@@ -248,8 +248,10 @@ const ReceiveHandoverRow = ({ handover, onReceived }) => {
  */
 export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) => {
   const [branches, setBranches] = useState([]);
-  const [ownSel, setOwnSel] = useState(ALL);
-  const branchId = scoped ? (scopedBranchId || "") : (ownSel === ALL ? "" : ownSel);
+  // Null until the branch list arrives, so the board opens on Anna Nagar (the desk's
+  // home branch) without first loading the All Branches roll-up.
+  const [ownSel, setOwnSel] = useState(scoped ? ALL : null);
+  const branchId = scoped ? (scopedBranchId || "") : (ownSel === ALL || ownSel === null ? "" : ownSel);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -263,10 +265,20 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
 
   useEffect(() => {
     if (scoped) return;
-    getBranches().then((b) => setBranches(b || [])).catch(() => setBranches([]));
+    getBranches()
+      .then((b) => {
+        // Anna Nagar leads the pill row and is the default pick; the rest keep their order.
+        const isAnna = (x) => /anna\s*nagar/i.test(x?.branch_name || "");
+        const list = b || [];
+        const sorted = [...list.filter(isAnna), ...list.filter((x) => !isAnna(x))];
+        setBranches(sorted);
+        setOwnSel((cur) => (cur === null ? (sorted.find(isAnna)?.id || ALL) : cur));
+      })
+      .catch(() => { setBranches([]); setOwnSel((cur) => (cur === null ? ALL : cur)); });
   }, [scoped]);
 
   const load = useCallback(async () => {
+    if (!scoped && ownSel === null) return;
     setLoading(true);
     try {
       setData(await getBranchCash(branchId ? { branch_id: branchId } : {}));
@@ -275,7 +287,7 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
     } finally {
       setLoading(false);
     }
-  }, [branchId]);
+  }, [branchId, scoped, ownSel]);
 
   useEffect(() => { load(); }, [load]);
 
