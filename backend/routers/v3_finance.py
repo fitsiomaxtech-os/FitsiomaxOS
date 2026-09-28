@@ -1073,6 +1073,7 @@ async def list_expenses(
         )
     approved_rows = [r for r in rows if r["approved"]]
     pending_rows = [r for r in rows if not r["approved"] and not r["rejected"]]
+    rejected_rows = [r for r in rows if not r["approved"] and r["rejected"]]
     # Same Cash/Cheque/Bank/UPI split Income's own summary carries (see get_branch_finance),
     # so the Expense tab's tiles read the same way and Overview can set the two side by
     # side. Blank on a row logged before payment_mode was asked for — reads back "unknown"
@@ -1090,6 +1091,8 @@ async def list_expenses(
         "approved_count": len(approved_rows),
         "pending_total": sum(r.get("amount", 0) for r in pending_rows),
         "pending_count": len(pending_rows),
+        "rejected_total": sum(r.get("amount", 0) for r in rejected_rows),
+        "rejected_count": len(rejected_rows),
         "payment_modes": payment_modes,
         "delete_enabled": await expense_delete_enabled(),
     }

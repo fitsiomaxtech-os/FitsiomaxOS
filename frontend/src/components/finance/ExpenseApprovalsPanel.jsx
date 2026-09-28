@@ -180,8 +180,8 @@ export const ExpenseApprovalsPanel = ({
   endDate = "",
 }) => {
   const [rows, setRows] = useState([]);
-  const [totals, setTotals] = useState({ approved_total: 0, approved_count: 0, pending_total: 0, pending_count: 0 });
-  const [view, setView] = useState("pending"); // "pending" | "approved"
+  const [totals, setTotals] = useState({ approved_total: 0, approved_count: 0, pending_total: 0, pending_count: 0, rejected_total: 0, rejected_count: 0 });
+  const [view, setView] = useState("pending"); // "pending" | "approved" | "rejected"
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState(null);
   const [viewing, setViewing] = useState(null); // the expense open in Expense Details
@@ -205,6 +205,8 @@ export const ExpenseApprovalsPanel = ({
         approved_count: data.approved_count || 0,
         pending_total: data.pending_total || 0,
         pending_count: data.pending_count || 0,
+        rejected_total: data.rejected_total || 0,
+        rejected_count: data.rejected_count || 0,
       });
     } catch {
       setRows([]);
@@ -215,10 +217,14 @@ export const ExpenseApprovalsPanel = ({
 
   useEffect(() => { load(); }, [load]);
 
-  // Rejected rows sit with the pending ones: both are still the branch's to deal with, and
-  // a turned-down expense filed under Approved would be a lie in a column of figures.
+  // Three piles, matching the three cards: waiting, signed off, turned down. Rejected used
+  // to sit in with pending, so the pending list showed rows its own card did not count.
   const visible = useMemo(
-    () => rows.filter((r) => (view === "approved" ? r.approved : !r.approved)),
+    () => rows.filter((r) => {
+      if (view === "approved") return r.approved;
+      if (view === "rejected") return !r.approved && r.rejected;
+      return !r.approved && !r.rejected;
+    }),
     [rows, view],
   );
 
@@ -265,10 +271,10 @@ export const ExpenseApprovalsPanel = ({
 
   return (
     <div className="space-y-4" data-testid="finance-expense-approvals">
-      {/* The same two cards the income side wears, so the tab reads the same whichever
-          way the money is going — and, as there, they are the switch: the toggle that
-          used to sit under them only repeated their two headings in a smaller font. */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* The income side's two cards plus a third for what was turned down -- and, as
+          there, they are the switch: the toggle that used to sit under them only repeated
+          their headings in a smaller font. */}
+      <div className="grid grid-cols-3 gap-3">
         <button
           type="button"
           onClick={() => setView("pending")}
@@ -291,6 +297,17 @@ export const ExpenseApprovalsPanel = ({
           <p className={`text-2xl font-bold ${view === "approved" ? "text-emerald-700" : "text-slate-700"}`}>{fmt(totals.approved_total)}</p>
           <p className={`text-[10px] ${view === "approved" ? "text-emerald-600" : "text-slate-400"}`}>{totals.approved_count} {totals.approved_count === 1 ? "expense" : "expenses"}</p>
         </button>
+        <button
+          type="button"
+          onClick={() => setView("rejected")}
+          aria-pressed={view === "rejected"}
+          className={`rounded-xl border p-4 text-left transition ${view === "rejected" ? "border-rose-300 bg-rose-50 ring-2 ring-rose-400" : "border-slate-200 bg-white hover:border-rose-200"}`}
+          data-testid="finance-expense-approvals-rejected-card"
+        >
+          <p className={`text-[11px] font-medium uppercase tracking-wide ${view === "rejected" ? "text-rose-700" : "text-slate-500"}`}>Rejected</p>
+          <p className={`text-2xl font-bold ${view === "rejected" ? "text-rose-700" : "text-slate-700"}`}>{fmt(totals.rejected_total)}</p>
+          <p className={`text-[10px] ${view === "rejected" ? "text-rose-600" : "text-slate-400"}`}>{totals.rejected_count} {totals.rejected_count === 1 ? "expense" : "expenses"}</p>
+        </button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -301,7 +318,7 @@ export const ExpenseApprovalsPanel = ({
             <div className="px-4 py-10 text-center" data-testid="finance-expense-approvals-empty">
               <Receipt className="mx-auto mb-2 h-8 w-8 text-slate-200" />
               <p className="text-xs text-slate-400">
-                {view === "pending" ? "Nothing waiting on approval." : "Nothing approved yet."}
+                {view === "pending" ? "Nothing waiting on approval." : view === "rejected" ? "Nothing rejected." : "Nothing approved yet."}
               </p>
             </div>
           ) : (
