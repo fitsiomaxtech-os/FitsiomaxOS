@@ -758,7 +758,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                     title={st.hint}
                     onClick={approvedOnly ? undefined : () => setIncomeStage(st.key)}
                     aria-pressed={approvedOnly ? undefined : picked}
-                    className={`inline-flex items-center gap-2 rounded-full border ${st.tone.border} ${st.tone.bg} py-1.5 pl-3 pr-4 ${
+                    className={`inline-flex items-center gap-2 rounded-[2px] border ${st.tone.border} ${st.tone.bg} py-1.5 pl-3 pr-4 ${
                       approvedOnly ? "" : `transition ${picked ? "" : "opacity-60 hover:opacity-100"}`
                     }`}
                     style={picked ? { boxShadow: `0 0 0 2px ${st.tone.ring}` } : undefined}
