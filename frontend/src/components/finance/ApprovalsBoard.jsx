@@ -1,7 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Check, CheckCircle2, ChevronRight, Clock, Minus, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronRight, Minus, RotateCcw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatTile } from "@/components/ui/stat-tile";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
@@ -956,24 +955,30 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           same two words a second time, in a smaller font, directly below the pair already
           naming each side and totalling it — so the pair does the picking now. */}
       <div className="grid grid-cols-2 gap-3">
-        {/* The house figure card, as on Branch Admin's Zumba tab: white, the colour in the
-            corner disc, the picked one ringed in its own colour. */}
         {[
-          { key: "pending", label: "Pending Approval", total: s.pending_total, count: s.pending_count, color: "#d97706", icon: Clock },
-          { key: "approved", label: "Approved", total: s.approved_total, count: s.approved_count, color: "#059669", icon: CheckCircle2 },
-        ].map((c) => (
-          <StatTile
-            key={c.key}
-            label={c.label}
-            value={fmt(c.total)}
-            sub={`${c.count || 0} payments`}
-            icon={c.icon}
-            color={c.color}
-            active={view === c.key}
-            onClick={() => setView(c.key)}
-            testid={`finance-approvals-${c.key}-card`}
-          />
-        ))}
+          { key: "pending", label: "Pending Approval", total: s.pending_total, count: s.pending_count, ring: "#d97706", border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
+          { key: "approved", label: "Approved", total: s.approved_total, count: s.approved_count, ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
+        ].map((c) => {
+          const on = view === c.key;
+          // Summary's ledger cards: tinted, 2px corners, the picked one outlined in its own
+          // colour and the other stepping back to 70%. The same soft two-layer shadow as the
+          // ledger cards on Branch Admin's Zumba tab, deepening on hover.
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setView(c.key)}
+              aria-pressed={on}
+              className={`rounded-[2px] border ${c.border} ${c.bg} p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] ${on ? "" : "opacity-70 hover:opacity-100"}`}
+              style={on ? { borderColor: c.ring } : undefined}
+              data-testid={`finance-approvals-${c.key}-card`}
+            >
+              <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
+              <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.total)}</p>
+              <p className={`text-[11px] ${c.sub}`}>{c.count || 0} payments</p>
+            </button>
+          );
+        })}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="finance-approvals-summary">
