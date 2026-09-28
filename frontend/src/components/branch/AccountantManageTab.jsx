@@ -364,6 +364,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   const [expenseTotals, setExpenseTotals] = useState({ approved_total: 0, approved_count: 0, pending_count: 0 });
   // One branch's drawer, or every opened branch's added up where no branch is picked.
   const [cashInHand, setCashInHand] = useState(0);
+  // Branches left out of that roll-up because their drawer has no opening count yet. The
+  // backend sums only counted drawers, so without this the card reads Rs.0 for a desk
+  // that has taken cash all month and gives no hint why.
+  const [openingUnset, setOpeningUnset] = useState(0);
   const [paymentModeFilter, setPaymentModeFilter] = useState("all");
   // Which side of the business the income summary is counting, where this board owns
   // the pills for it. "all" means no filter, same as a caller leaving `mode` unset.
@@ -437,8 +441,11 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       }))
       .catch(() => { /* the card falls back to zero; the panel says why when opened */ });
     getBranchCash(branchId ? { branch_id: branchId } : {})
-      .then((d) => setCashInHand((d?.by_branch ? d.total?.cash_in_hand : d?.cash_in_hand) || 0))
-      .catch(() => setCashInHand(0));
+      .then((d) => {
+        setCashInHand((d?.by_branch ? d.total?.cash_in_hand : d?.cash_in_hand) || 0);
+        setOpeningUnset(d?.by_branch ? d.total?.opening_unset || 0 : d?.opening_set === false ? 1 : 0);
+      })
+      .catch(() => { setCashInHand(0); setOpeningUnset(0); });
   }, [branchId]);
 
   useEffect(() => { loadExpenseTotals(); }, [loadExpenseTotals]);
@@ -721,6 +728,13 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 >
                   <p className={`text-[11px] font-bold uppercase tracking-wider ${tone.text}`}>{v.label}</p>
                   <p className={`mt-1 text-2xl font-bold tabular-nums ${tone.text}`}>{fmt(value)}</p>
+                  {v.key === "cash" && openingUnset > 0 && (
+                    <p className="mt-1 text-[11px] text-amber-700" data-testid="accountant-manage-cash-opening-unset">
+                      {branchId
+                        ? "Opening cash not set — set it on Branch Cash"
+                        : `${openingUnset} ${openingUnset === 1 ? "branch" : "branches"} without an opening count, not included`}
+                    </p>
+                  )}
                 </button>
               );
             })}
@@ -748,6 +762,31 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 off. Where only signed-off money counts there is nothing to pick, so they
                 are plain figures at full strength. */}
             <div className="flex flex-wrap items-center gap-2">
+              {/* The book in one line ahead of the piles: every collection in the window
+                  (both piles -- approval is a review step, not a gate on what counts as
+                  revenue, same as the Profit tab), less the approved expenses the
+                  Expenses card above shows. Plain figures, not filters. */}
+              {(() => {
+                const revenue = stagePiles.requested.total + stagePiles.approved.total;
+                const expense = Number(expenseTotals.approved_total) || 0;
+                const profit = revenue - expense;
+                return [
+                  { key: "revenue", label: "Revenue", value: revenue, border: "border-sky-200", bg: "bg-sky-50/70", text: "text-sky-700" },
+                  { key: "expense", label: "Expense", value: expense, border: "border-rose-200", bg: "bg-rose-50/70", text: "text-rose-700" },
+                  profit >= 0
+                    ? { key: "profit", label: "Profit", value: profit, border: "border-indigo-200", bg: "bg-indigo-50/70", text: "text-indigo-700" }
+                    : { key: "profit", label: "Loss", value: profit, border: "border-rose-300", bg: "bg-rose-50", text: "text-rose-700" },
+                ].map((c) => (
+                  <span
+                    key={c.key}
+                    className={`inline-flex items-center gap-2 rounded-[2px] border ${c.border} ${c.bg} py-1.5 pl-3 pr-4`}
+                    data-testid={`accountant-manage-book-${c.key}`}
+                  >
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</span>
+                    <span className={`text-sm font-bold tabular-nums ${c.text}`}>{fmt(c.value)}</span>
+                  </span>
+                ));
+              })()}
               {INCOME_STAGES.map((st) => {
                 const pile = stagePiles[st.key];
                 const picked = !approvedOnly && incomeStage === st.key;
