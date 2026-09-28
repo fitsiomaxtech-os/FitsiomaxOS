@@ -3656,6 +3656,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // wants it -- but a caller holding a confirmation dialog open needs to know not to
   // dismiss it over a move the server refused.
   const moveStage = async (stage) => {
+    // Never a bare move: Not a prospect needs its reminder call, which the popup asks for.
+    if (stage === notProspectStageName || stages.some((s) => s.name === stage && stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT))) {
+      setNotProspectDraft({ stage, days: 90, remarks: "" });
+      return false;
+    }
     try {
       await moveBranchStage(lead.id, { branch_stage: stage });
       toast.success(`Moved to ${stage}`);
@@ -3733,16 +3738,17 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
 
   const submitNotProspectMove = async () => {
     if (!notProspectDraft?.days) { toast.error("Choose when to call back"); return; }
+    const target = notProspectDraft.stage || notProspectStageName;
     try {
       setNotProspectBusy(true);
       await moveBranchStage(lead.id, {
-        branch_stage: notProspectStageName,
+        branch_stage: target,
         reminder_days: notProspectDraft.days,
         reminder_remarks: notProspectDraft.remarks,
       });
-      toast.success(`Moved to ${notProspectStageName}`);
+      toast.success(`Moved to ${target}`);
       setNotProspectDraft(null);
-      onMoved && onMoved(notProspectStageName);
+      onMoved && onMoved(target);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Move failed");
     } finally {
@@ -4244,8 +4250,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       }
                       // Not a prospect parks the lead until a call-back, so the move asks
                       // when first — the backend refuses it without one.
-                      if (stage === notProspectStageName) {
-                        setNotProspectDraft({ days: 90, remarks: "" });
+                      if (stage === notProspectStageName || stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT)) {
+                        setNotProspectDraft({ stage, days: 90, remarks: "" });
                         return;
                       }
                       if (consultationOnly) {
