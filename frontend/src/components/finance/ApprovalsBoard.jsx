@@ -145,6 +145,146 @@ const FilterGroup = ({ children, testId }) => (
   <div className="flex flex-wrap items-center gap-2" data-testid={testId}>{children}</div>
 );
 
+// A payment's date and the clock time it was taken at, read off the one ISO stamp the row
+// carries. One column holding both, the date over the time: they answer the same question
+// — when was this money taken — and two columns apart made the desk read across the table
+// to put one answer together.
+const fmtDate = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? String(iso).slice(0, 10)
+    : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const fmtTime = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+};
+
+// A cell with nothing to say says so once, in the same grey everywhere, rather than each
+// column inventing its own way of being empty.
+const Blank = () => <span className="text-slate-300">—</span>;
+
+/**
+ * The three reference columns, worked out once per row.
+ *
+ * They are named for UPI because that is the mode this desk spends its day signing off,
+ * but every mode has the same three things to answer and the columns hold whichever
+ * applies: where the money came from and where it landed, the account it landed in, and
+ * the number the payment is traced by. Cash answers none of the three — counting the
+ * drawer is its check — so its row is three dashes rather than three empty boxes.
+ *
+ * Nothing is invented. A payment that never recorded a field leaves that column blank:
+ * a UPI collection taken before the company-account picker existed has its transaction
+ * id and no account under it, and a counter sale records no reference at all because the
+ * sell popup never asks for one.
+ */
+const referenceColumns = (tx) => {
+  const ref = tx.payment_ref || {};
+  const mode = tx.payment_mode;
+
+  if (mode === "upi") {
+    return {
+      // The bank the money landed in, and whose account it is underneath. The payer's own
+      // handle is not here: the column names the receiver, and a fee collection records
+      // the account it landed in rather than the phone it left, so where a registration
+      // did capture the sender it is shown against the client instead.
+      route: [ref.receiver_bank || "", ref.receiver_name || ""],
+      account: [ref.receiver_upi_id || "", ref.receiver_account || ""],
+      txn: [ref.upi_transaction_id || "", ref.upi_utr ? `UTR ${ref.upi_utr}` : ""],
+    };
+  }
+  if (mode === "account_transfer") {
+    return {
+      route: [ref.bank_name || "", ref.account_holder_name || ""],
+      account: [ref.account_number || "", ref.ifsc_code || ""],
+      txn: [ref.transfer_reference || "", ""],
+    };
+  }
+  if (mode === "cheque") {
+    return {
+      route: [ref.cheque_bank || "", ""],
+      account: ["", ""],
+      txn: [ref.cheque_number ? `#${ref.cheque_number}` : "", ""],
+    };
+  }
+  if (mode === "card") {
+    return { route: ["", ""], account: ["", ""], txn: [ref.card_transaction_id || "", ""] };
+  }
+  // Zumba and Fitness keep one typed reference whatever the mode — see
+  // _registration_reference on the backend.
+  return { route: ["", ""], account: ["", ""], txn: [ref.reference || "", ""] };
+};
+
+// What each of the three reference columns is called for a given mode. The table heads
+// them for UPI, the mode most of the queue is; in the popup there is room to name them
+// for the row actually being signed off.
+const REF_LABELS = {
+  upi: ["Receiver Bank", "Receiver UPI", "Transaction UPI ID"],
+  account_transfer: ["Bank", "Account", "Transfer Reference"],
+  cheque: ["Cheque Bank", "Account", "Cheque Number"],
+  card: ["Bank", "Account", "Card Transaction ID"],
+};
+const refLabels = (mode) => REF_LABELS[mode] || ["Bank", "Account", "Reference"];
+
+/** One labelled fact in the popup's detail grid, with its qualifier underneath. */
+const DetailItem = ({ label, value, sub, wide = false, testId }) => (
+  <div className={`min-w-0 ${wide ? "col-span-2" : ""}`} data-testid={testId}>
+    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+    {value ? (
+      <p className="break-words text-sm font-medium text-slate-800">{value}</p>
+    ) : (
+      <p className="text-sm text-slate-300">—</p>
+    )}
+    {sub ? <p className="break-words text-[11px] leading-snug text-slate-500">{sub}</p> : null}
+  </div>
+);
+
+/**
+ * Everything the pending row says about the payment, laid out in the popup that signs it
+ * off -- so the accountant checks the amount or reference against the whole record rather
+ * than against a name and a figure, with the table hidden behind the overlay.
+ */
+const PaymentDetails = ({ tx }) => {
+  const ref = tx.payment_ref || {};
+  const cols = referenceColumns(tx);
+  const [routeLabel, accountLabel, txnLabel] = refLabels(tx.payment_mode);
+  const split = Array.isArray(ref.split) ? ref.split : [];
+  const phone = [tx.patient_phone, ref.payer_upi_id ? `UPI ${ref.payer_upi_id}` : ""].filter(Boolean).join(" · ");
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4" data-testid="finance-approve-details">
+      <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-slate-800">{tx.patient_name}</p>
+          {phone && <p className="text-xs text-slate-500">{phone}</p>}
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Amount</p>
+          <p className="text-lg font-bold text-emerald-600">{fmt(tx.amount)}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <DetailItem label="Branch" value={tx.branch_name} />
+        <DetailItem label="Session" value={tx.category ? tx.category.charAt(0).toUpperCase() + tx.category.slice(1) : ""} />
+        <DetailItem
+          label="Payment Method"
+          value={modeLabel(tx.payment_mode)}
+          sub={split.length > 0 ? split.map((t) => `${fmt(t.amount)} ${modeLabel(t.mode)}`).join(" + ") : ""}
+        />
+        <DetailItem label="Date & Time" value={fmtDate(tx.collected_at)} sub={fmtTime(tx.collected_at)} />
+        <DetailItem label={routeLabel} value={cols.route[0]} sub={cols.route[1]} />
+        <DetailItem label={accountLabel} value={cols.account[0]} sub={cols.account[1]} />
+        <DetailItem label={txnLabel} value={cols.txn[0]} sub={cols.txn[1]} />
+        <DetailItem label="Collected By" value={tx.collected_by} />
+      </div>
+    </div>
+  );
+};
+
 /**
  * Approve popup — what it asks for depends on the row's own payment mode: Cash gets a
  * re-entered amount (the one figure a cash drawer can't otherwise be checked against);
@@ -182,15 +322,13 @@ const ApproveModal = ({ tx, onClose, onApproved }) => {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" data-testid="finance-approve-modal">
-      <div className="w-full max-w-sm rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <h3 className="text-base font-semibold">Approve Payment</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="finance-approve-modal-close"><X className="h-4 w-4" /></button>
         </div>
-        <div className="space-y-3 p-5">
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">{tx.patient_name}</span> · {fmt(tx.amount)} via {modeLabel(mode)}
-          </p>
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
+          <PaymentDetails tx={tx} />
           {needsAmount && (
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Re-enter the amount collected</label>
@@ -281,81 +419,6 @@ const BulkApproveModal = ({ count, total, saving, onClose, onConfirm }) => (
     </div>
   </div>
 );
-
-// A payment's date and the clock time it was taken at, read off the one ISO stamp the row
-// carries. One column holding both, the date over the time: they answer the same question
-// — when was this money taken — and two columns apart made the desk read across the table
-// to put one answer together.
-const fmtDate = (iso) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? String(iso).slice(0, 10)
-    : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-};
-
-const fmtTime = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-};
-
-// A cell with nothing to say says so once, in the same grey everywhere, rather than each
-// column inventing its own way of being empty.
-const Blank = () => <span className="text-slate-300">—</span>;
-
-/**
- * The three reference columns, worked out once per row.
- *
- * They are named for UPI because that is the mode this desk spends its day signing off,
- * but every mode has the same three things to answer and the columns hold whichever
- * applies: where the money came from and where it landed, the account it landed in, and
- * the number the payment is traced by. Cash answers none of the three — counting the
- * drawer is its check — so its row is three dashes rather than three empty boxes.
- *
- * Nothing is invented. A payment that never recorded a field leaves that column blank:
- * a UPI collection taken before the company-account picker existed has its transaction
- * id and no account under it, and a counter sale records no reference at all because the
- * sell popup never asks for one.
- */
-const referenceColumns = (tx) => {
-  const ref = tx.payment_ref || {};
-  const mode = tx.payment_mode;
-
-  if (mode === "upi") {
-    return {
-      // The bank the money landed in, and whose account it is underneath. The payer's own
-      // handle is not here: the column names the receiver, and a fee collection records
-      // the account it landed in rather than the phone it left, so where a registration
-      // did capture the sender it is shown against the client instead.
-      route: [ref.receiver_bank || "", ref.receiver_name || ""],
-      account: [ref.receiver_upi_id || "", ref.receiver_account || ""],
-      txn: [ref.upi_transaction_id || "", ref.upi_utr ? `UTR ${ref.upi_utr}` : ""],
-    };
-  }
-  if (mode === "account_transfer") {
-    return {
-      route: [ref.bank_name || "", ref.account_holder_name || ""],
-      account: [ref.account_number || "", ref.ifsc_code || ""],
-      txn: [ref.transfer_reference || "", ""],
-    };
-  }
-  if (mode === "cheque") {
-    return {
-      route: [ref.cheque_bank || "", ""],
-      account: ["", ""],
-      txn: [ref.cheque_number ? `#${ref.cheque_number}` : "", ""],
-    };
-  }
-  if (mode === "card") {
-    return { route: ["", ""], account: ["", ""], txn: [ref.card_transaction_id || "", ""] };
-  }
-  // Zumba and Fitness keep one typed reference whatever the mode — see
-  // _registration_reference on the backend.
-  return { route: ["", ""], account: ["", ""], txn: [ref.reference || "", ""] };
-};
 
 /**
  * One reference column's cell: the fact, and underneath it whatever qualifies the fact.
