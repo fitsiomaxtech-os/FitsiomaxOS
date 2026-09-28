@@ -600,6 +600,12 @@ class V3LeadOut(BaseModel):
     portfolio_date: Optional[str] = None
     portfolio_time: Optional[str] = None
     portfolio_datetime: Optional[str] = None
+    # Set when the lead is moved to Not a prospect: the reminder call it is parked until.
+    not_prospect_at: Optional[str] = None
+    not_prospect_by: Optional[str] = None
+    not_prospect_reminder_days: Optional[int] = None
+    not_prospect_reminder_date: Optional[str] = None  # YYYY-MM-DD, IST
+    not_prospect_remarks: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -1071,6 +1077,10 @@ class V3MoveStageInput(BaseModel):
 
 class V3BranchStageInput(BaseModel):
     branch_stage: str
+    # Only read on a move to Not a prospect: when to call the patient back, in days from
+    # today (15, 20, 30 or 90), and an optional note on why they were written off.
+    reminder_days: Optional[int] = None
+    reminder_remarks: Optional[str] = None
 
 
 class V3PortfolioScheduleInput(BaseModel):

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Dict, Optional
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from calendar import monthrange
 import logging
 import uuid
@@ -21,6 +21,7 @@ from constants import (
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
+    SALES_STAGE_ROLE_NOT_A_PROSPECT,
 )
 from stage_utils import (
     branch_stage_names_for_branch, first_branch_stage_for_branch, get_first_stage_name,
@@ -43,6 +44,10 @@ from routers.v3_reviews import leads_awaiting_review, review_bookings, consultan
 from routers.v3_finance import lead_payment_history
 
 router = APIRouter(prefix="/api/v3")
+
+# The call-back delays offered when a lead is moved to Not a prospect, in days. The same
+# four the lead card's dropdown lists; anything else is refused.
+NOT_PROSPECT_REMINDER_DAYS = {15: "After 15 Days", 20: "After 20 Days", 30: "After 1 Month", 90: "After 3 Months"}
 
 
 async def _branch_stage_names(branch_id: Optional[str] = None) -> list:
@@ -563,7 +568,27 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
     if payload.branch_stage not in await _branch_stage_names(lead.get("branch_id")):
         raise HTTPException(status_code=400, detail="Invalid branch stage")
     old_stage = lead.get("branch_stage", "Unknown")
-    await v3_col("leads").update_one({"id": lead_id}, {"$set": {"branch_stage": payload.branch_stage, "updated_at": now_iso()}})
+    lead_arm = await sales_arm_for(branch_id=lead.get("branch_id"), vertical=lead.get("vertical"))
+
+    # Not a prospect parks the lead rather than ending it: the desk picks when to ring the
+    # patient back, and the board lists that date on the stage. Asked for on every move
+    # here, so a lead cannot land on the stage with no call-back behind it.
+    updates = {"branch_stage": payload.branch_stage, "updated_at": now_iso()}
+    reminder_note = ""
+    if payload.branch_stage == await _sales_stage_for_role(SALES_STAGE_ROLE_NOT_A_PROSPECT, lead_arm):
+        if payload.reminder_days not in NOT_PROSPECT_REMINDER_DAYS:
+            raise HTTPException(status_code=400, detail="Choose when to call this patient back")
+        today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+        reminder_date = (today_ist + timedelta(days=payload.reminder_days)).isoformat()
+        updates.update({
+            "not_prospect_at": now_iso(),
+            "not_prospect_by": user.full_name,
+            "not_prospect_reminder_days": payload.reminder_days,
+            "not_prospect_reminder_date": reminder_date,
+            "not_prospect_remarks": (payload.reminder_remarks or "").strip() or None,
+        })
+        reminder_note = f" · reminder call {NOT_PROSPECT_REMINDER_DAYS[payload.reminder_days].lower()} ({reminder_date})"
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
 
     # Cancelled is where a booked consultation goes to die, and the slot it was holding has
     # to go back on the calendar with it. Without this the lead read as cancelled on every
@@ -575,7 +600,6 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
     # appointment behind it is off. Idempotent, since a lead already cancelled has no rows
     # left in new_appointment to match.
     freed = 0
-    lead_arm = await sales_arm_for(branch_id=lead.get("branch_id"), vertical=lead.get("vertical"))
     if payload.branch_stage == await _sales_stage_for_role(SALES_STAGE_ROLE_CANCELLED, lead_arm):
         res = await v3_col("appointments").update_many(
             {"lead_id": lead_id, "status": "new_appointment"},
@@ -588,7 +612,8 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         "lead_id": lead_id,
         "action": "branch_stage_change",
         "details": f"Branch stage: '{old_stage}' -> '{payload.branch_stage}'"
-                   + (f" · {freed} appointment{'' if freed == 1 else 's'} cancelled, slot freed" if freed else ""),
+                   + (f" · {freed} appointment{'' if freed == 1 else 's'} cancelled, slot freed" if freed else "")
+                   + reminder_note,
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": now_iso(),

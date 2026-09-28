@@ -597,6 +597,39 @@ const followUpSlotLabel = (lead) => {
   };
 };
 
+/** When a lead moved to Not a prospect gets its reminder call, soonest first. The backend
+ *  accepts these four and nothing else (NOT_PROSPECT_REMINDER_DAYS in v3_branch_admin.py). */
+const NOT_PROSPECT_REMINDER_OPTIONS = [
+  { days: 15, label: "After 15 Days" },
+  { days: 20, label: "After 20 Days" },
+  { days: 30, label: "After 1 Month" },
+  { days: 90, label: "After 3 Months" },
+];
+
+/** A "YYYY-MM-DD" day, `days` from today, for the dialog's preview. */
+const isoDaysFromToday = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const shortDate = (iso) => (iso
+  ? new Date(`${String(iso).slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+  : "");
+
+/** The Not a prospect columns for one row: when it was written off, and the reminder call
+ *  it is parked until. Due is today or earlier -- the day the desk should be ringing. */
+const notProspectLabel = (lead) => {
+  const due = lead?.not_prospect_reminder_date;
+  const option = NOT_PROSPECT_REMINDER_OPTIONS.find((o) => o.days === lead?.not_prospect_reminder_days);
+  return {
+    markedOn: shortDate(lead?.not_prospect_at),
+    reminder: shortDate(due),
+    after: option?.label || "",
+    due: !!due && new Date(`${due}T00:00:00`).getTime() <= Date.now(),
+  };
+};
+
 /** The Follow Up column's heading — a clock and nothing else.
  *
  *  Icon-only because the column is only ever drawn on the Follow Up stage, where what the
@@ -1193,11 +1226,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       || /follow\s*-?\s*up/i.test(stageFilter);
   }, [stageFilter, stages]);
 
+  // On Not a prospect the Appointment column is history, so it becomes "Moved On" and the
+  // Follow Up slot carries the Reminder Call the lead is parked until.
+  const showNotProspectColumns = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
+  const showExtraColumn = showFollowUpColumn || showNotProspectColumns;
+
   // The column widths this list is drawn at, chosen once for the header and the rows
   // together — a row that disagreed with the header about how many columns there are
   // slides every cell after it a column across.
-  const listWidths = (showFollowUpColumn ? BRANCH_LIST_WIDTHS.withFollowUp : BRANCH_LIST_WIDTHS.base);
-  const armWidths = (showFollowUpColumn ? ARM_LIST_WIDTHS.withFollowUp : ARM_LIST_WIDTHS.base);
+  const listWidths = (showExtraColumn ? BRANCH_LIST_WIDTHS.withFollowUp : BRANCH_LIST_WIDTHS.base);
+  const armWidths = (showExtraColumn ? ARM_LIST_WIDTHS.withFollowUp : ARM_LIST_WIDTHS.base);
   // The fixed columns on an arm's table take their stated share; the questions divide what
   // is left, however many the arm asks. An inline width rather than a class because
   // Tailwind compiles the classes it can see in the source, and this one is arithmetic.
@@ -2296,6 +2334,18 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </p>
                           );
                         })()}
+                        {showNotProspectColumns && (() => {
+                          const np = notProspectLabel(lead);
+                          if (!np.reminder) return null;
+                          return (
+                            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-reminder-${lead.id}`}>
+                              <Bell className={`h-3 w-3 ${np.due ? "text-rose-500" : "text-slate-400"}`} />
+                              <span className="text-slate-500">Reminder call</span>
+                              <span className={`font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
+                              <span className={`font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
+                            </p>
+                          );
+                        })()}
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-slate-400">
                           {lead.assigned_physio_name && <span className="truncate">Physio: {lead.assigned_physio_name}</span>}
                           <span>Updated {(lead.updated_at || "").slice(0, 10)}</span>
@@ -2404,8 +2454,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       {intakeQuestions.map((q) => (
                         <th key={q.key} className="px-4 py-3" style={{ width: armQuestionWidth }}>{q.label}</th>
                       ))}
-                      <th className={`${armWidths.appt} px-4 py-3`}>Appointment</th>
-                      <FollowUpHeaderCell show={showFollowUpColumn} widthClass={armWidths.followUp} />
+                      {showNotProspectColumns ? (
+                        <>
+                          <th className={`${armWidths.appt} px-4 py-3`}>Moved On</th>
+                          <th className={`${armWidths.followUp} px-4 py-3`} data-testid="branch-list-reminder-head">Reminder Call</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className={`${armWidths.appt} px-4 py-3`}>Appointment</th>
+                          <FollowUpHeaderCell show={showFollowUpColumn} widthClass={armWidths.followUp} />
+                        </>
+                      )}
                       <th className={`${armWidths.stage} px-4 py-3`}>Stage</th>
                     </>
                   ) : entryStageNames.includes(stageFilter) ? (
@@ -2426,8 +2485,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       <th className={`${listWidths.painType} px-4 py-3`}>Pain Type</th>
                       <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
                       <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
-                      <th className={`${listWidths.appt} px-4 py-3`}>Appointment</th>
-                      <FollowUpHeaderCell show={showFollowUpColumn} widthClass={listWidths.followUp} />
+                      {showNotProspectColumns ? (
+                        <>
+                          <th className={`${listWidths.appt} px-4 py-3`}>Moved On</th>
+                          <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-reminder-head">Reminder Call</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className={`${listWidths.appt} px-4 py-3`}>Appointment</th>
+                          <FollowUpHeaderCell show={showFollowUpColumn} widthClass={listWidths.followUp} />
+                        </>
+                      )}
                       <th className={`${listWidths.stage} px-4 py-3`}>Stage</th>
                     </>
                   )}
@@ -2450,7 +2518,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             drawn. It used to read 9/8, one more than the table has ever
                             had, and a fitness arm's nine would have been a third wrong
                             answer to write down. */}
-                        <td colSpan={5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showFollowUpColumn ? 1 : 0) + (canDeleteLeads ? 1 : 0)} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
+                        <td colSpan={5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0) + (canDeleteLeads ? 1 : 0)} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
                           No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                         </td>
                       </tr>
@@ -2564,6 +2632,27 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         {showAssignedPhysio && (
                           <td className="truncate px-4 py-3 text-slate-600" title={lead.assigned_physio_name}>{lead.assigned_physio_name || <span className="text-slate-400">—</span>}</td>
                         )}
+                        {showNotProspectColumns ? (() => {
+                          const np = notProspectLabel(lead);
+                          return (
+                            <>
+                              <td className="px-4 py-3 text-xs text-slate-600">
+                                {np.markedOn || <span className="text-slate-400">—</span>}
+                                {lead.not_prospect_remarks && (
+                                  <span className="block truncate text-[10px] text-slate-400" title={lead.not_prospect_remarks}>{lead.not_prospect_remarks}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3" data-testid={`branch-row-reminder-${lead.id}`}>
+                                {np.reminder ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`whitespace-nowrap text-xs font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
+                                    <span className={`text-[10px] font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
+                                  </div>
+                                ) : <span className="text-slate-400">—</span>}
+                              </td>
+                            </>
+                          );
+                        })() : (<>
                         <td className="px-4 py-3">
                           {(() => {
                             const slot = apptSlotLabel(lead);
@@ -2605,6 +2694,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             })()}
                           </td>
                         )}
+                        </>)}
                         <td className="px-4 py-3">
                           <span
                             title={rowStage ? rowStage : undefined}
@@ -2906,6 +2996,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // a patient is going next, not moving them.
   const appointmentStageName = stageNameForRole(stages, STAGE_ROLE_APPOINTMENT);
   const cancelledStageName = stageNameForRole(stages, STAGE_ROLE_CANCELLED);
+  const notProspectStageName = stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
   const inAppointmentStage = lead.branch_stage === appointmentStageName;
   // The four real stages reachable from Appointment. Reschedule is the fifth exit and is
   // not in here, because it is not a stage at all -- see the pill itself.
@@ -2917,7 +3008,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const APPOINTMENT_EXITS = [
     stageNameForRole(stages, STAGE_ROLE_RNR),
     stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP),
-    stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT),
+    notProspectStageName,
     cancelledStageName,
   ];
   // `!!name` guards the matchesBranchStage call below: a lead with no consultation_stage
@@ -3053,6 +3144,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // "Move to Stage" popup for Follow Up (mirrors Appointment Date & Time's popup pattern)
   const [followUpMoveDraft, setFollowUpMoveDraft] = useState(null); // { date, time, remarks } | null
   const [followUpMoveBusy, setFollowUpMoveBusy] = useState(false);
+
+  // "Move to Stage" popup for Not a prospect: when to ring the patient back.
+  const [notProspectDraft, setNotProspectDraft] = useState(null); // { days, remarks } | null
+  const [notProspectBusy, setNotProspectBusy] = useState(false);
 
   /** Who could take this exact slot, and hand it to one of them.
    *
@@ -3636,6 +3731,25 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
     }
   };
 
+  const submitNotProspectMove = async () => {
+    if (!notProspectDraft?.days) { toast.error("Choose when to call back"); return; }
+    try {
+      setNotProspectBusy(true);
+      await moveBranchStage(lead.id, {
+        branch_stage: notProspectStageName,
+        reminder_days: notProspectDraft.days,
+        reminder_remarks: notProspectDraft.remarks,
+      });
+      toast.success(`Moved to ${notProspectStageName}`);
+      setNotProspectDraft(null);
+      onMoved && onMoved(notProspectStageName);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Move failed");
+    } finally {
+      setNotProspectBusy(false);
+    }
+  };
+
   const TABS = [
     { key: "overview", label: "Overview", color: "bg-sky-500" },
     { key: "follow-up", label: "Follow-Up", color: "bg-amber-500" },
@@ -4126,6 +4240,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       }
                       if (stage === "Follow Up") {
                         setFollowUpMoveDraft({ date: tomorrowIso(), time: "10:00", remarks: "" });
+                        return;
+                      }
+                      // Not a prospect parks the lead until a call-back, so the move asks
+                      // when first — the backend refuses it without one.
+                      if (stage === notProspectStageName) {
+                        setNotProspectDraft({ days: 90, remarks: "" });
                         return;
                       }
                       if (consultationOnly) {
@@ -5519,6 +5639,62 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
               <Button variant="outline" onClick={() => setFollowUpMoveDraft(null)} data-testid="branch-followup-move-cancel">Cancel</Button>
               <Button className="bg-amber-600 text-white hover:bg-amber-700" onClick={submitFollowUpMove} disabled={followUpMoveBusy} data-testid="branch-followup-move-save">Save & Move</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Not a prospect — Reminder Call popup (triggered from Move to Stage) */}
+      {notProspectDraft && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) setNotProspectDraft(null); }} data-testid="branch-not-prospect-modal">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-gradient-to-r from-slate-600 to-slate-700 px-5 py-4 text-white">
+              <div className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                <div>
+                  <p className="text-base font-semibold">{notProspectStageName} — Reminder Call</p>
+                  <p className="text-[11px] text-white/70">{lead.name}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+                </div>
+              </div>
+              <button onClick={() => setNotProspectDraft(null)} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="branch-not-prospect-close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div>
+                <label htmlFor="branch-not-prospect-days" className="mb-1.5 block text-xs font-semibold text-slate-600">Reminder Call *</label>
+                <select
+                  id="branch-not-prospect-days"
+                  value={notProspectDraft.days}
+                  onChange={(e) => setNotProspectDraft({ ...notProspectDraft, days: Number(e.target.value) })}
+                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  data-testid="branch-not-prospect-days"
+                >
+                  {NOT_PROSPECT_REMINDER_OPTIONS.map((o) => (
+                    <option key={o.days} value={o.days}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Call back on <span className="font-semibold text-slate-700">{shortDate(isoDaysFromToday(notProspectDraft.days))}</span>
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Remarks</label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  placeholder="Why not a prospect? (optional)"
+                  value={notProspectDraft.remarks}
+                  onChange={(e) => setNotProspectDraft({ ...notProspectDraft, remarks: e.target.value })}
+                  data-testid="branch-not-prospect-remarks"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
+              <Button variant="outline" onClick={() => setNotProspectDraft(null)} data-testid="branch-not-prospect-cancel">Cancel</Button>
+              <Button className="bg-slate-700 text-white hover:bg-slate-800" onClick={submitNotProspectMove} disabled={notProspectBusy} data-testid="branch-not-prospect-save">
+                {notProspectBusy ? "Moving..." : "Save & Move"}
+              </Button>
             </div>
           </div>
         </div>
