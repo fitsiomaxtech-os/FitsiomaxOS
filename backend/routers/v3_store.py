@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 import consultation_packages
+import store_branch_overrides
 from database import v3_col
 from deps import role_satisfies, v3_require_roles
 from schemas.v3 import V3UserOut
@@ -124,6 +125,27 @@ class StoreItemOut(StoreItemIn):
     id: str
     created_at: str
     updated_at: str
+    # True where the branch the list was read for keeps its own values for this package
+    # (see store_branch_overrides). Absent on Super Admin's own catalogue.
+    branch_override: Optional[bool] = None
+
+
+# The two desks that oversee every branch. Anyone else reads the store as their own branch.
+OFFICE_WIDE_ROLES = ("super_admin", "business_dev")
+
+
+def _branch_for(user: V3UserOut, requested: Optional[str]) -> Optional[str]:
+    """Which branch's Services and Products this request is about.
+
+    Super Admin and Business Development name one (driving a branch's board), or none for
+    the catalogue itself. A Branch Admin is always their own branch whatever is asked for;
+    a Consultant posted to several may name any of theirs.
+    """
+    if role_satisfies(user.role, OFFICE_WIDE_ROLES):
+        return requested or None
+    if requested and (requested == user.branch_id or requested in (user.branch_ids or [])):
+        return requested
+    return user.branch_id
 
 
 def _normalize_legacy_prices(doc: dict) -> dict:
@@ -178,12 +200,25 @@ BRANCH_EDITABLE_ITEM_TYPES = (None, *ITEM_TYPES)
 
 
 @router.put("/items/{item_id}", response_model=StoreItemOut)
-async def update_store_item(item_id: str, payload: StoreItemIn, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
-    # A Branch Admin edits an existing package in place — its name, description, image,
-    # duration or session count and prices — but may not turn it into another kind of item
-    # or move it to another shelf. The row is the same one every branch books from; Super
-    # Admin and Business Development keep the full edit, and alone create and delete.
-    if not role_satisfies(user.role, ("super_admin", "business_dev")):
+async def update_store_item(
+    item_id: str,
+    payload: StoreItemIn,
+    branch_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    # A Branch Admin edits an existing package — its name, description, image, duration or
+    # session count and prices — but may not turn it into another kind of item or move it
+    # to another shelf. Super Admin and Business Development keep the full edit, and alone
+    # create and delete.
+    #
+    # Where it lands is the developer switch's call (store_branch_overrides). Off: the row
+    # every branch books from. On: that branch's own copy of the values, leaving the default
+    # and every other branch alone. Super Admin reaches a branch's copy by editing from
+    # inside that branch's board, which sends its branch_id; from the catalogue itself it
+    # is the default that changes.
+    target_branch = _branch_for(user, branch_id)
+    per_branch = bool(target_branch) and await store_branch_overrides.enabled()
+    if not role_satisfies(user.role, OFFICE_WIDE_ROLES) or per_branch:
         existing = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0, "item_type": 1, "category": 1})
         if not existing:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -193,7 +228,7 @@ async def update_store_item(item_id: str, payload: StoreItemIn, user: V3UserOut 
             or payload.item_type != existing_type
             or payload.category != existing.get("category")
         ):
-            raise HTTPException(status_code=403, detail="Branch Admin cannot change a package's type or shelf")
+            raise HTTPException(status_code=403, detail="A branch cannot change a package's type or shelf")
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
     if payload.price_online < 0 or payload.price_offline < 0:
@@ -208,6 +243,10 @@ async def update_store_item(item_id: str, payload: StoreItemIn, user: V3UserOut 
         raise HTTPException(status_code=400, detail="Online sessions count must be at least 1")
     if payload.item_type == "session" and (not payload.sessions_offline or payload.sessions_offline < 1):
         raise HTTPException(status_code=400, detail="Offline sessions count must be at least 1")
+    if per_branch:
+        await store_branch_overrides.save(item_id, target_branch, payload.model_dump(), user.full_name)
+        doc = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0})
+        return _normalize_legacy_prices(await store_branch_overrides.overlay_one(doc, target_branch))
     update = payload.model_dump()
     update["price_is_total"] = payload.category in PRICE_IS_TOTAL_CATEGORIES
     update["updated_at"] = _now()
@@ -219,7 +258,12 @@ async def update_store_item(item_id: str, payload: StoreItemIn, user: V3UserOut 
 
 
 @router.get("/items", response_model=List[StoreItemOut])
-async def list_store_items(category: Optional[str] = None, item_type: Optional[str] = None, _: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "head_physio", "business_dev"))):
+async def list_store_items(
+    category: Optional[str] = None,
+    item_type: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "head_physio", "business_dev")),
+):
     q = {}
     if category:
         q["category"] = category
@@ -229,6 +273,9 @@ async def list_store_items(category: Optional[str] = None, item_type: Optional[s
     elif item_type:
         q["item_type"] = item_type
     docs = await v3_col("store_items").find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Every branch-side picker (booking, fee collection, Zumba, Fitness) reads through here,
+    # so this one overlay is what makes a branch see its own prices and durations everywhere.
+    docs = await store_branch_overrides.overlay(docs, _branch_for(user, branch_id))
     return [_normalize_legacy_prices(d) for d in docs]
 
 
@@ -237,6 +284,7 @@ async def delete_store_item(item_id: str, _: V3UserOut = Depends(v3_require_role
     res = await v3_col("store_items").delete_one({"id": item_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
+    await store_branch_overrides.forget_item(item_id)
     return {"message": "Item deleted"}
 
 

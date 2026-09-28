@@ -84,6 +84,9 @@ CORE_INDEXES = [
     ("doctors", [("profile_type", 1)], "profile_type"),
     ("employees", [("id", 1)], "id"),
     ("store_items", [("id", 1)], "id"),
+    # A branch's own Services and Products values, laid over the catalogue on every store
+    # list and every booking priced at that branch (store_branch_overrides.overlay).
+    ("store_item_branch_overrides", [("branch_id", 1), ("item_id", 1)], "branch_item"),
     ("users", [("email", 1)], "email"),
     # _branch_stages / _consultation_stage_names: filter by type, read in order.
     ("pipeline_stages", [("type", 1), ("order", 1)], "type_order"),

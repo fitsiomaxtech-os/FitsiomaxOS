@@ -699,6 +699,9 @@ export const setExpenseDeleteButton = async (password, enabled) => (await api.pu
 // Whether the Super Admin's My Consultation offers its branch-wise On/Off.
 export const getSaConsultBranchesSetting = async (password) => (await api.get("/admin/super-admin-consult-branches", { headers: developerHeaders(password) })).data;
 export const setSaConsultBranchesSetting = async (password, enabled) => (await api.put("/admin/super-admin-consult-branches", { enabled }, { headers: developerHeaders(password) })).data;
+// On: each branch keeps its own Services and Products values. Off: one catalogue for all.
+export const getStoreBranchOverrides = async (password) => (await api.get("/admin/store-branch-overrides", { headers: developerHeaders(password) })).data;
+export const setStoreBranchOverrides = async (password, enabled) => (await api.put("/admin/store-branch-overrides", { enabled }, { headers: developerHeaders(password) })).data;
 export const resetAllUsers = async (password) => (await api.post("/admin/reset-all-users", null, { params: { confirm: true }, headers: developerHeaders(password) })).data;
 
 // HR
@@ -899,10 +902,13 @@ export const uploadStoreImage = async (file) => {
   return data;
 };
 export const createStoreItem = async (payload) => (await api.post("/store/items", payload)).data;
-export const listStoreItems = async (category, itemType) => {
+// branchId: whose Services and Products to read. A Branch Admin is always read as their own
+// branch by the server; Super Admin passes it when driving a branch's board.
+export const listStoreItems = async (category, itemType, branchId) => {
   const params = {};
   if (category) params.category = category;
   if (itemType) params.item_type = itemType;
+  if (branchId) params.branch_id = branchId;
   return (await api.get("/store/items", { params })).data;
 };
 /** Every diet product the branch has priced, from both shelves.
@@ -921,7 +927,9 @@ export const listDietStoreItems = async () => {
   for (const item of lists.flat()) if (item?.id) byId.set(item.id, item);
   return [...byId.values()];
 };
-export const updateStoreItem = async (id, payload) => (await api.put(`/store/items/${id}`, payload)).data;
+export const updateStoreItem = async (id, payload, branchId) => (
+  await api.put(`/store/items/${id}`, payload, { params: branchId ? { branch_id: branchId } : {} })
+).data;
 export const deleteStoreItem = async (id) => (await api.delete(`/store/items/${id}`)).data;
 export const getStoreHistory = async (limit) => (await api.get("/store/history", { params: limit ? { limit } : {} })).data;
 export const getPaymentHistory = async (limit) => (await api.get("/store/payment-history", { params: limit ? { limit } : {} })).data;

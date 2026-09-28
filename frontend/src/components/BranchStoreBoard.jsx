@@ -32,7 +32,11 @@ const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 // Sessions, Rehab, Zumba, Workshop and Home Visit, the consultation form for Consultations,
 // Diet Consultations and Diet Package. Edit only — create and delete stay with Super Admin,
 // and the server refuses a branch moving a package to another type or shelf.
-const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all" }) => {
+//
+// With Services and Products per branch switched On (Developer Access), what is listed and
+// saved here is this branch's own copy — see store_branch_overrides.py. branchId is what
+// tells the server which branch when Super Admin is the one driving the board.
+const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", branchId }) => {
   const [items, setItems] = useState([]);
   const [viewingItem, setViewingItem] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
@@ -42,8 +46,8 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
   // an empty dep array, which is what the exhaustive-deps warning here was pointing at, and
   // which also meant the list never refetched for any reason at all.
   const loadItems = useCallback(
-    () => listStoreItems(category, itemType).then(setItems).catch(() => {}),
-    [category, itemType],
+    () => listStoreItems(category, itemType, branchId).then(setItems).catch(() => {}),
+    [category, itemType, branchId],
   );
   useEffect(() => { loadItems(); }, [loadItems, reloadToken]);
 
@@ -63,7 +67,18 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
             <Card key={it.id} data-testid={`${testidPrefix}-item-${it.id}`}>
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex-1 font-semibold text-slate-800">{it.name}</p>
+                  <p className="flex-1 font-semibold text-slate-800">
+                    {it.name}
+                    {it.branch_override && (
+                      <span
+                        className="ml-2 inline-block rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-violet-600"
+                        title="This branch has its own values for this package"
+                        data-testid={`${testidPrefix}-item-${it.id}-branch-override`}
+                      >
+                        This branch
+                      </span>
+                    )}
+                  </p>
                   <div className="flex shrink-0 gap-1">
                     <button
                       onClick={() => setViewingItem(it)}
@@ -128,6 +143,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
       {editingItem && (isSession ? (
         <CreateSessionPackageModal
           category={category}
+          branchId={branchId}
           item={editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={loadItems}
@@ -136,6 +152,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
         <CreateConsultationModal
           kind={itemType}
           category={category}
+          branchId={branchId}
           item={editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={loadItems}
@@ -145,7 +162,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
   );
 };
 
-export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all" }) => {
+export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", branchId }) => {
   const [sub, setSub] = useState("physiotherapy");
   return (
     <div className="space-y-4" data-testid="branch-store-panel-consultations">
@@ -172,7 +189,7 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all" }) =>
           itemType="consultation"
           emptyLabel="No consultations available yet."
           testidPrefix="branch-consultation"
-          reloadToken={reloadToken}
+          reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
         />
       )}
@@ -188,7 +205,7 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all" }) =>
           durationLabel="Diet Consultation Duration"
           emptyLabel="No diet consultations available yet."
           testidPrefix="branch-diet-consultation"
-          reloadToken={reloadToken}
+          reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
         />
       )}
@@ -196,7 +213,7 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all" }) =>
   );
 };
 
-export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
+export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all", branchId }) => {
   const [sub, setSub] = useState("physiotherapy");
   return (
     <div className="space-y-4" data-testid="branch-store-panel-sessions">
@@ -223,7 +240,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
           itemType="session"
           emptyLabel="No session packages available yet."
           testidPrefix="branch-session"
-          reloadToken={reloadToken}
+          reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
         />
       )}
@@ -237,7 +254,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
           itemType="session"
           emptyLabel="No fitness packages available yet."
           testidPrefix="branch-session-fitness"
-          reloadToken={reloadToken}
+          reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
         />
       )}
@@ -252,7 +269,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
           itemType="session"
           emptyLabel="No rehab packages available yet."
           testidPrefix="branch-session-rehab"
-          reloadToken={reloadToken}
+          reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
         />
       )}
@@ -271,14 +288,14 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
  * slot, so it carries no duration. The actual bookable Diet Consultation is item_type
  * "diet", shown separately under Consultations > Diet Consultations above.
  */
-export const BranchDietPanel = ({ reloadToken, modeFilter = "all" }) => (
+export const BranchDietPanel = ({ reloadToken, modeFilter = "all", branchId }) => (
   <div className="space-y-4" data-testid="branch-store-panel-diet">
     <BranchItemsPanel
       category="physiotherapy"
       itemType="diet_package"
       emptyLabel="No diet packages available yet. Super Admin adds them in Services and Products > Diet Package."
       testidPrefix="branch-diet"
-      reloadToken={reloadToken}
+      reloadToken={reloadToken} branchId={branchId}
       modeFilter={modeFilter}
     />
   </div>
@@ -303,7 +320,7 @@ const SESSION_LIKE_TABS = {
 
 // Home Visit's Consultant / Physiotherapy split, editable here like every other shelf.
 // The sub-tabs are Super Admin's own list, so the two pages cannot disagree about them.
-const BranchHomeVisitPanel = ({ reloadToken, modeFilter = "all" }) => {
+const BranchHomeVisitPanel = ({ reloadToken, modeFilter = "all", branchId }) => {
   const [sub, setSub] = useState(HOME_VISIT_SUBTABS[0].key);
   const current = HOME_VISIT_SUBTABS.find((t) => t.key === sub) || HOME_VISIT_SUBTABS[0];
   return (
@@ -330,7 +347,7 @@ const BranchHomeVisitPanel = ({ reloadToken, modeFilter = "all" }) => {
         itemType="session"
         emptyLabel={`No ${current.noun}s available yet.`}
         testidPrefix={`branch-home-visit-${current.key}`}
-        reloadToken={reloadToken}
+        reloadToken={reloadToken} branchId={branchId}
         modeFilter={modeFilter}
       />
     </div>
@@ -430,10 +447,10 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
         })}
       </div>
 
-      {tab === "consultations" && <BranchConsultationsPanel reloadToken={reloadTick} modeFilter={modeFilter} />}
-      {tab === "sessions" && <BranchSessionsPanel reloadToken={reloadTick} modeFilter={modeFilter} />}
-      {tab === "diet" && <BranchDietPanel reloadToken={reloadTick} modeFilter={modeFilter} />}
-      {tab === "home_visit" && <BranchHomeVisitPanel reloadToken={reloadTick} modeFilter={modeFilter} />}
+      {tab === "consultations" && <BranchConsultationsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
+      {tab === "sessions" && <BranchSessionsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
+      {tab === "diet" && <BranchDietPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
+      {tab === "home_visit" && <BranchHomeVisitPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
       {/* Keyed by category: without it React keeps the same instance across a tab switch
           and the previous shelf's rows sit there until the new ones land. */}
       {SESSION_LIKE_TABS[tab] && (
@@ -444,6 +461,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
           emptyLabel={SESSION_LIKE_TABS[tab].empty}
           testidPrefix={`branch-${tab}`}
           reloadToken={reloadTick}
+          branchId={branchId}
           modeFilter={modeFilter}
         />
       )}

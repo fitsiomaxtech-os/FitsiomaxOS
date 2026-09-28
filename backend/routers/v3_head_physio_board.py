@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from datetime import date
 import uuid
 
+import store_branch_overrides
 from database import v3_col
 from utils import now_iso, physio_slot_load, slot_capacity_of, active_doctor_query, live_branch_query
 from deps import (
@@ -516,13 +517,16 @@ async def hp_move_head_consultation_stage(
     return {"message": "Stage moved", "lead": V3LeadOut(**updated).model_dump()}
 
 
-async def _rehab_package_fields(item_id: str, mode: str):
+async def _rehab_package_fields(item_id: str, mode: str, branch_id: Optional[str] = None):
     """The Rehab course's fields on the lead, and the line the activity log says about it.
 
     Shared by Move to Admin and the Rehab consultation that follows a Treatment course, so
-    a package chosen at either is priced the one way.
+    a package chosen at either is priced the one way -- at the lead's branch's own figure
+    where it keeps one (store_branch_overrides).
     """
-    rehab_item = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0})
+    rehab_item = await store_branch_overrides.overlay_one(
+        await v3_col("store_items").find_one({"id": item_id}, {"_id": 0}), branch_id
+    )
     if not rehab_item:
         raise HTTPException(status_code=404, detail="Rehab package not found")
     if rehab_item.get("item_type") != "session" or rehab_item.get("category") != "rehab":
@@ -566,6 +570,7 @@ async def _home_visit_rate_item(lead: dict) -> dict:
     shelf = await v3_col("store_items").find(
         {"item_type": "session", "category": HOME_VISIT_PHYSIO_CATEGORY}, {"_id": 0}
     ).sort("created_at", 1).to_list(100)
+    shelf = await store_branch_overrides.overlay(shelf, lead.get("branch_id"))
     if not shelf:
         raise HTTPException(status_code=400, detail="No Home Visit > Physiotherapy package is set up to price this House Visit")
     kind = _visit_kind(lead.get("visit_package_name"))
@@ -573,9 +578,9 @@ async def _home_visit_rate_item(lead: dict) -> dict:
         same_kind = [i for i in shelf if _visit_kind(i.get("name")) == kind]
         if same_kind:
             return same_kind[0]
-    booked = await v3_col("store_items").find_one(
-        {"id": lead.get("visit_package_id")}, {"_id": 0, "manual_price": 1}
-    ) if lead.get("visit_package_id") else None
+    booked = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
+        {"id": lead.get("visit_package_id")}, {"_id": 0, "id": 1, "manual_price": 1}
+    ), lead.get("branch_id")) if lead.get("visit_package_id") else None
     if booked is not None:
         same_pricing = [i for i in shelf if bool(i.get("manual_price")) == bool(booked.get("manual_price"))]
         if len(same_pricing) == 1:
@@ -700,7 +705,9 @@ async def hp_consultation_decision(
     if payload.decision == "consultation_treatment":
         if not payload.item_id:
             raise HTTPException(status_code=400, detail="Select a Treatment Package")
-        item = await v3_col("store_items").find_one({"id": payload.item_id}, {"_id": 0})
+        item = await store_branch_overrides.overlay_one(
+            await v3_col("store_items").find_one({"id": payload.item_id}, {"_id": 0}), lead.get("branch_id")
+        )
         if not item:
             raise HTTPException(status_code=404, detail="Treatment package not found")
         if item.get("item_type") != "session":
@@ -752,7 +759,7 @@ async def hp_consultation_decision(
     # Only accepted alongside the referral — a rehab course on a patient who was never sent
     # to rehab is a fee nobody would know to collect.
     if payload.rehab_referred and payload.rehab_item_id:
-        rehab_fields, rehab_detail = await _rehab_package_fields(payload.rehab_item_id, payload.mode)
+        rehab_fields, rehab_detail = await _rehab_package_fields(payload.rehab_item_id, payload.mode, lead.get("branch_id"))
         updates.update(rehab_fields)
         detail += rehab_detail
 
@@ -760,7 +767,9 @@ async def hp_consultation_decision(
     # down to a per-class rate, so rate x classes lands back on the figure the catalogue
     # was given. Only accepted alongside its own flag, for the same reason.
     if payload.zumba_recommended and payload.zumba_item_id:
-        zumba_item = await v3_col("store_items").find_one({"id": payload.zumba_item_id}, {"_id": 0})
+        zumba_item = await store_branch_overrides.overlay_one(
+            await v3_col("store_items").find_one({"id": payload.zumba_item_id}, {"_id": 0}), lead.get("branch_id")
+        )
         if not zumba_item:
             raise HTTPException(status_code=404, detail="Zumba package not found")
         if zumba_item.get("item_type") != "session" or zumba_item.get("category") != "zumba":
@@ -931,7 +940,7 @@ async def hp_complete_rehab_consultation(
         raise HTTPException(status_code=400, detail="Book the Rehab consultation first")
 
     mode = payload.mode if payload.mode in ("online", "offline") else (lead.get("session_package_mode") or "offline")
-    rehab_fields, rehab_detail = await _rehab_package_fields(payload.rehab_item_id, mode)
+    rehab_fields, rehab_detail = await _rehab_package_fields(payload.rehab_item_id, mode, lead.get("branch_id"))
     now = now_iso()
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {
         **rehab_fields,

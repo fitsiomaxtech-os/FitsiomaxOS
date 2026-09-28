@@ -17,6 +17,7 @@ from deps import (
 )
 import lead_control
 import lead_purge
+import store_branch_overrides
 from constants import (
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, SALES_ARM_OFFLINE,
@@ -806,9 +807,9 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
     if booking and payload.visit_type == "home":
         if not payload.visit_package_id:
             raise HTTPException(status_code=400, detail="Pick a House Visit package")
-        visit_package = await v3_col("store_items").find_one(
+        visit_package = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
             {"id": payload.visit_package_id, "category": HOME_VISIT_CONSULTATION_CATEGORY}, {"_id": 0}
-        )
+        ), lead.get("branch_id"))
         if not visit_package:
             raise HTTPException(status_code=404, detail="House Visit package not found")
         # Moving an existing booking to another slot does not ask for the amount again: the
@@ -864,7 +865,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
         clash = await consultant_slot_clash(
             payload.physio_id,
             slot_time,
-            payload.duration or await consultation_slot_minutes(),
+            payload.duration or await consultation_slot_minutes(lead.get("branch_id")),
             exclude_lead_id=lead_id,
         )
         if clash:
@@ -1255,18 +1256,23 @@ async def _expert_photos(experts: list) -> Dict[str, str]:
     return out
 
 
-async def consultation_slot_minutes() -> Optional[int]:
-    """The Consultation Duration Super Admin set in FITSIO STORE, or None if none is set.
+async def consultation_slot_minutes(branch_id: Optional[str] = None) -> Optional[int]:
+    """The Consultation Duration set in FITSIO STORE, or None if none is set.
 
     Read on every request rather than frozen into the calendar: changing 60 mins to 30
     there has to change the times the booking popup offers straight away, without every
     Consultant re-publishing their days. A physiotherapy consultation wins over any other
     shelf's, and among those the one edited last — that is the edit being asked for.
+
+    `branch_id` is whose calendar this is. Where that branch keeps its own durations
+    (store_branch_overrides), its figures are the ones read.
     """
     rows = await v3_col("store_items").find(
-        {"item_type": {"$in": ["consultation", None]}, "duration_minutes": {"$gt": 0}},
-        {"_id": 0, "category": 1, "duration_minutes": 1, "updated_at": 1, "created_at": 1},
+        {"item_type": {"$in": ["consultation", None]}},
+        {"_id": 0, "id": 1, "category": 1, "duration_minutes": 1, "updated_at": 1, "created_at": 1},
     ).to_list(500)
+    rows = await store_branch_overrides.overlay(rows, branch_id)
+    rows = [r for r in rows if (r.get("duration_minutes") or 0) > 0]
     if not rows:
         return None
     rows.sort(
@@ -1441,8 +1447,8 @@ async def v3_available_experts(
             continue
         bookings_by_doc.setdefault(r.get("doctor_id"), []).append(r)
 
-    # Slot length is Super Admin's Consultation Duration, fetched fresh on every open.
-    slot_minutes = await consultation_slot_minutes()
+    # Slot length is this branch's Consultation Duration, fetched fresh on every open.
+    slot_minutes = await consultation_slot_minutes(branch_id)
 
     # Faces for the picker's Consultant column, resolved once for the whole branch list
     # rather than per row. See _expert_photos.
@@ -1533,7 +1539,7 @@ async def v3_available_dates(
 
     # Counted off the same cut as available-experts, so a day's number here is the number
     # of tiles its slot grid will draw.
-    slot_minutes = await consultation_slot_minutes()
+    slot_minutes = await consultation_slot_minutes(branch_id)
     dates: Dict[str, int] = {}
     for d in branch_experts:
         days = {
@@ -1909,7 +1915,7 @@ async def _rebook_consultation_slot(
     clash = await consultant_slot_clash(
         physio["id"],
         slot_time,
-        duration or await consultation_slot_minutes(),
+        duration or await consultation_slot_minutes(lead.get("branch_id")),
         exclude_lead_id=lead_id,
     )
     if clash:

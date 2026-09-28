@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides } from "@/lib/api";
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
@@ -134,6 +134,9 @@ export const PipelineStageManagement = ({ leading = null }) => {
   // The Super Admin's branch-wise On/Off on My Consultation. null until the zone is open.
   const [saBranches, setSaBranches] = useState(null);
   const [savingSaBranches, setSavingSaBranches] = useState(false);
+  // Whether each branch keeps its own Services and Products. null until the zone is open.
+  const [storePerBranch, setStorePerBranch] = useState(null);
+  const [savingStorePerBranch, setSavingStorePerBranch] = useState(false);
 
   // The tab being looked at, resolved once: `type` is this table's tab id, and for the
   // Branch pair it is not the same string as the pipeline's API type — both tabs are
@@ -266,7 +269,8 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setSaBranches(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setSaBranches(null); setStorePerBranch(null); return; }
+    getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
     getPhysioDayLock(devPassword).then((r) => setDayLock(!!r.locked)).catch(() => setDayLock(null));
     getLeadDeleteButton(devPassword).then((r) => setDeleteButton(!!r.enabled)).catch(() => setDeleteButton(null));
@@ -470,6 +474,23 @@ export const PipelineStageManagement = ({ leading = null }) => {
       resetFailed(e);
     }
     setSavingSaBranches(false);
+  };
+
+  const toggleStorePerBranch = async () => {
+    const next = !storePerBranch;
+    const ok = window.confirm(next
+      ? "Turn Services and Products per branch ON?\n\nEach branch keeps its own prices, Consultation Duration, session counts and names. A Branch Admin's edit changes their branch only, and their bookings and calendar use their own figures. Branches that have not edited anything keep Super Admin's values."
+      : "Turn Services and Products per branch OFF?\n\nEvery branch goes back to the same Services and Products, Super Admin's values, and a Branch Admin's edit changes it for all branches again. Each branch's own values are kept and come back if this is switched ON again.");
+    if (!ok) return;
+    setSavingStorePerBranch(true);
+    try {
+      const r = await setStoreBranchOverrides(devPassword, next);
+      setStorePerBranch(!!r.enabled);
+      toast.success(r.enabled ? "Each branch now has its own Services and Products" : "Services and Products are the same for every branch");
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingStorePerBranch(false);
   };
 
   const handleResetAllLeads = async () => {
@@ -724,6 +745,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
               { key: "lead-delete-button", label: "Branch Leads delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
               { key: "expense-delete-button", label: "Accountant Approvals delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
+              { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
             ].map((row) => (
               <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`${row.key}-card`}>
                 <span className="text-sm font-medium text-slate-800">{row.label}</span>

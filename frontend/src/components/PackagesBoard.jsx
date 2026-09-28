@@ -393,7 +393,9 @@ const KEEP_EXISTING_NAME = "__existing__";
 
 // Exported for Branch Admin's FITSIO STORE, which opens it to edit a consultation or a
 // diet package.
-export const CreateConsultationModal = ({ item, onClose, onSaved, kind = "consultation", category = "physiotherapy" }) => {
+// branchId: set when editing from a branch's own store, so with Services and Products per
+// branch switched On the edit is that branch's alone (the server decides; see v3_store.py).
+export const CreateConsultationModal = ({ item, onClose, onSaved, kind = "consultation", category = "physiotherapy", branchId }) => {
   const cfg = PACKAGE_KINDS[kind] || PACKAGE_KINDS.consultation;
   const isEdit = Boolean(item);
   // Only the Physiotherapy consultation shelf is sold as fixed packages — see
@@ -454,7 +456,7 @@ export const CreateConsultationModal = ({ item, onClose, onSaved, kind = "consul
         consultation_package: chosenPackage ? chosenPackage.key : null,
       };
       if (isEdit) {
-        await updateStoreItem(item.id, payload);
+        await updateStoreItem(item.id, payload, branchId);
         toast.success(`${cfg.noun} updated`);
       } else {
         await createStoreItem(payload);
@@ -695,7 +697,7 @@ const zumbaMonthsFor = (sessions) => (
 );
 
 // Exported for Branch Admin's FITSIO STORE, which opens it to edit a session-shaped package.
-export const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "physiotherapy" }) => {
+export const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "physiotherapy", branchId }) => {
   const isEdit = Boolean(item);
   const isZumba = category === "zumba";
   const isOfflineOnly = OFFLINE_ONLY_CATEGORIES.has(category);
@@ -804,7 +806,7 @@ export const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "
         manual_price: isManual,
       };
       if (isEdit) {
-        await updateStoreItem(item.id, payload);
+        await updateStoreItem(item.id, payload, branchId);
         toast.success("Session package updated");
       } else {
         await createStoreItem(payload);

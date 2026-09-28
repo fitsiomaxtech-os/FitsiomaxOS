@@ -6,6 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+import store_branch_overrides
 from database import v3_col
 from deps import v3_require_roles
 from schemas.v3 import (
@@ -148,7 +149,9 @@ async def sell_store_item(lead_id: str, payload: V3SellStoreItemInput, user: V3U
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    item = await v3_col("store_items").find_one({"id": payload.item_id}, {"_id": 0})
+    item = await store_branch_overrides.overlay_one(
+        await v3_col("store_items").find_one({"id": payload.item_id}, {"_id": 0}), lead.get("branch_id")
+    )
     if not item:
         raise HTTPException(status_code=404, detail="Store item not found")
     if item.get("item_type", "consultation") == "session":
@@ -718,9 +721,9 @@ async def collect_diet_fee(lead_id: str, payload: V3CollectDietFeeInput, user: V
     if lead.get("package_paid") is None:
         raise HTTPException(status_code=400, detail="Collect the Consultation Fee first")
 
-    item = await v3_col("store_items").find_one(
+    item = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
         {"id": payload.item_id, "item_type": {"$in": list(DIET_ITEM_TYPES)}}, {"_id": 0}
-    )
+    ), lead.get("branch_id"))
     if not item:
         raise HTTPException(status_code=404, detail="Diet Package not found. Add one in FITSIO STORE > Diet Package.")
 
@@ -836,9 +839,9 @@ async def collect_diet_chart_fee(lead_id: str, payload: V3CollectDietChartFeeInp
             detail="The Nutritionist has not recommended a Diet Chart for this patient yet",
         )
 
-    item = await v3_col("store_items").find_one(
+    item = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
         {"id": payload.item_id, "item_type": {"$in": list(DIET_ITEM_TYPES)}}, {"_id": 0}
-    )
+    ), lead.get("branch_id"))
     if not item:
         raise HTTPException(status_code=404, detail="Diet Package not found. Add one in FITSIO STORE > Diet Package.")
 
@@ -927,9 +930,9 @@ async def collect_package_payment(lead_id: str, payload: V3CollectPackagePayment
     # sends is what was handed over, and what it was owed is not the same question.
     package_updates: dict = {}
     if payload.consultation_item_id:
-        item = await v3_col("store_items").find_one(
+        item = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
             {"id": payload.consultation_item_id}, {"_id": 0}
-        )
+        ), lead.get("branch_id"))
         if not item:
             raise HTTPException(status_code=404, detail="Consultation package not found")
         # A House Visit patient's consultation is sold off Home Visit > Consultant rather
@@ -1138,7 +1141,10 @@ async def set_session_package_amount(lead_id: str, payload: V3SessionPackageAmou
     # the mark can still be priced.
     manual = bool(lead.get("session_package_manual"))
     if not manual and lead.get("session_package_id"):
-        pkg = await v3_col("store_items").find_one({"id": lead["session_package_id"]}, {"_id": 0, "manual_price": 1})
+        pkg = await store_branch_overrides.overlay_one(
+            await v3_col("store_items").find_one({"id": lead["session_package_id"]}, {"_id": 0, "id": 1, "manual_price": 1}),
+            lead.get("branch_id"),
+        )
         manual = bool(pkg and pkg.get("manual_price"))
     if not manual:
         raise HTTPException(status_code=400, detail="This package has a fixed price")

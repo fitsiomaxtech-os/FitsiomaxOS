@@ -20,6 +20,7 @@ from stage_utils import get_first_stage_name, realign_branch_stage_leads
 from shift_utils import attach_shifts
 import lead_control
 import lead_purge
+import store_branch_overrides
 from seed import create_default_lead_source, sync_lead_source_branch_name
 from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled
 from routers.v3_inventory import _add_to_stock
@@ -1241,6 +1242,37 @@ async def v3_set_sa_consult_branches(
         {"id": SA_CONSULT_BRANCHES_SETTING_ID},
         {"$set": {
             "id": SA_CONSULT_BRANCHES_SETTING_ID,
+            "enabled": payload.enabled,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"enabled": payload.enabled}
+
+
+# Whether each branch keeps its own Services and Products -- prices, Consultation Duration,
+# session counts, names. On: a branch's edit is its own and its bookings are priced and
+# timed off it. Off (the default): one catalogue for every branch, as it always was. The
+# branch copies are kept either way, so switching back On restores them.
+class StoreBranchOverridesInput(BaseModel):
+    enabled: bool
+
+
+@router.get("/admin/store-branch-overrides")
+async def v3_get_store_branch_overrides(_: V3UserOut = Depends(require_developer_password)):
+    return {"enabled": await store_branch_overrides.enabled()}
+
+
+@router.put("/admin/store-branch-overrides")
+async def v3_set_store_branch_overrides(
+    payload: StoreBranchOverridesInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    await v3_col("app_settings").update_one(
+        {"id": store_branch_overrides.SETTING_ID},
+        {"$set": {
+            "id": store_branch_overrides.SETTING_ID,
             "enabled": payload.enabled,
             "updated_by": user.full_name,
             "updated_at": now_iso(),
