@@ -858,7 +858,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           )}
 
           <RevenueDetailTable
-            title={REVENUE_VIEWS.find((v) => v.key === revenueView)?.label}
             rows={revenueView === "collected" ? filteredTxns : filteredTxns.filter((t) => t.source === revenueView)}
             onView={setViewingLeadId}
             onReceipt={(tx) => setReceipt(receiptForTxn(tx))}
@@ -1146,7 +1145,7 @@ const dayOf = (d) => (d || "").slice(0, 10);
 // so the collapsed cell counts them rather than wrapping to four lines.
 const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.length - 2) });
 
-const RevenueDetailTable = ({ title, rows, onView, onReceipt }) => {
+const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
   const groups = useMemo(() => groupPaymentsByClient(rows), [rows]);
   // Keyed by group, so narrowing the list above leaves stale keys behind harmlessly
   // rather than opening the wrong client.
@@ -1166,26 +1165,20 @@ const RevenueDetailTable = ({ title, rows, onView, onReceipt }) => {
   return (
     <Card data-testid="accountant-manage-revenue-detail">
       <CardContent className="p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-          <div className="flex items-center gap-3">
-            {/* The row count and the payment count are no longer the same number, so both
-                are stated rather than left to be counted off a list that now collapses. */}
-            <p className="text-[11px] text-slate-400" data-testid="revenue-detail-counts">
-              {countLabel(groups.length, "client")} · {countLabel(rows.length, "payment")}
-            </p>
-            {expandable.length > 0 && (
-              <button
-                type="button"
-                onClick={toggleAll}
-                className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-sky-300 hover:text-sky-600"
-                data-testid="revenue-detail-toggle-all"
-              >
-                {allOpen ? "Collapse all" : "Expand all"}
-              </button>
-            )}
+        {/* No title or counts bar: the table's own column header is the top of the card.
+            Expand all only appears when some client actually has several payments. */}
+        {expandable.length > 0 && (
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-sky-300 hover:text-sky-600"
+              data-testid="revenue-detail-toggle-all"
+            >
+              {allOpen ? "Collapse all" : "Expand all"}
+            </button>
           </div>
-        </div>
+        )}
 
         {/* Cards on a phone. Ten columns behind a 52rem scroll means every one of them is
             off-screen except the first two, and a transaction is only useful read whole —
