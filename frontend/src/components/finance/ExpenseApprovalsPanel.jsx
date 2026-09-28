@@ -125,6 +125,53 @@ const ExpenseDetailModal = ({ exp, deciding, onDecide, onClose }) => {
   );
 };
 
+/**
+ * The step between clicking Approve and the expense being approved. Says what is about to
+ * be signed off -- the figure, who it went to, what for -- so a click on the wrong row is
+ * caught here rather than undone afterwards. Above Expense Details, which can open it.
+ */
+const ConfirmApproveModal = ({ exp, saving, onConfirm, onClose }) => (
+  <div
+    className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4"
+    onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
+    data-testid="finance-expense-confirm"
+  >
+    <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+        <h3 className="text-base font-semibold text-slate-800">Confirm Approval</h3>
+        <button type="button" onClick={onClose} disabled={saving} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="space-y-3 p-5">
+        <p className="text-sm text-slate-600">Approve this expense?</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+          <Detail label="Expense">{exp.category}</Detail>
+          <Detail label="Amount"><span className="font-bold text-rose-600">{fmt(exp.amount)}</span></Detail>
+          <Detail label="Paid to">{exp.paid_to}</Detail>
+          <Detail label="Branch">{exp.branch_name}</Detail>
+          <Detail label="Payment mode">{MODE_LABELS[exp.payment_mode] || exp.payment_mode}</Detail>
+          <Detail label="Spent on">{exp.expense_date}</Detail>
+          <Detail label="Raised by">{exp.created_by}</Detail>
+          <Detail label="Bill / reference no.">{exp.reference}</Detail>
+          {exp.note ? <div className="col-span-2"><Detail label="What it was spent on">{exp.note}</Detail></div> : null}
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+        <Button variant="outline" onClick={onClose} disabled={saving} data-testid="finance-expense-confirm-cancel">Cancel</Button>
+        <Button
+          className="bg-emerald-600 text-white hover:bg-emerald-700"
+          onClick={onConfirm}
+          disabled={saving}
+          data-testid="finance-expense-confirm-approve"
+        >
+          <Check className="mr-1 h-4 w-4" /> {saving ? "Approving…" : "Confirm"}
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
 export const ExpenseApprovalsPanel = ({
   onChanged = () => {},
   branchId = "",
@@ -138,6 +185,7 @@ export const ExpenseApprovalsPanel = ({
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState(null);
   const [viewing, setViewing] = useState(null); // the expense open in Expense Details
+  const [confirming, setConfirming] = useState(null); // the expense waiting on "Yes, approve"
   // Switched on and off in Developer Access; the list says which.
   const [deleteEnabled, setDeleteEnabled] = useState(false);
 
@@ -174,7 +222,10 @@ export const ExpenseApprovalsPanel = ({
     [rows, view],
   );
 
-  const decide = async (exp, approve) => {
+  // Approve never goes through on the first click, from the row or from Expense Details:
+  // it opens the confirm popup, and only that popup's own button sends it.
+  const decide = async (exp, approve, confirmed = false) => {
+    if (approve && !confirmed) { setConfirming(exp); return; }
     let reason = "";
     if (!approve) {
       reason = window.prompt(`Why is this ${exp.category} expense of ${fmt(exp.amount)} being turned down?`) || "";
@@ -186,6 +237,7 @@ export const ExpenseApprovalsPanel = ({
       else await rejectFinanceExpense(exp.id, reason.trim());
       toast.success(approve ? "Approved" : "Rejected");
       setViewing(null);
+      setConfirming(null);
       load();
       onChanged();
     } catch (e) {
@@ -382,6 +434,15 @@ export const ExpenseApprovalsPanel = ({
           deciding={deciding === viewing.id}
           onDecide={decide}
           onClose={() => setViewing(null)}
+        />
+      )}
+
+      {confirming && (
+        <ConfirmApproveModal
+          exp={confirming}
+          saving={deciding === confirming.id}
+          onConfirm={() => decide(confirming, true, true)}
+          onClose={() => setConfirming(null)}
         />
       )}
     </div>
