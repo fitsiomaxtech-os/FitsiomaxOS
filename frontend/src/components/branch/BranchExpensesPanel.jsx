@@ -697,7 +697,7 @@ const SummaryCard = ({ label, color, amount, sub, active, onClick, testid }) => 
     <span className="mt-1 block truncate text-lg font-extrabold leading-tight tabular-nums sm:text-xl" style={{ color }}>
       {amount}
     </span>
-    <span className="mt-0.5 block truncate text-[10px] text-slate-400">{sub}</span>
+    {sub ? <span className="mt-0.5 block truncate text-[10px] text-slate-400">{sub}</span> : null}
   </button>
 );
 
@@ -1181,18 +1181,18 @@ const CashReturnList = ({ returns, onCancel, showBranch }) => {
   );
 };
 
-const countLabel = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-
 /**
  * @param branchId  Whose drawer to show. Cash in hand belongs to a branch, so with no
  *                  branch in view the card and the handover button are left out.
  */
-export const BranchExpensesPanel = ({ onChanged, branchId }) => {
+/* section: "cash" is the drawer alone (Summary's Cash In Hand card), "expenses" the
+   expense piles alone (its Expenses card); left unset, both, as before. */
+export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   // Which of the four piles is open. It opens on the request log rather than the drawer:
   // the drawer is only there when a branch is picked, and this is the expense side.
-  const [view, setView] = useState("request");
+  const [view, setView] = useState(section === "cash" ? "cash" : "request");
   const [adding, setAdding] = useState(false);
   const [handingOver, setHandingOver] = useState(false);
   const [cash, setCash] = useState(null);
@@ -1243,6 +1243,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
       setCash(box);
       setHandovers(ho.handovers || []);
       setCashReturns(ret.cash_returns || []);
+      onChangedRef.current?.();
     } catch {
       setCash(null);
       setHandovers([]);
@@ -1308,8 +1309,8 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
   // per-branch breakdown where there is one.
   const byBranch = cash?.by_branch || null;
   const cashFigures = byBranch ? cash.total : cash;
-  const showCash = !!cashFigures;
-  const activeView = view === "cash" && !showCash ? "request" : view;
+  const showCash = !!cashFigures && section !== "expenses";
+  const activeView = section === "cash" ? "cash" : view === "cash" && !showCash ? "request" : view;
 
   // The four, in the order the desk asked for them. There was a fifth, Approved, carrying
   // the same signed-off total over the same rows as Expense Approved — the same card twice
@@ -1321,11 +1322,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
           label: "Cash In Hand",
           color: cashFigures.cash_in_hand < 0 ? "#e11d48" : "#0284c7",
           amount: fmt(cashFigures.cash_in_hand),
-          sub: byBranch
-            // The total leaves out branches whose opening count is not set yet.
-            ? `across ${countLabel(byBranch.length - (cashFigures.opening_unset || 0), "branch", "branches")}`
-              + (cashFigures.opening_unset ? ` · ${cashFigures.opening_unset} not opened` : "")
-            : cash.opening_set ? "in the drawer now" : "opening not set",
         }]
       : []),
     {
@@ -1333,21 +1329,18 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
       label: "Expense Request",
       color: "#6366f1",
       amount: fmt(piles.request.total),
-      sub: `${countLabel(piles.request.rows.length, "request", "requests")} raised`,
     },
     {
       key: "expense_approved",
       label: "Expense Approved",
       color: "#059669",
       amount: fmt(piles.approved.total),
-      sub: `${countLabel(piles.approved.rows.length, "expense", "expenses")} signed off`,
     },
     {
       key: "pending",
       label: "Pending Approved",
       color: "#d97706",
       amount: fmt(piles.pending.total),
-      sub: `${countLabel(piles.pending.rows.length, "request", "requests")} waiting`,
     },
   ];
 
@@ -1389,8 +1382,9 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
 
           Two across a phone so the amounts stay readable, four across from lg where there
           is room for the whole row of them. */}
+      {section !== "cash" && (
       <div
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4"
+        className={`grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 ${CARDS.length === 4 ? "lg:grid-cols-4" : ""}`}
         data-testid="branch-expense-summary-cards"
       >
         {CARDS.map((c) => (
@@ -1406,6 +1400,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
           />
         ))}
       </div>
+      )}
 
       {/* What is being read, and the one thing there is to do to it. Add Expense sits on
           every expense pile rather than only the requests: wanting to log spending does
@@ -1416,13 +1411,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
             {activeView !== "cash"
               ? list.title
               : byBranch ? "What every branch is holding" : "How the drawer got to that figure"}
-          </p>
-          <p className="text-[11px] text-slate-400">
-            {activeView !== "cash"
-              ? list.hint
-              : byBranch
-                ? "One row per branch — collections and returns in, spending and handovers out"
-                : "Collections and returns in; spending and handovers out"}
           </p>
         </div>
         {activeView === "cash" ? (

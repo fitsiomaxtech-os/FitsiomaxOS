@@ -7,7 +7,7 @@ import { toast } from "@/components/ui/sonner";
 import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { rangeFor } from "@/lib/dateRange";
-import { getBranches, getRevenueOverview, getFinanceExpenses } from "@/lib/api";
+import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { receiptFromTransaction } from "@/lib/receipt";
@@ -69,6 +69,8 @@ const mainTabClasses = (tab, active) => {
 // that has not been through it, as Rs.4,96,594 and Rs.4,96,594 did here).
 const LEDGER_VIEWS = [
   { key: "income", label: "Income" },
+  // The drawer between money in and money out: what the branch should be holding now.
+  { key: "cash", label: "Cash In Hand" },
   { key: "expenses", label: "Expenses" },
 ];
 
@@ -376,6 +378,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // which fixes it on Approved and never moves it again.
   const [incomeStage, setIncomeStage] = useState(approvedOnly ? "approved" : "requested");
   const [expenseTotals, setExpenseTotals] = useState({ approved_total: 0, approved_count: 0, pending_count: 0 });
+  // One branch's drawer, or every opened branch's added up where no branch is picked.
+  const [cashInHand, setCashInHand] = useState(0);
   const [paymentModeFilter, setPaymentModeFilter] = useState("all");
   // Which side of the business the income summary is counting, where this board owns
   // the pills for it. "all" means no filter, same as a caller leaving `mode` unset.
@@ -448,6 +452,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         pending_count: d.pending_count || 0,
       }))
       .catch(() => { /* the card falls back to zero; the panel says why when opened */ });
+    getBranchCash(branchId ? { branch_id: branchId } : {})
+      .then((d) => setCashInHand((d?.by_branch ? d.total?.cash_in_hand : d?.cash_in_hand) || 0))
+      .catch(() => setCashInHand(0));
   }, [branchId]);
 
   useEffect(() => { loadExpenseTotals(); }, [loadExpenseTotals]);
@@ -736,16 +743,19 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               figure does not change colour depending on which screen it is read on. The
               picked one is ringed rather than filled, or the unpicked side would read as
               switched off rather than as the other half of the same total. */}
-          <div className="grid grid-cols-2 gap-3" data-testid="accountant-manage-ledger-filter">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="accountant-manage-ledger-filter">
             {LEDGER_VIEWS.map((v) => {
               const on = ledger === v.key;
-              const income = v.key === "income";
-              const tone = income
-                ? { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600/80" }
-                : { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700", sub: "text-rose-600/80" };
-              const value = income ? sums.totals.collected : expenseTotals.approved_total;
-              const count = income ? sums.counts.collected : expenseTotals.approved_count;
-              const noun = income ? "payment" : "expense";
+              const tone = {
+                income: { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
+                cash: { ring: "#0284c7", border: "border-sky-200", bg: "bg-sky-50/60", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
+                expenses: { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
+              }[v.key];
+              const value = {
+                income: sums.totals.collected,
+                cash: cashInHand,
+                expenses: expenseTotals.approved_total,
+              }[v.key];
               return (
                 <button
                   key={v.key}
@@ -757,15 +767,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   data-testid={`accountant-manage-ledger-${v.key}`}
                 >
                   <p className={`text-[11px] font-bold uppercase tracking-wider ${tone.text}`}>{v.label}</p>
-                  <p className={`mt-1 text-2xl font-bold ${tone.text}`}>{fmt(value)}</p>
-                  <p className={`text-[11px] ${tone.sub}`}>
-                    {countLabel(count, noun)}
-                    {/* Said on the card rather than only inside, so a branch does not have
-                        to open Expenses to find out something is waiting on somebody. */}
-                    {!income && expenseTotals.pending_count > 0
-                      ? ` \u00b7 ${expenseTotals.pending_count} awaiting approval`
-                      : ""}
-                  </p>
+                  <p className={`mt-1 text-2xl font-bold tabular-nums ${tone.text}`}>{fmt(value)}</p>
                 </button>
               );
             })}
@@ -775,7 +777,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               the revenue tiles, the source table, the payment-mode row — describes money
               going out, so the whole of the income side steps aside for it rather than
               being reused with different numbers in it. */}
-          {ledger === "expenses" && <BranchExpensesPanel onChanged={loadExpenseTotals} branchId={branchId} />}
+          {ledger === "cash" && <BranchExpensesPanel section="cash" onChanged={loadExpenseTotals} branchId={branchId} />}
+          {ledger === "expenses" && <BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} />}
 
           {ledger === "income" && (
           <>
