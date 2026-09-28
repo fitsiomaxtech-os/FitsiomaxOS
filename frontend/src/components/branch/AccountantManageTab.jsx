@@ -1163,12 +1163,12 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
   const toggleAll = () => setOpen(allOpen ? new Set() : new Set(expandable.map((g) => g.key)));
 
   return (
-    <Card data-testid="accountant-manage-revenue-detail">
-      <CardContent className="p-4">
+    <Card className="overflow-hidden" data-testid="accountant-manage-revenue-detail">
+      <CardContent className="p-0">
         {/* No title or counts bar: the table's own column header is the top of the card.
             Expand all only appears when some client actually has several payments. */}
         {expandable.length > 0 && (
-          <div className="mb-3 flex justify-end">
+          <div className="flex justify-end border-b border-slate-100 px-3 py-2">
             <button
               type="button"
               onClick={toggleAll}
@@ -1185,7 +1185,7 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
             who paid, how much, by what, when. The collections are listed inside the card
             rather than behind an expander: a phone row is already a block, and one line
             per payment is cheaper than a tap. */}
-        <div className="space-y-2 md:hidden" data-testid="revenue-detail-mobile">
+        <div className="space-y-2 p-3 md:hidden" data-testid="revenue-detail-mobile">
           {groups.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-400">No transactions yet.</p>
           ) : groups.map((g, i) => (
@@ -1235,19 +1235,21 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
         <div className="hidden overflow-x-auto md:block">
           {/* table-fixed at w-full squeezes ten columns into a phone's width rather than
               letting the wrapper scroll — the min-width is what makes it scroll instead. */}
-          <table className="w-full min-w-[52rem] table-fixed border-separate border-spacing-x-0 border-spacing-y-2 text-sm">
-            <thead>
+          {/* Flat rows with a hairline between them, under the same slate-500 header the
+              branch lead list uses. */}
+          <table className="w-full min-w-[52rem] table-fixed border-collapse text-sm">
+            <thead className="bg-slate-500 text-[11px] font-semibold uppercase tracking-wide text-white">
               <tr>
-                <th className="w-[4%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">S.No</th>
-                <th className="w-[15%] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Client</th>
-                <th className="w-[14%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Transaction ID</th>
-                <th className="w-[12%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Consultation/Session</th>
-                <th className="w-[11%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phone</th>
-                <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Paid Amount</th>
-                <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Payment Mode</th>
-                <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Date</th>
-                <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Branch</th>
-                <th className="w-[5%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">View</th>
+                <th className="w-[4%] px-3 py-2.5 text-center">S.No</th>
+                <th className="w-[15%] px-3 py-2.5 text-left">Client</th>
+                <th className="w-[14%] px-3 py-2.5 text-center">Transaction ID</th>
+                <th className="w-[12%] px-3 py-2.5 text-center">Consultation/Session</th>
+                <th className="w-[11%] px-3 py-2.5 text-center">Phone</th>
+                <th className="w-[10%] px-3 py-2.5 text-center">Paid Amount</th>
+                <th className="w-[10%] px-3 py-2.5 text-center">Payment Mode</th>
+                <th className="w-[10%] px-3 py-2.5 text-center">Date</th>
+                <th className="w-[9%] px-3 py-2.5 text-center">Branch</th>
+                <th className="w-[5%] px-3 py-2.5 text-center">View</th>
               </tr>
             </thead>
             <tbody>
@@ -1263,11 +1265,11 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                   <tr
                     key={g.key}
                     onClick={many ? () => toggle(g.key) : undefined}
-                    className={many ? "cursor-pointer" : undefined}
+                    className={`border-b border-slate-100 transition-colors hover:bg-slate-50 ${many ? "cursor-pointer" : ""}`}
                     data-testid={`revenue-detail-row-${g.key}`}
                   >
-                    <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-3 py-2 text-center text-slate-400">{i + 1}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">
+                    <td className="px-3 py-2.5 text-center text-slate-400">{i + 1}</td>
+                    <td className="px-3 py-2.5 font-medium text-slate-800">
                       {g.client_name}
                       {many && (
                         <span className="block text-[10px] font-normal text-slate-400">{countLabel(g.payments.length, "payment")}</span>
@@ -1278,7 +1280,7 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                         underneath. Blank for collections taken before transaction ids
                         existed — those rows are real money and must still list, so this
                         shows a dash rather than being filtered out. */}
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center">
+                    <td className="px-3 py-2.5 text-center">
                       {many ? (
                         <button
                           type="button"
@@ -1295,13 +1297,13 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">
+                    <td className="px-3 py-2.5 text-center text-slate-600">
                       {sources.shown.map(titleCase).join(" · ") || "—"}
                       {sources.extra > 0 && <span className="text-slate-400"> +{sources.extra}</span>}
                     </td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{g.phone || "—"}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-emerald-600">{fmt(g.total)}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center">
+                    <td className="px-3 py-2.5 text-center text-slate-600">{g.phone || "—"}</td>
+                    <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{fmt(g.total)}</td>
+                    <td className="px-3 py-2.5 text-center">
                       <div className="flex flex-wrap items-center justify-center gap-1">
                         {g.modes.length === 0
                           ? <PaymentModeBadge mode="" />
@@ -1312,15 +1314,15 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                     {/* The newest collection dates the row; a client whose payments span
                         days says so underneath rather than reading as if they all landed
                         on the one date. */}
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">
+                    <td className="px-3 py-2.5 text-center text-slate-600">
                       {dayOf(g.latest) || "—"}
                       {spansDays && <span className="block text-[10px] text-slate-400">since {dayOf(g.oldest)}</span>}
                     </td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">
+                    <td className="px-3 py-2.5 text-center text-slate-600">
                       {g.branches[0] || "—"}
                       {g.branches.length > 1 && <span className="text-slate-400"> +{g.branches.length - 1}</span>}
                     </td>
-                    <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-3 py-2 text-center">
+                    <td className="px-3 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         <button
                           type="button"
@@ -1356,25 +1358,25 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                   // Each collection exactly as it listed before, minus the client identity
                   // the row above already carries.
                   ...(many && isOpen ? g.payments.map((p) => (
-                    <tr key={`${g.key}-${p.id}`} data-testid={`revenue-detail-payment-${p.id}`}>
-                      <td className="rounded-l-[5px] border-y border-l-2 border-y-slate-100 border-l-sky-300 bg-slate-50 px-3 py-1.5" />
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5" />
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-center">
+                    <tr key={`${g.key}-${p.id}`} className="border-b border-slate-100 bg-slate-50" data-testid={`revenue-detail-payment-${p.id}`}>
+                      <td className="border-l-2 border-l-sky-300 px-3 py-1.5" />
+                      <td className="px-3 py-1.5" />
+                      <td className="px-3 py-1.5 text-center">
                         {p.transaction_id
                           ? <span className="font-mono text-[11px] text-slate-600" title={p.transaction_id}>{p.transaction_id}</span>
                           : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-center capitalize text-slate-600">{p.source}</td>
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5" />
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-center font-semibold text-emerald-600">{fmt(p.gross)}</td>
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-center"><PaymentModes tx={p} /></td>
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-center text-slate-600">{dayOf(p.date)}</td>
-                      <td className="border-y border-slate-100 bg-slate-50 px-3 py-1.5 text-center text-slate-600">{p.branch_name || "—"}</td>
+                      <td className="px-3 py-1.5 text-center capitalize text-slate-600">{p.source}</td>
+                      <td className="px-3 py-1.5" />
+                      <td className="px-3 py-1.5 text-center font-semibold text-emerald-600">{fmt(p.gross)}</td>
+                      <td className="px-3 py-1.5 text-center"><PaymentModes tx={p} /></td>
+                      <td className="px-3 py-1.5 text-center text-slate-600">{dayOf(p.date)}</td>
+                      <td className="px-3 py-1.5 text-center text-slate-600">{p.branch_name || "—"}</td>
                       {/* The one cell on these sub-rows that is not blank. Each of them
                           is a collection in its own right, so each has its own receipt —
                           which is the whole reason the group row above declines to show
                           one. No client button here: the row above is that client. */}
-                      <td className="rounded-r-[5px] border-y border-r border-slate-100 bg-slate-50 px-3 py-1.5 text-center">
+                      <td className="px-3 py-1.5 text-center">
                         {onReceipt && p.transaction_id && (
                           <button
                             type="button"
