@@ -326,7 +326,14 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
             />
             <Figure label="Handed over" value={fmt(data.total?.handed_over)} testId="branch-cash-total-handed" {...card("handed_over")} />
             <Figure label="In transit" value={fmt(data.total?.in_transit)} tone="amber" testId="branch-cash-total-transit" {...card("in_transit")} />
-            <Figure label="Cash in hand" value={fmt(data.total?.cash_in_hand)} tone="emerald" testId="branch-cash-total-hand" {...card("cash_in_hand")} />
+            {/* Summed over branches whose opening count is set; the rest are left out of it. */}
+            <Figure
+              label={data.total?.opening_unset ? `Cash in hand · ${data.total.opening_unset} not opened` : "Cash in hand"}
+              value={fmt(data.total?.cash_in_hand)}
+              tone="emerald"
+              testId="branch-cash-total-hand"
+              {...card("cash_in_hand")}
+            />
           </div>
           {kind && kind !== "branches" && <EntriesPanel kind={kind} branchId="" showBranch onClose={() => setKind(restKind)} />}
           {/* The per-branch roll-up, behind the Branches card rather than always on screen. */}

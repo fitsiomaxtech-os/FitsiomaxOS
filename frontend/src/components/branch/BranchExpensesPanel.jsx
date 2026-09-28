@@ -1128,7 +1128,9 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
           color: cashFigures.cash_in_hand < 0 ? "#e11d48" : "#0284c7",
           amount: fmt(cashFigures.cash_in_hand),
           sub: byBranch
-            ? `across ${countLabel(byBranch.length, "branch", "branches")}`
+            // The total leaves out branches whose opening count is not set yet.
+            ? `across ${countLabel(byBranch.length - (cashFigures.opening_unset || 0), "branch", "branches")}`
+              + (cashFigures.opening_unset ? ` · ${cashFigures.opening_unset} not opened` : "")
             : cash.opening_set ? "in the drawer now" : "opening not set",
         }]
       : []),

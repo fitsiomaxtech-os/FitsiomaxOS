@@ -12,7 +12,7 @@ from physio_scope import physio_owns_lead, resolve_physio_doctor
 from deps import v3_require_roles, is_branch_admin_role, is_physio_role
 from schemas.v3 import V3UserOut, V3MarkInstallmentPaidInput
 from stage_utils import entry_branch_stage_names
-from utils import generate_transaction_id
+from utils import clinic_today, generate_transaction_id
 # An installment is the Treatment Fee arriving in pieces, so it is counted under exactly
 # the rules the fee itself is -- imported rather than copied. v3_fitness.py and
 # v3_zumba.py already each carry their own copy of this counter; a fourth would be a
@@ -1194,6 +1194,9 @@ async def create_expense(
         if vendor.get("active") is False:
             raise HTTPException(status_code=400, detail=f"{vendor['name']} is switched off in the Vendor list")
 
+    if from_drawer and branch_id:
+        await _refuse_before_count(branch_id, payload.expense_date or clinic_today(), "an expense")
+
     doc = {
         "id": str(uuid.uuid4()),
         "category": payload.category.strip(),
@@ -1204,6 +1207,10 @@ async def create_expense(
         "vendor_id": (vendor or {}).get("id"),
         "vendor_name": (vendor or {}).get("name", ""),
         "payment_mode": payment_mode,
+        # Whether these notes came out of the branch's drawer. Branch Cash subtracts only
+        # the ones that did: head office paying a branch's bill in cash from its own till
+        # is a cash expense against that branch, but the branch's drawer never held it.
+        "from_branch_drawer": from_drawer,
         "reference": (payload.reference or "").strip(),
         # Stored as sent, not required here. The accountant's own form asks for the count
         # and will not submit one that does not add up to the amount; a branch's form does
@@ -1957,6 +1964,9 @@ async def revenue_overview(
     # "online" | "offline", off each lead's own vertical — named apart from the loop's
     # own `mode` (payment mode: cash/upi/card/...) below so the two can never collide.
     vertical_mode: Optional[str] = None,
+    # Every collection in `transactions` rather than the newest 500. Branch Cash's
+    # drill-down sets it: its list has to add up to the card, and the card counts them all.
+    full_transactions: bool = False,
     user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
 ):
     """AC Overview > Total Revenue, and Accountant Manage (Super Admin's per-branch
@@ -1966,24 +1976,34 @@ async def revenue_overview(
     if is_branch_admin_role(user.role):
         branch_id = user.branch_id
     today = datetime.now(timezone.utc).date().isoformat()
-    lead_query = {"branch_id": branch_id} if branch_id else {}
+    # A collection belongs to the branch that took it (see _branch_at), so a scoped read
+    # also loads the patients this branch has since transferred away -- their money here is
+    # still this branch's -- and drops what a transferred-in patient paid before arriving.
+    # Reading branch_id alone moved a patient's whole payment history, and the cash in the
+    # old branch's drawer, to the new branch the moment they moved.
+    lead_query = {"$or": [
+        {"branch_id": branch_id},
+        {"revenue_branch_splits.branch_id": branch_id},
+    ]} if branch_id else {}
     if vertical_mode in ("online", "offline"):
         lead_query["vertical"] = {"$regex": f"^{vertical_mode}_"}
-    leads = await v3_col("leads").find(lead_query, {"_id": 0}).to_list(20000)
-    lead_ids = [l["id"] for l in leads]
-    lead_branch_map = {l["id"]: l.get("branch_id") for l in leads}
-    lead_name_map = {l["id"]: l.get("name", "Unknown") for l in leads}
-    lead_phone_map = {l["id"]: l.get("phone", "") for l in leads}
+    activity_leads = await v3_col("leads").find(lead_query, {"_id": 0}).to_list(20000)
+    # Pending, outstanding and schedules further down are about who the branch has now.
+    leads = [l for l in activity_leads if not branch_id or l.get("branch_id") == branch_id]
+    lead_ids = [l["id"] for l in activity_leads]
+    lead_by_id = {l["id"]: l for l in activity_leads}
+    lead_name_map = {l["id"]: l.get("name", "Unknown") for l in activity_leads}
+    lead_phone_map = {l["id"]: l.get("phone", "") for l in activity_leads}
     # On the row so a receipt reissued from Accountant Manage can print it. The leads
     # are already loaded whole above, so this is a pass over a list in memory rather
     # than a query — and without it the one field a bill is filed under came out blank.
-    lead_patient_no_map = {l["id"]: l.get("patient_number", "") for l in leads}
-    lead_balance_map = {l["id"]: _lead_outstanding_balance(l) for l in leads}
-    lead_progress_map = {l["id"]: _lead_payment_progress(l) for l in leads}
-    lead_session_map = {l["id"]: _lead_session_summary(l) for l in leads}
+    lead_patient_no_map = {l["id"]: l.get("patient_number", "") for l in activity_leads}
+    lead_balance_map = {l["id"]: _lead_outstanding_balance(l) for l in activity_leads}
+    lead_progress_map = {l["id"]: _lead_payment_progress(l) for l in activity_leads}
+    lead_session_map = {l["id"]: _lead_session_summary(l) for l in activity_leads}
     lead_first_installment_map = {
         l["id"]: ((l.get("treatment_fee_payment_details") or {}).get("installments") or [{}])[0].get("amount")
-        for l in leads if l.get("treatment_fee_payment_mode") == "partial"
+        for l in activity_leads if l.get("treatment_fee_payment_mode") == "partial"
     }
 
     branch_docs = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1, "vertical": 1}).to_list(500)
@@ -2062,7 +2082,10 @@ async def revenue_overview(
             if first_amount is not None:
                 amount = first_amount
         day = (act.get("created_at") or "")[:10]
-        bid = lead_branch_map.get(act.get("lead_id"))
+        lead = lead_by_id.get(act.get("lead_id"))
+        bid = _branch_at(lead, act.get("created_at") or "") if lead else None
+        if branch_id and bid != branch_id:
+            continue  # taken while the patient was at another branch -- that branch's money
         bname = _branch_label(bid, branch_name_map)
 
         if category == "session":
@@ -2472,7 +2495,7 @@ async def revenue_overview(
             day: {mode: round(amount, 2) for mode, amount in modes.items()}
             for day, modes in by_day_modes.items()
         },
-        "transactions": sorted(transactions, key=lambda t: t["date"], reverse=True)[:500],
+        "transactions": sorted(transactions, key=lambda t: t["date"], reverse=True)[:None if full_transactions else 500],
         "outstanding_clients": outstanding_clients,
         "payment_schedule": payment_schedule,
         "pending_leads": pending_leads,
@@ -2683,6 +2706,10 @@ async def mark_installment_paid(
         raise HTTPException(status_code=404, detail="Installment not found")
     if installments[idx].get("paid"):
         raise HTTPException(status_code=400, detail="This installment has already been collected")
+    # The bare "just flip paid" call logged no activity, so money it marked collected never
+    # reached revenue or, when it was cash, the branch's drawer. Every screen sends a mode.
+    if not payload.payment_mode:
+        raise HTTPException(status_code=400, detail="Pick how this installment was paid")
 
     activity_details = None
     transaction_id = None
@@ -3639,6 +3666,35 @@ class CashAdjustmentCreate(BaseModel):
     note: Optional[str] = ""
 
 
+async def _last_count_day(branch_id: str) -> Optional[str]:
+    """The day this branch's cash was last physically counted -- its opening count or a
+    counted correction -- or None if it never has been. A handover's variance is also a
+    correction, but it counts the carrier's bag, not the drawer, so it has no counted_to."""
+    rows = await v3_col("cash_adjustments").find(
+        {"branch_id": branch_id, "$or": [{"reason": "opening"}, {"counted_to": {"$ne": None}}]},
+        {"_id": 0, "on": 1},
+    ).to_list(5000)
+    days = [r["on"] for r in rows if r.get("on")]
+    return max(days) if days else None
+
+
+async def _refuse_before_count(branch_id: str, on: str, what: str) -> None:
+    """Refuse drawer money dated before the drawer's last count.
+
+    The count is what the notes actually came to that day, so everything that happened
+    before it is already inside it. Entered afterwards and dated earlier, the same rupees
+    would move the box a second time and it would stop matching the cash.
+    """
+    counted = await _last_count_day(branch_id)
+    if counted and (on or "") < counted:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This branch's cash was counted on {counted}, and {what} dated before then "
+                   "is already in that count — date it on or after the count, or ask the "
+                   "accountant to correct the balance",
+        )
+
+
 async def _branch_cash_figures(
     branch_id: str, user: V3UserOut, up_to: Optional[str] = None, with_split: bool = False,
 ) -> dict:
@@ -3671,7 +3727,11 @@ async def _branch_cash_figures(
     # Every branch expense is cash now, so this is all of them — approved or still waiting,
     # never a rejected one. The notes left the branch when it was spent, whatever the
     # accountant does with the row afterwards.
-    exp_query = {"branch_id": branch_id, "payment_mode": "cash", "rejected": {"$ne": True}}
+    exp_query = {
+        "branch_id": branch_id, "payment_mode": "cash", "rejected": {"$ne": True},
+        # Rows from before the flag existed have none, and still count as they always did.
+        "from_branch_drawer": {"$ne": False},
+    }
     if up_to:
         exp_query["expense_date"] = {"$lte": up_to}
     exp_rows = await v3_col("expenses").find(exp_query, {"_id": 0, "amount": 1}).to_list(20000)
@@ -3789,7 +3849,11 @@ async def get_branch_cash(
         "cash_spent": round(sum(r["cash_spent"] for r in rows), 2),
         "handed_over": round(sum(r["handed_over"] for r in rows), 2),
         "in_transit": round(sum(r["in_transit"] for r in rows), 2),
-        "cash_in_hand": round(sum(r["cash_in_hand"] for r in rows), 2),
+        # Only drawers whose opening count is set. Before it, a branch's balance is every
+        # rupee of cash it ever took less a few expenses -- flagged on its own row, but
+        # summed in here it made the head-office total mean nothing.
+        "cash_in_hand": round(sum(r["cash_in_hand"] for r in rows if r["opening_set"]), 2),
+        "opening_unset": sum(1 for r in rows if not r["opening_set"]),
     }
     return {"branch_id": None, "total": total, "by_branch": sorted(rows, key=lambda r: -r["cash_in_hand"])}
 
@@ -3837,10 +3901,19 @@ async def get_branch_cash_entries(
 
     rows = []
     ledger = kind == "cash_in_hand"
+    if ledger and not branch_id:
+        # The roll-up card sums only branches whose opening is set, so its list does too.
+        opened = set(await v3_col("cash_adjustments").distinct(
+            "branch_id", {"branch_id": {"$in": branch_ids}, "reason": "opening"}
+        ))
+        branch_ids = [b for b in branch_ids if b in opened]
 
     if kind in ("collected", "collected_cash") or ledger:
         for bid in branch_ids:
-            rev = await revenue_overview(start_date=None, end_date=None, branch_id=bid, user=user)
+            # Every collection, not the newest 500 -- the card counts them all.
+            rev = await revenue_overview(
+                start_date=None, end_date=None, branch_id=bid, full_transactions=True, user=user,
+            )
             for t in rev.get("transactions") or []:
                 amount = round(float(t.get("gross") or 0), 2) if kind == "collected" else _cash_share(t)
                 if not amount:
@@ -3860,7 +3933,10 @@ async def get_branch_cash_entries(
                 })
 
     if kind == "cash_spent" or ledger:
-        exp_query = {"payment_mode": "cash", "rejected": {"$ne": True}, "branch_id": {"$in": branch_ids}}
+        exp_query = {
+            "payment_mode": "cash", "rejected": {"$ne": True}, "branch_id": {"$in": branch_ids},
+            "from_branch_drawer": {"$ne": False},
+        }
         for e in await v3_col("expenses").find(exp_query, {"_id": 0}).sort("expense_date", -1).to_list(20000):
             amount = round(float(e.get("amount") or 0), 2)
             rows.append({
@@ -3955,7 +4031,7 @@ async def create_cash_adjustment(
         "amount": delta,
         "counted_to": counted,
         "note": (payload.note or "").strip(),
-        "on": _now()[:10],
+        "on": clinic_today(),
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": _now(),
@@ -4013,6 +4089,9 @@ async def create_cash_handover(
             detail=f"The notes counted come to Rs.{counted_cash + coins:g}, but the handover is Rs.{amount:g}",
         )
 
+    on = payload.on or clinic_today()
+    await _refuse_before_count(branch_id, on, "a handover")
+
     branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "branch_name": 1})
     doc = {
         "id": str(uuid.uuid4()),
@@ -4022,7 +4101,7 @@ async def create_cash_handover(
         "cash_denominations": notes,
         "cash_coins": coins,
         "handed_to": payload.handed_to.strip(),
-        "on": payload.on or _now()[:10],
+        "on": on,
         "note": (payload.note or "").strip(),
         "status": "pending",
         "raised_by": user.full_name,
@@ -4100,7 +4179,13 @@ async def receive_cash_handover(
         "variance": variance,
         "receive_note": (payload.note or "").strip(),
     }
-    await v3_col("cash_handovers").update_one({"id": handover_id}, {"$set": update})
+    # Only while still pending, in the same write: two receives at once would otherwise
+    # both pass the check above and each write the variance onto the box.
+    res = await v3_col("cash_handovers").update_one(
+        {"id": handover_id, "status": "pending"}, {"$set": update}
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This handover has already been received")
 
     # The branch sent what it sent; if the accountant counted less, the branch is that
     # much shorter than its box says, so the box is corrected down (and up for an over).
@@ -4113,7 +4198,7 @@ async def receive_cash_handover(
             "counted_to": None,
             "note": f"Handover {handover_id[:8]} counted Rs.{received:g} against Rs.{stated:g} stated"
                     + (f" — {payload.note.strip()}" if (payload.note or '').strip() else ""),
-            "on": now[:10],
+            "on": clinic_today(),
             "created_by": user.full_name,
             "created_by_role": user.role,
             "created_at": now,
@@ -4130,11 +4215,12 @@ async def receive_cash_handover(
 @router.post("/finance/cash-handover/{handover_id}/cancel")
 async def cancel_cash_handover(
     handover_id: str,
-    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "business_dev")),
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
 ):
     """Pull a handover back before the accountant has received it — the notes never left,
     or left and came back. Only while pending: once received it is the accountant's record
-    to unpick, not the branch's."""
+    to unpick, not the branch's. The accountant is here because they can raise one too
+    (see create_cash_handover), and one raised by mistake had no way back."""
     row = await v3_col("cash_handovers").find_one({"id": handover_id}, {"_id": 0})
     if not row:
         raise HTTPException(status_code=404, detail="Handover not found")
@@ -4142,10 +4228,12 @@ async def cancel_cash_handover(
         raise HTTPException(status_code=403, detail="That handover is not your branch's")
     if row.get("status") != "pending":
         raise HTTPException(status_code=409, detail="This handover has already been received — it cannot be cancelled")
-    await v3_col("cash_handovers").update_one(
-        {"id": handover_id},
+    res = await v3_col("cash_handovers").update_one(
+        {"id": handover_id, "status": "pending"},
         {"$set": {"status": "cancelled", "cancelled_by": user.full_name, "cancelled_at": _now()}},
     )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This handover has already been received — it cannot be cancelled")
     return {"message": "Handover cancelled"}
 
 
