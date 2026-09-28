@@ -9,7 +9,7 @@ import { toast } from "@/components/ui/sonner";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import {
   getBranches, getFinanceExpenses, createFinanceExpense, deleteFinanceExpense,
-  approveFinanceExpense, rejectFinanceExpense,
+  approveFinanceExpense, rejectFinanceExpense, listVendors, createVendor,
 } from "@/lib/api";
 import { EXPENSE_PAYMENT_MODE_OPTIONS, PAYMENT_MODE_LABELS, PAYMENT_MODE_COLORS, orderedPaymentModeEntries } from "@/lib/paymentModes";
 import { PETTY_CASH_LIMIT, PETTY_CASH_REASON_REQUIRED, isPettyCash } from "@/lib/pettyCash";
@@ -26,7 +26,13 @@ const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN")}`;
 // to be the local day, not a UTC one, or an expense entered in the evening files itself
 // under tomorrow.
 
-const blankExpense = { category: "", amount: "", branch_id: "", note: "", expense_date: todayIso(), payment_mode: "cash", reference: "" };
+const blankExpense = { category: "", amount: "", branch_id: "", note: "", expense_date: todayIso(), payment_mode: "cash", reference: "", vendor_id: "" };
+
+/** The small uppercase caption every field in the Add Expense dialog carries — the same
+ *  one the branch's own Add Expense uses, so the two forms read as one form. */
+const FieldLabel = ({ children }) => (
+  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</label>
+);
 
 /**
  * What each cashless tender is asked for, so the row carries something the payment can
@@ -137,8 +143,17 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
   const [coins, setCoins] = useState("");
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(null);
+  // The Vendor book, for the picker in the Add Expense dialog — the same list the Vendor
+  // tab keeps, switched-off vendors left out since the server refuses an expense against
+  // one. Fetched when the dialog opens so a vendor added on the Vendor tab is there.
+  const [vendors, setVendors] = useState([]);
+  const [newVendor, setNewVendor] = useState(null); // { name, phone } while the + is open
+  const [addingVendor, setAddingVendor] = useState(false);
 
   useEffect(() => { if (!controlled) getBranches().then(setBranches).catch(() => {}); }, [controlled]);
+  useEffect(() => {
+    if (showAdd) listVendors({ active_only: true }).then((v) => setVendors(v || [])).catch(() => setVendors([]));
+  }, [showAdd]);
 
   const [startDate, endDate] = useMemo(
     () => rangeFor(preset, customFrom, customTo),
@@ -193,6 +208,25 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
     setForm(blankExpense);
     setNotes({});
     setCoins("");
+    setNewVendor(null);
+  };
+
+  // The + beside the vendor picker: added to the same Vendor list the Vendor tab shows,
+  // and picked for this expense straight away.
+  const saveNewVendor = async () => {
+    if (!newVendor?.name.trim()) { toast.error("Enter the vendor name"); return; }
+    setAddingVendor(true);
+    try {
+      const v = await createVendor({ name: newVendor.name.trim(), phone: newVendor.phone.trim() });
+      setVendors((list) => [...list, v].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm((f) => ({ ...f, vendor_id: v.id }));
+      setNewVendor(null);
+      toast.success(`${v.name} added`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not add the vendor");
+    } finally {
+      setAddingVendor(false);
+    }
   };
 
   const submit = async () => {
@@ -215,13 +249,16 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
     if (petty && !form.note.trim()) { toast.error(PETTY_CASH_REASON_REQUIRED); return; }
     setSaving(true);
     try {
+      const vendor = vendors.find((v) => v.id === form.vendor_id);
       await createFinanceExpense({
         ...form,
         amount: Number(form.amount),
         branch_id: expenseBranchId,
-        // Only off the tender it belongs to: a UPI id left in the box from before the
-        // mode was switched to Cash is not this payment's reference.
-        reference: ask ? form.reference.trim() : "",
+        vendor_id: vendor?.id || undefined,
+        paid_to: vendor?.name || "",
+        // Cash carries the bill number, if there is one; the other four carry what their
+        // tender is traced by. Either way it is the one box on screen for this tender.
+        reference: form.reference.trim(),
         cash_denominations: paidInCash ? (countedNotes(notes) || {}) : {},
         cash_coins: paidInCash ? coinsPaid : 0,
       });
@@ -575,16 +612,22 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
       )}
 
       {showAdd && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" data-testid="finance-expense-add-dialog">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-              <h3 className="text-base font-semibold">Add Expense</h3>
-              <button onClick={closeAdd} className="text-slate-400 hover:text-slate-600" data-testid="finance-expense-add-close"><X className="h-4 w-4" /></button>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) closeAdd(); }}
+          data-testid="finance-expense-add-dialog"
+        >
+          {/* Laid out as the branch's Add Expense is — labelled fields, name and amount
+              side by side, the vendor picker with its +, a bill number — so the accountant
+              and the branch fill in the same form. What is the accountant's own stays: the
+              branch it is booked to and every tender, not cash alone. The body scrolls and
+              the buttons stay put, so a tall form never pushes them off screen. */}
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-800">Add Expense</h3>
+              <button type="button" onClick={closeAdd} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close" data-testid="finance-expense-add-close"><X className="h-4 w-4" /></button>
             </div>
-            <div className="space-y-3 p-5">
-              <Input placeholder="Expense Name (e.g. Rent, Salaries)" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} data-testid="finance-expense-category" />
-              <Input type="number" min="0" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="finance-expense-amount" />
-              <MilkDateInput value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} data-testid="finance-expense-date" />
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
               {/* Already fixed by the branch-pill row above this board when embedded there;
                   the Accountant's own dashboard has no such row and still picks one here. */}
               {controlled ? (
@@ -592,18 +635,94 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
                   Recorded {effectiveBranchId ? "against this branch." : "as an org-wide expense (All Branches)."}
                 </p>
               ) : (
-                <select
-                  value={form.branch_id}
-                  onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
-                  className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
-                  data-testid="finance-expense-form-branch"
-                >
-                  <option value="">All Branches (org-wide)</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-                </select>
+                <div>
+                  <FieldLabel>Branch</FieldLabel>
+                  <select
+                    value={form.branch_id}
+                    onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
+                    className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm focus:border-sky-400 focus:outline-none"
+                    data-testid="finance-expense-form-branch"
+                  >
+                    <option value="">All Branches (org-wide)</option>
+                    {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+                  </select>
+                </div>
               )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <FieldLabel>Name *</FieldLabel>
+                  <Input placeholder="e.g. Rent, Salaries" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} data-testid="finance-expense-category" />
+                </div>
+                <div>
+                  <FieldLabel>Amount *</FieldLabel>
+                  <Input type="number" min="0" placeholder="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="finance-expense-amount" />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <FieldLabel>Vendor</FieldLabel>
+                  <div className="flex gap-2">
+                    <select
+                      value={form.vendor_id}
+                      onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}
+                      className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+                      data-testid="finance-expense-vendor"
+                    >
+                      <option value="">-- not a listed vendor --</option>
+                      {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setNewVendor(newVendor ? null : { name: "", phone: "" })}
+                      className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border ${
+                        newVendor ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                      title="Add vendor"
+                      aria-label="Add vendor"
+                      data-testid="finance-expense-vendor-add"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {newVendor && (
+                    <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-sky-200 bg-sky-50/50 p-2" data-testid="finance-expense-new-vendor">
+                      <Input
+                        value={newVendor.name}
+                        onChange={(e) => setNewVendor((n) => ({ ...n, name: e.target.value }))}
+                        placeholder="Vendor name *"
+                        className="min-w-[140px] flex-1 bg-white"
+                        autoFocus
+                        data-testid="finance-expense-new-vendor-name"
+                      />
+                      <Input
+                        value={newVendor.phone}
+                        onChange={(e) => setNewVendor((n) => ({ ...n, phone: e.target.value }))}
+                        placeholder="Phone"
+                        className="w-32 bg-white"
+                        data-testid="finance-expense-new-vendor-phone"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-9 bg-sky-600 text-white hover:bg-sky-700"
+                        disabled={addingVendor}
+                        onClick={saveNewVendor}
+                        data-testid="finance-expense-new-vendor-save"
+                      >
+                        {addingVendor ? "Adding…" : "Add"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <FieldLabel>Spent on</FieldLabel>
+                  <MilkDateInput value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} data-testid="finance-expense-date" />
+                </div>
+              </div>
+
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Payment Mode</label>
+                <FieldLabel>Payment mode</FieldLabel>
                 <div className="flex flex-wrap gap-1.5" data-testid="finance-expense-form-mode">
                   {EXPENSE_PAYMENT_MODE_OPTIONS.map((m) => {
                     const selected = m === form.payment_mode;
@@ -625,25 +744,24 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
                 </div>
               </div>
 
-              {/* What this tender can be found by later. Cash is counted; everything else
-                  is quoted. Both sit directly under the mode row that decides which one
-                  is asked, so switching the mode visibly changes the question. */}
-              {ask && (
-                <div data-testid="finance-expense-reference-field">
-                  <label className="mb-1 block text-xs font-medium text-slate-700">{ask.label}</label>
-                  <Input
-                    value={form.reference}
-                    onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                    placeholder={ask.placeholder}
-                    data-testid="finance-expense-reference"
-                  />
-                </div>
-              )}
+              {/* What this payment can be found by later, directly under the mode row that
+                  decides the question: a bill number for cash (optional — not every cash
+                  payment has one), and for the other four whatever their tender is traced
+                  by, which is required. */}
+              <div data-testid="finance-expense-reference-field">
+                <FieldLabel>{ask ? `${ask.label} *` : "Bill / reference no."}</FieldLabel>
+                <Input
+                  value={form.reference}
+                  onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                  placeholder={ask ? ask.placeholder : "Optional"}
+                  data-testid="finance-expense-reference"
+                />
+              </div>
 
               {paidInCash && (
                 <div data-testid="finance-expense-denominations">
                   <div className="mb-1 flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-700">Denominations</label>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Denominations *</span>
                     {/* The fewest notes that make the amount, for the common case where
                         the drawer was paid out in exactly that. Same button Closing
                         Balance offers over the same grid. */}
@@ -701,13 +819,19 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
                 </div>
               )}
 
-              <Input
-                placeholder={petty ? "Reason — what the petty cash was spent on" : "Remarks (optional)"}
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                className={petty && !form.note.trim() ? "border-amber-300" : ""}
-                data-testid="finance-expense-note"
-              />
+              <div>
+                <FieldLabel>{petty ? "What the petty cash was spent on *" : "Remarks"}</FieldLabel>
+                <textarea
+                  rows={2}
+                  placeholder={petty ? "Reason — what the petty cash was spent on" : "Optional"}
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none ${
+                    petty && !form.note.trim() ? "border-amber-300 focus:border-amber-400" : "border-slate-200 focus:border-sky-400"
+                  }`}
+                  data-testid="finance-expense-note"
+                />
+              </div>
               {petty && (
                 <p className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800" data-testid="finance-expense-petty-hint">
                   <Coins className="mt-0.5 h-3 w-3 shrink-0" />
@@ -718,9 +842,9 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
                 </p>
               )}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
               <Button variant="outline" onClick={closeAdd} data-testid="finance-expense-cancel">Cancel</Button>
-              <Button onClick={submit} disabled={saving} className="bg-sky-600 hover:bg-sky-700" data-testid="finance-expense-submit">
+              <Button onClick={submit} disabled={saving} className="bg-sky-600 text-white hover:bg-sky-700" data-testid="finance-expense-submit">
                 {saving ? "Saving..." : "Add Expense"}
               </Button>
             </div>
