@@ -709,7 +709,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               tile and the Accountant's own Total Expense card were already wearing, so a
               figure does not change colour depending on which screen it is read on. The
               picked one takes a 1px outline in its colour and the others step back to
-              70% — 2px corners, like the rest of the summary cards. */}
+              70% — 2px corners, like the rest of the summary cards, and the same soft
+              two-layer shadow as the Approvals cards and Zumba's ledger cards. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="accountant-manage-ledger-filter">
             {LEDGER_VIEWS.map((v) => {
               const on = ledger === v.key;
@@ -729,7 +730,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   type="button"
                   onClick={() => setLedger(v.key)}
                   aria-pressed={on}
-                  className={`rounded-[2px] border ${tone.border} ${tone.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
+                  className={`rounded-[2px] border ${tone.border} ${tone.bg} p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] ${on ? "" : "opacity-70 hover:opacity-100"}`}
                   style={on ? { borderColor: tone.ring } : undefined}
                   data-testid={`accountant-manage-ledger-${v.key}`}
                 >
