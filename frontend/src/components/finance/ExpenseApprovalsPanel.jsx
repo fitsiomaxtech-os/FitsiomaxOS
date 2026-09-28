@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Coins, Eye, Receipt, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Coins, Eye, Receipt, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { getFinanceExpenses, approveFinanceExpense, rejectFinanceExpense, deleteFinanceExpense } from "@/lib/api";
@@ -252,98 +252,127 @@ export const ExpenseApprovalsPanel = ({
                 {view === "pending" ? "Nothing waiting on approval." : "Nothing approved yet."}
               </p>
             </div>
-          ) : visible.map((exp) => (
-            <div
-              key={exp.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-              data-testid={`finance-expense-approvals-row-${exp.id}`}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 truncate text-sm font-medium text-slate-800">
-                  <span className="truncate">
-                    {exp.category}
-                    {exp.paid_to ? <span className="font-normal text-slate-500"> · to {exp.paid_to}</span> : null}
-                  </span>
-                  {/* Which of these came out of a tin, which is a smaller question than
-                      what there is to approve it against -- see reasonIsTheOnlyEvidence,
-                      which is what moves the branch's sentence onto a line of its own. */}
-                  {exp.petty_cash ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" data-testid={`finance-expense-approvals-petty-${exp.id}`}>
-                      <Coins className="h-2.5 w-2.5" /> Petty cash
-                    </span>
-                  ) : null}
-                </p>
-                <p className="truncate text-xs text-slate-500">
-                  {[exp.branch_name, exp.expense_date, MODE_LABELS[exp.payment_mode] || exp.payment_mode,
-                    exp.reference, ...(reasonIsTheOnlyEvidence(exp) ? [] : [exp.note])].filter(Boolean).join(" · ")}
-                </p>
-                {reasonIsTheOnlyEvidence(exp) && exp.note ? (
-                  <p className="break-words text-xs font-medium text-slate-700" data-testid={`finance-expense-approvals-reason-${exp.id}`}>
-                    “{exp.note}”
-                  </p>
-                ) : null}
-                {/* Whose spending this is. Approving a figure without knowing who raised
-                    it is initialling a number. */}
-                {exp.created_by ? (
-                  <p className="truncate text-[11px] text-slate-400">
-                    Raised by {exp.created_by}
-                    {exp.approved && exp.approved_by ? ` · approved by ${exp.approved_by}` : ""}
-                  </p>
-                ) : null}
-                {exp.rejected && exp.rejection_reason ? (
-                  <p className="truncate text-[11px] text-rose-600">Rejected — {exp.rejection_reason}</p>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-sm font-bold text-rose-600">{fmt(exp.amount)}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 border-sky-200 px-3 text-xs text-sky-700 hover:bg-sky-50"
-                  onClick={() => setViewing(exp)}
-                  data-testid={`finance-expense-approvals-view-${exp.id}`}
-                >
-                  <Eye className="mr-1 h-3.5 w-3.5" /> View
-                </Button>
-                {!exp.approved && (
-                  <>
-                    <Button
-                      size="sm"
-                      className="h-8 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
-                      disabled={deciding === exp.id}
-                      onClick={() => decide(exp, true)}
-                      data-testid={`finance-expense-approvals-approve-${exp.id}`}
+          ) : (
+            /* A table, the same shape HR Admin's candidate list has: a header naming the
+               columns, a row per expense, the actions at the end and the arrow that opens
+               it. The whole row opens Expense Details; the buttons act without opening. */
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] text-sm" data-testid="finance-expense-approvals-table">
+                <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Expense</th>
+                    <th className="px-4 py-2.5 font-semibold">Branch</th>
+                    <th className="px-4 py-2.5 font-semibold">Payment</th>
+                    <th className="px-4 py-2.5 font-semibold">Spent On</th>
+                    <th className="px-4 py-2.5 font-semibold">Raised By</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
+                    <th className="px-4 py-2.5" />
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visible.map((exp) => (
+                    <tr
+                      key={exp.id}
+                      onClick={() => setViewing(exp)}
+                      className="cursor-pointer hover:bg-slate-50"
+                      data-testid={`finance-expense-approvals-row-${exp.id}`}
                     >
-                      <Check className="mr-1 h-3.5 w-3.5" /> Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 border-rose-200 px-3 text-xs text-rose-700 hover:bg-rose-50"
-                      disabled={deciding === exp.id}
-                      onClick={() => decide(exp, false)}
-                      data-testid={`finance-expense-approvals-reject-${exp.id}`}
-                    >
-                      Reject
-                    </Button>
-                  </>
-                )}
-                {deleteEnabled && (
-                  <button
-                    type="button"
-                    onClick={() => remove(exp)}
-                    disabled={deciding === exp.id}
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                    title="Delete this expense"
-                    aria-label="Delete this expense"
-                    data-testid={`finance-expense-approvals-delete-${exp.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+                      <td className="max-w-[280px] px-4 py-3">
+                        <p className="flex items-center gap-2 font-medium text-slate-800">
+                          <span className="truncate">{exp.category}</span>
+                          {exp.petty_cash ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" data-testid={`finance-expense-approvals-petty-${exp.id}`}>
+                              <Coins className="h-2.5 w-2.5" /> Petty cash
+                            </span>
+                          ) : null}
+                        </p>
+                        {exp.paid_to ? <p className="truncate text-[11px] text-slate-400">to {exp.paid_to}</p> : null}
+                        {/* The branch's sentence, in full when it is the only thing to
+                            approve against -- see reasonIsTheOnlyEvidence. */}
+                        {exp.note ? (
+                          <p
+                            className={reasonIsTheOnlyEvidence(exp) ? "break-words text-[11px] font-medium text-slate-700" : "truncate text-[11px] text-slate-400"}
+                            title={exp.note}
+                            data-testid={`finance-expense-approvals-reason-${exp.id}`}
+                          >
+                            “{exp.note}”
+                          </p>
+                        ) : null}
+                        {exp.rejected && exp.rejection_reason ? (
+                          <p className="truncate text-[11px] text-rose-600">Rejected — {exp.rejection_reason}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{exp.branch_name || "—"}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {MODE_LABELS[exp.payment_mode] || exp.payment_mode || "—"}
+                        {exp.reference ? <span className="block truncate text-[11px] text-slate-400">{exp.reference}</span> : null}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">{exp.expense_date || "—"}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {exp.created_by || "—"}
+                        {exp.approved && exp.approved_by ? (
+                          <span className="block text-[11px] text-slate-400">approved by {exp.approved_by}</span>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-bold text-rose-600">{fmt(exp.amount)}</td>
+                      {/* The click that acts on a row must not also open it. */}
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 border-sky-200 px-3 text-xs text-sky-700 hover:bg-sky-50"
+                            onClick={() => setViewing(exp)}
+                            data-testid={`finance-expense-approvals-view-${exp.id}`}
+                          >
+                            <Eye className="mr-1 h-3.5 w-3.5" /> View
+                          </Button>
+                          {!exp.approved && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="h-8 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+                                disabled={deciding === exp.id}
+                                onClick={() => decide(exp, true)}
+                                data-testid={`finance-expense-approvals-approve-${exp.id}`}
+                              >
+                                <Check className="mr-1 h-3.5 w-3.5" /> Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-rose-200 px-3 text-xs text-rose-700 hover:bg-rose-50"
+                                disabled={deciding === exp.id}
+                                onClick={() => decide(exp, false)}
+                                data-testid={`finance-expense-approvals-reject-${exp.id}`}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {deleteEnabled && (
+                            <button
+                              type="button"
+                              onClick={() => remove(exp)}
+                              disabled={deciding === exp.id}
+                              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                              title="Delete this expense"
+                              aria-label="Delete this expense"
+                              data-testid={`finance-expense-approvals-delete-${exp.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right"><ChevronRight className="ml-auto h-4 w-4 text-slate-300" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
