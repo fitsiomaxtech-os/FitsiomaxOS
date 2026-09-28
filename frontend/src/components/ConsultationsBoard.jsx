@@ -1582,6 +1582,11 @@ const ROW_FEES = {
 // already passed the fee desk — the stages an unpaid rehab or diet fee gets stranded on.
 const PAST_FEE_DESK = ["Physio Assign", "Consultation Completed"];
 
+// The stages before the visit -- the same three the Cancel button is offered on. "Follow
+// Up" is Consultation Booked's former name. A patient on one of these has nothing dated
+// but their appointment, so a date filter reads them by that alone.
+const AWAITING_VISIT = ["New Appointment", "Consultation Booked", "Follow Up"];
+
 /**
  * Which fee a stage's list is about, where that is not the Consultation Fee.
  *
@@ -3159,6 +3164,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
         // consultations booked for today, plus the patients the branch has touched today.
         // Counts and rows come from this same list, so the cards still describe exactly
         // what a click on them opens.
+        //
+        // Except for a patient still waiting to be seen. Their appointment IS the date the
+        // row shows, and booking one stamps updated_at with the day it was booked -- so a
+        // consultation booked on the 25th for the 26th sat under 25 Sept with "Sat, 26
+        // Sept" printed on it, which reads as the filter being wrong. Before the visit
+        // there is no other work to find, so the appointment day is the only reading.
+        if (AWAITING_VISIT.includes(l[stageField])) return false;
         return inRange(stamp(l.updated_at));
       });
     }
@@ -3172,7 +3184,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
     if (externalMarkFilter === "vip") rows = rows.filter((l) => l.is_vip);
     else if (externalMarkFilter === "attention") rows = rows.filter((l) => l.needs_attention);
     return rows;
-  }, [board.leads, dateFilter, dateScope, search, externalMarkFilter, homeVisitScope]);
+  }, [board.leads, dateFilter, dateScope, search, externalMarkFilter, homeVisitScope, stageField]);
 
   // "Treatments" (Head Physio's own board only) is a cross-cutting view, not a real
   // position in the head_consultation_stage pipeline — a lead shows up here the moment
