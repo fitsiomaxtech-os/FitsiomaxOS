@@ -1232,7 +1232,9 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
           ))}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
+        {/* 90%, the list view only. zoom rather than transform: scale, so the box itself
+            shrinks and the card doesn't keep the full-size height around it. */}
+        <div className="hidden overflow-x-auto md:block" style={{ zoom: 0.9 }}>
           {/* table-fixed at w-full squeezes ten columns into a phone's width rather than
               letting the wrapper scroll — the min-width is what makes it scroll instead. */}
           {/* Flat rows with a hairline between them, under the same slate-500 header the
