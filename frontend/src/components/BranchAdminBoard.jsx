@@ -1433,7 +1433,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       const from = effectiveDateFilter.from?.getTime();
       const to = effectiveDateFilter.to?.getTime();
       list = list.filter((l) => {
-        const ts = new Date(l.created_at || 0).getTime();
+        // A lead with an appointment is on the day of that appointment, not the day it
+        // was entered: booked today for the 30th, it belongs under 30 Sept -- which is the
+        // date its own Appointment column shows. Only a lead with nothing booked yet
+        // falls back to when it arrived. appointment_date is a plain calendar day, so it
+        // is read at local midnight and never slips a day.
+        const ts = l.appointment_date
+          ? new Date(`${l.appointment_date}T00:00:00`).getTime()
+          : new Date(l.created_at || 0).getTime();
         if (!ts) return false;
         if (from && ts < from) return false;
         if (to && ts > to) return false;
