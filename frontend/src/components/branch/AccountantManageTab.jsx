@@ -709,15 +709,17 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               tile and the Accountant's own Total Expense card were already wearing, so a
               figure does not change colour depending on which screen it is read on. The
               picked one takes a 1px outline in its colour and the others step back to
-              70% — 2px corners, like the rest of the summary cards, and the same soft
-              two-layer shadow as the Approvals cards and Zumba's ledger cards. */}
+              80% — 2px corners, like the rest of the summary cards, and the same soft
+              two-layer shadow as the Approvals cards and Zumba's ledger cards. The tint
+              is the full -50 shade rather than 60% of it: at 60%, with the unpicked
+              pair at 70%, the cards read as washed out against the white page. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="accountant-manage-ledger-filter">
             {LEDGER_VIEWS.map((v) => {
               const on = ledger === v.key;
               const tone = {
-                income: { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
-                cash: { ring: "#0284c7", border: "border-sky-200", bg: "bg-sky-50/60", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
-                expenses: { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
+                income: { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700" },
+                cash: { ring: "#0284c7", border: "border-sky-200", bg: "bg-sky-50", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
+                expenses: { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50", text: "text-rose-700" },
               }[v.key];
               const value = {
                 income: sums.totals.collected,
@@ -730,7 +732,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   type="button"
                   onClick={() => setLedger(v.key)}
                   aria-pressed={on}
-                  className={`rounded-[2px] border ${tone.border} ${tone.bg} p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] ${on ? "" : "opacity-70 hover:opacity-100"}`}
+                  className={`rounded-[2px] border ${tone.border} ${tone.bg} p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] ${on ? "" : "opacity-80 hover:opacity-100"}`}
                   style={on ? { borderColor: tone.ring } : undefined}
                   data-testid={`accountant-manage-ledger-${v.key}`}
                 >
