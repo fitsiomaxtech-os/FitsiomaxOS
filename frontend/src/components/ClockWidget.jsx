@@ -374,7 +374,7 @@ export const ClockWidget = () => {
       )}
 
       {can("clock_in") && (
-        <Button size="sm" disabled={busy} onClick={() => act(clockIn, day.state === "done" ? "Clocked in again" : "Clocked in — have a good day")} className="shrink-0 bg-emerald-600 px-2 hover:bg-emerald-700 sm:px-3" data-testid="clock-in-button">
+        <Button size="sm" disabled={busy} onClick={() => act(clockIn, day.state === "done" ? "Clocked in again" : "Clocked in — have a good day")} className="shrink-0 rounded-[2px] bg-emerald-500 px-2 hover:bg-emerald-600 sm:px-3" data-testid="clock-in-button">
           <LogIn className="h-4 w-4" /><span className="hidden sm:inline">Clock In</span>
         </Button>
       )}
