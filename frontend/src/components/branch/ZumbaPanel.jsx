@@ -661,14 +661,50 @@ const CARDS = [
   // here — but a card that behaves differently from the seven beside it is a card people
   // press expecting the list to change, and the popup interrupted whatever was being
   // worked to say so.
-  { key: "payment_done", label: "Payment Done", color: "#059669", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
-  { key: "due_payment", label: "Due Payment", color: "#d97706", money: "due_total", count: "due_payment", countSub: (n) => `owed by ${n}` },
+  //
+  // These three wear the Accountant Summary's ledger card (see LedgerCard) rather than
+  // StatTile: they are the money-and-outcome end of the strip, and tinting them sets them
+  // apart from the headcounts before them.
+  { key: "payment_done", label: "Payment Done", color: "#059669", ledger: "emerald", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
+  { key: "due_payment", label: "Due Payment", color: "#d97706", ledger: "amber", money: "due_total", count: "due_payment", countSub: (n) => `owed by ${n}` },
   // One card, not two: Discontinue and Leave are both "not turning up", and splitting
   // them across the row asked the branch to read two numbers to learn one thing. The
   // distinction survives where it is actually useful — on the row, which says which — and
   // the server still counts them apart, so nothing downstream is coarsened by this.
-  { key: "discontinued", label: "Discontinue", color: "#e11d48", sub: "left the class", sum: ["discontinued", "leave"] },
+  { key: "discontinued", label: "Discontinue", color: "#e11d48", ledger: "rose", sub: "left the class", sum: ["discontinued", "leave"] },
 ];
+
+// Whole class names, not `bg-${tone}-50` built at runtime: Tailwind only compiles the
+// class names it can read in the source.
+const LEDGER_TONES = {
+  emerald: { border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
+  amber: { border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
+  rose: { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700", sub: "text-rose-600" },
+};
+
+/**
+ * The Accountant Summary's ledger card (Income / Cash in hand / Expenses): tinted, 2px
+ * corners, the picked one outlined in its own colour. There one card is always picked, so
+ * the rest step back to 70%; here "All" is the resting state, so a card only steps back
+ * while another card on the strip is the filter — otherwise all three would sit faded.
+ */
+const LedgerCard = ({ label, value, sub, tone, color, active, dimmed, onClick, testid }) => {
+  const t = LEDGER_TONES[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`h-full w-full rounded-[2px] border ${t.border} ${t.bg} p-3 text-left transition sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
+      style={active ? { borderColor: color } : undefined}
+      data-testid={testid}
+    >
+      <p className={`break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px] ${t.text}`}>{label}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${t.text}`}>{value}</p>
+      {sub && <p className={`mt-0.5 text-[10px] leading-tight sm:text-[11px] ${t.sub}`}>{sub}</p>}
+    </button>
+  );
+};
 
 const amountDue = (r) => Number(r?.fee_amount || 0) - Number(r?.fee_paid || 0);
 
@@ -1511,23 +1547,24 @@ export const ZumbaPanel = ({ branchId }) => {
         className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4 lg:grid-cols-7"
         data-testid="zumba-summary"
       >
-        {CARDS.map((c) => (
-          <StatTile
-            key={c.key}
-            label={c.label}
-            value={c.money
+        {CARDS.map((c) => {
+          const props = {
+            label: c.label,
+            value: c.money
               ? rupees(summary?.[c.money])
-              : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0)}
-            sub={c.countSub
+              : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0),
+            sub: c.countSub
               ? c.countSub(pluralCustomers(Number(summary?.[c.count || c.key]) || 0))
-              : c.sub}
-            icon={Music}
-            color={c.color}
-            active={card === c.key}
-            onClick={() => setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key))}
-            testid={`zumba-card-${c.key}`}
-          />
-        ))}
+              : c.sub,
+            color: c.color,
+            active: card === c.key,
+            onClick: () => setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)),
+            testid: `zumba-card-${c.key}`,
+          };
+          return c.ledger
+            ? <LedgerCard key={c.key} {...props} tone={c.ledger} dimmed={card !== "all" && card !== c.key} />
+            : <StatTile key={c.key} {...props} icon={Music} />;
+        })}
       </div>
 
       <ClassMasters masters={zumbaMasters} onSet={setClassMaster} busy={settingSlot} />
