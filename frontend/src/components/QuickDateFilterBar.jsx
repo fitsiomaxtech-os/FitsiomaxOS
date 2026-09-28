@@ -39,6 +39,8 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
  *            against the ~290 `short` needs -- the difference between fitting beside a
  *            search icon, a calendar, a refresh and a download, and not. The full label
  *            is on `title`, and sm and up is untouched: same h-10 buttons, same words.
+ *  - showTomorrow: adds Tomorrow after Today. For boards whose list is read by
+ *            appointment date; off by default.
  */
 
 const startOfDay = (d) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
@@ -54,6 +56,7 @@ const mondayOf = (d) => {
 };
 const sundayOf = (d) => { const m = mondayOf(d); const n = new Date(m); n.setDate(n.getDate() + 6); return n; };
 const daysBack = (d, n) => { const x = startOfDay(d); x.setDate(x.getDate() - n); return x; };
+const tomorrow = () => daysBack(new Date(), -1);
 
 /**
  * `short` is the phone label. Six full labels cannot share a phone's width, and the
@@ -67,10 +70,14 @@ const daysBack = (d, n) => { const x = startOfDay(d); x.setDate(x.getDate() - n)
  * Last 90 Days counts today as one of the ninety, so it runs today-89 → today. Ninety
  * whole days ending yesterday would drop the morning's consultations, which is the one
  * thing somebody opening this board is most likely to be checking.
+ *
+ * Tomorrow only means something over a list of appointments, so it is opt-in (see
+ * showTomorrow) — over a list read by created date it could only ever be empty.
  */
 export const QUICK_DATE_PRESETS = [
   { key: "all", label: "All", short: "All", micro: "All", range: () => ({ from: null, to: null }) },
   { key: "today", label: "Today", short: "Today", micro: "1D", range: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+  { key: "tomorrow", label: "Tomorrow", short: "Tmrw", micro: "+1D", optional: true, range: () => ({ from: tomorrow(), to: endOfDay(tomorrow()) }) },
   { key: "this_week", label: "This Week", short: "Week", micro: "1W", range: () => ({ from: mondayOf(new Date()), to: endOfDay(sundayOf(new Date())) }) },
   { key: "this_month", label: "This Month", short: "Month", micro: "1M", range: () => { const t = new Date(); return { from: startOfDay(new Date(t.getFullYear(), t.getMonth(), 1)), to: endOfDay(new Date(t.getFullYear(), t.getMonth() + 1, 0)) }; } },
   { key: "last_90", label: "Last 90 Days", short: "90d", micro: "90d", range: () => ({ from: daysBack(new Date(), 89), to: endOfDay(new Date()) }) },
@@ -111,11 +118,12 @@ export const intersectDateFilters = (a, b) => {
   return { key: `${a.key}+${b.key}`, label: `${a.label} · ${b.label}`, from, to };
 };
 
-export const QuickDateFilterBar = ({ value, onChange, testid = "quick-date", inline = false, showCustom = true, micro = false }) => {
+export const QuickDateFilterBar = ({ value, onChange, testid = "quick-date", inline = false, showCustom = true, micro = false, showTomorrow = false }) => {
+  const presets = QUICK_DATE_PRESETS.filter((p) => !p.optional || showTomorrow);
   // What lights up. All is the resting state, so a cleared filter lights All rather than
   // leaving the row with nothing selected and no way to tell it apart from a custom range.
   const activeKey = value?.key || "all";
-  const onPreset = QUICK_DATE_PRESETS.some((p) => p.key === activeKey);
+  const onPreset = presets.some((p) => p.key === activeKey);
 
   return (
     /* One row at every width, six equal columns on a phone so nothing lands off screen —
@@ -130,7 +138,7 @@ export const QuickDateFilterBar = ({ value, onChange, testid = "quick-date", inl
       className={`flex items-center gap-1 ${inline ? "shrink-0 flex-nowrap 2xl:gap-1.5" : "sm:gap-2 sm:flex-wrap"}`}
       data-testid={testid}
     >
-      {QUICK_DATE_PRESETS.map((p) => (
+      {presets.map((p) => (
         <button
           key={p.key}
           type="button"

@@ -1465,6 +1465,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     [dateFilter, quickDate],
   );
 
+  // Tomorrow is only offered over the consultation tabs (leads are read by created date,
+  // where it would always be empty), so leaving them with it picked falls back to Today
+  // rather than stranding an unlit, empty range on Branch Leads.
+  useEffect(() => {
+    if (!onConsultationTab && quickDate?.key === "tomorrow") setQuickDate(quickDatePreset("today"));
+  }, [onConsultationTab, quickDate]);
+
   const filteredLeads = useMemo(() => {
     let list = leads;
     if (effectiveDateFilter) {
@@ -1953,6 +1960,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 testid="branch-quick-date-inline"
                 inline
                 showCustom={false}
+                showTomorrow={onConsultationTab}
               />
             </div>
             {/* Pain Type, Pain Duration and City — the columns the list grew, now askable
@@ -2189,6 +2197,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               onChange={setQuickDate}
               testid="branch-quick-date"
               showCustom={false}
+              showTomorrow={onConsultationTab}
             />
           </div>
 
