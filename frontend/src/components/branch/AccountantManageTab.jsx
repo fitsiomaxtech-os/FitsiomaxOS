@@ -225,29 +225,19 @@ const countLabel = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
  * Tailwind reads class names out of the source, so a class name assembled at runtime
  * compiles to nothing.
  */
-const RevenueTile = ({ label, value, sub, icon: Icon, color, active, muted, onClick, testid }) => (
+const RevenueTile = ({ label, value, sub, color, active, muted, onClick, testid }) => (
   <button
     type="button"
     onClick={onClick}
     aria-pressed={active}
     data-testid={testid}
-    className={`group relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-white p-3 text-left transition-all duration-150 sm:p-3.5 ${
+    className={`group relative flex h-full w-full flex-col overflow-hidden border border-slate-200 p-3 text-left transition-all duration-150 sm:p-3.5 ${
       active
-        ? "border-slate-300 shadow-[0_4px_14px_-4px_rgba(16,24,40,0.16)]"
-        : "border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:border-slate-300 hover:bg-slate-50/60"
+        ? "shadow-[0_4px_14px_-4px_rgba(16,24,40,0.16)]"
+        : "bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:bg-slate-50/60"
     }`}
+    style={active ? { backgroundColor: `${color}14` } : undefined}
   >
-    {/* On the bottom edge rather than the top: it sits under the figure it belongs to,
-        and it is the one part of the card allowed to carry the category's colour at full
-        strength, so the row can be read along without reading a label. */}
-    <span
-      aria-hidden
-      className={`absolute inset-x-0 bottom-0 h-0.5 transition-opacity duration-150 ${active ? "opacity-100" : "opacity-0"}`}
-      style={{ background: color }}
-    />
-    {/* Name and figure start at the top edge, with the chip parked in the corner beside
-        them: read down the card it is label then figure then count, and the icon is a
-        mark to find the card by rather than a step on the way into it. */}
     <div className="flex w-full items-start gap-2">
       <div className="min-w-0 flex-1">
         {/* Sentence case at a normal weight rather than bold small caps: eight headings
@@ -261,16 +251,6 @@ const RevenueTile = ({ label, value, sub, icon: Icon, color, active, muted, onCl
         }`}>{value}</p>
         <p className="mt-0.5 truncate text-[10px] leading-tight text-slate-400 sm:text-[11px]">{sub}</p>
       </div>
-      {/* Tinted while it waits, solid once picked. The chip is the only thing on the card
-          that changes colour, which is what keeps the change quiet enough to sit in a row
-          of eight. */}
-      <span
-        aria-hidden
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150"
-        style={active ? { background: color, color: "#fff" } : { background: `${color}14`, color }}
-      >
-        {Icon && <Icon className="h-3.5 w-3.5" />}
-      </span>
     </div>
   </button>
 );
@@ -714,15 +694,15 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               Green for money in and rose for money out: the colours the Total Revenue
               tile and the Accountant's own Total Expense card were already wearing, so a
               figure does not change colour depending on which screen it is read on. The
-              picked one is ringed rather than filled, or the unpicked side would read as
-              switched off rather than as the other half of the same total. */}
+              picked one is marked only by the others stepping back to 70% — square, with
+              no ring, like the rest of the summary cards. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="accountant-manage-ledger-filter">
             {LEDGER_VIEWS.map((v) => {
               const on = ledger === v.key;
               const tone = {
-                income: { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
-                cash: { ring: "#0284c7", border: "border-sky-200", bg: "bg-sky-50/60", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
-                expenses: { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
+                income: { border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
+                cash: { border: "border-sky-200", bg: "bg-sky-50/60", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
+                expenses: { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
               }[v.key];
               const value = {
                 income: sums.totals.collected,
@@ -735,8 +715,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   type="button"
                   onClick={() => setLedger(v.key)}
                   aria-pressed={on}
-                  className={`rounded-xl border ${tone.border} ${tone.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
-                  style={on ? { boxShadow: `0 0 0 2px ${tone.ring}` } : undefined}
+                  className={`border ${tone.border} ${tone.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
                   data-testid={`accountant-manage-ledger-${v.key}`}
                 >
                   <p className={`text-[11px] font-bold uppercase tracking-wider ${tone.text}`}>{v.label}</p>
@@ -797,14 +776,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             {/* No "Send to accountant" button any more: a collection is awaiting approval
                 the moment it is taken, and the accountant's Approvals queue picks it up
                 without the branch pressing anything. */}
-            {/* With a pile to pick, this says what the picked one is. With none, it says
-                what every figure below is counting -- worth saying plainly, because the
-                two pills above it are showing figures that are deliberately not in it. */}
-            <p className="text-[11px] text-slate-400">
-              {approvedOnly
-                ? "Signed off only \u2014 what the branches have collected but not had approved is not counted below"
-                : INCOME_STAGES.find((st) => st.key === incomeStage)?.hint}
-            </p>
           </div>
 
           {/* All eight on one line where there is room for eight, stepping down to four
@@ -822,7 +793,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 label={v.short}
                 value={fmt(sums.totals[v.key])}
                 sub={countLabel(sums.counts[v.key], revenueNoun(v.key))}
-                icon={v.icon}
                 color={v.color}
                 active={revenueView === v.key}
                 muted={!sums.totals[v.key]}
