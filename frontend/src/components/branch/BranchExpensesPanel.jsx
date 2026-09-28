@@ -1186,8 +1186,11 @@ const CashReturnList = ({ returns, onCancel, showBranch }) => {
  *                  branch in view the card and the handover button are left out.
  */
 /* section: "cash" is the drawer alone (Summary's Cash In Hand card), "expenses" the
-   expense piles alone (its Expenses card); left unset, both, as before. */
-export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) => {
+   expense piles alone (its Expenses card); left unset, both, as before.
+   startDate / endDate: the range the board above is read under (YYYY-MM-DD), matched
+   against each expense's own date. Left off, every expense ever raised, as before. The
+   drawer ignores them -- cash in hand is what the box holds now. */
+export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", startDate, endDate }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   // Which of the four piles is open. It opens on the request log rather than the drawer:
@@ -1214,7 +1217,11 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
       // This branch's spending, not every branch's. The drawer figure on the first card
       // is one branch's, so a list beside it that counted them all would be two scopes
       // in one panel.
-      const data = await getFinanceExpenses(branchId ? { branch_id: branchId } : {});
+      const data = await getFinanceExpenses({
+        branch_id: branchId || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      });
       setRows(data.expenses || []);
       onChangedRef.current?.();
     } catch {
@@ -1222,7 +1229,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
     } finally {
       setLoading(false);
     }
-  }, [branchId]);
+  }, [branchId, startDate, endDate]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1286,20 +1293,27 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
   //
   // Request holds what is still only a request — once the accountant signs one off it is
   // spending, and moves to Expense Approved rather than being counted in both. A rejected
-  // row has nowhere else to be read, so it stays here, wearing its own chip.
+  // row has nowhere else to be read, so it stays in the list, wearing its own chip — but
+  // out of the card's figure, which is counted apart as `rejected`. Summed in, the card
+  // read Rs.3,200 of open requests beside Pending Rs.0 when all of it had been turned down.
   const piles = useMemo(() => {
     const out = {
       request: { rows: [], total: 0 },
       pending: { rows: [], total: 0 },
       approved: { rows: [], total: 0 },
+      rejected: { count: 0, total: 0 },
     };
     rows.forEach((r) => {
       const amount = Number(r.amount) || 0;
       if (!r.approved) {
         out.request.rows.push(r);
-        out.request.total += amount;
+        if (!r.rejected) out.request.total += amount;
       }
-      if (r.rejected) return;
+      if (r.rejected) {
+        out.rejected.count += 1;
+        out.rejected.total += amount;
+        return;
+      }
       const key = r.approved ? "approved" : "pending";
       out[key].rows.push(r);
       out[key].total += amount;
@@ -1331,6 +1345,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
       label: "Expense Request",
       color: "#6366f1",
       amount: fmt(piles.request.total),
+      sub: piles.rejected.count ? `+ ${fmt(piles.rejected.total)} rejected` : undefined,
     },
     {
       key: "expense_approved",

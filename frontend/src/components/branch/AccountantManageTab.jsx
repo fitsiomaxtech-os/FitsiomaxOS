@@ -428,12 +428,18 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   useEffect(() => { load(); }, [load]);
 
   // Kept beside the revenue call rather than inside it: this one answers about money going
-  // out, takes no date range yet, and a branch with no expenses should not stop the eight
-  // revenue cards rendering. Scoped to the same branch the revenue call is, though — the
-  // expense tile sits in the same row as the income tiles, and one of them counting every
-  // branch while the others counted the picked one is two scopes in one row of figures.
+  // out, and a branch with no expenses should not stop the eight revenue cards rendering.
+  // Scoped to the same branch and the same date range the revenue call is, though — the
+  // expense figures sit in the same row as the income ones and Profit subtracts one from
+  // the other, so Income for Today less Expenses for all time was two scopes in one sum.
+  // The drawer is left out of the range: cash in hand is what is in the box now.
   const loadExpenseTotals = useCallback(() => {
-    getFinanceExpenses(branchId ? { branch_id: branchId } : {})
+    if (preset === "custom" && (!customFrom || !customTo)) return;
+    getFinanceExpenses({
+      branch_id: branchId || undefined,
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
+    })
       .then((d) => setExpenseTotals({
         approved_total: d.approved_total || 0,
         approved_count: d.approved_count || 0,
@@ -447,7 +453,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         setOpeningUnset(d?.by_branch ? d.total?.opening_unset || 0 : d?.opening_set === false ? 1 : 0);
       })
       .catch(() => { setCashInHand(0); setOpeningUnset(0); });
-  }, [branchId]);
+  }, [branchId, startDate, endDate, preset, customFrom, customTo]);
 
   useEffect(() => { loadExpenseTotals(); }, [loadExpenseTotals]);
 
@@ -746,7 +752,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               going out, so the whole of the income side steps aside for it rather than
               being reused with different numbers in it. */}
           {ledger === "cash" && <BranchExpensesPanel section="cash" onChanged={loadExpenseTotals} branchId={branchId} />}
-          {ledger === "expenses" && <BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} />}
+          {ledger === "expenses" && <BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} startDate={startDate} endDate={endDate} />}
 
           {ledger === "income" && (
           <>

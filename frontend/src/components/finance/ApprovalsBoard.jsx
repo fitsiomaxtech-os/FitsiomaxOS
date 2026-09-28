@@ -36,15 +36,23 @@ export const PendingBadge = ({ count, testId }) => (count > 0 ? (
 // Every category the backend can return, which is not what this list held: Rehab and
 // Zumba were both missing, so a rehab course fee or a class fee could be seen only
 // under "All" and vanished the moment any pill was picked. Zumba could not be seen at
-// all until finance_approvals started reading the registrations it lives on.
+// all until finance_approvals started reading the registrations it lives on. Fitness was
+// missing the same way: a gym membership fee showed under All and under no pill, while
+// Summary gives it a card of its own.
+//
+// Named and ordered as Summary's revenue cards are (AccountantManageTab's REVENUE_VIEWS),
+// so the accountant moving from a figure there to signing it off here looks for the same
+// word in the same place — this row used to say Treatments and Fitsio Store for what
+// Summary calls Session and Store.
 const CATEGORIES = [
   ["all", "All"],
-  ["consultation", "Consultations"],
-  ["session", "Treatments"],
+  ["consultation", "Consultation"],
+  ["session", "Session"],
   ["diet", "Diet"],
-  ["rehab", "Rehab"],
+  ["store", "Store"],
   ["zumba", "Zumba"],
-  ["store", "Fitsio Store"],
+  ["rehab", "Rehab"],
+  ["fitness", "Fitness"],
   ["other", "Others"],
 ];
 
@@ -94,11 +102,11 @@ const PAYMENT_MODES = [
 
 const VERTICALS = [["all", "All"], ["offline", "Offline"], ["online", "Online"]];
 
-// Yesterday and Last Month are left off, though rangeFor knows both: this desk signs off a
-// batch rather than reading a closed period back, and the row shares its line with the
-// vertical filter beside it. Custom Range stays last, where a preset row ends everywhere
-// else in the OS.
-const DATE_PRESETS = ["all", "today", "this_week", "this_month", "custom"];
+// The same six windows Summary offers, so a figure read there for Yesterday or Last Month
+// can be opened here under the same window to sign it off. This Week went for the same
+// reason Summary dropped it: the ledger is read by the day or by the month. Custom Range
+// stays last, where a preset row ends everywhere else in the OS.
+const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month", "custom"];
 
 /**
  * One filter pill. The three rows of these used to be written out three times with three
