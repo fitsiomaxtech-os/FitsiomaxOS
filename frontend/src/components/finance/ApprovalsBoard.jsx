@@ -112,7 +112,7 @@ const FilterPill = ({ on, accent = "sky", onClick, children, testId }) => (
     type="button"
     onClick={onClick}
     aria-pressed={on}
-    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+    className={`shrink-0 rounded-[2px] border px-3 py-1.5 text-xs font-medium transition ${
       on
         ? accent === "indigo"
           ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
@@ -819,43 +819,35 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
 
   return (
     <div className="space-y-4" data-testid="finance-approvals-root">
-      {/* Which of the two is being signed off. Above the cards rather than among them,
-          because it changes what those cards are counting — the cards underneath cut one
-          ledger into pending and approved, this picks which ledger. */}
-      <div className="flex w-full items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5" data-testid="finance-approvals-ledger">
-        {LEDGERS.map((l) => (
-          <button
-            key={l.key}
-            type="button"
-            onClick={() => setLedger(l.key)}
-            className={`relative flex-1 rounded-md px-4 py-2 text-xs font-semibold transition ${ledger === l.key ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"}`}
-            data-testid={`finance-approvals-ledger-${l.key}`}
-          >
-            {l.label}
-            {/* Which ledger the waiting items are in. Every branch, unfiltered -- see
-                AccountantBoard's pending -- so picking a branch below does not make the
-                other ledger's count look like it went away. */}
-            <PendingBadge count={pending[l.key]} testId={`finance-approvals-ledger-badge-${l.key}`} />
-          </button>
-        ))}
-      </div>
+      {/* One filter block for both ledgers. Its first line is the whole toolbar: which
+          ledger is being signed off, then the vertical and branch, then the window pushed
+          to the far end. The ledger switch used to be a full-width bar of its own above
+          this block, which spent a band of screen on two buttons and split one set of
+          questions across two boxes. What else is on the block follows the ledger: what it
+          was for and how it was paid describe a collection and have nothing to say about
+          an expense -- /finance/expenses does not take them -- so that line is not offered
+          against one. Every control here is 2px-cornered, like Summary's cards. */}
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-[2px] border border-slate-200 bg-white" data-testid="finance-approvals-filters">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5" data-testid="finance-approvals-toolbar">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-[2px] border border-slate-200 bg-slate-50 p-0.5" data-testid="finance-approvals-ledger">
+            {LEDGERS.map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                onClick={() => setLedger(l.key)}
+                aria-pressed={ledger === l.key}
+                className={`relative whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${ledger === l.key ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"}`}
+                data-testid={`finance-approvals-ledger-${l.key}`}
+              >
+                {l.label}
+                {/* Which ledger the waiting items are in. Every branch, unfiltered -- see
+                    AccountantBoard's pending -- so picking a branch beside it does not make
+                    the other ledger's count look like it went away. */}
+                <PendingBadge count={pending[l.key]} testId={`finance-approvals-ledger-badge-${l.key}`} />
+              </button>
+            ))}
+          </div>
 
-      {/* One filter block for both ledgers, above the switch's two sides rather than
-          inside one of them. What is on it follows the ledger: the vertical and the window
-          narrow money going either way and stay put, while what it was for and how it was
-          paid describe a collection and have nothing to say about an expense —
-          /finance/expenses does not take them — so they are not offered against one.
-
-          Four loose bands of pills stood here before, in two sizes, each opening with a
-          pill called "All". Two lines now, each holding two groups at opposite ends: same
-          four questions, half the screen, and the gap in the middle of a line is what says
-          the pills either side of it are answering different things. */}
-      <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white" data-testid="finance-approvals-filters">
-        {/* Which money, and from when. Two groups pushed to opposite ends of the line
-            rather than stacked on two lines of their own: they are asked together and the
-            gap between them is what says they are two questions, so the row costs one band
-            of screen instead of two and still reads as two things. */}
-        <FilterRow>
           <FilterGroup testId="finance-approvals-mode-filter">
             {VERTICALS.map(([key, label]) => (
               <FilterPill
@@ -874,7 +866,7 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-8 rounded-md border border-slate-200 px-2 text-xs"
+                className="h-8 rounded-[2px] border border-slate-200 px-2 text-xs"
                 data-testid="finance-approvals-branch"
               >
                 <option value="">All Branches</option>
@@ -886,21 +878,20 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           {/* The shared finance row, so this desk and the three pages beside it name their
               windows with the same words and reach them the same way. Custom Range opens
               the dialog rather than dropping two date fields into the block underneath.
-
-              The pill alone among the four: this row shares its line with the vertical
-              pills at the other end of it, and the toolbar button the other three carry
-              stands 8px taller than those. One group taller than the group beside it reads
-              as a mistake rather than as a different kind of control. */}
-          <FinanceDateFilter
-            preset={preset}
-            customFrom={customFrom}
-            customTo={customTo}
-            onChange={pickDates}
-            presets={DATE_PRESETS}
-            variant="pill"
-            testid="finance-approvals-window"
-          />
-        </FilterRow>
+              The pill variant, not the toolbar button the other three carry: that one
+              stands 8px taller than the pills sharing this line. */}
+          <div className="min-w-0 sm:ml-auto">
+            <FinanceDateFilter
+              preset={preset}
+              customFrom={customFrom}
+              customTo={customTo}
+              onChange={pickDates}
+              presets={DATE_PRESETS}
+              variant="pill"
+              testid="finance-approvals-window"
+            />
+          </div>
+        </div>
 
         {/* What it was for, and how it was paid. Both describe a collection and neither is
             a question /finance/expenses can answer, so the whole line goes when the ledger

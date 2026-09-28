@@ -239,9 +239,9 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
  * is the one deciding the screen. It stands alone on its line, so it has the width for full
  * padding and scrolls itself if a phone leaves it short.
  *
- * `pill` is Approvals', whose row shares a line with filter pills of its own. One group
- * standing 8px taller than the group beside it reads as a mistake rather than as a
- * different kind of control.
+ * `pill` is Approvals', whose row shares one toolbar with the ledger switch and filter pills
+ * of its own, all at 2px corners. One group standing 8px taller than the group beside it
+ * reads as a mistake rather than as a different kind of control.
  *
  * `inline` is the toolbar button on a diet, for Summary, where the row shares its line with
  * five tab buttons and the two together have to fit without wrapping. It gives back its
@@ -274,7 +274,7 @@ const VARIANTS = {
   pill: {
     gap: "gap-1.5",
     scrolls: true,
-    btn: "shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition",
+    btn: "shrink-0 whitespace-nowrap rounded-[2px] border px-3 py-1.5 text-xs font-medium transition",
     on: "border-sky-600 bg-sky-600 text-white shadow-sm",
     off: "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600",
   },
@@ -329,7 +329,7 @@ export const FinanceDateFilter = ({
             aria-label="Filter by date"
             title="Filter by date"
             className={`flex shrink-0 items-center justify-center transition ${
-              compact ? "rounded-full border p-2" : "h-10 w-10 rounded-md"
+              compact ? "rounded-[2px] border p-2" : "h-10 w-10 rounded-md"
             } ${hasRange ? V.on : V.off}`}
             data-testid={`${testid}-icon`}
           >
@@ -347,7 +347,7 @@ export const FinanceDateFilter = ({
             type="button"
             onClick={() => setOpen(true)}
             className={`flex items-center gap-1.5 border border-sky-200 bg-sky-50 font-medium text-sky-700 hover:bg-sky-100 ${
-              compact ? "rounded-l-full py-1.5 pl-3 pr-2 text-xs" : "h-10 rounded-l-md pl-3 pr-2 text-xs sm:text-sm"
+              compact ? "rounded-l-[2px] py-1.5 pl-3 pr-2 text-xs" : "h-10 rounded-l-md pl-3 pr-2 text-xs sm:text-sm"
             }`}
             data-testid={`${testid}-chip-edit`}
           >
@@ -361,7 +361,7 @@ export const FinanceDateFilter = ({
             type="button"
             onClick={() => onChange("all", "", "")}
             className={`border border-l-0 border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 ${
-              compact ? "rounded-r-full py-1.5 pl-1 pr-2.5" : "h-10 rounded-r-md pl-1 pr-2.5"
+              compact ? "rounded-r-[2px] py-1.5 pl-1 pr-2.5" : "h-10 rounded-r-md pl-1 pr-2.5"
             }`}
             title="Clear date filter"
             aria-label="Clear date filter"
