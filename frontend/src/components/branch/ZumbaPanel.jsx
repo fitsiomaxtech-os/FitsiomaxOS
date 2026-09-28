@@ -687,6 +687,9 @@ const LEDGER_TONES = {
  * corners, the picked one outlined in its own colour. There one card is always picked, so
  * the rest step back to 70%; here "All" is the resting state, so a card only steps back
  * while another card on the strip is the filter — otherwise all three would sit faded.
+ *
+ * The shadow is two soft layers rather than one hard drop — a tight contact shadow and a
+ * wide faint one — so the card lifts off the page without a visible edge; hover deepens both.
  */
 const LedgerCard = ({ label, value, sub, tone, color, active, dimmed, onClick, testid }) => {
   const t = LEDGER_TONES[tone];
@@ -695,7 +698,7 @@ const LedgerCard = ({ label, value, sub, tone, color, active, dimmed, onClick, t
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`h-full w-full rounded-[2px] border ${t.border} ${t.bg} p-3 text-left transition sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
+      className={`h-full w-full rounded-[2px] border ${t.border} ${t.bg} p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
       style={active ? { borderColor: color } : undefined}
       data-testid={testid}
     >
