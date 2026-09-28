@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -356,13 +357,16 @@ const PaymentModes = ({ tx }) => {
  *              had nobody sign is not the accountant's income yet, and showing it as such
  *              overstates the books. The income side fixes on the Approved pile, and the
  *              two stage pills stop being a filter and become figures to read.
+ * @param toolbarTarget  An element in the page's own top bar (the finance workspace's tab
+ *              row). Given one, the date range and Refresh are drawn there, so the whole
+ *              dashboard reads off one top bar and this board keeps a single row of its own.
  * @param scoped  The branch is picked somewhere above this board and moves while it
  *              stays mounted -- Super Admin > Finance's branch-pill row. The select here
  *              is dropped (those pills already are it) and the branch is read straight
  *              off the prop on every render, so an empty one means All Branches rather
  *              than "pick your own", which is what a bare branchId would mean.
  */
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false }) => {
+export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -576,8 +580,37 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // what they are set to on their own faces, so it was a third control's worth of screen
   // spent repeating two.
 
+  // The range and Refresh. Hidden on Closing Balance and Close Books, which carry their
+  // own Daily/Weekly/Monthly control over which evenings are counted -- two date controls
+  // over one set of figures would leave the desk asking which is in force.
+  const dateControls = tab !== "closing" && tab !== "closebooks" ? (
+    <div className={`flex shrink-0 flex-nowrap items-center gap-2 ${toolbarTarget ? "" : "ml-auto"}`} data-testid="accountant-manage-date-filter">
+      <FinanceDateFilter
+        preset={preset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onChange={pickDates}
+        presets={DATE_PRESETS}
+        variant="inline"
+        filterIcon
+        testid="accountant-manage-window"
+      />
+      <Button
+        onClick={() => { load(); loadExpenseTotals(); }}
+        disabled={loading}
+        title="Refresh"
+        aria-label="Refresh"
+        className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+        data-testid="accountant-manage-refresh"
+      >
+        <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+      </Button>
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4" data-testid="accountant-manage-tab">
+      {toolbarTarget && dateControls && createPortal(dateControls, toolbarTarget)}
       {/* No title, no standfirst, no scope chip. This board is only ever reached by opening
           the tab named after it, so a heading repeating that name, a sentence explaining
           what a ledger is, and a chip reading back the two controls directly under it cost
@@ -599,7 +632,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           between the two grew the branch select, five tab names and six windows past the
           right edge at once -- and since this strip hides its scrollbar, what that looked
           like was a Custom Range button sliced down the middle and no Refresh at all. */}
-      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="accountant-manage-maintabs">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex shrink-0 items-center gap-2 border-r border-slate-200 pl-1.5 pr-2 min-[1900px]:pr-3">
             <label htmlFor="accountant-manage-branch" className="text-xs font-medium text-slate-600">Branch:</label>
@@ -627,79 +660,19 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             </button>
           ))}
         </div>
-        {/* ml-auto so the range sits at the far end of the line, with the empty middle
-            between it and the tabs standing for the two being different questions.
-
-            Hidden on Closing Balance, which carries its own Daily/Weekly/Monthly/Custom
-            control because it narrows a different thing: this range narrows a ledger, that
-            one picks which evenings are being counted or read back. Two date controls over
-            one set of figures is a question about which of them is in force, and the answer
-            -- that the range governs everything except the panel below it -- is not one a
-            toolbar can say. */}
-        {tab !== "closing" && tab !== "closebooks" && (
-        <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2" data-testid="accountant-manage-date-filter">
-          {/* The shared finance row, so this page and the three beside it are one control
-              in four places rather than four that have to be kept in step by hand. It
-              carries the range in force and the way back into the dialog itself.
-
-              `inline` because it shares its line with the tabs -- see VARIANTS. */}
-          <FinanceDateFilter
-            preset={preset}
-            customFrom={customFrom}
-            customTo={customTo}
-            onChange={pickDates}
-            presets={DATE_PRESETS}
-            variant="inline"
-            filterIcon
-            testid="accountant-manage-window"
-          />
-          <Button
-            onClick={load}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh"
-            className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
-            data-testid="accountant-manage-refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-        )}
-      </div>
-
-      {loading && !data ? (
-        <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
-      ) : tab === "summary" ? (
-        <div className="space-y-4" data-testid="accountant-manage-summary">
-          {/* Both filters on one line, above everything this tab shows: which side of
-              the business, then how the money came in. Two groups in one strip rather
-              than two strips, because they are one answer to one question -- what the
-              figures below are being narrowed to -- and stacked they read as two
-              unrelated decisions and cost a second band of screen.
-
-              Same strip the tab row above it wears (bordered card, nowrap, its own
-              sideways scroll on a phone), with a rule between the groups so the sky pills
-              and the indigo ones do not run together into one row of eleven. rounded-lg
-              on the pills, not rounded-full: 8px is the corner every other control on
-              this page is cut to, and a lozenge in a squared-off strip read as borrowed
-              from somewhere else.
-
-              Only on this tab. Payment Schedule, Discount Applied, Closing Balance and
-              Close Books read their own sources and take no notice of either group, so up
-              beside the tab names this strip would sit over four pages it narrows nothing
-              on. Here it comes and goes with the page it belongs to. */}
-          <div
-            className="flex flex-nowrap items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            data-testid="accountant-manage-summary-filters"
-          >
+        {/* How the figures are narrowed, on the Summary page only: which side of the
+            business, then how the money came in. In this row rather than a strip of their
+            own, so the board keeps to one bar under the page's tabs. */}
+        {tab === "summary" && (
+          <>
             {verticalModeFilter && (
-              <div className="flex shrink-0 flex-nowrap items-center gap-2 border-r border-slate-200 pr-2 2xl:pr-3" data-testid="accountant-manage-vertical-mode-filter">
+              <div className="flex shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2" data-testid="accountant-manage-vertical-mode-filter">
                 {VERTICAL_MODES.map(([key, label]) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setVerticalMode(key)}
-                    className={`shrink-0 whitespace-nowrap rounded-lg border px-3.5 py-1.5 text-sm font-medium transition ${
+                    className={`h-10 shrink-0 whitespace-nowrap rounded-md border px-3 text-xs font-medium transition min-[1900px]:text-sm ${
                       verticalMode === key ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
                     }`}
                     data-testid={`accountant-manage-vertical-mode-${key}`}
@@ -709,20 +682,13 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 ))}
               </div>
             )}
-
-            {/* Same set a Branch Admin picks from when collecting the fee in the first
-                place: how it was paid, not whether it has been signed off. It cuts the
-                income ledger only -- an expense is not a collection and carries no such
-                mode -- but it stays on screen with the Expenses side showing rather than
-                disappearing under it, so the strip does not change shape when the ledger
-                card below is pressed. */}
-            <div className="flex shrink-0 flex-nowrap items-center gap-2" data-testid="accountant-manage-payment-mode-filter">
+            <div className="flex shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2" data-testid="accountant-manage-payment-mode-filter">
               {PAYMENT_MODES.map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setPaymentModeFilter(key)}
-                  className={`shrink-0 whitespace-nowrap rounded-lg border px-3.5 py-1.5 text-sm font-medium transition ${
+                  className={`h-10 shrink-0 whitespace-nowrap rounded-md border px-3 text-xs font-medium transition min-[1900px]:text-sm ${
                     paymentModeFilter === key ? "border-indigo-600 bg-indigo-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
                   }`}
                   data-testid={`accountant-manage-payment-mode-${key}`}
@@ -731,8 +697,15 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 </button>
               ))}
             </div>
-          </div>
+          </>
+        )}
+        {!toolbarTarget && dateControls}
+      </div>
 
+      {loading && !data ? (
+        <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
+      ) : tab === "summary" ? (
+        <div className="space-y-4" data-testid="accountant-manage-summary">
           {/* The one question this tab opens on: money in, or money out. Two cards
               rather than a segmented pill, because the choice carries its own figure —
               a switch that also says what is on each side of it, in the shape the cards

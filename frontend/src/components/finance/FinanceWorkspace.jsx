@@ -27,7 +27,7 @@ const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 // put it over Payment Schedule, Discount Applied, Closing Balance and Close Books as well
 // — four pages it narrowed nothing on. It is now the board's own group, sharing the
 // Summary tab's filter strip with the payment modes; `verticalModeFilter` asks for it.
-const SummaryTab = ({ branchId, scoped }) => (
+const SummaryTab = ({ branchId, scoped, toolbarTarget }) => (
   <div className="space-y-4" data-testid="finance-summary-root">
     {/* canSend off: sending a day up for approval is the branch desk's move, and this is
         the desk it gets sent to. What lands here is signed off on the Approvals tab.
@@ -36,7 +36,7 @@ const SummaryTab = ({ branchId, scoped }) => (
         collection still sitting at a branch desk is the branch's figure, not the
         accountant's, and counting it here would have this board disagree with the books
         it is read against. The three piles still show, as figures rather than a filter. */}
-    <AccountantManageTab branchId={branchId} scoped={scoped} verticalModeFilter approvedOnly />
+    <AccountantManageTab branchId={branchId} scoped={scoped} verticalModeFilter approvedOnly toolbarTarget={toolbarTarget} />
   </div>
 );
 
@@ -65,7 +65,7 @@ const TABS = [
     key: "summary",
     label: "Summary",
     icon: BadgeIndianRupee,
-    render: ({ branchId, scoped }) => <SummaryTab branchId={branchId} scoped={scoped} />,
+    render: ({ branchId, scoped, toolbarTarget }) => <SummaryTab branchId={branchId} scoped={scoped} toolbarTarget={toolbarTarget} />,
   },
   {
     key: "approvals",
@@ -195,6 +195,10 @@ export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => 
   // its opener up through this ref on mount, and the tab row calls it — held in a ref
   // rather than in state so registering it does not re-render the row that reads it.
   const bankAddRef = useRef(null);
+  // The right-hand end of the tab row, where the Summary page draws its date range and
+  // Refresh -- one top bar for the whole dashboard. A callback ref held in state, so the
+  // page re-renders into it once it exists.
+  const [toolbarTarget, setToolbarTarget] = useState(null);
   const registerBankAdd = useCallback((open) => { bankAddRef.current = open; }, []);
 
   return (
@@ -264,6 +268,8 @@ export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => 
           })}
         </div>
 
+        <div ref={setToolbarTarget} className="flex shrink-0 flex-wrap items-center gap-2 empty:hidden" data-testid={`${testId}-toolbar`} />
+
         {/* The active page's own action, at the end of the row it belongs to. Full width
             below sm, where the tabs have already wrapped and a button squeezed against
             the last of them is the hardest thing on the row to hit. */}
@@ -287,7 +293,7 @@ export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => 
           different components, already unmounted and remounted by React swapping which
           one renders. */}
       <div key={selectedId}>
-        {active.render({ branchId, branchName, branches: sortedBranches, scoped, pending, onChanged: refreshPending, registerBankAdd })}
+        {active.render({ branchId, branchName, branches: sortedBranches, scoped, pending, onChanged: refreshPending, registerBankAdd, toolbarTarget })}
       </div>
     </div>
   );
