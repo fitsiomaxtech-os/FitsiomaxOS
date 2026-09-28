@@ -391,7 +391,8 @@ const PACKAGE_KINDS = {
 // quietly rename it to whichever package happened to sort first.
 const KEEP_EXISTING_NAME = "__existing__";
 
-// Exported for Branch Admin's FITSIO STORE, which opens it to edit a consultation.
+// Exported for Branch Admin's FITSIO STORE, which opens it to edit a consultation or a
+// diet package.
 export const CreateConsultationModal = ({ item, onClose, onSaved, kind = "consultation", category = "physiotherapy" }) => {
   const cfg = PACKAGE_KINDS[kind] || PACKAGE_KINDS.consultation;
   const isEdit = Boolean(item);
@@ -693,7 +694,8 @@ const zumbaMonthsFor = (sessions) => (
   sessions > 0 && sessions % ZUMBA_CLASSES_PER_MONTH === 0 ? sessions / ZUMBA_CLASSES_PER_MONTH : null
 );
 
-const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "physiotherapy" }) => {
+// Exported for Branch Admin's FITSIO STORE, which opens it to edit a session-shaped package.
+export const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "physiotherapy" }) => {
   const isEdit = Boolean(item);
   const isZumba = category === "zumba";
   const isOfflineOnly = OFFLINE_ONLY_CATEGORIES.has(category);

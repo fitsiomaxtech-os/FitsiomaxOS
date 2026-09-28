@@ -25,7 +25,7 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-# branch_admin because a Branch Admin may edit a consultation (see update_store_item), and
+# branch_admin because a Branch Admin may edit a package (see update_store_item), and
 # the Edit dialog's Change image uploads through here before it saves.
 @router.post("/upload-image")
 async def upload_store_image(file: UploadFile = File(...), _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
@@ -171,17 +171,18 @@ async def create_store_item(payload: StoreItemIn, _: V3UserOut = Depends(v3_requ
     return doc
 
 
-# What a Branch Admin may edit from their own FITSIO STORE: the two consultation shelves,
-# nothing else. None is a consultation created before item_type existed.
-BRANCH_EDITABLE_ITEM_TYPES = (None, "consultation", "diet")
+# What a Branch Admin may edit from their own FITSIO STORE: every package shelf —
+# consultations, session packages (Sessions, Rehab, Zumba, Workshop, Home Visit) and diet
+# packages. None is a consultation created before item_type existed.
+BRANCH_EDITABLE_ITEM_TYPES = (None, *ITEM_TYPES)
 
 
 @router.put("/items/{item_id}", response_model=StoreItemOut)
 async def update_store_item(item_id: str, payload: StoreItemIn, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
-    # A Branch Admin edits an existing consultation in place — its package, description,
-    # image, duration and prices — but may not turn it into another kind of item or move it
-    # to another shelf. The row is the same one every branch books from; Super Admin and
-    # Business Development keep the full edit.
+    # A Branch Admin edits an existing package in place — its name, description, image,
+    # duration or session count and prices — but may not turn it into another kind of item
+    # or move it to another shelf. The row is the same one every branch books from; Super
+    # Admin and Business Development keep the full edit, and alone create and delete.
     if not role_satisfies(user.role, ("super_admin", "business_dev")):
         existing = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0, "item_type": 1, "category": 1})
         if not existing:
@@ -192,7 +193,7 @@ async def update_store_item(item_id: str, payload: StoreItemIn, user: V3UserOut 
             or payload.item_type != existing_type
             or payload.category != existing.get("category")
         ):
-            raise HTTPException(status_code=403, detail="Branch Admin can edit consultations only")
+            raise HTTPException(status_code=403, detail="Branch Admin cannot change a package's type or shelf")
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
     if payload.price_online < 0 or payload.price_offline < 0:

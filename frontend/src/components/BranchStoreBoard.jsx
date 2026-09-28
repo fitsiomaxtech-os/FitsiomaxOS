@@ -19,6 +19,7 @@ import {
   SessionPriceBoxes,
   ViewItemModal,
   CreateConsultationModal,
+  CreateSessionPackageModal,
 } from "@/components/PackagesBoard";
 
 // Same helper BranchManagementBoard.jsx, PreSalesCRM.jsx and MarketingBoard.jsx each
@@ -27,10 +28,11 @@ import {
 // group branches.
 const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 
-// `canEdit` is set only on the two consultation shelves, which a Branch Admin may edit with
-// Super Admin's own dialog. The server refuses a branch edit to any other item_type, so the
-// rest stay read-only here rather than showing a button that 403s.
-const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", canEdit = false }) => {
+// Every shelf here is editable with Super Admin's own dialog for it: the session form for
+// Sessions, Rehab, Zumba, Workshop and Home Visit, the consultation form for Consultations,
+// Diet Consultations and Diet Package. Edit only — create and delete stay with Super Admin,
+// and the server refuses a branch moving a package to another type or shelf.
+const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all" }) => {
   const [items, setItems] = useState([]);
   const [viewingItem, setViewingItem] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
@@ -71,16 +73,14 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </button>
-                    {canEdit && (
-                      <button
-                        onClick={() => setEditingItem(it)}
-                        className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-sky-600"
-                        data-testid={`${testidPrefix}-item-${it.id}-edit`}
-                        title="Edit"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setEditingItem(it)}
+                      className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-sky-600"
+                      data-testid={`${testidPrefix}-item-${it.id}-edit`}
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
                 {it.image_url && <img src={it.image_url} alt={it.name} className="h-[200px] w-full rounded-lg object-cover" />}
@@ -121,12 +121,18 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
         <ViewItemModal
           item={viewingItem}
           kind={itemType}
-          canEdit={canEdit}
           onClose={() => setViewingItem(null)}
           onEdit={() => { setEditingItem(viewingItem); setViewingItem(null); }}
         />
       )}
-      {editingItem && (
+      {editingItem && (isSession ? (
+        <CreateSessionPackageModal
+          category={category}
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSaved={loadItems}
+        />
+      ) : (
         <CreateConsultationModal
           kind={itemType}
           category={category}
@@ -134,7 +140,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
           onClose={() => setEditingItem(null)}
           onSaved={loadItems}
         />
-      )}
+      ))}
     </div>
   );
 };
@@ -168,7 +174,6 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all" }) =>
           testidPrefix="branch-consultation"
           reloadToken={reloadToken}
           modeFilter={modeFilter}
-          canEdit
         />
       )}
       {sub === "fitness" && <PlaceholderPanel label="Fitness" testid="branch-consultations-subpanel-fitness" />}
@@ -185,7 +190,6 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all" }) =>
           testidPrefix="branch-diet-consultation"
           reloadToken={reloadToken}
           modeFilter={modeFilter}
-          canEdit
         />
       )}
     </div>
@@ -239,7 +243,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
       )}
       {/* Rehab arrives here because SESSIONS_SUBTABS is the same list Super Admin's page
           reads, so the sub-tab shows up the moment it is added there. It is the shelf the
-          top-level Rehab tab already lists, read-only as every session shelf here is —
+          top-level Rehab tab already lists, editable as every shelf here is —
           without this the button would select nothing and leave the panel blank. */}
       {sub === "rehab" && (
         <BranchItemsPanel
@@ -257,7 +261,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all" }) => {
 };
 
 /**
- * Diet Package — the branch's read-only view of what Super Admin has priced.
+ * Diet Package — what Super Admin has priced, editable here but not added to or deleted.
  *
  * No Physiotherapy/Fitness sub-tabs, matching Super Admin's own Diet Package tab: a diet
  * package is not split by department the way a consultation is, so a sub-tab bar with one
@@ -282,7 +286,7 @@ export const BranchDietPanel = ({ reloadToken, modeFilter = "all" }) => (
 
 /**
  * Rehab, Zumba Class, Workshop and Home Visit — Super Admin's four session-shaped shelves,
- * read-only here as every other catalogue is. Same panel, told which category to list;
+ * editable here as every other package shelf is. Same panel, told which category to list;
  * without these the tabs still appear (they come off the shared TABS list) and land on the
  * "coming soon" placeholder, which is not what a branch should see for a shelf that has
  * stock on it.
@@ -297,7 +301,7 @@ const SESSION_LIKE_TABS = {
   workshop: { category: "workshop", empty: "No workshops available yet." },
 };
 
-// Home Visit's Consultant / Physiotherapy split, read-only here like every other shelf.
+// Home Visit's Consultant / Physiotherapy split, editable here like every other shelf.
 // The sub-tabs are Super Admin's own list, so the two pages cannot disagree about them.
 const BranchHomeVisitPanel = ({ reloadToken, modeFilter = "all" }) => {
   const [sub, setSub] = useState(HOME_VISIT_SUBTABS[0].key);
