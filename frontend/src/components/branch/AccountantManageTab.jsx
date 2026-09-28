@@ -231,12 +231,12 @@ const RevenueTile = ({ label, value, sub, color, active, muted, onClick, testid 
     onClick={onClick}
     aria-pressed={active}
     data-testid={testid}
-    className={`group relative flex h-full w-full flex-col overflow-hidden border border-slate-200 p-3 text-left transition-all duration-150 sm:p-3.5 ${
+    className={`group relative flex h-full w-full flex-col overflow-hidden rounded-[2px] border border-slate-200 p-3 text-left transition-all duration-150 sm:p-3.5 ${
       active
         ? "shadow-[0_4px_14px_-4px_rgba(16,24,40,0.16)]"
         : "bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:bg-slate-50/60"
     }`}
-    style={active ? { backgroundColor: `${color}14` } : undefined}
+    style={active ? { borderColor: color, backgroundColor: `${color}14` } : undefined}
   >
     <div className="flex w-full items-start gap-2">
       <div className="min-w-0 flex-1">
@@ -694,15 +694,15 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               Green for money in and rose for money out: the colours the Total Revenue
               tile and the Accountant's own Total Expense card were already wearing, so a
               figure does not change colour depending on which screen it is read on. The
-              picked one is marked only by the others stepping back to 70% — square, with
-              no ring, like the rest of the summary cards. */}
+              picked one takes a 1px outline in its colour and the others step back to
+              70% — 2px corners, like the rest of the summary cards. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="accountant-manage-ledger-filter">
             {LEDGER_VIEWS.map((v) => {
               const on = ledger === v.key;
               const tone = {
-                income: { border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
-                cash: { border: "border-sky-200", bg: "bg-sky-50/60", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
-                expenses: { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
+                income: { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
+                cash: { ring: "#0284c7", border: "border-sky-200", bg: "bg-sky-50/60", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
+                expenses: { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
               }[v.key];
               const value = {
                 income: sums.totals.collected,
@@ -715,7 +715,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   type="button"
                   onClick={() => setLedger(v.key)}
                   aria-pressed={on}
-                  className={`border ${tone.border} ${tone.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
+                  className={`rounded-[2px] border ${tone.border} ${tone.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
+                  style={on ? { borderColor: tone.ring } : undefined}
                   data-testid={`accountant-manage-ledger-${v.key}`}
                 >
                   <p className={`text-[11px] font-bold uppercase tracking-wider ${tone.text}`}>{v.label}</p>
