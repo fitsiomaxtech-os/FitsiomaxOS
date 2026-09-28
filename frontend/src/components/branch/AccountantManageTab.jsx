@@ -361,7 +361,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // is the one with something to do in it -- except where only signed-off money counts,
   // which fixes it on Approved and never moves it again.
   const [incomeStage, setIncomeStage] = useState(approvedOnly ? "approved" : "requested");
-  const [expenseTotals, setExpenseTotals] = useState({ approved_total: 0, approved_count: 0, pending_count: 0 });
+  const [expenseTotals, setExpenseTotals] = useState({ approved_total: 0, approved_count: 0, pending_count: 0, pending_total: 0 });
   // One branch's drawer, or every opened branch's added up where no branch is picked.
   const [cashInHand, setCashInHand] = useState(0);
   // Branches left out of that roll-up because their drawer has no opening count yet. The
@@ -438,6 +438,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         approved_total: d.approved_total || 0,
         approved_count: d.approved_count || 0,
         pending_count: d.pending_count || 0,
+        pending_total: d.pending_total || 0,
       }))
       .catch(() => { /* the card falls back to zero; the panel says why when opened */ });
     getBranchCash(branchId ? { branch_id: branchId } : {})
@@ -776,8 +777,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   profit >= 0
                     ? { key: "profit", label: "Profit", value: profit, border: "border-indigo-200", bg: "bg-indigo-50/70", text: "text-indigo-700" }
                     : { key: "profit", label: "Loss", value: profit, border: "border-rose-300", bg: "bg-rose-50", text: "text-rose-700" },
-                  // The drawer, same figure as the Cash In Hand card above.
-                  { key: "cash", label: "Total Cash In Hand", value: cashInHand, border: "border-teal-200", bg: "bg-teal-50/70", text: cashInHand < 0 ? "text-rose-700" : "text-teal-700" },
+                  // Everything logged, approved or still waiting -- never a rejected one.
+                  // Expense beside it is the approved share only.
+                  { key: "total-expense", label: "Total Expense", value: expense + (Number(expenseTotals.pending_total) || 0), border: "border-rose-200", bg: "bg-rose-50/70", text: "text-rose-700" },
                 ].map((c) => (
                   <span
                     key={c.key}
