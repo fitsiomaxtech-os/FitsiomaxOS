@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Store,
   Stethoscope,
+  User,
   UserCircle,
   UserPlus,
   Users,
@@ -1165,17 +1166,25 @@ export const CRMPage = ({ auth, onLogout }) => {
                 onClick={() => setShowProfile(true)}
                 // Super Admin's phone reaches My Profile (and Logout, inside it) from the
                 // bottom bar, so the header drops both below md.
-                className={`${profileInFooterClass} items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-slate-50`}
+                className={`${profileInFooterClass} items-center gap-2 rounded-[2px] bg-white px-1.5 py-1 text-left shadow-md transition hover:shadow-lg sm:gap-2.5 sm:px-3 sm:py-1.5`}
                 data-testid="role-board-profile-button"
               >
                 {/* Whoever is signed in, by their own face. The same component the HR
                     directory draws with, so the picture HR uploaded when they were taken
-                    on is the picture here, and a missing file falls back to their initial
-                    rather than a broken image. */}
-                <EmployeeAvatar employee={auth.user} size={32} className="hidden sm:flex" />
-                <EmployeeAvatar employee={auth.user} size={28} className="flex sm:hidden" />
+                    on is the picture here. A login with no photo behind it gets a person
+                    mark rather than a pale initial, which read as an empty slot. */}
+                {auth.user.photo_url ? (
+                  <>
+                    <EmployeeAvatar employee={auth.user} size={32} className="hidden sm:flex" />
+                    <EmployeeAvatar employee={auth.user} size={28} className="flex sm:hidden" />
+                  </>
+                ) : (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-600 text-white sm:h-8 sm:w-8" aria-hidden="true">
+                    <User className="mt-1.5 h-5 w-5 fill-current sm:h-6 sm:w-6" strokeWidth={1.5} />
+                  </span>
+                )}
                 <span className="hidden sm:block">
-                  <span className="block text-sm font-semibold leading-tight text-slate-900" data-testid="role-board-user-greeting">
+                  <span className="block text-sm font-semibold uppercase leading-tight tracking-wide text-slate-700" data-testid="role-board-user-greeting">
                     {auth.user.full_name}
                   </span>
                   <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-400" data-testid="role-board-user-subtitle">
