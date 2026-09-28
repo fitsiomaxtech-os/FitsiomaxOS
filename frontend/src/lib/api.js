@@ -510,6 +510,11 @@ export const createCashHandover = async (payload) => (await api.post("/finance/c
 export const listCashHandovers = async (params = {}) => (await api.get("/finance/cash-handovers", { params })).data;
 export const receiveCashHandover = async (id, payload = {}) => (await api.post(`/finance/cash-handover/${id}/receive`, payload)).data;
 export const cancelCashHandover = async (id) => (await api.post(`/finance/cash-handover/${id}/cancel`)).data;
+// Cash coming back into a branch's drawer -- a float from head office, a handover brought
+// back, an advance returned. Adds to Cash in hand the moment it is recorded.
+export const createCashReturn = async (payload) => (await api.post("/finance/cash-return", payload)).data;
+export const listCashReturns = async (params = {}) => (await api.get("/finance/cash-returns", { params })).data;
+export const cancelCashReturn = async (id) => (await api.post(`/finance/cash-return/${id}/cancel`)).data;
 
 // Finance > UPI: the bank accounts the group collects into, and the QR each one is
 // scanned by. The image goes up on its own, ahead of Save, so the popup can show it

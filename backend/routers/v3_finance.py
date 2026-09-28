@@ -3653,6 +3653,20 @@ class CashHandoverReceive(BaseModel):
     note: Optional[str] = ""
 
 
+class CashReturnCreate(BaseModel):
+    # Ignored for a Branch Admin, who records cash coming back into their own drawer only.
+    branch_id: Optional[str] = None
+    amount: float
+    # Who gave the cash back -- head office sending a float down, a carrier bringing a
+    # handover back, a staff member returning an advance. Required for the same reason a
+    # handover names its carrier: cash with nobody's name on it is nobody's to answer for.
+    returned_by: str
+    cash_denominations: Optional[dict] = None
+    cash_coins: Optional[float] = 0
+    on: Optional[str] = None
+    note: Optional[str] = ""
+
+
 class CashAdjustmentCreate(BaseModel):
     # Ignored for nobody — only the accountant and Super Admin can reach this endpoint.
     branch_id: str
@@ -3749,6 +3763,14 @@ async def _branch_cash_figures(
         for h in ho_rows if h.get("status") in ("received", "disputed")
     ), 2)
 
+    # Cash that came back into the drawer: a float from head office, a carrier bringing a
+    # handover back, an advance returned. Cancelled ones never happened.
+    ret_query = {"branch_id": branch_id, "status": {"$ne": "cancelled"}}
+    if up_to:
+        ret_query["on"] = {"$lte": up_to}
+    ret_rows = await v3_col("cash_returns").find(ret_query, {"_id": 0, "amount": 1}).to_list(5000)
+    cash_returned = round(sum(float(r.get("amount") or 0) for r in ret_rows), 2)
+
     adj_query = {"branch_id": branch_id}
     if up_to:
         adj_query["on"] = {"$lte": up_to}
@@ -3756,10 +3778,12 @@ async def _branch_cash_figures(
     adjustments = round(sum(float(r.get("amount") or 0) for r in adj_rows), 2)
     opening_set = any(r.get("reason") == "opening" for r in adj_rows)
 
-    # In the drawer now = the opening count and corrections, plus cash taken, less cash
-    # spent, less everything that has left with a carrier (whether the accountant has
-    # counted it in yet or not — the notes are gone from the branch either way).
-    cash_in_hand = round(adjustments + collected_cash - cash_spent - handed_over - in_transit, 2)
+    # In the drawer now = the opening count and corrections, plus cash taken and cash
+    # returned, less cash spent, less everything that has left with a carrier (whether the
+    # accountant has counted it in yet or not — the notes are gone from the branch either way).
+    cash_in_hand = round(
+        adjustments + collected_cash + cash_returned - cash_spent - handed_over - in_transit, 2
+    )
     return {
         "branch_id": branch_id,
         "collected_total": collected_total,
@@ -3767,6 +3791,7 @@ async def _branch_cash_figures(
         "cash_approved": cash_approved,
         "cash_awaiting": cash_awaiting,
         "cash_spent": cash_spent,
+        "cash_returned": cash_returned,
         "handed_over": handed_over,
         "in_transit": in_transit,
         "adjustments": adjustments,
@@ -3847,6 +3872,7 @@ async def get_branch_cash(
         "collected_total": round(sum(r["collected_total"] for r in rows), 2),
         "collected_cash": round(sum(r["collected_cash"] for r in rows), 2),
         "cash_spent": round(sum(r["cash_spent"] for r in rows), 2),
+        "cash_returned": round(sum(r["cash_returned"] for r in rows), 2),
         "handed_over": round(sum(r["handed_over"] for r in rows), 2),
         "in_transit": round(sum(r["in_transit"] for r in rows), 2),
         # Only drawers whose opening count is set. Before it, a branch's balance is every
@@ -3859,7 +3885,9 @@ async def get_branch_cash(
 
 
 # The cards on Branch Cash, each of which opens the rows it was summed from.
-BRANCH_CASH_KINDS = ("collected", "collected_cash", "cash_spent", "handed_over", "in_transit", "cash_in_hand")
+BRANCH_CASH_KINDS = (
+    "collected", "collected_cash", "cash_spent", "cash_returned", "handed_over", "in_transit", "cash_in_hand",
+)
 
 
 def _cash_share(t: dict) -> float:
@@ -3971,6 +3999,23 @@ async def get_branch_cash_entries(
                 ] if x),
                 "status": (h.get("status") or "pending").title(),
                 "amount": -amount if ledger else amount,
+            })
+
+    if kind == "cash_returned" or ledger:
+        ret_query = {"branch_id": {"$in": branch_ids}, "status": {"$ne": "cancelled"}}
+        for r in await v3_col("cash_returns").find(ret_query, {"_id": 0}).sort("raised_at", -1).to_list(5000):
+            rows.append({
+                "id": f"ret-{r.get('id')}",
+                "date": r.get("on") or "",
+                "branch_name": branch_name_map.get(r.get("branch_id"), ""),
+                "type": "Cash return",
+                "party": r.get("returned_by") or "",
+                "detail": " · ".join(x for x in [
+                    f"raised by {r['raised_by']}" if r.get("raised_by") else "",
+                    r.get("note") or "",
+                ] if x),
+                "status": "",
+                "amount": round(float(r.get("amount") or 0), 2),
             })
 
     if ledger:
@@ -4235,6 +4280,125 @@ async def cancel_cash_handover(
     if res.modified_count == 0:
         raise HTTPException(status_code=409, detail="This handover has already been received — it cannot be cancelled")
     return {"message": "Handover cancelled"}
+
+
+def _cash_return_public(row: dict) -> dict:
+    return {
+        "id": row.get("id", ""),
+        "branch_id": row.get("branch_id"),
+        "branch_name": row.get("branch_name") or "",
+        "amount": round(float(row.get("amount") or 0), 2),
+        "returned_by": row.get("returned_by") or "",
+        "cash_denominations": row.get("cash_denominations") or {},
+        "cash_coins": round(float(row.get("cash_coins") or 0), 2),
+        "on": row.get("on") or "",
+        "note": row.get("note") or "",
+        "status": row.get("status") or "active",
+        "raised_by": row.get("raised_by") or "",
+        "raised_at": row.get("raised_at") or "",
+    }
+
+
+@router.post("/finance/cash-return")
+async def create_cash_return(
+    payload: CashReturnCreate,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
+):
+    """Cash coming back into a branch's drawer -- the Cash Return leg of the drawer's flow
+    (collections and returns in; expenses and handovers out). The box rises by the amount
+    straight away, the way a handover lowers it straight away: the notes are in the drawer
+    the moment they are handed in.
+
+    Open to the branch as well as the accountant. A branch can only claim more cash than
+    it had by recording one, and a box claiming more than the drawer holds is a shortfall
+    the branch then has to answer for at the next count -- nothing it could want.
+    """
+    if is_branch_admin_role(user.role):
+        if not user.branch_id:
+            raise HTTPException(status_code=400, detail="Your account is not attached to a branch")
+        branch_id = user.branch_id
+    else:
+        branch_id = payload.branch_id
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="Pick a branch")
+
+    amount = round(float(payload.amount or 0), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    if not (payload.returned_by or "").strip():
+        raise HTTPException(status_code=400, detail="Name who gave the cash back")
+
+    counted_cash, notes = _denomination_total(payload.cash_denominations)
+    coins = round(float(payload.cash_coins or 0), 2)
+    if notes and abs((counted_cash + coins) - amount) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The notes counted come to Rs.{counted_cash + coins:g}, but the return is Rs.{amount:g}",
+        )
+
+    on = payload.on or clinic_today()
+    await _refuse_before_count(branch_id, on, "a cash return")
+
+    branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "branch_name": 1})
+    doc = {
+        "id": str(uuid.uuid4()),
+        "branch_id": branch_id,
+        "branch_name": (branch or {}).get("branch_name", ""),
+        "amount": amount,
+        "returned_by": payload.returned_by.strip(),
+        "cash_denominations": notes,
+        "cash_coins": coins,
+        "on": on,
+        "note": (payload.note or "").strip(),
+        "status": "active",
+        "raised_by": user.full_name,
+        "raised_by_role": user.role,
+        "raised_at": _now(),
+    }
+    await v3_col("cash_returns").insert_one(doc.copy())
+    return {
+        "message": "Cash return recorded",
+        "cash_return": _cash_return_public(doc),
+        "branch_cash": await _branch_cash_figures(branch_id, user),
+    }
+
+
+@router.get("/finance/cash-returns")
+async def list_cash_returns(
+    branch_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
+):
+    """Cash returns, newest first. A Branch Admin sees their own branch's; the accountant
+    and Super Admin see every branch's, or one if they name it."""
+    if is_branch_admin_role(user.role):
+        branch_id = user.branch_id
+    query = {"branch_id": branch_id} if branch_id else {}
+    rows = await v3_col("cash_returns").find(query, {"_id": 0}).sort("raised_at", -1).to_list(1000)
+    listed = [_cash_return_public(r) for r in rows]
+    return {
+        "cash_returns": listed,
+        "total": round(sum(r["amount"] for r in listed if r["status"] != "cancelled"), 2),
+    }
+
+
+@router.post("/finance/cash-return/{return_id}/cancel")
+async def cancel_cash_return(
+    return_id: str,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
+):
+    """Take back a cash return recorded by mistake. The drawer drops by it again."""
+    row = await v3_col("cash_returns").find_one({"id": return_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Cash return not found")
+    if is_branch_admin_role(user.role) and row.get("branch_id") != user.branch_id:
+        raise HTTPException(status_code=403, detail="That cash return is not your branch's")
+    res = await v3_col("cash_returns").update_one(
+        {"id": return_id, "status": {"$ne": "cancelled"}},
+        {"$set": {"status": "cancelled", "cancelled_by": user.full_name, "cancelled_at": _now()}},
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This cash return is already cancelled")
+    return {"message": "Cash return cancelled"}
 
 
 # ---------- UPI / Bank accounts (Super Admin, Finance > UPI) ----------

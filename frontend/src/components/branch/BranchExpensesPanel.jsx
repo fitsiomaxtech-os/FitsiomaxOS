@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock, Coins, HandCoins, Plus, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, CheckCircle2, Clock, Coins, HandCoins, Plus, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
   getBranches, getFinanceExpenses, createFinanceExpense,
   getBranchCash, createCashHandover, listCashHandovers, cancelCashHandover,
+  createCashReturn, listCashReturns, cancelCashReturn,
   listVendors, createVendor,
 } from "@/lib/api";
 import { DENOMINATIONS, noteTotal, countedNotes, noteBreakdown, notesLabel } from "@/lib/denominations";
@@ -567,6 +568,105 @@ const HandoverDialog = ({ onClose, onSaved, cashInHand, branchId, branches }) =>
   );
 };
 
+const CashReturnDialog = ({ onClose, onSaved, branchId, branches }) => {
+  const [form, setForm] = useState({ amount: "", returned_by: "", on: todayIso(), note: "" });
+  const [pickedBranch, setPickedBranch] = useState("");
+  const [notes, setNotes] = useState({});
+  const [coins, setCoins] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const receivingBranch = branchId || pickedBranch;
+  const amountNum = Number(form.amount);
+  const counted = noteTotal(notes) + (Number(coins) || 0);
+  const countEntered = counted > 0;
+
+  const submit = async () => {
+    if (!receivingBranch) { toast.error("Pick the branch this cash is coming back to"); return; }
+    if (!(amountNum > 0)) { toast.error("Enter how much came back"); return; }
+    if (!form.returned_by.trim()) { toast.error("Name who gave the cash back"); return; }
+    if (countEntered && Math.abs(counted - amountNum) >= 0.01) {
+      toast.error("The notes counted do not add up to the amount");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createCashReturn({
+        ...form,
+        branch_id: receivingBranch,
+        amount: amountNum,
+        cash_denominations: countEntered ? (countedNotes(notes) || {}) : undefined,
+        cash_coins: Number(coins) || 0,
+      });
+      toast.success("Cash return recorded — added to Cash in hand");
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not record that cash return");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="branch-cash-return-dialog"
+    >
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-800">Cash return</h3>
+            <p className="text-[11px] text-slate-500">Cash coming back into the drawer — it adds to Cash in hand.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto p-5">
+          {!branchId && (
+            <BranchPicker
+              value={pickedBranch}
+              onChange={setPickedBranch}
+              branches={branches}
+              testid="branch-cash-return-branch"
+            />
+          )}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount *</label>
+            <Input type="number" min="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0" data-testid="branch-cash-return-amount" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Returned by *</label>
+            <Input value={form.returned_by} onChange={(e) => set("returned_by", e.target.value)} placeholder="Who gave the cash back" data-testid="branch-cash-return-by" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Date</label>
+            <Input type="date" value={form.on} onChange={(e) => set("on", e.target.value)} data-testid="branch-cash-return-date" />
+          </div>
+          <DenominationFields
+            amount={form.amount}
+            notes={notes}
+            coins={coins}
+            onNotes={setNotes}
+            onCoins={setCoins}
+            testPrefix="branch-cash-return"
+          />
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Note</label>
+            <Input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Why it came back (optional)" data-testid="branch-cash-return-note" />
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving} onClick={submit} data-testid="branch-cash-return-submit">
+            {saving ? "Recording…" : "Record return"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 /**
  * One of the four piles this panel opens on, in the shape HR Admin's own stage cards
@@ -749,6 +849,14 @@ const CashMovementList = ({ cash }) => {
       sign: "+",
       tone: "text-slate-700",
     },
+    {
+      key: "returned",
+      label: "Cash returned",
+      detail: "cash that came back into the drawer",
+      amount: cash.cash_returned || 0,
+      sign: "+",
+      tone: "text-emerald-700",
+    },
     { key: "spent", label: "Spent in cash", detail: "expenses paid out of the drawer", amount: cash.cash_spent, sign: "−", tone: "text-rose-600" },
     { key: "handed", label: "Handed over", detail: "received by the accountant", amount: cash.handed_over, sign: "−", tone: "text-rose-600" },
   ];
@@ -838,6 +946,7 @@ const CashByBranchList = ({ rows }) => {
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
               <span>collected {fmt(b.collected_cash)}</span>
+              {b.cash_returned > 0 ? <span className="text-emerald-700">· returned {fmt(b.cash_returned)}</span> : null}
               <span>· spent {fmt(b.cash_spent)}</span>
               <span>· handed over {fmt(b.handed_over)}</span>
               {b.in_transit > 0 ? <span className="text-amber-700">· in transit {fmt(b.in_transit)}</span> : null}
@@ -852,6 +961,7 @@ const CashByBranchList = ({ rows }) => {
             <tr>
               <th className="px-4 py-2.5 font-semibold">Branch</th>
               <th className="px-4 py-2.5 text-right font-semibold">Collected In Cash</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Returned</th>
               <th className="px-4 py-2.5 text-right font-semibold">Spent</th>
               <th className="px-4 py-2.5 text-right font-semibold">Handed Over</th>
               <th className="px-4 py-2.5 text-right font-semibold">In Transit</th>
@@ -866,6 +976,9 @@ const CashByBranchList = ({ rows }) => {
                   {!b.opening_set ? <p className="text-[11px] text-amber-700">opening not set</p> : null}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-slate-600">{fmt(b.collected_cash)}</td>
+                <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${b.cash_returned > 0 ? "text-emerald-700" : "text-slate-400"}`}>
+                  {b.cash_returned > 0 ? `+ ${fmt(b.cash_returned)}` : "—"}
+                </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-rose-600">− {fmt(b.cash_spent)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-rose-600">− {fmt(b.handed_over)}</td>
                 <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${b.in_transit > 0 ? "text-amber-700" : "text-slate-400"}`}>
@@ -1002,6 +1115,72 @@ const HandoverList = ({ handovers, onCancel, showBranch }) => {
   );
 };
 
+/** Cash that came back into the drawer, newest first. One recorded by mistake can be
+    cancelled, which takes it back off Cash in hand. */
+const CashReturnList = ({ returns, onCancel, showBranch }) => {
+  if (!returns.length) {
+    return (
+      <EmptyList testid="branch-cash-return-empty">
+        No cash returned yet. Cash return records cash coming back into the drawer.
+      </EmptyList>
+    );
+  }
+
+  return (
+    <ListFrame testid="branch-cash-return-list">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+          <tr>
+            <th className="px-4 py-2.5 font-semibold">Date</th>
+            <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
+            <th className="px-4 py-2.5 font-semibold">Returned By</th>
+            <th className="px-4 py-2.5 font-semibold">Notes Counted</th>
+            <th className="px-4 py-2.5" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {returns.map((r) => {
+            const cancelled = r.status === "cancelled";
+            return (
+              <tr key={r.id} className={`align-top hover:bg-slate-50 ${cancelled ? "opacity-60" : ""}`} data-testid={`branch-cash-return-${r.id}`}>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-500">{r.on || "—"}</td>
+                <td className={`whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums ${cancelled ? "text-slate-400 line-through" : "text-emerald-700"}`}>
+                  + {fmt(r.amount)}
+                </td>
+                <td className="px-4 py-3">
+                  <p className="font-medium text-slate-700">{r.returned_by || "—"}</p>
+                  {showBranch && r.branch_name ? <p className="text-[11px] text-slate-400">{r.branch_name}</p> : null}
+                  {r.raised_by ? <p className="text-[11px] text-slate-400">recorded by {r.raised_by}</p> : null}
+                  {r.note ? <p className="text-[11px] text-slate-400">{r.note}</p> : null}
+                </td>
+                <td className="px-4 py-3 text-[11px] text-slate-400">
+                  {notesLabel(r.cash_denominations)
+                    ? `${notesLabel(r.cash_denominations)}${Number(r.cash_coins) > 0 ? ` + Rs.${r.cash_coins} coins` : ""}`
+                    : "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {cancelled ? (
+                    <span className="text-[11px] text-slate-400">Cancelled</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onCancel(r.id)}
+                      className="text-[11px] text-slate-400 underline hover:text-rose-600"
+                      data-testid={`branch-cash-return-cancel-${r.id}`}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </ListFrame>
+  );
+};
+
 const countLabel = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -1018,6 +1197,8 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
   const [handingOver, setHandingOver] = useState(false);
   const [cash, setCash] = useState(null);
   const [handovers, setHandovers] = useState([]);
+  const [returning, setReturning] = useState(false);
+  const [cashReturns, setCashReturns] = useState([]);
   // Only for the two dialogs, and only where the board above has not already picked one:
   // both forms are statements about a single branch's cash, so with no branch in view
   // they have to ask which.
@@ -1054,15 +1235,18 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
   // each.
   const loadCash = useCallback(async () => {
     try {
-      const [box, ho] = await Promise.all([
+      const [box, ho, ret] = await Promise.all([
         getBranchCash(branchId ? { branch_id: branchId } : {}),
         listCashHandovers(branchId ? { branch_id: branchId } : {}),
+        listCashReturns(branchId ? { branch_id: branchId } : {}),
       ]);
       setCash(box);
       setHandovers(ho.handovers || []);
+      setCashReturns(ret.cash_returns || []);
     } catch {
       setCash(null);
       setHandovers([]);
+      setCashReturns([]);
     }
   }, [branchId]);
 
@@ -1077,6 +1261,16 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
     try {
       await cancelCashHandover(id);
       toast.success("Handover cancelled");
+      loadCash();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not cancel that");
+    }
+  };
+
+  const pullBackReturn = async (id) => {
+    try {
+      await cancelCashReturn(id);
+      toast.success("Cash return cancelled");
       loadCash();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not cancel that");
@@ -1227,18 +1421,27 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
             {activeView !== "cash"
               ? list.hint
               : byBranch
-                ? "One row per branch — collections in, spending and handovers out"
-                : "Collections in; spending and handovers out"}
+                ? "One row per branch — collections and returns in, spending and handovers out"
+                : "Collections and returns in; spending and handovers out"}
           </p>
         </div>
         {activeView === "cash" ? (
-          <Button
-            onClick={() => setHandingOver(true)}
-            className="ml-auto h-9 bg-amber-600 text-xs text-white hover:bg-amber-700"
-            data-testid="branch-handover-open"
-          >
-            <HandCoins className="mr-1.5 h-3.5 w-3.5" /> Hand over cash
-          </Button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              onClick={() => setReturning(true)}
+              className="h-9 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+              data-testid="branch-cash-return-open"
+            >
+              <ArrowDownToLine className="mr-1.5 h-3.5 w-3.5" /> Cash return
+            </Button>
+            <Button
+              onClick={() => setHandingOver(true)}
+              className="h-9 bg-amber-600 text-xs text-white hover:bg-amber-700"
+              data-testid="branch-handover-open"
+            >
+              <HandCoins className="mr-1.5 h-3.5 w-3.5" /> Hand over cash
+            </Button>
+          </div>
         ) : (
           <Button
             className="ml-auto bg-sky-600 text-white hover:bg-sky-700"
@@ -1265,6 +1468,10 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
             <p className="mb-2 text-sm font-semibold text-slate-700">Handovers</p>
             <HandoverList handovers={handovers} onCancel={pullBackHandover} showBranch={!branchId} />
           </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">Cash returns</p>
+            <CashReturnList returns={cashReturns} onCancel={pullBackReturn} showBranch={!branchId} />
+          </div>
         </div>
       ) : (
         <ExpenseList
@@ -1284,6 +1491,14 @@ export const BranchExpensesPanel = ({ onChanged, branchId }) => {
           branchId={branchId}
           branches={branches}
           pastRows={rows}
+        />
+      )}
+      {returning && (
+        <CashReturnDialog
+          onClose={() => setReturning(false)}
+          onSaved={() => { setReturning(false); loadCash(); }}
+          branchId={branchId}
+          branches={branches}
         />
       )}
       {handingOver && (

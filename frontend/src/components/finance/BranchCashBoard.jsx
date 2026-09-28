@@ -32,6 +32,7 @@ const KIND_LABEL = {
   collected: "Collected",
   collected_cash: "Collected (cash)",
   cash_spent: "Cash spent",
+  cash_returned: "Cash returned",
   handed_over: "Handed over",
   in_transit: "In transit",
   cash_in_hand: "Cash in hand",
@@ -326,9 +327,10 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
 
       {!loading && data && !branchId && (
         <div className="space-y-3" data-testid="branch-cash-rollup">
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
             <Figure label="Collected" value={fmt(data.total?.collected_total)} testId="branch-cash-total-collected" {...card("collected")} />
             <Figure label="Collected (cash)" value={fmt(data.total?.collected_cash)} testId="branch-cash-total-cash" {...card("collected_cash")} />
+            <Figure label="Cash returned" value={fmt(data.total?.cash_returned)} tone="emerald" testId="branch-cash-total-returned" {...card("cash_returned")} />
             <Figure label="Cash spent" value={fmt(data.total?.cash_spent)} testId="branch-cash-total-spent" {...card("cash_spent")} />
             <Figure
               label="Branches"
@@ -360,6 +362,7 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Branch</th>
                   <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Collected (cash)</th>
+                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Returned</th>
                   <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Spent</th>
                   <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Handed over</th>
                   <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">In transit</th>
@@ -379,6 +382,7 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
                       {!r.opening_set && <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">opening not set</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{fmt(r.collected_cash)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">{fmt(r.cash_returned)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{fmt(r.cash_spent)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{fmt(r.handed_over)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-amber-700">{fmt(r.in_transit)}</td>
@@ -398,9 +402,10 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
             <OpeningCashForm branchId={branchId} branchName={branchName} isCorrection={false} onDone={load} />
           )}
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
             <Figure label="Collected" value={fmt(data.collected_total)} testId="branch-cash-collected" {...card("collected")} />
             <Figure label="Collected (cash)" value={fmt(data.collected_cash)} testId="branch-cash-cash" {...card("collected_cash")} />
+            <Figure label="Cash returned" value={fmt(data.cash_returned)} tone="emerald" testId="branch-cash-returned" {...card("cash_returned")} />
             <Figure label="Spent (cash)" value={fmt(data.cash_spent)} testId="branch-cash-spent" {...card("cash_spent")} />
             <Figure label="Handed over" value={fmt(data.handed_over)} testId="branch-cash-handed" {...card("handed_over")} />
             <Figure label="In transit" value={fmt(data.in_transit)} tone="amber" testId="branch-cash-transit" {...card("in_transit")} />
@@ -410,6 +415,7 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
           <p className="text-[11px] text-slate-500" data-testid="branch-cash-reconcile">
             Collected in cash {fmt(data.collected_cash)}
             {(data.cash_approved != null) && <span className="text-slate-400"> (approved {fmt(data.cash_approved)} · awaiting {fmt(data.cash_awaiting)})</span>}
+            {data.cash_returned > 0 ? ` + returned ${fmt(data.cash_returned)}` : ""}
             {" "}− spent {fmt(data.cash_spent)} − handed over {fmt(data.handed_over)}
             {data.in_transit > 0 ? ` − in transit ${fmt(data.in_transit)}` : ""}
             {data.adjustments !== 0 ? ` ${data.adjustments > 0 ? "+" : "−"} opening/corrections ${fmt(Math.abs(data.adjustments))}` : ""}
