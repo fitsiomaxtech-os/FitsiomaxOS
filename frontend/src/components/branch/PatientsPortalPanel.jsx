@@ -952,9 +952,6 @@ function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
               popup, past everything else, so it can't be the thing a scroll lands on. */}
           <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50/50 p-3" data-testid="branch-patient-danger-zone">
             <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Delete Patient</p>
-            <p className="text-xs text-rose-700">
-              Permanently erases {lead.name || "this patient"} and everything on file for them — every fee collected, treatment session, and their spot on Branch Leads, the Consultant queue and Physio's board. This cannot be undone.
-            </p>
             <Button
               size="sm"
               variant="outline"
