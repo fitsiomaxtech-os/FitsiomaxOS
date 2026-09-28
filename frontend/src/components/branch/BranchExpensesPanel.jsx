@@ -1199,6 +1199,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
   const [handovers, setHandovers] = useState([]);
   const [returning, setReturning] = useState(false);
   const [cashReturns, setCashReturns] = useState([]);
+  const [cashFailed, setCashFailed] = useState(false);
   // Only for the two dialogs, and only where the board above has not already picked one:
   // both forms are statements about a single branch's cash, so with no branch in view
   // they have to ask which.
@@ -1235,14 +1236,15 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
   // each.
   const loadCash = useCallback(async () => {
     try {
-      const [box, ho, ret] = await Promise.all([
-        getBranchCash(branchId ? { branch_id: branchId } : {}),
-        listCashHandovers(branchId ? { branch_id: branchId } : {}),
-        listCashReturns(branchId ? { branch_id: branchId } : {}),
+      // Settled one by one: a list that fails to load should not take the drawer with it.
+      const scope = branchId ? { branch_id: branchId } : {};
+      const [box, ho, ret] = await Promise.allSettled([
+        getBranchCash(scope), listCashHandovers(scope), listCashReturns(scope),
       ]);
-      setCash(box);
-      setHandovers(ho.handovers || []);
-      setCashReturns(ret.cash_returns || []);
+      setCash(box.status === "fulfilled" ? box.value : null);
+      setCashFailed(box.status !== "fulfilled");
+      setHandovers(ho.status === "fulfilled" ? ho.value?.handovers || [] : []);
+      setCashReturns(ret.status === "fulfilled" ? ret.value?.cash_returns || [] : []);
       onChangedRef.current?.();
     } catch {
       setCash(null);
@@ -1441,7 +1443,13 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all" }) =>
         )}
       </div>
 
-      {activeView === "cash" ? (
+      {activeView === "cash" && !cash ? (
+        // The drawer view can open before its figures have arrived -- Summary's Cash In
+        // Hand card lands straight on it -- so it waits for them rather than reading null.
+        <EmptyList testid="branch-cash-loading">
+          {cashFailed ? "Could not load cash in hand — refresh to try again." : "Loading cash in hand…"}
+        </EmptyList>
+      ) : activeView === "cash" ? (
         <div className="space-y-4">
           {!byBranch && !cash.opening_set && (
             <p
