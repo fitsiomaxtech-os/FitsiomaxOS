@@ -776,6 +776,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   profit >= 0
                     ? { key: "profit", label: "Profit", value: profit, border: "border-indigo-200", bg: "bg-indigo-50/70", text: "text-indigo-700" }
                     : { key: "profit", label: "Loss", value: profit, border: "border-rose-300", bg: "bg-rose-50", text: "text-rose-700" },
+                  // The drawer, same figure as the Cash In Hand card above.
+                  { key: "cash", label: "Total Cash In Hand", value: cashInHand, border: "border-teal-200", bg: "bg-teal-50/70", text: cashInHand < 0 ? "text-rose-700" : "text-teal-700" },
                 ].map((c) => (
                   <span
                     key={c.key}
