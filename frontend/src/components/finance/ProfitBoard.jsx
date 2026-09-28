@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { rangeFor, rangeIncomplete } from "@/lib/dateRange";
 import { getBranches, getFinanceProfit } from "@/lib/api";
@@ -104,38 +103,30 @@ export const ProfitBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = f
         />
       </div>
 
+      {/* Summary's ledger cards: tinted, 2px corners, no icons. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4" data-testid="finance-profit-revenue-card">
-          <div className="mb-1 flex items-center justify-between">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">Revenue</p>
-            <TrendingUp className="h-4 w-4 text-emerald-600" />
+        {[
+          { key: "revenue", label: "Revenue", value: data.revenue, border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700" },
+          { key: "expense", label: "Expense", value: data.expense, border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700" },
+          positive
+            ? { key: "net", label: "Profit", value: data.profit, border: "border-sky-200", bg: "bg-sky-50/60", text: "text-sky-700" }
+            : { key: "net", label: "Profit", value: data.profit, border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700" },
+        ].map((c) => (
+          <div key={c.key} className={`rounded-[2px] border ${c.border} ${c.bg} p-4`} data-testid={`finance-profit-${c.key}-card`}>
+            <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
+            <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.value)}</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-700">{fmt(data.revenue)}</p>
-        </div>
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4" data-testid="finance-profit-expense-card">
-          <div className="mb-1 flex items-center justify-between">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-rose-700">Expense</p>
-            <TrendingDown className="h-4 w-4 text-rose-600" />
-          </div>
-          <p className="text-2xl font-bold text-rose-700">{fmt(data.expense)}</p>
-        </div>
-        <div className={`rounded-xl border p-4 ${positive ? "border-sky-200 bg-sky-50" : "border-amber-200 bg-amber-50"}`} data-testid="finance-profit-net-card">
-          <div className="mb-1 flex items-center justify-between">
-            <p className={`text-[11px] font-medium uppercase tracking-wide ${positive ? "text-sky-700" : "text-amber-700"}`}>Profit</p>
-            <Wallet className={`h-4 w-4 ${positive ? "text-sky-600" : "text-amber-600"}`} />
-          </div>
-          <p className={`text-2xl font-bold ${positive ? "text-sky-700" : "text-amber-700"}`}>{fmt(data.profit)}</p>
-        </div>
+        ))}
       </div>
 
       {data.expense_by_category.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden" data-testid="finance-profit-by-category">
-          <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Expense by Category</p>
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="finance-profit-by-category">
+          <div className="bg-slate-500 px-4 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-white">Expense by Category</p>
           </div>
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-100">
             {data.expense_by_category.map((c) => (
-              <div key={c.category} className="flex items-center justify-between px-4 py-2.5 text-sm">
+              <div key={c.category} className="flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-slate-50">
                 <span className="text-slate-700">{c.category}</span>
                 <span className="font-semibold text-rose-600">{fmt(c.amount)}</span>
               </div>

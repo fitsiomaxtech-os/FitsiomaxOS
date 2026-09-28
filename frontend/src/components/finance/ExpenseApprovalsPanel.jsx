@@ -275,42 +275,33 @@ export const ExpenseApprovalsPanel = ({
           there, they are the switch: the toggle that used to sit under them only repeated
           their headings in a smaller font. */}
       <div className="grid grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={() => setView("pending")}
-          aria-pressed={view === "pending"}
-          className={`rounded-xl border p-4 text-left transition ${view === "pending" ? "border-amber-300 bg-amber-50 ring-2 ring-amber-400" : "border-slate-200 bg-white hover:border-amber-200"}`}
-          data-testid="finance-expense-approvals-pending-card"
-        >
-          <p className={`text-[11px] font-medium uppercase tracking-wide ${view === "pending" ? "text-amber-700" : "text-slate-500"}`}>Pending Approval</p>
-          <p className={`text-2xl font-bold ${view === "pending" ? "text-amber-700" : "text-slate-700"}`}>{fmt(totals.pending_total)}</p>
-          <p className={`text-[10px] ${view === "pending" ? "text-amber-600" : "text-slate-400"}`}>{totals.pending_count} {totals.pending_count === 1 ? "request" : "requests"}</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("approved")}
-          aria-pressed={view === "approved"}
-          className={`rounded-xl border p-4 text-left transition ${view === "approved" ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-400" : "border-slate-200 bg-white hover:border-emerald-200"}`}
-          data-testid="finance-expense-approvals-approved-card"
-        >
-          <p className={`text-[11px] font-medium uppercase tracking-wide ${view === "approved" ? "text-emerald-700" : "text-slate-500"}`}>Approved</p>
-          <p className={`text-2xl font-bold ${view === "approved" ? "text-emerald-700" : "text-slate-700"}`}>{fmt(totals.approved_total)}</p>
-          <p className={`text-[10px] ${view === "approved" ? "text-emerald-600" : "text-slate-400"}`}>{totals.approved_count} {totals.approved_count === 1 ? "expense" : "expenses"}</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("rejected")}
-          aria-pressed={view === "rejected"}
-          className={`rounded-xl border p-4 text-left transition ${view === "rejected" ? "border-rose-300 bg-rose-50 ring-2 ring-rose-400" : "border-slate-200 bg-white hover:border-rose-200"}`}
-          data-testid="finance-expense-approvals-rejected-card"
-        >
-          <p className={`text-[11px] font-medium uppercase tracking-wide ${view === "rejected" ? "text-rose-700" : "text-slate-500"}`}>Rejected</p>
-          <p className={`text-2xl font-bold ${view === "rejected" ? "text-rose-700" : "text-slate-700"}`}>{fmt(totals.rejected_total)}</p>
-          <p className={`text-[10px] ${view === "rejected" ? "text-rose-600" : "text-slate-400"}`}>{totals.rejected_count} {totals.rejected_count === 1 ? "expense" : "expenses"}</p>
-        </button>
+        {[
+          { key: "pending", label: "Pending Approval", total: totals.pending_total, count: totals.pending_count, noun: ["request", "requests"], ring: "#d97706", border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
+          { key: "approved", label: "Approved", total: totals.approved_total, count: totals.approved_count, noun: ["expense", "expenses"], ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
+          { key: "rejected", label: "Rejected", total: totals.rejected_total, count: totals.rejected_count, noun: ["expense", "expenses"], ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700", sub: "text-rose-600" },
+        ].map((c) => {
+          const on = view === c.key;
+          // Summary's ledger cards: tinted, 2px corners, the picked one outlined in its own
+          // colour and the others stepping back to 70%.
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setView(c.key)}
+              aria-pressed={on}
+              className={`rounded-[2px] border ${c.border} ${c.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
+              style={on ? { borderColor: c.ring } : undefined}
+              data-testid={`finance-expense-approvals-${c.key}-card`}
+            >
+              <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
+              <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.total)}</p>
+              <p className={`text-[11px] ${c.sub}`}>{c.count} {c.count === 1 ? c.noun[0] : c.noun[1]}</p>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow">
         <div className="divide-y divide-slate-50">
           {loading ? (
             <p className="px-4 py-10 text-center text-sm text-slate-400">Loading…</p>
@@ -327,7 +318,7 @@ export const ExpenseApprovalsPanel = ({
                it. The whole row opens Expense Details; the buttons act without opening. */
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1080px] text-sm" data-testid="finance-expense-approvals-table">
-                <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+                <thead className="bg-slate-500 text-left text-[11px] font-semibold uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-4 py-2.5 font-semibold">Expense</th>
                     <th className="px-4 py-2.5 font-semibold">Branch</th>

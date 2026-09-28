@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Coins, Plus, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Coins, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatTile } from "@/components/ui/stat-tile";
 import { toast } from "@/components/ui/sonner";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { getPettyCash, topUpPettyCash } from "@/lib/api";
@@ -103,33 +102,21 @@ export const PettyCashPanel = ({ branchId = "", mode = "all", startDate = "", en
       {/* The balance is every movement ever, not this window's: it is what is in the tin
           right now, and a window cannot change that. The two beside it are the window. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="finance-petty-cash-tiles">
-        <StatTile
-          label={branchId ? "In the tin now" : "In the tins now"}
-          value={fmt(data.balance)}
-          sub={branchId ? "Every movement ever, not this window" : "Every branch's tin, added up"}
-          icon={Wallet}
-          color="#0284c7"
-          testid="finance-petty-cash-balance"
-        />
-        <StatTile
-          label="Topped up"
-          value={fmt(data.topped_up)}
-          sub="Notes put in, this window"
-          icon={ArrowDownLeft}
-          color="#059669"
-          testid="finance-petty-cash-topped-up"
-        />
-        <StatTile
-          label="Spent"
-          value={fmt(data.spent)}
-          sub="Notes taken out, this window"
-          icon={ArrowUpRight}
-          color="#e11d48"
-          testid="finance-petty-cash-spent"
-        />
+        {/* Summary's ledger cards: tinted, 2px corners, no icons. */}
+        {[
+          { key: "balance", label: branchId ? "In the tin now" : "In the tins now", value: data.balance, sub: branchId ? "Every movement ever, not this window" : "Every branch's tin, added up", border: "border-sky-200", bg: "bg-sky-50/60", text: "text-sky-700", subText: "text-sky-600" },
+          { key: "topped-up", label: "Topped up", value: data.topped_up, sub: "Notes put in, this window", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", subText: "text-emerald-600" },
+          { key: "spent", label: "Spent", value: data.spent, sub: "Notes taken out, this window", border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700", subText: "text-rose-600" },
+        ].map((c) => (
+          <div key={c.key} className={`rounded-[2px] border ${c.border} ${c.bg} p-4`} data-testid={`finance-petty-cash-${c.key}`}>
+            <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
+            <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.value)}</p>
+            <p className={`text-[11px] ${c.subText}`}>{c.sub}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" data-testid="finance-petty-cash-list">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="finance-petty-cash-list">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             {rows.length} {rows.length === 1 ? "movement" : "movements"}
@@ -153,21 +140,21 @@ export const PettyCashPanel = ({ branchId = "", mode = "all", startDate = "", en
                 would make them look like two different books. */}
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[44rem] table-fixed text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="w-[30%] px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">What for</th>
-                    <th className="w-[18%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Branch</th>
-                    <th className="w-[13%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</th>
-                    <th className="w-[13%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Kind</th>
-                    <th className="w-[14%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">By</th>
-                    <th className="w-[12%] px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-slate-400">Amount</th>
+                <thead className="bg-slate-500 text-white">
+                  <tr>
+                    <th className="w-[30%] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">What for</th>
+                    <th className="w-[18%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Branch</th>
+                    <th className="w-[13%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Date</th>
+                    <th className="w-[13%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Kind</th>
+                    <th className="w-[14%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">By</th>
+                    <th className="w-[12%] px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {rows.map((r) => {
                     const topUp = (r.delta || 0) > 0;
                     return (
-                      <tr key={r.id} className="transition hover:bg-slate-50/70" data-testid={`finance-petty-cash-row-${r.id}`}>
+                      <tr key={r.id} className="transition hover:bg-slate-50" data-testid={`finance-petty-cash-row-${r.id}`}>
                         <td className="px-4 py-3 align-top font-medium text-slate-800">
                           {/* The sentence the branch typed, which for a spend is the whole
                               of what the expense was approved on. */}

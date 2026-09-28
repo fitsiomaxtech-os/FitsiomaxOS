@@ -472,7 +472,7 @@ const DeleteIcon = ({ onClick, disabled, testId }) => (
 const PendingTable = ({ rows, selected, onToggle, onApprove, onDelete, busyId }) => (
   <div className="overflow-x-auto">
     <table className="w-full min-w-[1240px] text-sm" data-testid="finance-pending-table">
-      <thead className="bg-slate-500 text-left text-[10px] font-semibold uppercase tracking-wider text-white">
+      <thead className="bg-slate-500 text-left text-[11px] font-semibold uppercase tracking-wide text-white">
         <tr>
           <th className="w-9 px-3 py-2.5" />
           <th className="px-3 py-2.5 font-semibold">Client Name</th>
@@ -496,7 +496,7 @@ const PendingTable = ({ rows, selected, onToggle, onApprove, onDelete, busyId })
           return (
             <tr
               key={tx.id}
-              className={`align-top transition-colors ${selected.has(tx.id) ? "bg-emerald-50/50" : "hover:bg-slate-50/60"}`}
+              className={`align-top transition-colors ${selected.has(tx.id) ? "bg-emerald-50/50" : "hover:bg-slate-50"}`}
               data-testid={`finance-approval-row-${tx.id}`}
             >
               <td className="px-3 py-3">
@@ -586,7 +586,7 @@ const ApprovedTable = ({ groups, busyId, onUndo, onDelete }) => {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[820px] text-sm" data-testid="finance-approved-table">
-        <thead className="bg-slate-500 text-left text-[10px] font-semibold uppercase tracking-wider text-white">
+        <thead className="bg-slate-500 text-left text-[11px] font-semibold uppercase tracking-wide text-white">
           <tr>
             <th className="px-4 py-2.5 font-semibold">Patient</th>
             <th className="px-4 py-2.5 font-semibold">Branch</th>
@@ -954,34 +954,34 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
       <>
       {/* The cards are the switch. A Pending/Approved toggle underneath them said the
           same two words a second time, in a smaller font, directly below the pair already
-          naming each side and totalling it — so the pair does the picking now, the chosen
-          one carrying its colour and the other falling back to plain white. */}
+          naming each side and totalling it — so the pair does the picking now. */}
       <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => setView("pending")}
-          aria-pressed={view === "pending"}
-          className={`rounded-xl border p-4 text-left transition ${view === "pending" ? "border-amber-300 bg-amber-50 ring-2 ring-amber-400" : "border-slate-200 bg-white hover:border-amber-200"}`}
-          data-testid="finance-approvals-pending-card"
-        >
-          <p className={`text-[11px] font-medium uppercase tracking-wide ${view === "pending" ? "text-amber-700" : "text-slate-500"}`}>Pending Approval</p>
-          <p className={`text-2xl font-bold ${view === "pending" ? "text-amber-700" : "text-slate-700"}`}>{fmt(s.pending_total)}</p>
-          <p className={`text-[10px] ${view === "pending" ? "text-amber-600" : "text-slate-400"}`}>{s.pending_count || 0} payments</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("approved")}
-          aria-pressed={view === "approved"}
-          className={`rounded-xl border p-4 text-left transition ${view === "approved" ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-400" : "border-slate-200 bg-white hover:border-emerald-200"}`}
-          data-testid="finance-approvals-approved-card"
-        >
-          <p className={`text-[11px] font-medium uppercase tracking-wide ${view === "approved" ? "text-emerald-700" : "text-slate-500"}`}>Approved</p>
-          <p className={`text-2xl font-bold ${view === "approved" ? "text-emerald-700" : "text-slate-700"}`}>{fmt(s.approved_total)}</p>
-          <p className={`text-[10px] ${view === "approved" ? "text-emerald-600" : "text-slate-400"}`}>{s.approved_count || 0} payments</p>
-        </button>
+        {[
+          { key: "pending", label: "Pending Approval", total: s.pending_total, count: s.pending_count, ring: "#d97706", border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
+          { key: "approved", label: "Approved", total: s.approved_total, count: s.approved_count, ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
+        ].map((c) => {
+          const on = view === c.key;
+          // Summary's ledger cards: tinted, 2px corners, the picked one outlined in its own
+          // colour and the other stepping back to 70%.
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setView(c.key)}
+              aria-pressed={on}
+              className={`rounded-[2px] border ${c.border} ${c.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
+              style={on ? { borderColor: c.ring } : undefined}
+              data-testid={`finance-approvals-${c.key}-card`}
+            >
+              <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
+              <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.total)}</p>
+              <p className={`text-[11px] ${c.sub}`}>{c.count || 0} payments</p>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden" data-testid="finance-approvals-summary">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="finance-approvals-summary">
         {/* One bar, two jobs. Idle it names the list and offers the tick that takes all of
             it; with anything picked it becomes the bar that acts on the picking, carrying
             the count and the money so neither has to be totted up by eye. Not a second bar

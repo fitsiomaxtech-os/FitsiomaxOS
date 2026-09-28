@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Building2, Coins, HandCoins, Layers, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SummaryTile } from "@/components/ui/summary-tile";
 import { toast } from "@/components/ui/sonner";
 import { getBranches, getBranchCash, getBranchCashEntries, setBranchCashAdjustment, receiveCashHandover } from "@/lib/api";
 import { notesLabel } from "@/lib/denominations";
@@ -11,21 +12,22 @@ const ALL = "all";
 
 const TONE_TEXT = { slate: "text-slate-800", amber: "text-amber-700", emerald: "text-emerald-700" };
 
-const TONE_RING = { slate: "border-sky-500 ring-sky-100", amber: "border-amber-500 ring-amber-100", emerald: "border-emerald-500 ring-emerald-100" };
+// The picked card's outline and tint, as one hex — the Summary tab's revenue tiles do
+// the same, so a card here and a card there read as one row of cards.
+const TONE_HEX = { slate: "#0284c7", amber: "#d97706", emerald: "#059669" };
 
 // A card is a button: clicking it opens the rows it was summed from below the cards, and
 // clicking it again closes them.
 const Figure = ({ label, value, tone = "slate", testId, active = false, onClick }) => (
-  <button
-    type="button"
+  <SummaryTile
+    label={label}
+    value={value}
+    color={TONE_HEX[tone] || TONE_HEX.slate}
+    valueClassName={TONE_TEXT[tone] || TONE_TEXT.slate}
+    active={active}
     onClick={onClick}
-    aria-pressed={active}
-    className={`rounded-lg border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 hover:shadow-sm ${active ? `ring-2 ${TONE_RING[tone] || TONE_RING.slate}` : "border-slate-200"}`}
-    data-testid={testId}
-  >
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-    <p className={`text-lg font-bold tabular-nums ${TONE_TEXT[tone] || TONE_TEXT.slate}`}>{value}</p>
-  </button>
+    testid={testId}
+  />
 );
 
 const KIND_LABEL = {
@@ -67,7 +69,7 @@ const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
   const partyLabel = kind === "cash_spent" ? "Paid to" : kind === "handed_over" || kind === "in_transit" ? "Carried by" : "Party";
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white" data-testid="branch-cash-entries">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="branch-cash-entries">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5">
         <p className="text-sm font-semibold text-slate-800">{KIND_LABEL[kind]}</p>
         {rows && <span className="text-[11px] text-slate-400">{shown.length} entries · {fmt(total)}</span>}
@@ -95,20 +97,20 @@ const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
       {rows && shown.length > 0 && (
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-[640px] text-xs">
-            <thead className="sticky top-0 bg-slate-50 text-slate-500">
+            <thead className="sticky top-0 bg-slate-500 text-[11px] text-white">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Date</th>
-                {showBranch && <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Branch</th>}
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Type</th>
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">{partyLabel}</th>
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Detail</th>
-                <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Status</th>
-                <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Amount</th>
+                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Date</th>
+                {showBranch && <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Branch</th>}
+                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Type</th>
+                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">{partyLabel}</th>
+                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Detail</th>
+                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Status</th>
+                <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Amount</th>
               </tr>
             </thead>
             <tbody>
               {shown.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100">
+                <tr key={r.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50">
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-500">{r.date}</td>
                   {showBranch && <td className="px-3 py-2 text-slate-600">{r.branch_name}</td>}
                   <td className="px-3 py-2"><span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{r.type}</span></td>
@@ -352,21 +354,21 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
           {kind && kind !== "branches" && <EntriesPanel kind={kind} branchId="" showBranch onClose={() => setKind(restKind)} />}
           {/* The per-branch roll-up, behind the Branches card rather than always on screen. */}
           {kind === "branches" && (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white" data-testid="branch-cash-branches">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow" data-testid="branch-cash-branches">
             <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5">
               <p className="text-sm font-semibold text-slate-800">Branches</p>
               <span className="text-[11px] text-slate-400">{(data.by_branch || []).length} branches{!scoped ? " · click a branch to open it" : ""}</span>
             </div>
             <table className="w-full min-w-[720px] text-xs">
-              <thead className="bg-slate-50 text-slate-500">
+              <thead className="bg-slate-500 text-[11px] text-white">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold uppercase tracking-wider">Branch</th>
-                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Collected (cash)</th>
-                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Returned</th>
-                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Spent</th>
-                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Handed over</th>
-                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">In transit</th>
-                  <th className="px-3 py-2 text-right font-semibold uppercase tracking-wider">Cash in hand</th>
+                  <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Branch</th>
+                  <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Collected (cash)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Returned</th>
+                  <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Spent</th>
+                  <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Handed over</th>
+                  <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">In transit</th>
+                  <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Cash in hand</th>
                 </tr>
               </thead>
               <tbody>

@@ -6,7 +6,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { StatTile } from "@/components/ui/stat-tile";
+import { SummaryTile } from "@/components/ui/summary-tile";
 // The date controls every other board on the OS is narrowed by, rather than a third
 // spelling of "this month" that only this tab understands. The strip is the five one-tap
 // ranges; the calendar beside it is everything else — Yesterday, Last Month, an exact
@@ -664,7 +664,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
           that list's own length or total. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="vendor-cards">
         {CARDS.map((c) => (
-          <StatTile
+          <SummaryTile
             key={c.key}
             label={c.label}
             value={figures[c.key].value}
@@ -888,7 +888,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
 
               <div className="hidden overflow-x-auto sm:block" data-testid="vendor-list-desktop">
                 <table className="w-full min-w-[980px] text-sm">
-                  <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+                  <thead className="bg-slate-500 text-left text-[11px] uppercase tracking-wide text-white">
                     <tr>
                       <th className="w-12 px-4 py-2.5 font-semibold">S.No</th>
                       <th className="px-4 py-2.5 font-semibold">Vendor</th>

@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatTile } from "@/components/ui/stat-tile";
+import { SummaryTile } from "@/components/ui/summary-tile";
 import { toast } from "@/components/ui/sonner";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import {
@@ -50,7 +50,7 @@ const REFERENCE_ASK = {
   cheque: { label: "Cheque Number", placeholder: "Cheque no.", missing: "Enter the cheque number" },
 };
 
-// StatTile colours its card off one hex rather than a class, so the tender colours live
+// SummaryTile colours its card off one hex rather than a class, so the tender colours live
 // here as hex beside the class map every other reader of paymentModes.js uses. Same hues
 // as PAYMENT_MODE_COLORS — emerald, amber, sky, violet, pink, slate — so a tile and a
 // chip for the same tender are the same colour on the same screen.
@@ -437,11 +437,10 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
           whichever tile is lit, so the row stays a summary of the day rather than a
           summary of the filter. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="finance-expense-payment-modes">
-        <StatTile
+        <SummaryTile
           label="Total Expense"
           value={fmt(data.total)}
           sub={tender ? "All tenders — press to clear" : "Every tender in this window"}
-          icon={Receipt}
           color="#e11d48"
           active={!tender}
           onClick={() => setTender("")}
@@ -450,12 +449,11 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
         {orderedPaymentModeEntries(data.payment_modes).map(([pm, amt]) => {
           const t = MODE_TILE[pm] || MODE_TILE.unknown;
           return (
-            <StatTile
+            <SummaryTile
               key={pm}
               label={PAYMENT_MODE_LABELS[pm]}
               value={fmt(amt)}
               sub={tender === pm ? "Showing these only" : "Press to show only these"}
-              icon={t.icon}
               color={t.color}
               active={tender === pm}
               onClick={() => setTender(tender === pm ? "" : pm)}
@@ -465,7 +463,7 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
         })}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" data-testid="finance-expense-list">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="finance-expense-list">
         {/* What is actually on the table under the filters, counted and totalled. The
             total here follows the tender filter where the tiles above do not: this line
             describes the rows, and a footer figure that disagreed with the rows under it
@@ -492,22 +490,22 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
                 and this list is worked from a phone at the desk as often as not. */}
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[52rem] table-fixed text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="w-[26%] px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Expense</th>
-                    <th className="w-[15%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Branch</th>
-                    <th className="w-[11%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</th>
-                    <th className="w-[11%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Mode</th>
-                    <th className="w-[11%] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</th>
-                    <th className="w-[12%] px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-slate-400">Amount</th>
-                    <th className="w-[14%] px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</th>
+                <thead className="bg-slate-500 text-white">
+                  <tr>
+                    <th className="w-[26%] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Expense</th>
+                    <th className="w-[15%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Branch</th>
+                    <th className="w-[11%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Date</th>
+                    <th className="w-[11%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Mode</th>
+                    <th className="w-[11%] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">Status</th>
+                    <th className="w-[12%] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">Amount</th>
+                    <th className="w-[14%] px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {visible.map((exp) => (
                     <tr
                       key={exp.id}
-                      className={`transition hover:bg-slate-50/70 ${pending(exp) ? "bg-amber-50/40" : ""}`}
+                      className={`transition hover:bg-slate-50 ${pending(exp) ? "bg-amber-50/40" : ""}`}
                       data-testid={`finance-expense-row-${exp.id}`}
                     >
                       <td className="px-4 py-3 align-top">
