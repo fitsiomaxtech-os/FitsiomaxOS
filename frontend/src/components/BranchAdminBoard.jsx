@@ -5654,15 +5654,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
       {notProspectDraft && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) setNotProspectDraft(null); }} data-testid="branch-not-prospect-modal">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-gradient-to-r from-slate-600 to-slate-700 px-5 py-4 text-white">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 text-slate-800">
               <div className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
+                <Bell className="h-5 w-5 text-slate-500" />
                 <div>
-                  <p className="text-base font-semibold">{notProspectStageName} — Reminder Call</p>
-                  <p className="text-[11px] text-white/70">{lead.name}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+                  <p className="text-base font-semibold">{notProspectDraft.stage || notProspectStageName} — Reminder Call</p>
+                  <p className="text-[11px] text-slate-400">{lead.name}{lead.phone ? ` · ${lead.phone}` : ""}</p>
                 </div>
               </div>
-              <button onClick={() => setNotProspectDraft(null)} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="branch-not-prospect-close">
+              <button onClick={() => setNotProspectDraft(null)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid="branch-not-prospect-close">
                 <X className="h-4 w-4" />
               </button>
             </div>
