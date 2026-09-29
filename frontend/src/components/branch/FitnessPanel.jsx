@@ -719,115 +719,98 @@ const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSaved }) =
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl" data-testid="fitness-member-dialog">
-        <div className="flex items-start justify-between border-b p-5">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-2xl" data-testid="fitness-member-dialog">
+        <div className="flex items-center justify-between border-b px-5 py-3.5">
           <h3 className="text-base font-semibold text-slate-800">{isEdit ? `Edit ${member.name}` : "Add Gym Member"}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="fitness-dialog-close"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Client</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <FieldLabel>Full Name *</FieldLabel>
-                <Input value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus data-testid="fitness-form-name" />
-              </div>
-              <div>
-                <FieldLabel>Phone</FieldLabel>
-                <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="10-digit number" data-testid="fitness-form-phone" />
-              </div>
-              <div>
-                <FieldLabel>Age</FieldLabel>
-                <Input type="number" min="1" max="119" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="fitness-form-age" />
-              </div>
-              <div>
-                <FieldLabel>Gender</FieldLabel>
-                <FormSelect value={form.gender} onChange={(v) => set("gender", v)} testid="fitness-form-gender">
-                  {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </FormSelect>
-              </div>
-              <div>
-                <FieldLabel>Email</FieldLabel>
-                <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="fitness-form-email" />
-              </div>
-              <div className="sm:col-span-2">
-                <FieldLabel>Address</FieldLabel>
-                <Input value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="fitness-form-address" />
-              </div>
+        {/* Three to a row so the whole form fits on one screen, as the Zumba lead dialog
+            does; it only scrolls on a window too short for it. */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <FieldLabel>Full Name *</FieldLabel>
+              <Input value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus data-testid="fitness-form-name" />
             </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Membership</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <FieldLabel>Package</FieldLabel>
-                <FormSelect value={form.package_id} onChange={pickPackage} testid="fitness-form-package">
-                  <option value="">— Select a Fitness package —</option>
-                  {packages.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}{packageSessions(p) ? ` · ${packageSessions(p)} sessions` : ""} · {rupees(packageTotal(p))}
-                    </option>
-                  ))}
-                </FormSelect>
-                {packages.length === 0 && (
-                  // Says where the list comes from rather than showing an empty dropdown
-                  // and leaving the branch to guess it is broken.
-                  <p className="mt-1 text-[11px] text-amber-700" data-testid="fitness-no-packages">
-                    No Fitness packages published yet — Super Admin adds them in Services and Products → Sessions → Fitness.
-                  </p>
-                )}
-              </div>
-              <div>
-                <FieldLabel>Sessions</FieldLabel>
-                <Input type="number" min="0" value={form.package_sessions} onChange={(e) => set("package_sessions", e.target.value)} data-testid="fitness-form-sessions" />
-              </div>
-              <div>
-                <FieldLabel>Joined</FieldLabel>
-                <Input type="date" value={form.joined_date} onChange={(e) => set("joined_date", e.target.value)} data-testid="fitness-form-joined" />
-              </div>
-              <div>
-                <FieldLabel>Next Payment Due</FieldLabel>
-                <Input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} data-testid="fitness-form-due" />
-              </div>
+            <div>
+              <FieldLabel>Phone</FieldLabel>
+              <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="10-digit number" data-testid="fitness-form-phone" />
             </div>
-          </div>
+            <div>
+              <FieldLabel>Age</FieldLabel>
+              <Input type="number" min="1" max="119" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="fitness-form-age" />
+            </div>
+            <div>
+              <FieldLabel>Gender</FieldLabel>
+              <FormSelect value={form.gender} onChange={(v) => set("gender", v)} testid="fitness-form-gender">
+                {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+              </FormSelect>
+            </div>
+            <div>
+              <FieldLabel>Email</FieldLabel>
+              <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="fitness-form-email" />
+            </div>
+            <div className="sm:col-span-3">
+              <FieldLabel>Address</FieldLabel>
+              <Input value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="fitness-form-address" />
+            </div>
 
-          <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Payment</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <FieldLabel>Fee</FieldLabel>
-                <Input type="number" min="0" value={form.fee_amount} onChange={(e) => set("fee_amount", e.target.value)} data-testid="fitness-form-fee" />
-              </div>
-              {/* Money is not taken here. It arrives through Collect, which asks how each
-                  payment came in -- the mode, the reference, the notes counted, who took it
-                  and when -- and keeps them on the membership as a record. A box on this
-                  form would move the same balance with none of that behind it, and the two
-                  records would then disagree about the same money.
+            <div className="sm:col-span-2">
+              <FieldLabel>Package</FieldLabel>
+              <FormSelect value={form.package_id} onChange={pickPackage} testid="fitness-form-package">
+                <option value="">— Select a Fitness package —</option>
+                {packages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{packageSessions(p) ? ` · ${packageSessions(p)} sessions` : ""} · {rupees(packageTotal(p))}
+                  </option>
+                ))}
+              </FormSelect>
+              {packages.length === 0 && (
+                // Says where the list comes from rather than showing an empty dropdown
+                // and leaving the branch to guess it is broken.
+                <p className="mt-1 text-[11px] text-amber-700" data-testid="fitness-no-packages">
+                  No Fitness packages published yet — Super Admin adds them in Services and Products → Sessions → Fitness.
+                </p>
+              )}
+            </div>
+            <div>
+              <FieldLabel>Sessions</FieldLabel>
+              <Input type="number" min="0" value={form.package_sessions} onChange={(e) => set("package_sessions", e.target.value)} data-testid="fitness-form-sessions" />
+            </div>
+            <div>
+              <FieldLabel>Joined</FieldLabel>
+              <Input type="date" value={form.joined_date} onChange={(e) => set("joined_date", e.target.value)} data-testid="fitness-form-joined" />
+            </div>
+            <div>
+              <FieldLabel>Next Payment Due</FieldLabel>
+              <Input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} data-testid="fitness-form-due" />
+            </div>
+            <div>
+              <FieldLabel>Fee</FieldLabel>
+              <Input type="number" min="0" value={form.fee_amount} onChange={(e) => set("fee_amount", e.target.value)} data-testid="fitness-form-fee" />
+            </div>
 
-                  Same shape as the Zumba tab, where the fee is collected from a button on
-                  the record rather than typed into the form that creates it. */}
-              {/* The balance itself is never typed. Shown read-only so the figure is still
-                  in front of whoever is editing. */}
-              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="text-xs font-semibold text-slate-500">
-                  Collected <b className="text-slate-700">{rupees(member?.fee_paid)}</b>
-                </span>
-                <span className={`text-sm font-extrabold ${due > 0 ? "text-rose-700" : "text-emerald-700"}`} data-testid="fitness-form-balance">
-                  {due > 0 ? `${rupees(due)} due` : "Paid up"}
-                </span>
-              </div>
-              <div className="sm:col-span-2">
-                <FieldLabel>Notes</FieldLabel>
-                <Input value={form.notes} onChange={(e) => set("notes", e.target.value)} data-testid="fitness-form-notes" />
-              </div>
+            <div className="sm:col-span-2">
+              <FieldLabel>Notes</FieldLabel>
+              <Input value={form.notes} onChange={(e) => set("notes", e.target.value)} data-testid="fitness-form-notes" />
+            </div>
+            {/* Money is not taken here. It arrives through Collect, which records the mode,
+                reference, notes counted, who took it and when; a box on this form would move
+                the balance with none of that behind it. The balance is shown read-only so
+                the figure is still in front of whoever is editing. */}
+            <div className="flex h-10 items-center justify-between gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3">
+              <span className="text-xs font-semibold text-slate-500">
+                Collected <b className="text-slate-700">{rupees(member?.fee_paid)}</b>
+              </span>
+              <span className={`text-sm font-extrabold ${due > 0 ? "text-rose-700" : "text-emerald-700"}`} data-testid="fitness-form-balance">
+                {due > 0 ? `${rupees(due)} due` : "Paid up"}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t p-4">
+        <div className="flex justify-end gap-2 border-t px-5 py-3">
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button size="sm" onClick={submit} disabled={saving || overpaid} className="bg-sky-600 text-white hover:bg-sky-700" data-testid="fitness-form-save">
             {saving ? "Saving..." : isEdit ? "Save Changes" : "Register Member"}
