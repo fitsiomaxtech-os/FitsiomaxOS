@@ -355,7 +355,7 @@ export const ClockWidget = () => {
           type="button"
           onClick={() => setSheet("today")}
           title="Your day so far"
-          className={`hidden h-11 shrink-0 items-center gap-1.5 rounded-[2px] border px-3 text-xs font-semibold shadow transition sm:inline-flex ${
+          className={`hidden h-11 shrink-0 items-center gap-1.5 rounded-[2px] border px-3 text-xs font-semibold shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] transition sm:inline-flex ${
             onBreak
               ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
               : day.state === "done"
@@ -380,7 +380,7 @@ export const ClockWidget = () => {
       )}
 
       {can("break_out") && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => setSheet("break")} className="shrink-0 rounded-[2px] sm:h-11 border-amber-200 px-2 text-amber-700 shadow hover:bg-amber-50 sm:px-3" data-testid="clock-break-out-button">
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => setSheet("break")} className="shrink-0 rounded-[2px] sm:h-11 border-amber-200 px-2 text-amber-700 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] hover:bg-amber-50 sm:px-3" data-testid="clock-break-out-button">
           <Coffee className="h-4 w-4" /><span className="hidden sm:inline">Break Out</span>
         </Button>
       )}
@@ -396,7 +396,7 @@ export const ClockWidget = () => {
           // The end-of-day report, for Physios and Consultants who have not filed one yet.
           const info = await loadEod();
           if (info?.eligible && !info.report) setSheet("eod");
-        })} className="shrink-0 rounded-[2px] sm:h-11 border-slate-200 px-2 text-slate-600 shadow hover:bg-slate-50 sm:px-3" data-testid="clock-out-button">
+        })} className="shrink-0 rounded-[2px] sm:h-11 border-slate-200 px-2 text-slate-600 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] hover:bg-slate-50 sm:px-3" data-testid="clock-out-button">
           <LogOut className="h-4 w-4" /><span className="hidden sm:inline">Clock Out</span>
         </Button>
       )}
