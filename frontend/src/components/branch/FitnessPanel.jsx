@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dumbbell, IndianRupee, Pencil, Plus, RefreshCw, Search, Trash2, X, PlayCircle, LogOut, Stethoscope } from "lucide-react";
+import { ChevronRight, Dumbbell, IndianRupee, Pencil, Plus, RefreshCw, Trash2, UserPlus, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { listFitness, addFitness, updateFitness, setFitnessStatus, deleteFitness, collectFitnessPayment, renewFitness, acceptFitnessReferral, listStoreItems } from "@/lib/api";
@@ -49,6 +51,39 @@ const STATUS_META = {
   leave: { label: "On leave", classes: "border-amber-200 bg-amber-50 text-amber-700" },
   discontinued: { label: "Discontinued", classes: "border-rose-200 bg-rose-50 text-rose-700" },
 };
+
+// The row's version, in the Zumba list's one word: coming or not. Which kind of not-coming
+// stays in the tooltip and on the record.
+const STATUS_ROW = {
+  active: { label: "Active", classes: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  discontinued: { label: "Inactive", classes: "border-rose-200 bg-rose-50 text-rose-700" },
+  leave: { label: "Inactive", classes: "border-amber-200 bg-amber-50 text-amber-700" },
+};
+
+// The Zumba list's toolbar, pill for pill: the date row writes the shape DateFilterPopover
+// hands back, so the presets and Custom share one piece of state. Week runs Monday–Sunday.
+const startOfDay = (d) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
+const endOfDay = (d) => { const n = new Date(d); n.setHours(23, 59, 59, 999); return n; };
+const mondayOf = (d) => { const x = startOfDay(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+
+const DATE_PRESETS = [
+  { key: "all", label: "All", range: () => null },
+  { key: "today", label: "Today", range: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+  { key: "this_week", label: "This Week", range: () => { const m = mondayOf(new Date()); const e = new Date(m); e.setDate(e.getDate() + 6); return { from: m, to: endOfDay(e) }; } },
+  { key: "this_month", label: "This Month", range: () => { const t = new Date(); return { from: startOfDay(new Date(t.getFullYear(), t.getMonth(), 1)), to: endOfDay(new Date(t.getFullYear(), t.getMonth() + 1, 0)) }; } },
+];
+const presetFilter = (p) => { const r = p.range(); return r ? { key: p.key, label: p.label, ...r } : null; };
+const isPreset = (f) => !f || DATE_PRESETS.some((p) => p.key === f.key);
+
+// "split" is what the server writes when one collection came in more than one way.
+const MODE_FILTERS = [
+  ["all", "All Modes"],
+  ["cash", "Cash"],
+  ["upi", "UPI"],
+  ["card", "Card"],
+  ["account_transfer", "Bank Transfer"],
+  ["split", "Split"],
+];
 
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -111,6 +146,7 @@ export const FitnessPanel = ({ branchId }) => {
   const [search, setSearch] = useState("");
   const [card, setCard] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState(null); // null, or { key, label, from, to }
   const [editing, setEditing] = useState(null);   // a row, or {} for a new one
   const [collecting, setCollecting] = useState(null);
   const [renewing, setRenewing] = useState(null); // the membership being sold another term
@@ -215,6 +251,19 @@ export const FitnessPanel = ({ branchId }) => {
     // questions, and chaining them would apply the mode only while no card was open.
     if (modeFilter !== "all") list = list.filter((r) => r.payment_mode === modeFilter);
 
+    // On the day the membership began — the first date in the Date column.
+    if (dateFilter) {
+      const fromTs = dateFilter.from?.getTime();
+      const toTs = dateFilter.to?.getTime();
+      list = list.filter((r) => {
+        const ts = new Date(`${String(r.joined_date || r.created_at || "").slice(0, 10)}T00:00:00`).getTime();
+        if (!ts) return false;
+        if (fromTs && ts < fromTs) return false;
+        if (toTs && ts > toTs) return false;
+        return true;
+      });
+    }
+
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((r) =>
@@ -223,7 +272,7 @@ export const FitnessPanel = ({ branchId }) => {
         || (r.package_name || "").toLowerCase().includes(q));
     }
     return list;
-  }, [rows, card, modeFilter, search, monthStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rows, card, modeFilter, dateFilter, search, monthStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeStatus = async (row, status) => {
     try {
@@ -292,273 +341,230 @@ export const FitnessPanel = ({ branchId }) => {
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
-          <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <Dumbbell className="h-4 w-4 text-slate-400" /> Gym Memberships
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{visible.length}</span>
-          </p>
-          <div className="relative ml-auto min-w-0 flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, phone or package..."
-              className="h-10 pl-8"
-              data-testid="fitness-search"
-            />
+      <Card>
+        <CardContent className="p-0">
+          {/* The Zumba list's toolbar: dates, then payment mode, then search, refresh and
+              create at the right. Wraps group by group on a narrow window. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="fitness-date-filter">
+              {DATE_PRESETS.map((preset) => {
+                const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => setDateFilter(presetFilter(preset))}
+                    className={`h-8 rounded-md px-3 text-xs font-semibold transition ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    data-testid={`fitness-date-${preset.key}`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+              {/* Handed null while a preset is lit, so it reads "Custom" rather than
+                  echoing the pill beside it. */}
+              <span className="[&_button]:h-8 [&_button]:rounded-md [&_button]:px-3 [&_button]:text-xs [&_button]:font-semibold [&_svg]:mr-1.5 [&_svg]:h-3.5 [&_svg]:w-3.5">
+                <DateFilterPopover
+                  value={isPreset(dateFilter) ? null : dateFilter}
+                  onChange={setDateFilter}
+                  centered
+                  placeholder="Custom"
+                  testid="fitness-date-custom"
+                />
+              </span>
+            </div>
+            <span className="hidden h-6 w-px bg-slate-200 xl:block" aria-hidden="true" />
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="fitness-mode-filter">
+              {MODE_FILTERS.map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setModeFilter(key)}
+                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
+                    modeFilter === key
+                      ? "border-sky-600 bg-sky-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+                  }`}
+                  data-testid={`fitness-mode-${key}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name or phone"
+                className="h-8 w-44 text-xs"
+                data-testid="fitness-search"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 w-8 border-slate-200 bg-slate-100 p-0 text-slate-600 hover:bg-slate-200 hover:text-slate-700"
+                onClick={refresh}
+                disabled={loading}
+                title="Refresh"
+                aria-label="Refresh"
+                data-testid="fitness-refresh"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 w-8 bg-sky-600 p-0 text-white hover:bg-sky-700"
+                onClick={() => setEditing({})}
+                title="Add Member"
+                aria-label="Add Member"
+                data-testid="fitness-add-btn"
+              >
+                <UserPlus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={refresh}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh"
-            className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
-            data-testid="fitness-refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button
-            onClick={() => setEditing({})}
-            className="h-10 w-10 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700 sm:w-auto sm:px-4"
-            title="Add Member"
-            aria-label="Add Member"
-            data-testid="fitness-add-btn"
-          >
-            <Plus className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">Add Member</span>
-          </Button>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-3 py-2">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Paid by</span>
-          {[{ value: "all", label: "All Modes" }, ...PAYMENT_MODES.filter((m) => m.value)].map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              onClick={() => setModeFilter(m.value)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                modeFilter === m.value
-                  ? "border-sky-600 bg-sky-600 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-sky-300"
-              }`}
-              data-testid={`fitness-mode-${m.value}`}
-            >
-              {m.label}
-            </button>
-          ))}
-          <span className="ml-auto text-[11px] text-slate-500">
-            Collected <b className="text-emerald-700">{rupees(data.totals?.fee_paid)}</b>
-            {" · "}Outstanding <b className="text-rose-700">{rupees(data.totals?.fee_due)}</b>
-          </span>
-        </div>
-
-        {loading && rows.length === 0 ? (
-          <p className="px-4 py-14 text-center text-sm text-slate-400" data-testid="fitness-loading">Loading memberships...</p>
-        ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 px-4 py-16 text-center" data-testid="fitness-empty">
-            <Dumbbell className="h-9 w-9 text-slate-300" />
-            <p className="text-sm text-slate-500">
-              {rows.length === 0 ? "No gym members yet." : "Nothing matches this filter."}
+          {loading && rows.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-slate-400" data-testid="fitness-loading">Loading…</p>
+          ) : visible.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-slate-400" data-testid="fitness-empty">
+              {rows.length === 0 ? "No gym members yet. Add one with the button above." : "Nothing under this filter."}
             </p>
-            {rows.length === 0 && (
-              <p className="text-xs text-slate-400">Click <span className="font-semibold">Add Member</span> to register the first one.</p>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] table-fixed text-left text-sm">
-              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                {/* The Zumba tab's columns, in its order and under its names, so a branch
-                    reading one roll after the other reads the same row twice rather than
-                    two layouts for the same kind of person. */}
-                <tr>
-                  <th className="w-[4%] px-3 py-2.5">S.No</th>
-                  <th className="w-[15%] px-3 py-2.5">Name</th>
-                  <th className="w-[10%] px-3 py-2.5">Phone Number</th>
-                  <th className="w-[12%] px-3 py-2.5">Package</th>
-                  <th className="w-[8%] px-3 py-2.5">Start</th>
-                  <th className="w-[8%] px-3 py-2.5">Finish</th>
-                  <th className="w-[8%] px-3 py-2.5">Collected</th>
-                  <th className="w-[8%] px-3 py-2.5">Due</th>
-                  <th className="w-[8%] px-3 py-2.5">Status</th>
-                  <th className="w-[19%] px-3 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visible.map((r, i) => {
-                  const referral = r.origin === "consultation";
-                  const meta = referral ? REFERRED_META : (STATUS_META[r.status] || STATUS_META.active);
-                  const due = Number(r.fee_due || 0);
-                  return (
-                    <tr
-                      key={r.id}
-                      onClick={() => setViewing(r)}
-                      className="cursor-pointer align-top hover:bg-slate-50/60"
-                      data-testid={`fitness-row-${r.id}`}
-                    >
-                      <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
-                      {/* Age and gender go to the record, as they do on the Zumba tab: the
-                          day they joined has a column of its own now, and the columns
-                          beside the name are what the list is read for. */}
-                      <td className="px-3 py-3">
-                        <p className="max-w-full truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name}</p>
-                      </td>
-                      <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-col items-start gap-0.5">
-                          <p className="max-w-full truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name || "—"}</p>
-                          {r.package_sessions ? <p className="text-[10px] leading-4 text-slate-400">{r.package_sessions} sessions</p> : null}
-                        </div>
-                      </td>
-                      {/* When the membership began. */}
-                      <td className="px-3 py-3">
-                        <p className="text-xs leading-5 text-slate-600">{shortDate(r.joined_date || r.created_at)}</p>
-                      </td>
-                      {/* When the paid-up period runs out. The gym stores this as the date
-                          the next payment falls due, which is the same day the current one
-                          stops covering -- so it is that date under this heading, not a
-                          second one worked out from the package. A membership with none
-                          recorded says so rather than inventing one. */}
-                      <td className="px-3 py-3">
-                        {r.due_date
-                          ? <p className="text-xs leading-5 text-slate-600">{shortDate(r.due_date)}</p>
-                          : <span className="text-xs leading-5 text-slate-300">—</span>}
-                      </td>
-                      {/* What has come in, and what has not, in a column each. The price is
-                          neither: it is their sum, and the package names it. */}
-                      <td className="px-3 py-3">
-                        <p className="text-xs font-semibold leading-5 text-emerald-700">{rupees(r.fee_paid)}</p>
-                      </td>
-                      <td className="px-3 py-3">
-                        {due > 0
-                          ? <p className="text-xs font-semibold leading-5 text-rose-600">{rupees(due)}</p>
-                          : Number(r.fee_amount || 0) > 0
-                            ? <p className="text-xs leading-5 text-emerald-600">Paid up</p>
-                            : <p className="text-xs leading-5 text-slate-300">—</p>}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${meta.classes}`}>{meta.label}</span>
-                      </td>
-                      {/* The actions cell swallows the click: pressing Collect or Delete
-                          should not also open the row behind the dialog it just opened. */}
-                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-wrap items-center justify-end gap-1">
-                          {/* A referral is a decision recorded on the consultation, read
-                              live off the lead rather than copied here. Nothing has been
-                              sold against it, so Collect, Renew and Discontinue have
-                              nothing to act on -- the two moves that exist are taking the
-                              patient onto the roll and turning the referral away. */}
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[60rem] text-left text-sm">
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {/* The Zumba list's columns, less Master — the gym has no class masters.
+                      One fact per column, every header and cell on a single line. */}
+                  <tr className="whitespace-nowrap">
+                    <th className="w-[4%] px-3 py-2.5">S.No</th>
+                    <th className="w-[16%] px-3 py-2.5">Name</th>
+                    <th className="w-[10%] px-3 py-2.5">Mobile</th>
+                    <th className="w-[11%] px-3 py-2.5">Package</th>
+                    <th className="w-[16%] px-3 py-2.5">Date</th>
+                    <th className="w-[6%] px-3 py-2.5">Classes</th>
+                    <th className="w-[8%] px-3 py-2.5">Collected</th>
+                    <th className="w-[9%] px-3 py-2.5">Due Payment</th>
+                    <th className="w-[7%] px-3 py-2.5">Status</th>
+                    <th className="w-[8%] px-3 py-2.5 text-center">Payment</th>
+                    <th className="w-[5%] px-3 py-2.5 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visible.map((r, i) => {
+                    const referral = r.origin === "consultation";
+                    const paid = Number(r.fee_paid || 0);
+                    const due = Number(r.fee_due || 0);
+                    const statusKey = r.status || "active";
+                    const chip = referral ? REFERRED_META : (STATUS_ROW[statusKey] || STATUS_ROW.active);
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={() => setViewing(r)}
+                        className="cursor-pointer whitespace-nowrap align-middle hover:bg-slate-50/60"
+                        data-testid={`fitness-row-${r.id}`}
+                      >
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
+                        <td className="px-3 py-3">
+                          <p className="max-w-[12rem] truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
+                        </td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                        <td className="px-3 py-3">
+                          {r.package_name
+                            ? <p className="max-w-[9rem] truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>
+                            : <span className="text-xs leading-5 text-slate-300">—</span>}
+                        </td>
+                        {/* Start and end of the term on one line. The gym stores the end as
+                            the day the next payment falls due — the day this one stops
+                            covering. */}
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">
+                          {shortDate(r.joined_date || r.created_at)} – {r.due_date ? shortDate(r.due_date) : "—"}
+                        </td>
+                        {/* The package's session count, in amber once a renewal is due. */}
+                        <td className="px-3 py-3">
+                          {r.package_sessions ? (
+                            <p className={`text-xs leading-5 ${r.renewal_due ? "font-semibold text-amber-600" : "text-slate-600"}`}>
+                              {r.package_sessions}
+                            </p>
+                          ) : <span className="text-xs leading-5 text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="text-xs font-semibold leading-5 text-emerald-700">{rupees(paid)}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          {due > 0
+                            ? <p className="text-xs font-semibold leading-5 text-rose-600">{rupees(due)}</p>
+                            : Number(r.fee_amount || 0) > 0
+                              ? <p className="text-xs leading-5 text-emerald-600">Paid up</p>
+                              : <p className="text-xs leading-5 text-slate-300">—</p>}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}
+                            title={referral ? "Referred on the consultation" : (STATUS_META[statusKey] || STATUS_META.active).label}
+                            data-testid={`fitness-row-status-${r.id}`}
+                          >
+                            {chip.label}
+                          </span>
+                        </td>
+                        {/* The one button that settles the row: a referral is taken onto the
+                            roll, a balance is collected — green while nothing has been paid,
+                            red once part has and a balance is left. The cell swallows the
+                            click so it does not also open the record. */}
+                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                           {referral ? (
-                            <>
-                              <button
-                                disabled={accepting === r.id}
-                                onClick={() => acceptAndEdit(r)}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60"
-                                title="Referred on the consultation — take them onto the roll to sell a membership and collect the fee"
-                                data-testid={`fitness-accept-${r.id}`}
-                              >
-                                <Stethoscope className="h-3.5 w-3.5" />
-                                {accepting === r.id ? "Taking on…" : "Referred"}
-                              </button>
-                              {/* Off this list without the consultation's record changing,
-                                  and a fresh Fitness recommendation there brings them back. */}
-                              <button
-                                onClick={() => setConfirmDelete(r)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                                title="Take this referral off the Fitness list"
-                                data-testid={`fitness-delete-${r.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
+                              disabled={accepting === r.id}
+                              onClick={() => acceptAndEdit(r)}
+                              title="Referred on the consultation — take them onto the roll to sell a membership and collect the fee"
+                              data-testid={`fitness-accept-${r.id}`}
+                            >
+                              <Stethoscope className="h-3 w-3" />
+                              {accepting === r.id ? "Taking on…" : "Referred"}
+                            </Button>
+                          ) : due > 0 ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`h-7 gap-1 px-2 text-[10px] font-semibold ${paid > 0
+                                ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                                : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
+                              onClick={() => setCollecting(r)}
+                              title={paid > 0 ? `${rupees(due)} balance still due — take a payment` : `${rupees(due)} to collect`}
+                              data-testid={`fitness-collect-${r.id}`}
+                            >
+                              <IndianRupee className="h-3 w-3" />
+                              {paid > 0 ? "Due Collect" : "Collect"}
+                            </Button>
                           ) : (
-                            <>
-                            {/* Wherever there is a balance, whatever the membership's state.
-                                This was gated on the member not having discontinued, which hid
-                                the button on exactly the people a gym chases hardest: somebody
-                                who left owing money still owes it, and the endpoint takes the
-                                payment perfectly well — it refuses an unpriced or a paid-up
-                                membership, not a closed one. Nothing to take is the only
-                                reason to hide it. */}
-                            {due > 0 && (
-                              <button
-                                onClick={() => setCollecting(r)}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                                title={`Collect ${rupees(due)}`}
-                                data-testid={`fitness-collect-${r.id}`}
-                              >
-                                <IndianRupee className="h-3.5 w-3.5" /> Collect
-                              </button>
-                            )}
-                            {/* Only once the term is nearly up. A renewal offered in the first
-                                week of a month is a button nobody presses, and one offered the
-                                day after it lapses is a conversation already missed. */}
-                            {r.renewal_due && (
-                              <button
-                                onClick={() => setRenewing(r)}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-100"
-                                title={typeof r.days_left === "number" && r.days_left < 0
-                                  ? `Ran out ${Math.abs(r.days_left)} days ago — sell them another term`
-                                  : `${r.days_left} days left — sell them another term`}
-                                data-testid={`fitness-renew-${r.id}`}
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" /> Renew
-                              </button>
-                            )}
-                            {/* Bringing somebody back is the move that needed finding, so it
-                                carries a word rather than an icon — a bare glyph on a
-                                discontinued row reads as "play" and nothing says it restores
-                                the membership. Going the other way stays an icon: it sits
-                                beside Edit and Delete on every active row and would crowd
-                                them out labelled. */}
-                            {r.status === "active" ? (
-                              <button
-                                onClick={() => changeStatus(r, "discontinued")}
-                                className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                                title="Discontinue"
-                                data-testid={`fitness-discontinue-${r.id}`}
-                              >
-                                <LogOut className="h-4 w-4" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => changeStatus(r, "active")}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                                title="Put this membership back on the roll"
-                                data-testid={`fitness-resume-${r.id}`}
-                              >
-                                <PlayCircle className="h-3.5 w-3.5" /> Make Current
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setEditing(r)}
-                              className="rounded p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-600"
-                              title="Edit"
-                              data-testid={`fitness-edit-${r.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(r)}
-                              className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                              title="Delete"
-                              data-testid={`fitness-delete-${r.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                            </>
+                            <span className="text-xs leading-7 text-slate-300">—</span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                        </td>
+                        {/* Opens the record, where Edit, Renew, status and Delete live. */}
+                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700"
+                            onClick={() => setViewing(r)}
+                            title="View"
+                            aria-label="View"
+                            data-testid={`fitness-view-${r.id}`}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {viewing && (
         <FitnessDetailDialog
@@ -568,6 +574,8 @@ export const FitnessPanel = ({ branchId }) => {
           onCollect={() => { setCollecting(viewing); setViewing(null); }}
           onStatus={(status) => { const m = viewing; setViewing(null); changeStatus(m, status); }}
           onAccept={() => { const m = viewing; setViewing(null); acceptAndEdit(m); }}
+          onRenew={() => { setRenewing(viewing); setViewing(null); }}
+          onDelete={() => { setConfirmDelete(viewing); setViewing(null); }}
         />
       )}
 
@@ -1389,7 +1397,7 @@ const DetailLine = ({ label, children }) => (
   </div>
 );
 
-const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onAccept }) => {
+const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onAccept, onRenew, onDelete }) => {
   // Read live off the consultation that made it, with no membership behind it yet. The
   // balance block above already says "Nothing sold yet" on its own, because a referral
   // carries no fee -- what changes here is the badge and what the footer offers.
@@ -1568,6 +1576,17 @@ const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onA
             Zumba record offers it. Collect is not here: it sits on the balance it
             settles, and a second copy down here was the same button twice. */}
         <div className="flex flex-wrap items-center justify-end gap-2 border-t p-4">
+          {/* Off to the left, away from the moves that keep the membership going. For a
+              referral it turns the referral away rather than deleting a record. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="mr-auto border-rose-200 text-rose-700 hover:bg-rose-50"
+            onClick={onDelete}
+            data-testid="fitness-detail-delete"
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> {referral ? "Turn away" : "Delete"}
+          </Button>
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
           {/* Edit, Discontinue and Leave all act on a membership, and a referred patient
               has not been sold one -- so a referral is offered the move that gives it one
@@ -1580,6 +1599,15 @@ const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onA
             <>
             <Button variant="outline" size="sm" onClick={onEdit} data-testid="fitness-detail-edit">
               <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={member.renewal_due ? "border-amber-300 text-amber-700 hover:bg-amber-50" : ""}
+              onClick={onRenew}
+              data-testid="fitness-detail-renew"
+            >
+              <RefreshCw className="mr-1 h-3.5 w-3.5" /> Renew
             </Button>
             {member.status === "active" ? (
               <>
