@@ -1165,7 +1165,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 onClick={() => setShowProfile(true)}
                 // Super Admin's phone reaches My Profile (and Logout, inside it) from the
                 // bottom bar, so the header drops both below md.
-                className={`${profileInFooterClass} items-center gap-2 rounded-[2px] bg-white px-1.5 py-1 text-left shadow-md transition hover:shadow-lg sm:gap-2.5 sm:px-3 sm:py-1.5`}
+                className={`${profileInFooterClass} items-center gap-2 rounded-[2px] bg-white px-1.5 py-1 text-left shadow-[0_4px_6px_-1px_rgb(0_0_0/0.07),0_2px_4px_-2px_rgb(0_0_0/0.07)] transition hover:shadow-[0_10px_15px_-3px_rgb(0_0_0/0.07),0_4px_6px_-4px_rgb(0_0_0/0.07)] sm:gap-2.5 sm:px-3 sm:py-1.5`}
                 data-testid="role-board-profile-button"
               >
                 {/* Whoever is signed in, by their own face. The same component the HR
