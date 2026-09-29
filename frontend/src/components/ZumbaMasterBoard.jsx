@@ -66,9 +66,9 @@ const SummaryCard = ({ label, value, caption, tone, active, onClick, testid }) =
 /**
  * The Zumba master's board: the class they run, at their own branch.
  *
- * Two rows before anything else — the controls, then the three figures — because the
- * questions asked of this screen in that order are "find me a customer", "who is in
- * tonight's class" and "how much has come in". The roll itself sits underneath, which is
+ * Three rows before anything else — the figures, then the search, then the week — so
+ * the card filter is the first thing read, the search narrows whichever card is open,
+ * and the week picks the day for "Today's". The roll itself sits underneath, which is
  * what the search box searches.
  *
  * The branch is never passed: the server scopes a Zumba account to the branch it was
@@ -129,24 +129,7 @@ export const ZumbaMasterBoard = () => {
 
   return (
     <div className="flex flex-col gap-4" data-testid="zumba-master-board">
-      {/* Row one — find someone, and look at the month. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="zumba-master-toolbar">
-        <div className="relative min-w-[12rem] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search customer name or phone..."
-            className="h-10 pl-9"
-            data-testid="zumba-master-search"
-          />
-        </div>
-        <Button variant="outline" onClick={load} className="h-10 w-10 p-0" title="Refresh" aria-label="Refresh" data-testid="zumba-master-refresh">
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
-
-      {/* Row two — the three figures. Today's is the one that needs its caption: on a day
+      {/* Row one — the figures. Today's is the one that needs its caption: on a day
           the class does not run it reads zero, and without the caption a zero looks like
           an empty class rather than no class. */}
       <div className="flex flex-col gap-3 sm:flex-row" data-testid="zumba-master-summary">
@@ -173,7 +156,31 @@ export const ZumbaMasterBoard = () => {
         />
       </div>
 
-      {/* The week, as the Physio board draws it: the month over seven days, each carrying
+      {/* Row two — find someone. */}
+      <div className="flex flex-wrap items-center gap-2" data-testid="zumba-master-toolbar">
+        <div className="relative min-w-[12rem] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search customer name or phone..."
+            className="h-10 pl-9"
+            data-testid="zumba-master-search"
+          />
+        </div>
+        <Button
+          onClick={load}
+          disabled={loading}
+          title="Refresh"
+          aria-label="Refresh"
+          className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+          data-testid="zumba-master-refresh"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
+
+      {/* Row three — the week, as the Physio board draws it: the month over seven days, each carrying
           how many are booked into it, and the arrows stepping a week at a time from beside
           the row they move rather than from up in the label.
 
