@@ -334,6 +334,16 @@ export const PipelineStageManagement = ({ leading = null }) => {
               {ROLE_LABELS[s.role]}
             </span>
           ) : null}
+          {/* A Zumba stage that is also one of the branch tab's summary cards: its name and
+              colour here are the card's, so an edit shows up on that card too. */}
+          {apiType === "zumba" && s.card ? (
+            <span
+              className="ml-2 rounded border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-pink-600"
+              title="The Zumba tab's summary card uses this stage's name and colour."
+            >
+              Summary card
+            </span>
+          ) : null}
           {/* Which real stage the first pill is a view of. Without it the row reads as a
               sixth stage somebody forgot to give an order to, and the entry stage below
               reads as one with no pill for no reason -- when they are the two halves of

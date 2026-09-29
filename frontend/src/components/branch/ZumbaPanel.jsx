@@ -692,26 +692,35 @@ const LEDGER_TONES = {
  * The shadow is two soft layers rather than one hard drop — a tight contact shadow and a
  * wide faint one — so the card lifts off the page without a visible edge; hover deepens both.
  */
-const LedgerCard = ({ label, value, sub, tone, color, active, dimmed, onClick, testid }) => {
-  const t = LEDGER_TONES[tone];
+const LedgerCard = ({ label, value, sub, tone, hex, color, active, dimmed, onClick, testid }) => {
+  // A card backed by a Zumba stage is drawn from that stage's colour, which is any hex
+  // Super Admin picks — so inline, since Tailwind only has the tones written out above.
+  // The same recipe as the tones: a faint wash, a light border, the colour on the text.
+  const t = hex ? { border: "", bg: "", text: "", sub: "opacity-80" } : LEDGER_TONES[tone];
+  const box = hex ? { borderColor: active ? hex : `${hex}55`, background: `${hex}0f` } : (active ? { borderColor: color } : undefined);
+  const ink = hex ? { color: hex } : undefined;
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={`h-full w-full rounded-[2px] border ${t.border} ${t.bg} p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
-      style={active ? { borderColor: color } : undefined}
+      style={box}
       data-testid={testid}
     >
       <div className="flex items-start justify-between gap-1">
-        <p className={`min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px] ${t.text}`}>{label}</p>
+        <p className={`min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px] ${t.text}`} style={ink}>{label}</p>
         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400 sm:h-4 sm:w-4" aria-hidden="true" />
       </div>
-      <p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${t.text}`}>{value}</p>
-      {sub && <p className={`mt-0.5 text-[10px] leading-tight sm:text-[11px] ${t.sub}`}>{sub}</p>}
+      <p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${t.text}`} style={ink}>{value}</p>
+      {sub && <p className={`mt-0.5 text-[10px] leading-tight sm:text-[11px] ${t.sub}`} style={ink}>{sub}</p>}
     </button>
   );
 };
+
+// Stage colours are stored as #rrggbb; anything else falls back to the card's own tone
+// rather than building a broken `${hex}55`.
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 const amountDue = (r) => Number(r?.fee_amount || 0) - Number(r?.fee_paid || 0);
 
@@ -1579,15 +1588,21 @@ export const ZumbaPanel = ({ branchId }) => {
         data-testid="zumba-summary"
       >
         {CARDS.map((c) => {
+          // Direct, Consultant and Refer Master are Zumba pipeline stages too, and wear the
+          // name and colour Super Admin gives them in CI/CD ROOTS. The other cards have no
+          // stage behind them and keep their own.
+          const stage = stages.find((st) => st.card === c.key);
+          const hex = stage && HEX_COLOR.test(stage.color || "") ? stage.color : null;
           const props = {
-            label: c.label,
+            label: stage?.name || c.label,
+            hex,
             value: c.money
               ? rupees(summary?.[c.money])
               : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0),
             sub: c.countSub
               ? c.countSub(pluralCustomers(Number(summary?.[c.count || c.key]) || 0))
               : c.sub,
-            color: c.color,
+            color: hex || c.color,
             active: card === c.key,
             onClick: () => setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)),
             testid: `zumba-card-${c.key}`,

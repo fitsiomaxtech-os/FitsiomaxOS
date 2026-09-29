@@ -591,6 +591,16 @@ async def ensure_zumba_stages() -> None:
     somebody opened the screen.
     """
     if await v3_col("pipeline_stages").count_documents({"type": "zumba"}) > 0:
+        # Stamp the card onto a stage still wearing its seeded name but not yet the card --
+        # seeded before `card` existed, or added by hand under that name. Without it the
+        # name is the only link to the summary card, and the first rename breaks it.
+        for name, card, _c in ZUMBA_STAGE_CARDS:
+            if await v3_col("pipeline_stages").count_documents({"type": "zumba", "card": card}):
+                continue
+            await v3_col("pipeline_stages").update_one(
+                {"type": "zumba", "name": name, "card": {"$exists": False}},
+                {"$set": {"card": card}},
+            )
         return
     await v3_col("pipeline_stages").insert_many([
         {
@@ -988,7 +998,11 @@ async def list_zumba(
         "summary": summary,
         "registrations": rows,
         "masters": masters,
-        "stages": stages,
+        # Each stage says which summary card it feeds, so the branch tab can draw Direct,
+        # Consultant and Refer Master in the name and colour CI/CD ROOTS gives them. Resolved
+        # here with stage_card's name fallback, so a stage seeded before `card` was stamped
+        # still finds its card.
+        "stages": [{**st, "card": stage_card(st)} for st in stages],
         "branch": await _branch_label(branch_id),
     }
 
