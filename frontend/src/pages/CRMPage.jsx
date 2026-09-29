@@ -1125,7 +1125,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 <button
                   type="button"
                   onClick={() => setShowHPCalendar(true)}
-                  className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 sm:px-3"
+                  className="inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-[2px] border border-slate-200 px-2 text-xs font-medium text-slate-600 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] transition-colors hover:bg-slate-50 sm:h-11 sm:px-3"
                   data-testid="hp-header-calendar-button"
                 >
                   <CalendarDays className="h-4 w-4" />
