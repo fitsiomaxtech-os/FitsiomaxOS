@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, Loader2, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/sonner";
 import { disconnectPastData } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
@@ -9,7 +9,7 @@ import { dateStampFull } from "@/lib/time";
 /**
  * Super Admin's Disconnect: takes the register back out of this branch. The rows are
  * deleted on the server (see DELETE /past-data/import), so it asks once, plainly, with what
- * goes and how it comes back -- the Excel file is untouched and Import Excel reads it again.
+ * goes. The Excel file is untouched and Import Excel reads it again.
  */
 export const PastDataDisconnectDialog = ({ open, branchId, summary, onClose, onDisconnected }) => {
   const [confirmed, setConfirmed] = useState(false);
@@ -41,23 +41,19 @@ export const PastDataDisconnectDialog = ({ open, branchId, summary, onClose, onD
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) close(); }}>
-      <DialogContent className="max-w-lg" data-testid="past-disconnect-dialog">
+      <DialogContent className="max-w-lg" aria-describedby="past-disconnect-warning" data-testid="past-disconnect-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Unlink className="h-5 w-5 text-rose-600" />Disconnect past data</DialogTitle>
-          <DialogDescription>
-            Takes the Excel register out of {branchName}. Nothing in live leads, revenue or dashboards changes.
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
+            <span id="past-disconnect-warning">
               This deletes <b>{(summary?.clients || 0).toLocaleString("en-IN")} clients</b>,{" "}
               {(summary?.treatments || 0).toLocaleString("en-IN")} treatments and{" "}
               {(summary?.payments || 0).toLocaleString("en-IN")} installments
               {latest ? <> from {latest.source_file}, imported {latest.imported_at ? dateStampFull(latest.imported_at) : ""}</> : null}.
-              The Excel file itself is not touched — Import Excel brings it back.
             </span>
           </div>
 
