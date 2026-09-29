@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, Archive, ChevronLeft, ChevronRight, ClipboardList, FileSpreadsheet, IndianRupee,
-  Loader2, RefreshCw, Search, Upload, Users, Wallet,
+  Loader2, RefreshCw, Search, Unlink, Upload, Users, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatTile } from "@/components/ui/stat-tile";
 import { MaskedContact } from "@/components/MaskedContact";
 import { PastClientDialog } from "@/components/pastData/PastClientDialog";
+import { PastDataDisconnectDialog } from "@/components/pastData/PastDataDisconnectDialog";
 import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog";
 import { getPastDataClients, getPastDataSummary } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
@@ -60,7 +61,9 @@ export const PastDataBoard = ({ branchId }) => {
   const [listError, setListError] = useState("");
   const [openId, setOpenId] = useState("");
   const [importOpen, setImportOpen] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   // Only the newest request may draw the list: typing fast fires several, and they are
   // not guaranteed to come back in the order they were sent.
   const requestSeq = useRef(0);
@@ -69,8 +72,11 @@ export const PastDataBoard = ({ branchId }) => {
     setSummaryError("");
     getPastDataSummary(branchId)
       .then(setSummary)
-      .catch((e) => setSummaryError(e?.response?.data?.detail || "Could not load Past Data"));
+      .catch((e) => setSummaryError(e?.response?.data?.detail || "Could not load Past Data"))
+      .finally(() => setRefreshing(false));
   }, [branchId, reloadKey]);
+
+  const refresh = () => { setRefreshing(true); setReloadKey((k) => k + 1); };
 
   // The box searches as you type, but a request per keystroke is a request per letter of
   // every name. Waits for a pause instead.
@@ -139,12 +145,30 @@ export const PastDataBoard = ({ branchId }) => {
               can_import on /past-data/summary. Once it is here this swaps it for a newer
               copy of the workbook, e.g. after the flagged rows were fixed in Excel. */}
           {summary.can_import && summary.imported && (
-            <Button variant="outline" className="h-9 gap-2" onClick={() => setImportOpen(true)} data-testid="past-data-reimport">
+            <Button variant="outline" className="h-10 gap-2" onClick={() => setImportOpen(true)} data-testid="past-data-reimport">
               <Upload className="h-4 w-4" />Re-import
             </Button>
           )}
-          <Button variant="outline" className="h-9 gap-2" onClick={() => setReloadKey((k) => k + 1)} data-testid="past-data-refresh">
-            <RefreshCw className="h-4 w-4" />Refresh
+          {/* Super Admin only (can_disconnect): takes the register back out of this branch. */}
+          {summary.can_disconnect && (
+            <Button
+              variant="outline"
+              className="h-10 gap-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              onClick={() => setDisconnectOpen(true)}
+              data-testid="past-data-disconnect"
+            >
+              <Unlink className="h-4 w-4" />Disconnect
+            </Button>
+          )}
+          <Button
+            onClick={refresh}
+            disabled={refreshing}
+            title="Refresh"
+            aria-label="Refresh"
+            className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+            data-testid="past-data-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing || loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
@@ -310,6 +334,15 @@ export const PastDataBoard = ({ branchId }) => {
           branchId={branchId}
           onClose={() => setImportOpen(false)}
           onImported={() => { setImportOpen(false); setPage(1); setReloadKey((k) => k + 1); }}
+        />
+      )}
+      {summary.can_disconnect && (
+        <PastDataDisconnectDialog
+          open={disconnectOpen}
+          branchId={branchId}
+          summary={summary}
+          onClose={() => setDisconnectOpen(false)}
+          onDisconnected={() => { setDisconnectOpen(false); setOpenId(""); setPage(1); setReloadKey((k) => k + 1); }}
         />
       )}
     </div>

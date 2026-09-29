@@ -44,13 +44,14 @@ async def live_imports(col, branch_id: str = None) -> list:
     return await col("past_imports").find(query, {"_id": 0}).sort("imported_at", 1).to_list(50)
 
 
-async def remove_batch(col, batch_id: str) -> dict:
+async def remove_batch(col, batch_id: str, removed_by: str = "") -> dict:
     removed = {}
     for name in COLLECTIONS:
         result = await col(name).delete_many({"batch_id": batch_id})
         removed[name] = result.deleted_count
     await col("past_imports").update_one(
-        {"id": batch_id}, {"$set": {"removed_at": datetime.now(timezone.utc).isoformat()}},
+        {"id": batch_id},
+        {"$set": {"removed_at": datetime.now(timezone.utc).isoformat(), "removed_by": removed_by}},
     )
     return removed
 

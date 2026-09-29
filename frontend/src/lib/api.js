@@ -1133,3 +1133,6 @@ const pastDataForm = (branchId, file, extra = {}) => {
 };
 export const previewPastDataImport = async (branchId, file) => (await api.post("/past-data/import/preview", pastDataForm(branchId, file))).data;
 export const importPastData = async (branchId, file, sha256, replace = false) => (await api.post("/past-data/import", pastDataForm(branchId, file, { sha256, replace }))).data;
+// Super Admin's Disconnect: deletes every import on the branch. The Excel file is untouched,
+// so Import Excel brings it back.
+export const disconnectPastData = async (branchId) => (await api.delete("/past-data/import", { params: { branch_id: branchId } })).data;

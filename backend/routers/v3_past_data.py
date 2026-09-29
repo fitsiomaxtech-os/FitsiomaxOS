@@ -185,8 +185,10 @@ async def past_data_summary(
     # Whether the Import Excel button belongs on this screen: Super Admin, looking at one
     # branch, with no other branch already holding the register (see _import_blocker).
     can_import = bool(_is_importer(user) and scoped_branch and not await _import_blocker(scoped_branch))
+    # Disconnect: the same desk and the same one branch, once there is something on it to take out.
+    can_disconnect = bool(_is_importer(user) and scoped_branch and batch_ids)
     if not batch_ids:
-        return {"imported": False, "can_import": can_import, "imports": [], "clients": 0, "treatments": 0,
+        return {"imported": False, "can_import": can_import, "can_disconnect": False, "imports": [], "clients": 0, "treatments": 0,
                 "payments": 0, "paid_total": 0, "outstanding_total": 0, "owing_clients": 0,
                 "needs_look_clients": 0, "services": [], "statuses": [], "first_date": "", "last_date": ""}
 
@@ -215,6 +217,7 @@ async def past_data_summary(
     return {
         "imported": True,
         "can_import": can_import,
+        "can_disconnect": can_disconnect,
         "imports": [
             {
                 "id": b["id"], "branch_id": b.get("branch_id"), "branch_name": names.get(b.get("branch_id"), ""),
@@ -446,3 +449,26 @@ async def past_data_import(
         "replaced": [b["id"] for b in existing],
         "removed_rows": removed,
     }
+
+
+@router.delete("/past-data/import")
+async def past_data_disconnect(
+    branch_id: str,
+    user: V3UserOut = Depends(v3_require_roles(IMPORT_ROLE)),
+):
+    """Disconnect: take the register back out of this branch -- every import on it, rows and
+    all -- the way the terminal tool's --remove does, from a button.
+
+    The rows are deleted, not hidden: they are the clinic's whole patient list, and a copy the
+    screen no longer shows is one more to lose. The Excel file is untouched, so Import Excel
+    puts it back. The log rows stay, marked removed_at/removed_by, as the record that it was
+    here and who took it out. Nothing live read these tables, so nothing live changes.
+    """
+    existing = await past_data_store.live_imports(v3_col, branch_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="This branch holds no past data")
+    removed = {name: 0 for name in past_data_store.COLLECTIONS}
+    for batch in existing:
+        for name, count in (await past_data_store.remove_batch(v3_col, batch["id"], removed_by=user.full_name)).items():
+            removed[name] += count
+    return {"removed_batches": [b["id"] for b in existing], "removed": removed}
