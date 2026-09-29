@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import uuid
 
 from database import v3_col
-from utils import now_iso, normalize_slot_time, generate_patient_number
+from utils import now_iso, normalize_slot_time, generate_patient_number, without_past_moves
 from deps import (
     v3_current_user, v3_require_roles, is_branch_admin_role, is_head_physio_role, is_physio_role,
     vertical_names_an_arm, lead_as_read_by, works_org_wide,
@@ -56,6 +56,12 @@ async def v3_get_leads(
         if end_date:
             created_query["$lte"] = end_date
         query["created_at"] = created_query
+
+    # Past Data's trial clients are read on their own branch's board. Here only when the
+    # list is that one branch's -- never in the every-branch list Super Admin and an
+    # unassigned Pre-Sales desk read.
+    if not query.get("branch_id"):
+        query = without_past_moves(query)
 
     rows = await v3_col("leads").find(query, {"_id": 0}).sort("updated_at", -1).to_list(20000)
     # Lead Control is read from the branch here rather than stored on the lead, so a

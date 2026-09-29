@@ -1799,7 +1799,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           flex child of the root as before, and the lists keep their state for the way back. */}
       <div className={profileOpen ? "hidden" : "contents"}>
       {activeView === "past_data" && holdsPastData ? (
-        <PastDataBoard branchId={branchId} />
+        // A sheet moved to live, or taken back, changes this branch's Branch Leads: reloaded
+        // then, so the tab one click away is not showing the list from before.
+        <PastDataBoard branchId={branchId} onLeadsChanged={loadBoard} />
       ) : activeView === "consultations" ? (
         <div className="space-y-4" data-testid="branch-consultations-headphysio">
           {/* Three across on a phone, so they land as even rows in the order they are

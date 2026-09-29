@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from database import v3_col
-from utils import CLINIC_UTC_OFFSET, clinic_day_of, live_branch_query
+from utils import CLINIC_UTC_OFFSET, clinic_day_of, live_branch_query, without_past_moves
 from stage_utils import get_closing_stage_name
 from deps import v3_current_user, v3_require_roles
 from constants import V3_STAGES, V3_BRANCH_STAGES
@@ -41,7 +41,9 @@ async def v3_bd_summary(
 ):
     # Filter toolbar support — every lead-derived metric below respects these, so switching
     # Branch/Lead Source/Status/Date Range re-scopes the whole dashboard, not just the table.
-    lead_match: dict = {}
+    # Past Data's trial clients are left out from the start, so every figure built off this
+    # leaves them out too (see without_past_moves).
+    lead_match: dict = without_past_moves()
     if branch_id:
         lead_match["branch_id"] = branch_id
     if source_tab:
@@ -254,7 +256,7 @@ async def v3_bd_summary_rows(
         else None
     )
 
-    lead_match: dict = {}
+    lead_match: dict = without_past_moves()
     if branch_clause is not None:
         lead_match["branch_id"] = branch_clause
     if source_tab:
@@ -362,6 +364,7 @@ async def v3_bd_summary_rows(
 @router.get("/lead-sources")
 async def v3_lead_sources(_: V3UserOut = Depends(v3_require_roles("business_dev", "super_admin"))):
     pipeline = [
+        {"$match": without_past_moves()},
         {"$group": {
             "_id": {"source_tab": {"$ifNull": ["$source_tab", "Manual"]}, "source_type": "$source_type"},
             "count": {"$sum": 1},
@@ -388,8 +391,8 @@ async def v3_lead_sources(_: V3UserOut = Depends(v3_require_roles("business_dev"
 async def v3_master_board(_: V3UserOut = Depends(v3_current_user)):
     stage_counts = {}
     for stage in await _stage_names("pre_sales", V3_STAGES):
-        stage_counts[stage] = await v3_col("leads").count_documents({"stage": stage})
-    total = await v3_col("leads").count_documents({})
+        stage_counts[stage] = await v3_col("leads").count_documents(without_past_moves({"stage": stage}))
+    total = await v3_col("leads").count_documents(without_past_moves())
     return {"stage_counts": stage_counts, "total": total}
 
 
@@ -399,8 +402,8 @@ async def v3_branch_master_board(_: V3UserOut = Depends(v3_require_roles("super_
     branch_stages = await _stage_names("sales", V3_BRANCH_STAGES)
     branch_stage_counts = {}
     for stage in branch_stages:
-        branch_stage_counts[stage] = await v3_col("leads").count_documents({"branch_stage": stage})
-    total = await v3_col("leads").count_documents({"branch_stage": {"$in": branch_stages}})
+        branch_stage_counts[stage] = await v3_col("leads").count_documents(without_past_moves({"branch_stage": stage}))
+    total = await v3_col("leads").count_documents(without_past_moves({"branch_stage": {"$in": branch_stages}}))
     return {"branch_stage_counts": branch_stage_counts, "total": total}
 
 
@@ -441,7 +444,7 @@ async def v3_master_control(
         range_start_iso = datetime(fy_start_year, 4, 1, tzinfo=timezone.utc).isoformat()
 
     # Build a base filter to merge into every count_documents() call
-    base = {}
+    base = without_past_moves()
     if branch_id:
         base["branch_id"] = branch_id
     if service_type:
@@ -759,7 +762,7 @@ async def v3_dashboard_overview(
 
     leads_bucket = new_bucket()
     lead_rows = await v3_col("leads").find(
-        _utc_stamp_range_query("created_at", start_date, end_date), {"_id": 0, "branch_id": 1, "vertical": 1}
+        without_past_moves(_utc_stamp_range_query("created_at", start_date, end_date)), {"_id": 0, "branch_id": 1, "vertical": 1}
     ).to_list(50000)
     for l in lead_rows:
         bid = l.get("branch_id")
@@ -1003,7 +1006,7 @@ async def v3_dashboard_leads_analytics(
     as often as one branch, and resolving that to ids is the client's job — it owns the
     pills that define it.
     """
-    query: dict = _utc_stamp_range_query("created_at", start_date, end_date)
+    query: dict = without_past_moves(_utc_stamp_range_query("created_at", start_date, end_date))
     wanted_branches = [b for b in (branch_ids or "").split(",") if b.strip()]
     if wanted_branches:
         query["branch_id"] = {"$in": wanted_branches}
@@ -1200,7 +1203,7 @@ async def v3_dashboard_leads_trend(
     leads_b, appts_b, treat_b, rev_b = empty(), empty(), empty(), empty()
 
     for r in await v3_col("leads").find(
-        {"branch_id": {"$in": branch_ids}, "created_at": {"$gte": floor}},
+        without_past_moves({"branch_id": {"$in": branch_ids}, "created_at": {"$gte": floor}}),
         {"_id": 0, "branch_id": 1, "created_at": 1},
     ).to_list(100000):
         add(leads_b, r.get("branch_id"), r.get("created_at"))
@@ -1528,9 +1531,9 @@ async def dashboard_lead_metrics(
     branch_ids = {b["id"] for b in branches}
 
     ranged = await v3_col("leads").find(
-        _utc_stamp_range_query("created_at", start_date, end_date), {"_id": 0}
+        without_past_moves(_utc_stamp_range_query("created_at", start_date, end_date)), {"_id": 0}
     ).to_list(50000)
-    everyone = await v3_col("leads").find({}, {"_id": 0}).to_list(50000)
+    everyone = await v3_col("leads").find(without_past_moves(), {"_id": 0}).to_list(50000)
 
     cards = []
     for key in METRIC_ORDER:
@@ -1597,7 +1600,7 @@ async def dashboard_lead_metric_detail(
     branch_ids = {b["id"] for b in branches}
     branch_names = {b["id"]: b.get("branch_name", "") for b in branches}
 
-    query = _utc_stamp_range_query("created_at", start_date, end_date) if d["ranged"] else {}
+    query = without_past_moves(_utc_stamp_range_query("created_at", start_date, end_date) if d["ranged"] else {})
     pool = await v3_col("leads").find(query, {"_id": 0}).to_list(50000)
 
     matched = [l for l in pool if l.get("branch_id") in branch_ids and d["match"](l, today)]
@@ -1808,7 +1811,7 @@ async def v3_marketing_sources(
     dimension = BREAKDOWN_DIMENSION[group_by]
     pairs_branch = group_by.endswith("_branch")
 
-    query: dict = _utc_stamp_range_query("created_at", start_date, end_date)
+    query: dict = without_past_moves(_utc_stamp_range_query("created_at", start_date, end_date))
     wanted_branches = [b for b in (branch_ids or "").split(",") if b.strip()]
     if wanted_branches:
         query["branch_id"] = {"$in": wanted_branches}

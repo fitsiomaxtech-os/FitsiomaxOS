@@ -295,6 +295,28 @@ def active_doctor_query(query: dict = None) -> dict:
     return {**(query or {}), **ACTIVE_DOCTOR}
 
 
+# A lead Past Data's "Move to live" put on the Past Data branch to try the old sheets out as
+# live clients (see routers/v3_past_data.py) carries the id of that move here. They are real
+# leads on that branch's own board, where they are meant to be read, and nowhere else: a
+# sheet's worth of back-dated clients would otherwise land in every org-wide count at once --
+# the dashboards, Pre-Sales' unowned backlog and its Distribute button, the lead lists -- and
+# in front of the importers' duplicate-phone check, which would drop a returning patient's
+# new enquiry as already known.
+#
+# `None` matches the field missing too, which is every other lead there is.
+PAST_MOVE_FIELD = "past_move_id"
+
+
+def without_past_moves(query: dict = None) -> dict:
+    """Add "not a Past Data trial client" to an org-wide `leads` query.
+
+    For the reads that span branches. A read of one branch's leads -- a board, a branch's
+    own count -- leaves it off: on the Past Data branch those clients are the point, and on
+    any other branch there are none.
+    """
+    return {**(query or {}), PAST_MOVE_FIELD: None}
+
+
 # How many patients one physio takes in a single slot. A physio runs a floor: two or
 # three people on adjacent beds inside the same hour is how the treatment room actually
 # works, so one-per-slot was blocking bookings that happen in real life.

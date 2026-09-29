@@ -6,7 +6,7 @@ import uuid
 import re
 
 from database import v3_col
-from utils import now_iso, generate_patient_number, enquiry_created_at, find_enquiry_stamp
+from utils import now_iso, generate_patient_number, enquiry_created_at, find_enquiry_stamp, without_past_moves
 from deps import v3_require_roles, v3_current_user
 from constants import V3_STAGES
 from security import hash_password
@@ -255,8 +255,8 @@ class BulkDelete(BaseModel):
 
 @router.get("/dashboard")
 async def marketing_dashboard(_: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
-    pre_sales_count = await v3_col("leads").count_documents({"stage": {"$in": ["New Leads", "Follow Up"]}})
-    sales_count = await v3_col("leads").count_documents({"stage": "Appointment"})
+    pre_sales_count = await v3_col("leads").count_documents(without_past_moves({"stage": {"$in": ["New Leads", "Follow Up"]}}))
+    sales_count = await v3_col("leads").count_documents(without_past_moves({"stage": "Appointment"}))
     completed_count = await v3_col("leads").count_documents({"branch_stage": "Assigned Physio"})
     total_pre_sales_ever = pre_sales_count + sales_count + completed_count
     conv = (completed_count / total_pre_sales_ever * 100.0) if total_pre_sales_ever else 0.0
@@ -264,13 +264,14 @@ async def marketing_dashboard(_: V3UserOut = Depends(v3_require_roles("super_adm
     sources = await v3_col("marketing_sources").count_documents({"is_active": True})
 
     pipeline = [
+        {"$match": without_past_moves()},
         {"$group": {"_id": "$source_tab", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
     ]
     by_source_raw = await v3_col("leads").aggregate(pipeline).to_list(50)
     by_source = [{"source": (row.get("_id") or "unknown"), "count": row["count"]} for row in by_source_raw]
 
-    recent = await v3_col("leads").find({}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    recent = await v3_col("leads").find(without_past_moves(), {"_id": 0}).sort("created_at", -1).to_list(20)
     return {
         "kpis": {
             "pre_sales_leads": pre_sales_count,
@@ -333,12 +334,15 @@ async def unowned_pre_sales_query() -> Dict[str, Any]:
     Team & Distribution tab and the Distribute button would hand them to Pre-Sales,
     quietly undoing the switch. Leads with no branch are still fair game — nobody
     else can work them.
+
+    Past Data's trial clients are no one's backlog either: they sit on their own branch to
+    be looked at, and Distribute would hand a sheet's worth of them to Pre-Sales.
     """
     controls = await lead_control.branch_control_map()
     skip = [bid for bid, c in controls.items() if c == lead_control.BRANCH_ADMIN]
     if not skip:
-        return UNOWNED_LEAD
-    return {"$and": [UNOWNED_LEAD, {"branch_id": {"$nin": skip}}]}
+        return without_past_moves(UNOWNED_LEAD)
+    return without_past_moves({"$and": [UNOWNED_LEAD, {"branch_id": {"$nin": skip}}]})
 
 
 @router.get("/unassigned-count")
@@ -479,7 +483,7 @@ async def get_team_members(_: V3UserOut = Depends(v3_require_roles("super_admin"
             closed = await v3_col("leads").count_documents(
                 {"id": {"$in": appt_lead_ids}, "assigned_physio_id": {"$nin": [None, ""]}}
             ) if appt_lead_ids else 0
-            total_leads = await v3_col("leads").count_documents({"branch_id": bid})
+            total_leads = await v3_col("leads").count_documents(without_past_moves({"branch_id": bid}))
             rate = (closed / appointments * 100.0) if appointments else 0.0
             out.append({
                 "id": u["id"],
@@ -532,7 +536,7 @@ async def all_leads(
     page_size: int = Query(50, ge=1, le=200),
     _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev")),
 ):
-    query: Dict[str, Any] = {}
+    query: Dict[str, Any] = without_past_moves()
     if stage_type == "pre_sales":
         query["stage"] = {"$in": ["New Leads", "Follow Up"]}
     elif stage_type == "sales":
@@ -773,7 +777,9 @@ async def sync_source(source_id: str, payload: MarketingSyncInput, _: V3UserOut 
             if len(sample_errors) < 3:
                 sample_errors.append(f"row {idx + 1}: missing/invalid phone (looking in column '{phone_key}')")
             continue
-        exists = await v3_col("leads").find_one({"phone_normalized": phone_norm}, {"_id": 0, "id": 1})
+        # Not against Past Data's trial clients: a returning patient's new enquiry is a new
+        # lead, and one of those matching it would drop it here unseen.
+        exists = await v3_col("leads").find_one(without_past_moves({"phone_normalized": phone_norm}), {"_id": 0, "id": 1})
         if exists:
             skipped_duplicate += 1
             if len(sample_errors) < 3:
@@ -865,7 +871,7 @@ async def sync_source(source_id: str, payload: MarketingSyncInput, _: V3UserOut 
 async def performance(_: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
     funnel = []
     for stage in V3_STAGES:
-        count = await v3_col("leads").count_documents({"stage": stage})
+        count = await v3_col("leads").count_documents(without_past_moves({"stage": stage}))
         funnel.append({"stage": stage, "count": count})
 
     pre_pipeline = [

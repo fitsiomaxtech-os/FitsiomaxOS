@@ -24,7 +24,7 @@ from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 
 from database import v3_col
-from utils import now_iso, generate_patient_number, enquiry_created_at, find_enquiry_stamp
+from utils import now_iso, generate_patient_number, enquiry_created_at, find_enquiry_stamp, without_past_moves
 from deps import v3_require_roles, is_branch_admin_role
 from schemas.v3 import V3UserOut
 from stage_utils import first_branch_stage_for
@@ -520,9 +520,11 @@ async def _pull_source_unlocked(source_id: str, range_: str = "A1:Z10000") -> Di
             p for p in (normalize_phone(str(r.get(phone_key, "") or "").strip()) for r in rows) if p
         } - known_phones
         tab_phones = list(tab_phones)
+        # Past Data's trial clients are not known phones: a returning patient's new enquiry
+        # is a new lead, and matching one of those would skip it unseen.
         for start in range(0, len(tab_phones), 1000):
             async for doc in v3_col("leads").find(
-                {"phone_normalized": {"$in": tab_phones[start:start + 1000]}},
+                without_past_moves({"phone_normalized": {"$in": tab_phones[start:start + 1000]}}),
                 {"_id": 0, "phone_normalized": 1},
             ):
                 known_phones.add(doc["phone_normalized"])

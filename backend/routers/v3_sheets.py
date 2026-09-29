@@ -4,7 +4,7 @@ import uuid
 import os
 
 from database import v3_col
-from utils import now_iso
+from utils import now_iso, without_past_moves
 from deps import v3_require_roles
 from schemas.v3 import (
     V3UserOut, V3SheetConnectionCreate, V3SheetMappingInput, V3SheetSyncInput,
@@ -60,7 +60,7 @@ async def v3_sync_sheet(connection_id: str, payload: V3SheetSyncInput, _: V3User
             if not phone_val:
                 skipped += 1
                 continue
-            exists = await v3_col("leads").find_one({"phone": phone_val}, {"_id": 0})
+            exists = await v3_col("leads").find_one(without_past_moves({"phone": phone_val}), {"_id": 0})
             if exists:
                 skipped += 1
                 continue

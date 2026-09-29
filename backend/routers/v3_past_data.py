@@ -14,6 +14,12 @@ back arrives as a new enquiry like anybody else, and this is where their history
 Kept out of `leads` so that no board, dashboard or finance figure that reads leads -- and
 none of them scope by branch -- can count a row of it.
 
+The one way out of these tables is Move to live, and it goes no further than the branch the
+sheet sits on: a sheet's clients put on that branch's Branch Leads as live leads, to see how
+the old books read as the OS's own, and taken back off again with one button. Those leads
+carry the move's id and every org-wide read of `leads` leaves them out -- see
+past_data_live.py.
+
 Shown inside the branch it was imported into, and nowhere else: a Past Data tab on that
 branch's own board (BranchAdminBoard.jsx), which appears only on a branch that holds an
 import -- see /past-data/branches. So the reads below are all by branch. The two org-wide
@@ -30,6 +36,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
 import past_data
+import past_data_live
 import past_data_store
 from database import v3_col
 from deps import ORG_WIDE_ROLES, is_branch_admin_role, v3_current_user, v3_require_roles, works_org_wide
@@ -368,6 +375,8 @@ def _sheet(batch: dict) -> dict:
         "imported_by": batch.get("imported_by", ""),
         "counts": batch.get("counts", {}),
         "paid_total": batch.get("paid_total", 0),
+        # Set while the sheet's clients are on the branch as live leads (Move to live).
+        "live_move": batch.get("live_move") or None,
     }
 
 
@@ -520,6 +529,10 @@ async def past_data_import(
     )
     removed = 0
     if replacing:
+        # Its live clients go with it: they are the old copy's, and the new one is moved
+        # afresh once it has been read.
+        if replacing.get("live_move"):
+            await past_data_live.take_back(replacing, user.full_name)
         removed = sum((await past_data_store.remove_batch(v3_col, replacing["id"], removed_by=user.full_name)).values())
     return {
         "batch_id": batch_id,
@@ -537,12 +550,74 @@ async def past_data_disconnect(batch_id: str, user: V3UserOut = Depends(v3_requi
     The rows are deleted, not hidden: they are the clinic's patient list, and a copy the
     screen no longer shows is one more to lose. The Excel file is untouched, so adding it
     again puts it back. The log row stays, marked removed_at/removed_by, as the record that it
-    was here and who took it out. Nothing live read these tables, so nothing live changes.
+    was here and who took it out. Nothing live read these tables, so nothing live changes --
+    except a sheet moved to live, whose clients on the branch's Branch Leads go with it.
     """
     batch = await v3_col("past_imports").find_one({"id": batch_id, "removed_at": None}, {"_id": 0})
     if not batch:
         raise HTTPException(status_code=404, detail="That sheet is not connected any more")
     if not await _may_manage(user, batch.get("branch_id")):
         raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin disconnects past data sheets")
+    taken_back = await past_data_live.take_back(batch, user.full_name) if batch.get("live_move") else 0
     removed = await past_data_store.remove_batch(v3_col, batch_id, removed_by=user.full_name)
-    return {"removed_batch": batch_id, "label": past_data_store.sheet_label(batch), "removed": removed}
+    return {"removed_batch": batch_id, "label": past_data_store.sheet_label(batch), "removed": removed, "removed_leads": taken_back}
+
+
+# --------------------------------------------------------------------------- move to live
+#
+# A sheet's clients tried out as the OS's own: put on this branch's Branch Leads as live
+# leads, to see how the old books read there before anything goes to a working branch. See
+# past_data_live.py for what is written and why nothing outside this branch can count it.
+# Asked the same way as the import -- GET says what it would do and writes nothing, POST
+# does it -- and taken back with DELETE, which removes exactly those leads.
+
+
+async def _managed_sheet(user: V3UserOut, batch_id: str) -> dict:
+    batch = await v3_col("past_imports").find_one({"id": batch_id, "removed_at": None}, {"_id": 0})
+    if not batch:
+        raise HTTPException(status_code=404, detail="That sheet is not connected any more")
+    if not await _may_manage(user, batch.get("branch_id")):
+        raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin moves past data to live")
+    return batch
+
+
+@router.get("/past-data/imports/{batch_id}/move")
+async def past_data_move_preview(batch_id: str, user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES))):
+    """What Move to live would do with this sheet. Writes nothing."""
+    batch = await _managed_sheet(user, batch_id)
+    branch = await v3_col("branches").find_one({"id": batch.get("branch_id")}, {"_id": 0, "branch_name": 1}) or {}
+    out = {"sheet": _sheet(batch), "branch_name": branch.get("branch_name", "")}
+    if batch.get("live_move"):
+        return {**out, "moved": True}
+    p = await past_data_live.plan(batch)
+    return {
+        **out,
+        "moved": False,
+        "clients": len(p["clients"]) + len(p["skipped"]),
+        "adding": len(p["clients"]),
+        "skipped": len(p["skipped"]),
+        "skipped_names": [c.get("name") or c.get("excel_id") for c in p["skipped"][:EXAMPLES_PER_FINDING]],
+        "live_elsewhere": p["live_elsewhere"],
+        "branch_stage": p["branch_stage"],
+    }
+
+
+@router.post("/past-data/imports/{batch_id}/move")
+async def past_data_move(batch_id: str, user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES))):
+    """Put this sheet's clients on its branch as live leads."""
+    batch = await _managed_sheet(user, batch_id)
+    if batch.get("live_move"):
+        raise HTTPException(status_code=409, detail=f"{past_data_store.sheet_label(batch)} is live already")
+    record = await past_data_live.move(batch, user.full_name, past_data_store.sheet_label(batch))
+    if not record:
+        raise HTTPException(status_code=409, detail="This sheet is being moved already")
+    return {"live_move": record}
+
+
+@router.delete("/past-data/imports/{batch_id}/move")
+async def past_data_take_back(batch_id: str, user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES))):
+    """Take this sheet's live clients back off the branch. The sheet stays in Past Data."""
+    batch = await _managed_sheet(user, batch_id)
+    if not batch.get("live_move"):
+        raise HTTPException(status_code=404, detail="This sheet is not live")
+    return {"removed_leads": await past_data_live.take_back(batch, user.full_name)}

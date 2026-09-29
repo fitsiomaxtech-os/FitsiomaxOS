@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, Archive, ChevronLeft, ChevronRight, ClipboardList, FileSpreadsheet, IndianRupee,
-  Loader2, RefreshCw, Search, Unlink, Upload, Users, Wallet,
+  AlertTriangle, Archive, ArrowUpRight, ChevronLeft, ChevronRight, ClipboardList, FileSpreadsheet, IndianRupee,
+  Loader2, RefreshCw, Search, Undo2, Unlink, Upload, Users, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { MaskedContact } from "@/components/MaskedContact";
 import { PastClientDialog } from "@/components/pastData/PastClientDialog";
 import { PastDataDisconnectDialog } from "@/components/pastData/PastDataDisconnectDialog";
 import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog";
+import { PastDataMoveDialog } from "@/components/pastData/PastDataMoveDialog";
 import { getPastDataClients, getPastDataSummary } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
 import { layoutLabel, rs, rsShort, statusTone } from "@/lib/pastData";
@@ -32,11 +33,13 @@ const triggerClass = "h-10 w-full rounded-md border border-slate-200 bg-white px
 const day = (value) => (value ? dateStampFull(value) : "");
 const n = (v) => (v || 0).toLocaleString("en-IN");
 
-// One sheet in the Sheets list: what it is, what is in it, and its own Disconnect.
-const SheetRow = ({ sheet, canManage, onDisconnect }) => {
+// One sheet in the Sheets list: what it is, what is in it, whether its clients are live on
+// Branch Leads, and its own Move to live (or Take back) and Disconnect.
+const SheetRow = ({ sheet, canManage, onDisconnect, onMove }) => {
   const counts = sheet.counts || {};
   const revenue = sheet.layout === "revenue";
   const tabs = sheet.tabs || [];
+  const live = sheet.live_move;
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3" data-testid={`past-sheet-${sheet.id}`}>
       <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -46,6 +49,15 @@ const SheetRow = ({ sheet, canManage, onDisconnect }) => {
           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${revenue ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
             {layoutLabel(sheet.layout)}
           </span>
+          {live && (
+            <span
+              className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
+              title={`Moved ${day(live.moved_at)}${live.moved_by ? ` by ${live.moved_by}` : ""}`}
+              data-testid={`past-sheet-live-${sheet.id}`}
+            >
+              {live.status === "moving" ? "Moving to live…" : `Live on Branch Leads · ${n(live.leads)}`}
+            </span>
+          )}
         </div>
         <p className="text-xs text-slate-500">
           {n(counts.past_clients)} clients · {revenue ? `${n(counts.past_payments)} payments` : `${n(counts.past_treatments)} treatments`}
@@ -57,15 +69,38 @@ const SheetRow = ({ sheet, canManage, onDisconnect }) => {
         </p>
       </div>
       {canManage && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-          onClick={() => onDisconnect(sheet)}
-          data-testid={`past-sheet-disconnect-${sheet.id}`}
-        >
-          <Unlink className="h-3.5 w-3.5" />Disconnect
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {live ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-slate-600"
+              onClick={() => onMove(sheet, "back")}
+              data-testid={`past-sheet-take-back-${sheet.id}`}
+            >
+              <Undo2 className="h-3.5 w-3.5" />Take back
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => onMove(sheet, "move")}
+              data-testid={`past-sheet-move-${sheet.id}`}
+            >
+              <ArrowUpRight className="h-3.5 w-3.5" />Move to live
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+            onClick={() => onDisconnect(sheet)}
+            data-testid={`past-sheet-disconnect-${sheet.id}`}
+          >
+            <Unlink className="h-3.5 w-3.5" />Disconnect
+          </Button>
+        </div>
       )}
     </li>
   );
@@ -89,7 +124,7 @@ const SheetRow = ({ sheet, canManage, onDisconnect }) => {
  * The tiles double as the list's filter (Still owed, Needs a look), the way the money
  * boards use theirs; Clients clears it.
  */
-export const PastDataBoard = ({ branchId }) => {
+export const PastDataBoard = ({ branchId, onLeadsChanged }) => {
   const [summary, setSummary] = useState(null);
   const [summaryError, setSummaryError] = useState("");
   const [typed, setTyped] = useState("");
@@ -107,6 +142,8 @@ export const PastDataBoard = ({ branchId }) => {
   const [importOpen, setImportOpen] = useState(false);
   // The sheet whose Disconnect was pressed, while its confirmation is open.
   const [disconnecting, setDisconnecting] = useState(null);
+  // The sheet whose Move to live or Take back was pressed, and which of the two.
+  const [moving, setMoving] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   // Only the newest request may draw the list: typing fast fires several, and they are
@@ -180,6 +217,7 @@ export const PastDataBoard = ({ branchId }) => {
           <h2 className="text-base font-semibold text-slate-900">Past Data</h2>
           <p className="text-xs text-slate-500">
             The clinic's Excel sheets from before the OS, read-only. Nothing here counts in live leads, revenue or dashboards.
+            A sheet moved to live is tried out on this branch's Branch Leads only.
           </p>
           {summary.imported && (
             <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-xs text-slate-500" data-testid="past-data-source">
@@ -218,7 +256,13 @@ export const PastDataBoard = ({ branchId }) => {
           </h3>
           <ul className="divide-y divide-slate-100">
             {sheets.map((s) => (
-              <SheetRow key={s.id} sheet={s} canManage={summary.can_manage} onDisconnect={setDisconnecting} />
+              <SheetRow
+                key={s.id}
+                sheet={s}
+                canManage={summary.can_manage}
+                onDisconnect={setDisconnecting}
+                onMove={(sheetRow, mode) => setMoving({ sheet: sheetRow, mode })}
+              />
             ))}
           </ul>
         </section>
@@ -406,12 +450,21 @@ export const PastDataBoard = ({ branchId }) => {
         />
       )}
       {summary.can_manage && (
+        <PastDataMoveDialog
+          sheet={moving?.sheet || null}
+          mode={moving?.mode}
+          onClose={() => setMoving(null)}
+          onDone={() => { setMoving(null); refresh(); onLeadsChanged?.(); }}
+        />
+      )}
+      {summary.can_manage && (
         <PastDataDisconnectDialog
           sheet={disconnecting}
           onClose={() => setDisconnecting(null)}
           onDisconnected={() => {
             // The list may have been showing only that sheet; it is gone now.
             if (sheet === disconnecting?.id) setSheet(ALL);
+            if (disconnecting?.live_move) onLeadsChanged?.();
             setDisconnecting(null); setOpenId(""); reload();
           }}
         />

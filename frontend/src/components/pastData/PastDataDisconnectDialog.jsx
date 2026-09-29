@@ -57,6 +57,7 @@ export const PastDataDisconnectDialog = ({ sheet, onClose, onDisconnected }) => 
                 ? <> and {n(counts.past_payments)} payments</>
                 : <>, {n(counts.past_treatments)} treatments and {n(counts.past_payments)} installments</>}
               {sheet ? <> from {sheet.source_file}, imported {sheet.imported_at ? dateStampFull(sheet.imported_at) : ""}</> : null}.
+              {sheet?.live_move && <> Its <b>{n(sheet.live_move.leads)} live clients</b> come off Branch Leads too.</>}
             </span>
           </div>
 

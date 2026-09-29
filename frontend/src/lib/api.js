@@ -1136,3 +1136,9 @@ export const importPastData = async (branchId, file, sha256, { label = "", repla
 ).data;
 // Disconnect one sheet: deletes its rows. The branch's other sheets are not touched.
 export const disconnectPastDataSheet = async (sheetId) => (await api.delete(`/past-data/imports/${sheetId}`)).data;
+// Move to live: one sheet's clients put on this branch's Branch Leads as live leads, to try
+// them out there -- and taken back off again. The GET says what it would do and writes nothing.
+// A thousand clients each get a patient number, so the move is given longer than a click.
+export const previewPastDataMove = async (sheetId) => (await api.get(`/past-data/imports/${sheetId}/move`)).data;
+export const movePastDataToLive = async (sheetId) => (await api.post(`/past-data/imports/${sheetId}/move`, null, { timeout: 180000 })).data;
+export const takeBackPastDataMove = async (sheetId) => (await api.delete(`/past-data/imports/${sheetId}/move`, { timeout: 180000 })).data;

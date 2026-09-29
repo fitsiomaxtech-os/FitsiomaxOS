@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 import uuid
 
 from database import v3_col
-from utils import now_iso
+from utils import now_iso, without_past_moves
 from deps import v3_require_roles, v3_current_user, names_the_online_arm
 from constants import (
     V3_STAGES, V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
@@ -216,7 +216,11 @@ async def list_stages(
             # report the offline arm's leads as well as its own -- two tabs showing one
             # number and neither of them true.
             match = {"branch_id": {"$in": await _arm_branch_ids(arm)}}
-        leads_pipeline = ([{"$match": match}] if match else []) + [
+        # Past Data's trial clients are left out of the count, as out of every org-wide one;
+        # the delete below still counts them, so a stage they sit on cannot be deleted
+        # out from under them.
+        match = without_past_moves(match)
+        leads_pipeline = [{"$match": match}] + [
             {"$group": {"_id": f"${field}", "n": {"$sum": 1}}}
         ]
         async for row in v3_col("leads").aggregate(leads_pipeline):

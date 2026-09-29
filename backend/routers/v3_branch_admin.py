@@ -9,7 +9,7 @@ import uuid
 
 from database import v3_col
 from branch_calendar import is_leave
-from utils import now_iso, active_doctor_query
+from utils import PAST_MOVE_FIELD, now_iso, active_doctor_query
 from deps import (
     v3_require_roles, v3_current_user, is_head_physio_role, consultants_serving_branch,
     online_arm_practice, vertical_in_arm, lead_as_read_by, is_branch_admin_role,
@@ -2281,6 +2281,11 @@ def _transfer_block_reason(lead: dict) -> Optional[str]:
     Super Admin told "no" wants to know whether to wait for the consultation to happen or
     to finish collecting the fee.
     """
+    # A Past Data trial client is a copy on the Past Data branch, kept out of every org-wide
+    # figure (see past_data_live.py). Sent to a working branch it would be a patient there
+    # that no dashboard counts.
+    if lead.get(PAST_MOVE_FIELD):
+        return "This client was moved from Past Data to try it out on the Past Data branch. It stays there until the trial is done."
     stage = lead.get("consultation_stage")
     # No consultation pipeline at all means no consultation has ever been booked — the
     # lead is still purely in the branch's own sales pipeline, which is the first window.
