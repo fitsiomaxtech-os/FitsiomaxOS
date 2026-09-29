@@ -355,7 +355,7 @@ export const ClockWidget = () => {
           type="button"
           onClick={() => setSheet("today")}
           title="Your day so far"
-          className={`hidden shrink-0 items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-semibold transition sm:inline-flex ${
+          className={`hidden h-8 shrink-0 items-center gap-1.5 rounded-[2px] border px-3 text-xs font-semibold shadow transition sm:inline-flex ${
             onBreak
               ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
               : day.state === "done"
@@ -380,13 +380,13 @@ export const ClockWidget = () => {
       )}
 
       {can("break_out") && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => setSheet("break")} className="shrink-0 border-amber-200 px-2 text-amber-700 hover:bg-amber-50 sm:px-3" data-testid="clock-break-out-button">
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => setSheet("break")} className="shrink-0 rounded-[2px] border-amber-200 px-2 text-amber-700 shadow hover:bg-amber-50 sm:px-3" data-testid="clock-break-out-button">
           <Coffee className="h-4 w-4" /><span className="hidden sm:inline">Break Out</span>
         </Button>
       )}
 
       {can("break_in") && (
-        <Button size="sm" disabled={busy} onClick={() => act(clockBreakIn, "Welcome back")} className="shrink-0 bg-amber-500 px-2 hover:bg-amber-600 sm:px-3" data-testid="clock-break-in-button">
+        <Button size="sm" disabled={busy} onClick={() => act(clockBreakIn, "Welcome back")} className="shrink-0 rounded-[2px] bg-amber-500 px-2 hover:bg-amber-600 sm:px-3" data-testid="clock-break-in-button">
           <Play className="h-4 w-4" /><span className="hidden sm:inline">Break In</span>
         </Button>
       )}
@@ -396,7 +396,7 @@ export const ClockWidget = () => {
           // The end-of-day report, for Physios and Consultants who have not filed one yet.
           const info = await loadEod();
           if (info?.eligible && !info.report) setSheet("eod");
-        })} className="shrink-0 border-slate-200 px-2 text-slate-600 hover:bg-slate-50 sm:px-3" data-testid="clock-out-button">
+        })} className="shrink-0 rounded-[2px] border-slate-200 px-2 text-slate-600 shadow hover:bg-slate-50 sm:px-3" data-testid="clock-out-button">
           <LogOut className="h-4 w-4" /><span className="hidden sm:inline">Clock Out</span>
         </Button>
       )}
