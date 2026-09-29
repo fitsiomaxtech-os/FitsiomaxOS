@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Send, CheckCircle2, Clock, X, Search, RefreshCw, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { MilkDateInput } from "@/components/ui/milk-calendar";
+import { DateFilterPopover } from "@/components/DateFilterPopover";
+import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { StatTile } from "@/components/ui/stat-tile";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
@@ -30,6 +31,20 @@ const DATE_FIELD = {
   complete: { label: "Completed On", of: (r) => (r.completed_at || r.review_date || "").slice(0, 10) },
 };
 
+// "2026-09-29" read as local midnight. new Date("2026-09-29") is UTC midnight, which
+// in IST lands at 05:30 and in any zone west of UTC on the previous day.
+const localDay = (iso) => {
+  const [y, m, d] = (iso || "").split("-").map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : null;
+};
+
+const inDateFilter = (iso, f) => {
+  if (!f || (!f.from && !f.to)) return true;
+  const day = localDay(iso);
+  if (!day) return false;
+  return (!f.from || day >= f.from) && (!f.to || day <= f.to);
+};
+
 const dmy = (d) => {
   if (!d) return "—";
   const [y, m, day] = String(d).slice(0, 10).split("-");
@@ -51,9 +66,14 @@ export const BranchReviewPanel = ({ branchId }) => {
   const [data, setData] = useState({ reviews: [], counts: {}, head_physios: [], today: "" });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  // Cleared when the tab changes: the date means a different thing on each one, so a date
-  // carried across would silently filter on a field the new tab never fills.
-  const [dateFilter, setDateFilter] = useState("");
+  // Two date controls over one list, same as the Consultation tab: the one-tap ranges,
+  // and the calendar for everything else. The list is their overlap.
+  // The ranges survive a tab change -- "This Week" is a question worth asking of every
+  // stage, and the lit button says it is on. The calendar pick is cleared: an exact day
+  // chosen as a Raised On date means nothing as a Completed On one.
+  const [quickDate, setQuickDate] = useState(null);
+  const [dateFilter, setDateFilter] = useState(null);
+  const effectiveDateFilter = useMemo(() => intersectDateFilters(dateFilter, quickDate), [dateFilter, quickDate]);
   const [sendDraft, setSendDraft] = useState(null); // { review, head_physio_id, review_date, review_time, duration, notes }
   const [sending, setSending] = useState(false);
   const [viewing, setViewing] = useState(null);
@@ -85,9 +105,9 @@ export const BranchReviewPanel = ({ branchId }) => {
     let list = sub === "send" ? all.filter((r) => r.status === "send_to_review")
       : sub === "pending" ? all.filter((r) => r.status === "sent")
       : all.filter((r) => r.status === "completed");
-    if (dateFilter) {
+    if (effectiveDateFilter) {
       const of = DATE_FIELD[sub].of;
-      list = list.filter((r) => of(r) === dateFilter);
+      list = list.filter((r) => inDateFilter(of(r), effectiveDateFilter));
     }
     if (!search) return list;
     const q = search.toLowerCase();
@@ -96,7 +116,7 @@ export const BranchReviewPanel = ({ branchId }) => {
       || (r.patient_number || "").toLowerCase().includes(q)
       || (r.phone || "").includes(q)
       || (r.head_physio_name || "").toLowerCase().includes(q));
-  }, [data.reviews, sub, search, dateFilter]);
+  }, [data.reviews, sub, search, effectiveDateFilter]);
 
   const openSend = (review) => {
     const startDate = review.review_date || data.today || new Date().toISOString().slice(0, 10);
@@ -301,7 +321,7 @@ export const BranchReviewPanel = ({ branchId }) => {
             icon={t.icon}
             color={t.color}
             active={sub === t.key}
-            onClick={() => { setSub(t.key); setDateFilter(""); }}
+            onClick={() => { setSub(t.key); setDateFilter(null); }}
             testid={`branch-review-subtab-${t.key}`}
           />
         ))}
@@ -309,15 +329,19 @@ export const BranchReviewPanel = ({ branchId }) => {
 
       {/* No Card around this row any more. A bordered input sitting inside a bordered
           card is two rectangles drawing the same edge twice, which is what made the bar
-          look boxed-in. The field is now the surface itself. */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="group relative min-w-0 flex-1">
+          look boxed-in. The field is now the surface itself.
+
+          The Consultation tab's toolbar, in its order: search, the one-tap ranges, then
+          the calendar and Refresh on the right. Everything is h-10 so the preset buttons,
+          which are h-10 wherever they appear, sit level with the field beside them. */}
+      <div className="flex items-center gap-2">
+        <div className="group relative min-w-0 flex-1 lg:max-w-sm">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-sky-500" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search patient, number, phone or CONSULTANT..."
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+            className="h-10 w-full rounded-md border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
             data-testid="branch-review-search"
           />
           {/* Clearing a search by backspacing a long phrase is needless work. */}
@@ -333,52 +357,60 @@ export const BranchReviewPanel = ({ branchId }) => {
             </button>
           )}
         </div>
-        {/* Centred rather than anchored: this sits directly above the table, where a panel
-            hanging off the field opens over the rows and is clipped by the scroll. */}
-        <div className="relative shrink-0" data-testid="branch-review-date-wrap">
-          <MilkDateInput
+        {/* In the toolbar from lg; below that the same row stands on its own line under
+            it, as on the Consultation tab. Tomorrow is shown because Pending Review is
+            read by review date, which is a booking and can be tomorrow's. */}
+        <div className="hidden shrink-0 lg:block">
+          <QuickDateFilterBar
+            value={quickDate}
+            onChange={setQuickDate}
+            testid="branch-review-quick-date-inline"
+            inline
+            showCustom={false}
+            showTomorrow
+          />
+        </div>
+        {/* The calendar for everything the ranges don't cover — Yesterday, Last Month, an
+            exact day, a typed range. Centred rather than anchored: this sits directly
+            above the table, where a panel hanging off the button opens over the rows and
+            is clipped by the scroll. Which date it reads is the tab's (DATE_FIELD). */}
+        <div className="ml-auto flex shrink-0 items-center gap-2" title={DATE_FIELD[sub].label}>
+          <DateFilterPopover
+            value={dateFilter}
+            onChange={(next) => setDateFilter(next || null)}
+            testid="branch-review-date-filter"
+            placeholder={DATE_FIELD[sub].label}
             centered
             iconOnly
-            accent="sky"
-            title={DATE_FIELD[sub].label}
-            placeholder={DATE_FIELD[sub].label}
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="h-11 w-11 rounded-xl border-slate-200 bg-white shadow-sm"
-            data-testid="branch-review-date-filter"
+            phoneIconOnly
           />
-          {dateFilter && (
-            <button
-              type="button"
-              onClick={() => setDateFilter("")}
-              aria-label="Clear date filter"
-              className="absolute -right-1 -top-1 rounded-full border border-slate-200 bg-white p-0.5 text-slate-400 shadow-sm hover:text-slate-600"
-              data-testid="branch-review-date-clear"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
+          {/* Grey and icon-only at every width, matching the Refresh on Branch Leads and
+              the Consultant board. It was a labelled sky button here, then an orange one,
+              both of which read as something to act on sitting beside the date; refreshing
+              is the least interesting thing on the row and is coloured accordingly. The
+              word lives on title/aria-label. */}
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            title="Refresh"
+            aria-label="Refresh"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-500 text-white shadow-sm transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid="branch-review-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
         </div>
-        {/* Grey and icon-only at every width, matching the Refresh on Branch Leads and
-            the Consultant board. It was a labelled sky button here, then an orange one,
-            both of which read as something to act on sitting beside the date; refreshing
-            is the least interesting thing on the row and is coloured accordingly. The
-            word lives on title/aria-label.
-            h-11 and rounded-xl rather than the h-10 the other boards use: this row's
-            search and date button are h-11, and matching the row it sits in beats
-            matching a toolbar on another screen. The colour and the icon-only are the
-            convention; the height is local. */}
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          title="Refresh"
-          aria-label="Refresh"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-500 text-white shadow-sm transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid="branch-review-refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
+      </div>
+
+      <div className="lg:hidden">
+        <QuickDateFilterBar
+          value={quickDate}
+          onChange={setQuickDate}
+          testid="branch-review-quick-date"
+          showCustom={false}
+          showTomorrow
+        />
       </div>
 
       {loading && rows.length === 0 ? (
