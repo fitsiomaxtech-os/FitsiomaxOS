@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, ChevronRight, RefreshCw, BarChart3, CalendarDays } from "lucide-react";
+import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDa
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
+import { QuickDateFilterBar } from "@/components/QuickDateFilterBar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp } from "@/lib/time";
@@ -546,7 +548,7 @@ const presalesRangeFor = (key) => {
  * here rather than in a row of its own because the two narrow the same list, and a second
  * bordered strip under this one would read as a filter for something else.
  */
-const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handledBy, onHandledByChange, inline = false }) => {
+const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handledBy, onHandledByChange }) => {
   const activeKey = value?.key || "all";
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -571,9 +573,7 @@ const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handle
   };
 
   return (
-    // `inline` drops the row's own border and padding so it can sit inside a toolbar that
-    // already has them — the desk's Leads pane, where search and range share one bar.
-    <div className={inline ? "flex flex-wrap items-center gap-2" : "flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:gap-3 sm:p-3"} data-testid={`${testid}-row`}>
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:gap-3 sm:p-3" data-testid={`${testid}-row`}>
       <SegmentedPillGroup options={PRESALES_ANALYTICS_DATE_PRESETS} active={activeKey} onPick={pick} testid={testid} />
       {/* Kept next to the presets it belongs to, ahead of the Handled By group, so the
           range and the dates it resolves to read as one thing. */}
@@ -611,7 +611,7 @@ const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handle
           huddled at the left under a strip of empty white. From sm only: once the row wraps
           on a phone, ml-auto would strand this group hard right on a line of its own. */}
       {onHandledByChange && (
-        <div className={inline ? "" : "sm:ml-auto"}>
+        <div className="sm:ml-auto">
           <SegmentedPillGroup
             options={HANDLED_BY_FILTERS}
             active={handledBy}
@@ -1196,61 +1196,86 @@ export const PreSalesCRM = ({
         <PreSalesAnalyticsPanel sourceFilter={sourceFilter} groupBranchIds={modeBranchIds} role={role} />
       ) : (
       <>
-      {/* Toolbar — one bar, not two. The range pills used to be a bordered row of their
-          own under this one, and the calendar popover beside the search set the very same
-          dateFilter, so the board carried two date controls in two strips. The pills stay
-          (Custom covers what the popover did) and sit at the front of the bar; search
-          takes whatever width is left, and the actions close the row on the right.
-          Desk only — the phone block below keeps its own two rows. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2" data-testid="presales-toolbar">
-        <PreSalesRangePills
-          inline
-          value={dateFilter}
-          onChange={setDateFilter}
-          testid="presales-leads-range"
-          handledBy={showHandledByFilter ? handledByFilter : undefined}
-          onHandledByChange={showHandledByFilter ? setHandledByFilter : undefined}
-        />
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leads by name, email, phone..." className="h-10 pl-8" data-testid="presales-search" />
+      {/* Toolbar — Branch Admin's Branch Leads bar, piece for piece: the search first and
+          capped (a field stretched across the desk is mostly empty runway), the one-tap
+          ranges as separate buttons beside it, the Handled By filter as a dropdown where
+          Branch Admin keeps its Pain Type / City ones, and the actions pushed to the right
+          edge — calendar, refresh, create, pull. No box around it, the same as there.
+
+          Built from the same QuickDateFilterBar that board uses rather than restyling
+          this board's own pills, so the two cannot drift apart. It emits the
+          { key, label, from, to } shape dateFilter already holds, and null for All. The
+          calendar is the Custom: the ranges hide their own Custom trigger (showCustom)
+          because the icon on the right opens the same popover. */}
+      <div className="flex flex-wrap items-center gap-3" data-testid="presales-toolbar">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leads by name, email, phone..." className="h-10 pl-9" data-testid="presales-search" />
         </div>
-        {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
-            still say what each does. */}
-        <PullFromSheetButton onPulled={load} iconOnly />
-        <Button
-          variant="outline"
-          onClick={() => setShowCreate(true)}
-          title="Create Lead"
-          aria-label="Create Lead"
-          className="h-10 w-10 shrink-0 p-0"
-          data-testid="presales-create-lead-btn"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-        <Button
-          onClick={load}
-          disabled={loading}
-          title="Refresh"
-          aria-label="Refresh"
-          className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
-          data-testid="presales-refresh-btn"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
-        {role === "super_admin" && (
-          <Button
-            variant="outline"
-            className="h-10 shrink-0 px-4"
-            onClick={onManageStages}
-            title="Manage Stages"
-            aria-label="Manage Stages"
-            data-testid="presales-manage-stages-btn"
-          >
-            <Cog className="mr-1 h-4 w-4" />
-            Manage Stages
-          </Button>
+        <div className="shrink-0">
+          <QuickDateFilterBar value={dateFilter} onChange={setDateFilter} testid="presales-leads-range" inline showCustom={false} />
+        </div>
+        {showHandledByFilter && (
+          <Select value={handledByFilter} onValueChange={setHandledByFilter}>
+            <SelectTrigger
+              title="Handled By"
+              aria-label="Handled By"
+              className={`h-10 w-40 shrink-0 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${
+                handledByFilter !== "all"
+                  ? "border-sky-300 bg-sky-50 text-sky-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+              data-testid="presales-leads-range-handled-by"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200">
+              {HANDLED_BY_FILTERS.map((o) => (
+                <SelectItem key={o.key} value={o.key} className="text-xs text-slate-700" data-testid={`presales-leads-range-handled-by-${o.key}`}>
+                  {o.key === "all" ? "All Handlers" : o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
+        {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
+            still say what each does. Same order and colours as Branch Leads. */}
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="presales-date-filter" centered iconOnly />
+          <Button
+            onClick={load}
+            disabled={loading}
+            title="Refresh"
+            aria-label="Refresh"
+            className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+            data-testid="presales-refresh-btn"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            onClick={() => setShowCreate(true)}
+            title="Create Lead"
+            aria-label="Create Lead"
+            className="h-10 w-10 shrink-0 bg-sky-600 p-0 hover:bg-sky-700"
+            data-testid="presales-create-lead-btn"
+          >
+            <UserPlus className="h-4 w-4" />
+          </Button>
+          <PullFromSheetButton onPulled={load} iconOnly />
+          {role === "super_admin" && (
+            <Button
+              variant="outline"
+              className="h-10 shrink-0 px-4"
+              onClick={onManageStages}
+              title="Manage Stages"
+              aria-label="Manage Stages"
+              data-testid="presales-manage-stages-btn"
+            >
+              <Cog className="mr-1 h-4 w-4" />
+              Manage Stages
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* The stage strip that used to sit here is gone. It set the same `stageFilter`
