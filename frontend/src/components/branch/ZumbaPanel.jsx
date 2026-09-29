@@ -3,7 +3,6 @@ import { Eye, IndianRupee, Music, Pencil, Plus, RefreshCw, Stethoscope, Trash2, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatTile } from "@/components/ui/stat-tile";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
@@ -635,14 +634,14 @@ const sourceDetail = (r) => (r.source === MASTER && r.master_name ? `Refer Maste
 // The colours run warm through the sources and cool through the four that follow, so the
 // two halves of the row stay legible without drawing a box around either.
 const CARDS = [
-  { key: "all", label: "All", color: "#a855f7", sub: "on the roll" },
-  { key: "direct", label: "Direct", color: "#f59e0b", sub: "nobody referred them" },
-  { key: "consultant", label: "Consultant", color: "#f97316", sub: "from a consultation" },
+  { key: "all", label: "All", color: "#9333ea", ledger: "purple", sub: "on the roll" },
+  { key: "direct", label: "Direct", color: "#ca8a04", ledger: "yellow", sub: "nobody referred them" },
+  { key: "consultant", label: "Consultant", color: "#ea580c", ledger: "orange", sub: "from a consultation" },
   // Master is the leads a master brought in — a referral filed against a named master,
   // which is what the Zumba Master View's Refer Customer writes and what this card is
   // asked for. It held the branch-sourced count until that board existed and there was a
   // real master's referral to point it at.
-  { key: "masters", label: "Refer Master", color: "#d97706", sub: "brought by a master" },
+  { key: "masters", label: "Refer Master", color: "#0284c7", ledger: "sky", sub: "brought by a master" },
   // The last four are counts of people, like the four before them, but they answer what
   // became of a customer rather than where they came from: is the money settled, and are
   // they still turning up. The revenue split that used to sit here said the same thing
@@ -662,9 +661,7 @@ const CARDS = [
   // press expecting the list to change, and the popup interrupted whatever was being
   // worked to say so.
   //
-  // These three wear the Accountant Summary's ledger card (see LedgerCard) rather than
-  // StatTile: they are the money-and-outcome end of the strip, and tinting them sets them
-  // apart from the headcounts before them.
+  // Every card on the strip wears the Accountant Summary's ledger card (see LedgerCard).
   { key: "payment_done", label: "Payment Done", color: "#059669", ledger: "emerald", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
   { key: "due_payment", label: "Due Payment", color: "#d97706", ledger: "amber", money: "due_total", count: "due_payment", countSub: (n) => `owed by ${n}` },
   // One card, not two: Discontinue and Leave are both "not turning up", and splitting
@@ -677,6 +674,10 @@ const CARDS = [
 // Whole class names, not `bg-${tone}-50` built at runtime: Tailwind only compiles the
 // class names it can read in the source.
 const LEDGER_TONES = {
+  purple: { border: "border-purple-200", bg: "bg-purple-50/60", text: "text-purple-700", sub: "text-purple-600" },
+  yellow: { border: "border-yellow-200", bg: "bg-yellow-50/60", text: "text-yellow-700", sub: "text-yellow-600" },
+  orange: { border: "border-orange-200", bg: "bg-orange-50/60", text: "text-orange-700", sub: "text-orange-600" },
+  sky: { border: "border-sky-200", bg: "bg-sky-50/60", text: "text-sky-700", sub: "text-sky-600" },
   emerald: { border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
   amber: { border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
   rose: { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700", sub: "text-rose-600" },
@@ -1564,9 +1565,7 @@ export const ZumbaPanel = ({ branchId }) => {
             onClick: () => setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)),
             testid: `zumba-card-${c.key}`,
           };
-          return c.ledger
-            ? <LedgerCard key={c.key} {...props} tone={c.ledger} dimmed={card !== "all" && card !== c.key} />
-            : <StatTile key={c.key} {...props} icon={Music} />;
+          return <LedgerCard key={c.key} {...props} tone={c.ledger} dimmed={card !== "all" && card !== c.key} />;
         })}
       </div>
 
