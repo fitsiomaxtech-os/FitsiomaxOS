@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 // A stage is called what Super Admin calls it in CI/CD ROOTS, here and everywhere else.
 //
 // There used to be a rename table on this line -- `{ "Appointment Date & Time":
@@ -28,11 +30,21 @@
 // alongside `plain`, whose cards are borderless by design; the coloured variant already
 // draws its own border from the stage tint. Empty by default, so every existing bar is
 // untouched.
-export const StageTab = ({ label, count, active, onClick, color, testid, gridded = false, plain = false, borderClass = "" }) => {
+// `hoverColor` and `selectedColor` are a stage's own hover and picked colours, set in CI/CD
+// ROOTS (Pre-Sales only for now). Either left unset falls back to `color`, so a bar whose
+// stages carry neither draws exactly as it did before they existed.
+export const StageTab = ({ label, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
+  const picked = selectedColor || tint;
+  const [hovered, setHovered] = useState(false);
+  // Only a stage that has a hover colour of its own swaps on hover -- the rest keep the
+  // plain shadow lift they always had.
+  const hoverTint = !active && hovered && hoverColor ? hoverColor : null;
   return (
     <button
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       data-testid={testid}
       type="button"
       className={`relative flex flex-col items-center justify-center rounded-lg text-center transition-all hover:shadow-sm sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
@@ -50,8 +62,10 @@ export const StageTab = ({ label, count, active, onClick, color, testid, gridded
         plain
           ? undefined
           : active
-            ? { background: tint, color: "#ffffff", boxShadow: `0 2px 8px ${tint}40` }
-            : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }
+            ? { background: picked, color: "#ffffff", boxShadow: `0 2px 8px ${picked}40` }
+            : hoverTint
+              ? { background: `${hoverTint}24`, color: hoverTint, border: `1px solid ${hoverTint}66` }
+              : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }
       }
     >
       {/* Title case, as the stage is actually named — "Consultation Completed", not
@@ -110,6 +124,8 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           active={stageFilter === s.name}
           onClick={() => setStageFilter(stageFilter === s.name ? null : s.name)}
           color={s.color || "#64748b"}
+          hoverColor={s.hover_color}
+          selectedColor={s.selected_color}
           testid={`${testid}-${s.name}`}
           gridded
           plain={plain}

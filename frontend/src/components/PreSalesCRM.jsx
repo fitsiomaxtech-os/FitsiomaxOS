@@ -1041,6 +1041,8 @@ export const PreSalesCRM = ({
       { key: "All", testid: "all", label: "Total Leads", value: stageCounts.All, color: "#22c55e" },
       ...kpiStages.map((s) => ({
         key: s.name, testid: s.name, label: s.name, value: stageCounts[s.name] || 0, color: s.color,
+        // The stage's own hover and picked colours from CI/CD ROOTS; unset falls back to color.
+        hoverColor: s.hover_color, selectedColor: s.selected_color,
       })),
     ];
   }, [isMarketingHeadFunnel, isSalesMasterCards, funnelCounts, masterCardValues, stageCounts, kpiStages]);
@@ -1185,6 +1187,8 @@ export const PreSalesCRM = ({
               active={stageFilter === c.key}
               dimmed={stageFilter !== kpiCardModels[0].key && stageFilter !== c.key}
               color={c.color}
+              hoverColor={c.hoverColor}
+              selectedColor={c.selectedColor}
               onClick={() => setStageFilter(c.key)}
               testid={`presales-kpi-${c.testid}`}
             />
@@ -1570,6 +1574,8 @@ export const PreSalesCRM = ({
                   active={stageFilter === c.key}
                   dimmed={stageFilter !== kpiCardModels[0].key && stageFilter !== c.key}
                   color={c.color}
+                  hoverColor={c.hoverColor}
+                  selectedColor={c.selectedColor}
                   onClick={() => setStageFilter(c.key)}
                   testid={`presales-mobile-kpi-${c.testid}`}
                 />
@@ -1966,24 +1972,36 @@ const ProfileTab = ({ currentUser, branches, onLogout }) => {
  *
  * `dimmed` steps a card back while another one on the row is the filter, the same as the
  * Zumba strip does, so the picked card reads without needing a heavier outline.
+ *
+ * `hoverColor` and `selectedColor` are a Pre-Sales stage's own hover and picked colours
+ * from CI/CD ROOTS. Each falls back to `color`, so a card without them (Total Leads, every
+ * master-view card) draws the way it always has.
  */
-const KpiCard = ({ label, value, color, active, dimmed, onClick, testid }) => (
+const KpiCard = ({ label, value, color, hoverColor, selectedColor, active, dimmed, onClick, testid }) => {
+  const [hovered, setHovered] = useState(false);
+  // Picked wins over hovered: the card under the pointer that is already the filter keeps
+  // saying so.
+  const ink = active ? (selectedColor || color) : hovered && hoverColor ? hoverColor : color;
+  return (
   <button
     type="button"
     onClick={onClick}
+    onMouseEnter={() => setHovered(true)}
+    onMouseLeave={() => setHovered(false)}
     aria-pressed={active}
     data-testid={testid}
     title={label}
     className={`h-full w-full min-w-0 rounded-[2px] border p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
-    style={{ borderColor: active ? color : `${color}55`, background: `${color}0f` }}
+    style={{ borderColor: active ? ink : `${ink}55`, background: active && selectedColor ? `${ink}1f` : `${ink}0f` }}
   >
     <div className="flex items-start justify-between gap-1">
-      <p className="min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px]" style={{ color }}>{label}</p>
+      <p className="min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px]" style={{ color: ink }}>{label}</p>
       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400 sm:h-4 sm:w-4" aria-hidden="true" />
     </div>
-    <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" style={{ color }}>{value}</p>
+    <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" style={{ color: ink }}>{value}</p>
   </button>
-);
+  );
+};
 
 // Legacy compact chip kept for callers that haven't migrated yet (unused after redesign).
 const ChipTab = ({ label, active, onClick, color, testid }) => (

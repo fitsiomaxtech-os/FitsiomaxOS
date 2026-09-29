@@ -9,6 +9,90 @@ import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, re
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
+// A fresh form. hover_color and selected_color are "" for "same as the default colour",
+// which is also what the server stores to clear one (see STATE_COLOR in v3_stages).
+const EMPTY_FORM = { name: "", color: "#6366f1", hover_color: "", selected_color: "", is_final: false };
+
+// Pre-Sales only: its stages are the cards and pills a Pre-Sales rep filters by, so they
+// carry three colours -- at rest, under the pointer, and picked. Every other pipeline keeps
+// the single colour it always had.
+const STATE_COLOR_TYPES = ["pre_sales"];
+
+/**
+ * One colour choice in the stage dialog: the palette, plus a free picker for anything the
+ * palette lacks. `allowDefault` adds a "Same as default" swatch that stores "", for the
+ * hover and selected colours, which fall back to the stage's own colour when unset.
+ */
+const ColorChoice = ({ label, value, onChange, allowDefault = false, fallback, testid }) => {
+  const shown = value || fallback;
+  return (
+    <div data-testid={testid}>
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-xs text-slate-500">{label}</p>
+        <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <span className="inline-block h-3 w-3 rounded-full" style={{ background: shown }} />
+          {value || (allowDefault ? "Same as default" : "")}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {allowDefault && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            title="Same as default"
+            className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[9px] font-bold text-slate-500 ${!value ? "border-slate-900 ring-2 ring-offset-1" : "border-slate-200"}`}
+            style={{ background: `${fallback}22` }}
+            data-testid={`${testid}-default`}
+          >
+            =
+          </button>
+        )}
+        {PALETTE.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(c)}
+            className={`h-7 w-7 rounded-full border-2 ${value === c ? "border-slate-900 ring-2 ring-offset-1" : "border-transparent"}`}
+            style={{ background: c }}
+            data-testid={`${testid}-${c}`}
+          />
+        ))}
+        <input
+          type="color"
+          value={shown}
+          onChange={(e) => onChange(e.target.value)}
+          title="Pick any colour"
+          className="h-7 w-9 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+          data-testid={`${testid}-custom`}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** The three states side by side, drawn the way the Sales board's stage cards draw them,
+ *  so the colours are chosen against what they will actually look like. */
+const StatePreview = ({ name, color, hover, selected }) => (
+  <div className="grid grid-cols-3 gap-2" data-testid="stages-form-preview">
+    {[
+      { key: "default", label: "Default", c: color, active: false },
+      { key: "hover", label: "Hover", c: hover || color, active: false },
+      { key: "selected", label: "Selected", c: selected || color, active: true },
+    ].map((st) => (
+      <div key={st.key} className="text-center">
+        <div
+          className="rounded-[2px] border px-2 py-2 text-left shadow-sm"
+          style={{ borderColor: st.active ? st.c : `${st.c}55`, background: st.active ? `${st.c}1f` : `${st.c}0f` }}
+        >
+          <p className="truncate text-[10px] font-bold uppercase tracking-wider" style={{ color: st.c }}>{name || "Stage"}</p>
+          <p className="text-lg font-bold" style={{ color: st.c }}>12</p>
+        </div>
+        <p className="mt-1 text-[10px] text-slate-400">{st.label}</p>
+      </div>
+    ))}
+  </div>
+);
+
 // Every pipeline Super Admin can shape, in one table. The tab strip, the dropdown and the
 // card title are all derived from it, so a sixth pipeline is one entry rather than three
 // separate edits that can drift apart.
@@ -111,7 +195,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const [stages, setStages] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", color: "#6366f1", is_final: false });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [resetting, setResetting] = useState(false);
   const [resettingPayments, setResettingPayments] = useState(false);
   const [resettingUsers, setResettingUsers] = useState(false);
@@ -144,6 +228,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const active = TYPES.find((t) => t.key === type) || TYPES[0];
   const apiType = active.type || active.key;
   const arm = active.arm;
+  const hasStateColors = STATE_COLOR_TYPES.includes(apiType);
 
   // One request, for the pipeline being looked at. It used to fetch all five and keep only
   // the active list, the other four existing solely to put a count in a tab label — with
@@ -218,20 +303,28 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error("Stage name required"); return; }
+    // The hover and selected colours only travel for a pipeline that offers them, so an
+    // edit on any other tab cannot write fields its boards never read.
+    const { hover_color: hoverColor, selected_color: selectedColor, ...base } = form;
+    const body = hasStateColors ? { ...base, hover_color: hoverColor, selected_color: selectedColor } : base;
     try {
       if (editing) {
-        await stagesUpdate(editing.id, form);
+        await stagesUpdate(editing.id, body);
         toast.success("Stage updated");
       } else {
-        await stagesCreate({ ...form, type: apiType, arm });
+        await stagesCreate({ ...body, type: apiType, arm });
         toast.success("Stage created");
       }
-      setShowAdd(false); setEditing(null); setForm({ name: "", color: "#6366f1", is_final: false });
+      setShowAdd(false); setEditing(null); setForm(EMPTY_FORM);
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Save failed"); }
   };
 
-  const startEdit = (s) => { setEditing(s); setForm({ name: s.name, color: s.color, is_final: !!s.is_final }); setShowAdd(true); };
+  const startEdit = (s) => {
+    setEditing(s);
+    setForm({ name: s.name, color: s.color, hover_color: s.hover_color || "", selected_color: s.selected_color || "", is_final: !!s.is_final });
+    setShowAdd(true);
+  };
 
   const remove = async (s) => {
     if (!window.confirm(`Delete stage "${s.name}"?`)) return;
@@ -310,7 +403,18 @@ export const PipelineStageManagement = ({ leading = null }) => {
             )}
           </div>
         </td>
-        <td><span className="inline-block h-3 w-3 rounded-full" style={{ background: s.color }} /></td>
+        <td>
+          {hasStateColors && !isMirror ? (
+            // Default, hover, selected -- the last two fall back to the default when unset.
+            <span className="inline-flex items-center gap-1" data-testid={`stages-colors-${s.id}`}>
+              <span className="inline-block h-3 w-3 rounded-full" style={{ background: s.color }} title="Default colour" />
+              <span className="inline-block h-3 w-3 rounded-full" style={{ background: s.hover_color || s.color }} title={s.hover_color ? "Hover colour" : "Hover colour (same as default)"} />
+              <span className="inline-block h-3 w-3 rounded-full ring-2 ring-offset-1" style={{ background: s.selected_color || s.color, "--tw-ring-color": s.selected_color || s.color }} title={s.selected_color ? "Selected colour" : "Selected colour (same as default)"} />
+            </span>
+          ) : (
+            <span className="inline-block h-3 w-3 rounded-full" style={{ background: s.color }} />
+          )}
+        </td>
         <td className="font-medium" style={{ color: s.color }}>
           {s.name}
           {/* The Branch pipeline holds both Lead Control modes' opening stages at
@@ -613,7 +717,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
           row of its own above it. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {leading}
-        <Button onClick={() => { setEditing(null); setForm({ name: "", color: PALETTE[Math.floor(Math.random() * PALETTE.length)], is_final: false }); setShowAdd(true); }} className="shrink-0 bg-sky-600 hover:bg-sky-700" data-testid="stages-add-btn"><Plus className="h-4 w-4 mr-1" />Add Stage</Button>
+        <Button onClick={() => { setEditing(null); setForm({ ...EMPTY_FORM, color: PALETTE[Math.floor(Math.random() * PALETTE.length)] }); setShowAdd(true); }} className="shrink-0 bg-sky-600 hover:bg-sky-700" data-testid="stages-add-btn"><Plus className="h-4 w-4 mr-1" />Add Stage</Button>
       </div>
 
       {/* A dropdown on a phone: five pipelines two-across left the fifth alone on a third
@@ -661,7 +765,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
         <CardHeader><CardTitle className="text-base">{active.title} Pipeline Stages</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-slate-500"><tr><th className="py-2">Order</th><th>Color</th><th>Stage Name</th><th>{active.records}</th><th>Final</th><th>Actions</th></tr></thead>
+            <thead className="text-left text-xs text-slate-500"><tr><th className="py-2">Order</th><th>{hasStateColors ? "Colors" : "Color"}</th><th>Stage Name</th><th>{active.records}</th><th>Final</th><th>Actions</th></tr></thead>
             <tbody>
               {stripRows.map((s) => renderRow(s))}
               {hiddenRows.length > 0 && (
@@ -801,17 +905,26 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
       {showAdd && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" data-testid="stages-dialog">
-          <div className="w-full max-w-md space-y-3 rounded-lg bg-white p-5 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
             <h3 className="text-base font-semibold">{editing ? "Edit Stage" : "Add Stage"}</h3>
             <Input placeholder="Stage name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="stages-form-name" />
-            <div>
-              <p className="mb-1 text-xs text-slate-500">Color</p>
-              <div className="flex flex-wrap gap-2">
-                {PALETTE.map((c) => (
-                  <button key={c} onClick={() => setForm({ ...form, color: c })} className={`h-7 w-7 rounded-full border-2 ${form.color === c ? "border-slate-900 ring-2 ring-offset-1" : "border-transparent"}`} style={{ background: c }} data-testid={`stages-form-color-${c}`} />
-                ))}
+            {hasStateColors ? (
+              <div className="space-y-3">
+                <ColorChoice label="Default Colour" value={form.color} fallback={form.color} onChange={(c) => setForm({ ...form, color: c })} testid="stages-form-color" />
+                <ColorChoice label="Hover Colour" value={form.hover_color} fallback={form.color} allowDefault onChange={(c) => setForm({ ...form, hover_color: c })} testid="stages-form-hover-color" />
+                <ColorChoice label="Selected Colour" value={form.selected_color} fallback={form.color} allowDefault onChange={(c) => setForm({ ...form, selected_color: c })} testid="stages-form-selected-color" />
+                <StatePreview name={form.name} color={form.color} hover={form.hover_color} selected={form.selected_color} />
               </div>
-            </div>
+            ) : (
+              <div>
+                <p className="mb-1 text-xs text-slate-500">Color</p>
+                <div className="flex flex-wrap gap-2">
+                  {PALETTE.map((c) => (
+                    <button key={c} onClick={() => setForm({ ...form, color: c })} className={`h-7 w-7 rounded-full border-2 ${form.color === c ? "border-slate-900 ring-2 ring-offset-1" : "border-transparent"}`} style={{ background: c }} data-testid={`stages-form-color-${c}`} />
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.is_final} onChange={(e) => setForm({ ...form, is_final: e.target.checked })} data-testid="stages-form-final" />Mark as Final stage</label>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => { setShowAdd(false); setEditing(null); }} className="flex-1" data-testid="stages-form-cancel">Cancel</Button>

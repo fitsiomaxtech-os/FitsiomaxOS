@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List, Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 
 from database import v3_col
@@ -64,9 +64,18 @@ ROLE_DESCRIPTIONS = {
 }
 
 
+# A stage's hover and selected colours, beside its ordinary one. Only CI/CD ROOTS'
+# Pre-Sales tab offers them, but they are plain optional fields on every row -- a stage
+# without them draws in its one colour everywhere, which is what every other pipeline does.
+# "" clears one back to that fallback, so it is allowed alongside a #rrggbb.
+STATE_COLOR = Field(default=None, pattern=r"^(#[0-9a-fA-F]{6})?$")
+
+
 class StageCreate(BaseModel):
     name: str
     color: Optional[str] = "#64748b"
+    hover_color: Optional[str] = STATE_COLOR
+    selected_color: Optional[str] = STATE_COLOR
     type: StageType
     is_final: Optional[bool] = False
     # Which Branch arm the stage belongs to. Meaningless on every other pipeline, and
@@ -78,6 +87,8 @@ class StageCreate(BaseModel):
 class StageUpdate(BaseModel):
     name: Optional[str] = None
     color: Optional[str] = None
+    hover_color: Optional[str] = STATE_COLOR
+    selected_color: Optional[str] = STATE_COLOR
     is_final: Optional[bool] = None
 
 
@@ -237,6 +248,9 @@ async def create_stage(payload: StageCreate, _: V3UserOut = Depends(v3_require_r
         "is_final": bool(payload.is_final),
         "created_at": now_iso(),
     }
+    for key in ("hover_color", "selected_color"):
+        if getattr(payload, key):
+            doc[key] = getattr(payload, key)
     if arm:
         doc["arm"] = arm
     await v3_col("pipeline_stages").insert_one(doc.copy())
