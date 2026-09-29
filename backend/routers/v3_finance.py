@@ -12,12 +12,13 @@ from physio_scope import physio_owns_lead, resolve_physio_doctor
 from deps import v3_require_roles, is_branch_admin_role, is_physio_role
 from schemas.v3 import V3UserOut, V3MarkInstallmentPaidInput
 from stage_utils import entry_branch_stage_names
-from utils import clinic_today, generate_transaction_id
+from utils import PAST_MOVE_FIELD, clinic_today, generate_transaction_id
 # An installment is the Treatment Fee arriving in pieces, so it is counted under exactly
 # the rules the fee itself is -- imported rather than copied. v3_fitness.py and
 # v3_zumba.py already each carry their own copy of this counter; a fourth would be a
 # fourth place for the note list and the must-agree rule to drift apart.
 from routers.v3_packages import _notes_label, _settle_cash_count, _denomination_total
+import past_data_live
 
 
 def _now():
@@ -2373,6 +2374,42 @@ async def revenue_overview(
             **_approval_state(reg),
         })
 
+    # Past Data's trial clients (Move to live): the Excel payments of the clients moved onto
+    # the Past Data branch, read off the sheet rather than out of the payment trail -- see
+    # past_data_live.py. Only on a read of one branch, the only place those clients are, so
+    # no org-wide figure ever carries them; and only here, so none of it reaches approvals,
+    # the drawer or the closing count. They arrive signed off: the books they came from are
+    # closed. Their unpaid installments go on Outstanding Amount below.
+    past_owed: dict = {}
+    if branch_id and vertical_mode != "online":
+        past = await past_data_live.ledger({"branch_id": branch_id})
+        bname = _branch_label(branch_id, branch_name_map)
+        for p in past["payments"]:
+            row = past_data_live.transaction_row(p, bname)
+            day = row["date"][:10]
+            if (start_date and day < start_date) or (end_date and day > end_date):
+                continue
+            amount, category = row["gross"], row["source"]
+            if category == "session":
+                session_total += amount
+            elif category == "diet":
+                diet_total += amount
+            elif category == "rehab":
+                rehab_total += amount
+            elif category == "zumba":
+                zumba_total += amount
+            elif category == "fitness":
+                fitness_total += amount
+            else:
+                consultation_total += amount
+            d = by_day.setdefault(day, _empty_day(day))
+            d[category] = d.get(category, 0.0) + amount
+            b = by_branch_acc.setdefault(branch_id, _empty_branch(branch_id, bname))
+            b[f"{category}_total"] = b.get(f"{category}_total", 0.0) + amount
+            _tally_modes(row["payment_mode"], amount, [], day)
+            transactions.append(row)
+        past_owed = past_data_live.owed_by_lead(past["owed"], today)
+
     total_collected = consultation_total + session_total + diet_total + store_total + zumba_total + rehab_total + fitness_total
     trend = sorted(by_day.values(), key=lambda r: r["date"])
     for r in trend:
@@ -2386,6 +2423,8 @@ async def revenue_overview(
         l for l in leads
         if not (l.get("consultation_fee") or l.get("package_paid") or l.get("treatment_fee_paid"))
         and l.get("branch_stage") not in untouched_stages
+        # A Past Data trial client paid in Excel, and that is on the rows above.
+        and not l.get(PAST_MOVE_FIELD)
     ]
     pending_count = len(pending_leads_raw)
     pending_leads = [
@@ -2452,6 +2491,28 @@ async def revenue_overview(
                     "installments_total": installments_total,
                     "installments_paid": installments_paid,
                 })
+    # What the sheet said a trial client still owed when it was last saved. Marked, so the
+    # table offers no WhatsApp reminder for an Excel balance nobody on the OS set.
+    for owed in past_owed.values():
+        lead = owed["lead"]
+        paid = sum(p["amount_paid"] or 0 for p in past["payments"] if p["lead"]["id"] == lead["id"])
+        outstanding_clients.append({
+            "lead_id": lead["id"],
+            "client_name": lead.get("name") or "Unknown",
+            "phone": lead.get("phone") or "",
+            "email": lead.get("email") or "",
+            "branch_name": branch_name_map.get(branch_id, ""),
+            "balance": owed["balance"],
+            "total_bill": round(paid + owed["balance"], 2),
+            "paid_amount": round(paid, 2),
+            "due_date": owed["due_date"] or None,
+            "status": owed["status"],
+            "next_installment_number": None,
+            "next_installment_fee": None,
+            "next_installment_amount": None,
+            "next_installment_fee_label": None,
+            "past_data": True,
+        })
     outstanding_clients.sort(key=lambda r: -r["balance"])
     payment_schedule.sort(key=lambda r: r["due_date"])
 
@@ -2578,6 +2639,35 @@ async def client_transaction_history(
     installments = (lead.get("treatment_fee_payment_details") or {}).get("installments") or []
     session = _lead_session_summary(lead)
 
+    # A Past Data trial client's history is their Excel payments, read off the sheet the way
+    # revenue_overview reads them for the Accountant tab (past_data_live.py), and what the
+    # sheet said they still owed. Nothing on the lead itself describes that money.
+    if lead.get(PAST_MOVE_FIELD):
+        past = await past_data_live.ledger({"id": lead_id})
+        for p in past["payments"]:
+            row = past_data_live.transaction_row(p, branch_name)
+            transactions.append({
+                "id": row["id"],
+                "transaction_id": row["transaction_id"],
+                "date": row["date"],
+                "source": row["source"],
+                "amount": row["gross"],
+                "payment_mode": row["payment_mode"],
+                "details": f"{p.get('service') or 'Payment'} -- from Past Data ({p.get('excel_id') or ''})",
+                "collected_by": past_data_live.FROM_EXCEL,
+                "collected_by_role": "",
+                "receipt_no": None,
+                "original_amount": None,
+                "discount_amount": None,
+                "discount_reason": None,
+            })
+        transactions.sort(key=lambda t: t["date"] or "", reverse=True)
+        owed = past_data_live.owed_by_lead(past["owed"], today).get(lead_id)
+        if owed:
+            balance = round(balance + owed["balance"], 2)
+            outstanding_detail = {**outstanding_detail, "status": owed["status"],
+                                  "due_date": outstanding_detail.get("due_date") or owed["due_date"] or None}
+
     # A collected installment carries how it was paid and the reference that proves it
     # (UTR, cheque number, the account's last four). Those are written at collection
     # time but were never returned here, so the Client Details popup had no way to show
@@ -2632,6 +2722,9 @@ async def client_transaction_history(
             "first_seen": lead.get("created_at"),
             "source": lead.get("source_tab") or lead.get("source_type") or "",
             "assigned_physio_name": lead.get("assigned_physio_name") or "",
+            # A Past Data trial client: the popup reads, and sends nobody a reminder about
+            # money an Excel sheet recorded.
+            "past_data": bool(lead.get(PAST_MOVE_FIELD)),
         },
         "balance": balance,
         "balance_status": outstanding_detail["status"] if balance > 0 else "paid",

@@ -598,7 +598,9 @@ async def past_data_move_preview(batch_id: str, user: V3UserOut = Depends(v3_req
         "skipped": len(p["skipped"]),
         "skipped_names": [c.get("name") or c.get("excel_id") for c in p["skipped"][:EXAMPLES_PER_FINDING]],
         "live_elsewhere": p["live_elsewhere"],
-        "branch_stage": p["branch_stage"],
+        # Where they go: each stage the sheet puts people at, the pill it is read under, and
+        # how many -- past_data_live.stage_for has the rules.
+        "stage_counts": p["stage_counts"],
     }
 
 

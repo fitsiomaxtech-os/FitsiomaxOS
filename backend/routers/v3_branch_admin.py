@@ -9,7 +9,7 @@ import uuid
 
 from database import v3_col
 from branch_calendar import is_leave
-from utils import PAST_MOVE_FIELD, now_iso, active_doctor_query
+from utils import PAST_MOVE_FIELD, now_iso, active_doctor_query, without_past_moves
 from deps import (
     v3_require_roles, v3_current_user, is_head_physio_role, consultants_serving_branch,
     online_arm_practice, vertical_in_arm, lead_as_read_by, is_branch_admin_role,
@@ -1596,6 +1596,10 @@ async def v3_consultations_board(
         query = {field: {"$ne": None}}
         if branch_id and branch_id != "all":
             query["branch_id"] = branch_id
+        else:
+            # Every branch at once: not the Past Data branch's trial clients, which are read
+            # on that branch's own board (see utils.without_past_moves).
+            query = without_past_moves(query)
         if mine:
             my_doctor_ids = await v3_col("doctors").distinct(
                 "id", {"user_id": user.id, "profile_type": "head_physio"},

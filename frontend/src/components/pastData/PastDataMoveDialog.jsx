@@ -7,6 +7,18 @@ import { movePastDataToLive, previewPastDataMove, takeBackPastDataMove } from "@
 
 const n = (v) => (v || 0).toLocaleString("en-IN");
 
+// What the sheet said, where it differs from the pill it lands under (see stage_for in
+// backend past_data_live.py).
+const STAGE_NOTES = {
+  Leads: "no course in the sheet",
+  "Follow Up": "On Hold",
+  "Fee Collected": "a consultation only",
+  "Physio Assign": "a course running",
+  Completed: "Completed",
+  "Referred Out": "Referred Out",
+  Cancel: "Dropped",
+};
+
 /**
  * Move to live, and its undo, for one sheet (see backend past_data_live.py).
  *
@@ -85,7 +97,22 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
           ) : (
             <>
               <ul className="space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid="past-move-plan">
-                <li><b>{n(preview.adding)}</b> clients go onto {branch}'s Branch Leads, at <b>{preview.branch_stage}</b>, each with a patient number.</li>
+                <li><b>{n(preview.adding)}</b> clients go onto {branch}'s Branch Leads, each with a patient number, on the stage the sheet puts them at:</li>
+                {preview.stage_counts?.length > 0 && (
+                  <li>
+                    <ul className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2" data-testid="past-move-stages">
+                      {preview.stage_counts.map((s) => (
+                        <li key={s.stage} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                          <span>
+                            <b>{s.pill}</b>
+                            <span className="text-slate-400"> · {STAGE_NOTES[s.stage] || s.stage}</span>
+                          </span>
+                          <span className="font-semibold tabular-nums">{n(s.count)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
                 {preview.skipped > 0 && (
                   <li>
                     <b>{n(preview.skipped)}</b> skipped: already moved from another sheet
@@ -99,8 +126,9 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
               <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
                 <Info className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  A trial on {branch} only. These clients are not counted on any dashboard or other branch, get no payments or
-                  revenue, and nobody is messaged. What the sheet said about each one is on their card. Take back removes them.
+                  A trial on {branch} only. These clients are not counted on any dashboard or other branch, and nobody is messaged.
+                  Their Excel payments show on this branch's Accountant tab only, read from the sheet, never in OS revenue.
+                  What the sheet said about each one is on their card. Take back removes them.
                 </span>
               </div>
             </>

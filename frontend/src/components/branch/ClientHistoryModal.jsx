@@ -689,7 +689,9 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
               <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" aria-label="Download invoice" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 sm:flex-none sm:px-3 sm:py-2" data-testid="client-history-invoice">
                 <FileText className="h-3.5 w-3.5 shrink-0" /> <span className="hidden sm:inline">Download invoice</span>
               </button>
-              <button type="button" onClick={sendReminder} disabled={!client?.phone} title="Send on WhatsApp" aria-label="Send on WhatsApp" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:px-3 sm:py-2" data-testid="client-history-reminder">
+              {/* Off for a Past Data trial client: their balance is what an Excel sheet said,
+                  shown to read, and no one on the OS asked them for it. Email below too. */}
+              <button type="button" onClick={sendReminder} disabled={!client?.phone || client?.past_data} title="Send on WhatsApp" aria-label="Send on WhatsApp" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:px-3 sm:py-2" data-testid="client-history-reminder">
                 <MessageCircle className="h-3.5 w-3.5 shrink-0" /> <span className="hidden sm:inline">Send on WhatsApp</span>
               </button>
               <button type="button" onClick={callClient} disabled={!client?.phone} title="Call" aria-label="Call" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:px-3 sm:py-2" data-testid="client-history-call">
@@ -697,7 +699,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
               </button>
               {/* Not in the design, kept anyway: emailing a reminder already worked, and a
                   layout change is no reason to take a working action away. */}
-              <button type="button" onClick={sendEmailReminder} disabled={!client?.email} title="Email" aria-label="Email" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:px-3 sm:py-2" data-testid="client-history-email">
+              <button type="button" onClick={sendEmailReminder} disabled={!client?.email || client?.past_data} title="Email" aria-label="Email" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:px-3 sm:py-2" data-testid="client-history-email">
                 <Mail className="h-3.5 w-3.5 shrink-0" /> <span className="hidden sm:inline">Email</span>
               </button>
             </div>

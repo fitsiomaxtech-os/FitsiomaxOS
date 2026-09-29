@@ -386,7 +386,7 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
               meta: [
                 <StatusBadge status={r.status} />,
                 r.due_date ? <span className="font-semibold text-red-600">Due {r.due_date}</span> : null,
-                waNumber(r.phone) && <ReminderButton row={r} today={today} compact />,
+                !r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} compact />,
               ],
               onOpen: onView ? () => onView(r.lead_id) : undefined,
             })}
@@ -434,7 +434,9 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
                           <button type="button" onClick={() => onView && onView(r.lead_id)} title="View Details" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-sky-600">
                             <Eye className="h-3.5 w-3.5" />
                           </button>
-                          {waNumber(r.phone) && <ReminderButton row={r} today={today} />}
+                          {/* Not for a Past Data balance: that is what an Excel sheet said was owed
+                              when it was saved, shown for reading, and no one on the OS set it. */}
+                          {!r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} />}
                         </div>
                       </td>
                     </tr>
