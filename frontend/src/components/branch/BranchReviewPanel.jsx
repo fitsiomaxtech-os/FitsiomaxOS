@@ -3,7 +3,7 @@ import { Send, CheckCircle2, Clock, X, Search, RefreshCw, ChevronLeft, ChevronRi
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
+import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StatTile } from "@/components/ui/stat-tile";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
@@ -71,7 +71,8 @@ export const BranchReviewPanel = ({ branchId }) => {
   // The ranges survive a tab change -- "This Week" is a question worth asking of every
   // stage, and the lit button says it is on. The calendar pick is cleared: an exact day
   // chosen as a Raised On date means nothing as a Completed On one.
-  const [quickDate, setQuickDate] = useState(null);
+  // Opens on Today: the day's reviews are what the desk comes here for. All is one tap away.
+  const [quickDate, setQuickDate] = useState(() => quickDatePreset("today"));
   const [dateFilter, setDateFilter] = useState(null);
   const effectiveDateFilter = useMemo(() => intersectDateFilters(dateFilter, quickDate), [dateFilter, quickDate]);
   const [sendDraft, setSendDraft] = useState(null); // { review, head_physio_id, review_date, review_time, duration, notes }
