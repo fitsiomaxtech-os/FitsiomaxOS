@@ -36,6 +36,15 @@ const shortDate = (iso) => {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
+const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+
+// The status chip as the Branch Admin's Zumba table draws it (STATUS_ROW in ZumbaPanel.jsx).
+const STATUS_ROW = {
+  active: { label: "Active", classes: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  discontinued: { label: "Inactive", classes: "border-rose-200 bg-rose-50 text-rose-700" },
+  leave: { label: "Inactive", classes: "border-amber-200 bg-amber-50 text-amber-700" },
+};
+
 /** What the roll below is showing, so the header names the open card rather than
  *  always saying "Customers" over a list that has been narrowed. */
 const CARD_TITLES = {
@@ -258,62 +267,94 @@ export const ZumbaMasterBoard = () => {
             )}
           </div>
 
-          {loading ? (
-            <p className="px-4 py-12 text-center text-sm text-slate-400">Loading…</p>
-          ) : visible.length === 0 ? (
-            <p className="px-4 py-12 text-center text-sm text-slate-400" data-testid="zumba-master-empty">
-              {rows.length === 0
-                ? "Nobody assigned to your class yet. The branch admin assigns customers to a master."
-                : search.trim()
-                  ? "Nobody matches that search."
-                  : card === "today"
-                    ? "No class today. The class runs Mon, Wed and Fri."
-                    : "Nobody here yet."}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[40rem] text-left text-sm">
-                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {/* What a master needs of a customer: who they are, how to reach them,
-                      when their membership started and ends, and how much of it they
-                      bought. The money is the branch's business and has gone with the
-                      source, which said where a lead came from -- a question answered
-                      before this roll ever saw them. */}
+          {/* The header is drawn whether or not anybody is on the roll, in the Branch
+              Admin's Zumba columns -- the same customer reads the same way on both boards.
+              Master, Payment and Action are the branch's: this whole board is one master's
+              class, and taking money and editing the record happen at the branch desk. */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[56rem] text-left text-sm">
+              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <tr className="whitespace-nowrap">
+                  <th className="w-[5%] px-3 py-2.5">S.No</th>
+                  <th className="w-[17%] px-3 py-2.5">Name</th>
+                  <th className="w-[11%] px-3 py-2.5">Mobile</th>
+                  <th className="w-[11%] px-3 py-2.5">Package</th>
+                  <th className="w-[19%] px-3 py-2.5">Date</th>
+                  <th className="w-[8%] px-3 py-2.5">Classes</th>
+                  <th className="w-[9%] px-3 py-2.5">Collected</th>
+                  <th className="w-[10%] px-3 py-2.5">Due Payment</th>
+                  <th className="w-[10%] px-3 py-2.5">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
                   <tr>
-                    <th className="w-[5%] px-3 py-2.5">S.No</th>
-                    <th className="w-[22%] px-3 py-2.5">Name</th>
-                    <th className="w-[15%] px-3 py-2.5">Phone</th>
-                    <th className="w-[20%] px-3 py-2.5">Email</th>
-                    <th className="w-[13%] px-3 py-2.5">Joined</th>
-                    <th className="w-[13%] px-3 py-2.5">Finishes</th>
-                    <th className="w-[12%] px-3 py-2.5">Classes</th>
+                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-400">Loading…</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {visible.map((r, i) => (
-                    <tr key={r.id} className="align-middle hover:bg-slate-50/60" data-testid={`zumba-master-row-${r.id}`}>
-                      <td className="px-3 py-2.5 text-slate-400">{i + 1}</td>
-                      <td className="px-3 py-2.5">
-                        <p className="font-semibold text-slate-800">{r.name || "—"}</p>
-                        {/* Which of the two they are in, under the name — on the roll as a
-                            whole it is the only place the hour is said at all. */}
-                        {r.time_slot ? <p className="text-[11px] text-slate-400">{r.time_slot}</p> : null}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-600">{r.phone || "—"}</td>
-                      <td className="px-3 py-2.5 text-slate-600">
-                        <span className="block max-w-[16rem] truncate" title={r.email || ""}>{r.email || "—"}</span>
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-500">{shortDate(r.created_at)}</td>
-                      <td className="px-3 py-2.5 text-slate-500" data-testid={`zumba-master-finish-${r.id}`}>{r.finish_on ? shortDate(r.finish_on) : "—"}</td>
-                      <td className="px-3 py-2.5 text-slate-600">
-                        {r.package_sessions ? `${r.package_sessions} classes` : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ) : visible.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-400" data-testid="zumba-master-empty">
+                      {rows.length === 0
+                        ? "Nobody assigned to your class yet. The branch admin assigns customers to a master."
+                        : search.trim()
+                          ? "Nobody matches that search."
+                          : card === "today"
+                            ? "No class today. The class runs Mon, Wed and Fri."
+                            : "Nobody here yet."}
+                    </td>
+                  </tr>
+                ) : (
+                  visible.map((r, i) => {
+                    const paid = Number(r.fee_paid || 0);
+                    const due = Number(r.fee_amount || 0) - paid;
+                    const chip = STATUS_ROW[r.status || "active"] || STATUS_ROW.active;
+                    return (
+                      <tr key={r.id} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`zumba-master-row-${r.id}`}>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
+                        <td className="px-3 py-3">
+                          <p className="max-w-[12rem] truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
+                          {/* Which of the two they are in, under the name — on the roll as a
+                              whole it is the only place the hour is said at all. */}
+                          {r.time_slot ? <p className="text-[11px] text-slate-400">{r.time_slot}</p> : null}
+                        </td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                        <td className="px-3 py-3">
+                          {r.package_name
+                            ? <p className="max-w-[9rem] truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>
+                            : <span className="text-xs leading-5 text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600" data-testid={`zumba-master-finish-${r.id}`}>
+                          {shortDate(r.joined_on || r.created_at)} – {r.finish_on ? shortDate(r.finish_on) : "—"}
+                        </td>
+                        <td className="px-3 py-3">
+                          {typeof r.classes_left === "number" ? (
+                            <p className={`text-xs leading-5 ${r.renewal_due ? "font-semibold text-amber-600" : "text-slate-600"}`}>
+                              {r.classes_left === 0 ? "Term over" : r.classes_left}
+                            </p>
+                          ) : <span className="text-xs leading-5 text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="text-xs font-semibold leading-5 text-emerald-700">{rupees(paid)}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          {due > 0
+                            ? <p className="text-xs font-semibold leading-5 text-rose-600">{rupees(due)}</p>
+                            : Number(r.fee_amount || 0) > 0
+                              ? <p className="text-xs leading-5 text-emerald-600">Paid up</p>
+                              : <p className="text-xs leading-5 text-slate-300">—</p>}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
+                            {chip.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>
