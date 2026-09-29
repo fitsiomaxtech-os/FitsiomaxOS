@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, RefreshCw, BarChart3, CalendarDays } from "lucide-react";
+import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, ChevronRight, RefreshCw, BarChart3, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,6 @@ import {
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { CreateLeadModal } from "@/components/CreateLeadModal";
-import { SourcePill } from "@/components/marketing/SourcePill";
 import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
@@ -98,6 +97,12 @@ const branchTone = (name) => {
 };
 
 const branchLabel = (b) => b?.branch_name || b?.name || "";
+
+/** A lead's source as words for the line under its name — "google_sheets" reads as
+ *  "Google Sheets", the way HR Admin prints a candidate's source under their name. */
+const sourceLabel = (src) => (src
+  ? String(src).replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase())
+  : "—");
 
 /**
  * The board's coloured dropdown, shared by the Assigned To column and the Sources
@@ -541,7 +546,7 @@ const presalesRangeFor = (key) => {
  * here rather than in a row of its own because the two narrow the same list, and a second
  * bordered strip under this one would read as a filter for something else.
  */
-const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handledBy, onHandledByChange }) => {
+const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handledBy, onHandledByChange, inline = false }) => {
   const activeKey = value?.key || "all";
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -566,7 +571,9 @@ const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handle
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:gap-3 sm:p-3" data-testid={`${testid}-row`}>
+    // `inline` drops the row's own border and padding so it can sit inside a toolbar that
+    // already has them — the desk's Leads pane, where search and range share one bar.
+    <div className={inline ? "flex flex-wrap items-center gap-2" : "flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:gap-3 sm:p-3"} data-testid={`${testid}-row`}>
       <SegmentedPillGroup options={PRESALES_ANALYTICS_DATE_PRESETS} active={activeKey} onPick={pick} testid={testid} />
       {/* Kept next to the presets it belongs to, ahead of the Handled By group, so the
           range and the dates it resolves to read as one thing. */}
@@ -604,7 +611,7 @@ const PreSalesRangePills = ({ value, onChange, testid = "presales-range", handle
           huddled at the left under a strip of empty white. From sm only: once the row wraps
           on a phone, ml-auto would strand this group hard right on a line of its own. */}
       {onHandledByChange && (
-        <div className="sm:ml-auto">
+        <div className={inline ? "" : "sm:ml-auto"}>
           <SegmentedPillGroup
             options={HANDLED_BY_FILTERS}
             active={handledBy}
@@ -1176,6 +1183,7 @@ export const PreSalesCRM = ({
               label={c.label}
               value={c.value}
               active={stageFilter === c.key}
+              dimmed={stageFilter !== kpiCardModels[0].key && stageFilter !== c.key}
               color={c.color}
               onClick={() => setStageFilter(c.key)}
               testid={`presales-kpi-${c.testid}`}
@@ -1188,35 +1196,27 @@ export const PreSalesCRM = ({
         <PreSalesAnalyticsPanel sourceFilter={sourceFilter} groupBranchIds={modeBranchIds} role={role} />
       ) : (
       <>
-      {/* Toolbar */}
-      {/* Seven controls, which a phone cannot hold on one line — so it takes two, split
-          where the meaning splits: what you are looking at on top, what you can do to it
-          below. It used to be one flex-wrap row whose min-w-[260px] search forced a break
-          wherever it landed, leaving Manage Stages orphaned on a third line.
-
-          sm:contents dissolves both wrappers from sm up, so the desk still lays all seven
-          out in the single row it always had. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" data-testid="presales-toolbar">
-        <div className="flex items-center gap-2 sm:contents">
-        <div className="relative min-w-0 flex-1 sm:min-w-[260px]">
+      {/* Toolbar — one bar, not two. The range pills used to be a bordered row of their
+          own under this one, and the calendar popover beside the search set the very same
+          dateFilter, so the board carried two date controls in two strips. The pills stay
+          (Custom covers what the popover did) and sit at the front of the bar; search
+          takes whatever width is left, and the actions close the row on the right.
+          Desk only — the phone block below keeps its own two rows. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2" data-testid="presales-toolbar">
+        <PreSalesRangePills
+          inline
+          value={dateFilter}
+          onChange={setDateFilter}
+          testid="presales-leads-range"
+          handledBy={showHandledByFilter ? handledByFilter : undefined}
+          onHandledByChange={showHandledByFilter ? setHandledByFilter : undefined}
+        />
+        <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leads by name, email, phone..." className="h-10 pl-8" data-testid="presales-search" />
         </div>
-        {/* Icons only, matching Branch Leads. The labels move to title/aria-label rather
-            than being dropped, so a hover still says what each does and a screen reader
-            still announces it.
-
-            All Sources keeps its text: it is not a button but the current selection, and
-            an icon cannot say WHICH source is filtered. Same reason the date filter puts
-            its label back once a range is picked — a filtered screen has to admit it. */}
-        <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="presales-date-filter" centered iconOnly />
-        </div>
-
-        <div className="flex items-center gap-2 sm:contents">
-        {/* The All Branches dropdown that used to sit here is gone. The branch pills above
-            set the same sourceFilter, and two controls for one value meant a board that
-            could show "All Branches" in the toolbar while a branch pill was lit. The pills
-            say which group a branch belongs to as well, which the list never did. */}
+        {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
+            still say what each does. */}
         <PullFromSheetButton onPulled={load} iconOnly />
         <Button
           variant="outline"
@@ -1239,37 +1239,19 @@ export const PreSalesCRM = ({
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
         {role === "super_admin" && (
-          // Icon-only on a phone, like the four beside it — the words would take a third
-          // of the row for a control used once a month. The label stays on title and
-          // aria-label, and returns in full from sm up.
           <Button
             variant="outline"
-            className="h-10 w-10 shrink-0 p-0 sm:w-auto sm:px-4"
+            className="h-10 shrink-0 px-4"
             onClick={onManageStages}
             title="Manage Stages"
             aria-label="Manage Stages"
             data-testid="presales-manage-stages-btn"
           >
-            <Cog className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">Manage Stages</span>
+            <Cog className="mr-1 h-4 w-4" />
+            Manage Stages
           </Button>
         )}
-        </div>
       </div>
-
-      {/* The Leads pane's own range row, under the toolbar rather than above the KPI
-          cards. Search and these two filters are the one thing you reach for to narrow
-          the list, so they sit together as a block; the cards above keep reading as the
-          headline counts, and still recount against whatever this picks.
-          Already inside the leads branch, so it needs no analytics guard of its own —
-          that pane draws its own range row inside the panel. */}
-      <PreSalesRangePills
-        value={dateFilter}
-        onChange={setDateFilter}
-        testid="presales-leads-range"
-        handledBy={showHandledByFilter ? handledByFilter : undefined}
-        onHandledByChange={showHandledByFilter ? setHandledByFilter : undefined}
-      />
 
       {/* The stage strip that used to sit here is gone. It set the same `stageFilter`
           the KPI cards above already set, so every stage was on screen twice, four
@@ -1277,38 +1259,53 @@ export const PreSalesCRM = ({
           The cards win: they carry the counts. The mobile block below keeps its own
           StageTabBar — it has no KPI row, so that one isn't a duplicate. */}
 
-      {/* Leads table */}
-      <Card data-testid="presales-leads-card">
-        <CardContent className="p-0">
-          <div className="overflow-auto">
-            <table className="min-w-full border-separate border-spacing-x-0 border-spacing-y-2 text-sm">
-              <thead className="text-center text-xs text-slate-500">
-                <tr><th className="px-3 py-2 text-left">LEAD</th><th className="px-3 py-2">PHONE</th><th className="px-3 py-2">SOURCE</th><th className="px-3 py-2">STAGE</th>{isSuperAdminMasterView && <th className="px-3 py-2">HANDLED BY</th>}{stageFilter === "Appointment" && <th className="px-3 py-2">BRANCH ADMIN STATUS</th>}{stageFilter === "RNR" && <th className="px-3 py-2">LAST CALL</th>}<th className="px-3 py-2">CREATED</th><th className="px-3 py-2">ASSIGNED TO</th><th className="px-3 py-2">ACTIONS</th></tr>
+      {/* Leads table — drawn the way HR Admin's candidate list is (HumanResourceBoard):
+          a grey uppercase header, plain rows split by a hairline, a bold name with a
+          faint line under it. Source moved under the name and email under the phone,
+          which is where that list puts the same two facts. */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" data-testid="presales-leads-card">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-4 py-2.5 font-semibold">Lead</th>
+                  <th className="px-4 py-2.5 font-semibold">Contact</th>
+                  <th className="px-4 py-2.5 font-semibold">Stage</th>
+                  {isSuperAdminMasterView && <th className="px-4 py-2.5 font-semibold">Handled By</th>}
+                  {stageFilter === "Appointment" && <th className="px-4 py-2.5 font-semibold">Branch Admin Status</th>}
+                  {stageFilter === "RNR" && <th className="px-4 py-2.5 font-semibold">Last Call</th>}
+                  <th className="px-4 py-2.5 font-semibold">Created</th>
+                  <th className="px-4 py-2.5 font-semibold">Assigned To</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {visibleLeads.map((l) => {
                   const stg = stages.find((s) => s.name === l.stage);
                   return (
-                    <tr key={l.id} onClick={() => setEditing(l)} className="group cursor-pointer" data-testid={`presales-lead-row-${l.id}`}>
-                      <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-3 py-3 text-left font-medium text-slate-800 transition-colors group-hover:bg-slate-50">
-                        <div className="flex items-center gap-2">
-                          <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(l.name).bg} ${avatarColor(l.name).fg}`}>{initials(l.name)}</span>
-                          <span className="truncate">{l.name}</span>
-                        </div>
+                    <tr key={l.id} onClick={() => setEditing(l)} className="cursor-pointer hover:bg-slate-50" data-testid={`presales-lead-row-${l.id}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-800">{l.name}</p>
+                        <p className="text-[11px] text-slate-400" data-testid={`presales-lead-source-${l.id}`}>{sourceLabel(l.source_tab || l.source_type)}</p>
                       </td>
                       {/* Number only. Call and WhatsApp both hand off to an app the desk
                           does not have — tel: and wa.me open a dialer and a phone client,
                           so on a desktop they were two icons per row that either did
                           nothing or launched the wrong thing. They stay on the phone
                           cards, where they work. */}
-                      <td className="border-y border-slate-200 bg-white px-3 py-3 text-center transition-colors group-hover:bg-slate-50">
-                        <span className="font-mono text-xs text-slate-700">{l.phone || "—"}</span>
+                      <td className="px-4 py-3 text-slate-600">
+                        {l.phone || "—"}
+                        {l.email ? <span className="block max-w-[220px] truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-3 text-center transition-colors group-hover:bg-slate-50"><SourcePill source={l.source_tab || l.source_type} /></td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-3 transition-colors group-hover:bg-slate-50">
-                        <div className="flex flex-col items-center gap-1">
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col items-start gap-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="inline-flex h-6 items-center rounded border px-2 text-[10px] font-semibold" style={{ borderColor: stg?.color || "#cbd5e1", color: stg?.color || "#64748b" }}>{l.stage}</span>
+                            <span
+                              className="inline-flex shrink-0 whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold"
+                              style={{ color: stg?.color || "#64748b", borderColor: `${stg?.color || "#64748b"}55`, backgroundColor: `${stg?.color || "#64748b"}14` }}
+                            >
+                              {l.stage}
+                            </span>
                             {l.stage === "RNR" && (l.rnr_attempts || 0) > 0 && (
                               <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700" title={`${l.rnr_attempts} unanswered call attempts`} data-testid={`presales-rnr-badge-${l.id}`}>
                                 <PhoneOff className="h-2.5 w-2.5" />×{l.rnr_attempts}
@@ -1335,8 +1332,8 @@ export const PreSalesCRM = ({
                         </div>
                       </td>
                       {isSuperAdminMasterView && (
-                        <td className="border-y border-slate-200 bg-white px-3 py-3 text-center transition-colors group-hover:bg-slate-50" data-testid={`presales-handled-by-${l.id}`}>
-                          <div className="flex justify-center"><HandledByBadge lead={l} /></div>
+                        <td className="px-4 py-3" data-testid={`presales-handled-by-${l.id}`}>
+                          <div className="flex"><HandledByBadge lead={l} /></div>
                           {l.lead_control === "branch_admin" && l.branch_stage && (
                             <span className="mt-1 block text-[10px] text-slate-400">{l.branch_stage}</span>
                           )}
@@ -1345,8 +1342,8 @@ export const PreSalesCRM = ({
                       {stageFilter === "Appointment" && (() => {
                         const { branchName, status, statusColor } = branchStatusInfo(l, branches);
                         return (
-                          <td className="border-y border-slate-200 bg-white px-3 py-3 text-center text-xs transition-colors group-hover:bg-slate-50">
-                            <div className="flex flex-col items-center gap-1" data-testid={`presales-branch-status-${l.id}`}>
+                          <td className="px-4 py-3 text-xs">
+                            <div className="flex flex-col items-start gap-1" data-testid={`presales-branch-status-${l.id}`}>
                               <span className="font-semibold text-slate-700">{branchName || "—"}</span>
                               <span className={`inline-flex w-fit items-center rounded border px-1.5 text-[10px] font-semibold ${statusColor}`}>{status}</span>
                               {l.assigned_physio_name ? (
@@ -1359,9 +1356,9 @@ export const PreSalesCRM = ({
                         );
                       })()}
                       {stageFilter === "RNR" && (
-                        <td className="border-y border-slate-200 bg-white px-3 py-3 text-center transition-colors group-hover:bg-slate-50">
+                        <td className="px-4 py-3">
                           {l.rnr_last_attempt_at ? (
-                            <div className="flex flex-col items-center gap-0.5" data-testid={`presales-rnr-lastcall-${l.id}`}>
+                            <div className="flex flex-col items-start gap-0.5" data-testid={`presales-rnr-lastcall-${l.id}`}>
                               <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
                                 <Clock className="h-2.5 w-2.5" />{callTimeStamp(l.rnr_last_attempt_at)}
                               </span>
@@ -1372,8 +1369,8 @@ export const PreSalesCRM = ({
                           )}
                         </td>
                       )}
-                      <td className="border-y border-slate-200 bg-white px-3 py-3 text-center text-xs text-slate-400 transition-colors group-hover:bg-slate-50">{(l.created_at || "").slice(0, 10)}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-3 text-center transition-colors group-hover:bg-slate-50" onClick={(e) => e.stopPropagation()}>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">{(l.created_at || "").slice(0, 10) || "—"}</td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <ColorSelect
                           value={l.branch_id || ""}
                           options={branchOptions}
@@ -1393,8 +1390,8 @@ export const PreSalesCRM = ({
                           testid={`presales-assign-branch-${l.id}`}
                         />
                       </td>
-                      <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-3 py-3 text-center transition-colors group-hover:bg-slate-50">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
                           <button onClick={(e) => { e.stopPropagation(); setEditing(l); }} className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-sky-600" data-testid={`presales-lead-view-${l.id}`} title="View / Edit">
                             <Eye className="h-4 w-4" />
                           </button>
@@ -1408,7 +1405,7 @@ export const PreSalesCRM = ({
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && <tr><td colSpan={(stageFilter === "Appointment" || stageFilter === "RNR" ? 8 : 7) + (isSuperAdminMasterView ? 1 : 0)} className="px-3 py-8 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={(stageFilter === "Appointment" || stageFilter === "RNR" ? 7 : 6) + (isSuperAdminMasterView ? 1 : 0)} className="px-4 py-10 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1419,8 +1416,7 @@ export const PreSalesCRM = ({
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
       </>
       )}
     </div>
@@ -1547,6 +1543,7 @@ export const PreSalesCRM = ({
                   label={c.label}
                   value={c.value}
                   active={stageFilter === c.key}
+                  dimmed={stageFilter !== kpiCardModels[0].key && stageFilter !== c.key}
                   color={c.color}
                   onClick={() => setStageFilter(c.key)}
                   testid={`presales-mobile-kpi-${c.testid}`}
@@ -1937,37 +1934,29 @@ const ProfileTab = ({ currentUser, branches, onLogout }) => {
 /**
  * One stage's count, and the control that filters the table to it.
  *
- * Laid out to match the Analytics pane's metric cards on this same board — small uppercase
- * label over a large figure — because the two are the same kind of object and reading as
- * one system is most of what makes a row of them look considered.
+ * Wears Branch Admin > Zumba's summary card (LedgerCard in ZumbaPanel): a faint wash of
+ * the card's colour, 2px corners, an uppercase caption with a chevron, the figure under
+ * it, and a two-layer shadow that lifts it off the page. The colour is inline because it
+ * is whatever hex the stage carries, which Tailwind cannot know ahead of time.
  *
- * The type is deliberately small: the label is a caption for the number, not a heading
- * competing with it. Bigger label type is what forced "Branch Admin Appointment" onto two
- * lines, and two lines of near-identical words made the appointment pair hard to tell apart.
+ * `dimmed` steps a card back while another one on the row is the filter, the same as the
+ * Zumba strip does, so the picked card reads without needing a heavier outline.
  */
-const KpiCard = ({ label, value, color, active, onClick, testid }) => (
+const KpiCard = ({ label, value, color, active, dimmed, onClick, testid }) => (
   <button
+    type="button"
     onClick={onClick}
+    aria-pressed={active}
     data-testid={testid}
-    className={`min-w-0 rounded-xl px-2.5 py-3 text-left transition hover:shadow-sm ${active ? "ring-2 ring-inset" : ""}`}
-    style={{ background: `${color}14`, border: `1px solid ${color}33`, ...(active ? { "--tw-ring-color": color } : {}) }}
+    title={label}
+    className={`h-full w-full min-w-0 rounded-[2px] border p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
+    style={{ borderColor: active ? color : `${color}55`, background: `${color}0f` }}
   >
-    {/* Sentence case, not uppercase. Uppercase reads as the tidier dashboard caption, but
-        it sets about a third wider, and that width is the reason the row could not hold
-        eight cards without either wrapping the label or dropping a card to a second line.
-        Sentence case at 10px puts "Branch Admin Appointment" around 125px against the
-        ~148px this card gives it — clear by a real margin rather than by arithmetic I
-        cannot measure from here.
-        truncate is the backstop, not the plan: the column floor already fits every label
-        this board carries, so the ellipsis only appears for a custom stage name longer
-        than any of them, which then ends in "…" inside its own card rather than spilling
-        across the next.
-        Full colour, no opacity knocked off it — this is the smallest type on the card, and
-        fading small text is where contrast goes from tight to failing. */}
-    <p className="truncate text-[10px] font-semibold leading-tight" style={{ color }}>{label}</p>
-    {/* leading-none so the figure sits as a number rather than as a line of text — it is
-        what closed the loose gap under each label and the dead band at the card's foot. */}
-    <p className="mt-1.5 text-2xl font-bold leading-none" style={{ color }}>{value}</p>
+    <div className="flex items-start justify-between gap-1">
+      <p className="min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px]" style={{ color }}>{label}</p>
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400 sm:h-4 sm:w-4" aria-hidden="true" />
+    </div>
+    <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" style={{ color }}>{value}</p>
   </button>
 );
 
