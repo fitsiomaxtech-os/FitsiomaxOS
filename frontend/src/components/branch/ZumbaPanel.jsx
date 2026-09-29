@@ -655,11 +655,10 @@ const CARDS = [
   // afternoon from one owing 9,000. The count moves into the caption, where it is still
   // read but is no longer the answer.
   //
-  // Filters the list like every other card on this strip. It used to open a popup of its
-  // own instead, on the grounds that its answer is money and the split of it had no column
-  // here — but a card that behaves differently from the seven beside it is a card people
-  // press expecting the list to change, and the popup interrupted whatever was being
-  // worked to say so.
+  // Payment Done is the one card that opens rather than filters — see PaymentDoneModal.
+  // It spent a while filtering like its neighbours, and on a branch where nobody had paid
+  // yet a press on it emptied the list and said nothing else; the branch asked for the
+  // details back. The list underneath has a column for none of what the figure is made of.
   //
   // Every card on the strip wears the Accountant Summary's ledger card (see LedgerCard).
   { key: "payment_done", label: "Payment Done", color: "#059669", ledger: "emerald", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
@@ -907,6 +906,257 @@ const ClassMasters = ({ masters, onSet, busy }) => {
   );
 };
 
+
+/**
+ * The Payment Done card, opened rather than filtered.
+ *
+ * Every other card on the strip answers its question by narrowing the list beneath it,
+ * which works while the answer is a headcount. This one's answer is money, and money has a
+ * second half no column of that table can hold: whose it is. The split used to be printed
+ * into the list's header, which put the breakdown of one card inside the chrome of a list
+ * showing something else — so both halves are lifted out here, the split first and then
+ * the payments it is made of, in one place that is about the money and nothing else.
+ *
+ * The lines are read off every registration rather than off the filtered list, and drop
+ * whoever has discontinued exactly as the server's total does. A popup opened from a
+ * figure whose lines add up to less than the figure that was clicked is the one thing a
+ * card must never do, so it opens on every payment, footed, and can be read straight back
+ * against the card that opened it.
+ *
+ * From there it narrows three ways, and each one is a question a branch actually asks of
+ * this figure: whose money it is, which day it came in on, and how it arrived. They are
+ * this popup's own filters rather than the table's underneath — reading the takings is not
+ * a reason to lose the view being worked, and one set of pills writing both would mean it
+ * is. Whatever is left showing is what the header, the lanes and the foot all describe.
+ */
+const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
+  const [lane, setLane] = useState("all");
+  const [dateFilter, setDateFilter] = useState(null);
+  const [modeFilter, setModeFilter] = useState("");
+
+  // The day and the mode narrow the money itself, so the lanes are worked out from what is
+  // left after them: on a week one master did not teach, that master's tab reads zero
+  // rather than carrying the whole branch's figure over a list that no longer holds it.
+  // The lane is applied after, or picking one would empty the tabs beside it.
+  const scoped = useMemo(() => {
+    let list = rows;
+    if (dateFilter) {
+      // Compared as timestamps rather than as day strings: the picker hands back Dates
+      // whose ends are the start and the end of a day, so a single day is a range like any
+      // other and needs no special case.
+      const fromTs = dateFilter.from?.getTime();
+      const toTs = dateFilter.to?.getTime();
+      list = list.filter((r) => {
+        // The day the registration was taken — the only date this record carries. A fee is
+        // settled against the membership rather than stamped with a date of its own, so
+        // "today" here means today's registrations, the same as it does on the table.
+        const ts = new Date(`${dayOf(r.created_at)}T00:00:00`).getTime();
+        if (!ts) return false;
+        if (fromTs && ts < fromTs) return false;
+        if (toTs && ts > toTs) return false;
+        return true;
+      });
+    }
+    if (modeFilter) list = list.filter((r) => r.payment_mode === modeFilter);
+    return list;
+  }, [rows, dateFilter, modeFilter]);
+
+  const lanes = useMemo(() => revenueLanes(scoped), [scoped]);
+  const picked = lanes.find((l) => l.key === lane) || lanes[0];
+  const shown = useMemo(() => scoped.filter((r) => (picked?.match || (() => true))(r)), [scoped, picked]);
+
+  // A lane can go away under a filter — the unslotted one exists only while there is
+  // unslotted money — and leaving the popup pointed at a tab that is no longer on screen
+  // would show a list nothing above it explains.
+  useEffect(() => {
+    if (!lanes.some((l) => l.key === lane)) setLane("all");
+  }, [lanes, lane]);
+
+  const collected = sumPaid(shown);
+  const everything = sumPaid(rows);
+  const narrowed = shown.length !== rows.length;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="zumba-payment-done-dialog"
+    >
+      {/* overflow-hidden, or the tinted header paints its own square corners over the
+          rounded ones this container draws. */}
+      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b bg-emerald-50/60 p-5">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-slate-800">Payment Done</h3>
+            <p className="mt-1 text-2xl font-extrabold leading-none text-emerald-700" data-testid="zumba-payment-done-total">
+              {rupees(collected)}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              collected from {pluralCustomers(shown.length)}
+              {/* What was clicked, kept in sight while the popup is narrowed: the figure
+                  above is no longer the card's once a filter is on, and a number that has
+                  quietly stopped being the one you came in on is worse than a caption with
+                  another number in it. */}
+              {narrowed ? ` · of ${rupees(everything)} from ${pluralCustomers(rows.length)}` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close" data-testid="zumba-payment-done-close">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Whose the collected money is, above the payments it was made of — and the way
+            into each of them. */}
+        <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+          <RevenueLanes lanes={lanes} lane={picked?.key} onPick={setLane} />
+        </div>
+
+        {/* One line, two groups: when the days are asked on the left and the payment mode
+            on the right, the space between them is what says they are separate questions.
+            The same pair the table downstairs carries, because they are the same two
+            questions — asked here of the money rather than of the roll. */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-slate-100 px-5 py-2.5">
+          <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-payment-done-date-filter">
+            {DATE_PRESETS.map((preset) => {
+              const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => setDateFilter(presetFilter(preset))}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                  data-testid={`zumba-payment-done-date-${preset.key}`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+            {/* The trigger is a Button this component does not own, so its size and text
+                are pinned from out here rather than by adding props to a control five
+                other boards share. Handed null while a preset is active, so it reads
+                "Custom" rather than echoing the pill already lit beside it. */}
+            <span className="[&_button]:h-[30px] [&_button]:rounded-md [&_button]:px-3 [&_button]:text-xs [&_button]:font-semibold [&_svg]:mr-1.5 [&_svg]:h-3.5 [&_svg]:w-3.5">
+              <DateFilterPopover
+                value={isPreset(dateFilter) ? null : dateFilter}
+                onChange={setDateFilter}
+                centered
+                placeholder="Custom"
+                testid="zumba-payment-done-date-custom"
+              />
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-payment-done-mode-filter">
+            {MODE_FILTERS.map(([key, label]) => (
+              <button
+                key={key || "all"}
+                type="button"
+                onClick={() => setModeFilter(key)}
+                className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+                  modeFilter === key
+                    ? "border-sky-600 bg-sky-600 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+                }`}
+                data-testid={`zumba-payment-done-mode-${key || "all"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {shown.length === 0 ? (
+            <div className="px-5 py-12 text-center" data-testid="zumba-payment-done-empty">
+              <p className="text-sm text-slate-400">
+                {rows.length > 0
+                  ? "Nothing collected under this filter."
+                  : "Nothing has been collected at this branch yet."}
+              </p>
+              {/* A ₹0 popup that stops there leaves the desk nowhere to go. Whatever is
+                  owed is the money that would land here, so say how much and open it. */}
+              {rows.length === 0 && owed.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onShowDue}
+                  className="mt-3 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                  data-testid="zumba-payment-done-show-due"
+                >
+                  {rupees(owed.reduce((n, r) => n + amountDue(r), 0))} still owed by {pluralCustomers(owed.length)}
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[44rem] text-left text-sm">
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="w-[5%] px-4 py-2.5">S.No</th>
+                    <th className="w-[26%] px-4 py-2.5">Name</th>
+                    <th className="w-[20%] px-4 py-2.5">Package</th>
+                    <th className="w-[19%] px-4 py-2.5">Class</th>
+                    <th className="w-[13%] px-4 py-2.5">Mode</th>
+                    <th className="w-[17%] px-4 py-2.5 text-right">Collected</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shown.map((r, i) => {
+                    const due = Number(r.fee_amount || 0) - Number(r.fee_paid || 0);
+                    return (
+                      <tr key={r.id} className="align-top" data-testid={`zumba-payment-done-row-${r.id}`}>
+                        <td className="px-4 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
+                        <td className="px-4 py-3">
+                          <p className="max-w-full truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
+                          <p className="text-[10px] leading-4 text-slate-400">{r.phone || "No phone"}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          {r.package_name ? (
+                            <>
+                              <p className="max-w-full truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>
+                              {r.package_sessions ? <p className="text-[10px] leading-4 text-slate-400">{r.package_sessions} classes</p> : null}
+                            </>
+                          ) : <span className="text-xs leading-5 text-slate-300">—</span>}
+                        </td>
+                        {/* The slot, because it is what decides whose money this line is:
+                            the lane above is this column added up. A row with none yet
+                            says so rather than showing a dash, since those rows are the
+                            reason the "No slot yet" lane is up there at all. */}
+                        <td className="px-4 py-3">
+                          {r.time_slot
+                            ? <p className="text-xs leading-5 text-slate-600">{r.time_slot}</p>
+                            : <p className="text-xs font-semibold leading-5 text-amber-600">No slot yet</p>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex whitespace-nowrap rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                            {PAYMENT_MODE_LABELS[r.payment_mode] || r.payment_mode || "Not recorded"}
+                          </span>
+                        </td>
+                        {/* What came in on this membership, and what is still out on it. A
+                            part-paid customer is on Due Payment as well as here, and a
+                            column that showed only the takings would read as settled. */}
+                        <td className="px-4 py-3 text-right">
+                          <p className="text-xs font-semibold leading-5 text-emerald-700">{rupees(r.fee_paid)}</p>
+                          {due > 0 ? <p className="text-[10px] leading-4 text-rose-600">{rupees(due)} still due</p> : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {/* Footed, so the lines can be read back against the tab that opened them. */}
+                <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                  <tr>
+                    <td colSpan={5} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Total collected</td>
+                    <td className="px-4 py-3 text-right text-sm font-extrabold text-emerald-700" data-testid="zumba-payment-done-foot">{rupees(collected)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const STATUS_CHIP = {
   active: { label: "On the roll", classes: "border-emerald-200 bg-emerald-50 text-emerald-700" },
@@ -1305,6 +1555,10 @@ export const ZumbaPanel = ({ branchId }) => {
   const [renewing, setRenewing] = useState(null); // the membership being sold another term
   const [collecting, setCollecting] = useState(null); // the balance being paid down
   const [viewing, setViewing] = useState(null);   // the registration open in the detail popup
+  // Payment Done opens rather than filters — see PaymentDoneModal. Its own flag rather
+  // than a value of `card`, because the list underneath is left on whatever it was
+  // showing: reading the takings is not a reason to lose the view being worked.
+  const [paymentDoneOpen, setPaymentDoneOpen] = useState(false);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the books
   // The Zumba pipeline exactly as Super Admin has it in CI/CD ROOTS. Nothing is hardcoded
   // here: a clinic that has not set the pipeline up has no stages, and the Stage column
@@ -1391,15 +1645,8 @@ export const ZumbaPanel = ({ branchId }) => {
     // Four of the cards are not sources, so each says which rows it stands for. Where a
     // customer came from and what became of them are different questions, and only the
     // first is the `card` the server stamps on the row.
-    // Everyone who has handed something over — the same rows the popup listed, and the
-    // same population the card's own figure and caption are counted over ("collected from
-    // N customers"). Not narrowed to the fully settled, tempting as the label makes it:
-    // the number above the list would then be counted over one set of people and the list
-    // under it drawn from another, and a card whose rows do not add up to it is worse than
-    // one that overlaps its neighbour. What a part-paid customer still owes shows on their
-    // own line, and Due Payment is the card that collects them.
-    if (card === "payment_done") list = list.filter((r) => Number(r.fee_paid || 0) > 0);
-    else if (card === "due_payment") list = list.filter((r) => amountDue(r) > 0);
+    // Payment Done is not one of them: it opens its own popup instead of narrowing this.
+    if (card === "due_payment") list = list.filter((r) => amountDue(r) > 0);
     else if (card === "discontinued") list = list.filter((r) => (r.status || "active") !== "active");
     else if (card !== "all") list = list.filter((r) => r.card === card);
     if (dateFilter) {
@@ -1423,6 +1670,26 @@ export const ZumbaPanel = ({ branchId }) => {
     if (modeFilter) list = list.filter((r) => r.payment_mode === modeFilter);
     return list;
   }, [rows, card, search, dateFilter, modeFilter]);
+
+  /**
+   * The lines behind the Payment Done card: everyone who has handed something over.
+   * Discontinued customers are dropped for the same reason the server drops them from
+   * fee_total — see the summary loop in v3_zumba.py — so these lines add back up to
+   * exactly the number on the card.
+   *
+   * Not filtered to the settled: the card counts what came in, and a customer halfway
+   * through a membership has still handed money over. What they still owe is printed on
+   * their line rather than being a reason to leave them out.
+   */
+  const paymentDoneRows = useMemo(
+    () => rows.filter((r) => (r.status || "active") !== "discontinued" && Number(r.fee_paid || 0) > 0),
+    [rows],
+  );
+  // What is still out, for the popup to point at when nothing has come in yet.
+  const owedRows = useMemo(
+    () => rows.filter((r) => (r.status || "active") !== "discontinued" && amountDue(r) > 0),
+    [rows],
+  );
 
   // Every master offered in the picker: the ones already referred from, plus one being
   // typed in now, so a new name is selectable the moment it exists.
@@ -1580,8 +1847,10 @@ export const ZumbaPanel = ({ branchId }) => {
               ? c.countSub(pluralCustomers(Number(summary?.[c.count || c.key]) || 0))
               : c.sub,
             color: hex || c.color,
-            active: card === c.key,
-            onClick: () => setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)),
+            active: c.key === "payment_done" ? paymentDoneOpen : card === c.key,
+            onClick: () => (c.key === "payment_done"
+              ? setPaymentDoneOpen(true)
+              : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key))),
             testid: `zumba-card-${c.key}`,
           };
           return <LedgerCard key={c.key} {...props} tone={c.ledger} dimmed={card !== "all" && card !== c.key} />;
@@ -2078,6 +2347,15 @@ export const ZumbaPanel = ({ branchId }) => {
           onDelete={() => { const r = viewing; setViewing(null); setRemoving(r); }}
           onClose={() => setViewing(null)}
           onSaved={load}
+        />
+      )}
+
+      {paymentDoneOpen && (
+        <PaymentDoneModal
+          rows={paymentDoneRows}
+          owed={owedRows}
+          onShowDue={() => { setPaymentDoneOpen(false); setCard("due_payment"); }}
+          onClose={() => setPaymentDoneOpen(false)}
         />
       )}
 
