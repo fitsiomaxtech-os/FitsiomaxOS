@@ -1187,7 +1187,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 variant="outline"
                 size="sm"
                 onClick={logout}
-                className={`border-slate-200 px-2 text-slate-600 hover:bg-slate-50 sm:px-3 ${logoutInProfileClass}`}
+                className={`rounded-[2px] border-slate-200 px-2 text-slate-600 shadow hover:bg-slate-50 sm:px-3 ${logoutInProfileClass}`}
                 data-testid="role-board-logout-button"
               >
                 <LogOut className="h-4 w-4" />
