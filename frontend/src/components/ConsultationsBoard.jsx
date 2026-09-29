@@ -3374,7 +3374,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // booked rows is money taken before the visit it belongs to, and the column it needs
   // costs the seven reporting ones a point or two each to say nothing. The fee is
   // collected from Consultation Visit onward, where it is real.
-  const showStageFeeAction = !showDiscountColumn && !isConsultant && stageFilter !== "Consultation Booked";
+  //
+  // Off on Cancel for the same reason. Cancel is only offered before the visit, so a
+  // patient on that list never had the consultation the fee pays for.
+  const showStageFeeAction = !showDiscountColumn && !isConsultant
+    && stageFilter !== "Consultation Booked" && stageFilter !== "Cancel";
   // Which fee that column reports and collects: the open desk's own where the stage has
   // one of its own (see STAGE_ROW_FEE), and the Consultation Fee everywhere else, which
   // is the fee every one of those stages is actually waiting on.
@@ -6860,7 +6864,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                       );
                     })()}
                     {showStageFeeAction && (() => {
-                      const c = feeStateOf(l, stageRowFee);
+                      const fee = feeStateOf(l, stageRowFee);
+                      // A cancelled patient met on another list owes nothing either -- the
+                      // same reason the column is off on the Cancel stage above. Money
+                      // already taken still reads as Paid.
+                      const c = l[stageField] === "Cancel" && fee.kind !== "paid"
+                        ? { kind: "none", hint: "Consultation cancelled" }
+                        : fee;
                       // The prescription the CONSULTATION fee waits on, still missing. The
                       // button stays on the row and stays pressable — it is the way to the
                       // uploader — but it says what it will actually do, in the same amber
