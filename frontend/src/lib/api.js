@@ -1112,3 +1112,12 @@ export const collectFitnessPayment = async (registrationId, lines, note) => (awa
 // Another term on an existing membership. The server works out when the new term starts —
 // when the old one ends, not when the button was pressed — so nothing here has to.
 export const renewFitness = async (registrationId, payload) => (await api.post(`/branch/fitness/${registrationId}/renew`, payload)).data;
+
+// Past Data — the clinic's Excel register from before the OS, read-only, shown only on the
+// branch it was imported into. Written once by backend/tools/past_data_import.py; nothing
+// on the client writes to it. getPastDataBranches is what the branch board asks before it
+// shows the tab at all.
+export const getPastDataBranches = async () => (await api.get("/past-data/branches")).data;
+export const getPastDataSummary = async (branchId) => (await api.get("/past-data/summary", { params: branchId ? { branch_id: branchId } : {} })).data;
+export const getPastDataClients = async (params = {}) => (await api.get("/past-data/clients", { params })).data;
+export const getPastDataClient = async (clientId) => (await api.get(`/past-data/clients/${clientId}`)).data;

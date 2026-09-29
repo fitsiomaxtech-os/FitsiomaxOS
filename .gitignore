@@ -7,6 +7,11 @@
 # Uploaded user content
 backend/uploads/
 
+# Patient registers (names and phone numbers) -- e.g. Max00data.xlsm for
+# tools/past_data_import.py. Kept on the server outside the repo, never committed.
+*.xlsm
+*.xlsx
+
 # Dependencies
 node_modules/
 /node_modules

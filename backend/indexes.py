@@ -169,6 +169,11 @@ CORE_INDEXES = [
     # payment_reminders.py checks every due installment against what was already sent for
     # it, once an hour.
     ("payment_reminders", [("lead_id", 1), ("fee", 1), ("installment_number", 1)], "lead_fee_installment"),
+    # Past Data -- see routers/v3_past_data.py. A client opened from the list is read by its
+    # own id, then every course and installment of theirs by client_id.
+    ("past_clients", [("id", 1)], "id"),
+    ("past_treatments", [("client_id", 1)], "client_id"),
+    ("past_payments", [("client_id", 1)], "client_id"),
 ]
 
 

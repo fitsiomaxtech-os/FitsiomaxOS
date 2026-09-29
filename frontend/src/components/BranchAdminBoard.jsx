@@ -43,6 +43,7 @@ import {
   Eye,
   Home,
   Building2,
+  Archive,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,7 @@ import {
   rnrAttempt,
   getLeadAppointmentCard,
   listStoreItems,
+  getPastDataBranches,
 } from "@/lib/api";
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
@@ -96,6 +98,7 @@ import { ClientReviewsPanel } from "@/components/reviews/ClientReviewsPanel";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { RecordsPanel } from "@/components/branch/RecordsPanel";
+import { PastDataBoard } from "@/components/pastData/PastDataBoard";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { CreateLeadModal, DEPARTMENT_OPTIONS, LEAD_DATA_FIELDS } from "@/components/CreateLeadModal";
 import { LeadEditModal } from "@/components/LeadEditModal";
@@ -722,7 +725,12 @@ const ARM_LIST_WIDTHS = {
 // Consultation sits between Leads and Review because that is the order the branch works
 // them in -- a lead is picked up, consulted, then reviewed -- and because it was the one
 // list a Branch Admin opens hourly that still cost two taps behind More.
-const BOTTOM_NAV_KEYS = ["pipeline", "branch_consultation", "review", "consultations"];
+//
+// past_data is listed but only exists on the one branch the pre-OS register was imported
+// into (see holdsPastData below), so every other branch's bar is the four it always was.
+// On that branch it is the tab the board is for, and a desk opening it on a phone should
+// not have to find it behind More.
+const BOTTOM_NAV_KEYS = ["past_data", "pipeline", "branch_consultation", "review", "consultations"];
 
 // The two desks that only exist in a room. Zumba is a class taught in the branch's studio
 // in two fixed morning slots, and Fitness is the gym's membership roll — who is training,
@@ -974,6 +982,25 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [activeView, setActiveView] = useState("pipeline");
+  // Whether this branch holds the clinic's pre-OS Excel register (Past Data). Only the one
+  // branch it was imported into does, and only there is the tab shown -- and opened first,
+  // since reading that register is what the branch exists for. Asked once per branch: every
+  // mount point keys this board by branch, so switching branch starts it afresh. A failed
+  // ask leaves the tab off, which is every other branch's normal.
+  const [holdsPastData, setHoldsPastData] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setHoldsPastData(false);
+    if (!branchId) return undefined;
+    getPastDataBranches()
+      .then((res) => {
+        if (!live || !(res?.branch_ids || []).includes(branchId)) return;
+        setHoldsPastData(true);
+        setActiveView("past_data");
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [branchId]);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [consultationsSubTab, setConsultationsSubTab] = useState("head_physio");
@@ -1643,6 +1670,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // `short` is what the bottom nav shows — six full labels will not fit across a phone,
   // and a truncated "Accountant Ma…" reads worse than a word chosen to be short.
   const VIEW_TABS = [
+    // First, and only on the branch holding the pre-OS register -- see holdsPastData.
+    ...(holdsPastData ? [{ key: "past_data", label: "Past Data", short: "Past", icon: Archive }] : []),
     { key: "pipeline", label: "Branch Leads", short: "Leads", icon: LayoutDashboard },
     // Empty on purpose for now: the tab is the navigation going in ahead of what will sit
     // behind it, so the position is settled while the panel is still being decided.
@@ -1766,7 +1795,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {/* Hidden, not unmounted, while My Profile is open: `contents` keeps every view a
           flex child of the root as before, and the lists keep their state for the way back. */}
       <div className={profileOpen ? "hidden" : "contents"}>
-      {activeView === "consultations" ? (
+      {activeView === "past_data" && holdsPastData ? (
+        <PastDataBoard branchId={branchId} />
+      ) : activeView === "consultations" ? (
         <div className="space-y-4" data-testid="branch-consultations-headphysio">
           {/* Three across on a phone, so they land as even rows in the order they are
               declared. Left to wrap on their own they came out ragged — four rows, one of

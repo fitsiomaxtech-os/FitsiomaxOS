@@ -10,7 +10,7 @@ from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, m
 from routers.v3_google_sheets import start_auto_sync_scheduler
 from payment_reminders import start_payment_reminder_scheduler
 import lead_purge
-from routers import v1, v2, v3_auth, v3_config, v3_leads, v3_branch_admin, v3_appointments, v3_sheets, v3_dashboard, v3_head_physio, v3_finance, v3_head_physio_board, v3_physio_board, v3_session_assign, v3_patient_view, v3_marketing, v3_stages, v3_hr, v3_hr_ops, v3_hr_performance, v3_clock, v3_me, v3_security, v3_lead_fields, v3_branch_mgmt, v3_google_sheets, v3_packages, v3_public_super_admin, v3_password_reset, v3_store, v3_consult_appointments, v3_reviews, v3_patient_portal, v3_testimonials, v3_recruitment, v3_diet, v3_lead_documents, v3_inventory, v3_text_presets, v3_shifts, v3_zumba, v3_rehab, v3_fitness, v3_feedback, v3_client_reviews, v3_eod_reports, v3_branch_calendar, v3_session_payment, v3_physio_absence, v3_vendors
+from routers import v1, v2, v3_auth, v3_config, v3_leads, v3_branch_admin, v3_appointments, v3_sheets, v3_dashboard, v3_head_physio, v3_finance, v3_head_physio_board, v3_physio_board, v3_session_assign, v3_patient_view, v3_marketing, v3_stages, v3_hr, v3_hr_ops, v3_hr_performance, v3_clock, v3_me, v3_security, v3_lead_fields, v3_branch_mgmt, v3_google_sheets, v3_packages, v3_public_super_admin, v3_password_reset, v3_store, v3_consult_appointments, v3_reviews, v3_patient_portal, v3_testimonials, v3_recruitment, v3_diet, v3_lead_documents, v3_inventory, v3_text_presets, v3_shifts, v3_zumba, v3_rehab, v3_fitness, v3_feedback, v3_client_reviews, v3_eod_reports, v3_branch_calendar, v3_session_payment, v3_physio_absence, v3_vendors, v3_past_data
 
 app = FastAPI()
 
@@ -64,6 +64,7 @@ app.include_router(v3_branch_calendar.router)
 app.include_router(v3_hr_performance.router)
 app.include_router(v3_session_payment.router)
 app.include_router(v3_physio_absence.router)
+app.include_router(v3_past_data.router)
 
 UPLOAD_ROOT = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_ROOT, exist_ok=True)
