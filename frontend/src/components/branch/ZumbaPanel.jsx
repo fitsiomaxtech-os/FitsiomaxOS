@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, ChevronRight, IndianRupee, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
+import { ChevronRight, IndianRupee, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1315,6 +1315,7 @@ export const ZumbaPanel = ({ branchId }) => {
   // the same list as `masters` above: that one is names typed onto referrals, and a
   // referral name with no account behind it cannot be given a class.
   const [zumbaMasters, setZumbaMasters] = useState([]);
+  const masterNameOf = (id) => (zumbaMasters.find((m) => m.id === id) || {}).name || "";
   // The Zumba shelf as Super Admin priced it — a membership per term, monthly through
   // yearly. Read rather than hardcoded, so a change of price on the shelf, or a term
   // priced away from the standard amount, is the change of price here.
@@ -1716,38 +1717,38 @@ export const ZumbaPanel = ({ branchId }) => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[60rem] text-left text-sm">
+              <table className="w-full min-w-[64rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {/* Ten columns where there were twelve. Age and Registered moved under
-                      the name, which is where a person's own details belong and where the
-                      gym's table already keeps them; what is left is one fact per column,
-                      each wide enough to be read. */}
+                  {/* One fact per column. The term's two dates share a column, read top to
+                      bottom, and the classes left have one of their own beside them. */}
                   <tr>
                     <th className="w-[4%] px-3 py-2.5">S.No</th>
-                    <th className="w-[15%] px-3 py-2.5">Name</th>
-                    <th className="w-[11%] px-3 py-2.5">Phone Number</th>
-                    <th className="w-[11%] px-3 py-2.5">Package</th>
-                    <th className="w-[9%] px-3 py-2.5">Start</th>
-                    <th className="w-[9%] px-3 py-2.5">Finish</th>
-                    <th className="w-[8%] px-3 py-2.5">Collected</th>
-                    <th className="w-[8%] px-3 py-2.5">Due</th>
-                    <th className="w-[8%] px-3 py-2.5">Status</th>
-                    <th className="w-[11%] px-3 py-2.5 text-center">Balance Payment</th>
-                    <th className="w-[6%] px-3 py-2.5 text-center">Action</th>
+                    <th className="w-[13%] px-3 py-2.5">Name</th>
+                    <th className="w-[10%] px-3 py-2.5">Master</th>
+                    <th className="w-[9%] px-3 py-2.5">Mobile</th>
+                    <th className="w-[10%] px-3 py-2.5">Package</th>
+                    <th className="w-[12%] px-3 py-2.5">Start Date &amp; End Date</th>
+                    <th className="w-[8%] px-3 py-2.5">Pending Classes</th>
+                    <th className="w-[7%] px-3 py-2.5">Collected</th>
+                    <th className="w-[7%] px-3 py-2.5">Due</th>
+                    <th className="w-[7%] px-3 py-2.5">Status</th>
+                    <th className="w-[8%] px-3 py-2.5 text-center">Balance Payment</th>
+                    <th className="w-[5%] px-3 py-2.5 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {visible.map((r, i) => {
                     const paid = Number(r.fee_paid || 0);
                     const due = Number(r.fee_amount || 0) - paid;
-                    // Tinted rather than badged alone: a row that needs work should be
-                    // findable while scrolling past it, not only once it is read.
+                    // The badge under the name marks a row that needs work; the row itself
+                    // stays plain so the list reads as one table rather than a highlight.
                     const gaps = missingDetails(r);
+                    const master = masterNameOf(r.assigned_master_id);
                     return (
                       <tr
                         key={r.id}
                         onClick={() => setViewing(r)}
-                        className={`cursor-pointer align-top ${gaps.length > 0 ? "bg-amber-50/50 hover:bg-amber-50" : "hover:bg-slate-50/60"}`}
+                        className="cursor-pointer align-top hover:bg-slate-50/60"
                         data-testid={`zumba-row-${r.id}`}
                       >
                         <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
@@ -1775,6 +1776,12 @@ export const ZumbaPanel = ({ branchId }) => {
                           ) : null}
                           </div>
                         </td>
+                        {/* The master teaching their class, as assigned on the record. */}
+                        <td className="px-3 py-3">
+                          {master
+                            ? <p className="max-w-full truncate text-xs leading-5 text-slate-600" title={master}>{master}</p>
+                            : <span className="text-xs leading-5 text-slate-300">—</span>}
+                        </td>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
                         {/* What they bought, in a column of its own. It used to sit under
                             the source, where a membership and a lead channel read as one
@@ -1789,30 +1796,24 @@ export const ZumbaPanel = ({ branchId }) => {
                             ) : <span className="text-xs leading-5 text-slate-300">—</span>}
                           </div>
                         </td>
-                        {/* When the term began. Its own column now rather than a line under
-                            the name: it is half of what the two dates either side of the
-                            package say together, and the other half was already here. */}
-                        <td className="px-3 py-3">
-                          <p className="text-xs leading-5 text-slate-600">{shortDate(r.joined_on || r.created_at)}</p>
-                        </td>
-                        {/* When the membership runs out, counted forward from the term's
+                        {/* The term's start over its end. The end is counted forward from the
                             start by the plan's own length — the server works it out so this
-                            column and the master's roll cannot answer it differently. The
-                            classes left sit under it, in amber once a renewal is due, so
-                            the date and the reason to act on it are read together. */}
+                            column and the master's roll cannot answer it differently. */}
                         <td className="px-3 py-3">
                           <div className="flex flex-col items-start gap-0.5">
-                            {r.finish_on ? (
-                              <>
-                                <p className="max-w-full truncate text-xs leading-5 text-slate-600">{shortDate(r.finish_on)}</p>
-                                {typeof r.classes_left === "number" ? (
-                                  <p className={`max-w-full truncate text-[10px] leading-4 ${r.renewal_due ? "font-semibold text-amber-600" : "text-slate-400"}`}>
-                                    {r.classes_left === 0 ? "term over" : `${r.classes_left} left`}
-                                  </p>
-                                ) : null}
-                              </>
-                            ) : <span className="text-xs leading-5 text-slate-300">—</span>}
+                            <p className="max-w-full truncate text-xs leading-5 text-slate-600">{shortDate(r.joined_on || r.created_at)}</p>
+                            <p className="max-w-full truncate text-[11px] leading-4 text-slate-400">
+                              to {r.finish_on ? shortDate(r.finish_on) : "—"}
+                            </p>
                           </div>
+                        </td>
+                        {/* Classes left in the term, in amber once a renewal is due. */}
+                        <td className="px-3 py-3">
+                          {typeof r.classes_left === "number" ? (
+                            <p className={`text-xs leading-5 ${r.renewal_due ? "font-semibold text-amber-600" : "text-slate-600"}`}>
+                              {r.classes_left === 0 ? "Term over" : r.classes_left}
+                            </p>
+                          ) : <span className="text-xs leading-5 text-slate-300">—</span>}
                         </td>
                         {/* What has come in, and what has not, in a column each. The plan's
                             price is neither: it is their sum, and the package two columns
@@ -1891,7 +1892,7 @@ export const ZumbaPanel = ({ branchId }) => {
                             aria-label="View"
                             data-testid={`zumba-view-${r.id}`}
                           >
-                            <ArrowRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4" />
                           </button>
                         </td>
                       </tr>
@@ -2163,7 +2164,7 @@ export const ZumbaPanel = ({ branchId }) => {
       {viewing && (
         <ViewRegistrationModal
           row={viewing}
-          masterNameOf={(id) => (zumbaMasters.find((m) => m.id === id) || {}).name || ""}
+          masterNameOf={masterNameOf}
           onEdit={() => { const r = viewing; setViewing(null); openForm(r); }}
           onCollect={() => { const r = viewing; setViewing(null); setCollecting(r); }}
           onRenew={() => { const r = viewing; setViewing(null); setRenewing(r); }}
