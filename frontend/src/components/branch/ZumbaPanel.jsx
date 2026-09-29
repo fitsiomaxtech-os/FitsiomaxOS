@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Eye, IndianRupee, Music, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
+import { ChevronRight, Eye, IndianRupee, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -923,7 +923,7 @@ const STATUS_ROW = {
  * by whoever works both tabs. What is owed leads, since it is the thing a desk opens a row
  * to find out; who they are and what they bought sit under it, side by side.
  */
-const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onClose, onSaved }) => {
+const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, onDelete, onClose, onSaved }) => {
   const [pending, setPending] = useState(null); // "discontinued" | "leave" | null
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1182,12 +1182,42 @@ const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onClose, 
             to do, and two of them are not: Discontinue and Leave take somebody off the
             roll, and sitting them next to Close invites the mis-click. */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-slate-50/60 p-4">
-          <Button variant="outline" size="sm" onClick={onClose} data-testid="zumba-view-close-btn">Close</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} data-testid="zumba-view-close-btn">Close</Button>
+            {/* Off the row now, so it lives here: for a referral it takes it off this
+                list, for a registration it deletes it — both behind a confirm. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-rose-200 text-rose-700 hover:bg-rose-50"
+              onClick={onDelete}
+              title={ownedElsewhere ? "Take this referral off the Zumba list" : "Delete"}
+              data-testid="zumba-view-delete"
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> {ownedElsewhere ? "Remove" : "Delete"}
+            </Button>
+          </div>
           {!ownedElsewhere && (
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={onEdit} data-testid="zumba-view-edit">
                 <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
               </Button>
+              {/* Only once the term is nearly up — a renewal offered on the first day of
+                  six months is a button nobody presses. */}
+              {row.renewal_due && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={onRenew}
+                  title={row.classes_left === 0
+                    ? "This membership has run out — sell them another term"
+                    : `${row.classes_left} classes left — sell them another term`}
+                  data-testid="zumba-view-renew"
+                >
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" /> Renew
+                </Button>
+              )}
               {ended ? (
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" disabled={saving} onClick={() => apply("active", "")} data-testid="zumba-status-restore">
                   Put back on the roll
@@ -1265,7 +1295,6 @@ export const ZumbaPanel = ({ branchId }) => {
   const [loading, setLoading] = useState(true);
   const [card, setCard] = useState("all");
   const [search, setSearch] = useState("");
-  const [needsOnly, setNeedsOnly] = useState(false); // show only the half-filled rows
   const [modeFilter, setModeFilter] = useState(""); // "" = every mode, including none
   // The same shape Branch Leads keeps: { key, label, from, to } with Dates on the ends,
   // or null for no filter. The presets and the typed range both come from the one
@@ -1405,21 +1434,9 @@ export const ZumbaPanel = ({ branchId }) => {
     if (q) {
       list = list.filter((r) => (r.name || "").toLowerCase().includes(q) || (r.phone || "").includes(q));
     }
-    if (needsOnly) list = list.filter((r) => missingDetails(r).length > 0);
     if (modeFilter) list = list.filter((r) => r.payment_mode === modeFilter);
     return list;
-  }, [rows, card, search, dateFilter, needsOnly, modeFilter]);
-
-
-  // Counted off every row, not the filtered ones: the point of the badge is to say
-  // there is work waiting even while a card or a date range is hiding it.
-  // Counted over the roll, not over everybody: a discontinued customer missing a phone
-  // number is not work waiting, and chasing them is exactly what the badge would be asking
-  // somebody to do.
-  const needsCount = useMemo(
-    () => rows.filter((r) => (r.status || "active") !== "discontinued" && missingDetails(r).length > 0).length,
-    [rows],
-  );
+  }, [rows, card, search, dateFilter, modeFilter]);
 
   // Every master offered in the picker: the ones already referred from, plus one being
   // typed in now, so a new name is selectable the moment it exists.
@@ -1576,39 +1593,59 @@ export const ZumbaPanel = ({ branchId }) => {
 
       <Card>
         <CardContent className="p-0">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Music className="h-4 w-4 text-sky-600" />
-              Zumba Registrations
-              {branch?.name && (
-                <span className="rounded bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700" data-testid="zumba-branch-name">
-                  {branch.name}
-                </span>
-              )}
-
-              <span className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-bold text-slate-500">{visible.length}</span>
-              {/* Only ever drawn when there is something to draw it for, so an empty queue
-                  leaves the header alone rather than reporting nothing to do. */}
-              {needsCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setNeedsOnly((v) => !v)}
-                  aria-pressed={needsOnly}
-                  className={`rounded px-2 py-0.5 text-[10px] font-bold transition ${needsOnly ? "bg-amber-500 text-white" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100"}`}
-                  title={needsOnly ? "Show every registration" : "Show only the ones still to fill in"}
-                  data-testid="zumba-needs-details"
-                >
-                  {needsCount} to fill in
-                </button>
-              )}
+          {/* One toolbar, then the table: dates on the left, payment mode beside them, and
+              search, refresh and create at the right. The title row that used to sit above
+              it only repeated what the tab already says. On a window too narrow for all
+              three groups they wrap onto their own lines rather than interleaving. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-date-filter">
+              {DATE_PRESETS.map((preset) => {
+                const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => setDateFilter(presetFilter(preset))}
+                    className={`h-8 rounded-md px-3 text-xs font-semibold transition ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    data-testid={`zumba-date-${preset.key}`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+              {/* The trigger is a Button this component does not own, so its size and text
+                  are pinned from out here rather than by adding props to a control five
+                  other boards share. Handed null while a preset is active, so it reads
+                  "Custom" rather than echoing the pill already lit beside it. */}
+              <span className="[&_button]:h-8 [&_button]:rounded-md [&_button]:px-3 [&_button]:text-xs [&_button]:font-semibold [&_svg]:mr-1.5 [&_svg]:h-3.5 [&_svg]:w-3.5">
+                <DateFilterPopover
+                  value={isPreset(dateFilter) ? null : dateFilter}
+                  onChange={setDateFilter}
+                  centered
+                  placeholder="Custom"
+                  testid="zumba-date-custom"
+                />
+              </span>
             </div>
-            {/* The collected total used to be printed here because the card beside it had
-                room for a count only. The card carries the figure itself now, so repeating
-                it on the list header would state the same number twice. */}
-            {/* Whose the collected money is has gone with the rest of Payment Done, into
-                the popup that card opens. A breakdown of one card printed into the header
-                of a list showing something else read as a property of the list. */}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="hidden h-6 w-px bg-slate-200 xl:block" aria-hidden="true" />
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-mode-filter">
+              {MODE_FILTERS.map(([key, label]) => (
+                <button
+                  key={key || "all"}
+                  type="button"
+                  onClick={() => setModeFilter(key)}
+                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
+                    modeFilter === key
+                      ? "border-sky-600 bg-sky-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+                  }`}
+                  data-testid={`zumba-mode-${key || "all"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="ml-auto flex items-center gap-2">
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1617,12 +1654,8 @@ export const ZumbaPanel = ({ branchId }) => {
                 data-testid="zumba-search"
               />
               {/* Grey, because it changes nothing — it re-reads what is already on screen.
-                  The blue is spent on the one button that creates something.
-
-                  Icon only, and square like the date toggle beside it: the glyph says
-                  refresh on its own, and the word was the widest thing in a row that has
-                  a search field to fit. The label lives on title/aria-label, so a hover
-                  still says what it does and a screen reader still announces it. */}
+                  The blue is spent on the one button that creates something. Icon only;
+                  the label lives on title/aria-label. */}
               <Button
                 size="sm"
                 variant="outline"
@@ -1644,61 +1677,6 @@ export const ZumbaPanel = ({ branchId }) => {
               >
                 <UserPlus className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
-
-          {/* One line, two groups: when the dates are asked on the left and the payment
-              mode on the right, the space between them is what says they are separate
-              questions. Pills rather than dropdowns, because every option is then a click
-              away and the row says what is currently on, where a closed select says only
-              its own label. On a window too narrow for both, the modes take their own line
-              rather than the two interleaving. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-slate-100 px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-date-filter">
-              {DATE_PRESETS.map((preset) => {
-                const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
-                return (
-                  <button
-                    key={preset.key}
-                    type="button"
-                    onClick={() => setDateFilter(presetFilter(preset))}
-                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-                    data-testid={`zumba-date-${preset.key}`}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-              {/* The trigger is a Button this component does not own, so its size and text
-                  are pinned from out here rather than by adding props to a control five
-                  other boards share. Handed null while a preset is active, so it reads
-                  "Custom" rather than echoing the pill already lit beside it. */}
-              <span className="[&_button]:h-[30px] [&_button]:rounded-md [&_button]:px-3 [&_button]:text-xs [&_button]:font-semibold [&_svg]:mr-1.5 [&_svg]:h-3.5 [&_svg]:w-3.5">
-                <DateFilterPopover
-                  value={isPreset(dateFilter) ? null : dateFilter}
-                  onChange={setDateFilter}
-                  centered
-                  placeholder="Custom"
-                  testid="zumba-date-custom"
-                />
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-mode-filter">
-              {MODE_FILTERS.map(([key, label]) => (
-                <button
-                  key={key || "all"}
-                  type="button"
-                  onClick={() => setModeFilter(key)}
-                  className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
-                    modeFilter === key
-                      ? "border-sky-600 bg-sky-600 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
-                  }`}
-                  data-testid={`zumba-mode-${key || "all"}`}
-                >
-                  {label}
-                </button>
-              ))}
             </div>
           </div>
 
@@ -1842,21 +1820,20 @@ export const ZumbaPanel = ({ branchId }) => {
                             );
                           })()}
                         </td>
-                        {/* The actions cell swallows the click: pressing Edit or Delete
-                            should not also open the record behind the dialog it opened. */}
+                        {/* Two things on the row: look at the record, and take the money
+                            still owed. Edit, Renew and Delete live in the record the eye
+                            opens, so the row is not a strip of five look-alike buttons.
+                            The cell swallows the click so a button does not also open the
+                            record behind the dialog it opened. */}
                         <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                          {/* A referral is a decision recorded on the consultation, read
-                              live from the lead rather than copied here. Editing it would
-                              only put this tab out of step with the consultation that owns
-                              it — but taking it off this list is the branch's own call, and
-                              is recorded here rather than by rewriting the lead. */}
-                          {r.origin === "consultation" ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => setViewing(r)} title="View" aria-label="View" data-testid={`zumba-view-${r.id}`}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                              {/* Says where it came from and offers the one thing to do
-                                  with it: a referral the branch has not taken on yet. */}
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => setViewing(r)} title="View" aria-label="View" data-testid={`zumba-view-${r.id}`}>
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                            {/* A referral is a decision recorded on the consultation, read
+                                live from the lead. Its one thing to do is to be taken onto
+                                the branch's books, which is where a fee can be set at all. */}
+                            {r.origin === "consultation" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1869,69 +1846,20 @@ export const ZumbaPanel = ({ branchId }) => {
                                 <Stethoscope className="h-3 w-3" />
                                 {accepting === r.id ? "Taking on…" : "Referred"}
                               </Button>
-                              {/* The other thing to do with a referral: this branch is not
-                                  running the class for them. It comes off the list without
-                                  the consultation's record changing, and a fresh
-                                  recommendation later brings them back. */}
+                            ) : due > 0 ? (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 w-7 border-rose-200 p-0 text-rose-600 hover:bg-rose-50"
-                                onClick={() => setRemoving(r)}
-                                title="Take this referral off the Zumba list"
-                                aria-label="Take this referral off the Zumba list"
-                                data-testid={`zumba-delete-${r.id}`}
+                                className="h-7 gap-1 border-emerald-300 px-2 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => setCollecting(r)}
+                                title={`${rupees(due)} still due — take a payment`}
+                                data-testid={`zumba-collect-${r.id}`}
                               >
-                                <Trash2 className="h-3 w-3" />
+                                <IndianRupee className="h-3 w-3" />
+                                Due Collect
                               </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => setViewing(r)} title="View" aria-label="View" data-testid={`zumba-view-${r.id}`}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => openForm(r)} title="Edit" aria-label="Edit" data-testid={`zumba-edit-${r.id}`}>
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              {/* Only while something is owed. A customer who is square with
-                                  us has nothing to collect, and a button that opens a dialog
-                                  saying so is a button that should not have been there. */}
-                              {due > 0 && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 gap-1 border-emerald-300 px-2 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50"
-                                  onClick={(e) => { e.stopPropagation(); setCollecting(r); }}
-                                  title={`${rupees(due)} still due — take a payment`}
-                                  data-testid={`zumba-collect-${r.id}`}
-                                >
-                                  <IndianRupee className="h-3 w-3" />
-                                  Collect
-                                </Button>
-                              )}
-                              {/* Only once the term is nearly up. A renewal offered on the
-                                  first day of six months is a button nobody presses, and
-                                  one offered on the last is a conversation already missed. */}
-                              {r.renewal_due && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 gap-1 border-amber-300 px-2 text-[10px] font-semibold text-amber-700 hover:bg-amber-50"
-                                  onClick={(e) => { e.stopPropagation(); setRenewing(r); }}
-                                  title={r.classes_left === 0
-                                    ? "This membership has run out — sell them another term"
-                                    : `${r.classes_left} classes left — sell them another term`}
-                                  data-testid={`zumba-renew-${r.id}`}
-                                >
-                                  <RefreshCw className="h-3 w-3" />
-                                  Renew
-                                </Button>
-                              )}
-                              <Button size="sm" variant="outline" className="h-7 w-7 border-rose-200 p-0 text-rose-700 hover:bg-rose-50" onClick={() => setRemoving(r)} title="Delete" aria-label="Delete" data-testid={`zumba-delete-${r.id}`}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2191,6 +2119,8 @@ export const ZumbaPanel = ({ branchId }) => {
           masterNameOf={(id) => (zumbaMasters.find((m) => m.id === id) || {}).name || ""}
           onEdit={() => { const r = viewing; setViewing(null); openForm(r); }}
           onCollect={() => { const r = viewing; setViewing(null); setCollecting(r); }}
+          onRenew={() => { const r = viewing; setViewing(null); setRenewing(r); }}
+          onDelete={() => { const r = viewing; setViewing(null); setRemoving(r); }}
           onClose={() => setViewing(null)}
           onSaved={load}
         />
