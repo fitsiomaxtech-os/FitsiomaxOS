@@ -721,12 +721,7 @@ const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSaved }) =
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl" data-testid="fitness-member-dialog">
         <div className="flex items-start justify-between border-b p-5">
-          <div>
-            <h3 className="text-base font-semibold text-slate-800">{isEdit ? `Edit ${member.name}` : "Add Gym Member"}</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">
-              Packages come from Services and Products → Fitness. The fee fills in from the one you pick and stays editable.
-            </p>
-          </div>
+          <h3 className="text-base font-semibold text-slate-800">{isEdit ? `Edit ${member.name}` : "Add Gym Member"}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="fitness-dialog-close"><X className="h-4 w-4" /></button>
         </div>
 
@@ -795,9 +790,6 @@ const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSaved }) =
               <div>
                 <FieldLabel>Next Payment Due</FieldLabel>
                 <Input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} data-testid="fitness-form-due" />
-                {/* This date is what the Not Paid card reads, so it is worth saying what it
-                    does rather than leaving it as one more box. */}
-                <p className="mt-1 text-[10px] text-slate-400">Drives the Not Paid card.</p>
               </div>
             </div>
           </div>
@@ -822,7 +814,6 @@ const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSaved }) =
               <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <span className="text-xs font-semibold text-slate-500">
                   Collected <b className="text-slate-700">{rupees(member?.fee_paid)}</b>
-                  {isEdit && <span className="ml-1 font-normal text-slate-400">— taken with the Collect button on the row</span>}
                 </span>
                 <span className={`text-sm font-extrabold ${due > 0 ? "text-rose-700" : "text-emerald-700"}`} data-testid="fitness-form-balance">
                   {due > 0 ? `${rupees(due)} due` : "Paid up"}
