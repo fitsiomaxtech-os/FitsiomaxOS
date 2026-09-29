@@ -1259,30 +1259,6 @@ const todayLocal = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-/**
- * What this registration still needs, named.
- *
- * A referral arrives as half a record: the master hands over a person -- name, phone, age,
- * area -- and the branch owes the rest of it, which is the part that turns a name into a
- * customer in a class. These four are that part, and they are the four the row's badge
- * offers to go and fill in.
- *
- * Deliberately not everything that could be blank. Age and email are worth having and not
- * worth chasing, and listing them would put a badge on nearly every row, which says
- * "something is missing here" so often that it stops meaning it.
- *
- * Read as a phrase, so the badge reads "Needs a class time & a package" rather than naming
- * database columns at somebody.
- */
-const missingDetails = (row) => {
-  const gaps = [];
-  if (!(row?.phone || "").trim()) gaps.push("a phone number");
-  if (!(row?.assigned_master_id || "").trim()) gaps.push("a master");
-  if (!(row?.time_slot || "").trim()) gaps.push("a class time");
-  if (!(row?.package_id || "").trim()) gaps.push("a package");
-  return gaps;
-};
-
 const EMPTY = {
   name: "", email: "", phone: "", age: "", gender: "", address: "",
   source: "personal", master_name: "", assigned_master_id: "", time_slot: "", joined_on: "",
@@ -1719,20 +1695,19 @@ export const ZumbaPanel = ({ branchId }) => {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[64rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {/* One fact per column. The term's two dates share a column, read top to
-                      bottom, and the classes left have one of their own beside them. */}
-                  <tr>
+                  {/* One fact per column, every header and cell on a single line. */}
+                  <tr className="whitespace-nowrap">
                     <th className="w-[4%] px-3 py-2.5">S.No</th>
                     <th className="w-[13%] px-3 py-2.5">Name</th>
                     <th className="w-[10%] px-3 py-2.5">Master</th>
                     <th className="w-[9%] px-3 py-2.5">Mobile</th>
-                    <th className="w-[10%] px-3 py-2.5">Package</th>
-                    <th className="w-[12%] px-3 py-2.5">Start Date &amp; End Date</th>
-                    <th className="w-[8%] px-3 py-2.5">Pending Classes</th>
+                    <th className="w-[9%] px-3 py-2.5">Package</th>
+                    <th className="w-[15%] px-3 py-2.5">Date</th>
+                    <th className="w-[6%] px-3 py-2.5">Classes</th>
                     <th className="w-[7%] px-3 py-2.5">Collected</th>
-                    <th className="w-[7%] px-3 py-2.5">Due</th>
+                    <th className="w-[8%] px-3 py-2.5">Due Payment</th>
                     <th className="w-[7%] px-3 py-2.5">Status</th>
-                    <th className="w-[8%] px-3 py-2.5 text-center">Balance Payment</th>
+                    <th className="w-[7%] px-3 py-2.5 text-center">Payment</th>
                     <th className="w-[5%] px-3 py-2.5 text-center">Action</th>
                   </tr>
                 </thead>
@@ -1740,72 +1715,35 @@ export const ZumbaPanel = ({ branchId }) => {
                   {visible.map((r, i) => {
                     const paid = Number(r.fee_paid || 0);
                     const due = Number(r.fee_amount || 0) - paid;
-                    // The badge under the name marks a row that needs work; the row itself
-                    // stays plain so the list reads as one table rather than a highlight.
-                    const gaps = missingDetails(r);
                     const master = masterNameOf(r.assigned_master_id);
                     return (
                       <tr
                         key={r.id}
                         onClick={() => setViewing(r)}
-                        className="cursor-pointer align-top hover:bg-slate-50/60"
+                        className="cursor-pointer whitespace-nowrap align-middle hover:bg-slate-50/60"
                         data-testid={`zumba-row-${r.id}`}
                       >
                         <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
                         <td className="px-3 py-3">
-                          <div className="flex flex-col items-start gap-0.5">
-                          <p className="max-w-full truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
-                          {/* Age and gender go into the record rather than under the name:
-                              the columns beside it are the ones the list is read for, and
-                              the day they joined has one of its own now. */}
-                          {/* Names what is missing rather than saying "incomplete": the
-                              branch admin opens this row to do one specific thing, and the
-                              badge may as well say which. */}
-                          {gaps.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); return r.origin === "consultation" ? acceptAndEdit(r) : openForm(r); }}
-                              className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold leading-4 text-amber-800 ring-1 ring-amber-300 transition hover:bg-amber-200"
-                              title={r.origin === "consultation"
-                                ? `Take this referral onto the branch's books and fill in the ${gaps.join(" and ")}`
-                                : `Open this registration and fill in the ${gaps.join(" and ")}`}
-                              data-testid={`zumba-row-needs-${r.id}`}
-                            >
-                              Needs {gaps.join(" & ")}
-                            </button>
-                          ) : null}
-                          </div>
+                          <p className="max-w-[12rem] truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
                         </td>
                         {/* The master teaching their class, as assigned on the record. */}
                         <td className="px-3 py-3">
                           {master
-                            ? <p className="max-w-full truncate text-xs leading-5 text-slate-600" title={master}>{master}</p>
+                            ? <p className="max-w-[10rem] truncate text-xs leading-5 text-slate-600" title={master}>{master}</p>
                             : <span className="text-xs leading-5 text-slate-300">—</span>}
                         </td>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
-                        {/* What they bought, in a column of its own. It used to sit under
-                            the source, where a membership and a lead channel read as one
-                            fact about the customer rather than two. */}
                         <td className="px-3 py-3">
-                          <div className="flex flex-col items-start gap-0.5">
-                            {r.package_name ? (
-                              <>
-                                <p className="max-w-full truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>
-                                {r.package_sessions ? <p className="text-[10px] leading-4 text-slate-400">{r.package_sessions} classes</p> : null}
-                              </>
-                            ) : <span className="text-xs leading-5 text-slate-300">—</span>}
-                          </div>
+                          {r.package_name
+                            ? <p className="max-w-[9rem] truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>
+                            : <span className="text-xs leading-5 text-slate-300">—</span>}
                         </td>
-                        {/* The term's start over its end. The end is counted forward from the
-                            start by the plan's own length — the server works it out so this
-                            column and the master's roll cannot answer it differently. */}
-                        <td className="px-3 py-3">
-                          <div className="flex flex-col items-start gap-0.5">
-                            <p className="max-w-full truncate text-xs leading-5 text-slate-600">{shortDate(r.joined_on || r.created_at)}</p>
-                            <p className="max-w-full truncate text-[11px] leading-4 text-slate-400">
-                              to {r.finish_on ? shortDate(r.finish_on) : "—"}
-                            </p>
-                          </div>
+                        {/* The term's start and end on one line. The end is counted forward
+                            from the start by the plan's own length — the server works it out
+                            so this column and the master's roll cannot answer it differently. */}
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">
+                          {shortDate(r.joined_on || r.created_at)} – {r.finish_on ? shortDate(r.finish_on) : "—"}
                         </td>
                         {/* Classes left in the term, in amber once a renewal is due. */}
                         <td className="px-3 py-3">
