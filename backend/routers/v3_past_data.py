@@ -20,19 +20,38 @@ desks may read any branch's, as they may open any branch's board; a Branch Admin
 their own branch's, which is how the Past Data Entry login sees what it was made for, and
 no other branch's.
 """
+import asyncio
+import hashlib
+import io
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
+import past_data
+import past_data_store
 from database import v3_col
 from deps import ORG_WIDE_ROLES, is_branch_admin_role, v3_current_user, v3_require_roles, works_org_wide
 from past_data import match_key
 from schemas.v3 import V3UserOut
+from utils import live_branch_query
 
 router = APIRouter(prefix="/api/v3")
 
 PAST_DATA_ROLES = (*sorted(ORG_WIDE_ROLES), "branch_admin")
+
+# Putting the register in is Super Admin's alone. Reading it is wider (above); writing it
+# replaces a branch's whole history in one press, and that is not a desk's call.
+IMPORT_ROLE = "super_admin"
+
+# The register is under a megabyte. Ten times that is room for it to grow and still far
+# short of anything a person would upload by mistake and expect to be read.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+EXAMPLES_PER_FINDING = 8
+
+
+def _is_importer(user: V3UserOut) -> bool:
+    return (user.role or "").strip().lower() == IMPORT_ROLE
 
 
 def _own_branches(user: V3UserOut) -> set:
@@ -92,12 +111,29 @@ async def _live_batches(branch_id: Optional[str] = None) -> list:
 
 
 @router.get("/past-data/branches")
-async def past_data_branches(_: V3UserOut = Depends(v3_current_user)):
+async def past_data_branches(user: V3UserOut = Depends(v3_current_user)):
     """Which branches hold past data -- the one question the branch board asks before it
     decides whether to show a Past Data tab. Open to any signed-in desk that mounts that
-    board: it names branch ids and nothing about anybody in them."""
+    board: it names branch ids and nothing about anybody in them.
+
+    `importable_ids` answers the question before there is any past data: where Super Admin
+    may put it. Once one branch holds an import, that branch and no other -- the register is
+    one clinic's history and belongs in one place. Before that, every branch with nothing on
+    it yet: no leads and no experts, which is the branch made for this and not one of the
+    clinics. A branch already working patients never offers it.
+    """
     batches = await _live_batches()
-    return {"branch_ids": sorted({b["branch_id"] for b in batches if b.get("branch_id")})}
+    holding = sorted({b["branch_id"] for b in batches if b.get("branch_id")})
+    importable: list = []
+    if _is_importer(user):
+        if holding:
+            importable = holding
+        else:
+            for b in await v3_col("branches").find(live_branch_query(), {"_id": 0, "id": 1}).to_list(500):
+                if (not await v3_col("leads").count_documents({"branch_id": b["id"]}, limit=1)
+                        and not await v3_col("doctors").count_documents({"branch_id": b["id"]}, limit=1)):
+                    importable.append(b["id"])
+    return {"branch_ids": holding, "importable_ids": sorted(importable)}
 
 
 PATIENT_ID = re.compile(r"(?i)^pat\s*-?\s*(\d+)$")
@@ -143,12 +179,16 @@ async def past_data_summary(
     Counted off the rows rather than read off the import log, so the tiles and the list
     under them can never disagree about how many clients there are.
     """
-    batches = await _live_batches(_branch_for(user, branch_id))
+    scoped_branch = _branch_for(user, branch_id)
+    batches = await _live_batches(scoped_branch)
     batch_ids = [b["id"] for b in batches]
+    # Whether the Import Excel button belongs on this screen: Super Admin, looking at one
+    # branch, with no other branch already holding the register (see _import_blocker).
+    can_import = bool(_is_importer(user) and scoped_branch and not await _import_blocker(scoped_branch))
     if not batch_ids:
-        return {"imported": False, "imports": [], "clients": 0, "treatments": 0, "payments": 0,
-                "paid_total": 0, "outstanding_total": 0, "owing_clients": 0, "needs_look_clients": 0,
-                "services": [], "statuses": [], "first_date": "", "last_date": ""}
+        return {"imported": False, "can_import": can_import, "imports": [], "clients": 0, "treatments": 0,
+                "payments": 0, "paid_total": 0, "outstanding_total": 0, "owing_clients": 0,
+                "needs_look_clients": 0, "services": [], "statuses": [], "first_date": "", "last_date": ""}
 
     scope = {"batch_id": {"$in": batch_ids}}
     clients = await v3_col("past_clients").find(
@@ -174,11 +214,12 @@ async def past_data_summary(
     }
     return {
         "imported": True,
+        "can_import": can_import,
         "imports": [
             {
                 "id": b["id"], "branch_id": b.get("branch_id"), "branch_name": names.get(b.get("branch_id"), ""),
                 "source_file": b.get("source_file", ""), "imported_at": b.get("imported_at", ""),
-                "counts": b.get("counts", {}),
+                "imported_by": b.get("imported_by", ""), "counts": b.get("counts", {}),
             }
             for b in batches
         ],
@@ -266,4 +307,142 @@ async def past_data_client(client_id: str, user: V3UserOut = Depends(v3_require_
         "branch_name": branch.get("branch_name", ""),
         "shared_phone_clients": shared,
         "treatments": treatments,
+    }
+
+
+# --------------------------------------------------------------------------- the import
+#
+# The same import tools/past_data_import.py runs from a terminal, from a button: the server
+# this runs on is reached only through a browser console that cannot take a file, so the
+# workbook comes up the way every other upload in the OS does. Two steps, like the tool's
+# dry run and --apply -- /preview reads the file and writes nothing, and /import writes it
+# only once the person has read what /preview said. The file is read in memory and never
+# stored: it is the clinic's whole patient list, and a copy left on disk is one more to lose.
+
+
+async def _import_blocker(branch_id: str) -> str:
+    """Why this branch may not take the register, or "" when it may: another branch holds
+    it already. One clinic's history belongs in one place, and a second import somewhere
+    else would show every past patient twice across the two."""
+    others = [b for b in await past_data_store.live_imports(v3_col) if b.get("branch_id") != branch_id]
+    if not others:
+        return ""
+    branch = await v3_col("branches").find_one({"id": others[0]["branch_id"]}, {"_id": 0, "branch_name": 1}) or {}
+    return f"Past data is already imported into {branch.get('branch_name') or 'another branch'} -- it belongs on one branch only"
+
+
+async def _read_upload(file: UploadFile):
+    """The upload as (bytes, sha256, PastData), or a 400 saying plainly what is wrong."""
+    name = (file.filename or "").lower()
+    if not name.endswith((".xlsm", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Choose the Excel register (.xlsm or .xlsx)")
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="That file is larger than 10 MB -- it is not the register")
+    try:
+        # openpyxl is a second of CPU for the real register; off the event loop so the rest of
+        # the OS is not held up behind it.
+        data = await asyncio.to_thread(past_data.read_workbook, io.BytesIO(raw))
+    except past_data.PastDataError as e:
+        raise HTTPException(status_code=400, detail=f"This is not the register: {e}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read this file as an Excel workbook")
+    return raw, hashlib.sha256(raw).hexdigest(), data
+
+
+async def _import_branch(branch_id: str) -> dict:
+    branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    blocked = await _import_blocker(branch_id)
+    if blocked:
+        raise HTTPException(status_code=409, detail=blocked)
+    return branch
+
+
+def _report(data: past_data.PastData) -> dict:
+    """What the terminal tool prints, as data: the figures, then each finding with a few
+    examples and the whole list for the CSV the screen offers."""
+    s = past_data.summary(data)
+    by_code: dict = {}
+    for f in data.findings:
+        by_code.setdefault(f.code, []).append(f)
+    findings = [
+        {
+            "code": code,
+            "meaning": past_data.FINDINGS[code],
+            "imported": code not in past_data.NOT_IMPORTED,
+            "count": len(by_code[code]),
+            "examples": [{"sheet": f.sheet, "excel_id": f.excel_id, "detail": f.detail} for f in by_code[code][:EXAMPLES_PER_FINDING]],
+        }
+        for code in past_data.FINDINGS if code in by_code
+    ]
+    return {
+        **s,
+        "paid_total": sum(c["paid_total"] for c in data.clients),
+        "outstanding_total": sum(c["outstanding_total"] for c in data.clients),
+        "finding_groups": findings,
+        "all_findings": [
+            {"code": f.code, "meaning": past_data.FINDINGS.get(f.code, ""), "sheet": f.sheet,
+             "excel_id": f.excel_id, "detail": f.detail, "imported": f.code not in past_data.NOT_IMPORTED}
+            for f in data.findings
+        ],
+    }
+
+
+@router.post("/past-data/import/preview")
+async def past_data_import_preview(
+    branch_id: str = Form(...),
+    file: UploadFile = File(...),
+    user: V3UserOut = Depends(v3_require_roles(IMPORT_ROLE)),
+):
+    """Read the workbook and say what importing it would do. Writes nothing."""
+    branch = await _import_branch(branch_id)
+    _, sha, data = await _read_upload(file)
+    existing = await past_data_store.live_imports(v3_col, branch_id)
+    return {
+        "file_name": file.filename,
+        "sha256": sha,
+        "branch": {"id": branch["id"], "name": branch.get("branch_name", "")},
+        "existing": [
+            {"id": b["id"], "source_file": b.get("source_file", ""), "imported_at": b.get("imported_at", ""),
+             "counts": b.get("counts", {})}
+            for b in existing
+        ],
+        "report": _report(data),
+    }
+
+
+@router.post("/past-data/import")
+async def past_data_import(
+    branch_id: str = Form(...),
+    # The sha256 /preview returned. The file is sent again rather than held on the server
+    # between the two calls, so this is what proves it is the file the person just read the
+    # report for, and not another one picked in between.
+    sha256: str = Form(...),
+    replace: bool = Form(False),
+    file: UploadFile = File(...),
+    user: V3UserOut = Depends(v3_require_roles(IMPORT_ROLE)),
+):
+    """Write the workbook into this branch's Past Data. With `replace`, the import already
+    there is taken out once the new one is fully written -- never before."""
+    branch = await _import_branch(branch_id)
+    _, sha, data = await _read_upload(file)
+    if sha != sha256:
+        raise HTTPException(status_code=409, detail="This is not the file that was checked -- check it again before importing")
+    existing = await past_data_store.live_imports(v3_col, branch_id)
+    if existing and not replace:
+        raise HTTPException(status_code=409, detail="This branch already holds past data -- choose Replace to swap it for this file")
+
+    batch_id = await past_data_store.write_batch(
+        v3_col, data, branch, file.filename or "", sha, imported_by=user.full_name,
+    )
+    removed = 0
+    for old in existing:
+        removed += sum((await past_data_store.remove_batch(v3_col, old["id"])).values())
+    return {
+        "batch_id": batch_id,
+        "counts": {"past_clients": len(data.clients), "past_treatments": len(data.treatments), "past_payments": len(data.payments)},
+        "replaced": [b["id"] for b in existing],
+        "removed_rows": removed,
     }

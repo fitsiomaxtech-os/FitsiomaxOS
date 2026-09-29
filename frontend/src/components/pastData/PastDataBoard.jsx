@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, Archive, ChevronLeft, ChevronRight, ClipboardList, FileSpreadsheet, IndianRupee,
-  Loader2, RefreshCw, Search, Users, Wallet,
+  Loader2, RefreshCw, Search, Upload, Users, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatTile } from "@/components/ui/stat-tile";
 import { MaskedContact } from "@/components/MaskedContact";
 import { PastClientDialog } from "@/components/pastData/PastClientDialog";
+import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog";
 import { getPastDataClients, getPastDataSummary } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
 import { rs, rsShort, statusTone } from "@/lib/pastData";
@@ -58,6 +59,7 @@ export const PastDataBoard = ({ branchId }) => {
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState("");
   const [openId, setOpenId] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   // Only the newest request may draw the list: typing fast fires several, and they are
   // not guaranteed to come back in the order they were sent.
@@ -132,16 +134,35 @@ export const PastDataBoard = ({ branchId }) => {
             </p>
           )}
         </div>
-        <Button variant="outline" className="h-9 gap-2" onClick={() => setReloadKey((k) => k + 1)} data-testid="past-data-refresh">
-          <RefreshCw className="h-4 w-4" />Refresh
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {/* Super Admin only, and only where the server says the register may go -- see
+              can_import on /past-data/summary. Once it is here this swaps it for a newer
+              copy of the workbook, e.g. after the flagged rows were fixed in Excel. */}
+          {summary.can_import && summary.imported && (
+            <Button variant="outline" className="h-9 gap-2" onClick={() => setImportOpen(true)} data-testid="past-data-reimport">
+              <Upload className="h-4 w-4" />Re-import
+            </Button>
+          )}
+          <Button variant="outline" className="h-9 gap-2" onClick={() => setReloadKey((k) => k + 1)} data-testid="past-data-refresh">
+            <RefreshCw className="h-4 w-4" />Refresh
+          </Button>
+        </div>
       </div>
 
       {!summary.imported ? (
         <div className="rounded-lg border border-dashed border-slate-200 p-10 text-center" data-testid="past-data-empty">
           <Archive className="mx-auto h-6 w-6 text-slate-400" />
           <p className="mt-2 text-sm font-semibold text-slate-600">No past data imported yet</p>
-          <p className="mt-1 text-xs text-slate-500">The register is loaded on the server with backend/tools/past_data_import.py.</p>
+          {summary.can_import ? (
+            <>
+              <p className="mt-1 text-xs text-slate-500">Import the clinic's Excel register into this branch. It is checked first, and nothing is written until you confirm.</p>
+              <Button className="mt-4 gap-2 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setImportOpen(true)} data-testid="past-data-import">
+                <Upload className="h-4 w-4" />Import Excel
+              </Button>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">Super Admin imports the register from this tab.</p>
+          )}
         </div>
       ) : (
         <>
@@ -283,6 +304,14 @@ export const PastDataBoard = ({ branchId }) => {
       )}
 
       <PastClientDialog clientId={openId} onClose={() => setOpenId("")} onOpenClient={setOpenId} />
+      {summary.can_import && (
+        <PastDataImportDialog
+          open={importOpen}
+          branchId={branchId}
+          onClose={() => setImportOpen(false)}
+          onImported={() => { setImportOpen(false); setPage(1); setReloadKey((k) => k + 1); }}
+        />
+      )}
     </div>
   );
 };

@@ -982,9 +982,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [activeView, setActiveView] = useState("pipeline");
-  // Whether this branch holds the clinic's pre-OS Excel register (Past Data). Only the one
-  // branch it was imported into does, and only there is the tab shown -- and opened first,
-  // since reading that register is what the branch exists for. Asked once per branch: every
+  // Whether this branch shows the Past Data tab -- the clinic's pre-OS Excel register. Only
+  // the one branch it was imported into holds it, and only there is the tab shown, opened
+  // first, since reading that register is what the branch exists for. Before any import,
+  // Super Admin also gets it on a branch with nothing on it yet, to import from; the server
+  // decides which (importable_ids -- see /past-data/branches). Asked once per branch: every
   // mount point keys this board by branch, so switching branch starts it afresh. A failed
   // ask leaves the tab off, which is every other branch's normal.
   const [holdsPastData, setHoldsPastData] = useState(false);
@@ -994,7 +996,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     if (!branchId) return undefined;
     getPastDataBranches()
       .then((res) => {
-        if (!live || !(res?.branch_ids || []).includes(branchId)) return;
+        const shown = [...(res?.branch_ids || []), ...(res?.importable_ids || [])];
+        if (!live || !shown.includes(branchId)) return;
         setHoldsPastData(true);
         setActiveView("past_data");
       })

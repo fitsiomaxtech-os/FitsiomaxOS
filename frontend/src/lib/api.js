@@ -1121,3 +1121,15 @@ export const getPastDataBranches = async () => (await api.get("/past-data/branch
 export const getPastDataSummary = async (branchId) => (await api.get("/past-data/summary", { params: branchId ? { branch_id: branchId } : {} })).data;
 export const getPastDataClients = async (params = {}) => (await api.get("/past-data/clients", { params })).data;
 export const getPastDataClient = async (clientId) => (await api.get(`/past-data/clients/${clientId}`)).data;
+// Super Admin's Import Excel: preview reads the workbook and writes nothing; import sends the
+// same file again with the sha256 preview returned, so the server knows it is the file whose
+// report was just read.
+const pastDataForm = (branchId, file, extra = {}) => {
+  const form = new FormData();
+  form.append("branch_id", branchId);
+  Object.entries(extra).forEach(([k, v]) => form.append(k, String(v)));
+  form.append("file", file);
+  return form;
+};
+export const previewPastDataImport = async (branchId, file) => (await api.post("/past-data/import/preview", pastDataForm(branchId, file))).data;
+export const importPastData = async (branchId, file, sha256, replace = false) => (await api.post("/past-data/import", pastDataForm(branchId, file, { sha256, replace }))).data;

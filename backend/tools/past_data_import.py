@@ -32,17 +32,13 @@ import asyncio
 import csv
 import hashlib
 import sys
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import past_data  # noqa: E402
 
-COLLECTIONS = ("past_clients", "past_treatments", "past_payments")
 EXAMPLES_PER_FINDING = 6
-CHUNK = 500
 
 
 def rupees(value) -> str:
@@ -130,87 +126,14 @@ def write_findings_csv(data: past_data.PastData, path: Path) -> None:
 
 # ----------------------------------------------------------------------------- database
 #
-# Each of these takes `col`, the collection getter, rather than importing database.py at
-# the top. The report above has to run where there is no .env -- on the laptop the workbook
-# is being cleaned on -- and database.py reads MONGO_URL the moment it is imported.
-
-async def find_branch(col, code: str):
-    """The branch by its code, archived or not. Past Data's own branch is meant to be
-    archived once the import is checked, and must still be findable to --remove from."""
-    rows = await col("branches").find(
-        {"code": {"$regex": f"^{code}$", "$options": "i"}},
-        {"_id": 0, "id": 1, "branch_name": 1, "code": 1, "archived": 1},
-    ).to_list(5)
-    return rows[0] if len(rows) == 1 else None
-
-
-async def live_imports(col, branch_id: str) -> list:
-    return await col("past_imports").find(
-        {"branch_id": branch_id, "removed_at": None}, {"_id": 0},
-    ).sort("imported_at", 1).to_list(50)
-
-
-async def remove_batch(col, batch_id: str) -> dict:
-    removed = {}
-    for name in COLLECTIONS:
-        result = await col(name).delete_many({"batch_id": batch_id})
-        removed[name] = result.deleted_count
-    await col("past_imports").update_one(
-        {"id": batch_id}, {"$set": {"removed_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    return removed
-
-
-async def write_batch(col, data: past_data.PastData, branch: dict, source_file: str, file_sha256: str, now=None) -> str:
-    """Write one import and log it. Returns the batch id.
-
-    The log row goes in last, once every record is down: a batch the log does not name is
-    one that never finished, and the except below clears it out again.
-    """
-    now = now or datetime.now(timezone.utc)
-    # The time for a person reading it, and four random characters so two runs inside one
-    # second -- a --replace straight after an --apply -- cannot share an id. They would
-    # otherwise, and removing the old batch would take the new one out with it.
-    batch_id = "PDI-" + now.strftime("%y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
-    stamp = {
-        "branch_id": branch["id"],
-        "batch_id": batch_id,
-        "source_file": source_file,
-        "imported_at": now.isoformat(),
-    }
-    rows = {
-        "past_clients": data.clients,
-        "past_treatments": data.treatments,
-        "past_payments": data.payments,
-    }
-    try:
-        for name, records in rows.items():
-            for start in range(0, len(records), CHUNK):
-                # Copies, so Mongo's _id lands on them and not on the caller's dicts.
-                await col(name).insert_many([{**r, **stamp} for r in records[start:start + CHUNK]])
-        s = past_data.summary(data)
-        await col("past_imports").insert_one({
-            "id": batch_id,
-            "branch_id": branch["id"],
-            "branch_code": branch.get("code", ""),
-            "source_file": source_file,
-            "file_sha256": file_sha256,
-            "counts": {name: len(records) for name, records in rows.items()},
-            "paid_total": sum(c["paid_total"] for c in data.clients),
-            "outstanding_total": sum(c["outstanding_total"] for c in data.clients),
-            "findings": s["findings"],
-            "imported_at": now.isoformat(),
-            "removed_at": None,
-        })
-    except Exception:
-        for name in COLLECTIONS:
-            await col(name).delete_many({"batch_id": batch_id})
-        raise
-    return batch_id
+# The writing itself lives in past_data_store.py, shared with the Import Excel button on the
+# Past Data tab. Imported inside run_with_database rather than used from here, for the same
+# reason database.py is: the report above has to run where there is no .env at all.
 
 
 async def run_with_database(args, data, source: Path | None) -> int:
-    from database import v3_col  # noqa: E402 -- see the note above find_branch
+    from database import v3_col  # noqa: E402 -- see the note above
+    from past_data_store import find_branch, live_imports, remove_batch, write_batch  # noqa: E402
 
     branch = await find_branch(v3_col, args.branch)
     if not branch:
