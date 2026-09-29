@@ -1,9 +1,10 @@
-"""Past Data: the clinic's register from before the OS, read-only.
+"""Past Data: the clinic's books from before the OS, read-only.
 
-Written once by tools/past_data_import.py from the Excel workbook the clinic kept before
-it moved onto the OS (see past_data.py for how that is read), and never written by
-anything here. Three collections of its own -- past_clients, past_treatments,
-past_payments -- plus past_imports, one row per import.
+Put in by uploading the Excel sheets the clinic kept before it moved onto the OS -- the
+register (past_data.py) and the branches' monthly revenue sheets (past_revenue.py) -- one
+sheet per upload, each one its own import (see "the import" below; tools/past_data_import.py
+does the same from a terminal). Three collections of its own -- past_clients,
+past_treatments, past_payments -- plus past_imports, one row per sheet.
 
 Read-only on purpose, and apart from `leads` on purpose. These are courses that finished,
 or were dropped, or were still running on the day the workbook was last saved, and the
@@ -40,22 +41,45 @@ router = APIRouter(prefix="/api/v3")
 
 PAST_DATA_ROLES = (*sorted(ORG_WIDE_ROLES), "branch_admin")
 
-# Putting the register in is Super Admin's alone. Reading it is wider (above); writing it
-# replaces a branch's whole history in one press, and that is not a desk's call.
-IMPORT_ROLE = "super_admin"
+# Adding and disconnecting sheets: Super Admin, and the Past Data branch's own admin -- the
+# login made to keep these books. Not the business desk, which reads them, and not any other
+# branch's admin: see _may_manage.
+SUPER_ADMIN = "super_admin"
 
 # The register is under a megabyte. Ten times that is room for it to grow and still far
 # short of anything a person would upload by mistake and expect to be read.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 EXAMPLES_PER_FINDING = 8
+MAX_SHEETS = 200
 
 
-def _is_importer(user: V3UserOut) -> bool:
-    return (user.role or "").strip().lower() == IMPORT_ROLE
+def _is_super_admin(user: V3UserOut) -> bool:
+    return (user.role or "").strip().lower() == SUPER_ADMIN
 
 
 def _own_branches(user: V3UserOut) -> set:
     return {b for b in (user.branch_ids or []) if b} | ({user.branch_id} if user.branch_id else set())
+
+
+async def _past_data_branch_ids() -> set:
+    """Every branch that has ever held a sheet -- disconnected ones too, so a branch whose last
+    sheet was taken out keeps its Past Data tab, to add the corrected one from."""
+    return {b for b in await v3_col("past_imports").distinct("branch_id") if b}
+
+
+async def _may_manage(user: V3UserOut, branch_id: Optional[str]) -> bool:
+    """Whether this caller may add sheets to, and disconnect them from, this branch.
+
+    Super Admin anywhere. A Branch Admin on their own branch, and only once it is the Past
+    Data branch -- Super Admin's first import is what makes it one -- so no working branch's
+    admin can start filling their branch with old books.
+    """
+    if not branch_id:
+        return False
+    if _is_super_admin(user):
+        return True
+    return (is_branch_admin_role(user.role) and branch_id in _own_branches(user)
+            and branch_id in await _past_data_branch_ids())
 
 
 def _branch_for(user: V3UserOut, branch_id: Optional[str]) -> Optional[str]:
@@ -91,7 +115,7 @@ LIST_FIELDS = {
     "_id": 0, "id": 1, "excel_id": 1, "name": 1, "phone": 1, "gender": 1, "age": 1,
     "registration_date": 1, "treatments_count": 1, "services": 1, "last_treatment_date": 1,
     "latest_status": 1, "paid_total": 1, "outstanding_total": 1, "issue_count": 1, "flags": 1,
-    "branch_id": 1,
+    "branch_id": 1, "batch_id": 1,
 }
 
 
@@ -107,26 +131,29 @@ async def _live_batches(branch_id: Optional[str] = None) -> list:
     query = {"removed_at": None}
     if branch_id:
         query["branch_id"] = branch_id
-    return await v3_col("past_imports").find(query, {"_id": 0}).sort("imported_at", -1).to_list(50)
+    return await v3_col("past_imports").find(query, {"_id": 0}).sort("imported_at", -1).to_list(MAX_SHEETS)
 
 
 @router.get("/past-data/branches")
 async def past_data_branches(user: V3UserOut = Depends(v3_current_user)):
     """Which branches hold past data -- the one question the branch board asks before it
     decides whether to show a Past Data tab. Open to any signed-in desk that mounts that
-    board: it names branch ids and nothing about anybody in them.
+    board: it names branch ids and nothing about anybody in them. A branch that has held a
+    sheet keeps the tab after its last one is disconnected, to add the next from.
 
     `importable_ids` answers the question before there is any past data: where Super Admin
-    may put it. Once one branch holds an import, that branch and no other -- the register is
-    one clinic's history and belongs in one place. Before that, every branch with nothing on
-    it yet: no leads and no experts, which is the branch made for this and not one of the
+    may put it. Once one branch holds an import, that branch and no other -- the old books
+    are one clinic's history and belong in one place. Before that, every branch with nothing
+    on it yet: no leads and no experts, which is the branch made for this and not one of the
     clinics. A branch already working patients never offers it.
     """
-    batches = await _live_batches()
-    holding = sorted({b["branch_id"] for b in batches if b.get("branch_id")})
+    holding = sorted(await _past_data_branch_ids())
     importable: list = []
-    if _is_importer(user):
-        if holding:
+    if _is_super_admin(user):
+        live = sorted({b["branch_id"] for b in await _live_batches() if b.get("branch_id")})
+        if live:
+            importable = live
+        elif holding:
             importable = holding
         else:
             for b in await v3_col("branches").find(live_branch_query(), {"_id": 0, "id": 1}).to_list(500):
@@ -182,13 +209,12 @@ async def past_data_summary(
     scoped_branch = _branch_for(user, branch_id)
     batches = await _live_batches(scoped_branch)
     batch_ids = [b["id"] for b in batches]
-    # Whether the Import Excel button belongs on this screen: Super Admin, looking at one
-    # branch, with no other branch already holding the register (see _import_blocker).
-    can_import = bool(_is_importer(user) and scoped_branch and not await _import_blocker(scoped_branch))
-    # Disconnect: the same desk and the same one branch, once there is something on it to take out.
-    can_disconnect = bool(_is_importer(user) and scoped_branch and batch_ids)
+    # Whether Add sheet and Disconnect belong on this screen (see _may_manage). Adding also
+    # needs no other branch to hold the old books already (_import_blocker).
+    can_manage = bool(scoped_branch and await _may_manage(user, scoped_branch))
+    can_add = bool(can_manage and not await _import_blocker(scoped_branch))
     if not batch_ids:
-        return {"imported": False, "can_import": can_import, "can_disconnect": False, "imports": [], "clients": 0, "treatments": 0,
+        return {"imported": False, "can_manage": can_manage, "can_add": can_add, "imports": [], "clients": 0, "treatments": 0,
                 "payments": 0, "paid_total": 0, "outstanding_total": 0, "owing_clients": 0,
                 "needs_look_clients": 0, "services": [], "statuses": [], "first_date": "", "last_date": ""}
 
@@ -216,16 +242,10 @@ async def past_data_summary(
     }
     return {
         "imported": True,
-        "can_import": can_import,
-        "can_disconnect": can_disconnect,
-        "imports": [
-            {
-                "id": b["id"], "branch_id": b.get("branch_id"), "branch_name": names.get(b.get("branch_id"), ""),
-                "source_file": b.get("source_file", ""), "imported_at": b.get("imported_at", ""),
-                "imported_by": b.get("imported_by", ""), "counts": b.get("counts", {}),
-            }
-            for b in batches
-        ],
+        "can_manage": can_manage,
+        "can_add": can_add,
+        # The sheets, newest first -- each shown with its own Disconnect.
+        "imports": [{**_sheet(b), "branch_name": names.get(b.get("branch_id"), "")} for b in batches],
         "clients": len(clients),
         "treatments": await v3_col("past_treatments").count_documents(scope),
         "payments": await v3_col("past_payments").count_documents(scope),
@@ -248,12 +268,16 @@ async def past_data_clients(
     status: str = "",
     # "owing" | "needs_look" -- the two tiles above the list that act as its filter.
     show: str = "",
+    # One sheet's clients only: an import id from summary's `imports`.
+    sheet: str = "",
     sort: str = "recent",
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=PAGE_SIZE_MAX),
     user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
     batch_ids = [b["id"] for b in await _live_batches(_branch_for(user, branch_id))]
+    if sheet:
+        batch_ids = [b for b in batch_ids if b == sheet]
     if not batch_ids:
         return {"total": 0, "page": page, "page_size": page_size, "rows": []}
 
@@ -305,9 +329,11 @@ async def past_data_client(client_id: str, user: V3UserOut = Depends(v3_require_
         ).to_list(20)
 
     branch = await v3_col("branches").find_one({"id": client.get("branch_id")}, {"_id": 0, "branch_name": 1}) or {}
+    batch = await v3_col("past_imports").find_one({"id": client.get("batch_id")}, {"_id": 0}) or {}
     return {
         **client,
         "branch_name": branch.get("branch_name", ""),
+        "sheet_label": past_data_store.sheet_label(batch) if batch else "",
         "shared_phone_clients": shared,
         "treatments": treatments,
     }
@@ -320,13 +346,35 @@ async def past_data_client(client_id: str, user: V3UserOut = Depends(v3_require_
 # workbook comes up the way every other upload in the OS does. Two steps, like the tool's
 # dry run and --apply -- /preview reads the file and writes nothing, and /import writes it
 # only once the person has read what /preview said. The file is read in memory and never
-# stored: it is the clinic's whole patient list, and a copy left on disk is one more to lose.
+# stored: it is the clinic's patient list, and a copy left on disk is one more to lose.
+#
+# Each upload is a sheet of its own on the branch -- the register, a branch's revenue sheet,
+# another branch's -- listed on the tab with its own Disconnect. Uploading one that is already
+# there is caught at /preview: the very same file is refused, and one holding mostly the same
+# people (the register saved again under another name) is offered as a replacement for the
+# sheet it repeats rather than a second copy of everyone.
+
+
+def _sheet(batch: dict) -> dict:
+    """One import as the tab lists it."""
+    return {
+        "id": batch["id"],
+        "branch_id": batch.get("branch_id"),
+        "label": past_data_store.sheet_label(batch),
+        "layout": batch.get("layout") or "register",
+        "tabs": batch.get("tabs") or [],
+        "source_file": batch.get("source_file", ""),
+        "imported_at": batch.get("imported_at", ""),
+        "imported_by": batch.get("imported_by", ""),
+        "counts": batch.get("counts", {}),
+        "paid_total": batch.get("paid_total", 0),
+    }
 
 
 async def _import_blocker(branch_id: str) -> str:
-    """Why this branch may not take the register, or "" when it may: another branch holds
-    it already. One clinic's history belongs in one place, and a second import somewhere
-    else would show every past patient twice across the two."""
+    """Why this branch may not take a sheet, or "" when it may: another branch holds the old
+    books already. One clinic's history belongs in one place, and sheets spread over two
+    branches would each show half of it."""
     others = [b for b in await past_data_store.live_imports(v3_col) if b.get("branch_id") != branch_id]
     if not others:
         return ""
@@ -338,29 +386,49 @@ async def _read_upload(file: UploadFile):
     """The upload as (bytes, sha256, PastData), or a 400 saying plainly what is wrong."""
     name = (file.filename or "").lower()
     if not name.endswith((".xlsm", ".xlsx")):
-        raise HTTPException(status_code=400, detail="Choose the Excel register (.xlsm or .xlsx)")
+        raise HTTPException(status_code=400, detail="Choose an Excel sheet (.xlsm or .xlsx)")
     raw = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="That file is larger than 10 MB -- it is not the register")
+        raise HTTPException(status_code=413, detail="That file is larger than 10 MB -- it is not one of the clinic's sheets")
     try:
         # openpyxl is a second of CPU for the real register; off the event loop so the rest of
         # the OS is not held up behind it.
         data = await asyncio.to_thread(past_data.read_workbook, io.BytesIO(raw))
     except past_data.PastDataError as e:
-        raise HTTPException(status_code=400, detail=f"This is not the register: {e}")
+        raise HTTPException(status_code=400, detail=f"This sheet cannot be read: {e}")
     except Exception:
         raise HTTPException(status_code=400, detail="Could not read this file as an Excel workbook")
     return raw, hashlib.sha256(raw).hexdigest(), data
 
 
-async def _import_branch(branch_id: str) -> dict:
+async def _manage_branch(user: V3UserOut, branch_id: str) -> dict:
+    """The branch a sheet is being added to, once this caller may add one there."""
     branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
+    if not await _may_manage(user, branch_id):
+        raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin adds past data sheets")
     blocked = await _import_blocker(branch_id)
     if blocked:
         raise HTTPException(status_code=409, detail=blocked)
     return branch
+
+
+async def _overlaps(data: past_data.PastData, existing: list) -> list:
+    """The sheets already here that hold some of the same people, by phone number.
+
+    `same_people` where it is most of them: the same book saved again, or an older copy of
+    it -- which the screen offers to replace rather than add beside, since added it shows
+    everyone twice. A few shared numbers is patients who came back, and is only said.
+    """
+    new = {c["phone_normalized"] for c in data.clients if c.get("phone_normalized")}
+    found = []
+    for batch in existing if new else []:
+        old = {p for p in await v3_col("past_clients").distinct("phone_normalized", {"batch_id": batch["id"]}) if p}
+        matched = len(new & old)
+        if matched:
+            found.append({**_sheet(batch), "matched": matched, "of": len(new), "same_people": matched * 2 >= len(new)})
+    return sorted(found, key=lambda o: -o["matched"])
 
 
 def _report(data: past_data.PastData) -> dict:
@@ -397,21 +465,22 @@ def _report(data: past_data.PastData) -> dict:
 async def past_data_import_preview(
     branch_id: str = Form(...),
     file: UploadFile = File(...),
-    user: V3UserOut = Depends(v3_require_roles(IMPORT_ROLE)),
+    user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
-    """Read the workbook and say what importing it would do. Writes nothing."""
-    branch = await _import_branch(branch_id)
+    """Read the sheet and say what adding it would do. Writes nothing."""
+    branch = await _manage_branch(user, branch_id)
     _, sha, data = await _read_upload(file)
     existing = await past_data_store.live_imports(v3_col, branch_id)
+    same_file = next((b for b in existing if b.get("file_sha256") == sha), None)
     return {
         "file_name": file.filename,
         "sha256": sha,
+        "suggested_label": past_data_store.file_label(file.filename or ""),
         "branch": {"id": branch["id"], "name": branch.get("branch_name", "")},
-        "existing": [
-            {"id": b["id"], "source_file": b.get("source_file", ""), "imported_at": b.get("imported_at", ""),
-             "counts": b.get("counts", {})}
-            for b in existing
-        ],
+        "existing": [_sheet(b) for b in existing],
+        # This very file is a sheet here already: adding it again would only show it twice.
+        "same_file": _sheet(same_file) if same_file else None,
+        "overlaps": await _overlaps(data, existing),
         "report": _report(data),
     }
 
@@ -423,52 +492,57 @@ async def past_data_import(
     # between the two calls, so this is what proves it is the file the person just read the
     # report for, and not another one picked in between.
     sha256: str = Form(...),
-    replace: bool = Form(False),
+    # What the tab calls the sheet; the file's name when blank.
+    label: str = Form(""),
+    # A sheet on this branch to swap for this one -- taken out once this one is fully written,
+    # never before. Blank adds this as a sheet of its own.
+    replace_id: str = Form(""),
     file: UploadFile = File(...),
-    user: V3UserOut = Depends(v3_require_roles(IMPORT_ROLE)),
+    user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
-    """Write the workbook into this branch's Past Data. With `replace`, the import already
-    there is taken out once the new one is fully written -- never before."""
-    branch = await _import_branch(branch_id)
+    """Add the sheet to this branch's Past Data, or put it in place of one already there."""
+    branch = await _manage_branch(user, branch_id)
     _, sha, data = await _read_upload(file)
     if sha != sha256:
         raise HTTPException(status_code=409, detail="This is not the file that was checked -- check it again before importing")
     existing = await past_data_store.live_imports(v3_col, branch_id)
-    if existing and not replace:
-        raise HTTPException(status_code=409, detail="This branch already holds past data -- choose Replace to swap it for this file")
+    replacing = None
+    if replace_id:
+        replacing = next((b for b in existing if b["id"] == replace_id), None)
+        if not replacing:
+            raise HTTPException(status_code=404, detail="The sheet to replace is not on this branch any more")
+    same_file = next((b for b in existing if b.get("file_sha256") == sha), None)
+    if same_file and same_file is not replacing:
+        raise HTTPException(status_code=409, detail=f"This file is already here as {past_data_store.sheet_label(same_file)}")
 
     batch_id = await past_data_store.write_batch(
-        v3_col, data, branch, file.filename or "", sha, imported_by=user.full_name,
+        v3_col, data, branch, file.filename or "", sha, imported_by=user.full_name, label=label,
     )
     removed = 0
-    for old in existing:
-        removed += sum((await past_data_store.remove_batch(v3_col, old["id"])).values())
+    if replacing:
+        removed = sum((await past_data_store.remove_batch(v3_col, replacing["id"], removed_by=user.full_name)).values())
     return {
         "batch_id": batch_id,
         "counts": {"past_clients": len(data.clients), "past_treatments": len(data.treatments), "past_payments": len(data.payments)},
-        "replaced": [b["id"] for b in existing],
+        "replaced": [replacing["id"]] if replacing else [],
         "removed_rows": removed,
     }
 
 
-@router.delete("/past-data/import")
-async def past_data_disconnect(
-    branch_id: str,
-    user: V3UserOut = Depends(v3_require_roles(IMPORT_ROLE)),
-):
-    """Disconnect: take the register back out of this branch -- every import on it, rows and
-    all -- the way the terminal tool's --remove does, from a button.
+@router.delete("/past-data/imports/{batch_id}")
+async def past_data_disconnect(batch_id: str, user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES))):
+    """Disconnect one sheet: take it back out of its branch, rows and all -- the terminal
+    tool's --remove, from a button. The branch's other sheets are not touched.
 
-    The rows are deleted, not hidden: they are the clinic's whole patient list, and a copy the
-    screen no longer shows is one more to lose. The Excel file is untouched, so Import Excel
-    puts it back. The log rows stay, marked removed_at/removed_by, as the record that it was
-    here and who took it out. Nothing live read these tables, so nothing live changes.
+    The rows are deleted, not hidden: they are the clinic's patient list, and a copy the
+    screen no longer shows is one more to lose. The Excel file is untouched, so adding it
+    again puts it back. The log row stays, marked removed_at/removed_by, as the record that it
+    was here and who took it out. Nothing live read these tables, so nothing live changes.
     """
-    existing = await past_data_store.live_imports(v3_col, branch_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="This branch holds no past data")
-    removed = {name: 0 for name in past_data_store.COLLECTIONS}
-    for batch in existing:
-        for name, count in (await past_data_store.remove_batch(v3_col, batch["id"], removed_by=user.full_name)).items():
-            removed[name] += count
-    return {"removed_batches": [b["id"] for b in existing], "removed": removed}
+    batch = await v3_col("past_imports").find_one({"id": batch_id, "removed_at": None}, {"_id": 0})
+    if not batch:
+        raise HTTPException(status_code=404, detail="That sheet is not connected any more")
+    if not await _may_manage(user, batch.get("branch_id")):
+        raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin disconnects past data sheets")
+    removed = await past_data_store.remove_batch(v3_col, batch_id, removed_by=user.full_name)
+    return {"removed_batch": batch_id, "label": past_data_store.sheet_label(batch), "removed": removed}

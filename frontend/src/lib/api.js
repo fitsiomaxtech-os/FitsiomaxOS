@@ -1113,17 +1113,16 @@ export const collectFitnessPayment = async (registrationId, lines, note) => (awa
 // when the old one ends, not when the button was pressed — so nothing here has to.
 export const renewFitness = async (registrationId, payload) => (await api.post(`/branch/fitness/${registrationId}/renew`, payload)).data;
 
-// Past Data — the clinic's Excel register from before the OS, read-only, shown only on the
-// branch it was imported into. Written once by backend/tools/past_data_import.py; nothing
-// on the client writes to it. getPastDataBranches is what the branch board asks before it
-// shows the tab at all.
+// Past Data — the clinic's Excel sheets from before the OS (the register, the branches'
+// revenue sheets), read-only, shown only on the branch they were imported into.
+// getPastDataBranches is what the branch board asks before it shows the tab at all.
 export const getPastDataBranches = async () => (await api.get("/past-data/branches")).data;
 export const getPastDataSummary = async (branchId) => (await api.get("/past-data/summary", { params: branchId ? { branch_id: branchId } : {} })).data;
 export const getPastDataClients = async (params = {}) => (await api.get("/past-data/clients", { params })).data;
 export const getPastDataClient = async (clientId) => (await api.get(`/past-data/clients/${clientId}`)).data;
-// Super Admin's Import Excel: preview reads the workbook and writes nothing; import sends the
-// same file again with the sha256 preview returned, so the server knows it is the file whose
-// report was just read.
+// Add sheet: preview reads the workbook and writes nothing; import sends the same file again
+// with the sha256 preview returned, so the server knows it is the file whose report was just
+// read. Each import is one sheet on the branch — replaceId puts it in place of one already there.
 const pastDataForm = (branchId, file, extra = {}) => {
   const form = new FormData();
   form.append("branch_id", branchId);
@@ -1132,7 +1131,8 @@ const pastDataForm = (branchId, file, extra = {}) => {
   return form;
 };
 export const previewPastDataImport = async (branchId, file) => (await api.post("/past-data/import/preview", pastDataForm(branchId, file))).data;
-export const importPastData = async (branchId, file, sha256, replace = false) => (await api.post("/past-data/import", pastDataForm(branchId, file, { sha256, replace }))).data;
-// Super Admin's Disconnect: deletes every import on the branch. The Excel file is untouched,
-// so Import Excel brings it back.
-export const disconnectPastData = async (branchId) => (await api.delete("/past-data/import", { params: { branch_id: branchId } })).data;
+export const importPastData = async (branchId, file, sha256, { label = "", replaceId = "" } = {}) => (
+  await api.post("/past-data/import", pastDataForm(branchId, file, { sha256, label, replace_id: replaceId }))
+).data;
+// Disconnect one sheet: deletes its rows. The branch's other sheets are not touched.
+export const disconnectPastDataSheet = async (sheetId) => (await api.delete(`/past-data/imports/${sheetId}`)).data;

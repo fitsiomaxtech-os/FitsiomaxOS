@@ -145,12 +145,15 @@ FINDINGS = {
     "missing_treatment": "Payment names an Enrollment ID that is not in the register -- NOT imported",
     "enquiry_no_client": "Enquiry matches no client by phone -- NOT imported",
     "enquiry_ambiguous": "Enquiry matches several clients on one phone -- NOT imported",
+    # A revenue sheet's own (see past_revenue.py).
+    "no_date": "Payment row with no date",
+    "no_name_row": "Row with no name or mobile (a total line, or a note) -- NOT imported",
 }
 
 # Findings where the row itself was left out, as opposed to imported with a flag.
 NOT_IMPORTED = {
     "duplicate_id", "row_without_id", "missing_client", "missing_treatment",
-    "enquiry_no_client", "enquiry_ambiguous",
+    "enquiry_no_client", "enquiry_ambiguous", "no_name_row",
 }
 
 
@@ -170,6 +173,10 @@ class PastData:
     enquiries_read: int = 0
     enquiries_attached: int = 0
     findings: List[Finding] = field(default_factory=list)
+    # "register" -- the four-sheet workbook this module reads -- or "revenue", a branch's
+    # monthly revenue sheet (past_revenue.py); and, for the latter, the month tabs it read.
+    layout: str = "register"
+    tabs: List[str] = field(default_factory=list)
 
     def note(self, code: str, sheet: str, excel_id: str, detail: str = "") -> None:
         self.findings.append(Finding(code, sheet, excel_id, detail))
@@ -298,6 +305,8 @@ def payment_mode(value: Any) -> str:
     words = text(value).lower()
     if not words:
         return ""
+    # And run together, so "G PAY" is GPay and "C CARD" a card.
+    words = f"{words} {squash(words)}"
     for mode, cues in (
         ("upi", ("upi", "gpay", "phonepe", "paytm")),
         ("card", ("card", "credit", "debit")),
@@ -426,12 +435,17 @@ def _flag(record: Dict[str, Any], code: str) -> None:
 
 
 def read_workbook(source) -> PastData:
-    """Read the register. `source` is a path or an open binary file -- the latter so an
-    upload can be read without being written to disk first."""
+    """Read the register -- or, when the workbook has no Patient Master, a branch's monthly
+    revenue sheet (past_revenue.py). `source` is a path or an open binary file -- the latter
+    so an upload can be read without being written to disk first."""
     from openpyxl import load_workbook  # only the reader needs it; the cleaners above don't
 
     workbook = load_workbook(source, read_only=True, data_only=True, keep_vba=False)
     try:
+        if CLIENT_SHEET not in workbook.sheetnames:
+            # Not the register: read it as a branch's monthly revenue sheet, or refuse it.
+            import past_revenue
+            return past_revenue.read(workbook)
         data = PastData()
         client_rows = _unique(_read_sheet(workbook, CLIENT_SHEET, CLIENT_COLUMNS, data), CLIENT_SHEET, data)
         treatment_rows = _unique(_read_sheet(workbook, TREATMENT_SHEET, TREATMENT_COLUMNS, data), TREATMENT_SHEET, data)
@@ -698,6 +712,8 @@ def summary(data: PastData) -> Dict[str, Any]:
         "payments": len(data.payments),
         "enquiries_read": data.enquiries_read,
         "enquiries_attached": data.enquiries_attached,
+        "layout": data.layout,
+        "tabs": list(data.tabs),
         "payment_states": states,
         "findings": counts,
     }

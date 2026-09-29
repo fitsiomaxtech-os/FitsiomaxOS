@@ -13,7 +13,7 @@ import { PastDataDisconnectDialog } from "@/components/pastData/PastDataDisconne
 import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog";
 import { getPastDataClients, getPastDataSummary } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
-import { rs, rsShort, statusTone } from "@/lib/pastData";
+import { layoutLabel, rs, rsShort, statusTone } from "@/lib/pastData";
 
 const PAGE_SIZE = 50;
 // Radix Select will not take "" as an item's value, so "every one" is spelled out.
@@ -30,18 +30,61 @@ const SORTS = [
 const triggerClass = "h-10 w-full rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200 sm:w-[180px]";
 
 const day = (value) => (value ? dateStampFull(value) : "");
+const n = (v) => (v || 0).toLocaleString("en-IN");
+
+// One sheet in the Sheets list: what it is, what is in it, and its own Disconnect.
+const SheetRow = ({ sheet, canManage, onDisconnect }) => {
+  const counts = sheet.counts || {};
+  const revenue = sheet.layout === "revenue";
+  const tabs = sheet.tabs || [];
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3" data-testid={`past-sheet-${sheet.id}`}>
+      <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-semibold text-slate-900">{sheet.label}</p>
+          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${revenue ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
+            {layoutLabel(sheet.layout)}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          {n(counts.past_clients)} clients · {revenue ? `${n(counts.past_payments)} payments` : `${n(counts.past_treatments)} treatments`}
+          {" · "}{rs(sheet.paid_total)}
+          {revenue && tabs.length > 0 && ` · ${tabs.length === 1 ? tabs[0] : `${tabs[0]} to ${tabs[tabs.length - 1]}`}`}
+        </p>
+        <p className="truncate text-[11px] text-slate-400">
+          {sheet.source_file} · added {day(sheet.imported_at)}{sheet.imported_by ? ` by ${sheet.imported_by}` : ""}
+        </p>
+      </div>
+      {canManage && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+          onClick={() => onDisconnect(sheet)}
+          data-testid={`past-sheet-disconnect-${sheet.id}`}
+        >
+          <Unlink className="h-3.5 w-3.5" />Disconnect
+        </Button>
+      )}
+    </li>
+  );
+};
 
 /**
- * Past Data: the clinic's Excel register from before the OS, as it was kept — every past
- * client, their courses and their installments, read-only.
+ * Past Data: the clinic's Excel sheets from before the OS, as they were kept — the register
+ * with its courses and installments, and the branches' monthly revenue sheets — every past
+ * client and what they paid, read-only.
  *
  * Its own screen rather than rows on the lead boards, because it is its own data: the
  * import writes past_clients/past_treatments/past_payments and never touches leads, so no
  * live board, dashboard or finance figure counts a row of it. A past patient who comes back
  * arrives as a new enquiry like anybody else; this is where their history is looked up.
  *
- * Mounted as a tab of the branch board, on the one branch the register was imported into
- * (see BranchAdminBoard), and held to that branch: `branchId` goes on every request.
+ * Mounted as a tab of the branch board, on the one branch the sheets were imported into
+ * (see BranchAdminBoard), and held to that branch: `branchId` goes on every request. Each
+ * uploaded file is a sheet of its own, listed with its own Disconnect; Super Admin and that
+ * branch's own admin add and disconnect them (can_add / can_manage from the server).
  *
  * The tiles double as the list's filter (Still owed, Needs a look), the way the money
  * boards use theirs; Clients clears it.
@@ -53,6 +96,7 @@ export const PastDataBoard = ({ branchId }) => {
   const [q, setQ] = useState("");
   const [service, setService] = useState(ALL);
   const [status, setStatus] = useState(ALL);
+  const [sheet, setSheet] = useState(ALL);
   const [show, setShow] = useState("");
   const [sort, setSort] = useState("recent");
   const [page, setPage] = useState(1);
@@ -61,7 +105,8 @@ export const PastDataBoard = ({ branchId }) => {
   const [listError, setListError] = useState("");
   const [openId, setOpenId] = useState("");
   const [importOpen, setImportOpen] = useState(false);
-  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  // The sheet whose Disconnect was pressed, while its confirmation is open.
+  const [disconnecting, setDisconnecting] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   // Only the newest request may draw the list: typing fast fires several, and they are
@@ -95,6 +140,7 @@ export const PastDataBoard = ({ branchId }) => {
       q: q || undefined,
       service: service === ALL ? undefined : service,
       status: status === ALL ? undefined : status,
+      sheet: sheet === ALL ? undefined : sheet,
       show: show || undefined,
       sort,
       page,
@@ -105,7 +151,7 @@ export const PastDataBoard = ({ branchId }) => {
       .finally(() => { if (seq === requestSeq.current) setLoading(false); });
     // Refresh reloads the summary, and a new summary is what redraws the list -- so the
     // list needs no reload counter of its own, which would fetch it twice.
-  }, [branchId, summary, q, service, status, show, sort, page]);
+  }, [branchId, summary, q, service, status, sheet, show, sort, page]);
 
   const pick = (setter) => (value) => { setter(value); setPage(1); };
   const toggleShow = (key) => { setShow((cur) => (cur === key ? "" : key)); setPage(1); };
@@ -117,10 +163,14 @@ export const PastDataBoard = ({ branchId }) => {
     return <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Loading Past Data…</div>;
   }
 
-  const latest = summary.imports?.[0];
+  const sheets = summary.imports || [];
+  const sheetLabel = Object.fromEntries(sheets.map((s) => [s.id, s.label]));
+  const hasRevenue = sheets.some((s) => s.layout === "revenue");
+  const hasRegister = sheets.some((s) => s.layout !== "revenue");
   const from = (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, list.total);
   const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
+  const reload = () => { setPage(1); setReloadKey((k) => k + 1); };
 
   return (
     <div className="space-y-4" data-testid="past-data-board">
@@ -129,35 +179,23 @@ export const PastDataBoard = ({ branchId }) => {
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold text-slate-900">Past Data</h2>
           <p className="text-xs text-slate-500">
-            The clinic's Excel register from before the OS, read-only. Nothing here counts in live leads, revenue or dashboards.
+            The clinic's Excel sheets from before the OS, read-only. Nothing here counts in live leads, revenue or dashboards.
           </p>
-          {latest && (
+          {summary.imported && (
             <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-xs text-slate-500" data-testid="past-data-source">
               <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-              {latest.source_file} · imported {day(latest.imported_at)}
-              {latest.branch_name ? ` into ${latest.branch_name}` : ""}
+              {sheets.length} sheet{sheets.length === 1 ? "" : "s"}
+              {sheets[0]?.branch_name ? ` in ${sheets[0].branch_name}` : ""}
               {summary.first_date && ` · registrations ${day(summary.first_date)} to ${day(summary.last_date)}`}
             </p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {/* Super Admin only, and only where the server says the register may go -- see
-              can_import on /past-data/summary. Once it is here this swaps it for a newer
-              copy of the workbook, e.g. after the flagged rows were fixed in Excel. */}
-          {summary.can_import && summary.imported && (
-            <Button variant="outline" className="h-10 gap-2" onClick={() => setImportOpen(true)} data-testid="past-data-reimport">
-              <Upload className="h-4 w-4" />Re-import
-            </Button>
-          )}
-          {/* Super Admin only (can_disconnect): takes the register back out of this branch. */}
-          {summary.can_disconnect && (
-            <Button
-              variant="outline"
-              className="h-10 gap-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-              onClick={() => setDisconnectOpen(true)}
-              data-testid="past-data-disconnect"
-            >
-              <Unlink className="h-4 w-4" />Disconnect
+          {/* Super Admin, or this branch's own admin once it holds past data -- can_add on
+              /past-data/summary. Each file added is a sheet of its own below. */}
+          {summary.can_add && summary.imported && (
+            <Button variant="outline" className="h-10 gap-2" onClick={() => setImportOpen(true)} data-testid="past-data-add-sheet">
+              <Upload className="h-4 w-4" />Add sheet
             </Button>
           )}
           <Button
@@ -173,30 +211,45 @@ export const PastDataBoard = ({ branchId }) => {
         </div>
       </div>
 
+      {sheets.length > 0 && (
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white" data-testid="past-data-sheets">
+          <h3 className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Sheets ({sheets.length})
+          </h3>
+          <ul className="divide-y divide-slate-100">
+            {sheets.map((s) => (
+              <SheetRow key={s.id} sheet={s} canManage={summary.can_manage} onDisconnect={setDisconnecting} />
+            ))}
+          </ul>
+        </section>
+      )}
+
       {!summary.imported ? (
         <div className="rounded-lg border border-dashed border-slate-200 p-10 text-center" data-testid="past-data-empty">
           <Archive className="mx-auto h-6 w-6 text-slate-400" />
-          <p className="mt-2 text-sm font-semibold text-slate-600">No past data imported yet</p>
-          {summary.can_import ? (
+          <p className="mt-2 text-sm font-semibold text-slate-600">No sheets added yet</p>
+          {summary.can_add ? (
             <>
-              <p className="mt-1 text-xs text-slate-500">Import the clinic's Excel register into this branch. It is checked first, and nothing is written until you confirm.</p>
+              <p className="mt-1 text-xs text-slate-500">Add the clinic register or a branch's revenue sheet. It is checked first, and nothing is written until you confirm.</p>
               <Button className="mt-4 gap-2 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setImportOpen(true)} data-testid="past-data-import">
-                <Upload className="h-4 w-4" />Import Excel
+                <Upload className="h-4 w-4" />Add a sheet
               </Button>
             </>
           ) : (
-            <p className="mt-1 text-xs text-slate-500">Super Admin imports the register from this tab.</p>
+            <p className="mt-1 text-xs text-slate-500">Super Admin or this branch's admin adds sheets from this tab.</p>
           )}
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <StatTile
-              label="Clients" value={summary.clients.toLocaleString("en-IN")} sub="Everyone in the Patient Master"
+              label="Clients" value={summary.clients.toLocaleString("en-IN")}
+              sub={sheets.length > 1 ? `Across ${sheets.length} sheets` : hasRevenue ? "Everyone in the revenue sheet" : "Everyone in the Patient Master"}
               icon={Users} color="#0284c7" active={!show} onClick={() => { setShow(""); setPage(1); }} testid="past-tile-clients"
             />
             <StatTile
-              label="Treatments" value={summary.treatments.toLocaleString("en-IN")} sub="Courses in the register"
+              label="Treatments" value={summary.treatments.toLocaleString("en-IN")}
+              sub={hasRevenue && hasRegister ? "Courses, and paid visits" : hasRevenue ? "One per payment row" : "Courses in the register"}
               icon={ClipboardList} color="#6366f1" testid="past-tile-treatments"
             />
             <StatTile
@@ -224,6 +277,17 @@ export const PastDataBoard = ({ branchId }) => {
                 data-testid="past-data-search"
               />
             </div>
+            {sheets.length > 1 && (
+              <Select value={sheet} onValueChange={pick(setSheet)}>
+                <SelectTrigger className={triggerClass} aria-label="Sheet" data-testid="past-data-sheet"><SelectValue /></SelectTrigger>
+                <SelectContent className="border-slate-200">
+                  <SelectItem value={ALL} className="text-xs">All sheets</SelectItem>
+                  {sheets.map((s) => (
+                    <SelectItem key={s.id} value={s.id} className="text-xs">{s.label} ({n(s.counts?.past_clients)})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={service} onValueChange={pick(setService)}>
               <SelectTrigger className={triggerClass} aria-label="Service" data-testid="past-data-service"><SelectValue /></SelectTrigger>
               <SelectContent className="border-slate-200">
@@ -285,6 +349,11 @@ export const PastDataBoard = ({ branchId }) => {
                         <p className="font-mono text-[11px] text-slate-400">
                           {c.excel_id}{c.gender ? ` · ${c.gender}` : ""}{c.age ? ` · ${c.age}` : ""}
                         </p>
+                        {sheets.length > 1 && sheetLabel[c.batch_id] && (
+                          <span className="mt-0.5 inline-flex rounded bg-slate-100 px-1.5 text-[10px] font-medium text-slate-500" data-testid="past-row-sheet">
+                            {sheetLabel[c.batch_id]}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <MaskedContact phone={c.phone || ""} />
@@ -328,21 +397,23 @@ export const PastDataBoard = ({ branchId }) => {
       )}
 
       <PastClientDialog clientId={openId} onClose={() => setOpenId("")} onOpenClient={setOpenId} />
-      {summary.can_import && (
+      {summary.can_add && (
         <PastDataImportDialog
           open={importOpen}
           branchId={branchId}
           onClose={() => setImportOpen(false)}
-          onImported={() => { setImportOpen(false); setPage(1); setReloadKey((k) => k + 1); }}
+          onImported={() => { setImportOpen(false); reload(); }}
         />
       )}
-      {summary.can_disconnect && (
+      {summary.can_manage && (
         <PastDataDisconnectDialog
-          open={disconnectOpen}
-          branchId={branchId}
-          summary={summary}
-          onClose={() => setDisconnectOpen(false)}
-          onDisconnected={() => { setDisconnectOpen(false); setOpenId(""); setPage(1); setReloadKey((k) => k + 1); }}
+          sheet={disconnecting}
+          onClose={() => setDisconnecting(null)}
+          onDisconnected={() => {
+            // The list may have been showing only that sheet; it is gone now.
+            if (sheet === disconnecting?.id) setSheet(ALL);
+            setDisconnecting(null); setOpenId(""); reload();
+          }}
         />
       )}
     </div>

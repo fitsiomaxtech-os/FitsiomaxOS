@@ -3,21 +3,23 @@ import { AlertTriangle, Loader2, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/sonner";
-import { disconnectPastData } from "@/lib/api";
+import { disconnectPastDataSheet } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
 
+const n = (v) => (v || 0).toLocaleString("en-IN");
+
 /**
- * Super Admin's Disconnect: takes the register back out of this branch. The rows are
- * deleted on the server (see DELETE /past-data/import), so it asks once, plainly, with what
- * goes. The Excel file is untouched and Import Excel reads it again.
+ * Disconnect one sheet: takes it back out of the branch. Its rows are deleted on the server
+ * (see DELETE /past-data/imports/{id}), so it asks once, plainly, with what goes. The
+ * branch's other sheets are not touched, and the Excel file can be added again.
  */
-export const PastDataDisconnectDialog = ({ open, branchId, summary, onClose, onDisconnected }) => {
+export const PastDataDisconnectDialog = ({ sheet, onClose, onDisconnected }) => {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const latest = summary?.imports?.[0];
-  const branchName = latest?.branch_name || "this branch";
+  const counts = sheet?.counts || {};
+  const revenue = sheet?.layout === "revenue";
 
   const close = () => {
     if (busy) return;
@@ -28,8 +30,8 @@ export const PastDataDisconnectDialog = ({ open, branchId, summary, onClose, onD
   const run = async () => {
     setBusy(true); setError("");
     try {
-      const res = await disconnectPastData(branchId);
-      toast.success(`Past data disconnected — ${res.removed.past_clients.toLocaleString("en-IN")} clients removed from ${branchName}`);
+      const res = await disconnectPastDataSheet(sheet.id);
+      toast.success(`${sheet.label} disconnected — ${n(res.removed.past_clients)} clients removed`);
       setConfirmed(false);
       setBusy(false);
       onDisconnected();
@@ -40,20 +42,21 @@ export const PastDataDisconnectDialog = ({ open, branchId, summary, onClose, onD
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) close(); }}>
+    <Dialog open={!!sheet} onOpenChange={(v) => { if (!v) close(); }}>
       <DialogContent className="max-w-lg" aria-describedby="past-disconnect-warning" data-testid="past-disconnect-dialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Unlink className="h-5 w-5 text-rose-600" />Disconnect past data</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Unlink className="h-5 w-5 text-rose-600" />Disconnect {sheet?.label}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span id="past-disconnect-warning">
-              This deletes <b>{(summary?.clients || 0).toLocaleString("en-IN")} clients</b>,{" "}
-              {(summary?.treatments || 0).toLocaleString("en-IN")} treatments and{" "}
-              {(summary?.payments || 0).toLocaleString("en-IN")} installments
-              {latest ? <> from {latest.source_file}, imported {latest.imported_at ? dateStampFull(latest.imported_at) : ""}</> : null}.
+              This deletes <b>{n(counts.past_clients)} clients</b>
+              {revenue
+                ? <> and {n(counts.past_payments)} payments</>
+                : <>, {n(counts.past_treatments)} treatments and {n(counts.past_payments)} installments</>}
+              {sheet ? <> from {sheet.source_file}, imported {sheet.imported_at ? dateStampFull(sheet.imported_at) : ""}</> : null}.
             </span>
           </div>
 
@@ -61,7 +64,7 @@ export const PastDataDisconnectDialog = ({ open, branchId, summary, onClose, onD
 
           <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
             <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="past-disconnect-confirm" />
-            I want to remove the past data from {branchName}.
+            I want to remove {sheet?.label} from Past Data.
           </label>
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">

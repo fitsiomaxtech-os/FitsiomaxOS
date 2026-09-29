@@ -148,7 +148,9 @@ export const PastClientDialog = ({ clientId, onClose, onOpenClient }) => {
             <Chip className="border-slate-200 bg-slate-50 text-slate-500"><Archive className="h-3 w-3" />Read-only · Excel register</Chip>
           </DialogTitle>
           <DialogDescription>
-            {client?.branch_name ? `Imported into ${client.branch_name} from ${client.source_file || "the register"}.` : "From the clinic's register before the OS."}
+            {client?.branch_name
+              ? `Imported into ${client.branch_name} from ${client.sheet_label || client.source_file || "the register"}${client.sheet_label && client.source_file ? ` (${client.source_file})` : ""}.`
+              : "From the clinic's sheets before the OS."}
             {" "}Not counted in live leads, revenue or dashboards.
           </DialogDescription>
         </DialogHeader>

@@ -14,9 +14,11 @@ design (see past_data.py): the live boards, dashboards and finance figures read 
 collections, so none of them can see a row written here.
 
 Every row carries the batch id of the import that wrote it, so one import comes back out
-exactly. A replace writes the new batch in full before the caller removes the old one, so a
+exactly. A branch may hold several -- one per sheet uploaded, each shown and disconnected on
+its own. A replace writes the new batch in full before the caller removes the old one, so a
 failure half way leaves the old data standing rather than nothing.
 """
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -24,6 +26,15 @@ import past_data
 
 COLLECTIONS = ("past_clients", "past_treatments", "past_payments")
 CHUNK = 500
+
+
+def file_label(source_file: str) -> str:
+    """A sheet's name when nobody gave it one: the file's, without its folder or extension."""
+    return re.sub(r"\.[^.]+$", "", re.split(r"[\\/]", source_file or "")[-1]).strip()
+
+
+def sheet_label(batch: dict) -> str:
+    return batch.get("label") or file_label(batch.get("source_file", "")) or batch.get("id", "")
 
 
 async def find_branch(col, code: str):
@@ -58,7 +69,7 @@ async def remove_batch(col, batch_id: str, removed_by: str = "") -> dict:
 
 async def write_batch(
     col, data: past_data.PastData, branch: dict, source_file: str, file_sha256: str,
-    now=None, imported_by: str = "",
+    now=None, imported_by: str = "", label: str = "",
 ) -> str:
     """Write one import and log it. Returns the batch id.
 
@@ -93,6 +104,11 @@ async def write_batch(
             "branch_id": branch["id"],
             "branch_code": branch.get("code", ""),
             "source_file": source_file,
+            # What the Past Data tab calls this sheet -- "Parrys", say, where every branch's
+            # file is "Revenue Sheet new.xlsx".
+            "label": (label or "").strip()[:80] or file_label(source_file),
+            "layout": data.layout,
+            "tabs": list(data.tabs),
             "file_sha256": file_sha256,
             "counts": {name: len(records) for name, records in rows.items()},
             "paid_total": sum(c["paid_total"] for c in data.clients),

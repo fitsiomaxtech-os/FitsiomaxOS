@@ -1,4 +1,5 @@
-"""Import the clinic's pre-OS Excel register into the Past Data tables.
+"""Import one of the clinic's pre-OS Excel sheets -- the register, or a branch's monthly
+revenue sheet -- into the Past Data tables.
 
 Dry-run by default. Prints what the workbook holds and what would be written, and writes
 nothing:
@@ -6,6 +7,8 @@ nothing:
     cd backend && python tools/past_data_import.py /root/Max00data.xlsm
     cd backend && python tools/past_data_import.py /root/Max00data.xlsm --branch PAS
     cd backend && python tools/past_data_import.py /root/Max00data.xlsm --branch PAS --apply
+    cd backend && python tools/past_data_import.py /root/Parrys.xlsx --branch PAS --apply --label Parrys
+    cd backend && python tools/past_data_import.py /root/Max00data.xlsm --branch PAS --apply --replace PDI-260929-153012-a1b2
     cd backend && python tools/past_data_import.py --branch PAS --remove PDI-260929-153012-a1b2
 
 Without --branch it never opens the database, so the first form runs anywhere the workbook
@@ -21,9 +24,10 @@ figures read those other collections, so none of them can see a row this writes,
 import cannot change a number anybody is already reporting.
 
 Every row carries the batch id of the import that wrote it, so --remove takes one import
-back out exactly. A branch holds one import at a time: --apply refuses while one is there
-unless --replace is given, and --replace writes the new batch in full before it removes
-the old one, so a failure half way leaves the old data standing rather than nothing.
+back out exactly. Each import is one sheet, and a branch holds as many as are added: --apply
+adds this one beside the others, and --replace BATCH_ID puts it in place of that one --
+writing the new batch in full before it removes the old, so a failure half way leaves the
+old data standing rather than nothing. The very same file twice is refused.
 
 The workbook holds patients' names and phone numbers. Upload it to the server outside the
 repository (e.g. /root/), and delete it once the import is checked -- never commit it.
@@ -78,14 +82,19 @@ def print_report(data: past_data.PastData, show_all: bool = False) -> None:
     cancelled_rows, _ = state("cancelled")
     unknown_rows, _ = state("unknown")
 
+    revenue = s["layout"] == "revenue"
     print()
+    if revenue:
+        print(f"A revenue sheet: one payment a row, from the tabs {', '.join(s['tabs'])}.")
     print("Would write:")
-    print(f"  past_clients     {s['clients']:>5}   ({s['enquiries_attached']} of {s['enquiries_read']} enquiries attached to them)")
+    print(f"  past_clients     {s['clients']:>5}"
+          + ("" if revenue else f"   ({s['enquiries_attached']} of {s['enquiries_read']} enquiries attached to them)"))
     print(f"  past_treatments  {s['treatments']:>5}")
     print(f"  past_payments    {s['payments']:>5}")
     print(f"      paid         {paid_rows:>5}   {rupees(paid_amount)}")
-    print(f"      unpaid       {unpaid_rows:>5}   {rupees(unpaid_amount)} still owed when the workbook was saved")
-    print(f"      cancelled    {cancelled_rows:>5}")
+    if not revenue:
+        print(f"      unpaid       {unpaid_rows:>5}   {rupees(unpaid_amount)} still owed when the workbook was saved")
+        print(f"      cancelled    {cancelled_rows:>5}")
     if unknown_rows:
         print(f"      unknown      {unknown_rows:>5}")
 
@@ -160,30 +169,38 @@ async def run_with_database(args, data, source: Path | None) -> int:
               f"from {b.get('source_file')} ({str(b.get('imported_at', ''))[:16]})")
 
     if not args.apply:
-        print("\nNothing written. Re-run with --apply to import"
-              + (", with --replace to swap out what is there." if existing else "."))
+        print("\nNothing written. Re-run with --apply to add it as a sheet"
+              + (", or --apply --replace BATCH_ID to put it in place of one above." if existing else "."))
         return 0
-    if existing and not args.replace:
-        print("\nNot written: this branch already holds past data. Re-run with --replace to swap it for "
-              "this workbook, or --remove the batch above first.")
+    replacing = None
+    if args.replace:
+        replacing = next((b for b in existing if b["id"] == args.replace), None)
+        if not replacing:
+            print(f"\nNot written: no import {args.replace!r} on this branch to replace.")
+            return 1
+    sha = sha256_of(source)
+    same = next((b for b in existing if b.get("file_sha256") == sha), None)
+    if same and same is not replacing:
+        print(f"\nNot written: this very file is already imported here as {same['id']}.")
         return 1
 
-    batch_id = await write_batch(v3_col, data, branch, source.name, sha256_of(source))
+    batch_id = await write_batch(v3_col, data, branch, source.name, sha, label=args.label or "")
     print(f"\nImported as {batch_id}.")
-    for old in existing:
-        removed = await remove_batch(v3_col, old["id"])
-        print(f"Replaced {old['id']} (removed {sum(removed.values())} rows).")
+    if replacing:
+        removed = await remove_batch(v3_col, replacing["id"])
+        print(f"Replaced {replacing['id']} (removed {sum(removed.values())} rows).")
     print(f"To take it back out: python tools/past_data_import.py --branch {branch.get('code')} --remove {batch_id}")
     return 0
 
 
 def parse_args(argv):
     import argparse
-    parser = argparse.ArgumentParser(description="Import the pre-OS Excel register into Past Data.")
-    parser.add_argument("workbook", nargs="?", help="Path to Max00data.xlsm")
+    parser = argparse.ArgumentParser(description="Import a pre-OS Excel sheet into Past Data.")
+    parser.add_argument("workbook", nargs="?", help="Path to the sheet, e.g. Max00data.xlsm")
     parser.add_argument("--branch", help="Code of the Past Data branch, e.g. PAS")
     parser.add_argument("--apply", action="store_true", help="Write it (default is a dry run)")
-    parser.add_argument("--replace", action="store_true", help="With --apply: swap out the import already there")
+    parser.add_argument("--replace", metavar="BATCH_ID", help="With --apply: put this sheet in place of that import")
+    parser.add_argument("--label", help="With --apply: what the Past Data tab calls this sheet (default: the file name)")
     parser.add_argument("--remove", metavar="BATCH_ID", help="Take one import back out (needs --branch)")
     parser.add_argument("--all", action="store_true", help="List every finding, not the first few of each")
     parser.add_argument("--findings-csv", metavar="PATH", help="Also write every finding to a CSV")

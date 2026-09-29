@@ -27,9 +27,18 @@ export const FLAG_LABELS = {
   client_mismatch: "Row names a different patient",
   check_mode: "Payment mode missing",
   unknown_state: "No status or amount",
+  no_date: "No date on the row",
 };
 
 export const flagLabel = (code) => FLAG_LABELS[code] || code;
+
+// The two kinds of sheet the import reads (backend past_data.py / past_revenue.py).
+export const LAYOUT_LABELS = {
+  register: "Register",
+  revenue: "Revenue sheet",
+};
+
+export const layoutLabel = (layout) => LAYOUT_LABELS[layout] || LAYOUT_LABELS.register;
 
 // The register's own course statuses. Read as what the sheet said on the day it was saved:
 // it left consultation-only patients "Active", so Active here is not "in treatment now".
