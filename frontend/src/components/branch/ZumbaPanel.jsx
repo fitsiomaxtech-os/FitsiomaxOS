@@ -1921,19 +1921,20 @@ export const ZumbaPanel = ({ branchId }) => {
                 className="h-8 w-44 text-xs"
                 data-testid="zumba-search"
               />
-              {/* Grey, because it changes nothing — it re-reads what is already on screen.
-                  The blue is spent on the one button that creates something. Icon only;
-                  the label lives on title/aria-label. */}
+              {/* The app's own refresh button — solid slate, white icon — as on Patients,
+                  Accountant Manage and Branch Management. Grey rather than blue: it changes
+                  nothing, and the blue is spent on the one button that creates something.
+                  Kept at h-8 so it lines up with the search box and the add button. */}
               <Button
                 size="sm"
-                variant="outline"
-                className="h-8 w-8 border-slate-200 bg-slate-100 p-0 text-slate-600 hover:bg-slate-200 hover:text-slate-700"
+                className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
                 onClick={load}
+                disabled={loading}
                 title="Refresh"
                 aria-label="Refresh"
                 data-testid="zumba-refresh"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
               <Button
                 size="sm"
