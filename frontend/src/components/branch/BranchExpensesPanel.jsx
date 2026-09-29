@@ -512,7 +512,6 @@ const HandoverDialog = ({ onClose, onSaved, cashInHand, branchId, branches }) =>
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold text-slate-800">Hand over cash</h3>
-            <p className="text-[11px] text-slate-500">Settle the drawer to the person carrying it to the accountant.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close">
             <X className="h-4 w-4" />
@@ -530,10 +529,8 @@ const HandoverDialog = ({ onClose, onSaved, cashInHand, branchId, branches }) =>
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount *</label>
             <Input type="number" min="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0" data-testid="branch-handover-amount" />
-            {drawer != null && (
-              <p className={`mt-1 text-[10px] ${overDrawer ? "text-amber-700" : "text-slate-400"}`}>
-                Drawer holds {fmt(drawer)}{overDrawer ? " — that is more than is in it" : ` — ${fmt(drawer - (amountNum > 0 ? amountNum : 0))} left after this`}
-              </p>
+            {drawer != null && overDrawer && (
+              <p className="mt-1 text-[10px] text-amber-700">Drawer holds only {fmt(drawer)}</p>
             )}
           </div>
           <div>
@@ -617,7 +614,6 @@ const CashReturnDialog = ({ onClose, onSaved, branchId, branches }) => {
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold text-slate-800">Cash return</h3>
-            <p className="text-[11px] text-slate-500">Cash coming back into the drawer — it adds to Cash in hand.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close">
             <X className="h-4 w-4" />
