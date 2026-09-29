@@ -1499,6 +1499,11 @@ export const ZumbaPanel = ({ branchId }) => {
     }
   };
 
+  // The price of the membership picked in the open form: the fee box's placeholder, and
+  // what is saved if that box is left empty.
+  const pickedPackage = form?.package_id ? packages.find((p) => p.id === form.package_id) : null;
+  const pickedPrice = pickedPackage ? planTotal(pickedPackage) : 0;
+
   const save = async () => {
     if (!form?.name?.trim()) { toast.error("Name is required"); return; }
     // Belt to the server's braces: a lead-backed row has no registration to write to, and
@@ -1528,7 +1533,9 @@ export const ZumbaPanel = ({ branchId }) => {
         source: form.source || "personal",
         master_name: (form.master_name || "").trim(),
         assigned_master_id: form.assigned_master_id || "",
-        fee_amount: Number(form.fee_amount || 0),
+        fee_amount: form.fee_amount === "" || form.fee_amount == null
+          ? Number(pickedPrice || 0)
+          : Number(form.fee_amount),
         // No fee_paid and no lines: this form registers a customer, and saying nothing about
         // the money is what leaves what has been collected alone. Sending a zero here would
         // wipe a customer's payments every time somebody fixed their phone number.
@@ -1827,9 +1834,16 @@ export const ZumbaPanel = ({ branchId }) => {
                             record behind the dialog it opened. */}
                         <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => setViewing(r)} title="View" aria-label="View" data-testid={`zumba-view-${r.id}`}>
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
+                            <button
+                              type="button"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                              onClick={() => setViewing(r)}
+                              title="View"
+                              aria-label="View"
+                              data-testid={`zumba-view-${r.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
                             {/* A referral is a decision recorded on the consultation, read
                                 live from the lead. Its one thing to do is to be taken onto
                                 the branch's books, which is where a fee can be set at all. */}
@@ -1847,16 +1861,21 @@ export const ZumbaPanel = ({ branchId }) => {
                                 {accepting === r.id ? "Taking on…" : "Referred"}
                               </Button>
                             ) : due > 0 ? (
+                              /* Green for a fresh package nothing has been paid on yet;
+                                 red once part has come in and a balance is left over,
+                                 because that is the one to chase. */
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 gap-1 border-emerald-300 px-2 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                                className={`h-7 gap-1 px-2 text-[10px] font-semibold ${paid > 0
+                                  ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                                  : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
                                 onClick={() => setCollecting(r)}
-                                title={`${rupees(due)} still due — take a payment`}
+                                title={paid > 0 ? `${rupees(due)} balance still due — take a payment` : `${rupees(due)} to collect`}
                                 data-testid={`zumba-collect-${r.id}`}
                               >
                                 <IndianRupee className="h-3 w-3" />
-                                Due Collect
+                                {paid > 0 ? "Due Collect" : "Collect"}
                               </Button>
                             ) : null}
                           </div>
@@ -2075,11 +2094,25 @@ export const ZumbaPanel = ({ branchId }) => {
                   />
                   <div className="space-y-2 pt-1">
                     <FieldLabel>Fee Amount</FieldLabel>
-                    <Input type="number" value={form.fee_amount} onChange={(e) => setForm({ ...form, fee_amount: e.target.value, package_id: "", package_name: "", package_sessions: "" })} placeholder="0" data-testid="zumba-field-amount" />
+                    {/* Filled from the membership picked above, and still editable: a
+                        discount or a special price is typed over it without the package
+                        coming unpicked, since they are still on that plan. Cleared, the
+                        plan's price shows as the placeholder and is what gets saved. */}
+                    <Input
+                      type="number"
+                      value={form.fee_amount}
+                      onChange={(e) => setForm({ ...form, fee_amount: e.target.value })}
+                      placeholder={pickedPrice ? String(pickedPrice) : "0"}
+                      data-testid="zumba-field-amount"
+                    />
                     {/* What they owe, not what they have handed over. This form registers a
                         customer; money is taken at the counter afterwards, through Collect,
                         which is a different act and has its own record of how it arrived. */}
-                    <p className="text-[11px] text-slate-400">Set by the membership above. Collect the fee from the row once they are registered.</p>
+                    <p className="text-[11px] text-slate-400">
+                      {pickedPrice
+                        ? `Package price ${rupees(pickedPrice)} — edit to charge a different amount. Collect the fee from the row once they are registered.`
+                        : "Pick a membership above, or type the fee. Collect the fee from the row once they are registered."}
+                    </p>
                   </div>
                 </div>
               </div>
