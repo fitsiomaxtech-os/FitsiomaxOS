@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Eye, IndianRupee, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowRight, ChevronRight, IndianRupee, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1724,15 +1724,16 @@ export const ZumbaPanel = ({ branchId }) => {
                       each wide enough to be read. */}
                   <tr>
                     <th className="w-[4%] px-3 py-2.5">S.No</th>
-                    <th className="w-[17%] px-3 py-2.5">Name</th>
+                    <th className="w-[15%] px-3 py-2.5">Name</th>
                     <th className="w-[11%] px-3 py-2.5">Phone Number</th>
-                    <th className="w-[13%] px-3 py-2.5">Package</th>
+                    <th className="w-[11%] px-3 py-2.5">Package</th>
                     <th className="w-[9%] px-3 py-2.5">Start</th>
                     <th className="w-[9%] px-3 py-2.5">Finish</th>
-                    <th className="w-[9%] px-3 py-2.5">Collected</th>
-                    <th className="w-[9%] px-3 py-2.5">Due</th>
-                    <th className="w-[9%] px-3 py-2.5">Status</th>
-                    <th className="w-[10%] px-3 py-2.5 text-right">Actions</th>
+                    <th className="w-[8%] px-3 py-2.5">Collected</th>
+                    <th className="w-[8%] px-3 py-2.5">Due</th>
+                    <th className="w-[8%] px-3 py-2.5">Status</th>
+                    <th className="w-[11%] px-3 py-2.5 text-center">Balance Payment</th>
+                    <th className="w-[6%] px-3 py-2.5 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1842,58 +1843,56 @@ export const ZumbaPanel = ({ branchId }) => {
                             );
                           })()}
                         </td>
-                        {/* Two things on the row: look at the record, and take the money
-                            still owed. Edit, Renew and Delete live in the record the eye
-                            opens, so the row is not a strip of five look-alike buttons.
-                            The cell swallows the click so a button does not also open the
-                            record behind the dialog it opened. */}
-                        <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-                              onClick={() => setViewing(r)}
-                              title="View"
-                              aria-label="View"
-                              data-testid={`zumba-view-${r.id}`}
+                        {/* The money still owed, and the one button that takes it. Green on
+                            a fresh package nothing has been paid on yet; red once part has
+                            come in and a balance is left over, because that is the one to
+                            chase. A referral's button here takes it onto the branch's books,
+                            which is where a fee can be set at all. The cell swallows the
+                            click so the button does not also open the record behind it. */}
+                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          {r.origin === "consultation" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
+                              disabled={accepting === r.id}
+                              onClick={() => acceptAndEdit(r)}
+                              title="Referred on the consultation — take it onto the branch's books to assign a master, set a time and collect the fee"
+                              data-testid={`zumba-accept-${r.id}`}
                             >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            {/* A referral is a decision recorded on the consultation, read
-                                live from the lead. Its one thing to do is to be taken onto
-                                the branch's books, which is where a fee can be set at all. */}
-                            {r.origin === "consultation" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 gap-1 border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
-                                disabled={accepting === r.id}
-                                onClick={() => acceptAndEdit(r)}
-                                title="Referred on the consultation — take it onto the branch's books to assign a master, set a time and collect the fee"
-                                data-testid={`zumba-accept-${r.id}`}
-                              >
-                                <Stethoscope className="h-3 w-3" />
-                                {accepting === r.id ? "Taking on…" : "Referred"}
-                              </Button>
-                            ) : due > 0 ? (
-                              /* Green for a fresh package nothing has been paid on yet;
-                                 red once part has come in and a balance is left over,
-                                 because that is the one to chase. */
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className={`h-7 gap-1 px-2 text-[10px] font-semibold ${paid > 0
-                                  ? "border-rose-300 text-rose-700 hover:bg-rose-50"
-                                  : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
-                                onClick={() => setCollecting(r)}
-                                title={paid > 0 ? `${rupees(due)} balance still due — take a payment` : `${rupees(due)} to collect`}
-                                data-testid={`zumba-collect-${r.id}`}
-                              >
-                                <IndianRupee className="h-3 w-3" />
-                                {paid > 0 ? "Due Collect" : "Collect"}
-                              </Button>
-                            ) : null}
-                          </div>
+                              <Stethoscope className="h-3 w-3" />
+                              {accepting === r.id ? "Taking on…" : "Referred"}
+                            </Button>
+                          ) : due > 0 ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`h-7 gap-1 px-2 text-[10px] font-semibold ${paid > 0
+                                ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                                : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
+                              onClick={() => setCollecting(r)}
+                              title={paid > 0 ? `${rupees(due)} balance still due — take a payment` : `${rupees(due)} to collect`}
+                              data-testid={`zumba-collect-${r.id}`}
+                            >
+                              <IndianRupee className="h-3 w-3" />
+                              {paid > 0 ? "Due Collect" : "Collect"}
+                            </Button>
+                          ) : (
+                            <span className="text-xs leading-7 text-slate-300">—</span>
+                          )}
+                        </td>
+                        {/* Opens the record, where Edit, Renew and Delete live. */}
+                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700"
+                            onClick={() => setViewing(r)}
+                            title="View"
+                            aria-label="View"
+                            data-testid={`zumba-view-${r.id}`}
+                          >
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     );
