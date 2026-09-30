@@ -1,10 +1,9 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet, AlertCircle, AlarmClock, CalendarClock, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecordCards } from "@/components/branch/RecordCards";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
-import { getClientTransactionHistory } from "@/lib/api";
 import { waNumber } from "@/lib/phone";
 import { isHandheld } from "@/lib/receipt";
 
@@ -39,7 +38,9 @@ const whatsappReminder = (r, today) => {
   if (tab) tab.opener = null;
 };
 
-const ReminderButton = ({ row, today, compact }) => (
+/** Phone cards only — the bare mark, no box or label. The desktop table leaves reminders
+ *  to the client popup, whose contact row carries a WhatsApp action of its own. */
+const ReminderButton = ({ row, today }) => (
   <button
     type="button"
     // The phone card is itself clickable (it opens the patient), so neither a tap nor
@@ -47,15 +48,13 @@ const ReminderButton = ({ row, today, compact }) => (
     onClick={(e) => { e.stopPropagation(); whatsappReminder(row, today); }}
     onKeyDown={(e) => e.stopPropagation()}
     title="Send payment reminder on WhatsApp"
-    className={compact
-      ? "inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
-      : "rounded p-1 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"}
+    aria-label="Send payment reminder on WhatsApp"
+    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100"
     data-testid={`outstanding-remind-whatsapp-${row.lead_id}`}
   >
-    <WhatsAppIcon className="h-3.5 w-3.5" />{compact ? " Remind" : null}
+    <WhatsAppIcon className="h-5 w-5" />
   </button>
 );
-const formatMode = (mode) => (mode ? (mode === "upi" ? "UPI" : mode.charAt(0).toUpperCase() + mode.slice(1)) : "");
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -234,41 +233,12 @@ const downloadCsv = (rows) => {
   URL.revokeObjectURL(url);
 };
 
-const ExpandedHistory = ({ leadId }) => {
-  const [history, setHistory] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    getClientTransactionHistory(leadId)
-      .then((d) => { setHistory(d); setLoading(false); })
-      .catch(() => { setHistory(null); setLoading(false); });
-  }, [leadId]);
-
-  if (loading) return <p className="px-4 py-3 text-xs text-slate-400">Loading payment history...</p>;
-  const transactions = history?.transactions || [];
-  if (transactions.length === 0) return <p className="px-4 py-3 text-xs text-slate-400">No payment history yet.</p>;
-
-  return (
-    <div className="space-y-1.5 px-4 py-3">
-      {transactions.map((tx) => (
-        <div key={tx.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-3 py-1.5 text-xs">
-          <span className="capitalize text-slate-600">{tx.source} · <span className="normal-case">{formatMode(tx.payment_mode)}</span></span>
-          <span className="text-slate-400">{(tx.date || "").slice(0, 10)}</span>
-          <span className="font-semibold text-emerald-600">{fmt(tx.amount)}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 export const OutstandingAmountBoard = ({ rows, onView }) => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [month, setMonth] = useState("all");
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
-  const [expanded, setExpanded] = useState(null);
 
   const today = todayIso();
 
@@ -386,8 +356,10 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
               meta: [
                 <StatusBadge status={r.status} />,
                 r.due_date ? <span className="font-semibold text-red-600">Due {r.due_date}</span> : null,
-                !r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} compact />,
               ],
+              // Not for a Past Data balance: that is what an Excel sheet said was owed when it
+              // was saved, shown for reading, and no one on the OS set it.
+              actions: !r.past_data && waNumber(r.phone) ? <ReminderButton row={r} today={today} /> : null,
               onOpen: onView ? () => onView(r.lead_id) : undefined,
             })}
           />
@@ -396,70 +368,50 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
             <table className="w-full min-w-[62rem] table-fixed border-separate border-spacing-x-0 border-spacing-y-2 text-sm">
               <thead>
                 <tr>
-                  <th className="w-[4%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400"></th>
                   <th className="w-[5%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">S.No</th>
-                  <th className="w-[16%] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Client</th>
-                  <th className="w-[13%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phone</th>
-                  <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Branch</th>
+                  <th className="w-[17%] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Client</th>
+                  <th className="w-[12%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phone</th>
+                  <th className="w-[11%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Branch</th>
                   <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total Bill</th>
-                  <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Paid</th>
+                  <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Paid</th>
                   <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Balance</th>
                   <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-red-600">Due Date</th>
                   <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                  <th className="w-[13%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
+                  <th className="w-[8%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={11} className="px-3 py-8 text-center text-sm text-slate-400">No outstanding balances.</td></tr>
+                  <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-400">No outstanding balances.</td></tr>
                 ) : filtered.map((r, i) => (
-                  <Fragment key={r.lead_id}>
-                    <tr data-testid={`accountant-manage-outstanding-${r.lead_id}`}>
-                      <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-2 py-2 text-center">
-                        <button type="button" onClick={() => setExpanded(expanded === r.lead_id ? null : r.lead_id)} className="text-slate-400 hover:text-slate-700">
-                          {expanded === r.lead_id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      </td>
-                      <td className="border-y border-slate-200 bg-white px-2 py-2 text-center text-slate-400">{i + 1}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">{r.client_name}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.phone || "—"}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.branch_name || "—"}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-700">{fmt(r.total_bill)}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-emerald-600">{fmt(r.paid_amount)}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-amber-600">{fmt(r.balance)}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-red-600">{r.due_date || "—"}</td>
-                      <td className="border-y border-slate-200 bg-white px-3 py-2 text-center"><StatusBadge status={r.status} /></td>
-                      <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-3 py-2">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* A labelled button, not a pale 14px glyph: opening the client is
-                              this row's main action and it was the hardest thing on it to see. */}
-                          <button
-                            type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
-                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2.5 text-xs font-semibold text-sky-700 hover:border-sky-300 hover:bg-sky-100"
-                            data-testid={`outstanding-view-${r.lead_id}`}
-                          >
-                            <Eye className="h-4 w-4" /> View
-                          </button>
-                          {/* Not for a Past Data balance: that is what an Excel sheet said was owed
-                              when it was saved, shown for reading, and no one on the OS set it. */}
-                          {!r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} />}
-                        </div>
-                      </td>
-                    </tr>
-                    {expanded === r.lead_id && (
-                      <tr>
-                        <td colSpan={11} className="border-x border-b border-slate-200 bg-slate-50/60 p-0">
-                          <ExpandedHistory leadId={r.lead_id} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
+                  <tr key={r.lead_id} data-testid={`accountant-manage-outstanding-${r.lead_id}`}>
+                    <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-2 py-2 text-center text-slate-400">{i + 1}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">{r.client_name}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.phone || "—"}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.branch_name || "—"}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-700">{fmt(r.total_bill)}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-emerald-600">{fmt(r.paid_amount)}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-amber-600">{fmt(r.balance)}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-red-600">{r.due_date || "—"}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center"><StatusBadge status={r.status} /></td>
+                    <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-2 py-2 text-center">
+                      {/* A plain link, not a boxed button: it is the row's one action, and the
+                          payment history the old row arrow expanded is on the popup it opens. */}
+                      <button
+                        type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline"
+                        data-testid={`outstanding-view-${r.lead_id}`}
+                      >
+                        <Eye className="h-4 w-4" /> View
+                      </button>
+                    </td>
+                  </tr>
                 ))}
               </tbody>
               {filtered.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan={5} className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Totals</td>
+                    <td colSpan={4} className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Totals</td>
                     <td className="px-3 py-2 text-center text-xs font-bold text-slate-700">{fmt(footer.total_bill)}</td>
                     <td className="px-3 py-2 text-center text-xs font-bold text-emerald-600">{fmt(footer.paid_amount)}</td>
                     <td className="px-3 py-2 text-center text-xs font-bold text-amber-600">{fmt(footer.balance)}</td>

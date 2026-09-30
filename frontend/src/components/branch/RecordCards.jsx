@@ -13,9 +13,10 @@ import { Eye } from "lucide-react";
  * Shared rather than written seven times because these cards differ only in which fields
  * they name, and seven copies would drift the moment one was edited.
  *
- * `card(row, i)` returns { key, title, subtitle?, amount?, meta?, onOpen?, testid? }.
+ * `card(row, i)` returns { key, title, subtitle?, amount?, meta?, actions?, onOpen?, testid? }.
  * meta entries may be strings or badge elements; falsy ones are dropped, so a board can
- * pass `cond && <Badge/>` without guarding.
+ * pass `cond && <Badge/>` without guarding. `actions` sits at the right end beside View;
+ * a control there must stop its own click, or it opens the card too.
  */
 export const RecordCards = ({ rows, card, empty = "Nothing here yet.", testid }) => (
   <div className="space-y-2 md:hidden" data-testid={testid}>
@@ -48,12 +49,17 @@ export const RecordCards = ({ rows, card, empty = "Nothing here yet.", testid })
             </div>
             {c.amount ? <div className="shrink-0 text-right leading-tight">{c.amount}</div> : null}
           </div>
-          {meta.length > 0 || clickable ? (
+          {meta.length > 0 || clickable || c.actions ? (
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
               {meta.map((m, j) => <span key={j} className="min-w-0 max-w-full truncate">{m}</span>)}
-              {clickable && (
-                <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700">
-                  <Eye className="h-3.5 w-3.5" /> View
+              {(clickable || c.actions) && (
+                <span className="ml-auto inline-flex shrink-0 items-center gap-2">
+                  {c.actions}
+                  {clickable && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-sky-700">
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </span>
+                  )}
                 </span>
               )}
             </div>

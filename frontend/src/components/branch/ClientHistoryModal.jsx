@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Mail, Printer, FileText, MessageCircle, Wallet, PhoneCall, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
+import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -152,7 +153,7 @@ const SectionTitle = ({ children, aside }) => (
 const PaymentCards = ({ transactions, servicedBy }) => {
   const [openId, setOpenId] = useState(transactions[0]?.id || null);
   if (transactions.length === 0) {
-    return <p className="rounded-lg border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500">No payments recorded yet.</p>;
+    return <p className="py-4 text-center text-sm text-slate-500">No payments yet.</p>;
   }
   return (
     <div className="space-y-2" data-testid="client-history-transactions">
@@ -214,9 +215,9 @@ const PaymentCards = ({ transactions, servicedBy }) => {
   );
 };
 
-/** The treatment course as quoted, and how much of it has been paid for. Deliberately
- *  silent on sessions *used* — attendance isn't recorded anywhere, so any "0 of 6 used"
- *  would be a claim this screen can't stand behind. */
+/** The treatment course as quoted, and how much of it has been paid for, on one row.
+ *  Deliberately silent on sessions *used* — attendance isn't recorded anywhere, so any
+ *  "0 of 6 used" would be a claim this screen can't stand behind. */
 const SessionPackageCard = ({ pd }) => {
   const count = Number(pd.session_package_sessions) || 0;
   const price = Number(pd.session_package_price) || 0;
@@ -224,33 +225,21 @@ const SessionPackageCard = ({ pd }) => {
   const purchased = paid > 0;
   const perSession = count > 0 && price > 0 ? Math.round(price / count) : null;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3.5" data-testid="client-history-session-package">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5" data-testid="client-history-session-package">
+      <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-800">{count > 0 ? `${count}-session course` : "Treatment package"}</p>
-        <span className={`shrink-0 text-[11px] font-bold uppercase tracking-wide ${purchased ? "text-teal-700" : "text-slate-500"}`}>
-          {purchased ? (pd.session_due > 0 ? "Part paid" : "Purchased") : "Not purchased"}
-        </span>
-      </div>
-      {count > 0 && count <= 24 && (
-        <div className="mt-2.5 flex flex-wrap gap-1">
-          {Array.from({ length: count }, (_, i) => (
-            <span
-              key={i}
-              className={`flex h-6 min-w-6 items-center justify-center rounded border px-1.5 font-mono text-xs ${purchased ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}
-            >
-              {i + 1}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-2 text-xs">
-        <span className="text-slate-600">{purchased ? `${fmt(paid)} paid` : "Nothing paid yet"}</span>
         {price > 0 && (
-          <span className="text-slate-600">
-            Quoted <span className="font-mono font-semibold text-slate-800">{fmt(price)}</span>
-            {perSession && <span className="text-slate-500"> · {fmt(perSession)}/session</span>}
-          </span>
+          <p className="text-xs text-slate-600">
+            <span className="font-mono font-semibold text-slate-800">{fmt(price)}</span>
+            {perSession && ` · ${fmt(perSession)}/session`}
+          </p>
         )}
+      </div>
+      <div className="shrink-0 text-right">
+        <p className={`text-[11px] font-bold uppercase tracking-wide ${purchased ? "text-teal-700" : "text-slate-500"}`}>
+          {purchased ? (pd.session_due > 0 ? "Part paid" : "Purchased") : "Not purchased"}
+        </p>
+        {purchased && <p className="font-mono text-xs font-semibold text-teal-700">{fmt(paid)} paid</p>}
       </div>
     </div>
   );
@@ -276,21 +265,30 @@ const DueRow = ({ title, sub, amount, meta, next, children, testid }) => (
   </div>
 );
 
-/** One of the contact card's actions. Readable when it can't be used rather than faded to
- *  40% — the reason it can't ("No email") is on the button itself. */
-const ContactAction = ({ icon: Icon, label, offLabel, onClick, disabled, testid }) => (
+/** One of the contact row's actions. Only drawn when it can be used — a greyed "No email"
+ *  button was one more thing to read that said nothing the missing email didn't. */
+const ContactAction = ({ icon: Icon, label, onClick, className = "text-slate-700", testid }) => (
   <button
     type="button"
     onClick={onClick}
-    disabled={disabled}
-    title={disabled ? offLabel : label}
-    aria-label={disabled ? offLabel : label}
-    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-300 bg-white px-1 py-2.5 text-xs font-semibold text-slate-800 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800 disabled:cursor-not-allowed disabled:border-dashed disabled:bg-slate-50 disabled:text-slate-500 disabled:hover:border-slate-300 disabled:hover:bg-slate-50"
+    title={label}
+    className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold hover:bg-slate-50 ${className}`}
     data-testid={testid}
   >
-    <Icon className="h-4 w-4" />
-    <span className="leading-tight">{disabled ? offLabel : label}</span>
+    <Icon className="h-4 w-4" /> {label}
   </button>
+);
+
+/** One figure of the money strip. `aside` (the balance's status badge) wraps under the
+ *  figure rather than squeezing it when the tile is narrow. */
+const MoneyTile = ({ label, value, aside, tone = "text-slate-900", className = "border-slate-200 bg-white", testid }) => (
+  <div className={`min-w-0 rounded-lg border px-2.5 py-2 sm:px-3 ${className}`}>
+    <p className="text-[11px] font-semibold uppercase text-slate-500 sm:tracking-wide">{label}</p>
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <p className={`break-all font-mono text-sm font-bold tabular-nums sm:text-base ${tone}`} data-testid={testid}>{value}</p>
+      {aside}
+    </div>
+  </div>
 );
 
 const downloadInvoice = (client, data) => {
@@ -321,13 +319,13 @@ const RECENT_PAYMENTS = 3;
  * payment history, and complete activity timeline. Opened via the eye icon from
  * Transactions History, Accountant Manage's Collections tables, and Total Revenue.
  *
- * Two panes. The left one is the money and the person: what is owed, the one button that
- * collects it, and how to reach them — so the answer to "what do we do about this client"
- * never scrolls away. The right one is the record, in three tabs.
+ * One column, top to bottom: the money in four figures, the one button that collects it,
+ * how to reach the client, then the record in three tabs. Anything with nothing to say —
+ * an empty payments box, a greyed "No email" button — is left out rather than drawn.
  *
- * Portalled to <body> and sized off the viewport (dvh), so no board it opens from can clip
- * it: on a short laptop screen each pane scrolls inside the popup, on a phone it is the
- * whole screen, and the footer is always in view.
+ * Portalled to <body> and sized to its content, capped by the viewport (dvh), so no board
+ * it opens from can clip it. It floats over the page on a phone as on a desktop, never
+ * taking the whole screen; past the cap the body scrolls and the footer stays in view.
  */
 export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
   const [data, setData] = useState(null);
@@ -383,7 +381,6 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
   const discount = transactions.reduce((s, t) => s + Math.max(Number(t.discount_amount) || 0, 0), 0);
   const due = Number(data?.balance) || 0;
   const billed = collected + discount + due;
-  const pct = (n) => (billed > 0 ? Math.max((n / billed) * 100, 0) : 0);
   // The single discount's own percentage, quoted only when there is exactly one —
   // averaging several across different prices would be a made-up number.
   const discounted = transactions.filter((t) => Number(t.discount_amount) > 0);
@@ -508,52 +505,61 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
     ? `Collect ${pd.next_installment_label || "installment"} #${pd.next_installment_number}`
     : "Collect payment";
 
+  // What the Overview tab has to show. With none of it, the tab says so in one line
+  // instead of drawing empty section boxes.
+  const hasPackage = Boolean(pd.session_package_sessions || pd.session_package_price || pd.session_total > 0);
+  const contactFacts = [
+    client?.assigned_physio_name && ["Expert", client.assigned_physio_name],
+    client?.source && ["Source", client.source],
+    client?.email && ["Email", client.email],
+  ].filter(Boolean);
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/50 sm:items-center sm:p-4" data-testid="client-history-modal">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-6"
+      // A click on the dimmed page closes it, as on any popup that floats — but never while
+      // the Collect popup is open over it, which handles its own backdrop.
+      onClick={(e) => { if (e.target === e.currentTarget && !collectDraft) onClose(); }}
+      data-testid="client-history-modal"
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-history-name"
-        className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-5xl sm:rounded-xl lg:h-[min(46rem,calc(100dvh-2rem))]"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
       >
         {/* ---- header: who this is ---- */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-100 text-lg font-bold text-teal-800 sm:flex">
-              {(client?.name || "?").trim().charAt(0).toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 id="client-history-name" className="truncate text-xl font-bold text-slate-900" data-testid="client-history-name">{client?.name || "Loading..."}</h3>
-                {client && (
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[status]}`} data-testid="client-history-status">
-                    <span className={`h-1.5 w-1.5 rounded-full ${status === "done" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                    {status === "done" ? "Completed" : "In Progress"}
-                  </span>
-                )}
-              </div>
-              {/* Identity in one line: who, where, their file number, and when they first
-                  came in. Each part is dropped rather than shown blank when absent. */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 id="client-history-name" className="truncate text-lg font-bold text-slate-900" data-testid="client-history-name">{client?.name || "Loading..."}</h3>
               {client && (
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-600" data-testid="client-history-meta">
-                  {[
-                    client.phone,
-                    client.branch_name,
-                    client.patient_number && <span key="pn" className="font-mono">{client.patient_number}</span>,
-                    client.first_seen && `First seen ${fmtDay(client.first_seen)}`,
-                  ].filter(Boolean).map((part, i, arr) => (
-                    <span key={i} className="flex items-center gap-2">
-                      {part}
-                      {i < arr.length - 1 && <span className="text-slate-300">·</span>}
-                    </span>
-                  ))}
-                </div>
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLES[status]}`} data-testid="client-history-status">
+                  <span className={`h-1.5 w-1.5 rounded-full ${status === "done" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  {status === "done" ? "Completed" : "In Progress"}
+                </span>
               )}
             </div>
+            {/* Identity in one line: who, where, and their file number. Each part is
+                dropped rather than shown blank when absent. */}
+            {client && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-600" data-testid="client-history-meta">
+                {[
+                  client.phone,
+                  client.branch_name,
+                  client.patient_number && <span key="pn" className="font-mono">{client.patient_number}</span>,
+                ].filter(Boolean).map((part, i, arr) => (
+                  <span key={i} className="flex items-center gap-2">
+                    {part}
+                    {i < arr.length - 1 && <span className="text-slate-300">·</span>}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             data-testid="client-history-close"
           >
             <X className="h-5 w-5" />
@@ -561,187 +567,173 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
         </div>
 
         {loading && !data ? (
-          <p className="flex-1 py-16 text-center text-sm text-slate-500">Loading...</p>
+          <p className="py-12 text-center text-sm text-slate-500">Loading...</p>
         ) : !data ? (
-          <p className="flex-1 py-16 text-center text-sm text-slate-500">Failed to load client details.</p>
+          <p className="py-12 text-center text-sm text-slate-500">Failed to load client details.</p>
         ) : (
-          // One row held to the popup's height (minmax(0,1fr)) so each pane scrolls on its
-          // own at lg; an auto row would grow to the taller pane and be clipped instead.
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
-            {/* ---- left: the money, the one action on it, and the person ---- */}
-            <aside className="space-y-4 border-b border-slate-200 bg-slate-50 p-4 sm:p-5 lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r">
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid="client-history-money-strip">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">{due > 0 ? "Balance due" : "Balance"}</p>
-                <p className={`mt-1 font-mono text-3xl font-bold tabular-nums ${due > 0 ? "text-rose-700" : "text-teal-700"}`} data-testid="client-history-balance">{fmt(due)}</p>
-                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-700">
-                  {due > 0 ? <Badge meta={balanceMeta} /> : <Badge meta={BALANCE_STATUS_META.paid} />}
-                  {due > 0 && data.next_due_date && <span>Next due <span className="font-semibold">{fmtDay(data.next_due_date)}</span></span>}
-                </div>
-
-                <div className="mt-3.5 flex h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div className="bg-teal-600" style={{ width: `${pct(collected)}%` }} title={`Collected ${fmt(collected)}`} />
-                  {/* Hatched, because a discount is money that was never taken — it should
-                      not read as solidly as money that was. */}
-                  <div
-                    style={{ width: `${pct(discount)}%`, backgroundImage: "repeating-linear-gradient(45deg, #f59e0b 0 3px, #fde68a 3px 6px)" }}
-                    title={`Discount ${fmt(discount)}`}
-                  />
-                  <div className="bg-rose-400" style={{ width: `${pct(due)}%` }} title={`Due ${fmt(due)}`} />
-                </div>
-
-                <dl className="mt-3 space-y-1.5 text-sm">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="flex items-center gap-2 text-slate-600"><span className="h-2 w-2 rounded-full bg-slate-400" />Billed</dt>
-                    <dd className="font-mono font-semibold tabular-nums text-slate-900">{fmt(billed)}</dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="flex items-center gap-2 text-slate-600"><span className="h-2 w-2 rounded-full bg-amber-400" />Discount{solePct != null ? ` (${solePct}%)` : ""}</dt>
-                    <dd className={`font-mono font-semibold tabular-nums ${discount > 0 ? "text-amber-700" : "text-slate-500"}`}>{discount > 0 ? `−${fmt(discount)}` : fmt(0)}</dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="flex items-center gap-2 text-slate-600"><span className="h-2 w-2 rounded-full bg-teal-600" />Collected</dt>
-                    <dd className="font-mono font-semibold tabular-nums text-teal-700">{fmt(collected)}</dd>
-                  </div>
-                </dl>
-                <p className="mt-2.5 text-xs text-slate-500">
-                  {data.last_payment_date ? `Last payment ${fmtDayTime(data.last_payment_date)}` : "No payments yet"}
-                </p>
-
-                {collectKind ? (
-                  <button
-                    type="button" onClick={openCollect} disabled={recording}
-                    className="mt-3.5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
-                    data-testid="client-history-record-payment"
-                  >
-                    <Wallet className="h-4 w-4" /> {recording ? "Saving..." : collectLabel}
-                  </button>
-                ) : due > 0 ? (
-                  <p className="mt-3.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900" data-testid="client-history-collect-note">
-                    Not on an installment schedule — collect it from the client's card in <span className="font-semibold">Consultations</span>.
-                  </p>
-                ) : (
-                  <p className="mt-3.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm text-teal-900" data-testid="client-history-collect-note">
-                    Nothing left to collect. This client is fully paid.
-                  </p>
-                )}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {/* ---- the money, the one action on it, and how to reach them ---- */}
+            <div className="space-y-3 px-4 py-3.5 sm:px-5">
+              {/* Balance first and widest — the whole row on a phone, with the other three
+                  under it — since it is the one figure the desk opened this for. */}
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-[1.5fr_1fr_1fr_1fr]" data-testid="client-history-money-strip">
+                <MoneyTile
+                  label={due > 0 ? "Balance due" : "Balance"}
+                  value={fmt(due)}
+                  aside={<Badge meta={due > 0 ? balanceMeta : BALANCE_STATUS_META.paid} />}
+                  tone={due > 0 ? "text-rose-700" : "text-teal-700"}
+                  className={`col-span-3 sm:col-span-1 ${due > 0 ? "border-rose-200 bg-rose-50" : "border-teal-200 bg-teal-50"}`}
+                  testid="client-history-balance"
+                />
+                <MoneyTile label="Billed" value={fmt(billed)} />
+                <MoneyTile
+                  label="Discount"
+                  value={discount > 0 ? `−${fmt(discount)}` : fmt(0)}
+                  aside={solePct != null && <span className="rounded bg-amber-100 px-1 py-px text-[11px] font-bold text-amber-800">{solePct}%</span>}
+                  tone={discount > 0 ? "text-amber-700" : "text-slate-500"}
+                />
+                <MoneyTile label="Collected" value={fmt(collected)} tone="text-teal-700" />
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <SectionTitle>Contact</SectionTitle>
-                <StatRows rows={[
-                  ["Phone", client?.phone || "Not on file"],
-                  ["Email", client?.email || "Not on file"],
-                  client?.source && ["Source", client.source],
-                  client?.assigned_physio_name && ["Expert", client.assigned_physio_name],
-                ]} />
-                {/* Full strength whenever they work. A Past Data client's balance can be
-                    collected here now, so a reminder about it is the desk's to send too. */}
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <ContactAction icon={PhoneCall} label="Call" offLabel="No phone" onClick={callClient} disabled={!client?.phone} testid="client-history-call" />
-                  <ContactAction icon={MessageCircle} label="WhatsApp" offLabel="No phone" onClick={sendReminder} disabled={!client?.phone} testid="client-history-reminder" />
-                  <ContactAction icon={Mail} label="Email" offLabel="No email" onClick={sendEmailReminder} disabled={!client?.email} testid="client-history-email" />
+              {((due > 0 && data.next_due_date) || data.last_payment_date || collectKind) && (
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+                    {due > 0 && data.next_due_date && <span>Next due <span className="font-semibold text-slate-800">{fmtDay(data.next_due_date)}</span></span>}
+                    {data.last_payment_date && <span>Last paid <span className="font-semibold text-slate-800">{fmtDayTime(data.last_payment_date)}</span></span>}
+                  </div>
+                  {collectKind && (
+                    <button
+                      type="button" onClick={openCollect} disabled={recording}
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
+                      data-testid="client-history-record-payment"
+                    >
+                      <Wallet className="h-4 w-4" /> {recording ? "Saving..." : collectLabel}
+                    </button>
+                  )}
                 </div>
-              </div>
-            </aside>
+              )}
 
-            {/* ---- right: the record ---- */}
-            <section className="flex min-w-0 flex-col lg:min-h-0">
-              <div className="sticky top-0 z-10 flex shrink-0 gap-1 border-b border-slate-200 bg-white px-3 sm:px-5 lg:static" role="tablist">
-                {[
-                  { key: "overview", label: "Overview", count: null },
-                  { key: "transactions", label: "Transactions", count: transactions.length },
-                  { key: "timeline", label: "Timeline", count: timeline.length },
-                ].map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === t.key}
-                    onClick={() => setTab(t.key)}
-                    className={`-mb-px border-b-2 px-3 py-3 text-sm font-semibold transition ${tab === t.key ? "border-teal-600 text-teal-700" : "border-transparent text-slate-600 hover:text-slate-900"}`}
-                    data-testid={`client-history-tab-${t.key}`}
-                  >
-                    {t.label}
-                    {/* The count belongs on the tab: it says whether opening it is worth the
-                        click, which the label alone never does. */}
-                    {t.count != null && (
-                      <span className={`ml-1.5 rounded-full px-1.5 py-px text-xs tabular-nums ${tab === t.key ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
+              {(contactFacts.length > 0 || client?.phone || client?.email) && (
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-100 pt-3">
+                  {contactFacts.length > 0 && (
+                    <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm">
+                      {contactFacts.map(([label, value]) => (
+                        <div key={label} className="flex min-w-0 items-baseline gap-1.5">
+                          <dt className="text-xs text-slate-500">{label}</dt>
+                          <dd className="min-w-0 break-words font-medium text-slate-800">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  <div className="flex gap-2">
+                    {client?.phone && <ContactAction icon={PhoneCall} label="Call" onClick={callClient} testid="client-history-call" />}
+                    {/* On for a Past Data client too: that balance can be collected here now,
+                        so a reminder about it is the desk's to send. */}
+                    {client?.phone && <ContactAction icon={WhatsAppIcon} label="WhatsApp" onClick={sendReminder} className="text-emerald-700" testid="client-history-reminder" />}
+                    {client?.email && <ContactAction icon={Mail} label="Email" onClick={sendEmailReminder} testid="client-history-email" />}
+                  </div>
+                </div>
+              )}
+            </div>
 
-              <div className="space-y-6 p-4 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
-                {tab === "overview" ? (
-                  <>
-                    {/* What is still owed, row by row, in the order Collect takes it. */}
-                    {pastOwed.length > 0 && (
-                      <div data-testid="client-history-past-owed">
-                        <SectionTitle aside={<span className="text-xs font-semibold text-slate-600">{pastOwed.length} due · {fmt(pastTotal)}</span>}>
-                          Balance to collect
-                        </SectionTitle>
-                        <div className="space-y-2">
-                          {pastOwed.map((r, i) => (
+            {/* ---- the record ---- */}
+            <div className="sticky top-0 z-10 flex gap-1 border-y border-slate-200 bg-white px-3 sm:px-4" role="tablist">
+              {[
+                { key: "overview", label: "Overview", count: null },
+                { key: "transactions", label: "Transactions", count: transactions.length },
+                { key: "timeline", label: "Timeline", count: timeline.length },
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`-mb-px border-b-2 px-2.5 py-2.5 text-sm font-semibold transition ${tab === t.key ? "border-teal-600 text-teal-700" : "border-transparent text-slate-600 hover:text-slate-900"}`}
+                  data-testid={`client-history-tab-${t.key}`}
+                >
+                  {t.label}
+                  {/* The count belongs on the tab: it says whether opening it is worth the
+                      click, which the label alone never does. */}
+                  {t.count != null && (
+                    <span className={`ml-1.5 rounded-full px-1.5 py-px text-xs tabular-nums ${tab === t.key ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-5 px-4 py-3.5 sm:px-5">
+              {tab === "overview" ? (
+                <>
+                  {/* What is still owed, row by row, in the order Collect takes it. */}
+                  {pastOwed.length > 0 && (
+                    <div data-testid="client-history-past-owed">
+                      <SectionTitle aside={<span className="text-xs font-semibold text-slate-600">{pastOwed.length} due · {fmt(pastTotal)}</span>}>
+                        Balance to collect
+                      </SectionTitle>
+                      <div className="space-y-2">
+                        {pastOwed.map((r, i) => (
+                          <DueRow
+                            key={r.id}
+                            title={r.service || "Past Data course"}
+                            sub={[
+                              r.due_date && `Due ${fmtDay(r.due_date)}`,
+                              r.excel_id,
+                              r.collected > 0 && `${fmt(r.collected)} already collected`,
+                            ].filter(Boolean).join(" · ")}
+                            amount={r.amount}
+                            meta={PAST_STATUS_META[r.status] || PAST_STATUS_META.partial}
+                            next={i === 0}
+                            testid={`client-history-past-owed-${r.id}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {schedule.length > 0 && (
+                    <div>
+                      <SectionTitle>Payment Schedule</SectionTitle>
+                      <div className="space-y-2">
+                        {schedule.map((s) => {
+                          const isNext = s.installment_number === pd.next_installment_number && s.fee === (pd.next_installment_fee || "treatment");
+                          return (
                             <DueRow
-                              key={r.id}
-                              title={r.service || "Past Data course"}
-                              sub={[
-                                r.due_date && `Due ${fmtDay(r.due_date)}`,
-                                r.excel_id,
-                                r.collected > 0 && `${fmt(r.collected)} already collected`,
-                              ].filter(Boolean).join(" · ")}
-                              amount={r.amount}
-                              meta={PAST_STATUS_META[r.status] || PAST_STATUS_META.partial}
-                              next={i === 0}
-                              testid={`client-history-past-owed-${r.id}`}
-                            />
-                          ))}
-                        </div>
+                              key={`${s.fee || "treatment"}-${s.installment_number}`}
+                              // Which fee this row belongs to. Numbering restarts per fee, so
+                              // without it a client owing on two reads as "#1, #2, #1, #2".
+                              title={`${s.fee_label || "Installment"} #${s.installment_number}`}
+                              sub={s.due_date ? `Due ${fmtDay(s.due_date)}` : null}
+                              amount={s.amount}
+                              meta={SCHEDULE_STATUS_META[s.status] || SCHEDULE_STATUS_META.upcoming}
+                              next={isNext}
+                              testid={`client-history-schedule-${s.fee || "treatment"}-${s.installment_number}`}
+                            >
+                              {/* How this one was settled, once it has been — the UTR or cheque
+                                  number is the only way to match it to a bank statement later. */}
+                              {s.payment_mode && (
+                                <div className="mt-2 flex flex-wrap items-center gap-1" data-testid={`client-history-schedule-ref-${s.fee || "treatment"}-${s.installment_number}`}>
+                                  <span className="rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{formatMode(s.payment_mode)}</span>
+                                  {paidReference(s).map((chip) => (
+                                    <span key={chip} className="rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">{chip}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </DueRow>
+                          );
+                        })}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {schedule.length > 0 && (
-                      <div>
-                        <SectionTitle>Payment Schedule</SectionTitle>
-                        <div className="space-y-2">
-                          {schedule.map((s) => {
-                            const isNext = s.installment_number === pd.next_installment_number && s.fee === (pd.next_installment_fee || "treatment");
-                            return (
-                              <DueRow
-                                key={`${s.fee || "treatment"}-${s.installment_number}`}
-                                // Which fee this row belongs to. Numbering restarts per fee, so
-                                // without it a client owing on two reads as "#1, #2, #1, #2".
-                                title={`${s.fee_label || "Installment"} #${s.installment_number}`}
-                                sub={s.due_date ? `Due ${fmtDay(s.due_date)}` : null}
-                                amount={s.amount}
-                                meta={SCHEDULE_STATUS_META[s.status] || SCHEDULE_STATUS_META.upcoming}
-                                next={isNext}
-                                testid={`client-history-schedule-${s.fee || "treatment"}-${s.installment_number}`}
-                              >
-                                {/* How this one was settled, once it has been — the UTR or cheque
-                                    number is the only way to match it to a bank statement later. */}
-                                {s.payment_mode && (
-                                  <div className="mt-2 flex flex-wrap items-center gap-1" data-testid={`client-history-schedule-ref-${s.fee || "treatment"}-${s.installment_number}`}>
-                                    <span className="rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{formatMode(s.payment_mode)}</span>
-                                    {paidReference(s).map((chip) => (
-                                      <span key={chip} className="rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">{chip}</span>
-                                    ))}
-                                  </div>
-                                )}
-                              </DueRow>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                  {hasPackage && (
+                    <div>
+                      <SectionTitle>Session Package</SectionTitle>
+                      <SessionPackageCard pd={pd} />
+                    </div>
+                  )}
 
-                    {(pd.session_package_sessions || pd.session_package_price || pd.session_total > 0) && (
-                      <div>
-                        <SectionTitle>Session Package</SectionTitle>
-                        <SessionPackageCard pd={pd} />
-                      </div>
-                    )}
-
+                  {transactions.length > 0 && (
                     <div>
                       <SectionTitle
                         aside={transactions.length > RECENT_PAYMENTS && (
@@ -754,40 +746,44 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
                       </SectionTitle>
                       <PaymentCards transactions={transactions.slice(0, RECENT_PAYMENTS)} servicedBy={client?.assigned_physio_name} />
                     </div>
-                  </>
-                ) : tab === "transactions" ? (
-                  <PaymentCards transactions={transactions} servicedBy={client?.assigned_physio_name} />
-                ) : (
-                  <div className="space-y-2">
-                    {timeline.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-slate-500">No activity yet.</p>
-                    ) : timeline.map((ev) => (
-                      <div key={ev.id} className="flex items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5" data-testid={`client-history-event-${ev.id}`}>
-                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                        <div className="min-w-0">
-                          <p className="break-words text-sm text-slate-800">{ev.details}</p>
-                          <p className="mt-0.5 text-xs text-slate-500">{fmtDate(ev.created_at)} · {ev.created_by}</p>
-                        </div>
+                  )}
+
+                  {pastOwed.length === 0 && schedule.length === 0 && !hasPackage && transactions.length === 0 && (
+                    <p className="py-4 text-center text-sm text-slate-500">No payments yet.</p>
+                  )}
+                </>
+              ) : tab === "transactions" ? (
+                <PaymentCards transactions={transactions} servicedBy={client?.assigned_physio_name} />
+              ) : timeline.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-500">No activity yet.</p>
+              ) : (
+                <ol className="divide-y divide-slate-100">
+                  {timeline.map((ev) => (
+                    <li key={ev.id} className="flex items-start gap-2.5 py-2" data-testid={`client-history-event-${ev.id}`}>
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <div className="min-w-0">
+                        <p className="break-words text-sm text-slate-800">{ev.details}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{fmtDate(ev.created_at)} · {ev.created_by}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
         )}
 
         {/* The paperwork, in a footer that never scrolls away — it applies to the client,
             not to whichever tab happens to be open. */}
         {data && (
-          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
-            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none" data-testid="client-history-print">
+          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5">
+            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none" data-testid="client-history-print">
               <Printer className="h-4 w-4 shrink-0" /> Print<span className="hidden sm:inline"> receipt</span>
             </button>
-            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
+            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
               <FileText className="h-4 w-4 shrink-0" /> <span className="hidden sm:inline">Download </span>Invoice
             </button>
-            <button type="button" onClick={onClose} className="ml-auto hidden rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
+            <button type="button" onClick={onClose} className="ml-auto hidden rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
               Close
             </button>
           </div>
