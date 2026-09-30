@@ -582,9 +582,12 @@ async def branch_reviews(
         active_doctor_query({"profile_type": "head_physio"}), {"_id": 0, "id": 1, "full_name": 1}
     ).to_list(200)
 
+    # Which review of the patient's course each row is -- the table's Review Counts column.
+    numbers = await _review_numbers(rows)
+
     return {
         "branch_id": branch_id,
-        "reviews": [_shape(r) for r in rows],
+        "reviews": [{**_shape(r), "review_number": numbers.get(r.get("id"))} for r in rows],
         "counts": counts,
         "head_physios": head_physios,
         "today": _today(),
@@ -732,12 +735,10 @@ async def branch_send_review(
 
 # ------------------------------------------------------- Head Physio: complete a review
 
-async def _client_week_stars(rows: List[dict]) -> dict:
-    """The client's stars for the week each review covers, keyed by review id -- the Star
-    Rating column on the Consultant's Weekly Review table. Week N's review is matched to the
-    portal's weekly Physio review for treatment week N (review_numbers_for_lead), stars only.
-    Numbered against every review the lead has, not just the ones on this board, so a week
-    reads the same here as it does anywhere else."""
+async def _review_numbers(rows: List[dict]) -> dict:
+    """review_numbers_for_lead for every lead in `rows`, keyed by review id. Numbered
+    against every review each lead has, not just the rows passed in, so a week reads the
+    same on a filtered board as it does anywhere else."""
     lead_ids = list({r.get("lead_id") for r in rows if r.get("lead_id")})
     if not lead_ids:
         return {}
@@ -751,6 +752,19 @@ async def _client_week_stars(rows: List[dict]) -> dict:
     numbers: dict = {}
     for revs in by_lead.values():
         numbers.update(review_numbers_for_lead(revs))
+    return numbers
+
+
+async def _client_week_stars(rows: List[dict]) -> dict:
+    """The client's stars for the week each review covers, keyed by review id -- the Star
+    Rating column on the Consultant's Weekly Review table. Week N's review is matched to the
+    portal's weekly Physio review for treatment week N (review_numbers_for_lead), stars only.
+    Numbered against every review the lead has, not just the ones on this board, so a week
+    reads the same here as it does anywhere else."""
+    lead_ids = list({r.get("lead_id") for r in rows if r.get("lead_id")})
+    if not lead_ids:
+        return {}
+    numbers = await _review_numbers(rows)
     rated = await v3_col("client_reviews").find(
         {"lead_id": {"$in": lead_ids}, "kind": "physio", "source": "week",
          "track": {"$in": ["treatment", None]}, "skipped": {"$ne": True}},

@@ -196,44 +196,33 @@ export const BranchReviewPanel = ({ branchId }) => {
     return (
       <tr className="transition-colors hover:bg-slate-50" data-testid={`branch-review-row-${r.id}`}>
         <td className="px-4 py-3 align-middle text-slate-400">{index + 1}</td>
-        <td className="px-4 py-3 align-middle">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-slate-800">{r.lead_name}</span>
-            {r.patient_number && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">{r.patient_number}</span>}
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{r.treatment_days} treatment days</span>
-            {overdue && <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">OVERDUE</span>}
-          </div>
-          {r.reason && <p className="mt-0.5 text-[10px] text-slate-400">{r.reason}</p>}
+        <td className="whitespace-nowrap px-4 py-3 align-middle">
+          <span className="font-medium text-slate-800">{r.lead_name}</span>
+          {r.patient_number && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">{r.patient_number}</span>}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 align-middle text-slate-600">{r.phone || "—"}</td>
         <td className="whitespace-nowrap px-4 py-3 align-middle text-slate-600">{r.physio_name || "—"}</td>
+        <td className="whitespace-nowrap px-4 py-3 align-middle font-medium text-violet-700">{r.head_physio_name || "—"}</td>
         <td className="whitespace-nowrap px-4 py-3 align-middle text-slate-600">{r.session_package_name || "—"}</td>
-        {sub !== "send" && (
-          <td className="whitespace-nowrap px-4 py-3 align-middle">
-            <span className="font-medium text-violet-700">{r.head_physio_name || "—"}</span>
-            <p className={`text-[10px] ${overdue ? "text-rose-600" : "text-slate-400"}`}>
-              review {dmy(r.review_date)}{r.review_time ? ` · ${to12h(r.review_time)}` : ""}
-              {r.status === "completed" && <span className="ml-1 font-semibold text-emerald-600">· completed</span>}
-            </p>
-          </td>
-        )}
-        <td className="whitespace-nowrap px-4 py-3 align-middle">
-          {r.status === "send_to_review" ? (
-            <Button size="sm" className="bg-amber-600 text-xs text-white hover:bg-amber-700" onClick={() => openSend(r)} data-testid={`branch-review-send-${r.id}`}>
-              <Send className="mr-1.5 h-3.5 w-3.5" /> Send to CONSULTANT
-            </Button>
-          ) : r.status === "sent" ? (
-            <Button size="sm" variant="outline" className="text-xs" onClick={() => openSend(r)} data-testid={`branch-review-reassign-${r.id}`}>
-              Reassign
-            </Button>
-          ) : (
-            <span className="text-[11px] text-slate-400">—</span>
-          )}
+        <td className="whitespace-nowrap px-4 py-3 align-middle text-slate-600">{r.review_number || "—"}</td>
+        <td className={`whitespace-nowrap px-4 py-3 align-middle ${overdue ? "font-semibold text-rose-600" : "text-slate-600"}`}>
+          {r.review_date ? `${dmy(r.review_date)}${r.review_time ? ` · ${to12h(r.review_time)}` : ""}` : "—"}
+          {overdue && <span className="ml-2 rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">OVERDUE</span>}
         </td>
         <td className="whitespace-nowrap px-4 py-3 align-middle">
-          <Button size="sm" variant="outline" className="text-xs" onClick={() => setViewing(r)} data-testid={`branch-review-view-${r.id}`}>
-            View
-          </Button>
+          <div className="flex items-center justify-end gap-2">
+            {r.status === "send_to_review" ? (
+              <Button size="sm" className="bg-amber-600 text-xs text-white hover:bg-amber-700" onClick={() => openSend(r)} data-testid={`branch-review-send-${r.id}`}>
+                <Send className="mr-1.5 h-3.5 w-3.5" /> Send to CONSULTANT
+              </Button>
+            ) : r.status === "sent" ? (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => openSend(r)} data-testid={`branch-review-reassign-${r.id}`}>
+                Reassign
+              </Button>
+            ) : null}
+            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setViewing(r)} title="View details" aria-label="View details" data-testid={`branch-review-view-${r.id}`}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </td>
       </tr>
     );
@@ -434,12 +423,12 @@ export const BranchReviewPanel = ({ branchId }) => {
               <tr>
                 <th className="w-12 px-4 py-2.5">S.No</th>
                 <th className="px-4 py-2.5">Patient</th>
-                <th className="whitespace-nowrap px-4 py-2.5">Phone</th>
                 <th className="whitespace-nowrap px-4 py-2.5">Physio</th>
-                <th className="whitespace-nowrap px-4 py-2.5">Weeks</th>
-                {sub !== "send" && <th className="whitespace-nowrap px-4 py-2.5">CONSULTANT</th>}
-                <th className="whitespace-nowrap px-4 py-2.5">{sub === "send" ? "Send to CONSULTANT" : "Action"}</th>
-                <th className="whitespace-nowrap px-4 py-2.5">View</th>
+                <th className="whitespace-nowrap px-4 py-2.5">CONSULTANT</th>
+                <th className="whitespace-nowrap px-4 py-2.5">Total Weeks</th>
+                <th className="whitespace-nowrap px-4 py-2.5">Review Counts</th>
+                <th className="whitespace-nowrap px-4 py-2.5">Review Date</th>
+                <th className="whitespace-nowrap px-4 py-2.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
