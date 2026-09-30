@@ -673,34 +673,38 @@ export const BranchReviewPanel = ({ branchId }) => {
       {/* Read-only detail */}
       {viewing && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3" data-testid="branch-review-view-modal">
-          <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-slate-500 px-6 py-4 text-white">
-              <div>
-                <p className="text-lg font-bold">{viewing.lead_name}</p>
-                <p className="text-xs text-white/80">{viewing.patient_number || "—"} · {viewing.phone || "—"}</p>
+          <div className="flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-4">
+              <div className="min-w-0">
+                <p className="truncate text-lg font-bold text-slate-800">{viewing.lead_name}</p>
+                <p className="text-xs text-slate-500">{viewing.patient_number || "—"} · {viewing.phone || "—"}</p>
               </div>
-              <button onClick={() => setViewing(null)} className="rounded-lg border-2 border-orange-200 bg-orange-100 p-2 text-orange-600 hover:bg-orange-200" data-testid="branch-review-view-close">
+              <button onClick={() => setViewing(null)} className="shrink-0 rounded-lg border-2 border-orange-200 bg-orange-100 p-2 text-orange-600 hover:bg-orange-200" data-testid="branch-review-view-close">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex-1 space-y-3 overflow-y-auto p-5 text-sm">
-              {[
-                ["Status", viewing.status === "send_to_review" ? "Waiting to be sent" : viewing.status === "sent" ? "With the CONSULTANT" : "Completed"],
-                ["Treatment Days", `${viewing.treatment_days}`],
-                ["Package", viewing.session_package_name || "—"],
-                ["Raised By", `${viewing.physio_name || "—"} · ${dmy(viewing.raised_at)}`],
-                ["CONSULTANT", viewing.head_physio_name || "Not sent yet"],
-                ["Review Date", dmy(viewing.review_date)],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-500">{k}</span>
-                  <span className="text-right font-semibold text-slate-700">{v}</span>
-                </div>
-              ))}
-              {viewing.reason && <Block label="Reason" text={viewing.reason} />}
-              {viewing.physio_notes && <Block label="Physio's Notes" text={viewing.physio_notes} />}
-              {viewing.head_physio_notes && <Block label="CONSULTANT's Review" text={viewing.head_physio_notes} tone="emerald" />}
-              {viewing.head_physio_suggestions && <Block label="Suggestions" text={viewing.head_physio_suggestions} tone="emerald" />}
+            <div className="flex-1 space-y-4 overflow-y-auto p-5 text-sm">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  ["Status", viewing.status === "send_to_review" ? "Waiting to be sent" : viewing.status === "sent" ? "With the CONSULTANT" : "Completed"],
+                  ["Treatment Days", `${viewing.treatment_days}`],
+                  ["Package", viewing.session_package_name || "—"],
+                  ["Raised By", `${viewing.physio_name || "—"} · ${dmy(viewing.raised_at)}`],
+                  ["CONSULTANT", viewing.head_physio_name || "Not sent yet"],
+                  ["Review Date", dmy(viewing.review_date)],
+                ].map(([k, v]) => (
+                  <div key={k} className="rounded-lg border border-slate-200 px-3 py-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{k}</p>
+                    <p className="mt-0.5 break-words font-semibold text-slate-700">{v}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {viewing.reason && <Block label="Reason" text={viewing.reason} />}
+                {viewing.physio_notes && <Block label="Physio's Notes" text={viewing.physio_notes} />}
+                {viewing.head_physio_notes && <Block label="CONSULTANT's Review" text={viewing.head_physio_notes} tone="emerald" />}
+                {viewing.head_physio_suggestions && <Block label="Suggestions" text={viewing.head_physio_suggestions} tone="emerald" />}
+              </div>
             </div>
             <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-3.5">
               <Button variant="outline" onClick={() => setViewing(null)} data-testid="branch-review-view-done">Close</Button>
