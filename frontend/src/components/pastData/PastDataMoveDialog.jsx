@@ -55,7 +55,7 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
     try {
       if (back) {
         const res = await takeBackPastDataMove(sheet.id);
-        toast.success(`${sheet.label}: ${n(res.removed_leads)} live clients taken back`);
+        toast.success(`${sheet.label}: ${n(res.removed_leads)} live clients returned back`);
       } else {
         const res = await movePastDataToLive(sheet.id);
         toast.success(`${sheet.label}: ${n(res.live_move.leads)} clients are live on Branch Leads`);
@@ -63,7 +63,7 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
       setBusy(false);
       onDone();
     } catch (e) {
-      setError(e?.response?.data?.detail || (back ? "Could not take them back -- nothing was changed" : "Could not move -- nothing was changed"));
+      setError(e?.response?.data?.detail || (back ? "Could not return them back -- nothing was changed" : "Could not move -- nothing was changed"));
       setBusy(false);
     }
   };
@@ -78,7 +78,7 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {back ? <Undo2 className="h-5 w-5 text-slate-600" /> : <ArrowUpRight className="h-5 w-5 text-emerald-600" />}
-            {back ? "Take back" : "Move to live"}: {sheet?.label}
+            {back ? "Return Back" : "Move to Live"}: {sheet?.label}
           </DialogTitle>
         </DialogHeader>
 
@@ -128,7 +128,7 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
                 <span>
                   A trial on {branch} only. These clients are not counted on any dashboard or other branch, and nobody is messaged.
                   Their Excel payments show on this branch's Accountant tab only, read from the sheet, never in OS revenue.
-                  What the sheet said about each one is on their card. Take back removes them.
+                  What the sheet said about each one is on their card. Return Back removes them.
                 </span>
               </div>
             </>
@@ -154,7 +154,7 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
                 data-testid="past-move-submit"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : back ? <Undo2 className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
-                {busy ? (back ? "Taking back…" : "Moving…") : back ? "Take back" : "Move to live"}
+                {busy ? (back ? "Returning…" : "Moving…") : back ? "Return Back" : "Move to Live"}
               </Button>
             )}
           </div>

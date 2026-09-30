@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  ArrowDownUp,
   BadgeIndianRupee,
   BarChart3,
   Briefcase,
@@ -85,6 +86,7 @@ const MarketingBoard = lazy(() => import("@/components/marketing/MarketingBoard"
 const PreSalesCRM = lazy(() => import("@/components/PreSalesCRM").then((m) => ({ default: m.PreSalesCRM })));
 const DashboardBoard = lazy(() => import("@/components/DashboardBoard").then((m) => ({ default: m.DashboardBoard })));
 const PipelineStageManagement = lazy(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
+const PastDataImportExport = lazy(() => import("@/components/pastData/PastDataImportExport").then((m) => ({ default: m.PastDataImportExport })));
 const HRBoard = lazy(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.HRBoard })));
 const HumanResourceBoard = lazy(() => import("@/components/hr/HumanResourceBoard").then((m) => ({ default: m.HumanResourceBoard })));
 const FinanceWiseBoard = lazy(() => import("@/components/branch/FinanceWiseBoard").then((m) => ({ default: m.FinanceWiseBoard })));
@@ -321,10 +323,13 @@ const SUPER_ADMIN_TABS = [
 // they always did ("marketing"/"stages") — Settings is a second name for that pair of
 // states, not a third state of its own, so PreSalesCRM's "Manage Stages" jump
 // (setSuperAdminView("stages")) keeps working without knowing Settings exists.
-const SETTINGS_SUB_VIEWS = ["marketing", "stages"];
+// Import/Export is Past Data's sheets (PastDataImportExport), reachable here without
+// opening the Past Data Entry branch board.
+const SETTINGS_SUB_VIEWS = ["marketing", "stages", "import_export"];
 const SETTINGS_SUB_TABS = [
   { key: "marketing", label: "Marketing Source", icon: Megaphone },
   { key: "stages", label: "Workflow Roots", icon: Activity },
+  { key: "import_export", label: "Import/Export", icon: ArrowDownUp },
 ];
 const isSuperAdminTabActive = (view, key) => (key === "settings" ? SETTINGS_SUB_VIEWS.includes(view) : view === key);
 
@@ -1478,6 +1483,7 @@ export const CRMPage = ({ auth, onLogout }) => {
           <div data-testid="super-admin-settings">
             {superAdminView === "marketing" && <MarketingBoard branches={branches} leading={settingsSubTabs} />}
             {superAdminView === "stages" && <PipelineStageManagement leading={settingsSubTabs} />}
+            {superAdminView === "import_export" && <PastDataImportExport branches={branches} leading={settingsSubTabs} />}
           </div>
         )}
 

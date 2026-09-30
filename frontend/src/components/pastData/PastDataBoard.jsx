@@ -34,7 +34,7 @@ const day = (value) => (value ? dateStampFull(value) : "");
 const n = (v) => (v || 0).toLocaleString("en-IN");
 
 // One sheet in the Sheets list: what it is, what is in it, whether its clients are live on
-// Branch Leads, and its own Move to live (or Take back) and Disconnect.
+// Branch Leads, and its own Move to Live (or Return Back) and Disconnect.
 const SheetRow = ({ sheet, canManage, onDisconnect, onMove }) => {
   const counts = sheet.counts || {};
   const revenue = sheet.layout === "revenue";
@@ -78,7 +78,7 @@ const SheetRow = ({ sheet, canManage, onDisconnect, onMove }) => {
               onClick={() => onMove(sheet, "back")}
               data-testid={`past-sheet-take-back-${sheet.id}`}
             >
-              <Undo2 className="h-3.5 w-3.5" />Take back
+              <Undo2 className="h-3.5 w-3.5" />Return Back
             </Button>
           ) : (
             <Button
@@ -88,7 +88,7 @@ const SheetRow = ({ sheet, canManage, onDisconnect, onMove }) => {
               onClick={() => onMove(sheet, "move")}
               data-testid={`past-sheet-move-${sheet.id}`}
             >
-              <ArrowUpRight className="h-3.5 w-3.5" />Move to live
+              <ArrowUpRight className="h-3.5 w-3.5" />Move to Live
             </Button>
           )}
           <Button
@@ -142,7 +142,7 @@ export const PastDataBoard = ({ branchId, onLeadsChanged }) => {
   const [importOpen, setImportOpen] = useState(false);
   // The sheet whose Disconnect was pressed, while its confirmation is open.
   const [disconnecting, setDisconnecting] = useState(null);
-  // The sheet whose Move to live or Take back was pressed, and which of the two.
+  // The sheet whose Move to Live or Return Back was pressed, and which of the two.
   const [moving, setMoving] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
