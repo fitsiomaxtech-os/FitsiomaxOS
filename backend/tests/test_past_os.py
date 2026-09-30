@@ -201,6 +201,39 @@ def test_duplicate_ids_and_shared_phones():
     assert {"duplicate_id", "shared_phone"} <= set(codes(data))
 
 
+def test_values_off_the_template_lists_are_reported():
+    """What the Dummy OG Sheet held: a course by another name, statuses the lists do not have,
+    and a payment with no Payment For. Each is said out loud rather than passed over."""
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001")],
+        "Physio": [child(2, "FM-1", course="Physio 1-on-1", package="2w", sessions=14, amount=8400)],
+        "Sessions": [child(2, "FM-1", course="treatment", at=datetime(2026, 9, 7), status="Active")],
+        "Reviews": [child(2, "FM-1", at=datetime(2026, 9, 20), status="Complete")],
+        "Payments": [child(2, "FM-1", payment_for="-", status="Active or Paid", amount=8400)],
+    })
+    assert {"unknown_course", "unknown_session_status", "unknown_review_status", "unknown_payment_for",
+            "no_status"} <= set(codes(data))
+    course = data.treatments[0]
+    # Read as Treatment, so the session (course "treatment") finds it.
+    assert course["course"] == "Treatment" and course["service"] == "Treatment · 2w"
+    assert "session_no_course" not in codes(data)
+    client = data.clients[0]
+    assert client["sessions"][0]["status"] == "Active" and client["reviews"][0]["status"] == "Complete"
+    assert client["paid_total"] == 0 and data.payments[0]["state"] == "unknown"
+
+
+def test_template_values_raise_nothing():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001")],
+        "Physio": [child(2, "FM-1", course="Rehab", package="Knee Rehab", sessions=10, amount=9000)],
+        "Sessions": [child(2, "FM-1", course="Rehab", at=datetime(2026, 9, 7), status="Upcoming")],
+        "Reviews": [child(2, "FM-1", at=datetime(2026, 9, 20), status="Pending")],
+        "Payments": [child(2, "FM-1", payment_for="Treatment Fee", status="Paid", amount=9000, paid_date=datetime(2026, 9, 6)),
+                     child(3, "FM-1", payment_for="Consultation Fee", status="Pending", amount=500)],
+    })
+    assert not {"unknown_course", "unknown_session_status", "unknown_review_status", "unknown_payment_for"} & set(codes(data))
+
+
 def test_moment_keeps_a_time_and_drops_midnight():
     assert moment(datetime(2026, 9, 4, 11, 30)) == "2026-09-04 11:30"
     assert moment(datetime(2026, 9, 4)) == "2026-09-04"

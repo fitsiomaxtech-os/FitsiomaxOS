@@ -160,6 +160,8 @@ GENDERS = {"male": "Male", "female": "Female", "other": "Other"}
 COURSES = {"treatment": "Treatment", "rehab": "Rehab"}
 SESSION_STATUSES = {"completed": "Completed", "upcoming": "Upcoming"}
 REVIEW_STATUSES = {"completed": "Completed", "pending": "Pending"}
+# Payment For, the template's other value beside the consultation fee.
+TREATMENT_FEE = {"treatmentfee", "treatment"}
 
 # What a desk types into a cell to say "nothing here".
 BLANKS = {"-", "--", "—", "–", "na", "n/a", "nil", "none"}
@@ -203,6 +205,27 @@ def _pick(table: Dict[str, str], value: Any) -> str:
 
 def _is_sample(record: dict) -> bool:
     return bool(SAMPLE.match(text(record.get("name"))))
+
+
+def _course(data: PastData, tab: str, where: str, who: str, value: Any) -> str:
+    """Treatment or Rehab. Anything else written in the cell ("Physio 1-on-1") is a
+    treatment course by another name, read as one and reported, so its sessions and payments
+    still find it."""
+    written = text(value)
+    course = COURSES.get(squash(written), "")
+    if not course and written:
+        data.note("unknown_course", tab, where, f"{who}: '{written}'")
+    return course or "Treatment"
+
+
+def _status(data: PastData, table: Dict[str, str], code: str, tab: str, where: str, who: str, value: Any) -> str:
+    """A list value in the template's own spelling; one that is not on the list is kept as
+    written and reported, since what it was meant to say is not ours to guess."""
+    written = text(value)
+    known = table.get(squash(written))
+    if not known:
+        data.note(code, tab, where, f"{who}: '{written or '(blank)'}'")
+    return known or written
 
 
 # ---------------------------------------------------------------------------- the tabs
@@ -358,7 +381,7 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         client = owner(record, PHYSIO, where)
         if not client:
             continue
-        course = _pick(COURSES, record.get("course")) or "Treatment"
+        course = _course(data, PHYSIO, where, client["name"], record.get("course"))
         package = text(record.get("package"))
         completed = day(record.get("completed_date"))
         sessions = record.get("sessions")
@@ -383,13 +406,14 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         client = owner(record, SESSIONS, where)
         if not client:
             continue
-        course = _pick(COURSES, record.get("course")) or "Treatment"
+        course = _course(data, SESSIONS, where, client["name"], record.get("course"))
         at = moment(record.get("at"))
         session = {
             "course": course,
             "session_no": whole(record.get("session_no")),
             "at": at,
-            "status": _pick(SESSION_STATUSES, record.get("status")),
+            "status": _status(data, SESSION_STATUSES, "unknown_session_status", SESSIONS, where,
+                              client["name"], record.get("status")),
             "physio": text(record.get("physio")),
             "remarks": text(record.get("remarks")),
             "row": where,
@@ -416,7 +440,8 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
             "review_no": whole(record.get("review_no")),
             "at": moment(record.get("at")),
             "head_physio": text(record.get("head_physio")),
-            "status": _pick(REVIEW_STATUSES, record.get("status")),
+            "status": _status(data, REVIEW_STATUSES, "unknown_review_status", REVIEWS, where,
+                              client["name"], record.get("status")),
             "physio_notes": text(record.get("physio_notes")),
             "head_physio_notes": text(record.get("head_physio_notes")),
             "row": where,
@@ -436,6 +461,8 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         figure = amount(record.get("amount"))
         paid_day, due_day = day(record.get("paid_date")), day(record.get("due_date"))
         state = _state(status, figure)
+        if not squash(payment_for).startswith("consult") and squash(payment_for) not in TREATMENT_FEE:
+            data.note("unknown_payment_for", PAYMENTS, where, f"{client['name']}: '{payment_for or '(blank)'}'")
 
         if squash(payment_for).startswith("consult"):
             treatment = consultations.get(client["id"])

@@ -113,6 +113,44 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
                     </ul>
                   </li>
                 )}
+                {/* An OS Data sheet's alone (care_summary in backend past_data_live.py): who
+                    goes to the Consultant and Physio the sheet names, with their course, fee
+                    and session days, and every name the OS has nobody for. */}
+                {preview.care && (
+                  <li data-testid="past-move-care">
+                    <ul className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                      {[
+                        ["With their Consultant", preview.care.consultants],
+                        ["With their Physio", preview.care.physios],
+                        ["Package", preview.care.packages],
+                        ["Fee paid", preview.care.fees_paid],
+                        ["Session days", preview.care.days],
+                      ].map(([label, value]) => (
+                        <li key={label} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs">
+                          <span>{label}</span>
+                          <span className="font-semibold tabular-nums">{n(value)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {preview.care.unread_days > 0 && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        {n(preview.care.unread_days)} session{preview.care.unread_days === 1 ? "" : "s"} left out: Status is not Completed or Upcoming.
+                      </p>
+                    )}
+                    {preview.care.missing?.length > 0 && (
+                      <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800" data-testid="past-move-missing">
+                        <p className="font-semibold">Not carried, fix the name in the sheet or in HR:</p>
+                        <ul className="mt-1 space-y-0.5">
+                          {preview.care.missing.map((m) => (
+                            <li key={`${m.role}-${m.name}-${m.why}`}>
+                              <b>{m.role} {m.name}</b>: {m.why} ({n(m.clients)} client{m.clients === 1 ? "" : "s"})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                )}
                 {preview.skipped > 0 && (
                   <li>
                     <b>{n(preview.skipped)}</b> skipped: already moved from another sheet
@@ -125,11 +163,19 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
               </ul>
               <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
                 <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  A trial on {branch} only. These clients are not counted on any dashboard or other branch, and nobody is messaged.
-                  Their Excel payments show on this branch's Accountant tab only, read from the sheet, never in OS revenue.
-                  What the sheet said about each one is on their card. Return Back removes them.
-                </span>
+                {preview.care ? (
+                  <span>
+                    Not counted on any dashboard, and nobody is messaged. Each client goes to the Consultant and Physio the sheet
+                    names, so they see them on their own boards. Their Excel payments show on this branch's Accountant tab only.
+                    Return Back removes them, with their appointments and session days.
+                  </span>
+                ) : (
+                  <span>
+                    A trial on {branch} only. These clients are not counted on any dashboard or other branch, and nobody is messaged.
+                    Their Excel payments show on this branch's Accountant tab only, read from the sheet, never in OS revenue.
+                    What the sheet said about each one is on their card. Return Back removes them.
+                  </span>
+                )}
               </div>
             </>
           )}

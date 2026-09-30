@@ -1596,9 +1596,11 @@ async def v3_consultations_board(
         query = {field: {"$ne": None}}
         if branch_id and branch_id != "all":
             query["branch_id"] = branch_id
-        else:
+        elif not mine:
             # Every branch at once: not the Past Data branch's trial clients, which are read
-            # on that branch's own board (see utils.without_past_moves).
+            # on that branch's own board (see utils.without_past_moves). A Consultant's own
+            # list keeps them: it is narrowed to their appointments below, and a trial client
+            # has one only when an OS Data sheet named this Consultant (past_data_live.care_for).
             query = without_past_moves(query)
         if mine:
             my_doctor_ids = await v3_col("doctors").distinct(

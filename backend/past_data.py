@@ -155,6 +155,10 @@ FINDINGS = {
     "no_status": "Payment with an amount but no Paid / Pending Status -- not counted as paid",
     "payment_no_course": "Treatment Fee with no course on the Physio tab -- kept under a course of its own",
     "session_no_course": "Session with no course of its kind on the Physio tab",
+    "unknown_course": "Course is not Treatment or Rehab -- read as Treatment",
+    "unknown_session_status": "Session Status is not Completed or Upcoming -- not put on the physio's board",
+    "unknown_review_status": "Review Status is not Completed or Pending",
+    "unknown_payment_for": "Payment For is not Consultation Fee or Treatment Fee -- filed under the course running on its date",
     "sample_row": "The template's sample row (a name starting \"Sample\") -- NOT imported",
     # A custom sheet's own (see past_custom.py).
     "merged_rows": "Same phone and name on more than one row -- read as one client",

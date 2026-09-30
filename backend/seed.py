@@ -2,7 +2,7 @@ import re
 import uuid
 from database import db, v2_col, v3_col
 from deps import HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, is_hr_role, is_diet_role, is_zumba_role
-from utils import now_iso, derive_branch_code, generate_patient_number, enquiry_created_at, find_enquiry_stamp
+from utils import PAST_MOVE_FIELD, now_iso, derive_branch_code, generate_patient_number, enquiry_created_at, find_enquiry_stamp
 from security import hash_password
 from constants import (
     V3_VERTICALS, V3_BRANCH_STAGES, V3_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
@@ -1300,7 +1300,9 @@ async def normalize_lead_session_package_prices() -> None:
     # flat rate would rewrite that patient's figure to one nobody quoted them.
     course_items = await _course_priced_item_ids() | await _home_visit_item_ids()
     leads = await v3_col("leads").find(
-        {"session_package_sessions": {"$ne": None}, "treatment_fee_paid": None},
+        # Not a client an OS Data sheet moved to live (past_data_live.care_for): the price on
+        # their package is what the sheet says they were charged.
+        {"session_package_sessions": {"$ne": None}, "treatment_fee_paid": None, PAST_MOVE_FIELD: None},
         {"_id": 0, "id": 1, "session_package_sessions": 1, "session_package_price": 1, "session_package_mode": 1, "session_package_id": 1,
          "visit_type": 1, "session_package_manual": 1},
     ).to_list(2000)
@@ -1340,6 +1342,9 @@ async def flag_manual_session_packages() -> None:
             "session_package_id": {"$in": ids},
             "treatment_fee_paid": None,
             "session_package_manual": {"$ne": True},
+            # The same exemption as normalize_lead_session_package_prices: a moved client's
+            # price came from their sheet.
+            PAST_MOVE_FIELD: None,
         },
         {"$set": {"session_package_manual": True, "session_package_price": None, "updated_at": now_iso()}},
     )

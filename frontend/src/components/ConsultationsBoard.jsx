@@ -8977,8 +8977,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                           new in. */}
                       {(!treatmentAssigned || courseDone) && (
                         <p className="text-xs leading-relaxed text-slate-600">
+                          {/* "Collected" only when it is: unpaid, the gate note below says what
+                              is waiting, and this line used to contradict it. */}
                           {!treatmentAssigned
-                            ? "Treatment Fee collected. Choose the physiotherapist who will deliver the sessions."
+                            ? `${treatmentFeePaid ? "Treatment Fee collected. " : ""}Choose the physiotherapist who will deliver the sessions.`
                             : "Every session of this course has been delivered."}
                         </p>
                       )}

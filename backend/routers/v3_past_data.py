@@ -625,6 +625,9 @@ async def past_data_move_preview(batch_id: str, user: V3UserOut = Depends(v3_req
         # Where they go: each stage the sheet puts people at, the pill it is read under, and
         # how many -- past_data_live.stage_for has the rules.
         "stage_counts": p["stage_counts"],
+        # An OS Data sheet's alone: who goes to which Consultant and Physio, and the names
+        # that matched nobody (past_data_live.care_summary). None for any other sheet.
+        "care": p["care"],
     }
 
 
