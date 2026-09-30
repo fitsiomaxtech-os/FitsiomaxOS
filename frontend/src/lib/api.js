@@ -1142,3 +1142,9 @@ export const disconnectPastDataSheet = async (sheetId) => (await api.delete(`/pa
 export const previewPastDataMove = async (sheetId) => (await api.get(`/past-data/imports/${sheetId}/move`)).data;
 export const movePastDataToLive = async (sheetId) => (await api.post(`/past-data/imports/${sheetId}/move`, null, { timeout: 180000 })).data;
 export const takeBackPastDataMove = async (sheetId) => (await api.delete(`/past-data/imports/${sheetId}/move`, { timeout: 180000 })).data;
+// Settings > Import/Export: every sheet on every branch, archived ones too, and a sheet's
+// branch switched -- or disconnected, with a null branch.
+export const getPastDataSheets = async () => (await api.get("/past-data/sheets")).data;
+export const setPastDataSheetBranch = async (sheetId, branchId) => (
+  await api.post(`/past-data/imports/${sheetId}/branch`, { branch_id: branchId || null })
+).data;

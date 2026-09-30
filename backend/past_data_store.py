@@ -55,6 +55,37 @@ async def live_imports(col, branch_id: str = None) -> list:
     return await col("past_imports").find(query, {"_id": 0}).sort("imported_at", 1).to_list(50)
 
 
+async def home_branch_id(col):
+    """The branch new sheets are added on: the one the first sheet ever went into, or None
+    before any import. A sheet can be connected to another branch after (set_branch), and its
+    branch_id moves with it, so the first one's origin_branch_id is what keeps this fixed."""
+    first = await col("past_imports").find(
+        {}, {"_id": 0, "branch_id": 1, "origin_branch_id": 1},
+    ).sort("imported_at", 1).to_list(1)
+    if not first:
+        return None
+    return first[0].get("origin_branch_id") or first[0].get("branch_id")
+
+
+async def set_branch(col, batch_id: str, branch) -> None:
+    """Connect one sheet to `branch`, or to no branch when it is None: the log row and every
+    row the sheet wrote, so the branch's Past Data tab and the reads scoped to it follow.
+
+    The branch it was added on is kept once, as origin_branch_id, for home_branch_id."""
+    current = await col("past_imports").find_one({"id": batch_id}, {"_id": 0, "branch_id": 1}) or {}
+    await col("past_imports").update_one(
+        {"id": batch_id, "origin_branch_id": {"$exists": False}},
+        {"$set": {"origin_branch_id": current.get("branch_id")}},
+    )
+    branch_id = branch["id"] if branch else None
+    for name in COLLECTIONS:
+        await col(name).update_many({"batch_id": batch_id}, {"$set": {"branch_id": branch_id}})
+    await col("past_imports").update_one(
+        {"id": batch_id},
+        {"$set": {"branch_id": branch_id, "branch_code": (branch or {}).get("code", "")}},
+    )
+
+
 async def remove_batch(col, batch_id: str, removed_by: str = "") -> dict:
     removed = {}
     for name in COLLECTIONS:

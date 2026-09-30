@@ -34,6 +34,7 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from pydantic import BaseModel
 
 import past_data
 import past_data_live
@@ -74,19 +75,25 @@ async def _past_data_branch_ids() -> set:
     return {b for b in await v3_col("past_imports").distinct("branch_id") if b}
 
 
+async def _home_branch_id() -> Optional[str]:
+    """Where sheets are added: the Past Data branch (see past_data_store.home_branch_id)."""
+    return await past_data_store.home_branch_id(v3_col)
+
+
 async def _may_manage(user: V3UserOut, branch_id: Optional[str]) -> bool:
     """Whether this caller may add sheets to, and disconnect them from, this branch.
 
-    Super Admin anywhere. A Branch Admin on their own branch, and only once it is the Past
+    Super Admin anywhere. A Branch Admin on their own branch, and only when it is the Past
     Data branch -- Super Admin's first import is what makes it one -- so no working branch's
-    admin can start filling their branch with old books.
+    admin can start filling their branch with old books, nor manage a sheet Super Admin has
+    connected to their branch from Settings > Import/Export.
     """
     if not branch_id:
         return False
     if _is_super_admin(user):
         return True
     return (is_branch_admin_role(user.role) and branch_id in _own_branches(user)
-            and branch_id in await _past_data_branch_ids())
+            and branch_id == await _home_branch_id())
 
 
 def _branch_for(user: V3UserOut, branch_id: Optional[str]) -> Optional[str]:
@@ -155,19 +162,19 @@ async def past_data_branches(user: V3UserOut = Depends(v3_current_user)):
     clinics. A branch already working patients never offers it.
     """
     holding = sorted(await _past_data_branch_ids())
+    home = await _home_branch_id()
     importable: list = []
     if _is_super_admin(user):
-        live = sorted({b["branch_id"] for b in await _live_batches() if b.get("branch_id")})
-        if live:
-            importable = live
-        elif holding:
-            importable = holding
+        if home:
+            importable = [home]
         else:
             for b in await v3_col("branches").find(live_branch_query(), {"_id": 0, "id": 1}).to_list(500):
                 if (not await v3_col("leads").count_documents({"branch_id": b["id"]}, limit=1)
                         and not await v3_col("doctors").count_documents({"branch_id": b["id"]}, limit=1)):
                     importable.append(b["id"])
-    return {"branch_ids": holding, "importable_ids": sorted(importable)}
+    # `home_id` is the Past Data branch itself, whose board opens on the tab. Another branch
+    # holding a sheet connected to it from Settings shows the tab without opening on it.
+    return {"branch_ids": holding, "importable_ids": sorted(importable), "home_id": home}
 
 
 PATIENT_ID = re.compile(r"(?i)^pat\s*-?\s*(\d+)$")
@@ -381,14 +388,13 @@ def _sheet(batch: dict) -> dict:
 
 
 async def _import_blocker(branch_id: str) -> str:
-    """Why this branch may not take a sheet, or "" when it may: another branch holds the old
-    books already. One clinic's history belongs in one place, and sheets spread over two
-    branches would each show half of it."""
-    others = [b for b in await past_data_store.live_imports(v3_col) if b.get("branch_id") != branch_id]
-    if not others:
+    """Why this branch may not take a sheet, or "" when it may: sheets are added on the Past
+    Data branch only, and connected to other branches from Settings > Import/Export after."""
+    home = await _home_branch_id()
+    if not home or home == branch_id:
         return ""
-    branch = await v3_col("branches").find_one({"id": others[0]["branch_id"]}, {"_id": 0, "branch_name": 1}) or {}
-    return f"Past data is already imported into {branch.get('branch_name') or 'another branch'} -- it belongs on one branch only"
+    branch = await v3_col("branches").find_one({"id": home}, {"_id": 0, "branch_name": 1}) or {}
+    return f"Past data sheets are added on {branch.get('branch_name') or 'the Past Data branch'}"
 
 
 async def _read_upload(file: UploadFile):
@@ -479,7 +485,9 @@ async def past_data_import_preview(
     """Read the sheet and say what adding it would do. Writes nothing."""
     branch = await _manage_branch(user, branch_id)
     _, sha, data = await _read_upload(file)
-    existing = await past_data_store.live_imports(v3_col, branch_id)
+    # Every branch's sheets, not only this one's: a sheet connected elsewhere from Settings
+    # is still the same file and the same people.
+    existing = await past_data_store.live_imports(v3_col)
     same_file = next((b for b in existing if b.get("file_sha256") == sha), None)
     return {
         "file_name": file.filename,
@@ -514,12 +522,14 @@ async def past_data_import(
     _, sha, data = await _read_upload(file)
     if sha != sha256:
         raise HTTPException(status_code=409, detail="This is not the file that was checked -- check it again before importing")
-    existing = await past_data_store.live_imports(v3_col, branch_id)
+    existing = await past_data_store.live_imports(v3_col)
     replacing = None
     if replace_id:
         replacing = next((b for b in existing if b["id"] == replace_id), None)
         if not replacing:
-            raise HTTPException(status_code=404, detail="The sheet to replace is not on this branch any more")
+            raise HTTPException(status_code=404, detail="The sheet to replace is not connected any more")
+        if replacing.get("branch_id") != branch_id and not _is_super_admin(user):
+            raise HTTPException(status_code=403, detail="Only Super Admin replaces a sheet on another branch")
     same_file = next((b for b in existing if b.get("file_sha256") == sha), None)
     if same_file and same_file is not replacing:
         raise HTTPException(status_code=409, detail=f"This file is already here as {past_data_store.sheet_label(same_file)}")
@@ -529,6 +539,13 @@ async def past_data_import(
     )
     removed = 0
     if replacing:
+        # The new copy takes the old one's branch, or its having none.
+        if replacing.get("branch_id") != branch["id"]:
+            target = None
+            if replacing.get("branch_id"):
+                target = await v3_col("branches").find_one(
+                    {"id": replacing["branch_id"]}, {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
+            await past_data_store.set_branch(v3_col, batch_id, target)
         # Its live clients go with it: they are the old copy's, and the new one is moved
         # afresh once it has been read.
         if replacing.get("live_move"):
@@ -556,7 +573,7 @@ async def past_data_disconnect(batch_id: str, user: V3UserOut = Depends(v3_requi
     batch = await v3_col("past_imports").find_one({"id": batch_id, "removed_at": None}, {"_id": 0})
     if not batch:
         raise HTTPException(status_code=404, detail="That sheet is not connected any more")
-    if not await _may_manage(user, batch.get("branch_id")):
+    if not (_is_super_admin(user) or await _may_manage(user, batch.get("branch_id"))):
         raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin disconnects past data sheets")
     taken_back = await past_data_live.take_back(batch, user.full_name) if batch.get("live_move") else 0
     removed = await past_data_store.remove_batch(v3_col, batch_id, removed_by=user.full_name)
@@ -576,6 +593,8 @@ async def _managed_sheet(user: V3UserOut, batch_id: str) -> dict:
     batch = await v3_col("past_imports").find_one({"id": batch_id, "removed_at": None}, {"_id": 0})
     if not batch:
         raise HTTPException(status_code=404, detail="That sheet is not connected any more")
+    if not batch.get("branch_id"):
+        raise HTTPException(status_code=409, detail="Select a branch for this sheet first")
     if not await _may_manage(user, batch.get("branch_id")):
         raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin moves past data to live")
     return batch
@@ -623,3 +642,69 @@ async def past_data_take_back(batch_id: str, user: V3UserOut = Depends(v3_requir
     if not batch.get("live_move"):
         raise HTTPException(status_code=404, detail="This sheet is not live")
     return {"removed_leads": await past_data_live.take_back(batch, user.full_name)}
+
+
+# --------------------------------------------------------------------------- import/export
+#
+# Super Admin's Settings > Import/Export: every sheet on one list, whichever branch it is on,
+# and each one connected to a branch -- or to none -- from there. A sheet on no branch shows on
+# no branch's Past Data tab and cannot be moved to live until it is given one.
+
+
+class SheetBranchIn(BaseModel):
+    # None disconnects the sheet from its branch.
+    branch_id: Optional[str] = None
+
+
+@router.get("/past-data/sheets")
+async def past_data_sheets(user: V3UserOut = Depends(v3_require_roles(*sorted(ORG_WIDE_ROLES)))):
+    """Every sheet ever added, newest first: connected ones and the disconnected (archived)
+    ones, which keep their log row after their data is deleted. Plus the branches a sheet can
+    be connected to, and the Past Data branch that Add Sheet puts new ones on."""
+    rows = await v3_col("past_imports").find({}, {"_id": 0}).sort("imported_at", -1).to_list(500)
+    branches = await v3_col("branches").find(
+        live_branch_query(), {"_id": 0, "id": 1, "branch_name": 1}).sort("branch_name", 1).to_list(500)
+    names = {b["id"]: b.get("branch_name", "") for b in branches}
+    missing = list({r.get("branch_id") for r in rows if r.get("branch_id") and r.get("branch_id") not in names})
+    if missing:
+        for b in await v3_col("branches").find({"id": {"$in": missing}}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500):
+            names[b["id"]] = b.get("branch_name", "")
+    home = await _home_branch_id()
+    super_admin = _is_super_admin(user)
+    return {
+        "sheets": [
+            {
+                **_sheet(r),
+                "branch_name": names.get(r.get("branch_id"), ""),
+                "archived": bool(r.get("removed_at")),
+                "removed_at": r.get("removed_at") or "",
+                "removed_by": r.get("removed_by", ""),
+            }
+            for r in rows
+        ],
+        "branches": branches,
+        "home_id": home,
+        "can_manage": super_admin,
+        "can_add": bool(super_admin and home),
+    }
+
+
+@router.post("/past-data/imports/{batch_id}/branch")
+async def past_data_sheet_branch(batch_id: str, body: SheetBranchIn, user: V3UserOut = Depends(v3_require_roles(SUPER_ADMIN))):
+    """Connect a sheet to another branch, or disconnect it from its branch. Its data stays; it
+    only changes which branch's Past Data tab shows it and where Move to live would put it.
+    A live sheet's clients are on its branch's Branch Leads, so it is returned back first."""
+    batch = await v3_col("past_imports").find_one({"id": batch_id, "removed_at": None}, {"_id": 0})
+    if not batch:
+        raise HTTPException(status_code=404, detail="That sheet is not connected any more")
+    if batch.get("live_move"):
+        raise HTTPException(status_code=409, detail=f"{past_data_store.sheet_label(batch)} is live -- Return Back first")
+    target = None
+    if body.branch_id:
+        target = await v3_col("branches").find_one(
+            live_branch_query({"id": body.branch_id}), {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="Branch not found")
+    if (target or {}).get("id") != batch.get("branch_id"):
+        await past_data_store.set_branch(v3_col, batch_id, target)
+    return {"id": batch_id, "branch_id": (target or {}).get("id"), "branch_name": (target or {}).get("branch_name", "")}

@@ -1483,7 +1483,7 @@ export const CRMPage = ({ auth, onLogout }) => {
           <div data-testid="super-admin-settings">
             {superAdminView === "marketing" && <MarketingBoard branches={branches} leading={settingsSubTabs} />}
             {superAdminView === "stages" && <PipelineStageManagement leading={settingsSubTabs} />}
-            {superAdminView === "import_export" && <PastDataImportExport branches={branches} leading={settingsSubTabs} />}
+            {superAdminView === "import_export" && <PastDataImportExport leading={settingsSubTabs} />}
           </div>
         )}
 

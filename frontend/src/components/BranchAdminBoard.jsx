@@ -732,6 +732,8 @@ const ARM_LIST_WIDTHS = {
 // not have to find it behind More.
 const BOTTOM_NAV_KEYS = ["past_data", "pipeline", "branch_consultation", "review", "consultations"];
 
+const PAST_DATA_TAB = { key: "past_data", label: "Past Data", short: "Past", icon: Archive };
+
 // The two desks that only exist in a room. Zumba is a class taught in the branch's studio
 // in two fixed morning slots, and Fitness is the gym's membership roll — who is training,
 // who is paused, who owes on a package. Neither is something an arm with no floor sells.
@@ -989,17 +991,26 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // decides which (importable_ids -- see /past-data/branches). Asked once per branch: every
   // mount point keys this board by branch, so switching branch starts it afresh. A failed
   // ask leaves the tab off, which is every other branch's normal.
+  //
+  // A working branch can hold a sheet too, once Super Admin connects one to it from Settings >
+  // Import/Export. There the tab is last, off the phone bar, and not opened first: the
+  // branch exists for its patients, and the old books are something it looks up.
   const [holdsPastData, setHoldsPastData] = useState(false);
+  const [pastDataHome, setPastDataHome] = useState(false);
   useEffect(() => {
     let live = true;
     setHoldsPastData(false);
+    setPastDataHome(false);
     if (!branchId) return undefined;
     getPastDataBranches()
       .then((res) => {
         const shown = [...(res?.branch_ids || []), ...(res?.importable_ids || [])];
         if (!live || !shown.includes(branchId)) return;
         setHoldsPastData(true);
-        setActiveView("past_data");
+        // No home_id before the first import: the branch being imported into is the home.
+        const home = !res?.home_id || res.home_id === branchId;
+        setPastDataHome(home);
+        if (home) setActiveView("past_data");
       })
       .catch(() => {});
     return () => { live = false; };
@@ -1673,8 +1684,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // `short` is what the bottom nav shows — six full labels will not fit across a phone,
   // and a truncated "Accountant Ma…" reads worse than a word chosen to be short.
   const VIEW_TABS = [
-    // First, and only on the branch holding the pre-OS register -- see holdsPastData.
-    ...(holdsPastData ? [{ key: "past_data", label: "Past Data", short: "Past", icon: Archive }] : []),
+    // First, and only on the branch holding the pre-OS register -- see holdsPastData. Last
+    // on a working branch holding a sheet connected to it (pastDataHome false).
+    ...(holdsPastData && pastDataHome ? [PAST_DATA_TAB] : []),
     { key: "pipeline", label: "Branch Leads", short: "Leads", icon: LayoutDashboard },
     // Empty on purpose for now: the tab is the navigation going in ahead of what will sit
     // behind it, so the position is settled while the panel is still being decided.
@@ -1716,14 +1728,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // board without one, and keep every tab: they are reading a branch rather than running
     // it, and an org-level view that hid a desk depending on whose branch was picked would
     // be answering a question about the viewer.
+    ...(holdsPastData && !pastDataHome ? [PAST_DATA_TAB] : []),
   ].filter((t) => !(ROOM_ONLY_TABS.includes(t.key) && runsWithoutARoom(currentUser?.role)));
 
   // The phone bar carries four of them plus More; the desktop strip above still shows
   // every one. Both halves come off VIEW_TABS, so a tab added there lands in one or the
   // other rather than being dropped -- and in VIEW_TABS order, which is what puts
   // Consultation between Leads and Review on the bar without a second list to keep in step.
-  const bottomTabs = VIEW_TABS.filter((t) => BOTTOM_NAV_KEYS.includes(t.key));
-  const moreTabs = VIEW_TABS.filter((t) => !BOTTOM_NAV_KEYS.includes(t.key));
+  const onBottomBar = (key) => BOTTOM_NAV_KEYS.includes(key) && (key !== "past_data" || pastDataHome);
+  const bottomTabs = VIEW_TABS.filter((t) => onBottomBar(t.key));
+  const moreTabs = VIEW_TABS.filter((t) => !onBottomBar(t.key));
 
   // Everything under MANAGEMENT — Experts and Calendar used to be their own
   // top-level tabs, and Manager used to sit one level deeper inside Calendar;
