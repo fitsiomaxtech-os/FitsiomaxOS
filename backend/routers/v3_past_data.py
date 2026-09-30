@@ -67,8 +67,12 @@ def _is_super_admin(user: V3UserOut) -> bool:
 
 
 async def _home_branch_id() -> Optional[str]:
-    """Where sheets are added: the Past Data branch (see past_data_store.home_branch_id)."""
-    return await past_data_store.home_branch_id(v3_col)
+    """Where sheets are added: the Past Data branch (see past_data_store.home_branch_id), or
+    None -- any branch -- when there is none yet, or the one kept has since been deleted."""
+    home = await past_data_store.home_branch_id(v3_col)
+    if home and not await v3_col("branches").find_one({"id": home}, {"_id": 0, "id": 1}):
+        return None
+    return home
 
 
 async def _may_manage(user: V3UserOut, branch_id: Optional[str]) -> bool:
@@ -531,9 +535,13 @@ async def past_data_import(
     if same_file and same_file is not replacing:
         raise HTTPException(status_code=409, detail=f"This file is already here as {past_data_store.sheet_label(same_file)}")
 
+    home_before = await _home_branch_id()
     batch_id = await past_data_store.write_batch(
         v3_col, data, branch, file.filename or "", sha, imported_by=user.full_name, label=label,
     )
+    # With no home yet -- the first sheet ever, or the home branch deleted -- this branch
+    # becomes it. Otherwise a no-op: _manage_branch let nothing through but the home.
+    await past_data_store.remember_home(v3_col, branch["id"], replace=not home_before)
     removed = 0
     if replacing:
         # The new copy takes the old one's branch, or its having none.
@@ -680,9 +688,10 @@ async def past_data_sheets(user: V3UserOut = Depends(v3_require_roles(*sorted(OR
             for r in rows
         ],
         "branches": branches,
+        # None before the first sheet is ever added: Add Sheet then asks which branch.
         "home_id": home,
         "can_manage": super_admin,
-        "can_add": bool(super_admin and home),
+        "can_add": bool(super_admin and (home or branches)),
     }
 
 

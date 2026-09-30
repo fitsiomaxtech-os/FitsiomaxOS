@@ -404,6 +404,7 @@ export const PastDataImportExport = ({ leading = null }) => {
         <PastDataImportDialog
           open={importOpen}
           branchId={data.home_id}
+          branches={branches}
           onClose={() => setImportOpen(false)}
           onImported={() => { setImportOpen(false); refresh(); }}
         />

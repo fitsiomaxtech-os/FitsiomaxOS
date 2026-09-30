@@ -55,16 +55,42 @@ async def live_imports(col, branch_id: str = None) -> list:
     return await col("past_imports").find(query, {"_id": 0}).sort("imported_at", 1).to_list(50)
 
 
+# Where the home branch is kept (app_settings, one row), so it outlives the sheets.
+HOME_SETTING = "past_data_home"
+
+
 async def home_branch_id(col):
     """The branch new sheets are added on: the one the first sheet ever went into, or None
-    before any import. A sheet can be connected to another branch after (set_branch), and its
-    branch_id moves with it, so the first one's origin_branch_id is what keeps this fixed."""
+    before any import.
+
+    Kept in app_settings (remember_home). It was once read off the oldest past_imports row
+    alone -- its origin_branch_id, since set_branch moves branch_id -- and so went with it: with
+    every sheet disconnected and deleted from the archive, nothing said where the home was and
+    Add Sheet had nowhere to add to. An install from before the setting is still read off that
+    row, and remembered from it."""
+    saved = await col("app_settings").find_one({"id": HOME_SETTING}, {"_id": 0, "branch_id": 1})
+    if saved and saved.get("branch_id"):
+        return saved["branch_id"]
     first = await col("past_imports").find(
         {}, {"_id": 0, "branch_id": 1, "origin_branch_id": 1},
     ).sort("imported_at", 1).to_list(1)
     if not first:
         return None
-    return first[0].get("origin_branch_id") or first[0].get("branch_id")
+    home = first[0].get("origin_branch_id") or first[0].get("branch_id")
+    if home:
+        await remember_home(col, home)
+    return home
+
+
+async def remember_home(col, branch_id: str, replace: bool = False) -> None:
+    """Make `branch_id` the home branch -- unless one is kept already, or in place of it with
+    `replace` (the one kept names a branch deleted since)."""
+    row = {"branch_id": branch_id, "set_at": datetime.now(timezone.utc).isoformat()}
+    await col("app_settings").update_one(
+        {"id": HOME_SETTING},
+        {"$set": row} if replace else {"$setOnInsert": {"id": HOME_SETTING, **row}},
+        upsert=True,
+    )
 
 
 async def set_branch(col, batch_id: str, branch) -> None:
