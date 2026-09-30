@@ -1053,7 +1053,11 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt }) => {
                   <span className="font-semibold text-emerald-600">{fmt(tx.gross)}</span>
                   <span className="capitalize">{tx.source}</span>
                   <span>{(tx.date || "").slice(0, 10)}</span>
-                  {onView && <Eye className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-300" />}
+                  {onView && (
+                    <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700">
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -1106,7 +1110,7 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt }) => {
                         <button
                           type="button"
                           onClick={() => onView && onView(tx.lead_id)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-sky-600"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
                           title="Open this client"
                           aria-label="Open this client"
                           data-testid={`discount-detail-view-${tx.id}`}
@@ -1381,7 +1385,7 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); if (onView) onView(g.lead_id); }}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-sky-600"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
                           title="Open this client"
                           aria-label="Open this client"
                           data-testid={`revenue-detail-view-${g.key}`}

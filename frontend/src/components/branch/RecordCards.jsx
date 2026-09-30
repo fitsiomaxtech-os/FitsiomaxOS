@@ -51,7 +51,11 @@ export const RecordCards = ({ rows, card, empty = "Nothing here yet.", testid })
           {meta.length > 0 || clickable ? (
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
               {meta.map((m, j) => <span key={j} className="min-w-0 max-w-full truncate">{m}</span>)}
-              {clickable && <Eye className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-300" />}
+              {clickable && (
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700">
+                  <Eye className="h-3.5 w-3.5" /> View
+                </span>
+              )}
             </div>
           ) : null}
         </div>

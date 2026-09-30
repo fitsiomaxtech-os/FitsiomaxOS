@@ -11,7 +11,9 @@ Past Data branch, which works no patients -- and nowhere else:
   - no fee, package, installment, session or activity is written, so the payment trail, the
     approvals queue, the drawer, the payment reminders and every org-wide revenue figure have
     nothing to read, and nobody is messaged. The Excel payments are shown to this branch's
-    Accountant tab by reading them off the sheet (see "the Accountant" below);
+    Accountant tab by reading them off the sheet (see "the Accountant" below). Money the desk
+    collects on a sheet's balance afterwards is the one exception, and a deliberate one: it
+    is taken today, so it is recorded as any collection is (see collected_against);
   - vertical is offline physiotherapy and no physio is assigned, so neither the online arm's
     board nor any physio's picks them up;
   - they cannot be transferred to a working branch (_transfer_block_reason in
@@ -633,9 +635,32 @@ def owed_status(due: str, today: str) -> str:
     return "partial"
 
 
+async def collected_against(lead_ids: List[str]) -> Dict[str, float]:
+    """Excel payment row id -> what the desk has since collected against it on the OS.
+
+    Read off the collections themselves (collect_past_balance in routers/v3_finance.py writes
+    `past_allocations` on its activity line) rather than kept on the sheet's row, so there is
+    one record of the money, and Return Back -- which deletes a trial lead's activity --
+    gives the sheet its balance back without anything else to undo."""
+    if not lead_ids:
+        return {}
+    taken: Dict[str, float] = {}
+    lines = await v3_col("lead_activity").find(
+        {"lead_id": {"$in": lead_ids}, "past_allocations": {"$exists": True}},
+        {"_id": 0, "past_allocations": 1},
+    ).to_list(100000)
+    for line in lines:
+        for a in line.get("past_allocations") or []:
+            taken[a["past_payment_id"]] = taken.get(a["past_payment_id"], 0.0) + float(a.get("amount") or 0)
+    return taken
+
+
 async def ledger(lead_query: dict) -> dict:
     """The trial leads `lead_query` picks out (within the trial leads), with their Excel
-    payments. `payments` are paid ones, `owed` the installments still unpaid when saved."""
+    payments. `payments` are paid ones, `owed` the installments still unpaid when saved,
+    less whatever has been collected against them on the OS since -- `outstanding` on an
+    owed row is what is left, `os_collected` what came off it. `collected` is that money
+    per lead."""
     leads = await v3_col("leads").find(
         {**lead_query, PAST_MOVE_FIELD: {"$ne": None}},
         {"_id": 0, "id": 1, "name": 1, "phone": 1, "email": 1, "patient_number": 1, "branch_id": 1,
@@ -646,19 +671,25 @@ async def ledger(lead_query: dict) -> dict:
         for cid in (lead.get("past_client_ids") or [lead.get("past_client_id")]) if cid
     }
     if not lead_by_client:
-        return {"leads": leads, "payments": [], "owed": []}
+        return {"leads": leads, "payments": [], "owed": [], "collected": {}}
     rows = await v3_col("past_payments").find({"client_id": {"$in": list(lead_by_client)}}, {"_id": 0}).to_list(200000)
     services = {t["id"]: t.get("service") or "" for t in await v3_col("past_treatments").find(
         {"client_id": {"$in": list(lead_by_client)}}, {"_id": 0, "id": 1, "service": 1}).to_list(200000)}
-    payments, owed = [], []
+    taken = await collected_against([lead["id"] for lead in leads])
+    payments, owed, collected = [], [], {}
     for p in rows:
         lead = lead_by_client[p["client_id"]]
         entry = {**p, "lead": lead, "service": services.get(p.get("treatment_id"), "")}
         if p.get("state") == "paid" and (p.get("amount_paid") or 0) > 0:
             payments.append(entry)
         if p.get("state") != "cancelled" and (p.get("outstanding") or 0) > 0:
-            owed.append(entry)
-    return {"leads": leads, "payments": payments, "owed": owed}
+            off = round(min(taken.get(p["id"], 0.0), float(p["outstanding"])), 2)
+            if off:
+                collected[lead["id"]] = round(collected.get(lead["id"], 0.0) + off, 2)
+            left = round(float(p["outstanding"]) - off, 2)
+            if left > 0:
+                owed.append({**entry, "outstanding": left, "os_collected": off})
+    return {"leads": leads, "payments": payments, "owed": owed, "collected": collected}
 
 
 def payment_day(p: dict) -> str:

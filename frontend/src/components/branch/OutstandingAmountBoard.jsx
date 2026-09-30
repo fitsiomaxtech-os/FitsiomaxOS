@@ -431,8 +431,14 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
                       <td className="border-y border-slate-200 bg-white px-3 py-2 text-center"><StatusBadge status={r.status} /></td>
                       <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-3 py-2">
                         <div className="flex items-center justify-center gap-1">
-                          <button type="button" onClick={() => onView && onView(r.lead_id)} title="View Details" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-sky-600">
-                            <Eye className="h-3.5 w-3.5" />
+                          {/* A labelled button, not a pale 14px glyph: opening the client is
+                              this row's main action and it was the hardest thing on it to see. */}
+                          <button
+                            type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2.5 text-xs font-semibold text-sky-700 hover:border-sky-300 hover:bg-sky-100"
+                            data-testid={`outstanding-view-${r.lead_id}`}
+                          >
+                            <Eye className="h-4 w-4" /> View
                           </button>
                           {/* Not for a Past Data balance: that is what an Excel sheet said was owed
                               when it was saved, shown for reading, and no one on the OS set it. */}

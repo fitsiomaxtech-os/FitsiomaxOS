@@ -540,6 +540,9 @@ export const getRevenueOverview = async (params = {}) => (await api.get("/financ
 
 export const getClientTransactionHistory = async (leadId) => (await api.get(`/finance/client/${leadId}`)).data;
 export const markInstallmentPaid = async (leadId, installmentNumber, payload) => (await api.post(`/finance/installment/${leadId}/${installmentNumber}/mark-paid`, payload)).data;
+// Money against a Past Data client's sheet balance, paid off oldest due first. Same payload
+// as an installment's; the amount may be anything up to the whole balance.
+export const collectPastBalance = async (leadId, payload) => (await api.post(`/finance/past-balance/${leadId}/collect`, payload)).data;
 
 // Whose consultant book the board will show, and whether it belongs to the caller. My
 // Consultation reads it so it can never present somebody else's appointments as your own.

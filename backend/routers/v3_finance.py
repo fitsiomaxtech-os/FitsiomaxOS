@@ -2495,7 +2495,10 @@ async def revenue_overview(
     # table offers no WhatsApp reminder for an Excel balance nobody on the OS set.
     for owed in past_owed.values():
         lead = owed["lead"]
+        # The sheet's payments plus what has been collected on its balance since, so the
+        # bill stays what the sheet said while the balance comes down.
         paid = sum(p["amount_paid"] or 0 for p in past["payments"] if p["lead"]["id"] == lead["id"])
+        paid += past["collected"].get(lead["id"], 0.0)
         outstanding_clients.append({
             "lead_id": lead["id"],
             "client_name": lead.get("name") or "Unknown",
@@ -2642,6 +2645,10 @@ async def client_transaction_history(
     # A Past Data trial client's history is their Excel payments, read off the sheet the way
     # revenue_overview reads them for the Accountant tab (past_data_live.py), and what the
     # sheet said they still owed. Nothing on the lead itself describes that money.
+    #
+    # past_owed is that balance row by row, oldest due first -- the order Collect pays it
+    # off in (collect_past_balance) -- so the popup can show what a payment will clear.
+    past_owed = []
     if lead.get(PAST_MOVE_FIELD):
         past = await past_data_live.ledger({"id": lead_id})
         for p in past["payments"]:
@@ -2662,6 +2669,18 @@ async def client_transaction_history(
                 "discount_reason": None,
             })
         transactions.sort(key=lambda t: t["date"] or "", reverse=True)
+        past_owed = [
+            {
+                "id": p["id"],
+                "excel_id": p.get("excel_id") or "",
+                "service": p.get("service") or "",
+                "due_date": p.get("due_date") or "",
+                "amount": p["outstanding"],
+                "collected": p.get("os_collected") or 0,
+                "status": past_data_live.owed_status(p.get("due_date") or "", today),
+            }
+            for p in sorted(past["owed"], key=lambda p: (p.get("due_date") or "9999-12-31", p.get("excel_id") or ""))
+        ]
         owed = past_data_live.owed_by_lead(past["owed"], today).get(lead_id)
         if owed:
             balance = round(balance + owed["balance"], 2)
@@ -2761,9 +2780,122 @@ async def client_transaction_history(
             ),
         },
         "schedule": schedule,
+        "past_owed": past_owed,
         "transactions": transactions,
         "timeline": activity,
     }
+
+
+def _tender(payload: V3MarkInstallmentPaidInput, amount: float, what: str = "installment") -> tuple:
+    """How one collection was paid, checked: (mode, amount, mode_fields, detail_suffix).
+
+    `amount` is what is being collected when no split says otherwise. mode_fields are the
+    references kept beside the money; detail_suffix is how the activity line names them.
+    Shared by an installment and a Past Data balance, so the two are paid by the same rules.
+    """
+    mode = payload.payment_mode
+    # One installment paid half in cash and half by UPI -- the same split the fee
+    # itself can arrive in, and the same rules: every tender settles today, the
+    # server sums them rather than trusting a total sent beside them, and the mode
+    # on the record reads "split" because naming either half would be half a lie.
+    lines = payload.payment_lines or []
+    if lines:
+        for line in lines:
+            if line.mode not in SPLIT_TENDER_MODES:
+                raise HTTPException(status_code=400, detail=f"A split payment accepts: {sorted(SPLIT_TENDER_MODES)}")
+            if line.amount is None or line.amount <= 0:
+                raise HTTPException(status_code=400, detail="Every payment in a split must be more than zero")
+        lines_total = round(sum(line.amount for line in lines), 2)
+        if payload.amount is not None and abs(payload.amount - lines_total) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The payments add up to Rs.{lines_total:g}, but the {what} being collected is Rs.{payload.amount:g}",
+            )
+        amount = lines_total
+        mode = "split"
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    mode_fields = {}
+    detail_suffix = ""
+    if lines:
+        # Counted against the tender's own amount, never the installment total --
+        # see the same zip in collect_treatment_fee.
+        line_notes = [
+            _settle_cash_count(ln.denominations, ln.amount, f" for the Rs.{ln.amount:g} cash payment") if ln.mode == "cash" else {}
+            for ln in lines
+        ]
+        mode_fields = {"payment_lines": [
+            {
+                "mode": ln.mode,
+                "amount": ln.amount,
+                "reference": (ln.reference or "").strip(),
+                "denominations": counted,
+            }
+            for ln, counted in zip(lines, line_notes)
+        ]}
+        detail_suffix = " · Split: " + ", ".join(
+            f"Rs.{ln.amount:g} {ln.mode}"
+            + (f" ({ln.reference.strip()})" if (ln.reference or "").strip() else "")
+            + (f" [{_notes_label(counted)}]" if counted else "")
+            for ln, counted in zip(lines, line_notes)
+        )
+    elif mode == "cash":
+        # The installment's own notes. Optional, and refused when they disagree with
+        # the money -- the fee's rule, applied to the piece of it being collected.
+        counted = _settle_cash_count(payload.denominations, amount)
+        if counted:
+            mode_fields = {"denominations": counted}
+            detail_suffix = f" · Counted {_notes_label(counted)}"
+    elif mode == "upi":
+        # UTR is named in the log only when there is one. The Collect popups stopped
+        # asking for it, so the old unconditional line wrote "UTR " with nothing after
+        # it onto every installment collected from here.
+        txn = (payload.upi_transaction_id or "").strip()
+        utr = (payload.upi_utr or "").strip()
+        # The company UPI ID it landed in, when the desk picked one -- same rule as
+        # the whole fee's, in build_payment_details (routers/v3_packages.py).
+        bank_upi = (payload.upi_id or "").strip()
+        mode_fields = {"upi_transaction_id": txn}
+        if utr:
+            mode_fields["upi_utr"] = utr
+        if bank_upi:
+            mode_fields["upi_id"] = bank_upi
+        if txn or utr:
+            detail_suffix = f" · UPI txn {txn}"
+            if utr:
+                detail_suffix += f", UTR {utr}"
+            if bank_upi:
+                detail_suffix += f" to {bank_upi}"
+    elif mode == "card":
+        # One field: the transaction id off the terminal. Same rule as a card payment
+        # against the whole fee -- see build_payment_details in v3_packages.py, which
+        # explains why the four bank fields were never the desk's to answer.
+        txn = (payload.card_transaction_id or "").strip()
+        if not txn:
+            raise HTTPException(status_code=400, detail="Card Transaction ID is required")
+        mode_fields = {"card_transaction_id": txn}
+        detail_suffix = f" · Card txn {txn}"
+    elif mode == "cheque":
+        if not payload.bank_name or not payload.bank_name.strip() or not payload.cheque_number or not payload.cheque_number.strip():
+            raise HTTPException(status_code=400, detail="Bank Name and Cheque Number are required")
+        mode_fields = {"bank_name": payload.bank_name.strip(), "cheque_number": payload.cheque_number.strip()}
+        detail_suffix = f" · Cheque #{payload.cheque_number.strip()}, {payload.bank_name.strip()}"
+    elif mode == "account_transfer":
+        if not all([payload.account_number and payload.account_number.strip(), payload.account_holder_name and payload.account_holder_name.strip(),
+                    payload.bank_name and payload.bank_name.strip(), payload.ifsc_code and payload.ifsc_code.strip(),
+                    payload.transfer_reference and payload.transfer_reference.strip()]):
+            raise HTTPException(status_code=400, detail="Account Number, Account Holder Name, Bank Name, IFSC Code and Reference/UTR No. are required")
+        last4 = "".join(ch for ch in payload.account_number if ch.isdigit())[-4:]
+        mode_fields = {
+            "account_last4": last4,
+            "account_holder_name": payload.account_holder_name.strip(),
+            "bank_name": payload.bank_name.strip(),
+            "ifsc_code": payload.ifsc_code.strip().upper(),
+            "transfer_reference": payload.transfer_reference.strip(),
+        }
+        detail_suffix = f" · A/C ****{last4}, {payload.account_holder_name.strip()}, {payload.bank_name.strip()} ({payload.ifsc_code.strip().upper()}) · Ref {payload.transfer_reference.strip()}"
+    return mode, amount, mode_fields, detail_suffix
 
 
 @router.post("/finance/installment/{lead_id}/{installment_number}/mark-paid")
@@ -2807,109 +2939,8 @@ async def mark_installment_paid(
     activity_details = None
     transaction_id = None
     if payload.payment_mode:
-        mode = payload.payment_mode
-        amount = payload.amount if payload.amount is not None else installments[idx].get("amount", 0)
-        # One installment paid half in cash and half by UPI -- the same split the fee
-        # itself can arrive in, and the same rules: every tender settles today, the
-        # server sums them rather than trusting a total sent beside them, and the mode
-        # on the record reads "split" because naming either half would be half a lie.
-        lines = payload.payment_lines or []
-        if lines:
-            for line in lines:
-                if line.mode not in SPLIT_TENDER_MODES:
-                    raise HTTPException(status_code=400, detail=f"A split payment accepts: {sorted(SPLIT_TENDER_MODES)}")
-                if line.amount is None or line.amount <= 0:
-                    raise HTTPException(status_code=400, detail="Every payment in a split must be more than zero")
-            lines_total = round(sum(line.amount for line in lines), 2)
-            if payload.amount is not None and abs(payload.amount - lines_total) > 0.01:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"The payments add up to Rs.{lines_total:g}, but the installment being collected is Rs.{payload.amount:g}",
-                )
-            amount = lines_total
-            mode = "split"
-        if amount <= 0:
-            raise HTTPException(status_code=400, detail="Amount must be greater than zero")
-
-        mode_fields = {}
-        detail_suffix = ""
-        if lines:
-            # Counted against the tender's own amount, never the installment total --
-            # see the same zip in collect_treatment_fee.
-            line_notes = [
-                _settle_cash_count(ln.denominations, ln.amount, f" for the Rs.{ln.amount:g} cash payment") if ln.mode == "cash" else {}
-                for ln in lines
-            ]
-            mode_fields = {"payment_lines": [
-                {
-                    "mode": ln.mode,
-                    "amount": ln.amount,
-                    "reference": (ln.reference or "").strip(),
-                    "denominations": counted,
-                }
-                for ln, counted in zip(lines, line_notes)
-            ]}
-            detail_suffix = " · Split: " + ", ".join(
-                f"Rs.{ln.amount:g} {ln.mode}"
-                + (f" ({ln.reference.strip()})" if (ln.reference or "").strip() else "")
-                + (f" [{_notes_label(counted)}]" if counted else "")
-                for ln, counted in zip(lines, line_notes)
-            )
-        elif mode == "cash":
-            # The installment's own notes. Optional, and refused when they disagree with
-            # the money -- the fee's rule, applied to the piece of it being collected.
-            counted = _settle_cash_count(payload.denominations, amount)
-            if counted:
-                mode_fields = {"denominations": counted}
-                detail_suffix = f" · Counted {_notes_label(counted)}"
-        elif mode == "upi":
-            # UTR is named in the log only when there is one. The Collect popups stopped
-            # asking for it, so the old unconditional line wrote "UTR " with nothing after
-            # it onto every installment collected from here.
-            txn = (payload.upi_transaction_id or "").strip()
-            utr = (payload.upi_utr or "").strip()
-            # The company UPI ID it landed in, when the desk picked one -- same rule as
-            # the whole fee's, in build_payment_details (routers/v3_packages.py).
-            bank_upi = (payload.upi_id or "").strip()
-            mode_fields = {"upi_transaction_id": txn}
-            if utr:
-                mode_fields["upi_utr"] = utr
-            if bank_upi:
-                mode_fields["upi_id"] = bank_upi
-            if txn or utr:
-                detail_suffix = f" · UPI txn {txn}"
-                if utr:
-                    detail_suffix += f", UTR {utr}"
-                if bank_upi:
-                    detail_suffix += f" to {bank_upi}"
-        elif mode == "card":
-            # One field: the transaction id off the terminal. Same rule as a card payment
-            # against the whole fee -- see build_payment_details in v3_packages.py, which
-            # explains why the four bank fields were never the desk's to answer.
-            txn = (payload.card_transaction_id or "").strip()
-            if not txn:
-                raise HTTPException(status_code=400, detail="Card Transaction ID is required")
-            mode_fields = {"card_transaction_id": txn}
-            detail_suffix = f" · Card txn {txn}"
-        elif mode == "cheque":
-            if not payload.bank_name or not payload.bank_name.strip() or not payload.cheque_number or not payload.cheque_number.strip():
-                raise HTTPException(status_code=400, detail="Bank Name and Cheque Number are required")
-            mode_fields = {"bank_name": payload.bank_name.strip(), "cheque_number": payload.cheque_number.strip()}
-            detail_suffix = f" · Cheque #{payload.cheque_number.strip()}, {payload.bank_name.strip()}"
-        elif mode == "account_transfer":
-            if not all([payload.account_number and payload.account_number.strip(), payload.account_holder_name and payload.account_holder_name.strip(),
-                        payload.bank_name and payload.bank_name.strip(), payload.ifsc_code and payload.ifsc_code.strip(),
-                        payload.transfer_reference and payload.transfer_reference.strip()]):
-                raise HTTPException(status_code=400, detail="Account Number, Account Holder Name, Bank Name, IFSC Code and Reference/UTR No. are required")
-            last4 = "".join(ch for ch in payload.account_number if ch.isdigit())[-4:]
-            mode_fields = {
-                "account_last4": last4,
-                "account_holder_name": payload.account_holder_name.strip(),
-                "bank_name": payload.bank_name.strip(),
-                "ifsc_code": payload.ifsc_code.strip().upper(),
-                "transfer_reference": payload.transfer_reference.strip(),
-            }
-            detail_suffix = f" · A/C ****{last4}, {payload.account_holder_name.strip()}, {payload.bank_name.strip()} ({payload.ifsc_code.strip().upper()}) · Ref {payload.transfer_reference.strip()}"
+        default = payload.amount if payload.amount is not None else installments[idx].get("amount", 0)
+        mode, amount, mode_fields, detail_suffix = _tender(payload, default)
 
         # Each installment is its own collection, so each earns its own transaction id --
         # the schedule they belong to has none, since scheduling moves no money.
@@ -2952,6 +2983,92 @@ async def mark_installment_paid(
 
     updated_details = {**details, "installments": installments}
     return {"message": "Installment marked as paid", "transaction_id": transaction_id, "balance": _lead_outstanding_balance({**lead, cfg["details"]: updated_details})}
+
+
+# Which revenue line money against an Excel course lands on, by what the course was for --
+# category_for's piles, onto the fee actions _revenue_category reads back. Anything else
+# (a treatment course, and the odd Zumba or Fitness row) is the Treatment Fee's.
+PAST_COLLECT_ACTIONS = {
+    "consultation": "package_payment_collected",
+    "diet": "diet_fee_collected",
+    "rehab": "rehab_fee_collected",
+}
+
+
+@router.post("/finance/past-balance/{lead_id}/collect")
+async def collect_past_balance(
+    lead_id: str,
+    payload: V3MarkInstallmentPaidInput = V3MarkInstallmentPaidInput(),
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "accountant", "business_dev")),
+):
+    """Client Details > Collect — money taken today against what a Past Data trial client's
+    sheet said they still owed.
+
+    Real money, so it is recorded the way an installment is: one activity line with its own
+    transaction id, reaching revenue, approvals and the drawer like any other collection. The
+    sheet is not edited. The line carries `past_allocations` -- which Excel rows it paid, and
+    how much of each -- and past_data_live.ledger takes those off what the rows still owe.
+    Return Back deletes a trial lead's activity, and with it these lines, so the sheet's
+    balance comes back whole with no second record to undo.
+
+    Paid oldest due first. The amount may be one installment, part of one, or several at
+    once, up to the whole balance."""
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if is_branch_admin_role(user.role) and lead.get("branch_id") != user.branch_id:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if not lead.get(PAST_MOVE_FIELD):
+        raise HTTPException(status_code=400, detail="This client has no Past Data balance")
+    if not payload.payment_mode:
+        raise HTTPException(status_code=400, detail="Pick how this payment was made")
+
+    past = await past_data_live.ledger({"id": lead_id})
+    owed = sorted(past["owed"], key=lambda p: (p.get("due_date") or "9999-12-31", p.get("excel_id") or ""))
+    balance = round(sum(p["outstanding"] for p in owed), 2)
+    if balance <= 0:
+        raise HTTPException(status_code=400, detail="Nothing is owed on this client's Past Data balance")
+
+    default = payload.amount if payload.amount is not None else owed[0]["outstanding"]
+    mode, amount, mode_fields, detail_suffix = _tender(payload, default, "payment")
+    amount = round(amount, 2)
+    if amount > balance + 0.01:
+        raise HTTPException(status_code=400, detail=f"Rs.{amount:g} is more than the Rs.{balance:g} this client owes")
+
+    allocations, left = [], amount
+    for p in owed:
+        if left <= 0.005:
+            break
+        take = round(min(left, p["outstanding"]), 2)
+        allocations.append({"past_payment_id": p["id"], "excel_id": p.get("excel_id") or "", "amount": take})
+        left = round(left - take, 2)
+
+    first = owed[0]
+    action = PAST_COLLECT_ACTIONS.get(past_data_live.category_for(first.get("service")), "treatment_fee_collected")
+    transaction_id = await generate_transaction_id(lead.get("branch_id"))
+    refs = ", ".join(a["excel_id"] for a in allocations if a["excel_id"])
+    # The amount and the mode first: _parse_rs_amount reads the first "Rs." on the line and
+    # _parse_payment_mode the first "via", and the course name is the sheet's own free text.
+    # Written as "Rs.150000", not the float's "Rs.150000.0" -- the timeline shows this line.
+    details = (
+        f"Collected Rs.{f'{amount:.2f}'.rstrip('0').rstrip('.')} via {mode} against the Past Data balance"
+        f" for '{first.get('service') or 'Past Data course'}'"
+        + (f" ({refs})" if refs else "")
+        + f"{detail_suffix} · Txn {transaction_id}"
+    )
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "transaction_id": transaction_id,
+        "lead_id": lead_id,
+        "action": action,
+        "details": details,
+        "past_allocations": allocations,
+        "payment": {"mode": mode, "amount": amount, **mode_fields},
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "created_at": _now(),
+    })
+    return {"message": "Payment collected", "transaction_id": transaction_id, "balance": round(balance - amount, 2)}
 
 
 # ---------------------------------------------------------------------------
