@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from "@/components/ui/sonner";
 import { importPastData, previewPastDataImport } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
-import { layoutLabel, rs } from "@/lib/pastData";
+import { TYPE_LABELS, layoutLabel, rs } from "@/lib/pastData";
 
 const EXAMPLES_SHOWN = 3;
 const n = (v) => (v || 0).toLocaleString("en-IN");
@@ -58,8 +58,9 @@ const FindingGroup = ({ g }) => (
  * and said so. The same file is sent both times -- the server keeps nothing between the two
  * -- with the sha256 the check returned, so what is added is what was checked.
  *
- * It reads either kind of sheet the clinic kept: the register, or a branch's monthly revenue
- * sheet. Each becomes a sheet of its own on the tab. A file that is already there is caught
+ * It reads any of the three kinds of sheet: the register, a branch's monthly revenue sheet, or
+ * the OS Data workbook, whose five tabs -- leads, courses, sessions, reviews, payments -- are
+ * read in one go. Each becomes a sheet of its own on the list. A file that is already there is caught
  * here: the very same file cannot be added twice, and one holding mostly the same people as a
  * sheet already there (the register saved again) is offered as that sheet's replacement.
  */
@@ -99,6 +100,10 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
 
   const report = preview?.report;
   const revenue = report?.layout === "revenue";
+  const osData = report?.layout === "os";
+  // One upload is one sheet on one branch: an OS Data file holding several branches' clients
+  // says so here, before they all go onto the one.
+  const branchesInFile = Object.entries(report?.branches || {});
   const flagged = (report?.finding_groups || []).filter((g) => g.imported);
   const leftOut = (report?.finding_groups || []).filter((g) => !g.imported);
   const sameFile = preview?.same_file;
@@ -129,8 +134,8 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-emerald-600" />Add a sheet</DialogTitle>
           <DialogDescription>
-            Choose an Excel sheet: the clinic register, or a branch's monthly revenue sheet. It is checked first and
-            nothing is written until you press Add. Past data never goes into live leads, revenue or dashboards.
+            Choose an Excel sheet: the clinic register, a branch's monthly revenue sheet, or the OS Data workbook. It is
+            checked first and nothing is written until you press Add. Past data never goes into live leads, revenue or dashboards.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,7 +161,10 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
           {report && (
             <div className="space-y-4" data-testid="past-import-report">
               <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" />Checked: a {layoutLabel(report.layout).toLowerCase()}. This is what adding it to <b>{preview.branch.name}</b> would do:
+                <CheckCircle2 className="h-4 w-4" />
+                Checked: {osData
+                  ? `the OS Data workbook (${(report.types || []).map((t) => TYPE_LABELS[t] || t).join(" · ")})`
+                  : `a ${layoutLabel(report.layout).toLowerCase()}`}. This is what adding it to <b>{preview.branch.name}</b> would do:
               </p>
 
               <label className="block space-y-1">
@@ -164,7 +172,15 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
                 <Input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder={preview.suggested_label} className="h-9 sm:w-80" data-testid="past-import-label" />
               </label>
 
-              {revenue ? (
+              {osData ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <Figure label="Clients" value={n(report.clients)} />
+                  <Figure label="Courses" value={n(report.treatments)} />
+                  <Figure label="Sessions" value={n(report.sessions)} />
+                  <Figure label={`Paid (${paid.rows})`} value={rs(report.paid_total)} tone="text-emerald-700" />
+                  <Figure label={`Pending (${unpaid.rows})`} value={rs(report.outstanding_total)} tone="text-amber-700" />
+                </div>
+              ) : revenue ? (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Figure label="Clients" value={n(report.clients)} />
                   <Figure label="Payments" value={n(report.payments)} />
@@ -179,10 +195,22 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
                 </div>
               )}
               <p className="text-xs text-slate-500" data-testid="past-import-sub">
-                {revenue
-                  ? `Month tabs read: ${(report.tabs || []).join(", ")} · one payment per row`
-                  : `${n(report.payments)} installment rows · ${report.enquiries_attached} of ${report.enquiries_read} enquiries matched to a client`}
+                {osData
+                  ? `Rows read: ${Object.entries(report.tab_rows || {}).map(([tab, rows]) => `${tab} ${n(rows)}`).join(" · ")}`
+                    + ((report.tabs_missing || []).length ? ` · not in the file: ${report.tabs_missing.join(", ")}` : "")
+                  : revenue
+                    ? `Month tabs read: ${(report.tabs || []).join(", ")} · one payment per row`
+                    : `${n(report.payments)} installment rows · ${report.enquiries_attached} of ${report.enquiries_read} enquiries matched to a client`}
               </p>
+              {osData && branchesInFile.length > 1 && (
+                <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-testid="past-import-branches">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    This file holds clients of {branchesInFile.length} branches ({branchesInFile.map(([b, count]) => `${b} ${n(count)}`).join(" · ")}).
+                    One sheet goes onto one branch — split the file by branch if they belong to different ones.
+                  </span>
+                </p>
+              )}
 
               {flagged.length > 0 && (
                 <section className="space-y-2">

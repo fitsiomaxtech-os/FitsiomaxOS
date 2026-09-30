@@ -11,7 +11,7 @@ import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog
 import { PastDataMoveDialog } from "@/components/pastData/PastDataMoveDialog";
 import { deletePastDataArchived, getPastDataSheets, setPastDataSheetBranch } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
-import { layoutLabel, rs } from "@/lib/pastData";
+import { TYPE_LABELS, layoutLabel, rs, sheetTypes } from "@/lib/pastData";
 
 const n = (v) => (v || 0).toLocaleString("en-IN");
 const clientsIn = (list) => list.reduce((sum, s) => sum + (s.counts?.past_clients || 0), 0);
@@ -59,11 +59,20 @@ const CARDS = [
   { key: "no_branch", label: "Without Branch Sheet", color: "#9333ea", ledger: "purple", pick: (s) => !s.archived && !s.branch_id },
 ];
 
-// The toolbar's pills, as the Zumba table's payment-mode pills.
-const TYPE_FILTERS = [["", "All"], ["register", "Register"], ["revenue", "Revenue Sheet"]];
+// The toolbar's pills, as the Zumba table's payment-mode pills. One per kind of data (see
+// sheetTypes): an OS Data sheet holding leads, sessions and payments shows under all three,
+// and Revenue takes in the branches' monthly revenue sheets as well.
+const TYPE_FILTERS = [["", "All"], ["register", "Register"], ["lead", "Lead"], ["sessions", "Sessions"], ["revenue", "Revenue"]];
 
 // Chips as the Zumba table draws its Status (5px corners, bold 10px).
 const chip = "inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold";
+// Off the Status chips' green, amber and red, so a Type chip is never read as a status.
+const TYPE_CHIP = {
+  register: "border-sky-200 bg-sky-50 text-sky-700",
+  lead: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  sessions: "border-teal-200 bg-teal-50 text-teal-700",
+  revenue: "border-violet-200 bg-violet-50 text-violet-700",
+};
 const STATUS_CHIP = {
   active: "border-emerald-200 bg-emerald-50 text-emerald-700",
   inactive: "border-amber-200 bg-amber-50 text-amber-700",
@@ -154,7 +163,7 @@ export const PastDataImportExport = ({ leading = null }) => {
   const counted = Object.fromEntries(CARDS.map((c) => [c.key, sheets.filter(c.pick)]));
   const q = search.trim().toLowerCase();
   const shown = (card === "all" ? sheets.filter((s) => !s.archived) : counted[card])
-    .filter((s) => !type || (s.layout || "register") === type)
+    .filter((s) => !type || sheetTypes(s).includes(type))
     .filter((s) => !q || [s.label, s.source_file, s.branch_name].some((v) => (v || "").toLowerCase().includes(q)));
 
   return (
@@ -242,8 +251,8 @@ export const PastDataImportExport = ({ leading = null }) => {
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <tr className="whitespace-nowrap">
                     <th className="w-[4%] px-3 py-2.5">S.No</th>
-                    <th className="w-[16%] px-3 py-2.5">Sheet</th>
-                    <th className="w-[8%] px-3 py-2.5">Type</th>
+                    <th className="w-[14%] px-3 py-2.5">Sheet</th>
+                    <th className="w-[12%] px-3 py-2.5">Type</th>
                     <th className="w-[6%] px-3 py-2.5">Clients</th>
                     <th className="w-[9%] px-3 py-2.5">Paid</th>
                     <th className="w-[9%] px-3 py-2.5">Date</th>
@@ -269,9 +278,18 @@ export const PastDataImportExport = ({ leading = null }) => {
                           <p className="max-w-[14rem] truncate text-sm font-semibold leading-5 text-slate-800" title={s.source_file || s.label}>{s.label}</p>
                         </td>
                         <td className="px-3 py-3">
-                          <span className={`${chip} ${s.layout === "revenue" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
-                            {layoutLabel(s.layout)}
-                          </span>
+                          <div className="flex items-center gap-1" data-testid={`import-export-types-${s.id}`}>
+                            {sheetTypes(s).map((t) => (
+                              <span
+                                key={t}
+                                className={`${chip} ${TYPE_CHIP[t]}`}
+                                title={t === "sessions" && s.layout === "os" ? `${n(s.sessions_count)} sessions · ${n(s.reviews_count)} reviews` : undefined}
+                                data-testid={`import-export-type-${t}-${s.id}`}
+                              >
+                                {s.layout === "os" ? TYPE_LABELS[t] : layoutLabel(s.layout)}
+                              </span>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-600">{n(s.counts?.past_clients)}</td>
                         <td className="px-3 py-3">

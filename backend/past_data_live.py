@@ -37,13 +37,15 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 import lead_purge
+import past_os
 from constants import (
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
-    SALES_STAGE_ROLE_FOLLOW_UP, V3_CONSULTATION_STAGES,
+    SALES_STAGE_ROLE_FOLLOW_UP, SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PORTFOLIO,
+    SALES_STAGE_ROLE_RNR, V3_CONSULTATION_STAGES,
 )
 from database import v3_col
 from past_revenue import NO_NAME, _one_person
-from stage_utils import first_branch_stage_for_branch, sales_arm_for
+from stage_utils import branch_stage_names_for_branch, first_branch_stage_for_branch, sales_arm_for
 from utils import PAST_MOVE_FIELD, generate_patient_number, without_past_moves
 
 SOURCE_TAB = "Past Data"
@@ -73,6 +75,12 @@ def _day(value: str) -> str:
         return f"{d:02d} {MONTHS[m - 1]} {y}"
     except (ValueError, IndexError, AttributeError):
         return value or ""
+
+
+def _when(value: str) -> str:
+    """"2026-09-04 11:30" as "04 Sep 2026 11:30", and a date alone as _day writes it."""
+    on, _, at = (value or "").partition(" ")
+    return f"{_day(on)} {at}".strip() if on else ""
 
 
 def _rs(amount) -> str:
@@ -112,6 +120,10 @@ def _same_person(a: dict, b: dict) -> bool:
 # As the sheet read on the day it was last saved. The register left patients "Active" long
 # after their last visit, so Physio Assign here says what the sheet said, not who is in the
 # clinic this week -- the card's Last treatment row says which.
+#
+# An OS Data sheet (past_os.py) needs none of this: its Current Stage is already one of the
+# OS's own stage names, and the client goes onto that stage, "os:" in front of it here so it
+# cannot be taken for one of the register's words above (see _os_placement).
 
 LEADS = "Leads"
 FOLLOW_UP = "Follow Up"
@@ -125,6 +137,22 @@ PILLS = {LEADS: LEADS, FOLLOW_UP: FOLLOW_UP, FEE_COLLECTED: FEE_COLLECTED, IN_TR
          COMPLETED: COMPLETED, REFERRED_OUT: COMPLETED, CANCELLED: CANCELLED}
 STAGE_ORDER = (LEADS, FOLLOW_UP, FEE_COLLECTED, IN_TREATMENT, COMPLETED, REFERRED_OUT, CANCELLED)
 
+OS_PREFIX = "os:"
+OS_STAGE_ORDER = tuple(OS_PREFIX + s for s in past_os.STAGES)
+# The Branch-pipeline stages an OS Data client can stand on, by the role the stage carries --
+# the name is Super Admin's to change (see constants.py, "Stage roles").
+OS_BRANCH_ROLES = {
+    "RNR": SALES_STAGE_ROLE_RNR,
+    "Follow Up": SALES_STAGE_ROLE_FOLLOW_UP,
+    "Portfolio": SALES_STAGE_ROLE_PORTFOLIO,
+    "Not a prospect": SALES_STAGE_ROLE_NOT_A_PROSPECT,
+    "Cancelled": SALES_STAGE_ROLE_CANCELLED,
+}
+
+
+def pill_for(stage: str) -> str:
+    return stage[len(OS_PREFIX):] if stage.startswith(OS_PREFIX) else PILLS.get(stage, stage)
+
 # A course that was a consultation and nothing else, however the desk wrote it: the
 # register's "Consultation", "Diet Consultation" and "Diet Chart", and a revenue sheet's
 # "Cons", "Adv-cons", "online diet cons". "Cons+physio session" is a course.
@@ -137,6 +165,8 @@ def consultation_only(service: str) -> bool:
 
 def stage_for(client: dict, latest: Optional[dict]) -> str:
     """Which of the stages above this client goes onto. `latest` is their newest course."""
+    if client.get("current_stage"):
+        return OS_PREFIX + client["current_stage"]
     status = " ".join((client.get("latest_status") or "").lower().split())
     if status == "dropped":
         return CANCELLED
@@ -167,12 +197,22 @@ async def stage_names(branch_id: str) -> dict:
 
     consultation = {r["name"] for r in await v3_col("pipeline_stages").find(
         {"type": "consultation"}, {"_id": 0, "name": 1}).to_list(200)}
+
+    # For an OS Data client: the stage carrying each role, only where this branch's board has
+    # it. RNR, say, is a Branch-Admin-controlled branch's alone, and a lead put on a stage its
+    # board does not show would be on no pill at all.
+    visible = set(await branch_stage_names_for_branch(branch_id, []))
+    roles = {}
+    for role in OS_BRANCH_ROLES.values():
+        rows = await v3_col("pipeline_stages").find({"type": "sales", "role": role}, {"_id": 0, "name": 1}).to_list(20)
+        roles[role] = next((r["name"] for r in rows if r["name"] in visible), None)
     return {
         "entry": await first_branch_stage_for_branch(branch_id, ENTRY_FALLBACK),
         "follow_up": await by_role(SALES_STAGE_ROLE_FOLLOW_UP),
         "appointment": await by_role(SALES_STAGE_ROLE_APPOINTMENT),
         "cancelled": await by_role(SALES_STAGE_ROLE_CANCELLED),
         "consultation": consultation or set(V3_CONSULTATION_STAGES),
+        "roles": roles,
     }
 
 
@@ -188,6 +228,8 @@ def placement(stage: str, names: dict) -> dict:
     A consultation stage this install no longer has leaves the lead at Leads rather than on
     a stage no pill shows.
     """
+    if stage.startswith(OS_PREFIX):
+        return _os_placement(stage[len(OS_PREFIX):], names)
     at_entry = {"branch_stage": names["entry"], "consultation_stage": None, "physio_stage": None}
     consultation = names["consultation"]
     if stage == LEADS:
@@ -204,6 +246,28 @@ def placement(stage: str, names: dict) -> dict:
         return at_entry
     return {"branch_stage": names["appointment"], "consultation_stage": written,
             "physio_stage": "Complete" if stage == COMPLETED else None}
+
+
+def _os_placement(name: str, names: dict) -> dict:
+    """An OS Data client's Current Stage as the fields a lead stands on it by.
+
+    Leads is the branch's opening stage. RNR, Follow Up, Portfolio, Not a prospect and
+    Cancelled are Branch stages, found by role on this branch's own board. Every other name is
+    a consultation stage -- Consultation Booked through Diet Chart, and Cancel -- with the
+    booked appointment behind it, as a booking leaves a lead. Completed is a closed course,
+    as the register's is. A stage this branch has no pill for leaves the client at Leads.
+    """
+    at_entry = {"branch_stage": names["entry"], "consultation_stage": None, "physio_stage": None}
+    if name == LEADS:
+        return at_entry
+    if name in OS_BRANCH_ROLES:
+        stage = names.get("roles", {}).get(OS_BRANCH_ROLES[name])
+        return {**at_entry, "branch_stage": stage} if stage else at_entry
+    if name == COMPLETED:
+        return placement(COMPLETED, names)
+    if name not in names["consultation"]:
+        return at_entry
+    return {"branch_stage": names["appointment"], "consultation_stage": name, "physio_stage": None}
 
 
 def _latest(courses: List[dict]) -> Optional[dict]:
@@ -225,6 +289,8 @@ def past_fields(client: dict, sheet_label: str, elsewhere: List[str]) -> Dict[st
     """What the sheet said about this person, as the lead popup's rows. Blank ones left out."""
     services = ", ".join(client.get("services") or [])
     count = client.get("treatments_count") or 0
+    journey = client.get("journey") or {}
+    sessions = (client.get("sessions_completed") or 0, client.get("sessions_upcoming") or 0)
     fields = {
         "Past Data ID": client.get("excel_id") or "",
         "Past Data sheet": sheet_label,
@@ -232,6 +298,13 @@ def past_fields(client: dict, sheet_label: str, elsewhere: List[str]) -> Dict[st
         "Treatments": f"{count}{' · ' + services if services else ''}" if count else "",
         "Last treatment": _day(client.get("last_treatment_date") or ""),
         "Latest status": client.get("latest_status") or "",
+        # An OS Data sheet's own (past_os.py): what a lead has no field for.
+        "Branch in Excel": client.get("branch_as_written") or "",
+        "Consultant in Excel": client.get("consultant") or "",
+        "Appointment": _when(journey.get("appointment_at") or ""),
+        "Sessions": f"{sessions[0]} completed · {sessions[1]} upcoming" if any(sessions) else "",
+        "Reviews": str(client["reviews_count"]) if client.get("reviews_count") else "",
+        "Dropped reason": client.get("dropped_reason") or "",
         "Paid in Excel": _rs(client.get("paid_total")) if client.get("paid_total") else "",
         "Owed when saved": _rs(client.get("outstanding_total")) if client.get("outstanding_total") else "",
         "Source in Excel": client.get("source") or "",
@@ -270,17 +343,19 @@ def lead_for(
         **stage_fields,
         "notes": client.get("notes") or "",
         "extra_fields": past_fields(client, sheet_label, elsewhere),
-        "alternative_phone": "",
-        "address": "",
-        "city": "",
-        "state": "",
+        # Blank for the register and the revenue sheets, which have no such columns; an OS
+        # Data sheet was laid out on these very fields.
+        "alternative_phone": client.get("alternative_phone") or "",
+        "address": client.get("address") or "",
+        "city": client.get("city") or "",
+        "state": client.get("state") or "",
         "location": "",
-        "department": "",
-        "condition": "",
-        "months_of_pain": None,
+        "department": client.get("department") or "",
+        "condition": client.get("condition") or "",
+        "months_of_pain": client.get("months_of_pain"),
         "age": client.get("age"),
         "gender": client.get("gender") or "",
-        "occupation": "",
+        "occupation": client.get("occupation") or "",
         "expected_consultation_date": "",
         "lead_data": {},
         # When they first came, and when they were last seen: the board lists by updated_at,
@@ -347,13 +422,19 @@ async def plan(batch: dict) -> dict:
         (skipped if twin else adding).append(c)
     courses = await _courses_by_client({"batch_id": batch["id"]})
     stages = {c["id"]: stage_for(c, _latest(courses.get(c["id"], []))) for c in adding}
-    counts = {s: sum(1 for v in stages.values() if v == s) for s in STAGE_ORDER}
+    counts = {s: sum(1 for v in stages.values() if v == s) for s in STAGE_ORDER + OS_STAGE_ORDER}
     elsewhere = await _elsewhere(adding)
     return {
         "clients": adding,
         "skipped": skipped,
         "stages": stages,
-        "stage_counts": [{"stage": s, "pill": PILLS[s], "count": n} for s, n in counts.items() if n],
+        # `note` says what in the sheet put them there, where the dialog cannot work it out
+        # from the stage (an OS Data sheet's Current Stage).
+        "stage_counts": [
+            {"stage": s, "pill": pill_for(s), "count": n,
+             **({"note": "Current Stage in the sheet"} if s.startswith(OS_PREFIX) else {})}
+            for s, n in counts.items() if n
+        ],
         "elsewhere": elsewhere,
         "live_elsewhere": sum(1 for c in adding if elsewhere.get(c.get("phone_normalized") or "")),
         "names": await stage_names(batch["branch_id"]),

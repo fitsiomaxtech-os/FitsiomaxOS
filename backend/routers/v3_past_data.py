@@ -1,9 +1,10 @@
 """Past Data: the clinic's books from before the OS, read-only.
 
 Put in by uploading the Excel sheets the clinic kept before it moved onto the OS -- the
-register (past_data.py) and the branches' monthly revenue sheets (past_revenue.py) -- one
-sheet per upload, each one its own import (see "the import" below; tools/past_data_import.py
-does the same from a terminal). Three collections of its own -- past_clients,
+register (past_data.py), the branches' monthly revenue sheets (past_revenue.py), and the OS
+Data workbook laid out on the OS's own fields, its Leads, Physio, Sessions, Reviews and
+Payments tabs read in one go (past_os.py) -- one sheet per upload, each one its own import
+(see "the import" below; tools/past_data_import.py does the same from a terminal). Three collections of its own -- past_clients,
 past_treatments, past_payments -- plus past_imports, one row per sheet.
 
 Read-only on purpose, and apart from `leads` on purpose. These are courses that finished,
@@ -311,6 +312,11 @@ def _sheet(batch: dict) -> dict:
         "label": past_data_store.sheet_label(batch),
         "layout": batch.get("layout") or "register",
         "tabs": batch.get("tabs") or [],
+        # An OS Data sheet's kinds of data -- "lead", "sessions", "revenue"; the other two
+        # layouts are one kind each, read off `layout`.
+        "types": batch.get("types") or [],
+        "sessions_count": batch.get("sessions_count", 0),
+        "reviews_count": batch.get("reviews_count", 0),
         "source_file": batch.get("source_file", ""),
         "imported_at": batch.get("imported_at", ""),
         "imported_by": batch.get("imported_by", ""),

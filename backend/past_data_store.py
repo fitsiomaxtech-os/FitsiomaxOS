@@ -1,8 +1,8 @@
 """Writing the Past Data tables -- the one place an import is put down or taken back out.
 
 Shared by the two ways an import happens: tools/past_data_import.py from a terminal, and the
-Import Excel button on the Past Data tab (routers/v3_past_data.py). One copy, so the two
-cannot drift into writing the register two different ways.
+Add Sheet button on Settings > Import/Export (routers/v3_past_data.py). One copy, so the two
+cannot drift into writing a sheet two different ways.
 
 Each function takes `col`, the collection getter, rather than importing database.py at the
 top: the terminal tool reads and reports on a workbook where there is no .env at all -- the
@@ -140,6 +140,12 @@ async def write_batch(
             "label": (label or "").strip()[:80] or file_label(source_file),
             "layout": data.layout,
             "tabs": list(data.tabs),
+            # The OS Data workbook's: which kinds it held (Lead, Sessions, Revenue -- the
+            # Import/Export Type column), and the sessions and reviews carried on its clients.
+            "types": list(data.types),
+            "tab_rows": dict(data.tab_rows),
+            "sessions_count": data.sessions_read,
+            "reviews_count": data.reviews_read,
             "file_sha256": file_sha256,
             "counts": {name: len(records) for name, records in rows.items()},
             "paid_total": sum(c["paid_total"] for c in data.clients),

@@ -148,12 +148,20 @@ FINDINGS = {
     # A revenue sheet's own (see past_revenue.py).
     "no_date": "Payment row with no date",
     "no_name_row": "Row with no name or mobile (a total line, or a note) -- NOT imported",
+    # The OS Data workbook's own (see past_os.py).
+    "no_patient_id": "Leads row with no Patient ID -- its other rows are matched by phone and name",
+    "unknown_stage": "Current Stage is not one of the OS stages -- placed at Leads",
+    "no_client": "Row names nobody on the Leads tab -- NOT imported",
+    "no_status": "Payment with an amount but no Paid / Pending Status -- not counted as paid",
+    "payment_no_course": "Treatment Fee with no course on the Physio tab -- kept under a course of its own",
+    "session_no_course": "Session with no course of its kind on the Physio tab",
+    "sample_row": "The template's sample row (a name starting \"Sample\") -- NOT imported",
 }
 
 # Findings where the row itself was left out, as opposed to imported with a flag.
 NOT_IMPORTED = {
     "duplicate_id", "row_without_id", "missing_client", "missing_treatment",
-    "enquiry_no_client", "enquiry_ambiguous", "no_name_row",
+    "enquiry_no_client", "enquiry_ambiguous", "no_name_row", "no_client", "sample_row",
 }
 
 
@@ -173,10 +181,22 @@ class PastData:
     enquiries_read: int = 0
     enquiries_attached: int = 0
     findings: List[Finding] = field(default_factory=list)
-    # "register" -- the four-sheet workbook this module reads -- or "revenue", a branch's
-    # monthly revenue sheet (past_revenue.py); and, for the latter, the month tabs it read.
+    # "register" -- the four-sheet workbook this module reads -- "revenue", a branch's
+    # monthly revenue sheet (past_revenue.py), or "os", the OS Data workbook laid out on the
+    # OS's own fields (past_os.py); and, for the latter two, the tabs read.
     layout: str = "register"
     tabs: List[str] = field(default_factory=list)
+    # The OS Data workbook's alone. What kinds of data it held -- "lead", "sessions" (its
+    # courses, sessions and reviews), "revenue" (its payments) -- the rows read off each tab,
+    # and the tabs it would have read that were not in the file.
+    types: List[str] = field(default_factory=list)
+    tab_rows: Dict[str, int] = field(default_factory=dict)
+    tabs_missing: List[str] = field(default_factory=list)
+    sessions_read: int = 0
+    reviews_read: int = 0
+    # Its Leads tab's Branch column, as written -> how many clients: one upload is one sheet
+    # on one branch, so a file holding several says so before it is added.
+    branches: Dict[str, int] = field(default_factory=dict)
 
     def note(self, code: str, sheet: str, excel_id: str, detail: str = "") -> None:
         self.findings.append(Finding(code, sheet, excel_id, detail))
@@ -435,15 +455,21 @@ def _flag(record: Dict[str, Any], code: str) -> None:
 
 
 def read_workbook(source) -> PastData:
-    """Read the register -- or, when the workbook has no Patient Master, a branch's monthly
-    revenue sheet (past_revenue.py). `source` is a path or an open binary file -- the latter
-    so an upload can be read without being written to disk first."""
+    """Read the register -- or, when the workbook has no Patient Master, the OS Data workbook
+    (past_os.py) or a branch's monthly revenue sheet (past_revenue.py), in that order.
+    `source` is a path or an open binary file -- the latter so an upload can be read without
+    being written to disk first."""
     from openpyxl import load_workbook  # only the reader needs it; the cleaners above don't
 
     workbook = load_workbook(source, read_only=True, data_only=True, keep_vba=False)
     try:
         if CLIENT_SHEET not in workbook.sheetnames:
-            # Not the register: read it as a branch's monthly revenue sheet, or refuse it.
+            # Not the register. The OS Data workbook is asked about before the revenue sheet:
+            # its Payments tab has NAME, PHONE and AMOUNT columns, which the revenue reader
+            # would take for a month of payments and read alone, every other tab passed over.
+            import past_os
+            if past_os.detect(workbook):
+                return past_os.read(workbook)
             import past_revenue
             return past_revenue.read(workbook)
         data = PastData()
@@ -714,6 +740,12 @@ def summary(data: PastData) -> Dict[str, Any]:
         "enquiries_attached": data.enquiries_attached,
         "layout": data.layout,
         "tabs": list(data.tabs),
+        "types": list(data.types),
+        "tab_rows": dict(data.tab_rows),
+        "tabs_missing": list(data.tabs_missing),
+        "sessions": data.sessions_read,
+        "reviews": data.reviews_read,
+        "branches": dict(data.branches),
         "payment_states": states,
         "findings": counts,
     }

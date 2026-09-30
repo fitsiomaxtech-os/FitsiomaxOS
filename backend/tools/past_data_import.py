@@ -83,12 +83,17 @@ def print_report(data: past_data.PastData, show_all: bool = False) -> None:
     unknown_rows, _ = state("unknown")
 
     revenue = s["layout"] == "revenue"
+    os_data = s["layout"] == "os"
     print()
     if revenue:
         print(f"A revenue sheet: one payment a row, from the tabs {', '.join(s['tabs'])}.")
+    if os_data:
+        print(f"The OS Data workbook ({' · '.join(s['types'])}), from the tabs {', '.join(s['tabs'])}"
+              + (f"; not in the file: {', '.join(s['tabs_missing'])}" if s["tabs_missing"] else "") + ".")
     print("Would write:")
     print(f"  past_clients     {s['clients']:>5}"
-          + ("" if revenue else f"   ({s['enquiries_attached']} of {s['enquiries_read']} enquiries attached to them)"))
+          + (f"   (with {s['sessions']} sessions and {s['reviews']} reviews)" if os_data
+             else "" if revenue else f"   ({s['enquiries_attached']} of {s['enquiries_read']} enquiries attached to them)"))
     print(f"  past_treatments  {s['treatments']:>5}")
     print(f"  past_payments    {s['payments']:>5}")
     print(f"      paid         {paid_rows:>5}   {rupees(paid_amount)}")

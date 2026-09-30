@@ -8,7 +8,7 @@ import { movePastDataToLive, previewPastDataMove, takeBackPastDataMove } from "@
 const n = (v) => (v || 0).toLocaleString("en-IN");
 
 // What the sheet said, where it differs from the pill it lands under (see stage_for in
-// backend past_data_live.py).
+// backend past_data_live.py). An OS Data sheet's stages come with their own `note`.
 const STAGE_NOTES = {
   Leads: "no course in the sheet",
   "Follow Up": "On Hold",
@@ -105,7 +105,7 @@ export const PastDataMoveDialog = ({ sheet, mode, onClose, onDone }) => {
                         <li key={s.stage} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs">
                           <span>
                             <b>{s.pill}</b>
-                            <span className="text-slate-400"> · {STAGE_NOTES[s.stage] || s.stage}</span>
+                            <span className="text-slate-400"> · {s.note || STAGE_NOTES[s.stage] || s.stage}</span>
                           </span>
                           <span className="font-semibold tabular-nums">{n(s.count)}</span>
                         </li>
