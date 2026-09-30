@@ -9,7 +9,7 @@ import {
   bmList, bmCreateWithExistingAdmin, bmReassignAdmin,
   updateBranch, hrBranchAdminCandidates,
   getVerticals, createVertical, deleteVertical, getDoctors,
-  getDashboardOverview, bmListArchived, bmArchiveBranch, bmRestoreBranch,
+  getDashboardOverview, bmListArchived, bmArchiveBranch, bmRestoreBranch, bmDeleteArchivedBranch,
 } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 // Shared with the branch form's Vertical picker, so a service type is the same colour and
@@ -741,10 +741,70 @@ const ArchiveBranchModal = ({ branch, onClose, onArchived }) => {
   );
 };
 
+// The step after archiving, and the one nothing undoes — so the same password as archive,
+// and the dialog says where the branch's leads and its admin end up before it goes.
+const DeleteArchivedBranchModal = ({ branch, onClose, onDeleted }) => {
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const leads = branch.leads_total || 0;
+
+  const submit = async () => {
+    if (!password) { toast.error("Enter your password"); return; }
+    setSaving(true);
+    try {
+      await bmDeleteArchivedBranch(branch.id, password);
+      toast.success(`"${branch.branch_name}" deleted`);
+      onDeleted();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Delete failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="bm-archived-delete-dialog">
+      <div className="w-full max-w-sm rounded-lg bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+          <h3 className="inline-flex items-center gap-2 text-base font-semibold"><Trash2 className="h-4 w-4 text-red-500" />Delete Branch</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="bm-archived-delete-close"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3 p-5">
+          <p className="text-sm text-slate-600">
+            Permanently deletes <span className="font-semibold text-slate-800">"{branch.branch_name}"</span>. This can't be undone.
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-slate-500">
+            <li>{leads > 0 ? `Its ${leads} lead${leads === 1 ? "" : "s"} go back to Pre-Sales with no branch.` : "It has no leads."}</li>
+            {branch.admin_name && <li>{branch.admin_name} keeps their login and becomes unassigned in HR.</li>}
+          </ul>
+          <Field label="Confirm your Super Admin password">
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+              placeholder="Password"
+              autoFocus
+              data-testid="bm-archived-delete-password"
+            />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+          <Button variant="outline" onClick={onClose} data-testid="bm-archived-delete-cancel">Cancel</Button>
+          <Button className="bg-red-600 hover:bg-red-700" onClick={submit} disabled={saving} data-testid="bm-archived-delete-confirm">
+            {saving ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ArchivedBranchesModal = ({ onClose, onRestored }) => {
   const [archived, setArchived] = useState([]);
   const [loading, setLoading] = useState(true);
   const [restoringId, setRestoringId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -785,18 +845,35 @@ const ArchivedBranchesModal = ({ onClose, onRestored }) => {
                 <p className="truncate text-sm font-medium text-slate-800">{b.branch_name}</p>
                 <p className="truncate text-xs text-slate-500">{b.admin_name || "—"}{b.archived_at ? ` · archived ${b.archived_at.slice(0, 10)}` : ""}</p>
               </div>
-              <Button
-                className="h-8 shrink-0 bg-emerald-600 px-3 text-xs hover:bg-emerald-700"
-                onClick={() => restore(b)}
-                disabled={restoringId === b.id}
-                data-testid={`bm-archived-restore-${b.id}`}
-              >
-                {restoringId === b.id ? "Restoring…" : "Restore"}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  className="h-8 shrink-0 bg-emerald-600 px-3 text-xs hover:bg-emerald-700"
+                  onClick={() => restore(b)}
+                  disabled={restoringId === b.id}
+                  data-testid={`bm-archived-restore-${b.id}`}
+                >
+                  {restoringId === b.id ? "Restoring…" : "Restore"}
+                </Button>
+                <Button
+                  className="h-8 shrink-0 bg-red-600 px-3 text-xs hover:bg-red-700"
+                  onClick={() => setDeleteTarget(b)}
+                  disabled={restoringId === b.id}
+                  data-testid={`bm-archived-delete-${b.id}`}
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
           ))}
         </div>
       </div>
+      {deleteTarget && (
+        <DeleteArchivedBranchModal
+          branch={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); load(); }}
+        />
+      )}
     </div>
   );
 };

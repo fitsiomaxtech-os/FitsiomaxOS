@@ -824,6 +824,7 @@ export const bmList = async () => (await api.get("/branch-mgmt")).data;
 export const bmListArchived = async () => (await api.get("/branch-mgmt", { params: { archived: true } })).data;
 export const bmArchiveBranch = async (branchId, password) => (await api.post(`/branch-mgmt/${branchId}/archive`, { password })).data;
 export const bmRestoreBranch = async (branchId) => (await api.post(`/branch-mgmt/${branchId}/restore`)).data;
+export const bmDeleteArchivedBranch = async (branchId, password) => (await api.post(`/branch-mgmt/${branchId}/delete-permanent`, { password })).data;
 export const bmCreateWithExistingAdmin = async (payload) => (await api.post("/branch-mgmt/with-existing-admin", payload)).data;
 export const bmReassignAdmin = async (branchId, admin_user_id) => (await api.patch(`/branch-mgmt/${branchId}/admin`, { admin_user_id })).data;
 export const bmHeadPhysioCandidates = async () => (await api.get("/branch-mgmt/head-physio-candidates")).data;
