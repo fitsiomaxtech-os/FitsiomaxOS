@@ -156,6 +156,8 @@ FINDINGS = {
     "payment_no_course": "Treatment Fee with no course on the Physio tab -- kept under a course of its own",
     "session_no_course": "Session with no course of its kind on the Physio tab",
     "sample_row": "The template's sample row (a name starting \"Sample\") -- NOT imported",
+    # A custom sheet's own (see past_custom.py).
+    "merged_rows": "Same phone and name on more than one row -- read as one client",
 }
 
 # Findings where the row itself was left out, as opposed to imported with a flag.
@@ -182,8 +184,9 @@ class PastData:
     enquiries_attached: int = 0
     findings: List[Finding] = field(default_factory=list)
     # "register" -- the four-sheet workbook this module reads -- "revenue", a branch's
-    # monthly revenue sheet (past_revenue.py), or "os", the OS Data workbook laid out on the
-    # OS's own fields (past_os.py); and, for the latter two, the tabs read.
+    # monthly revenue sheet (past_revenue.py), "os", the OS Data workbook laid out on the
+    # OS's own fields (past_os.py), or "custom", any other list of people, read column by
+    # column as picked on Auto Scan (past_custom.py); and, for the latter three, the tabs read.
     layout: str = "register"
     tabs: List[str] = field(default_factory=list)
     # The OS Data workbook's alone. What kinds of data it held -- "lead", "sessions" (its
@@ -197,6 +200,10 @@ class PastData:
     # Its Leads tab's Branch column, as written -> how many clients: one upload is one sheet
     # on one branch, so a file holding several says so before it is added.
     branches: Dict[str, int] = field(default_factory=dict)
+    # The columns Auto Scan left on, tab by tab, when the sheet was read through them
+    # (past_scan.read_picked): [{"tab", "columns": [{"header", "field"}]}]. Empty when the
+    # whole workbook was read, as the terminal tool reads it.
+    columns: List[Dict[str, Any]] = field(default_factory=list)
 
     def note(self, code: str, sheet: str, excel_id: str, detail: str = "") -> None:
         self.findings.append(Finding(code, sheet, excel_id, detail))
@@ -454,31 +461,57 @@ def _flag(record: Dict[str, Any], code: str) -> None:
         record["flags"].append(code)
 
 
-def read_workbook(source) -> PastData:
+def read_workbook(source, columns: Optional[list] = None) -> PastData:
     """Read the register -- or, when the workbook has no Patient Master, the OS Data workbook
-    (past_os.py) or a branch's monthly revenue sheet (past_revenue.py), in that order.
-    `source` is a path or an open binary file -- the latter so an upload can be read without
-    being written to disk first."""
+    (past_os.py), a branch's monthly revenue sheet (past_revenue.py), or else any list of
+    people (past_custom.py), in that order. `source` is a path or an open binary file -- the
+    latter so an upload can be read without being written to disk first.
+
+    `columns` is what Auto Scan left on (past_scan.read_picked): only those tabs and columns
+    are read. Left out, the whole workbook is, as the terminal tool reads it."""
     from openpyxl import load_workbook  # only the reader needs it; the cleaners above don't
 
     workbook = load_workbook(source, read_only=True, data_only=True, keep_vba=False)
     try:
-        if CLIENT_SHEET not in workbook.sheetnames:
-            # Not the register. The OS Data workbook is asked about before the revenue sheet:
-            # its Payments tab has NAME, PHONE and AMOUNT columns, which the revenue reader
-            # would take for a month of payments and read alone, every other tab passed over.
-            import past_os
-            if past_os.detect(workbook):
-                return past_os.read(workbook)
-            import past_revenue
-            return past_revenue.read(workbook)
-        data = PastData()
-        client_rows = _unique(_read_sheet(workbook, CLIENT_SHEET, CLIENT_COLUMNS, data), CLIENT_SHEET, data)
-        treatment_rows = _unique(_read_sheet(workbook, TREATMENT_SHEET, TREATMENT_COLUMNS, data), TREATMENT_SHEET, data)
-        payment_rows = _unique(_read_sheet(workbook, PAYMENT_SHEET, PAYMENT_COLUMNS, data), PAYMENT_SHEET, data)
-        enquiry_rows = _unique(_read_sheet(workbook, ENQUIRY_SHEET, ENQUIRY_COLUMNS, data), ENQUIRY_SHEET, data)
+        if columns is None:
+            return read_open(workbook)
+        import past_scan
+        book = past_scan.grid(workbook)
     finally:
         workbook.close()
+    return past_scan.read_picked(book, columns)
+
+
+def read_open(workbook, layout: Optional[str] = None) -> PastData:
+    """Read an open workbook as `layout` -- as detected here when not given, the order
+    read_workbook says."""
+    if layout is None and CLIENT_SHEET not in workbook.sheetnames:
+        # Not the register. The OS Data workbook is asked about before the revenue sheet:
+        # its Payments tab has NAME, PHONE and AMOUNT columns, which the revenue reader
+        # would take for a month of payments and read alone, every other tab passed over.
+        import past_os
+        if past_os.detect(workbook):
+            return past_os.read(workbook)
+        import past_revenue
+        try:
+            return past_revenue.read(workbook)
+        except PastDataError:
+            layout = "custom"
+    if layout == "os":
+        import past_os
+        return past_os.read(workbook)
+    if layout == "revenue":
+        import past_revenue
+        return past_revenue.read(workbook)
+    if layout == "custom":
+        import past_custom
+        import past_scan
+        return past_custom.read(workbook if isinstance(workbook, past_scan.GridBook) else past_scan.grid(workbook))
+    data = PastData()
+    client_rows = _unique(_read_sheet(workbook, CLIENT_SHEET, CLIENT_COLUMNS, data), CLIENT_SHEET, data)
+    treatment_rows = _unique(_read_sheet(workbook, TREATMENT_SHEET, TREATMENT_COLUMNS, data), TREATMENT_SHEET, data)
+    payment_rows = _unique(_read_sheet(workbook, PAYMENT_SHEET, PAYMENT_COLUMNS, data), PAYMENT_SHEET, data)
+    enquiry_rows = _unique(_read_sheet(workbook, ENQUIRY_SHEET, ENQUIRY_COLUMNS, data), ENQUIRY_SHEET, data)
     return build(client_rows, treatment_rows, payment_rows, enquiry_rows, data)
 
 

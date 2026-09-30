@@ -286,7 +286,11 @@ async def _courses_by_client(query: dict) -> Dict[str, List[dict]]:
 # ------------------------------------------------------------------------ the lead itself
 
 def past_fields(client: dict, sheet_label: str, elsewhere: List[str]) -> Dict[str, str]:
-    """What the sheet said about this person, as the lead popup's rows. Blank ones left out."""
+    """What the sheet said about this person, as the lead popup's rows. Blank ones left out.
+
+    A custom sheet's columns kept as they were written (past_custom.py) come after the
+    sheet's own rows, under their own headers -- Company, Country -- save where a header is
+    one of the rows here already and that row has something to say."""
     services = ", ".join(client.get("services") or [])
     count = client.get("treatments_count") or 0
     journey = client.get("journey") or {}
@@ -309,11 +313,17 @@ def past_fields(client: dict, sheet_label: str, elsewhere: List[str]) -> Dict[st
         "Owed when saved": _rs(client.get("outstanding_total")) if client.get("outstanding_total") else "",
         "Source in Excel": client.get("source") or "",
         "Location": ", ".join(client.get("locations") or []),
+        "Date of birth": _day(client.get("dob") or ""),
+    }
+    for label, value in (client.get("extra") or {}).items():
+        if not fields.get(label):
+            fields[label] = value
+    fields.update({
         "Needs a look": (f"{client['issue_count']} flagged on import -- see Past Data"
                          if client.get("issue_count") else ""),
         "Also in the OS": "; ".join(elsewhere[:ELSEWHERE_SHOWN]) + (
             f" and {len(elsewhere) - ELSEWHERE_SHOWN} more" if len(elsewhere) > ELSEWHERE_SHOWN else ""),
-    }
+    })
     return {k: v for k, v in fields.items() if v}
 
 
@@ -344,12 +354,13 @@ def lead_for(
         "notes": client.get("notes") or "",
         "extra_fields": past_fields(client, sheet_label, elsewhere),
         # Blank for the register and the revenue sheets, which have no such columns; an OS
-        # Data sheet was laid out on these very fields.
+        # Data sheet was laid out on these very fields, and a custom sheet's columns picked
+        # onto them.
         "alternative_phone": client.get("alternative_phone") or "",
         "address": client.get("address") or "",
         "city": client.get("city") or "",
         "state": client.get("state") or "",
-        "location": "",
+        "location": client.get("location") or "",
         "department": client.get("department") or "",
         "condition": client.get("condition") or "",
         "months_of_pain": client.get("months_of_pain"),

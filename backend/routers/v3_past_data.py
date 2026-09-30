@@ -1,10 +1,12 @@
 """Past Data: the clinic's books from before the OS, read-only.
 
 Put in by uploading the Excel sheets the clinic kept before it moved onto the OS -- the
-register (past_data.py), the branches' monthly revenue sheets (past_revenue.py), and the OS
+register (past_data.py), the branches' monthly revenue sheets (past_revenue.py), the OS
 Data workbook laid out on the OS's own fields, its Leads, Physio, Sessions, Reviews and
-Payments tabs read in one go (past_os.py) -- one sheet per upload, each one its own import
-(see "the import" below; tools/past_data_import.py does the same from a terminal). Three collections of its own -- past_clients,
+Payments tabs read in one go (past_os.py), and any other list of people (past_custom.py) --
+one sheet per upload, each one its own import, scanned first so its tabs and columns can be
+picked (past_scan.py; see "the import" below; tools/past_data_import.py does the same from a
+terminal, reading every column). Three collections of its own -- past_clients,
 past_treatments, past_payments -- plus past_imports, one row per sheet.
 
 Read-only on purpose, and apart from `leads` on purpose. These are courses that finished,
@@ -28,6 +30,7 @@ desks may read any branch's sheets; only Super Admin adds, connects, moves and d
 import asyncio
 import hashlib
 import io
+import json
 import re
 from typing import Optional
 
@@ -37,6 +40,7 @@ from pydantic import BaseModel
 import past_data
 import past_data_live
 import past_data_store
+import past_scan
 from database import v3_col
 from deps import ORG_WIDE_ROLES, v3_require_roles
 from past_data import match_key
@@ -292,10 +296,12 @@ async def past_data_client(client_id: str, user: V3UserOut = Depends(v3_require_
 #
 # The same import tools/past_data_import.py runs from a terminal, from a button: the server
 # this runs on is reached only through a browser console that cannot take a file, so the
-# workbook comes up the way every other upload in the OS does. Two steps, like the tool's
-# dry run and --apply -- /preview reads the file and writes nothing, and /import writes it
-# only once the person has read what /preview said. The file is read in memory and never
-# stored: it is the clinic's patient list, and a copy left on disk is one more to lose.
+# workbook comes up the way every other upload in the OS does. Three steps, each sending the
+# file again: /scan lists every tab and column in it (Auto Scan) so they can be turned on or
+# off; /preview (Fetch) reads the ones left on and writes nothing, like the tool's dry run;
+# and /import writes it only once the person has read what /preview said. The file is read
+# in memory and never stored: it is the clinic's patient list, and a copy left on disk is
+# one more to lose.
 #
 # Each upload is a sheet of its own on the branch -- the register, a branch's revenue sheet,
 # another branch's -- listed on the tab with its own Disconnect. Uploading one that is already
@@ -324,6 +330,8 @@ def _sheet(batch: dict) -> dict:
         "paid_total": batch.get("paid_total", 0),
         # Set while the sheet's clients are on the branch as live leads (Move to live).
         "live_move": batch.get("live_move") or None,
+        # How many columns Auto Scan left on; 0 for a sheet read whole.
+        "columns_count": sum(len(t.get("columns") or []) for t in batch.get("columns") or []),
     }
 
 
@@ -337,18 +345,35 @@ async def _import_blocker(branch_id: str) -> str:
     return f"Past data sheets are added on {branch.get('branch_name') or 'the Past Data branch'}"
 
 
-async def _read_upload(file: UploadFile):
-    """The upload as (bytes, sha256, PastData), or a 400 saying plainly what is wrong."""
+async def _upload_bytes(file: UploadFile) -> bytes:
     name = (file.filename or "").lower()
     if not name.endswith((".xlsm", ".xlsx")):
         raise HTTPException(status_code=400, detail="Choose an Excel sheet (.xlsm or .xlsx)")
     raw = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="That file is larger than 10 MB -- it is not one of the clinic's sheets")
+    return raw
+
+
+def _picked(columns: str):
+    """The `columns` form field -- the tabs and columns Auto Scan left on, as JSON -- or None
+    when it was not sent, which reads the whole workbook."""
+    if not (columns or "").strip():
+        return None
+    try:
+        return json.loads(columns)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="The columns picked could not be read -- scan the file again")
+
+
+async def _read_upload(file: UploadFile, columns: str = ""):
+    """The upload as (bytes, sha256, PastData), or a 400 saying plainly what is wrong."""
+    raw = await _upload_bytes(file)
+    picked = _picked(columns)
     try:
         # openpyxl is a second of CPU for the real register; off the event loop so the rest of
         # the OS is not held up behind it.
-        data = await asyncio.to_thread(past_data.read_workbook, io.BytesIO(raw))
+        data = await asyncio.to_thread(past_data.read_workbook, io.BytesIO(raw), picked)
     except past_data.PastDataError as e:
         raise HTTPException(status_code=400, detail=f"This sheet cannot be read: {e}")
     except Exception:
@@ -416,15 +441,44 @@ def _report(data: past_data.PastData) -> dict:
     }
 
 
-@router.post("/past-data/import/preview")
-async def past_data_import_preview(
+@router.post("/past-data/import/scan")
+async def past_data_import_scan(
     branch_id: str = Form(...),
     file: UploadFile = File(...),
     user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
-    """Read the sheet and say what adding it would do. Writes nothing."""
+    """Auto Scan: every tab in the workbook, its header row, and each column under it with a
+    few of its values -- what Add Sheet shows to turn tabs and columns on or off before
+    anything is read. See past_scan.py. Writes nothing."""
     branch = await _manage_branch(user, branch_id)
-    _, sha, data = await _read_upload(file)
+    raw = await _upload_bytes(file)
+    try:
+        scanned = await asyncio.to_thread(past_scan.scan_file, io.BytesIO(raw))
+    except past_data.PastDataError as e:
+        raise HTTPException(status_code=400, detail=f"This sheet cannot be read: {e}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read this file as an Excel workbook")
+    return {
+        "file_name": file.filename,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "branch": {"id": branch["id"], "name": branch.get("branch_name", "")},
+        **scanned,
+    }
+
+
+@router.post("/past-data/import/preview")
+async def past_data_import_preview(
+    branch_id: str = Form(...),
+    # The tabs and columns left on after Auto Scan, as JSON (past_scan.read_picked). Not
+    # sent, the whole workbook is read.
+    columns: str = Form(""),
+    file: UploadFile = File(...),
+    user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
+):
+    """Read the sheet -- through the columns picked -- and say what adding it would do.
+    Writes nothing."""
+    branch = await _manage_branch(user, branch_id)
+    _, sha, data = await _read_upload(file, columns)
     # Every branch's sheets, not only this one's: a sheet connected elsewhere from Settings
     # is still the same file and the same people.
     existing = await past_data_store.live_imports(v3_col)
@@ -452,14 +506,17 @@ async def past_data_import(
     # What the tab calls the sheet; the file's name when blank.
     label: str = Form(""),
     # A sheet on this branch to swap for this one -- taken out once this one is fully written,
-    # never before. Blank adds this as a sheet of its own.
+    # never before. Blank adds this as a sheet of its own. The same file already here can only
+    # be added again this way: to fetch it with other columns.
     replace_id: str = Form(""),
+    # The columns /preview was sent: what is added is what the report was read for.
+    columns: str = Form(""),
     file: UploadFile = File(...),
     user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
     """Add the sheet to this branch's Past Data, or put it in place of one already there."""
     branch = await _manage_branch(user, branch_id)
-    _, sha, data = await _read_upload(file)
+    _, sha, data = await _read_upload(file, columns)
     if sha != sha256:
         raise HTTPException(status_code=409, detail="This is not the file that was checked -- check it again before importing")
     existing = await past_data_store.live_imports(v3_col)

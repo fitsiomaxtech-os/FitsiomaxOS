@@ -84,7 +84,11 @@ def print_report(data: past_data.PastData, show_all: bool = False) -> None:
 
     revenue = s["layout"] == "revenue"
     os_data = s["layout"] == "os"
+    custom = s["layout"] == "custom"
     print()
+    if custom:
+        print(f"A custom sheet: one person a row, from the tabs {', '.join(s['tabs'])}, "
+              "every headed column read under the OS field its header names.")
     if revenue:
         print(f"A revenue sheet: one payment a row, from the tabs {', '.join(s['tabs'])}.")
     if os_data:
@@ -93,7 +97,7 @@ def print_report(data: past_data.PastData, show_all: bool = False) -> None:
     print("Would write:")
     print(f"  past_clients     {s['clients']:>5}"
           + (f"   (with {s['sessions']} sessions and {s['reviews']} reviews)" if os_data
-             else "" if revenue else f"   ({s['enquiries_attached']} of {s['enquiries_read']} enquiries attached to them)"))
+             else "" if revenue or custom else f"   ({s['enquiries_attached']} of {s['enquiries_read']} enquiries attached to them)"))
     print(f"  past_treatments  {s['treatments']:>5}")
     print(f"  past_payments    {s['payments']:>5}")
     print(f"      paid         {paid_rows:>5}   {rupees(paid_amount)}")

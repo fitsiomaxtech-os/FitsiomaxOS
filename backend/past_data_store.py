@@ -146,6 +146,9 @@ async def write_batch(
             "tab_rows": dict(data.tab_rows),
             "sessions_count": data.sessions_read,
             "reviews_count": data.reviews_read,
+            # The tabs and columns Auto Scan left on, and each one's OS field on a custom
+            # sheet -- empty when the whole workbook was read (the terminal tool).
+            "columns": list(data.columns),
             "file_sha256": file_sha256,
             "counts": {name: len(records) for name, records in rows.items()},
             "paid_total": sum(c["paid_total"] for c in data.clients),

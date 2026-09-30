@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Info, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CloudDownload, Download, FileSpreadsheet, Info, Loader2, Pencil, ScanSearch, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/sonner";
-import { importPastData, previewPastDataImport } from "@/lib/api";
+import { PastDataScanPicker } from "@/components/pastData/PastDataScanPicker";
+import { importPastData, previewPastDataImport, scanPastDataImport } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
-import { TYPE_LABELS, layoutLabel, rs } from "@/lib/pastData";
+import { TYPE_LABELS, initialPicks, layoutLabel, onCount, picksPayload, picksProblems, rs } from "@/lib/pastData";
 
 const EXAMPLES_SHOWN = 3;
 const n = (v) => (v || 0).toLocaleString("en-IN");
@@ -53,46 +54,76 @@ const FindingGroup = ({ g }) => (
 );
 
 /**
- * Add a sheet to Past Data, in the two steps the terminal tool takes: read the workbook and
- * show what adding it would do (nothing is written), then add it once somebody has read that
- * and said so. The same file is sent both times -- the server keeps nothing between the two
- * -- with the sha256 the check returned, so what is added is what was checked.
+ * Add a sheet to Past Data, in the steps the terminal tool takes, with Auto Scan in front:
  *
- * It reads any of the three kinds of sheet: the register, a branch's monthly revenue sheet, or
- * the OS Data workbook, whose five tabs -- leads, courses, sessions, reviews, payments -- are
- * read in one go. Each becomes a sheet of its own on the list. A file that is already there is caught
- * here: the very same file cannot be added twice, and one holding mostly the same people as a
- * sheet already there (the register saved again) is offered as that sheet's replacement.
+ *   1. Scan. Choosing the file lists every tab in it and every header under each, with a few
+ *      of the values it holds (PastDataScanPicker) -- to turn tabs and headers on or off, and
+ *      on a custom sheet to say which OS field each column goes into.
+ *   2. Fetch. Reads the tabs and headers left on and shows what adding them would do; nothing
+ *      is written. "Change columns" goes back to step 1.
+ *   3. Add, once somebody has read that and said so.
+ *
+ * The same file and the same columns are sent each time -- the server keeps nothing between
+ * the calls -- with the sha256 the check returned, so what is added is what was checked.
+ *
+ * It reads any kind of sheet: the register, a branch's monthly revenue sheet, the OS Data
+ * workbook (its five tabs read in one go), or any other list of people, a custom sheet. Each
+ * becomes a sheet of its own on the list. A file that is already there is caught at Fetch: the
+ * very same file is only added again in place of itself (to fetch other columns), and one
+ * holding mostly the same people as a sheet already there (the register saved again) is
+ * offered as that sheet's replacement.
  */
 export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) => {
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
+  const [scan, setScan] = useState(null);
+  const [picks, setPicks] = useState({});
   const [preview, setPreview] = useState(null);
   const [label, setLabel] = useState("");
   const [replaceId, setReplaceId] = useState("");
+  const [scanning, setScanning] = useState(false);
   const [checking, setChecking] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
   const reset = () => {
-    setFile(null); setPreview(null); setLabel(""); setReplaceId("");
-    setChecking(false); setImporting(false); setError(""); setConfirmed(false);
+    setFile(null); setScan(null); setPicks({}); setPreview(null); setLabel(""); setReplaceId("");
+    setScanning(false); setChecking(false); setImporting(false); setError(""); setConfirmed(false);
     if (inputRef.current) inputRef.current.value = "";
   };
   const close = () => { if (importing) return; reset(); onClose(); };
 
   const choose = async (picked) => {
     if (!picked) return;
-    setFile(picked); setPreview(null); setError(""); setConfirmed(false); setChecking(true);
+    setFile(picked); setScan(null); setPicks({}); setPreview(null); setError(""); setConfirmed(false); setScanning(true);
     try {
-      const res = await previewPastDataImport(branchId, picked);
-      setPreview(res);
-      setLabel(res.suggested_label || "");
-      // Mostly the same people as a sheet already here: replacing it is the likely intent.
-      setReplaceId((res.overlaps || []).find((o) => o.same_people)?.id || "");
+      const res = await scanPastDataImport(branchId, picked);
+      setScan(res);
+      setPicks(initialPicks(res));
     } catch (e) {
-      setError(e?.response?.data?.detail || "Could not check this file");
+      setError(e?.response?.data?.detail || "Could not scan this file");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const problems = scan ? picksProblems(scan, picks) : {};
+  const blocked = Object.keys(problems).length > 0;
+  const payload = scan ? picksPayload(scan, picks) : null;
+
+  const fetchPicked = async () => {
+    if (!file || !scan || blocked) return;
+    setPreview(null); setError(""); setConfirmed(false); setChecking(true);
+    try {
+      const res = await previewPastDataImport(branchId, file, payload);
+      setPreview(res);
+      // Fetched again with other columns: it goes in place of itself, under its own name.
+      setLabel(res.same_file?.label || res.suggested_label || "");
+      // Mostly the same people as a sheet already here: replacing it is the likely intent.
+      setReplaceId(res.same_file?.id || (res.overlaps || []).find((o) => o.same_people)?.id || "");
+    } catch (e) {
+      setError(e?.response?.data?.detail || "Could not fetch this file");
     } finally {
       setChecking(false);
     }
@@ -101,6 +132,7 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
   const report = preview?.report;
   const revenue = report?.layout === "revenue";
   const osData = report?.layout === "os";
+  const custom = report?.layout === "custom";
   // One upload is one sheet on one branch: an OS Data file holding several branches' clients
   // says so here, before they all go onto the one.
   const branchesInFile = Object.entries(report?.branches || {});
@@ -118,7 +150,7 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
     if (!file || !preview) return;
     setImporting(true); setError("");
     try {
-      const res = await importPastData(branchId, file, preview.sha256, { label: label.trim(), replaceId });
+      const res = await importPastData(branchId, file, preview.sha256, { label: label.trim(), replaceId, columns: payload });
       toast.success(`${replacing ? "Replaced" : "Added"} ${name} — ${n(res.counts.past_clients)} past clients`);
       reset();
       onImported();
@@ -130,12 +162,12 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) close(); }}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto" data-testid="past-import-dialog">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto" data-testid="past-import-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-emerald-600" />Add a sheet</DialogTitle>
           <DialogDescription>
-            Choose an Excel sheet: the clinic register, a branch's monthly revenue sheet, or the OS Data workbook. It is
-            checked first and nothing is written until you press Add. Past data never goes into live leads, revenue or dashboards.
+            Choose an Excel file. Every sheet and header in it is scanned — turn on the ones to fetch into the OS. Nothing is
+            written until you press Add.
           </DialogDescription>
         </DialogHeader>
 
@@ -149,12 +181,29 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
               onChange={(e) => choose(e.target.files?.[0])}
               data-testid="past-import-file"
             />
-            <Button type="button" variant="outline" className="gap-2" onClick={() => inputRef.current?.click()} disabled={checking || importing} data-testid="past-import-choose">
+            <Button type="button" variant="outline" className="gap-2" onClick={() => inputRef.current?.click()} disabled={scanning || checking || importing} data-testid="past-import-choose">
               <Upload className="h-4 w-4" />{file ? "Choose another file" : "Choose file"}
             </Button>
             <span className="min-w-0 truncate text-sm text-slate-600">{file ? file.name : "No file chosen"}</span>
-            {checking && <span className="inline-flex items-center gap-1.5 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Checking…</span>}
+            {scanning && <span className="inline-flex items-center gap-1.5 text-sm text-slate-500" data-testid="past-import-scanning"><ScanSearch className="h-4 w-4 animate-pulse" />Scanning…</span>}
+            {checking && <span className="inline-flex items-center gap-1.5 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Fetching…</span>}
           </div>
+
+          {scan && !preview && (
+            <PastDataScanPicker scan={scan} picks={picks} onChange={setPicks} problems={problems} disabled={checking} />
+          )}
+          {scan && preview && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[5px] border border-slate-200 bg-white px-3 py-2.5" data-testid="past-import-picked">
+              <span className="min-w-0 flex-1 text-xs text-slate-600">
+                <b className="text-slate-800">Fetched:</b>{" "}
+                {scan.tabs.filter((t) => t.used && picks[t.name]?.on)
+                  .map((t) => `${t.name} ${onCount(t, picks[t.name])} of ${t.columns.filter((c) => c.used).length} headers`).join(" · ")}
+              </span>
+              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => { setPreview(null); setConfirmed(false); }} disabled={importing} data-testid="past-import-change">
+                <Pencil className="h-3 w-3" />Change columns
+              </Button>
+            </div>
+          )}
 
           {error && <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" data-testid="past-import-error">{error}</p>}
 
@@ -186,6 +235,12 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
                   <Figure label="Payments" value={n(report.payments)} />
                   <Figure label="Collected" value={rs(report.paid_total)} tone="text-emerald-700" />
                 </div>
+              ) : custom ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <Figure label="Clients" value={n(report.clients)} />
+                  <Figure label="Sheets" value={n((report.tabs || []).length)} />
+                  <Figure label="Headers" value={n((payload || []).reduce((sum, t) => sum + t.columns.length, 0))} />
+                </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <Figure label="Clients" value={n(report.clients)} />
@@ -195,7 +250,7 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
                 </div>
               )}
               <p className="text-xs text-slate-500" data-testid="past-import-sub">
-                {osData
+                {osData || custom
                   ? `Rows read: ${Object.entries(report.tab_rows || {}).map(([tab, rows]) => `${tab} ${n(rows)}`).join(" · ")}`
                     + ((report.tabs_missing || []).length ? ` · not in the file: ${report.tabs_missing.join(", ")}` : "")
                   : revenue
@@ -231,9 +286,12 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
               )}
 
               {sameFile ? (
-                <p className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" data-testid="past-import-same-file">
+                <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" data-testid="past-import-same-file">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>This exact file is already here as <b>{sameFile.label}</b>, added {sameFile.imported_at ? dateStampFull(sameFile.imported_at) : ""}.</span>
+                  <span>
+                    This exact file is already here as <b>{sameFile.label}</b>, added {sameFile.imported_at ? dateStampFull(sameFile.imported_at) : ""}.
+                    Adding it again replaces it with the headers picked now.
+                  </span>
                 </p>
               ) : (
                 <>
@@ -269,27 +327,39 @@ export const PastDataImportDialog = ({ open, branchId, onClose, onImported }) =>
                 </>
               )}
 
-              {!sameFile && (
-                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-                  <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="past-import-confirm" />
-                  I have checked this report and want to {replacing ? `replace ${replacing.label} with it` : `add it to ${preview.branch.name}`}.
-                </label>
-              )}
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="past-import-confirm" />
+                I have checked this report and want to {replacing ? `replace ${replacing.label} with it` : `add it to ${preview.branch.name}`}.
+              </label>
             </div>
           )}
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
             <Button type="button" variant="outline" onClick={close} disabled={importing} data-testid="past-import-cancel">Cancel</Button>
-            <Button
-              type="button"
-              className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
-              disabled={!report || !!sameFile || !confirmed || importing || checking}
-              onClick={runImport}
-              data-testid="past-import-submit"
-            >
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {importing ? "Adding…" : replacing ? `Replace ${replacing.label}` : "Add sheet"}
-            </Button>
+            {scan && !preview ? (
+              <Button
+                type="button"
+                className="gap-2 bg-sky-600 text-white hover:bg-sky-700"
+                disabled={blocked || checking}
+                onClick={fetchPicked}
+                data-testid="past-import-fetch"
+              >
+                {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                {checking ? "Fetching…" : "Fetch"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
+                // The same file again goes in only in place of itself.
+                disabled={!report || (!!sameFile && replaceId !== sameFile.id) || !confirmed || importing || checking}
+                onClick={runImport}
+                data-testid="past-import-submit"
+              >
+                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {importing ? "Adding…" : replacing ? `Replace ${replacing.label}` : "Add sheet"}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

@@ -11,7 +11,7 @@ import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog
 import { PastDataMoveDialog } from "@/components/pastData/PastDataMoveDialog";
 import { deletePastDataArchived, getPastDataSheets, setPastDataSheetBranch } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
-import { TYPE_LABELS, layoutLabel, rs, sheetTypes } from "@/lib/pastData";
+import { TYPE_LABELS, layoutLabel, rs, sheetTypes, typedLayout } from "@/lib/pastData";
 
 const n = (v) => (v || 0).toLocaleString("en-IN");
 const clientsIn = (list) => list.reduce((sum, s) => sum + (s.counts?.past_clients || 0), 0);
@@ -286,7 +286,7 @@ export const PastDataImportExport = ({ leading = null }) => {
                                 title={t === "sessions" && s.layout === "os" ? `${n(s.sessions_count)} sessions · ${n(s.reviews_count)} reviews` : undefined}
                                 data-testid={`import-export-type-${t}-${s.id}`}
                               >
-                                {s.layout === "os" ? TYPE_LABELS[t] : layoutLabel(s.layout)}
+                                {typedLayout(s.layout) ? TYPE_LABELS[t] : layoutLabel(s.layout)}
                               </span>
                             ))}
                           </div>
