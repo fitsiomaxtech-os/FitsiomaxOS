@@ -20,12 +20,9 @@ the old books read as the OS's own, and taken back off again with one button. Th
 carry the move's id and every org-wide read of `leads` leaves them out -- see
 past_data_live.py.
 
-Shown inside the branch it was imported into, and nowhere else: a Past Data tab on that
-branch's own board (BranchAdminBoard.jsx), which appears only on a branch that holds an
-import -- see /past-data/branches. So the reads below are all by branch. The two org-wide
-desks may read any branch's, as they may open any branch's board; a Branch Admin reads
-their own branch's, which is how the Past Data Entry login sees what it was made for, and
-no other branch's.
+Managed from one place, Super Admin's Settings > Import/Export (PastDataImportExport.jsx);
+no branch board has a tab for it, and no Branch Admin reaches any of it. The two org-wide
+desks may read any branch's sheets; only Super Admin adds, connects, moves and disconnects.
 """
 import asyncio
 import hashlib
@@ -40,18 +37,17 @@ import past_data
 import past_data_live
 import past_data_store
 from database import v3_col
-from deps import ORG_WIDE_ROLES, is_branch_admin_role, v3_current_user, v3_require_roles, works_org_wide
+from deps import ORG_WIDE_ROLES, v3_require_roles
 from past_data import match_key
 from schemas.v3 import V3UserOut
 from utils import live_branch_query
 
 router = APIRouter(prefix="/api/v3")
 
-PAST_DATA_ROLES = (*sorted(ORG_WIDE_ROLES), "branch_admin")
+PAST_DATA_ROLES = tuple(sorted(ORG_WIDE_ROLES))
 
-# Adding and disconnecting sheets: Super Admin, and the Past Data branch's own admin -- the
-# login made to keep these books. Not the business desk, which reads them, and not any other
-# branch's admin: see _may_manage.
+# Adding and disconnecting sheets: Super Admin alone. Not the business desk, which reads
+# them, and no Branch Admin -- the Past Data Entry login included: see _may_manage.
 SUPER_ADMIN = "super_admin"
 
 # The register is under a megabyte. Ten times that is room for it to grow and still far
@@ -65,53 +61,22 @@ def _is_super_admin(user: V3UserOut) -> bool:
     return (user.role or "").strip().lower() == SUPER_ADMIN
 
 
-def _own_branches(user: V3UserOut) -> set:
-    return {b for b in (user.branch_ids or []) if b} | ({user.branch_id} if user.branch_id else set())
-
-
-async def _past_data_branch_ids() -> set:
-    """Every branch that has ever held a sheet -- disconnected ones too, so a branch whose last
-    sheet was taken out keeps its Past Data tab, to add the corrected one from."""
-    return {b for b in await v3_col("past_imports").distinct("branch_id") if b}
-
-
 async def _home_branch_id() -> Optional[str]:
     """Where sheets are added: the Past Data branch (see past_data_store.home_branch_id)."""
     return await past_data_store.home_branch_id(v3_col)
 
 
 async def _may_manage(user: V3UserOut, branch_id: Optional[str]) -> bool:
-    """Whether this caller may add sheets to, and disconnect them from, this branch.
-
-    Super Admin anywhere. A Branch Admin on their own branch, and only when it is the Past
-    Data branch -- Super Admin's first import is what makes it one -- so no working branch's
-    admin can start filling their branch with old books, nor manage a sheet Super Admin has
-    connected to their branch from Settings > Import/Export.
-    """
-    if not branch_id:
-        return False
-    if _is_super_admin(user):
-        return True
-    return (is_branch_admin_role(user.role) and branch_id in _own_branches(user)
-            and branch_id == await _home_branch_id())
+    """Whether this caller may add sheets to, and disconnect them from, this branch: Super
+    Admin, on a branch that exists. Once a Branch Admin of the Past Data branch did too, from
+    a Past Data tab on that branch's board; the tab is gone, and the access with it."""
+    return bool(branch_id) and _is_super_admin(user)
 
 
 def _branch_for(user: V3UserOut, branch_id: Optional[str]) -> Optional[str]:
-    """The branch this caller may read past data for.
-
-    An org-wide desk reads the branch it asked for, or every branch when it named none. A
-    Branch Admin reads their own: naming another branch is refused rather than quietly
-    swapped for theirs, since a screen that asked for one branch and was shown another
-    would say so nowhere.
-    """
-    if works_org_wide(user.role):
-        return branch_id or None
-    own = _own_branches(user)
-    if not is_branch_admin_role(user.role) or not own:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    if branch_id and branch_id not in own:
-        raise HTTPException(status_code=403, detail="Not your branch")
-    return branch_id or user.branch_id
+    """The branch to read past data for: the one asked for, or every branch when none was.
+    Only the org-wide desks get this far (PAST_DATA_ROLES)."""
+    return branch_id or None
 
 PAGE_SIZE_MAX = 200
 
@@ -146,37 +111,6 @@ async def _live_batches(branch_id: Optional[str] = None) -> list:
     if branch_id:
         query["branch_id"] = branch_id
     return await v3_col("past_imports").find(query, {"_id": 0}).sort("imported_at", -1).to_list(MAX_SHEETS)
-
-
-@router.get("/past-data/branches")
-async def past_data_branches(user: V3UserOut = Depends(v3_current_user)):
-    """Which branches hold past data -- the one question the branch board asks before it
-    decides whether to show a Past Data tab. Open to any signed-in desk that mounts that
-    board: it names branch ids and nothing about anybody in them. A branch that has held a
-    sheet keeps the tab after its last one is disconnected, to add the next from.
-
-    `importable_ids` answers the question before there is any past data: where Super Admin
-    may put it. Once one branch holds an import, that branch and no other -- the old books
-    are one clinic's history and belong in one place. Before that, every branch with nothing
-    on it yet: no leads and no experts, which is the branch made for this and not one of the
-    clinics. A branch already working patients never offers it.
-    """
-    home = await _home_branch_id()
-    # The Past Data branch keeps its tab even once every sheet on it has been connected
-    # elsewhere or deleted from the archive, to add the next one from.
-    holding = sorted(await _past_data_branch_ids() | ({home} if home else set()))
-    importable: list = []
-    if _is_super_admin(user):
-        if home:
-            importable = [home]
-        else:
-            for b in await v3_col("branches").find(live_branch_query(), {"_id": 0, "id": 1}).to_list(500):
-                if (not await v3_col("leads").count_documents({"branch_id": b["id"]}, limit=1)
-                        and not await v3_col("doctors").count_documents({"branch_id": b["id"]}, limit=1)):
-                    importable.append(b["id"])
-    # `home_id` is the Past Data branch itself, whose board opens on the tab. Another branch
-    # holding a sheet connected to it from Settings shows the tab without opening on it.
-    return {"branch_ids": holding, "importable_ids": sorted(importable), "home_id": home}
 
 
 PATIENT_ID = re.compile(r"(?i)^pat\s*-?\s*(\d+)$")
@@ -319,9 +253,7 @@ async def past_data_client(client_id: str, user: V3UserOut = Depends(v3_require_
     """One past client whole: who they were, what they enquired about, every course, and
     every installment under the course it was paid against."""
     client = await v3_col("past_clients").find_one({"id": client_id}, {"_id": 0})
-    # Another branch's client reads as not found to a Branch Admin, same as one that does
-    # not exist: which ids belong to which branch is not theirs to learn either.
-    if not client or (not works_org_wide(user.role) and client.get("branch_id") not in _own_branches(user)):
+    if not client:
         raise HTTPException(status_code=404, detail="Past client not found")
 
     treatments = await v3_col("past_treatments").find(
@@ -424,7 +356,7 @@ async def _manage_branch(user: V3UserOut, branch_id: str) -> dict:
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
     if not await _may_manage(user, branch_id):
-        raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin adds past data sheets")
+        raise HTTPException(status_code=403, detail="Only Super Admin adds past data sheets")
     blocked = await _import_blocker(branch_id)
     if blocked:
         raise HTTPException(status_code=409, detail=blocked)
@@ -576,7 +508,7 @@ async def past_data_disconnect(batch_id: str, user: V3UserOut = Depends(v3_requi
     if not batch:
         raise HTTPException(status_code=404, detail="That sheet is not connected any more")
     if not (_is_super_admin(user) or await _may_manage(user, batch.get("branch_id"))):
-        raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin disconnects past data sheets")
+        raise HTTPException(status_code=403, detail="Only Super Admin disconnects past data sheets")
     taken_back = await past_data_live.take_back(batch, user.full_name) if batch.get("live_move") else 0
     removed = await past_data_store.remove_batch(v3_col, batch_id, removed_by=user.full_name)
     return {"removed_batch": batch_id, "label": past_data_store.sheet_label(batch), "removed": removed, "removed_leads": taken_back}
@@ -598,7 +530,7 @@ async def _managed_sheet(user: V3UserOut, batch_id: str) -> dict:
     if not batch.get("branch_id"):
         raise HTTPException(status_code=409, detail="Select a branch for this sheet first")
     if not await _may_manage(user, batch.get("branch_id")):
-        raise HTTPException(status_code=403, detail="Only Super Admin or this branch's own admin moves past data to live")
+        raise HTTPException(status_code=403, detail="Only Super Admin moves past data to live")
     return batch
 
 

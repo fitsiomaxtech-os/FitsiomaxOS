@@ -1114,12 +1114,7 @@ export const collectFitnessPayment = async (registrationId, lines, note) => (awa
 export const renewFitness = async (registrationId, payload) => (await api.post(`/branch/fitness/${registrationId}/renew`, payload)).data;
 
 // Past Data — the clinic's Excel sheets from before the OS (the register, the branches'
-// revenue sheets), read-only, shown only on the branch they were imported into.
-// getPastDataBranches is what the branch board asks before it shows the tab at all.
-export const getPastDataBranches = async () => (await api.get("/past-data/branches")).data;
-export const getPastDataSummary = async (branchId) => (await api.get("/past-data/summary", { params: branchId ? { branch_id: branchId } : {} })).data;
-export const getPastDataClients = async (params = {}) => (await api.get("/past-data/clients", { params })).data;
-export const getPastDataClient = async (clientId) => (await api.get(`/past-data/clients/${clientId}`)).data;
+// revenue sheets), read-only, managed by Super Admin from Settings > Import/Export.
 // Add sheet: preview reads the workbook and writes nothing; import sends the same file again
 // with the sha256 preview returned, so the server knows it is the file whose report was just
 // read. Each import is one sheet on the branch — replaceId puts it in place of one already there.

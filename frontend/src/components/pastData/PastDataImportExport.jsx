@@ -70,21 +70,21 @@ const STATUS_CHIP = {
   archived: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
-// Past Data's own filter dropdowns (triggerClass in PastDataBoard), at the row buttons' height.
+// The OS's slim filter dropdown, at the row buttons' height.
 const triggerClass = "h-7 w-[160px] rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200";
 const rowButton = "h-7 gap-1 px-2 text-[10px] font-semibold";
 
 /**
  * Settings -> Import/Export: every Past Data sheet on every branch, for Super Admin.
  *
- * A sheet is added on the Past Data branch (Add Sheet; the server's home_id) and connected
- * from here to the branch it belongs to -- which then shows it on its own Past Data tab, and
- * is where Move to Live puts its clients -- or disconnected from its branch, which leaves it
- * on no branch's tab and not movable until it is given one. A live sheet keeps its branch
- * until it is returned back: its clients are on that branch's Branch Leads.
+ * The one place Past Data is managed: no branch board has a tab for it. A sheet is added on
+ * the Past Data branch (Add Sheet; the server's home_id) and connected from here to the
+ * branch it belongs to -- which is where Move to Live puts its clients -- or disconnected
+ * from its branch, which leaves it not movable until it is given one. A live sheet keeps its
+ * branch until it is returned back: its clients are on that branch's Branch Leads.
  *
  * Disconnect is the other thing: it deletes the sheet's data, and the sheet stays listed as
- * Archived until Delete takes it off. Same dialogs as the Past Data tab (PastDataBoard).
+ * Archived until Delete takes it off.
  *
  * The list is the Branch Admin's Zumba table (branch/ZumbaPanel.jsx): a toolbar of pills and
  * search over a slate-headed table, one line per sheet.
