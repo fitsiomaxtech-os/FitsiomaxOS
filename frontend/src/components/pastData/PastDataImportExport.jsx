@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, ChevronRight, Link2Off, Loader2, RefreshCw, Undo2, Unlink, Upload } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Link2Off, Loader2, RefreshCw, Trash2, Undo2, Unlink, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { PastDataDisconnectDialog } from "@/components/pastData/PastDataDisconnectDialog";
 import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog";
 import { PastDataMoveDialog } from "@/components/pastData/PastDataMoveDialog";
-import { getPastDataSheets, setPastDataSheetBranch } from "@/lib/api";
+import { deletePastDataArchived, getPastDataSheets, setPastDataSheetBranch } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
 import { layoutLabel, rs } from "@/lib/pastData";
 
@@ -57,8 +59,20 @@ const CARDS = [
   { key: "no_branch", label: "Without Branch Sheet", color: "#9333ea", ledger: "purple", pick: (s) => !s.archived && !s.branch_id },
 ];
 
-// Past Data's own filter dropdowns (triggerClass in PastDataBoard), at a table row's height.
-const triggerClass = "h-8 w-[170px] rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200";
+// The toolbar's pills, as the Zumba table's payment-mode pills.
+const TYPE_FILTERS = [["", "All"], ["register", "Register"], ["revenue", "Revenue Sheet"]];
+
+// Chips as the Zumba table draws its Status (5px corners, bold 10px).
+const chip = "inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold";
+const STATUS_CHIP = {
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  inactive: "border-amber-200 bg-amber-50 text-amber-700",
+  archived: "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+// Past Data's own filter dropdowns (triggerClass in PastDataBoard), at the row buttons' height.
+const triggerClass = "h-7 w-[160px] rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200";
+const rowButton = "h-7 gap-1 px-2 text-[10px] font-semibold";
 
 /**
  * Settings -> Import/Export: every Past Data sheet on every branch, for Super Admin.
@@ -70,7 +84,10 @@ const triggerClass = "h-8 w-[170px] rounded-md border border-slate-200 bg-white 
  * until it is returned back: its clients are on that branch's Branch Leads.
  *
  * Disconnect is the other thing: it deletes the sheet's data, and the sheet stays listed as
- * Archived. Same dialogs as the Past Data tab (PastDataBoard).
+ * Archived until Delete takes it off. Same dialogs as the Past Data tab (PastDataBoard).
+ *
+ * The list is the Branch Admin's Zumba table (branch/ZumbaPanel.jsx): a toolbar of pills and
+ * search over a slate-headed table, one line per sheet.
  *
  * `leading` is Settings' sub-tab switcher, on the same row as Add Sheet the way Workflow
  * Roots puts it beside Add Stage.
@@ -81,9 +98,14 @@ export const PastDataImportExport = ({ leading = null }) => {
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [card, setCard] = useState("all");
+  const [type, setType] = useState("");
+  const [search, setSearch] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [moving, setMoving] = useState(null);
   const [disconnecting, setDisconnecting] = useState(null);
+  // The archived sheet whose Delete was pressed, while its confirmation is open.
+  const [deleting, setDeleting] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   // The sheet whose branch is being changed, while that request is out.
   const [switching, setSwitching] = useState("");
 
@@ -112,11 +134,28 @@ export const PastDataImportExport = ({ leading = null }) => {
     }
   };
 
+  const deleteArchived = async () => {
+    setDeleteBusy(true);
+    try {
+      await deletePastDataArchived(deleting.id);
+      toast.success(`${deleting.label} deleted`);
+      setDeleting(null);
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const sheets = data?.sheets || [];
   const branches = data?.branches || [];
   const canManage = !!data?.can_manage;
   const counted = Object.fromEntries(CARDS.map((c) => [c.key, sheets.filter(c.pick)]));
-  const shown = card === "all" ? sheets.filter((s) => !s.archived) : counted[card];
+  const q = search.trim().toLowerCase();
+  const shown = (card === "all" ? sheets.filter((s) => !s.archived) : counted[card])
+    .filter((s) => !type || (s.layout || "register") === type)
+    .filter((s) => !q || [s.label, s.source_file, s.branch_name].some((v) => (v || "").toLowerCase().includes(q)));
 
   return (
     <div className="space-y-5" data-testid="import-export-page">
@@ -161,137 +200,184 @@ export const PastDataImportExport = ({ leading = null }) => {
       )}
 
       <Card data-testid="import-export-card">
-        <CardHeader><CardTitle className="text-base">Past Data Sheets</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="p-0">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="import-export-type-filter">
+              {TYPE_FILTERS.map(([key, label]) => (
+                <button
+                  key={key || "all"}
+                  type="button"
+                  onClick={() => setType(key)}
+                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
+                    type === key
+                      ? "border-sky-600 bg-sky-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+                  }`}
+                  data-testid={`import-export-type-${key || "all"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search sheet or branch"
+                className="h-8 w-48 text-xs"
+                data-testid="import-export-search"
+              />
+            </div>
+          </div>
+
           {error ? (
-            <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" data-testid="import-export-error">{error}</p>
+            <p className="px-4 py-12 text-center text-sm text-rose-600" data-testid="import-export-error">{error}</p>
           ) : !data ? (
-            <div className="flex items-center justify-center py-8 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+            <div className="flex items-center justify-center px-4 py-12 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          ) : shown.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-slate-400" data-testid="import-export-empty">No sheets.</p>
           ) : (
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="text-left text-xs text-slate-500">
-                <tr>
-                  <th className="py-2">Sheet</th>
-                  <th>Type</th>
-                  <th>Clients</th>
-                  <th>Paid</th>
-                  <th>Branch</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((s) => {
-                  const liveMove = s.live_move;
-                  const busy = switching === s.id;
-                  // A branch archived since the sheet was connected to it is not in the list,
-                  // but is still where the sheet is.
-                  const options = s.branch_id && !branches.some((b) => b.id === s.branch_id)
-                    ? [{ id: s.branch_id, branch_name: s.branch_name || s.branch_id }, ...branches]
-                    : branches;
-                  return (
-                    <tr key={s.id} className="border-t border-slate-100" data-testid={`import-export-row-${s.id}`}>
-                      <td className="py-3 pr-3">
-                        <p className="font-medium text-slate-800">{s.label}</p>
-                        <p className="text-xs text-slate-400">{dateStampFull(s.archived ? s.removed_at : s.imported_at)}</p>
-                      </td>
-                      <td className="pr-3">
-                        <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.layout === "revenue" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
-                          {layoutLabel(s.layout)}
-                        </span>
-                      </td>
-                      <td className="pr-3 tabular-nums">{n(s.counts?.past_clients)}</td>
-                      <td className="whitespace-nowrap pr-3 tabular-nums">{rs(s.paid_total)}</td>
-                      <td className="pr-3">
-                        {canManage && !s.archived ? (
-                          <Select value={s.branch_id || ""} onValueChange={(v) => setBranch(s, v)} disabled={!!liveMove || busy}>
-                            <SelectTrigger
-                              className={triggerClass}
-                              title={liveMove ? "Return Back first" : undefined}
-                              aria-label="Branch"
-                              data-testid={`import-export-branch-${s.id}`}
-                            >
-                              <SelectValue placeholder="Select Branch" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72 border-slate-200">
-                              {options.map((b) => (
-                                <SelectItem key={b.id} value={b.id} className="text-xs" data-testid={`import-export-branch-option-${b.id}`}>
-                                  {b.branch_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-xs text-slate-600">{s.branch_name || "—"}</span>
-                        )}
-                      </td>
-                      <td className="pr-3">
-                        {s.archived ? (
-                          <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">Archived</span>
-                        ) : liveMove ? (
-                          <span className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700" data-testid={`import-export-live-${s.id}`}>
-                            {liveMove.status === "moving" ? "Moving…" : `Active · ${n(liveMove.leads)}`}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[64rem] text-left text-sm">
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <tr className="whitespace-nowrap">
+                    <th className="w-[4%] px-3 py-2.5">S.No</th>
+                    <th className="w-[16%] px-3 py-2.5">Sheet</th>
+                    <th className="w-[8%] px-3 py-2.5">Type</th>
+                    <th className="w-[6%] px-3 py-2.5">Clients</th>
+                    <th className="w-[9%] px-3 py-2.5">Paid</th>
+                    <th className="w-[9%] px-3 py-2.5">Date</th>
+                    <th className="w-[13%] px-3 py-2.5">Branch</th>
+                    <th className="w-[7%] px-3 py-2.5">Status</th>
+                    <th className="px-3 py-2.5">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shown.map((s, i) => {
+                    const liveMove = s.live_move;
+                    const busy = switching === s.id;
+                    const status = s.archived ? "archived" : liveMove ? "active" : "inactive";
+                    // A branch archived since the sheet was connected to it is not in the list,
+                    // but is still where the sheet is.
+                    const options = s.branch_id && !branches.some((b) => b.id === s.branch_id)
+                      ? [{ id: s.branch_id, branch_name: s.branch_name || s.branch_id }, ...branches]
+                      : branches;
+                    return (
+                      <tr key={s.id} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`import-export-row-${s.id}`}>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
+                        <td className="px-3 py-3">
+                          <p className="max-w-[14rem] truncate text-sm font-semibold leading-5 text-slate-800" title={s.source_file || s.label}>{s.label}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`${chip} ${s.layout === "revenue" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
+                            {layoutLabel(s.layout)}
                           </span>
-                        ) : (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Inactive</span>
-                        )}
-                      </td>
-                      <td>
-                        {canManage && !s.archived && (
-                          <div className="flex flex-wrap gap-2">
-                            {liveMove ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 gap-1.5 text-slate-600"
-                                onClick={() => setMoving({ sheet: s, mode: "back" })}
-                                data-testid={`import-export-return-${s.id}`}
+                        </td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{n(s.counts?.past_clients)}</td>
+                        <td className="px-3 py-3">
+                          <p className="text-xs font-semibold leading-5 text-emerald-700">{rs(s.paid_total)}</p>
+                        </td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{dateStampFull(s.archived ? s.removed_at : s.imported_at) || "—"}</td>
+                        <td className="px-3 py-3">
+                          {canManage && !s.archived ? (
+                            <Select value={s.branch_id || ""} onValueChange={(v) => setBranch(s, v)} disabled={!!liveMove || busy}>
+                              <SelectTrigger
+                                className={triggerClass}
+                                title={liveMove ? "Return Back first" : undefined}
+                                aria-label="Branch"
+                                data-testid={`import-export-branch-${s.id}`}
                               >
-                                <Undo2 className="h-3.5 w-3.5" />Return Back
-                              </Button>
-                            ) : s.branch_id ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                                onClick={() => setMoving({ sheet: s, mode: "move" })}
-                                data-testid={`import-export-move-${s.id}`}
-                              >
-                                <ArrowUpRight className="h-3.5 w-3.5" />Move to Live
-                              </Button>
-                            ) : null}
-                            {s.branch_id && !liveMove && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                                onClick={() => setBranch(s, "")}
-                                disabled={busy}
-                                data-testid={`import-export-unbranch-${s.id}`}
-                              >
-                                <Link2Off className="h-3.5 w-3.5" />Disconnect Branch
-                              </Button>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 gap-1.5 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                              onClick={() => setDisconnecting(s)}
-                              data-testid={`import-export-disconnect-${s.id}`}
-                            >
-                              <Unlink className="h-3.5 w-3.5" />Disconnect
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {shown.length === 0 && (
-                  <tr><td colSpan="7" className="py-6 text-center text-slate-400" data-testid="import-export-empty">No sheets.</td></tr>
-                )}
-              </tbody>
-            </table>
+                                <SelectValue placeholder="Select Branch" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-72 border-slate-200">
+                                {options.map((b) => (
+                                  <SelectItem key={b.id} value={b.id} className="text-xs" data-testid={`import-export-branch-option-${b.id}`}>
+                                    {b.branch_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : s.branch_name ? (
+                            <p className="max-w-[10rem] truncate text-xs leading-5 text-slate-600" title={s.branch_name}>{s.branch_name}</p>
+                          ) : (
+                            <span className="text-xs leading-5 text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`${chip} ${STATUS_CHIP[status]}`} data-testid={`import-export-status-${s.id}`}>
+                            {status === "active"
+                              ? (liveMove.status === "moving" ? "Moving…" : `Active · ${n(liveMove.leads)}`)
+                              : status === "archived" ? "Archived" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          {canManage && (
+                            <div className="flex items-center gap-1.5">
+                              {s.archived ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={`${rowButton} border-rose-300 text-rose-700 hover:bg-rose-50`}
+                                  onClick={() => setDeleting(s)}
+                                  data-testid={`import-export-delete-${s.id}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />Delete
+                                </Button>
+                              ) : (
+                                <>
+                                  {liveMove ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={`${rowButton} border-slate-300 text-slate-700 hover:bg-slate-50`}
+                                      onClick={() => setMoving({ sheet: s, mode: "back" })}
+                                      data-testid={`import-export-return-${s.id}`}
+                                    >
+                                      <Undo2 className="h-3 w-3" />Return Back
+                                    </Button>
+                                  ) : s.branch_id ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={`${rowButton} border-emerald-300 text-emerald-700 hover:bg-emerald-50`}
+                                      onClick={() => setMoving({ sheet: s, mode: "move" })}
+                                      data-testid={`import-export-move-${s.id}`}
+                                    >
+                                      <ArrowUpRight className="h-3 w-3" />Move to Live
+                                    </Button>
+                                  ) : null}
+                                  {s.branch_id && !liveMove && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={`${rowButton} border-amber-300 text-amber-700 hover:bg-amber-50`}
+                                      onClick={() => setBranch(s, "")}
+                                      disabled={busy}
+                                      data-testid={`import-export-unbranch-${s.id}`}
+                                    >
+                                      <Link2Off className="h-3 w-3" />Disconnect Branch
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className={`${rowButton} border-rose-300 text-rose-700 hover:bg-rose-50`}
+                                    onClick={() => setDisconnecting(s)}
+                                    data-testid={`import-export-disconnect-${s.id}`}
+                                  >
+                                    <Unlink className="h-3 w-3" />Disconnect
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -319,6 +405,25 @@ export const PastDataImportExport = ({ leading = null }) => {
           onDisconnected={() => { setDisconnecting(null); refresh(); }}
         />
       )}
+      <Dialog open={!!deleting} onOpenChange={(v) => { if (!v && !deleteBusy) setDeleting(null); }}>
+        <DialogContent className="max-w-sm" aria-describedby={undefined} data-testid="import-export-delete-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base"><Trash2 className="h-5 w-5 text-rose-600" />Delete {deleting?.label}?</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setDeleting(null)} disabled={deleteBusy} data-testid="import-export-delete-cancel">Cancel</Button>
+            <Button
+              type="button"
+              className="gap-2 bg-rose-600 text-white hover:bg-rose-700"
+              onClick={deleteArchived}
+              disabled={deleteBusy}
+              data-testid="import-export-delete-confirm"
+            >
+              {deleteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

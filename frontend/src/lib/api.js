@@ -1148,3 +1148,5 @@ export const getPastDataSheets = async () => (await api.get("/past-data/sheets")
 export const setPastDataSheetBranch = async (sheetId, branchId) => (
   await api.post(`/past-data/imports/${sheetId}/branch`, { branch_id: branchId || null })
 ).data;
+// An archived (already disconnected) sheet taken off the list for good.
+export const deletePastDataArchived = async (sheetId) => (await api.delete(`/past-data/archived/${sheetId}`)).data;

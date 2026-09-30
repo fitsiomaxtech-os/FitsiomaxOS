@@ -161,8 +161,10 @@ async def past_data_branches(user: V3UserOut = Depends(v3_current_user)):
     on it yet: no leads and no experts, which is the branch made for this and not one of the
     clinics. A branch already working patients never offers it.
     """
-    holding = sorted(await _past_data_branch_ids())
     home = await _home_branch_id()
+    # The Past Data branch keeps its tab even once every sheet on it has been connected
+    # elsewhere or deleted from the archive, to add the next one from.
+    holding = sorted(await _past_data_branch_ids() | ({home} if home else set()))
     importable: list = []
     if _is_super_admin(user):
         if home:
@@ -708,3 +710,19 @@ async def past_data_sheet_branch(batch_id: str, body: SheetBranchIn, user: V3Use
     if (target or {}).get("id") != batch.get("branch_id"):
         await past_data_store.set_branch(v3_col, batch_id, target)
     return {"id": batch_id, "branch_id": (target or {}).get("id"), "branch_name": (target or {}).get("branch_name", "")}
+
+
+@router.delete("/past-data/archived/{batch_id}")
+async def past_data_delete_archived(batch_id: str, user: V3UserOut = Depends(v3_require_roles(SUPER_ADMIN))):
+    """Delete an archived sheet -- one already disconnected -- from the list for good. Its data
+    went at Disconnect; this takes the log row that recorded it was here, and any row of it a
+    failed disconnect might have left behind. A connected sheet is refused: Disconnect first."""
+    batch = await v3_col("past_imports").find_one({"id": batch_id}, {"_id": 0, "id": 1, "removed_at": 1, "label": 1, "source_file": 1})
+    if not batch:
+        raise HTTPException(status_code=404, detail="That sheet is not in the archive")
+    if not batch.get("removed_at"):
+        raise HTTPException(status_code=409, detail=f"{past_data_store.sheet_label(batch)} is still connected -- Disconnect it first")
+    for name in past_data_store.COLLECTIONS:
+        await v3_col(name).delete_many({"batch_id": batch_id})
+    await v3_col("past_imports").delete_one({"id": batch_id, "removed_at": {"$ne": None}})
+    return {"deleted": batch_id, "label": past_data_store.sheet_label(batch)}
