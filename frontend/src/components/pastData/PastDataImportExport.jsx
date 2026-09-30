@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, ChevronRight, Link2Off, Loader2, RefreshCw, Undo2, Unlink, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { PastDataDisconnectDialog } from "@/components/pastData/PastDataDisconnectDialog";
 import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog";
@@ -13,7 +14,8 @@ import { layoutLabel, rs } from "@/lib/pastData";
 const n = (v) => (v || 0).toLocaleString("en-IN");
 const clientsIn = (list) => list.reduce((sum, s) => sum + (s.counts?.past_clients || 0), 0);
 
-// The Zumba tab's summary cards (LedgerCard in branch/ZumbaPanel.jsx), tone for tone.
+// The Zumba tab's summary cards (LedgerCard in branch/ZumbaPanel.jsx), tone for tone, with
+// 5px corners here rather than its 2px.
 // Whole class names, not `bg-${tone}-50` built at runtime: Tailwind only compiles the
 // class names it can read in the source.
 const LEDGER_TONES = {
@@ -31,7 +33,7 @@ const LedgerCard = ({ label, value, sub, tone, color, active, dimmed, onClick, t
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`h-full w-full rounded-[2px] border ${t.border} ${t.bg} p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
+      className={`h-full w-full rounded-[5px] border ${t.border} ${t.bg} p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
       style={active ? { borderColor: color } : undefined}
       data-testid={testid}
     >
@@ -55,7 +57,8 @@ const CARDS = [
   { key: "no_branch", label: "Without Branch Sheet", color: "#9333ea", ledger: "purple", pick: (s) => !s.archived && !s.branch_id },
 ];
 
-const selectClass = "h-8 w-full min-w-[150px] rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60";
+// Past Data's own filter dropdowns (triggerClass in PastDataBoard), at a table row's height.
+const triggerClass = "h-8 w-[170px] rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200";
 
 /**
  * Settings -> Import/Export: every Past Data sheet on every branch, for Super Admin.
@@ -201,18 +204,23 @@ export const PastDataImportExport = ({ leading = null }) => {
                       <td className="whitespace-nowrap pr-3 tabular-nums">{rs(s.paid_total)}</td>
                       <td className="pr-3">
                         {canManage && !s.archived ? (
-                          <select
-                            value={s.branch_id || ""}
-                            onChange={(e) => setBranch(s, e.target.value)}
-                            disabled={!!liveMove || busy}
-                            title={liveMove ? "Return Back first" : undefined}
-                            className={selectClass}
-                            aria-label="Branch"
-                            data-testid={`import-export-branch-${s.id}`}
-                          >
-                            {!s.branch_id && <option value="" disabled>Select Branch</option>}
-                            {options.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-                          </select>
+                          <Select value={s.branch_id || ""} onValueChange={(v) => setBranch(s, v)} disabled={!!liveMove || busy}>
+                            <SelectTrigger
+                              className={triggerClass}
+                              title={liveMove ? "Return Back first" : undefined}
+                              aria-label="Branch"
+                              data-testid={`import-export-branch-${s.id}`}
+                            >
+                              <SelectValue placeholder="Select Branch" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72 border-slate-200">
+                              {options.map((b) => (
+                                <SelectItem key={b.id} value={b.id} className="text-xs" data-testid={`import-export-branch-option-${b.id}`}>
+                                  {b.branch_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <span className="text-xs text-slate-600">{s.branch_name || "—"}</span>
                         )}
