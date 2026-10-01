@@ -1122,22 +1122,21 @@ export const renewFitness = async (registrationId, payload) => (await api.post(`
 // Add sheet: scan lists every tab and header in the workbook (Auto Scan); preview (Fetch) reads
 // the tabs and columns left on — `columns`, see picksPayload in lib/pastData.js — and writes
 // nothing; import sends the same file and columns again with the sha256 preview returned, so
-// the server knows it is the file whose report was just read. Each import is one sheet on the
-// branch — replaceId puts it in place of one already there.
-const pastDataForm = (branchId, file, extra = {}) => {
+// the server knows it is the file whose report was just read. Each import is one sheet, on no
+// branch until one is picked for it — replaceId puts it in place of one already there.
+const pastDataForm = (file, extra = {}) => {
   const form = new FormData();
-  form.append("branch_id", branchId);
   Object.entries(extra).forEach(([k, v]) => form.append(k, String(v)));
   form.append("file", file);
   return form;
 };
 const columnsField = (columns) => (columns ? { columns: JSON.stringify(columns) } : {});
-export const scanPastDataImport = async (branchId, file) => (await api.post("/past-data/import/scan", pastDataForm(branchId, file))).data;
-export const previewPastDataImport = async (branchId, file, columns = null) => (
-  await api.post("/past-data/import/preview", pastDataForm(branchId, file, columnsField(columns)))
+export const scanPastDataImport = async (file) => (await api.post("/past-data/import/scan", pastDataForm(file))).data;
+export const previewPastDataImport = async (file, columns = null) => (
+  await api.post("/past-data/import/preview", pastDataForm(file, columnsField(columns)))
 ).data;
-export const importPastData = async (branchId, file, sha256, { label = "", replaceId = "", columns = null } = {}) => (
-  await api.post("/past-data/import", pastDataForm(branchId, file, { sha256, label, replace_id: replaceId, ...columnsField(columns) }))
+export const importPastData = async (file, sha256, { label = "", replaceId = "", columns = null } = {}) => (
+  await api.post("/past-data/import", pastDataForm(file, { sha256, label, replace_id: replaceId, ...columnsField(columns) }))
 ).data;
 // Disconnect one sheet: deletes its rows. The branch's other sheets are not touched.
 export const disconnectPastDataSheet = async (sheetId) => (await api.delete(`/past-data/imports/${sheetId}`)).data;

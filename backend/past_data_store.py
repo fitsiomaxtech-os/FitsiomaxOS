@@ -21,6 +21,7 @@ failure half way leaves the old data standing rather than nothing.
 import re
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 import past_data
 
@@ -55,49 +56,11 @@ async def live_imports(col, branch_id: str = None) -> list:
     return await col("past_imports").find(query, {"_id": 0}).sort("imported_at", 1).to_list(50)
 
 
-# Where the home branch is kept (app_settings, one row), so it outlives the sheets.
-HOME_SETTING = "past_data_home"
-
-
-async def home_branch_id(col):
-    """The branch new sheets are added on: the one the first sheet ever went into, or None
-    before any import.
-
-    Kept in app_settings (remember_home). It was once read off the oldest past_imports row
-    alone -- its origin_branch_id, since set_branch moves branch_id -- and so went with it: with
-    every sheet disconnected and deleted from the archive, nothing said where the home was and
-    Add Sheet had nowhere to add to. An install from before the setting is still read off that
-    row, and remembered from it."""
-    saved = await col("app_settings").find_one({"id": HOME_SETTING}, {"_id": 0, "branch_id": 1})
-    if saved and saved.get("branch_id"):
-        return saved["branch_id"]
-    first = await col("past_imports").find(
-        {}, {"_id": 0, "branch_id": 1, "origin_branch_id": 1},
-    ).sort("imported_at", 1).to_list(1)
-    if not first:
-        return None
-    home = first[0].get("origin_branch_id") or first[0].get("branch_id")
-    if home:
-        await remember_home(col, home)
-    return home
-
-
-async def remember_home(col, branch_id: str, replace: bool = False) -> None:
-    """Make `branch_id` the home branch -- unless one is kept already, or in place of it with
-    `replace` (the one kept names a branch deleted since)."""
-    row = {"branch_id": branch_id, "set_at": datetime.now(timezone.utc).isoformat()}
-    await col("app_settings").update_one(
-        {"id": HOME_SETTING},
-        {"$set": row} if replace else {"$setOnInsert": {"id": HOME_SETTING, **row}},
-        upsert=True,
-    )
-
-
 async def set_branch(col, batch_id: str, branch) -> None:
     """Connect one sheet to `branch`, or to no branch when it is None: the log row and every
     row the sheet wrote, so the branch's Past Data tab and the reads scoped to it follow.
 
-    The branch it was added on is kept once, as origin_branch_id, for home_branch_id."""
+    The branch it was added on is kept once, as origin_branch_id."""
     current = await col("past_imports").find_one({"id": batch_id}, {"_id": 0, "branch_id": 1}) or {}
     await col("past_imports").update_one(
         {"id": batch_id, "origin_branch_id": {"$exists": False}},
@@ -125,10 +88,11 @@ async def remove_batch(col, batch_id: str, removed_by: str = "") -> dict:
 
 
 async def write_batch(
-    col, data: past_data.PastData, branch: dict, source_file: str, file_sha256: str,
+    col, data: past_data.PastData, branch: Optional[dict], source_file: str, file_sha256: str,
     now=None, imported_by: str = "", label: str = "",
 ) -> str:
-    """Write one import and log it. Returns the batch id.
+    """Write one import and log it, on `branch` or -- None, as Add Sheet does -- on no
+    branch. Returns the batch id.
 
     The log row goes in last, once every record is down: a batch the log does not name is
     one that never finished, and the except below clears it out again. The Past Data reads
@@ -140,7 +104,7 @@ async def write_batch(
     # otherwise, and removing the old batch would take the new one out with it.
     batch_id = "PDI-" + now.strftime("%y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
     stamp = {
-        "branch_id": branch["id"],
+        "branch_id": (branch or {}).get("id"),
         "batch_id": batch_id,
         "source_file": source_file,
         "imported_at": now.isoformat(),
@@ -158,8 +122,8 @@ async def write_batch(
         s = past_data.summary(data)
         await col("past_imports").insert_one({
             "id": batch_id,
-            "branch_id": branch["id"],
-            "branch_code": branch.get("code", ""),
+            "branch_id": (branch or {}).get("id"),
+            "branch_code": (branch or {}).get("code", ""),
             "source_file": source_file,
             # What the Past Data tab calls this sheet -- "Parrys", say, where every branch's
             # file is "Revenue Sheet new.xlsx".

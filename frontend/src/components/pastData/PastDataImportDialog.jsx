@@ -3,7 +3,6 @@ import { AlertTriangle, CheckCircle2, CloudDownload, Download, FileSpreadsheet, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { PastDataScanPicker } from "@/components/pastData/PastDataScanPicker";
 import { importPastData, previewPastDataImport, scanPastDataImport } from "@/lib/api";
@@ -74,14 +73,11 @@ const FindingGroup = ({ g }) => (
  * holding mostly the same people as a sheet already there (the register saved again) is
  * offered as that sheet's replacement.
  *
- * `branchId` is the Past Data branch sheets are added on (the server's home_id). Before one is
- * known -- nothing ever added, or every sheet deleted before the server kept it -- the dialog
- * asks, from `branches`, starting on the one named Past Data; the first sheet added makes it
- * the home.
+ * A new sheet is added on no branch -- Without Branch on the list -- and connected to its branch
+ * from the list's branch picker. A replacement takes the replaced sheet's branch.
  */
-export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, onImported }) => {
+export const PastDataImportDialog = ({ open, onClose, onImported }) => {
   const inputRef = useRef(null);
-  const [chosenBranch, setChosenBranch] = useState("");
   const [file, setFile] = useState(null);
   const [scan, setScan] = useState(null);
   const [picks, setPicks] = useState({});
@@ -101,14 +97,11 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
   };
   const close = () => { if (importing) return; reset(); onClose(); };
 
-  const pastDataBranch = branches.find((b) => /past\s*data/i.test(b.branch_name || ""))?.id || "";
-  const target = branchId || chosenBranch || pastDataBranch;
-
   const choose = async (picked) => {
-    if (!picked || !target) return;
+    if (!picked) return;
     setFile(picked); setScan(null); setPicks({}); setPreview(null); setError(""); setConfirmed(false); setScanning(true);
     try {
-      const res = await scanPastDataImport(target, picked);
+      const res = await scanPastDataImport(picked);
       setScan(res);
       setPicks(initialPicks(res));
     } catch (e) {
@@ -126,7 +119,7 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
     if (!file || !scan || blocked) return;
     setPreview(null); setError(""); setConfirmed(false); setChecking(true);
     try {
-      const res = await previewPastDataImport(target, file, payload);
+      const res = await previewPastDataImport(file, payload);
       setPreview(res);
       // Fetched again with other columns: it goes in place of itself, under its own name.
       setLabel(res.same_file?.label || res.suggested_label || "");
@@ -160,7 +153,7 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
     if (!file || !preview) return;
     setImporting(true); setError("");
     try {
-      const res = await importPastData(target, file, preview.sha256, { label: label.trim(), replaceId, columns: payload });
+      const res = await importPastData(file, preview.sha256, { label: label.trim(), replaceId, columns: payload });
       toast.success(`${replacing ? "Replaced" : "Added"} ${name} — ${n(res.counts.past_clients)} past clients`);
       reset();
       onImported();
@@ -182,25 +175,6 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
         </DialogHeader>
 
         <div className="space-y-4">
-          {!branchId && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Add to branch</span>
-              <Select
-                value={target}
-                onValueChange={(v) => { setChosenBranch(v); setPreview(null); setConfirmed(false); }}
-                disabled={scanning || checking || importing}
-              >
-                <SelectTrigger className="h-9 w-64 text-sm" aria-label="Add to branch" data-testid="past-import-branch">
-                  <SelectValue placeholder="Select Branch" />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id} className="text-sm">{b.branch_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
             <input
               ref={inputRef}
@@ -210,7 +184,7 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
               onChange={(e) => choose(e.target.files?.[0])}
               data-testid="past-import-file"
             />
-            <Button type="button" variant="outline" className="gap-2" onClick={() => inputRef.current?.click()} disabled={!target || scanning || checking || importing} data-testid="past-import-choose">
+            <Button type="button" variant="outline" className="gap-2" onClick={() => inputRef.current?.click()} disabled={scanning || checking || importing} data-testid="past-import-choose">
               <Upload className="h-4 w-4" />{file ? "Choose another file" : "Choose file"}
             </Button>
             <span className="min-w-0 truncate text-sm text-slate-600">{file ? file.name : "No file chosen"}</span>
@@ -242,7 +216,7 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
                 <CheckCircle2 className="h-4 w-4" />
                 Checked: {osData
                   ? `the OS Data workbook (${(report.types || []).map((t) => TYPE_LABELS[t] || t).join(" · ")})`
-                  : `a ${layoutLabel(report.layout).toLowerCase()}`}. This is what adding it to <b>{preview.branch.name}</b> would do:
+                  : `a ${layoutLabel(report.layout).toLowerCase()}`}. This is what adding it would do:
               </p>
 
               <label className="block space-y-1">
@@ -358,7 +332,7 @@ export const PastDataImportDialog = ({ open, branchId, branches = [], onClose, o
 
               <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
                 <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="past-import-confirm" />
-                I have checked this report and want to {replacing ? `replace ${replacing.label} with it` : `add it to ${preview.branch.name}`}.
+                I have checked this report and want to {replacing ? `replace ${replacing.label} with it` : "add it"}.
               </label>
             </div>
           )}

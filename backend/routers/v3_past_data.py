@@ -66,15 +66,6 @@ def _is_super_admin(user: V3UserOut) -> bool:
     return (user.role or "").strip().lower() == SUPER_ADMIN
 
 
-async def _home_branch_id() -> Optional[str]:
-    """Where sheets are added: the Past Data branch (see past_data_store.home_branch_id), or
-    None -- any branch -- when there is none yet, or the one kept has since been deleted."""
-    home = await past_data_store.home_branch_id(v3_col)
-    if home and not await v3_col("branches").find_one({"id": home}, {"_id": 0, "id": 1}):
-        return None
-    return home
-
-
 async def _may_manage(user: V3UserOut, branch_id: Optional[str]) -> bool:
     """Whether this caller may add sheets to, and disconnect them from, this branch: Super
     Admin, on a branch that exists. Once a Branch Admin of the Past Data branch did too, from
@@ -168,10 +159,9 @@ async def past_data_summary(
     scoped_branch = _branch_for(user, branch_id)
     batches = await _live_batches(scoped_branch)
     batch_ids = [b["id"] for b in batches]
-    # Whether Add sheet and Disconnect belong on this screen (see _may_manage). Adding also
-    # needs no other branch to hold the old books already (_import_blocker).
+    # Whether Add sheet and Disconnect belong on this screen (see _may_manage).
     can_manage = bool(scoped_branch and await _may_manage(user, scoped_branch))
-    can_add = bool(can_manage and not await _import_blocker(scoped_branch))
+    can_add = can_manage
     if not batch_ids:
         return {"imported": False, "can_manage": can_manage, "can_add": can_add, "imports": [], "clients": 0, "treatments": 0,
                 "payments": 0, "paid_total": 0, "outstanding_total": 0, "owing_clients": 0,
@@ -339,16 +329,6 @@ def _sheet(batch: dict) -> dict:
     }
 
 
-async def _import_blocker(branch_id: str) -> str:
-    """Why this branch may not take a sheet, or "" when it may: sheets are added on the Past
-    Data branch only, and connected to other branches from Settings > Import/Export after."""
-    home = await _home_branch_id()
-    if not home or home == branch_id:
-        return ""
-    branch = await v3_col("branches").find_one({"id": home}, {"_id": 0, "branch_name": 1}) or {}
-    return f"Past data sheets are added on {branch.get('branch_name') or 'the Past Data branch'}"
-
-
 async def _upload_bytes(file: UploadFile) -> bytes:
     name = (file.filename or "").lower()
     if not name.endswith((".xlsm", ".xlsx")):
@@ -385,17 +365,11 @@ async def _read_upload(file: UploadFile, columns: str = ""):
     return raw, hashlib.sha256(raw).hexdigest(), data
 
 
-async def _manage_branch(user: V3UserOut, branch_id: str) -> dict:
-    """The branch a sheet is being added to, once this caller may add one there."""
-    branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
-    if not branch:
-        raise HTTPException(status_code=404, detail="Branch not found")
-    if not await _may_manage(user, branch_id):
+def _require_adder(user: V3UserOut) -> None:
+    """Only Super Admin adds sheets. A new sheet is on no branch: it is connected to one from
+    Settings > Import/Export, never put on one by Add Sheet."""
+    if not _is_super_admin(user):
         raise HTTPException(status_code=403, detail="Only Super Admin adds past data sheets")
-    blocked = await _import_blocker(branch_id)
-    if blocked:
-        raise HTTPException(status_code=409, detail=blocked)
-    return branch
 
 
 async def _overlaps(data: past_data.PastData, existing: list) -> list:
@@ -447,14 +421,13 @@ def _report(data: past_data.PastData) -> dict:
 
 @router.post("/past-data/import/scan")
 async def past_data_import_scan(
-    branch_id: str = Form(...),
     file: UploadFile = File(...),
     user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
     """Auto Scan: every tab in the workbook, its header row, and each column under it with a
     few of its values -- what Add Sheet shows to turn tabs and columns on or off before
     anything is read. See past_scan.py. Writes nothing."""
-    branch = await _manage_branch(user, branch_id)
+    _require_adder(user)
     raw = await _upload_bytes(file)
     try:
         scanned = await asyncio.to_thread(past_scan.scan_file, io.BytesIO(raw))
@@ -465,14 +438,12 @@ async def past_data_import_scan(
     return {
         "file_name": file.filename,
         "sha256": hashlib.sha256(raw).hexdigest(),
-        "branch": {"id": branch["id"], "name": branch.get("branch_name", "")},
         **scanned,
     }
 
 
 @router.post("/past-data/import/preview")
 async def past_data_import_preview(
-    branch_id: str = Form(...),
     # The tabs and columns left on after Auto Scan, as JSON (past_scan.read_picked). Not
     # sent, the whole workbook is read.
     columns: str = Form(""),
@@ -481,17 +452,16 @@ async def past_data_import_preview(
 ):
     """Read the sheet -- through the columns picked -- and say what adding it would do.
     Writes nothing."""
-    branch = await _manage_branch(user, branch_id)
+    _require_adder(user)
     _, sha, data = await _read_upload(file, columns)
-    # Every branch's sheets, not only this one's: a sheet connected elsewhere from Settings
-    # is still the same file and the same people.
+    # Every branch's sheets: a sheet connected to any of them is still the same file and the
+    # same people.
     existing = await past_data_store.live_imports(v3_col)
     same_file = next((b for b in existing if b.get("file_sha256") == sha), None)
     return {
         "file_name": file.filename,
         "sha256": sha,
         "suggested_label": past_data_store.file_label(file.filename or ""),
-        "branch": {"id": branch["id"], "name": branch.get("branch_name", "")},
         "existing": [_sheet(b) for b in existing],
         # This very file is a sheet here already: adding it again would only show it twice.
         "same_file": _sheet(same_file) if same_file else None,
@@ -502,14 +472,13 @@ async def past_data_import_preview(
 
 @router.post("/past-data/import")
 async def past_data_import(
-    branch_id: str = Form(...),
     # The sha256 /preview returned. The file is sent again rather than held on the server
     # between the two calls, so this is what proves it is the file the person just read the
     # report for, and not another one picked in between.
     sha256: str = Form(...),
     # What the tab calls the sheet; the file's name when blank.
     label: str = Form(""),
-    # A sheet on this branch to swap for this one -- taken out once this one is fully written,
+    # A sheet already here to swap for this one -- taken out once this one is fully written,
     # never before. Blank adds this as a sheet of its own. The same file already here can only
     # be added again this way: to fetch it with other columns.
     replace_id: str = Form(""),
@@ -518,8 +487,9 @@ async def past_data_import(
     file: UploadFile = File(...),
     user: V3UserOut = Depends(v3_require_roles(*PAST_DATA_ROLES)),
 ):
-    """Add the sheet to this branch's Past Data, or put it in place of one already there."""
-    branch = await _manage_branch(user, branch_id)
+    """Add the sheet, on no branch, or put it in place of one already here -- on that one's
+    branch."""
+    _require_adder(user)
     _, sha, data = await _read_upload(file, columns)
     if sha != sha256:
         raise HTTPException(status_code=409, detail="This is not the file that was checked -- check it again before importing")
@@ -529,28 +499,21 @@ async def past_data_import(
         replacing = next((b for b in existing if b["id"] == replace_id), None)
         if not replacing:
             raise HTTPException(status_code=404, detail="The sheet to replace is not connected any more")
-        if replacing.get("branch_id") != branch_id and not _is_super_admin(user):
-            raise HTTPException(status_code=403, detail="Only Super Admin replaces a sheet on another branch")
     same_file = next((b for b in existing if b.get("file_sha256") == sha), None)
     if same_file and same_file is not replacing:
         raise HTTPException(status_code=409, detail=f"This file is already here as {past_data_store.sheet_label(same_file)}")
 
-    home_before = await _home_branch_id()
     batch_id = await past_data_store.write_batch(
-        v3_col, data, branch, file.filename or "", sha, imported_by=user.full_name, label=label,
+        v3_col, data, None, file.filename or "", sha, imported_by=user.full_name, label=label,
     )
-    # With no home yet -- the first sheet ever, or the home branch deleted -- this branch
-    # becomes it. Otherwise a no-op: _manage_branch let nothing through but the home.
-    await past_data_store.remember_home(v3_col, branch["id"], replace=not home_before)
     removed = 0
     if replacing:
         # The new copy takes the old one's branch, or its having none.
-        if replacing.get("branch_id") != branch["id"]:
-            target = None
-            if replacing.get("branch_id"):
-                target = await v3_col("branches").find_one(
-                    {"id": replacing["branch_id"]}, {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
-            await past_data_store.set_branch(v3_col, batch_id, target)
+        if replacing.get("branch_id"):
+            target = await v3_col("branches").find_one(
+                {"id": replacing["branch_id"]}, {"_id": 0, "id": 1, "code": 1, "branch_name": 1})
+            if target:
+                await past_data_store.set_branch(v3_col, batch_id, target)
         # Its live clients go with it: they are the old copy's, and the new one is moved
         # afresh once it has been read.
         if replacing.get("live_move"):
@@ -668,7 +631,7 @@ class SheetBranchIn(BaseModel):
 async def past_data_sheets(user: V3UserOut = Depends(v3_require_roles(*sorted(ORG_WIDE_ROLES)))):
     """Every sheet ever added, newest first: connected ones and the disconnected (archived)
     ones, which keep their log row after their data is deleted. Plus the branches a sheet can
-    be connected to, and the Past Data branch that Add Sheet puts new ones on."""
+    be connected to."""
     rows = await v3_col("past_imports").find({}, {"_id": 0}).sort("imported_at", -1).to_list(500)
     branches = await v3_col("branches").find(
         live_branch_query(), {"_id": 0, "id": 1, "branch_name": 1}).sort("branch_name", 1).to_list(500)
@@ -677,7 +640,6 @@ async def past_data_sheets(user: V3UserOut = Depends(v3_require_roles(*sorted(OR
     if missing:
         for b in await v3_col("branches").find({"id": {"$in": missing}}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500):
             names[b["id"]] = b.get("branch_name", "")
-    home = await _home_branch_id()
     super_admin = _is_super_admin(user)
     return {
         "sheets": [
@@ -691,10 +653,8 @@ async def past_data_sheets(user: V3UserOut = Depends(v3_require_roles(*sorted(OR
             for r in rows
         ],
         "branches": branches,
-        # None before the first sheet is ever added: Add Sheet then asks which branch.
-        "home_id": home,
         "can_manage": super_admin,
-        "can_add": bool(super_admin and (home or branches)),
+        "can_add": super_admin,
     }
 
 

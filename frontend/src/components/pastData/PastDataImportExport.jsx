@@ -87,8 +87,7 @@ const rowButton = "h-7 gap-1 px-2 text-[10px] font-semibold";
  * Settings -> Import/Export: every Past Data sheet on every branch, for Super Admin.
  *
  * The one place Past Data is managed: no branch board has a tab for it. A sheet is added on
- * the Past Data branch (Add Sheet; the server's home_id) and connected from here to the
- * branch it belongs to -- which is where Move to Live puts its clients -- or disconnected
+ * no branch (Add Sheet) and connected from here to the branch it belongs to -- which is where Move to Live puts its clients -- or disconnected
  * from its branch, which leaves it not movable until it is given one. A live sheet keeps its
  * branch until it is returned back: its clients are on that branch's Branch Leads.
  *
@@ -403,8 +402,6 @@ export const PastDataImportExport = ({ leading = null }) => {
       {data?.can_add && (
         <PastDataImportDialog
           open={importOpen}
-          branchId={data.home_id}
-          branches={branches}
           onClose={() => setImportOpen(false)}
           onImported={() => { setImportOpen(false); refresh(); }}
         />

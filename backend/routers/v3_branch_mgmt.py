@@ -141,11 +141,8 @@ async def delete_archived_branch(branch_id: str, payload: BranchArchiveInput, us
         raise HTTPException(status_code=404, detail="Branch not found")
     if not branch.get("archived"):
         raise HTTPException(status_code=409, detail="Archive the branch before deleting it")
-    # The Past Data branch is where every sheet is added (past_data_store.home_branch_id
-    # reads it off the first import), and a connected sheet's rows carry this branch_id.
-    # Deleting either would leave Import/Export pointing at a branch that is not there.
-    if await past_data_store.home_branch_id(v3_col) == branch_id:
-        raise HTTPException(status_code=409, detail="This is the Past Data branch — sheets are added here, so it can't be deleted")
+    # A connected sheet's rows carry this branch_id: deleting the branch would leave
+    # Import/Export pointing at a branch that is not there.
     sheets = await past_data_store.live_imports(v3_col, branch_id)
     if sheets:
         raise HTTPException(status_code=409, detail=f"{len(sheets)} past data sheet(s) are connected to this branch — connect them elsewhere in Import/Export first")
