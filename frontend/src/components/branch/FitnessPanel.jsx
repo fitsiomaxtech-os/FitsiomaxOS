@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Dumbbell, IndianRupee, Pencil, Plus, RefreshCw, Trash2, UserPlus, X, PlayCircle, Stethoscope } from "lucide-react";
+import { ChevronRight, IndianRupee, Pencil, Plus, RefreshCw, Trash2, UserPlus, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -324,7 +324,10 @@ export const FitnessPanel = ({ branchId }) => {
           a gap that reads as a card yet to load, which is what happened when this asked
           for six and there were five. Written as a literal because Tailwind reads class
           names out of the source: a count built from CARDS.length at runtime compiles to
-          nothing. Six now, with Referred among them -- keep the two in step. */}
+          nothing. Six now, with Referred among them -- keep the two in step.
+
+          `arrow` on each tile: no corner disc and no dumbbell, just the ledger card's
+          chevron on a 5px corner, matching the Zumba strip beside this one. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
@@ -332,7 +335,7 @@ export const FitnessPanel = ({ branchId }) => {
             label={c.label}
             value={c.value ?? 0}
             sub={c.sub}
-            icon={Dumbbell}
+            arrow
             color={c.color}
             active={card === c.key}
             onClick={() => setCard(c.key)}

@@ -1,3 +1,5 @@
+import { ChevronRight } from "lucide-react";
+
 /**
  * The figure card the money boards share: a label, the number, a line saying what the
  * number counts, and the card's colour carried by a disc bleeding out of the top-right
@@ -22,6 +24,10 @@
  * whole width, with the figure and the sub-line sized down to match. From sm up a compact
  * card is the ordinary card — the squeeze is only ever the phone's.
  *
+ * `arrow` drops the corner disc and its icon in favour of the ledger card's chevron, on a
+ * 5px corner -- the look the finance cards and Zumba's own strip already wear. Opt-in so
+ * the money, physio and review boards keep the disc they were built around.
+ *
  * Two slots for controls that belong to one card rather than to the list under it:
  * `footer` on a rule beneath the figure, and `corner` on the top line, running up to the
  * icon with the icon on its right. Corner is for a control that reads as a property of
@@ -30,7 +36,7 @@
  */
 export const StatTile = ({
   label, value, sub, icon: Icon, color = "#0284c7", active = false, onClick, testid, footer, corner,
-  compact = false,
+  compact = false, arrow = false,
 }) => {
   // With a footer or a corner the card cannot be one big button: both hold controls of
   // their own, and a button inside a button is invalid markup the browser unnests, which
@@ -43,7 +49,7 @@ export const StatTile = ({
   // tallest, but a tile that only claims its content height floats at the top of that
   // cell — which is what left one card with a footer standing taller than the three
   // beside it.
-  const chrome = `relative h-full w-full overflow-hidden rounded-xl border bg-white text-left shadow-sm transition ${
+  const chrome = `relative h-full w-full overflow-hidden ${arrow ? "rounded-[5px]" : "rounded-xl"} border bg-white text-left shadow-sm transition ${
     active ? "border-transparent" : `border-slate-200 ${onClick ? "hover:shadow-md" : ""}`
   }`;
   const body = (
@@ -55,12 +61,20 @@ export const StatTile = ({
       style={!wrapped && active ? { boxShadow: `0 0 0 2px ${color}` } : undefined}
       data-testid={testid}
     >
-      <span
-        aria-hidden
-        className={`pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full sm:-right-6 sm:-top-6 sm:h-20 sm:w-20 ${compact ? "hidden sm:block" : ""}`}
-        style={{ background: `linear-gradient(135deg, ${color}2E, ${color}0D)` }}
-      />
-      {Icon && !corner && <Icon aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact ? "hidden sm:block" : ""}`} style={{ color }} />}
+      {/* The corner disc and its icon are the money boards' own decoration. An `arrow` card
+          (Branch Admin's Fitness strip) drops both and carries the ledger card's chevron
+          instead -- see ui/ledger-card and ZumbaPanel's own card, which this strip matches. */}
+      {!arrow && (
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full sm:-right-6 sm:-top-6 sm:h-20 sm:w-20 ${compact ? "hidden sm:block" : ""}`}
+          style={{ background: `linear-gradient(135deg, ${color}2E, ${color}0D)` }}
+        />
+      )}
+      {Icon && !corner && !arrow && <Icon aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact ? "hidden sm:block" : ""}`} style={{ color }} />}
+      {arrow && !corner && (
+        <ChevronRight aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact ? "hidden sm:block" : ""}`} />
+      )}
       {/* The right padding keeps a long label out from under the icon; the figure shrinks
           on a phone because two cards to a row leaves about 130px and "Rs.4,32,704" does
           not fit at text-2xl with nowhere to wrap.
