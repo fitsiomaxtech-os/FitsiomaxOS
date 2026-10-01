@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Calendar, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, RefreshCw, UserX, X } from "lucide-react";
+import { Calendar, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SeatDots } from "@/components/ui/seat-dots";
 import { toast } from "@/components/ui/sonner";
@@ -483,9 +483,11 @@ export default function MissedClassPanel() {
 
   return (
     <div className="space-y-4" data-testid="branch-missed-class-panel">
+      {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
+          on a 5px corner, matching the Fitness, Review and Patients strips. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Days to re-book" value={rows.length} sub="left without a date" icon={UserX} color="#d97706" testid="missed-class-tile-days" />
-        <StatTile label="Patients waiting" value={patients} sub="owed a day of treatment" icon={AlertCircle} color="#dc2626" testid="missed-class-tile-patients" />
+        <StatTile label="Days to re-book" value={rows.length} sub="left without a date" arrow color="#d97706" testid="missed-class-tile-days" />
+        <StatTile label="Patients waiting" value={patients} sub="owed a day of treatment" arrow color="#dc2626" testid="missed-class-tile-patients" />
       </div>
 
       <div className="flex items-center justify-between gap-2">
