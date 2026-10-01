@@ -3,6 +3,8 @@ import { AlertTriangle, ArrowDownToLine, CheckCircle2, Clock, Coins, HandCoins, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
+import { LedgerCard } from "@/components/ui/ledger-card";
+import { EntriesPanel } from "@/components/finance/BranchCashBoard";
 import {
   getBranches, getFinanceExpenses, createFinanceExpense,
   getBranchCash, createCashHandover, listCashHandovers, cancelCashHandover,
@@ -828,102 +830,8 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid }) => {
 };
 
 /**
- * The drawer as a list rather than a figure: every movement that made it, in the order
- * the sum works, ending on what should be in the drawer now. The Cash In Hand card above
- * is the answer; this is the working behind it.
- */
-const CashMovementList = ({ cash }) => {
-  const lines = [
-    {
-      key: "collected",
-      label: "Collected in cash",
-      detail:
-        cash.cash_approved != null || cash.cash_awaiting != null
-          ? `approved ${fmt(cash.cash_approved)} · awaiting ${fmt(cash.cash_awaiting)}`
-          : "cash taken at the desk",
-      amount: cash.collected_cash,
-      sign: "+",
-      tone: "text-slate-700",
-    },
-    {
-      key: "returned",
-      label: "Cash returned",
-      detail: "cash that came back into the drawer",
-      amount: cash.cash_returned || 0,
-      sign: "+",
-      tone: "text-emerald-700",
-    },
-    { key: "spent", label: "Spent in cash", detail: "expenses paid out of the drawer", amount: cash.cash_spent, sign: "−", tone: "text-rose-600" },
-    { key: "handed", label: "Handed over", detail: "received by the accountant", amount: cash.handed_over, sign: "−", tone: "text-rose-600" },
-  ];
-  if (cash.in_transit > 0) {
-    lines.push({ key: "transit", label: "In transit", detail: "left the branch, not yet received", amount: cash.in_transit, sign: "−", tone: "text-amber-700" });
-  }
-  if (cash.adjustments !== 0) {
-    lines.push({
-      key: "adjustments",
-      label: "Opening / corrections",
-      detail: "set by the accountant",
-      amount: Math.abs(cash.adjustments),
-      sign: cash.adjustments > 0 ? "+" : "−",
-      tone: cash.adjustments < 0 ? "text-rose-600" : "text-emerald-700",
-    });
-  }
-
-  return (
-    <>
-      <div className="space-y-2 sm:hidden" data-testid="branch-cash-movements-mobile">
-        {lines.map((l) => (
-          <div key={l.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-800">{l.label}</p>
-              <p className="truncate text-[11px] text-slate-400">{l.detail}</p>
-            </div>
-            <span className={`shrink-0 text-sm font-semibold tabular-nums ${l.tone}`}>{l.sign} {fmt(l.amount)}</span>
-          </div>
-        ))}
-        <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-slate-300 bg-slate-50 p-3">
-          <p className="text-sm font-bold text-slate-700">Cash in hand</p>
-          <span className="text-sm font-bold tabular-nums text-slate-800">{fmt(cash.cash_in_hand)}</span>
-        </div>
-      </div>
-
-      <ListFrame testid="branch-cash-movements-desktop">
-        <table className="w-full min-w-[520px] text-sm">
-          <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-4 py-2.5 font-semibold">Movement</th>
-              <th className="px-4 py-2.5 font-semibold">Detail</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {lines.map((l) => (
-              <tr key={l.key} className="hover:bg-slate-50" data-testid={`branch-cash-movement-${l.key}`}>
-                <td className="px-4 py-3 font-medium text-slate-800">{l.label}</td>
-                <td className="px-4 py-3 text-[11px] text-slate-400">{l.detail}</td>
-                <td className={`whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums ${l.tone}`}>
-                  {l.sign} {fmt(l.amount)}
-                </td>
-              </tr>
-            ))}
-            <tr className="border-t-2 border-slate-200 bg-slate-50/70">
-              <td className="px-4 py-3 font-bold text-slate-700">Cash in hand</td>
-              <td className="px-4 py-3 text-[11px] text-slate-400">what should be in the drawer now</td>
-              <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-slate-800" data-testid="branch-cash-in-hand">
-                {fmt(cash.cash_in_hand)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </ListFrame>
-    </>
-  );
-};
-
-/**
  * Every branch's drawer, a row each, for the desk reading all of them at once — the same
- * sum as the movements list above, laid sideways: what each branch took in cash, what it
+ * sum as the Cash In Hand cards, laid sideways: what each branch took in cash, what it
  * spent and sent up, and what it should still be holding.
  */
 const CashByBranchList = ({ rows }) => {
@@ -1199,6 +1107,11 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   const [returning, setReturning] = useState(false);
   const [cashReturns, setCashReturns] = useState([]);
   const [cashFailed, setCashFailed] = useState(false);
+  // Which Cash In Hand card is open (section "cash"). Cash in hand, the answer, to start with.
+  const [cashCard, setCashCard] = useState("cash_in_hand");
+  // Bumped each time the drawer is read again, so the open card's list is read again with it:
+  // a handover or a return just saved belongs in it as well as in the figure.
+  const [cashVersion, setCashVersion] = useState(0);
   // Only for the two dialogs, and only where the board above has not already picked one:
   // both forms are statements about a single branch's cash, so with no branch in view
   // they have to ask which.
@@ -1248,6 +1161,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       setCashFailed(box.status !== "fulfilled");
       setHandovers(ho.status === "fulfilled" ? ho.value?.handovers || [] : []);
       setCashReturns(ret.status === "fulfilled" ? ret.value?.cash_returns || [] : []);
+      setCashVersion((v) => v + 1);
       onChangedRef.current?.();
     } catch {
       setCash(null);
@@ -1381,6 +1295,59 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   };
 
   const list = LISTS[activeView];
+
+  // The drawer as cards (section "cash"): every movement the balance is made of, in the order
+  // the sum works, then the answer, then the two record lists. Each card opens what it was
+  // summed from -- the movements through /finance/branch-cash/entries, the same rows Branch
+  // Cash opens, so a card and its list agree. In transit and Opening / corrections only show
+  // when they hold something, as they did as lines of the table these cards replace.
+  const f = cashFigures || {};
+  const inTransitHandovers = handovers.filter((h) => h.status === "pending").length;
+  const CASH_CARDS = cashFigures ? [
+    {
+      key: "collected_cash",
+      label: "Collected in cash",
+      color: "#059669",
+      value: `+ ${fmt(f.collected_cash)}`,
+      sub: f.cash_approved != null || f.cash_awaiting != null
+        ? `approved ${fmt(f.cash_approved)} · awaiting ${fmt(f.cash_awaiting)}`
+        : "cash taken at the desk",
+    },
+    { key: "cash_returned", label: "Cash returned", color: "#0d9488", value: `+ ${fmt(f.cash_returned)}`, sub: "came back into the drawer" },
+    { key: "cash_spent", label: "Spent in cash", color: "#e11d48", value: `− ${fmt(f.cash_spent)}`, sub: "expenses paid out of the drawer" },
+    { key: "handed_over", label: "Handed over", color: "#d97706", value: `− ${fmt(f.handed_over)}`, sub: "received by the accountant" },
+    ...(f.in_transit > 0
+      ? [{ key: "in_transit", label: "In transit", color: "#ea580c", value: `− ${fmt(f.in_transit)}`, sub: "left the branch, not yet received" }]
+      : []),
+    ...(!byBranch && f.adjustments
+      ? [{
+          key: "adjustments",
+          label: "Opening / corrections",
+          color: "#64748b",
+          value: `${f.adjustments > 0 ? "+" : "−"} ${fmt(Math.abs(f.adjustments))}`,
+          sub: "set by the accountant",
+        }]
+      : []),
+    {
+      key: "cash_in_hand",
+      label: "Cash in hand",
+      color: f.cash_in_hand < 0 ? "#e11d48" : "#0284c7",
+      value: fmt(f.cash_in_hand),
+      sub: byBranch ? "what every branch is holding" : "what should be in the drawer now",
+    },
+    {
+      key: "handovers",
+      label: "Handovers",
+      color: "#7c3aed",
+      value: handovers.length,
+      sub: inTransitHandovers ? `${inTransitHandovers} in transit` : "handed to the accountant",
+    },
+    { key: "cash_returns", label: "Cash returns", color: "#4f46e5", value: cashReturns.length, sub: "brought back to the drawer" },
+  ] : [];
+  // A card that is gone -- In transit once it is received, a branch switched -- falls back to
+  // Cash in hand rather than leaving its list open under no card.
+  const openCash = CASH_CARDS.some((c) => c.key === cashCard) ? cashCard : "cash_in_hand";
+  const CASH_COLS = { 7: "xl:grid-cols-7", 8: "xl:grid-cols-8", 9: "xl:grid-cols-9" };
   // What the two dialogs check an amount against. One branch's drawer or nothing: the
   // roll-up is several drawers added up, and "that is more than is in it" said against a
   // figure spread over every branch would be a check on nothing.
@@ -1415,17 +1382,36 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       </div>
       )}
 
+      {activeView === "cash" && cash && (
+        <div
+          className={`grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 ${CASH_COLS[CASH_CARDS.length] || "xl:grid-cols-7"}`}
+          data-testid="branch-cash-cards"
+        >
+          {CASH_CARDS.map((c) => (
+            <LedgerCard
+              key={c.key}
+              label={c.label}
+              value={c.value}
+              sub={c.sub}
+              color={c.color}
+              active={openCash === c.key}
+              onClick={() => setCashCard(c.key)}
+              testid={`branch-cash-card-${c.key}`}
+            />
+          ))}
+        </div>
+      )}
+
       {/* What is being read, and the one thing there is to do to it. Add Expense sits on
           every expense pile rather than only the requests: wanting to log spending does
-          not depend on which pile happened to be open when you thought of it. */}
+          not depend on which pile happened to be open when you thought of it. On the
+          drawer the cards above already say what is open, so only its two buttons. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-700" data-testid="branch-expense-list-title">
-            {activeView !== "cash"
-              ? list.title
-              : byBranch ? "What every branch is holding" : "How the drawer got to that figure"}
-          </p>
-        </div>
+        {activeView !== "cash" && (
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-700" data-testid="branch-expense-list-title">{list.title}</p>
+          </div>
+        )}
         {activeView === "cash" ? (
           <div className="ml-auto flex flex-wrap gap-2">
             <Button
@@ -1470,15 +1456,22 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
               Opening cash not set by the accountant — this is collections less spending since tracking began.
             </p>
           )}
-          {byBranch ? <CashByBranchList rows={byBranch} /> : <CashMovementList cash={cash} />}
-          <div>
-            <p className="mb-2 text-sm font-semibold text-slate-700">Handovers</p>
+          {openCash === "handovers" ? (
             <HandoverList handovers={handovers} onCancel={pullBackHandover} showBranch={!branchId} />
-          </div>
-          <div>
-            <p className="mb-2 text-sm font-semibold text-slate-700">Cash returns</p>
+          ) : openCash === "cash_returns" ? (
             <CashReturnList returns={cashReturns} onCancel={pullBackReturn} showBranch={!branchId} />
-          </div>
+          ) : openCash === "cash_in_hand" && byBranch ? (
+            <CashByBranchList rows={byBranch} />
+          ) : (
+            // The movements, and Cash in hand on one branch: the whole list its balance is
+            // made of, the opening count and corrections among it.
+            <EntriesPanel
+              key={cashVersion}
+              kind={openCash === "adjustments" ? "cash_in_hand" : openCash}
+              branchId={branchId || ""}
+              showBranch={!branchId}
+            />
+          )}
         </div>
       ) : (
         <ExpenseList

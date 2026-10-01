@@ -4,6 +4,7 @@ import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, Refres
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
+import { LedgerCard } from "@/components/ui/ledger-card";
 import { toast } from "@/components/ui/sonner";
 import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
@@ -63,40 +64,21 @@ const mainTabClasses = (tab, active) => {
   return active ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50";
 };
 
-// Money in and money out — the first thing this tab is asked, and the two do not belong
-// in one list. What replaced: three chips splitting collections by sign-off, which said
-// the same thing three times over (every collection is pending until the Accountant's own
-// Approvals tab signs it off, so Collected and Pending read identically on any branch
-// that has not been through it, as Rs.4,96,594 and Rs.4,96,594 did here).
-const LEDGER_VIEWS = [
-  { key: "income", label: "Income" },
+// The Summary's four cards, each one the view under it: the two piles the income side is
+// read in, the drawer, and the money that went out. Approved first -- the signed-off figure
+// is the one read first, the waiting pile after it. Emerald for signed off and amber for
+// waiting on somebody, the colours the expense piles wear for the same two states.
+//
+// Where a collection stands between the desk that took it and the books is one of two
+// piles, not three: the moment a collection is taken it is awaiting approval (see stageOf),
+// and every row is in exactly one of them, so there is no "all" card -- it would be a total
+// no one is responsible for.
+const SUMMARY_CARDS = [
+  { key: "approved", label: "Income Approved", color: "#059669", hint: "Signed off by the accountant" },
+  { key: "requested", label: "Awaiting Approval", color: "#d97706", hint: "Taken at the desk, waiting for the accountant to sign it off" },
   // The drawer between money in and money out: what the branch should be holding now.
-  { key: "cash", label: "Cash In Hand" },
-  { key: "expenses", label: "Expenses" },
-];
-
-/**
- * Where a collection stands between the desk that took it and the books.
- *
- * Two, not three. There used to be a "Collected" pile between them — money taken at the
- * desk that the branch had not yet pressed "Send to accountant" on — but that step gated
- * nothing: the accountant's Approvals queue always showed every unapproved collection
- * whether it had been "sent" or not. So the moment a collection is taken it is awaiting
- * approval, and the branch has one less thing to remember at the end of a day.
- *
- * `all` is not one of them on purpose. Every row is in exactly one of these two, so a
- * third pill showing both at once would be a total that no one is responsible for.
- */
-// Tones match the expense pills for the same two states -- amber for waiting on somebody,
-// emerald for signed off -- so a branch reading Income after Expenses reads the same
-// colours for the same thing. Filled rather than tinted, so the two piles stand apart from
-// the plain book figures (Revenue, Expense, Profit, Total Expense) on the same line.
-// Approved first: the signed-off figure is the one read first, the waiting pile after it.
-const INCOME_STAGES = [
-  { key: "approved", label: "Income Approved", hint: "Signed off by the accountant",
-    tone: { dot: "bg-white", border: "border-emerald-600", bg: "bg-emerald-600", text: "text-white", sub: "text-white/80", ring: "#047857" } },
-  { key: "requested", label: "Awaiting Approval", hint: "Taken at the desk, waiting for the accountant to sign it off",
-    tone: { dot: "bg-white", border: "border-amber-600", bg: "bg-amber-600", text: "text-white", sub: "text-white/80", ring: "#b45309" } },
+  { key: "cash", label: "Cash In Hand", color: "#0284c7" },
+  { key: "expenses", label: "Expenses", color: "#e11d48" },
 ];
 
 /** Which of the two one collection is in. Everything not yet signed off is awaiting it. */
@@ -702,52 +684,58 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
       ) : tab === "summary" ? (
         <div className="space-y-4" data-testid="accountant-manage-summary">
-          {/* The one question this tab opens on: money in, or money out. Two cards
-              rather than a segmented pill, because the choice carries its own figure —
-              a switch that also says what is on each side of it, in the shape the cards
-              below it already use.
+          {/* The four cards, each the view under it (Zumba's summary cards, ui/ledger-card):
+              the two income piles, the drawer, and the money that went out. The picked one is
+              filled in its colour. Where only signed-off money counts there is no pile to move
+              to, so Awaiting Approval is a figure to read rather than a card to press.
 
-              Green for money in and rose for money out: the colours the Total Revenue
-              tile and the Accountant's own Total Expense card were already wearing, so a
-              figure does not change colour depending on which screen it is read on. The
-              picked one takes a 2px outline in its colour and the others step back to
-              80% — 2px corners, like the rest of the summary cards, and the same soft
-              two-layer shadow as the Approvals cards and Zumba's ledger cards. The tint
-              is the full -50 shade rather than 60% of it: at 60%, with the unpicked
-              pair at 70%, the cards read as washed out against the white page. */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="accountant-manage-ledger-filter">
-            {LEDGER_VIEWS.map((v) => {
-              const on = ledger === v.key;
-              const tone = {
-                income: { ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700" },
-                cash: { ring: "#0284c7", border: "border-sky-200", bg: "bg-sky-50", text: cashInHand < 0 ? "text-rose-700" : "text-sky-700" },
-                expenses: { ring: "#e11d48", border: "border-rose-200", bg: "bg-rose-50", text: "text-rose-700" },
-              }[v.key];
-              const value = {
-                income: sums.totals.collected,
-                cash: cashInHand,
-                expenses: expenseTotals.approved_total,
-              }[v.key];
+              The book line that sat under them (Revenue, Expense, Profit, Total Expense) is
+              gone: the branch asked for these four and nothing else. */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="accountant-manage-ledger-filter">
+            {SUMMARY_CARDS.map((c) => {
+              const pile = c.key === "approved" || c.key === "requested";
+              const stage = approvedOnly ? "approved" : incomeStage;
+              const picked = pile ? ledger === "income" && stage === c.key : ledger === c.key;
+              const pendingExpense = Number(expenseTotals.pending_total) || 0;
+              const card = {
+                approved: { value: stagePiles.approved.total, sub: countLabel(stagePiles.approved.count, "payment") },
+                requested: { value: stagePiles.requested.total, sub: countLabel(stagePiles.requested.count, "payment") },
+                cash: {
+                  value: cashInHand,
+                  color: cashInHand < 0 ? "#e11d48" : c.color,
+                  sub: openingUnset > 0
+                    ? (branchId
+                      ? "Opening cash not set — set it on Branch Cash"
+                      : `${openingUnset} ${openingUnset === 1 ? "branch" : "branches"} without an opening count, not included`)
+                    : "in the drawer now",
+                },
+                expenses: {
+                  value: expenseTotals.approved_total,
+                  sub: pendingExpense > 0
+                    ? `+ ${fmt(pendingExpense)} awaiting approval`
+                    : countLabel(Number(expenseTotals.approved_count) || 0, "approved expense"),
+                },
+              }[c.key];
+              const readOnly = approvedOnly && c.key === "requested";
               return (
-                <button
-                  key={v.key}
-                  type="button"
-                  onClick={() => setLedger(v.key)}
-                  aria-pressed={on}
-                  className={`rounded-[2px] border-2 ${tone.border} ${tone.bg} p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] ${on ? "" : "opacity-80 hover:opacity-100"}`}
-                  style={on ? { borderColor: tone.ring } : undefined}
-                  data-testid={`accountant-manage-ledger-${v.key}`}
-                >
-                  <p className={`text-[11px] font-bold uppercase tracking-wider ${tone.text}`}>{v.label}</p>
-                  <p className={`mt-1 text-2xl font-bold tabular-nums ${tone.text}`}>{fmt(value)}</p>
-                  {v.key === "cash" && openingUnset > 0 && (
-                    <p className="mt-1 text-[11px] text-amber-700" data-testid="accountant-manage-cash-opening-unset">
-                      {branchId
-                        ? "Opening cash not set — set it on Branch Cash"
-                        : `${openingUnset} ${openingUnset === 1 ? "branch" : "branches"} without an opening count, not included`}
-                    </p>
-                  )}
-                </button>
+                <LedgerCard
+                  key={c.key}
+                  label={c.label}
+                  value={fmt(card.value)}
+                  sub={card.sub}
+                  color={card.color || c.color}
+                  title={c.hint}
+                  active={picked}
+                  onClick={readOnly ? undefined : () => {
+                    if (pile) {
+                      setLedger("income");
+                      setIncomeStage(c.key);
+                    } else {
+                      setLedger(c.key);
+                    }
+                  }}
+                  testid={`accountant-manage-ledger-${c.key}`}
+                />
               );
             })}
           </div>
@@ -761,80 +749,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
           {ledger === "income" && (
           <>
-          {/* The two piles. Above the revenue tiles because it scopes them: the eight
-              figures below are the picked pile's, not the day's. */}
-          <div className="flex flex-wrap items-center gap-2" data-testid="accountant-manage-income-stages">
-            {/* Each pile says what it holds, not just how many rows -- the same pills the
-                expense side shows, for the same reason: what is waiting on a signature and
-                what has been signed off are figures a branch used to have to press through
-                to add up.
-
-                Where the piles can be moved between they are the filter they always were:
-                the picked one is ringed and the other steps back rather than switching
-                off. Where only signed-off money counts there is nothing to pick, so they
-                are plain figures at full strength. */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* The book in one line ahead of the piles: every collection in the window
-                  (both piles -- approval is a review step, not a gate on what counts as
-                  revenue, same as the Profit tab), less the approved expenses the
-                  Expenses card above shows. Plain figures, not filters. */}
-              {(() => {
-                const revenue = stagePiles.requested.total + stagePiles.approved.total;
-                const expense = Number(expenseTotals.approved_total) || 0;
-                const profit = revenue - expense;
-                return [
-                  { key: "revenue", label: "Revenue", value: revenue, border: "border-sky-200", bg: "bg-sky-50/70", text: "text-sky-700" },
-                  { key: "expense", label: "Expense", value: expense, border: "border-rose-200", bg: "bg-rose-50/70", text: "text-rose-700" },
-                  profit >= 0
-                    ? { key: "profit", label: "Profit", value: profit, border: "border-indigo-200", bg: "bg-indigo-50/70", text: "text-indigo-700" }
-                    : { key: "profit", label: "Loss", value: profit, border: "border-rose-300", bg: "bg-rose-50", text: "text-rose-700" },
-                  // Everything logged, approved or still waiting -- never a rejected one.
-                  // Expense beside it is the approved share only.
-                  { key: "total-expense", label: "Total Expense", value: expense + (Number(expenseTotals.pending_total) || 0), border: "border-rose-200", bg: "bg-rose-50/70", text: "text-rose-700" },
-                ].map((c) => (
-                  <span
-                    key={c.key}
-                    className={`inline-flex items-center gap-2 rounded-[2px] border ${c.border} ${c.bg} py-1.5 pl-3 pr-4`}
-                    data-testid={`accountant-manage-book-${c.key}`}
-                  >
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</span>
-                    <span className={`text-sm font-bold tabular-nums ${c.text}`}>{fmt(c.value)}</span>
-                  </span>
-                ));
-              })()}
-              {INCOME_STAGES.map((st) => {
-                const pile = stagePiles[st.key];
-                const picked = !approvedOnly && incomeStage === st.key;
-                const Pill = approvedOnly ? "span" : "button";
-                return (
-                  <Pill
-                    key={st.key}
-                    type={approvedOnly ? undefined : "button"}
-                    title={st.hint}
-                    onClick={approvedOnly ? undefined : () => setIncomeStage(st.key)}
-                    aria-pressed={approvedOnly ? undefined : picked}
-                    className={`inline-flex items-center gap-2 rounded-[2px] border ${st.tone.border} ${st.tone.bg} py-1.5 pl-3 pr-4 ${
-                      approvedOnly ? "" : `transition ${picked ? "" : "opacity-60 hover:opacity-100"}`
-                    }`}
-                    // A white gap before the ring: flush against a filled pill a 2px ring
-                    // in its own colour family would read as part of the fill.
-                    style={picked ? { boxShadow: `0 0 0 2px #fff, 0 0 0 4px ${st.tone.ring}` } : undefined}
-                    data-testid={`accountant-manage-income-stage-${st.key}`}
-                  >
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${st.tone.dot}`} />
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${st.tone.text}`}>{st.label}</span>
-                    <span className={`text-sm font-bold tabular-nums ${st.tone.text}`}>{fmt(pile.total)}</span>
-                    <span className={`text-[11px] ${st.tone.sub}`}>· {countLabel(pile.count, "payment")}</span>
-                  </Pill>
-                );
-              })}
-            </div>
-
-            {/* No "Send to accountant" button any more: a collection is awaiting approval
-                the moment it is taken, and the accountant's Approvals queue picks it up
-                without the branch pressing anything. */}
-          </div>
-
           {/* All eight on one line where there is room for eight, stepping down to four
               and then two rather than squeezing: at lg an eighth of the width is narrower
               than the card's own text column.

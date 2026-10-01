@@ -40,8 +40,10 @@ const KIND_LABEL = {
   cash_in_hand: "Cash in hand",
 };
 
-/** The rows behind one card, with a Type filter off the rows' own types. */
-const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
+/** The rows behind one card, with a Type filter off the rows' own types. Also the Cash In
+ *  Hand cards on Accountant Manage's Summary (BranchExpensesPanel), where the cards are the
+ *  tabs and there is nothing to close: no onClose, no close button. */
+export const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
   const [rows, setRows] = useState(null);
   const [type, setType] = useState(ALL);
 
@@ -73,9 +75,11 @@ const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5">
         <p className="text-sm font-semibold text-slate-800">{KIND_LABEL[kind]}</p>
         {rows && <span className="text-[11px] text-slate-400">{shown.length} entries · {fmt(total)}</span>}
-        <button type="button" onClick={onClose} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="branch-cash-entries-close">
-          <X className="h-4 w-4" />
-        </button>
+        {onClose && (
+          <button type="button" onClick={onClose} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="branch-cash-entries-close">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
       {types.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-3 py-2" data-testid="branch-cash-entries-types">
