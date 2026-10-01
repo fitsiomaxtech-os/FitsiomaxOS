@@ -551,8 +551,13 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           1536px, some 240px before this row had the width for them, so every laptop
           between the two grew the branch select, five tab names and six windows past the
           right edge at once -- and since this strip hides its scrollbar, what that looked
-          like was a Custom Range button sliced down the middle and no Refresh at all. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm" data-testid="accountant-manage-maintabs">
+          like was a Custom Range button sliced down the middle and no Refresh at all.
+
+          90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
+          itself, so the tabs, modes and windows fit on one desk line without the strip
+          scrolling, and the bar stays flush with the board's edges instead of leaving the
+          gap a scaled-down full-width row would. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm" style={{ zoom: 0.9 }} data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex shrink-0 items-center gap-2 border-r border-slate-200 pl-1.5 pr-2 min-[1900px]:pr-3">
             <label htmlFor="accountant-manage-branch" className="text-xs font-medium text-slate-600">Branch:</label>
