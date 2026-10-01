@@ -215,7 +215,7 @@ const RevenueTile = ({ label, value, sub, color, active, muted, onClick, testid 
     onClick={onClick}
     aria-pressed={active}
     data-testid={testid}
-    className={`group relative flex h-full w-full flex-col overflow-hidden rounded-[2px] border border-slate-200 p-3 text-left transition-all duration-150 sm:p-3.5 ${
+    className={`group relative flex h-full w-full flex-col overflow-hidden rounded-[5px] border border-slate-200 p-3 text-left transition-all duration-150 sm:p-3.5 ${
       active
         ? "shadow-[0_4px_14px_-4px_rgba(16,24,40,0.16)]"
         : "bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:bg-slate-50/60"

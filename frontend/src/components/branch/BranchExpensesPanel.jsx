@@ -679,7 +679,7 @@ const SummaryCard = ({ label, color, amount, sub, active, onClick, testid }) => 
     type="button"
     onClick={onClick}
     aria-pressed={active}
-    className={`min-w-0 rounded-[2px] border border-slate-200 px-3 py-3 text-left transition hover:shadow-sm ${
+    className={`min-w-0 rounded-[5px] border border-slate-200 px-3 py-3 text-left transition hover:shadow-sm ${
       active ? "shadow-sm" : "bg-white"
     }`}
     style={active ? { borderColor: color, backgroundColor: `${color}14` } : undefined}

@@ -20,7 +20,7 @@ export const LedgerCard = ({ label, value, sub, color = "#0284c7", active = fals
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
       title={title}
-      className={`h-full w-full min-w-0 rounded-[2px] border p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 sm:p-4 ${
+      className={`h-full w-full min-w-0 rounded-[5px] border p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 sm:p-4 ${
         onClick ? "hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)]" : ""
       }`}
       style={{ borderColor: active ? color : `${color}55`, background: active ? color : `${color}0f` }}
