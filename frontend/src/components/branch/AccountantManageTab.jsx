@@ -89,12 +89,14 @@ const LEDGER_VIEWS = [
  */
 // Tones match the expense pills for the same two states -- amber for waiting on somebody,
 // emerald for signed off -- so a branch reading Income after Expenses reads the same
-// colours for the same thing.
+// colours for the same thing. Filled rather than tinted, so the two piles stand apart from
+// the plain book figures (Revenue, Expense, Profit, Total Expense) on the same line.
+// Approved first: the signed-off figure is the one read first, the waiting pile after it.
 const INCOME_STAGES = [
-  { key: "requested", label: "Awaiting Approval", hint: "Taken at the desk, waiting for the accountant to sign it off",
-    tone: { dot: "bg-amber-500", border: "border-amber-200", bg: "bg-amber-50/70", text: "text-amber-700", sub: "text-amber-600/80", ring: "#d97706" } },
   { key: "approved", label: "Income Approved", hint: "Signed off by the accountant",
-    tone: { dot: "bg-emerald-500", border: "border-emerald-200", bg: "bg-emerald-50/70", text: "text-emerald-700", sub: "text-emerald-600/80", ring: "#059669" } },
+    tone: { dot: "bg-white", border: "border-emerald-600", bg: "bg-emerald-600", text: "text-white", sub: "text-white/80", ring: "#047857" } },
+  { key: "requested", label: "Awaiting Approval", hint: "Taken at the desk, waiting for the accountant to sign it off",
+    tone: { dot: "bg-white", border: "border-amber-600", bg: "bg-amber-600", text: "text-white", sub: "text-white/80", ring: "#b45309" } },
 ];
 
 /** Which of the two one collection is in. Everything not yet signed off is awaiting it. */
@@ -814,7 +816,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                     className={`inline-flex items-center gap-2 rounded-[2px] border ${st.tone.border} ${st.tone.bg} py-1.5 pl-3 pr-4 ${
                       approvedOnly ? "" : `transition ${picked ? "" : "opacity-60 hover:opacity-100"}`
                     }`}
-                    style={picked ? { boxShadow: `0 0 0 2px ${st.tone.ring}` } : undefined}
+                    // A white gap before the ring: flush against a filled pill a 2px ring
+                    // in its own colour family would read as part of the fill.
+                    style={picked ? { boxShadow: `0 0 0 2px #fff, 0 0 0 4px ${st.tone.ring}` } : undefined}
                     data-testid={`accountant-manage-income-stage-${st.key}`}
                   >
                     <span className={`h-2 w-2 shrink-0 rounded-full ${st.tone.dot}`} />
