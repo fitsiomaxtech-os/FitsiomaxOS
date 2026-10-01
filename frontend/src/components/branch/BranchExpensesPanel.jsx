@@ -1354,8 +1354,30 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   // figure spread over every branch would be a check on nothing.
   const cashInHand = byBranch ? null : cash?.cash_in_hand ?? null;
 
+  // The drawer's two buttons. Over a movements list they share its Type filter's row; over
+  // the others, a row of their own.
+  const cashActions = (
+    <>
+      <Button
+        onClick={() => setReturning(true)}
+        className="h-9 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+        data-testid="branch-cash-return-open"
+      >
+        <ArrowDownToLine className="mr-1.5 h-3.5 w-3.5" /> Cash return
+      </Button>
+      <Button
+        onClick={() => setHandingOver(true)}
+        className="h-9 bg-amber-600 text-xs text-white hover:bg-amber-700"
+        data-testid="branch-handover-open"
+      >
+        <HandCoins className="mr-1.5 h-3.5 w-3.5" /> Hand over cash
+      </Button>
+    </>
+  );
+  const cashOwnList = openCash === "handovers" || openCash === "cash_returns" || (openCash === "cash_in_hand" && byBranch);
+
   return (
-    <div className="space-y-4" data-testid="branch-expenses-panel">
+    <div className={activeView === "cash" ? "space-y-3" : "space-y-4"} data-testid="branch-expenses-panel">
       {/* The four piles, as cards that are also the tabs onto them — the shape HR Admin's
           stage cards already wear on this system, and for the same reason: a figure you
           press to read the rows behind it, rather than a row of figures and a tab bar
@@ -1403,85 +1425,61 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
         </div>
       )}
 
-      {/* What is being read, and the one thing there is to do to it. Add Expense sits on
-          every expense pile rather than only the requests: wanting to log spending does
-          not depend on which pile happened to be open when you thought of it. On the
-          drawer the cards above already say what is open, so only its two buttons. */}
-      <div className="flex flex-wrap items-center gap-2">
-        {activeView !== "cash" && (
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-700" data-testid="branch-expense-list-title">{list.title}</p>
-          </div>
-        )}
-        {activeView === "cash" ? (
-          <div className="ml-auto flex flex-wrap gap-2">
-            <Button
-              onClick={() => setReturning(true)}
-              className="h-9 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
-              data-testid="branch-cash-return-open"
-            >
-              <ArrowDownToLine className="mr-1.5 h-3.5 w-3.5" /> Cash return
-            </Button>
-            <Button
-              onClick={() => setHandingOver(true)}
-              className="h-9 bg-amber-600 text-xs text-white hover:bg-amber-700"
-              data-testid="branch-handover-open"
-            >
-              <HandCoins className="mr-1.5 h-3.5 w-3.5" /> Hand over cash
-            </Button>
-          </div>
+      {activeView === "cash" ? (
+        cash && !cashOwnList ? (
+          // The movements, and Cash in hand on one branch: the whole list its balance is
+          // made of, the opening count and corrections among it. The picked card above
+          // names it, so no title row: its Type filter and the two buttons are one line.
+          <EntriesPanel
+            key={cashVersion}
+            kind={openCash === "adjustments" ? "cash_in_hand" : openCash}
+            branchId={branchId || ""}
+            showBranch={!branchId}
+            toolbar={cashActions}
+          />
         ) : (
-          <Button
-            className="ml-auto bg-sky-600 text-white hover:bg-sky-700"
-            onClick={() => setAdding(true)}
-            data-testid="branch-expense-add"
-          >
-            <Plus className="mr-1 h-4 w-4" /> Add Expense
-          </Button>
-        )}
-      </div>
-
-      {activeView === "cash" && !cash ? (
-        // The drawer view can open before its figures have arrived -- Summary's Cash In
-        // Hand card lands straight on it -- so it waits for them rather than reading null.
-        <EmptyList testid="branch-cash-loading">
-          {cashFailed ? "Could not load cash in hand — refresh to try again." : "Loading cash in hand…"}
-        </EmptyList>
-      ) : activeView === "cash" ? (
-        <div className="space-y-4">
-          {!byBranch && !cash.opening_set && (
-            <p
-              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700"
-              data-testid="branch-cash-not-set"
-            >
-              Opening cash not set by the accountant — this is collections less spending since tracking began.
-            </p>
-          )}
-          {openCash === "handovers" ? (
-            <HandoverList handovers={handovers} onCancel={pullBackHandover} showBranch={!branchId} />
-          ) : openCash === "cash_returns" ? (
-            <CashReturnList returns={cashReturns} onCancel={pullBackReturn} showBranch={!branchId} />
-          ) : openCash === "cash_in_hand" && byBranch ? (
-            <CashByBranchList rows={byBranch} />
-          ) : (
-            // The movements, and Cash in hand on one branch: the whole list its balance is
-            // made of, the opening count and corrections among it.
-            <EntriesPanel
-              key={cashVersion}
-              kind={openCash === "adjustments" ? "cash_in_hand" : openCash}
-              branchId={branchId || ""}
-              showBranch={!branchId}
-            />
-          )}
-        </div>
+          <div className="space-y-2">
+            <div className="flex flex-wrap justify-end gap-2">{cashActions}</div>
+            {!cash ? (
+              // The drawer view can open before its figures have arrived -- Summary's Cash
+              // In Hand card lands straight on it -- so it waits for them rather than reading null.
+              <EmptyList testid="branch-cash-loading">
+                {cashFailed ? "Could not load cash in hand — refresh to try again." : "Loading cash in hand…"}
+              </EmptyList>
+            ) : openCash === "handovers" ? (
+              <HandoverList handovers={handovers} onCancel={pullBackHandover} showBranch={!branchId} />
+            ) : openCash === "cash_returns" ? (
+              <CashReturnList returns={cashReturns} onCancel={pullBackReturn} showBranch={!branchId} />
+            ) : (
+              <CashByBranchList rows={byBranch} />
+            )}
+          </div>
+        )
       ) : (
-        <ExpenseList
-          rows={list.rows}
-          loading={loading}
-          empty={list.empty}
-          showBranch={!branchId}
-          testid="branch-expense-list"
-        />
+        <>
+          {/* What is being read, and the one thing there is to do to it. Add Expense sits
+              on every expense pile rather than only the requests: wanting to log spending
+              does not depend on which pile happened to be open when you thought of it. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-700" data-testid="branch-expense-list-title">{list.title}</p>
+            </div>
+            <Button
+              className="ml-auto bg-sky-600 text-white hover:bg-sky-700"
+              onClick={() => setAdding(true)}
+              data-testid="branch-expense-add"
+            >
+              <Plus className="mr-1 h-4 w-4" /> Add Expense
+            </Button>
+          </div>
+          <ExpenseList
+            rows={list.rows}
+            loading={loading}
+            empty={list.empty}
+            showBranch={!branchId}
+            testid="branch-expense-list"
+          />
+        </>
       )}
 
       {adding && (

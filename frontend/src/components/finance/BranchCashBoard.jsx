@@ -42,8 +42,12 @@ const KIND_LABEL = {
 
 /** The rows behind one card, with a Type filter off the rows' own types. Also the Cash In
  *  Hand cards on Accountant Manage's Summary (BranchExpensesPanel), where the cards are the
- *  tabs and there is nothing to close: no onClose, no close button. */
-export const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
+ *  tabs and there is nothing to close: no onClose, no close button.
+ *
+ *  toolbar: buttons to sit on the Type filter's row. Given, the title row goes -- the
+ *  picked card above already says what is open -- and the filter and buttons are one line
+ *  over the table rather than three. */
+export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar }) => {
   const [rows, setRows] = useState(null);
   const [type, setType] = useState(ALL);
 
@@ -70,30 +74,34 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
   const total = shown.reduce((s, r) => s + Number(r.amount || 0), 0);
   const partyLabel = kind === "cash_spent" ? "Paid to" : kind === "handed_over" || kind === "in_transit" ? "Carried by" : "Party";
 
-  return (
+  const typeFilter = types.length > 1 && (
+    <select
+      value={type}
+      onChange={(e) => setType(e.target.value)}
+      className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
+      aria-label="Type"
+      data-testid="branch-cash-entries-types"
+    >
+      {[[ALL, rows.length], ...types].map(([t, n]) => (
+        <option key={t} value={t}>{t === ALL ? "All types" : t} ({n})</option>
+      ))}
+    </select>
+  );
+
+  const table = (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow" data-testid="branch-cash-entries">
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5">
-        <p className="text-sm font-semibold text-slate-800">{KIND_LABEL[kind]}</p>
-        {rows && <span className="text-[11px] text-slate-400">{shown.length} entries · {fmt(total)}</span>}
-        {onClose && (
-          <button type="button" onClick={onClose} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="branch-cash-entries-close">
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-      {types.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-3 py-2" data-testid="branch-cash-entries-types">
-          <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Type</span>
-          {[[ALL, rows.length], ...types].map(([t, n]) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setType(t)}
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${type === t ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-            >
-              {t === ALL ? "All" : t} <span className="opacity-70">{n}</span>
-            </button>
-          ))}
+      {!toolbar && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5">
+          <p className="text-sm font-semibold text-slate-800">{KIND_LABEL[kind]}</p>
+          {rows && <span className="text-[11px] text-slate-400">{shown.length} entries · {fmt(total)}</span>}
+          <div className="ml-auto flex items-center gap-2">
+            {typeFilter}
+            {onClose && (
+              <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="branch-cash-entries-close">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       )}
       {!rows && <p className="py-8 text-center text-xs text-slate-400">Loading…</p>}
@@ -128,6 +136,17 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose }) => {
           </table>
         </div>
       )}
+    </div>
+  );
+
+  if (!toolbar) return table;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {typeFilter}
+        <div className="ml-auto flex flex-wrap gap-2">{toolbar}</div>
+      </div>
+      {table}
     </div>
   );
 };
