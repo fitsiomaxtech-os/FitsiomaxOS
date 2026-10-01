@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronRight, Coins, Eye, Receipt, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LedgerCard } from "@/components/ui/ledger-card";
 import { toast } from "@/components/ui/sonner";
 import { getFinanceExpenses, approveFinanceExpense, rejectFinanceExpense, deleteFinanceExpense } from "@/lib/api";
 import { notesLabel } from "@/lib/denominations";
@@ -270,31 +271,25 @@ export const ExpenseApprovalsPanel = ({
   return (
     <div className="space-y-4" data-testid="finance-expense-approvals">
       {/* The income side's two cards -- and, as there, they are the switch: the toggle
-          that used to sit under them only repeated their headings in a smaller font. */}
+          that used to sit under them only repeated their headings in a smaller font.
+          Accountant Manage Summary's ledger cards (ui/ledger-card): the picked one filled
+          solid in its own colour, the other a faint wash of it. */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { key: "pending", label: "Pending Approval", total: totals.pending_total, count: totals.pending_count, noun: ["request", "requests"], ring: "#d97706", border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
-          { key: "approved", label: "Approved", total: totals.approved_total, count: totals.approved_count, noun: ["expense", "expenses"], ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
-        ].map((c) => {
-          const on = view === c.key;
-          // Summary's ledger cards: tinted, 2px corners, the picked one outlined in its own
-          // colour and the others stepping back to 70%.
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => setView(c.key)}
-              aria-pressed={on}
-              className={`rounded-[2px] border ${c.border} ${c.bg} p-4 text-left transition ${on ? "" : "opacity-70 hover:opacity-100"}`}
-              style={on ? { borderColor: c.ring } : undefined}
-              data-testid={`finance-expense-approvals-${c.key}-card`}
-            >
-              <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
-              <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.total)}</p>
-              <p className={`text-[11px] ${c.sub}`}>{c.count} {c.count === 1 ? c.noun[0] : c.noun[1]}</p>
-            </button>
-          );
-        })}
+          { key: "pending", label: "Pending Approval", total: totals.pending_total, count: totals.pending_count, noun: ["request", "requests"], color: "#d97706" },
+          { key: "approved", label: "Approved", total: totals.approved_total, count: totals.approved_count, noun: ["expense", "expenses"], color: "#059669" },
+        ].map((c) => (
+          <LedgerCard
+            key={c.key}
+            label={c.label}
+            value={fmt(c.total)}
+            sub={`${c.count} ${c.count === 1 ? c.noun[0] : c.noun[1]}`}
+            color={c.color}
+            active={view === c.key}
+            onClick={() => setView(c.key)}
+            testid={`finance-expense-approvals-${c.key}-card`}
+          />
+        ))}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow">
