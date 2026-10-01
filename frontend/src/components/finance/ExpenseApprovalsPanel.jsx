@@ -273,7 +273,7 @@ export const ExpenseApprovalsPanel = ({
       {/* The income side's two cards -- and, as there, they are the switch: the toggle
           that used to sit under them only repeated their headings in a smaller font.
           Accountant Manage Summary's ledger cards (ui/ledger-card): the picked one filled
-          solid in its own colour, the other a faint wash of it. */}
+          solid in its own colour, the other plain white. */}
       <div className="grid grid-cols-2 gap-3">
         {[
           { key: "pending", label: "Pending Approval", total: totals.pending_total, count: totals.pending_count, noun: ["request", "requests"], color: "#d97706" },

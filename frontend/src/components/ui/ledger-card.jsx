@@ -1,40 +1,46 @@
 import { ChevronRight } from "lucide-react";
 
 /**
- * Branch Admin > Zumba's summary card (LedgerCard in branch/ZumbaPanel.jsx), for the boards
- * that want the same strip: a faint wash of the card's colour, its label in bold small caps
- * with the arrow in the corner, the figure, and a caption under it. The picked card is filled
- * solid in its own colour with the words in white, so which one is open reads at a glance.
+ * The finance boards' summary card: white and bordered at rest, its label in grey bold
+ * small caps with the arrow in the corner, the figure in dark ink, and a caption under it.
+ * Colour is kept for the picked card alone, which is filled solid in its own colour with
+ * the words in white, so which one is open reads at a glance.
  *
  * One hex per card, applied inline: Tailwind reads class names out of the source, so a class
  * built at runtime from a colour compiles to nothing.
  *
+ * `muted` greys a figure of nothing -- Rs.0 still says the desk was open and took nothing,
+ * which is worth showing and not worth reading first.
+ *
  * Without onClick it is a figure to read rather than a button: no arrow, no hover.
  */
-export const LedgerCard = ({ label, value, sub, color = "#0284c7", active = false, onClick, title, testid }) => {
+export const LedgerCard = ({ label, value, sub, color = "#0284c7", active = false, muted = false, onClick, title, testid }) => {
   const Tag = onClick ? "button" : "div";
-  const ink = active ? "#ffffff" : color;
   return (
     <Tag
       type={onClick ? "button" : undefined}
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
       title={title}
-      className={`h-full w-full min-w-0 rounded-[5px] border p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 sm:p-4 ${
-        onClick ? "hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)]" : ""
+      className={`h-full w-full min-w-0 rounded-[5px] border p-3 text-left transition duration-200 sm:p-4 ${
+        active
+          ? "shadow-[0_2px_4px_rgba(15,23,42,0.06),0_8px_20px_rgba(15,23,42,0.12)]"
+          : `border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${
+            onClick ? "hover:border-slate-300 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_6px_16px_rgba(15,23,42,0.08)]" : ""
+          }`
       }`}
-      style={{ borderColor: active ? color : `${color}55`, background: active ? color : `${color}0f` }}
+      style={active ? { borderColor: color, backgroundColor: color } : undefined}
       data-testid={testid}
     >
       <div className="flex items-start justify-between gap-1">
-        <p className="min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px]" style={{ color: ink }}>
+        <p className={`min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px] ${active ? "text-white" : "text-slate-500"}`}>
           {label}
         </p>
         {onClick && <ChevronRight className={`h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 ${active ? "text-white" : "text-slate-400"}`} aria-hidden="true" />}
       </div>
-      <p className="mt-1 break-words text-xl font-bold tabular-nums sm:text-2xl" style={{ color: ink }}>{value}</p>
+      <p className={`mt-1 break-words text-xl font-bold tabular-nums sm:text-2xl ${active ? "text-white" : muted ? "text-slate-400" : "text-slate-900"}`}>{value}</p>
       {sub ? (
-        <p className={`mt-0.5 text-[10px] leading-tight sm:text-[11px] ${active ? "opacity-90" : "opacity-80"}`} style={{ color: ink }}>{sub}</p>
+        <p className={`mt-0.5 text-[10px] leading-tight sm:text-[11px] ${active ? "text-white/90" : "text-slate-400"}`}>{sub}</p>
       ) : null}
     </Tag>
   );
