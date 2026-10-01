@@ -1735,8 +1735,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // let the scrolling tab strip and the leads table widen the board instead of
     // scrolling inside it.
     <div className={`flex flex-col gap-4 [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
-      {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file. */}
-      <div className="show-scrollbar hidden items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:flex" data-testid="branch-view-tabs">
+      {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file.
+          90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
+          itself, so eleven labels fit across a desk without the strip scrolling, and the
+          bar stays flush with the board's edges instead of leaving the gap a scaled-down
+          full-width row would. */}
+      <div className="show-scrollbar hidden items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:flex" style={{ zoom: 0.9 }} data-testid="branch-view-tabs">
         {VIEW_TABS.map((tab) => {
           const Icon = tab.icon;
           return (
