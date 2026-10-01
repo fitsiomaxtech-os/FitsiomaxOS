@@ -62,8 +62,9 @@ export const StatTile = ({
       data-testid={testid}
     >
       {/* The corner disc and its icon are the money boards' own decoration. An `arrow` card
-          (Branch Admin's Fitness strip) drops both and carries the ledger card's chevron
-          instead -- see ui/ledger-card and ZumbaPanel's own card, which this strip matches. */}
+          (Branch Admin's Fitness and Patients strips) drops both and carries the ledger
+          card's chevron instead -- see ui/ledger-card and ZumbaPanel's own card, which
+          these strips match. */}
       {!arrow && (
         <span
           aria-hidden

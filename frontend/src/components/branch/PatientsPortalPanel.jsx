@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, Copy, Dumbbell, HeartPulse, Music, Phone, PhoneCall, RefreshCw,
-  Stethoscope, Trash2, User, Users, X,
+  Copy, Phone, PhoneCall, RefreshCw, Trash2, User, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,12 +99,12 @@ const feeParts = (l) => [
  * a card and the rows it counts can never be named differently in two places.
  */
 const CARDS = [
-  { key: "all", label: "All", sub: "on the roll", icon: Users, color: "#6366f1" },
-  { key: "consultation", label: "Consultations", sub: "seen by a physio", icon: Stethoscope, color: "#0284c7" },
-  { key: "treatment", label: "Treatments", sub: "on a course", icon: HeartPulse, color: "#059669" },
-  { key: "rehab", label: "Rehab", sub: "programme booked", icon: Activity, color: "#d97706" },
-  { key: "fitness", label: "Fitness", sub: "gym members", icon: Dumbbell, color: "#7c3aed" },
-  { key: "zumba", label: "Zumba", sub: "class members", icon: Music, color: "#db2777" },
+  { key: "all", label: "All", sub: "on the roll", color: "#6366f1" },
+  { key: "consultation", label: "Consultations", sub: "seen by a physio", color: "#0284c7" },
+  { key: "treatment", label: "Treatments", sub: "on a course", color: "#059669" },
+  { key: "rehab", label: "Rehab", sub: "programme booked", color: "#d97706" },
+  { key: "fitness", label: "Fitness", sub: "gym members", color: "#7c3aed" },
+  { key: "zumba", label: "Zumba", sub: "class members", color: "#db2777" },
 ];
 
 const SERVICE_LABEL = {
@@ -310,7 +309,11 @@ export const PatientsPortalPanel = ({ branchId }) => {
 
       {/* Six columns for six cards on a wide screen, so the row finishes flush with the
           page. Written as literal class names because Tailwind reads them out of the
-          source — a count built from CARDS.length at runtime compiles to nothing. */}
+          source — a count built from CARDS.length at runtime compiles to nothing.
+
+          `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
+          on a 5px corner — the same strip the Fitness tab carries, so the two boards read
+          as one family beside the Zumba strip. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
@@ -318,7 +321,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
             label={c.label}
             value={counts[c.key] ?? 0}
             sub={c.sub}
-            icon={c.icon}
+            arrow
             color={c.color}
             active={card === c.key}
             onClick={() => setCard(c.key)}
