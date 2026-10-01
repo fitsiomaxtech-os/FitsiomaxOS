@@ -158,9 +158,12 @@ const inRange = (row, range) => {
  * figure be the length or the total of the list its own card opens — a number over a list
  * it does not describe is the thing a summary row is most often wrong about.
  *
- * No icons. The corner glyphs said which card at a glance, which is worth having where a
- * row of cards is only ever read; where it is pressed, the label and the ring around the
- * pressed one carry that, and four glyphs in four corners are four things to look past.
+ * No per-card icons. The corner glyphs said which card at a glance, which is worth having
+ * where a row of cards is only ever read; where it is pressed, the label and the ring
+ * around the pressed one carry that, and four glyphs in four corners are four things to
+ * look past. The corner arrow is not one of those glyphs: it is the same on all four, so
+ * it marks none of them -- the ledger card's own corner (see ui/ledger-card), worn here so
+ * this strip matches the branch's other summary strips.
  *
  * `count` is what the card shows and `rows` is what it opens, both off the already
  * filtered lists, so the search box and the date range narrow the figures with the lists.
@@ -669,6 +672,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
             label={c.label}
             value={figures[c.key].value}
             sub={figures[c.key].sub}
+            arrow
             color={c.color}
             active={card === c.key}
             onClick={() => setCard(c.key)}

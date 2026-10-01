@@ -162,13 +162,16 @@ const BranchTransferRecords = ({ branchId }) => {
             key={c.key}
             type="button"
             onClick={() => setDirection(c.key)}
-            className={`rounded-xl border bg-white px-3 py-2.5 text-left transition-colors ${
+            className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
               direction === c.key ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-200 hover:border-slate-300"
             }`}
             data-testid={`transfer-records-card-${c.key}`}
           >
-            <p className="text-[11px] font-medium text-slate-500">{c.label}</p>
+            <p className="pr-6 text-[11px] font-medium text-slate-500">{c.label}</p>
             <p className="text-xl font-bold text-slate-800">{counts[c.key]}</p>
+            {/* The ledger card's corner arrow (see ui/ledger-card), so the Records strip
+                reads the same as the branch's other summary strips. */}
+            <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           </button>
         ))}
       </div>
