@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 // A stage is called what Super Admin calls it in CI/CD ROOTS, here and everywhere else.
 //
@@ -87,6 +88,15 @@ export const StageTab = ({ label, count, active, onClick, color, hoverColor, sel
           : "text-[11px] leading-tight"
       }`}>{label}</span>
       <span className={`mt-0.5 font-bold leading-none sm:text-lg ${gridded ? "text-base" : "text-lg"}`}>{count}</span>
+      {/* The corner arrow the finance boards' summary cards carry (see ui/ledger-card), so
+          Branch Admin's summary strip and Accountant Manage's own read as the same card.
+          Absolutely placed so the centred label and figure underneath are not shifted by it. */}
+      {plain && (
+        <ChevronRight
+          className={`absolute right-1.5 top-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 ${active ? "text-sky-500" : "text-slate-400"}`}
+          aria-hidden="true"
+        />
+      )}
     </button>
   );
 };
