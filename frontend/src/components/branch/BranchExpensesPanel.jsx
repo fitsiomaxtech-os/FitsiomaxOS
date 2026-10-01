@@ -1205,11 +1205,10 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   // spending, and moves to Expense Approved rather than being counted in both. A rejected
   // row has nowhere else to be read, so it stays in the list, wearing its own chip — but
   // out of the card's figure, which is counted apart as `rejected`. Summed in, the card
-  // read Rs.3,200 of open requests beside Pending Rs.0 when all of it had been turned down.
+  // read Rs.3,200 of open requests when all of it had been turned down.
   const piles = useMemo(() => {
     const out = {
       request: { rows: [], total: 0 },
-      pending: { rows: [], total: 0 },
       approved: { rows: [], total: 0 },
       rejected: { count: 0, total: 0 },
     };
@@ -1224,9 +1223,10 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
         out.rejected.total += amount;
         return;
       }
-      const key = r.approved ? "approved" : "pending";
-      out[key].rows.push(r);
-      out[key].total += amount;
+      if (r.approved) {
+        out.approved.rows.push(r);
+        out.approved.total += amount;
+      }
     });
     return out;
   }, [rows]);
@@ -1238,9 +1238,10 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   const showCash = !!cashFigures && section !== "expenses";
   const activeView = section === "cash" ? "cash" : view === "cash" && !showCash ? "request" : view;
 
-  // The four, in the order the desk asked for them. There was a fifth, Approved, carrying
+  // The cards, in the order the desk asked for them. There was a fifth, Approved, carrying
   // the same signed-off total over the same rows as Expense Approved — the same card twice
-  // on the screen — so Expense Approved answers both questions on its own.
+  // on the screen — so Expense Approved answers both questions on its own. Pending Approved
+  // went too: it was Expense Request's open total under another name.
   const CARDS = [
     ...(showCash
       ? [{
@@ -1263,12 +1264,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       color: "#059669",
       amount: fmt(piles.approved.total),
     },
-    {
-      key: "pending",
-      label: "Pending Approved",
-      color: "#d97706",
-      amount: fmt(piles.pending.total),
-    },
   ];
 
   // What the list under the cards is, per card: what it is called, what it holds, and
@@ -1285,12 +1280,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       hint: "Each one as it was raised, approved and paid",
       rows: piles.approved.rows,
       empty: "Nothing approved yet.",
-    },
-    pending: {
-      title: "Waiting on the accountant",
-      hint: "Raised at the branch and not yet signed off",
-      rows: piles.pending.rows,
-      empty: "Nothing waiting. Add Expense sends a request to the accountant.",
     },
   };
 
@@ -1378,16 +1367,15 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
 
   return (
     <div className={activeView === "cash" ? "space-y-3" : "space-y-4"} data-testid="branch-expenses-panel">
-      {/* The four piles, as cards that are also the tabs onto them — the shape HR Admin's
+      {/* The piles, as cards that are also the tabs onto them — the shape HR Admin's
           stage cards already wear on this system, and for the same reason: a figure you
           press to read the rows behind it, rather than a row of figures and a tab bar
           under it saying the same thing twice.
 
-          Two across a phone so the amounts stay readable, four across from lg where there
-          is room for the whole row of them. */}
+          Two across a phone so the amounts stay readable, the whole row across from sm. */}
       {section !== "cash" && (
       <div
-        className={`grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 ${CARDS.length === 4 ? "lg:grid-cols-4" : ""}`}
+        className={`grid grid-cols-2 gap-2 sm:gap-3 ${CARDS.length === 3 ? "sm:grid-cols-3" : ""}`}
         data-testid="branch-expense-summary-cards"
       >
         {CARDS.map((c) => (
