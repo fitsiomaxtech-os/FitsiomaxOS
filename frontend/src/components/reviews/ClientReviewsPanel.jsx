@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Building2, UserRound, CalendarCheck, Check, ChevronDown, ChevronRight, Clock, MessageSquareOff, MessageSquareQuote, RefreshCw, Search, Star, X } from "lucide-react";
+import { Building2, UserRound, Check, ChevronDown, ChevronRight, MessageSquareQuote, RefreshCw, Search, Star, X } from "lucide-react";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -363,20 +363,20 @@ const TypePill = ({ review }) => {
  */
 const TILES = {
   consultant: [
-    { key: "", label: "All", figure: "total", sub: () => "Every consultant review", icon: MessageSquareQuote, color: "#4f46e5" },
-    { key: "rated", label: "Consultation Review", figure: "average", sub: (f) => `${f.rated} ratings · 7-day + anytime`, icon: Star, color: "#f59e0b" },
-    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★ · every 7 days of treatment`, icon: CalendarCheck, color: "#059669" },
-    { key: "anytime", label: "Anytime", figure: "anytime", sub: () => "From the Feedback tab", icon: Clock, color: "#0284c7" },
+    { key: "", label: "All", figure: "total", sub: () => "Every consultant review", color: "#4f46e5" },
+    { key: "rated", label: "Consultation Review", figure: "average", sub: (f) => `${f.rated} ratings · 7-day + anytime`, color: "#f59e0b" },
+    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★ · every 7 days of treatment`, color: "#059669" },
+    { key: "anytime", label: "Anytime", figure: "anytime", sub: () => "From the Feedback tab", color: "#0284c7" },
   ],
   physio: [
-    { key: "", label: "All", figure: "total", sub: () => "Every physio review", icon: MessageSquareQuote, color: "#4f46e5" },
-    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★ · every 7 days of treatment`, icon: Activity, color: "#059669" },
-    { key: "rated", label: "Average Rating", figure: "average", sub: (f) => `${f.rated} ratings`, icon: Star, color: "#f59e0b" },
-    { key: "anytime", label: "Anytime", figure: "anytime", sub: () => "From the Feedback tab", icon: Clock, color: "#0284c7" },
+    { key: "", label: "All", figure: "total", sub: () => "Every physio review", color: "#4f46e5" },
+    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★ · every 7 days of treatment`, color: "#059669" },
+    { key: "rated", label: "Average Rating", figure: "average", sub: (f) => `${f.rated} ratings`, color: "#f59e0b" },
+    { key: "anytime", label: "Anytime", figure: "anytime", sub: () => "From the Feedback tab", color: "#0284c7" },
   ],
   branch_admin: [
-    { key: "", label: "All", figure: "total", sub: () => "Every branch admin review", icon: MessageSquareQuote, color: "#4f46e5" },
-    { key: "rated", label: "Average Rating", figure: "average", sub: (f) => `${f.rated} ratings`, icon: Star, color: "#f59e0b" },
+    { key: "", label: "All", figure: "total", sub: () => "Every branch admin review", color: "#4f46e5" },
+    { key: "rated", label: "Average Rating", figure: "average", sub: (f) => `${f.rated} ratings`, color: "#f59e0b" },
   ],
 };
 
@@ -392,7 +392,6 @@ const STAFF_TILES = {
     label: "Without Review",
     figure: "noComment",
     sub: () => "Rated, no words from the client",
-    icon: MessageSquareOff,
     color: "#64748b",
   })),
 };
@@ -785,6 +784,8 @@ export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly =
         </CardContent>
       </Card>
 
+      {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
+          on a 5px corner, matching the Fitness, Review and Patients strips. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map((t) => (
           <StatTile
@@ -792,7 +793,7 @@ export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly =
             label={t.label}
             value={t.figure === "average" ? (figures.average != null ? `${figures.average} ★` : "—") : figures[t.figure]}
             sub={t.sub(figures)}
-            icon={t.icon}
+            arrow
             color={t.color}
             active={source === t.key}
             onClick={() => setSource((cur) => (cur === t.key ? "" : t.key))}
