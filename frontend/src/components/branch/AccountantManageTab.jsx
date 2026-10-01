@@ -707,7 +707,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                     ? (branchId
                       ? "Opening cash not set — set it on Branch Cash"
                       : `${openingUnset} ${openingUnset === 1 ? "branch" : "branches"} without an opening count, not included`)
-                    : "in the drawer now",
+                    : undefined,
                 },
                 expenses: {
                   value: expenseTotals.approved_total,

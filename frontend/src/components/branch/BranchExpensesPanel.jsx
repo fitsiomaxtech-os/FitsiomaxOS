@@ -1301,6 +1301,9 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   // summed from -- the movements through /finance/branch-cash/entries, the same rows Branch
   // Cash opens, so a card and its list agree. In transit and Opening / corrections only show
   // when they hold something, as they did as lines of the table these cards replace.
+  //
+  // A caption only where it carries a figure (the approved / awaiting split, how many
+  // handovers are in transit): a fixed line under each card only said its label again.
   const f = cashFigures || {};
   const inTransitHandovers = handovers.filter((h) => h.status === "pending").length;
   const CASH_CARDS = cashFigures ? [
@@ -1311,13 +1314,13 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       value: `+ ${fmt(f.collected_cash)}`,
       sub: f.cash_approved != null || f.cash_awaiting != null
         ? `approved ${fmt(f.cash_approved)} · awaiting ${fmt(f.cash_awaiting)}`
-        : "cash taken at the desk",
+        : undefined,
     },
-    { key: "cash_returned", label: "Cash returned", color: "#0d9488", value: `+ ${fmt(f.cash_returned)}`, sub: "came back into the drawer" },
-    { key: "cash_spent", label: "Spent in cash", color: "#e11d48", value: `− ${fmt(f.cash_spent)}`, sub: "expenses paid out of the drawer" },
-    { key: "handed_over", label: "Handed over", color: "#d97706", value: `− ${fmt(f.handed_over)}`, sub: "received by the accountant" },
+    { key: "cash_returned", label: "Cash returned", color: "#0d9488", value: `+ ${fmt(f.cash_returned)}` },
+    { key: "cash_spent", label: "Spent in cash", color: "#e11d48", value: `− ${fmt(f.cash_spent)}` },
+    { key: "handed_over", label: "Handed over", color: "#d97706", value: `− ${fmt(f.handed_over)}` },
     ...(f.in_transit > 0
-      ? [{ key: "in_transit", label: "In transit", color: "#ea580c", value: `− ${fmt(f.in_transit)}`, sub: "left the branch, not yet received" }]
+      ? [{ key: "in_transit", label: "In transit", color: "#ea580c", value: `− ${fmt(f.in_transit)}` }]
       : []),
     ...(!byBranch && f.adjustments
       ? [{
@@ -1325,7 +1328,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
           label: "Opening / corrections",
           color: "#64748b",
           value: `${f.adjustments > 0 ? "+" : "−"} ${fmt(Math.abs(f.adjustments))}`,
-          sub: "set by the accountant",
         }]
       : []),
     {
@@ -1333,16 +1335,15 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       label: "Cash in hand",
       color: f.cash_in_hand < 0 ? "#e11d48" : "#0284c7",
       value: fmt(f.cash_in_hand),
-      sub: byBranch ? "what every branch is holding" : "what should be in the drawer now",
     },
     {
       key: "handovers",
       label: "Handovers",
       color: "#7c3aed",
       value: handovers.length,
-      sub: inTransitHandovers ? `${inTransitHandovers} in transit` : "handed to the accountant",
+      sub: inTransitHandovers ? `${inTransitHandovers} in transit` : undefined,
     },
-    { key: "cash_returns", label: "Cash returns", color: "#4f46e5", value: cashReturns.length, sub: "brought back to the drawer" },
+    { key: "cash_returns", label: "Cash returns", color: "#4f46e5", value: cashReturns.length },
   ] : [];
   // A card that is gone -- In transit once it is received, a branch switched -- falls back to
   // Cash in hand rather than leaving its list open under no card.
