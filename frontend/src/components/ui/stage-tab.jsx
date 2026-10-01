@@ -25,6 +25,11 @@ import { useState } from "react";
 // picked out. Opt-in rather than the default because this bar is shared: Branch Leads
 // asked for blank cards, while the Consultations and Pre-Sales bars still read by
 // colour, and changing it here would have restyled all three at once.
+//
+// A blank card also takes the finance boards' corner (ui/ledger-card, 5px) rather than the
+// shared rounded-lg, so Branch Admin's summary strip and Accountant Manage's own read as
+// the same card. Scoped to `plain`, so the coloured Consultations and Pre-Sales bars keep
+// the radius they had.
 // `borderClass` outlines the card in a colour of the caller's choosing — a Tailwind
 // border utility, passed as a literal class name so the JIT can see it. Only meaningful
 // alongside `plain`, whose cards are borderless by design; the coloured variant already
@@ -47,7 +52,9 @@ export const StageTab = ({ label, count, active, onClick, color, hoverColor, sel
       onMouseLeave={() => setHovered(false)}
       data-testid={testid}
       type="button"
-      className={`relative flex flex-col items-center justify-center rounded-lg text-center transition-all hover:shadow-sm sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
+      className={`relative flex flex-col items-center justify-center text-center transition-all hover:shadow-sm sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
+        plain ? "rounded-[5px]" : "rounded-lg"
+      } ${
         gridded
           ? "w-full min-w-0 px-1 py-2"
           : "min-w-[86px] shrink-0 px-3 py-2.5"
