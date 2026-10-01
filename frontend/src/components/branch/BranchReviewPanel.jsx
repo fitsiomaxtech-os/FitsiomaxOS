@@ -298,7 +298,10 @@ export const BranchReviewPanel = ({ branchId }) => {
           three permanently tinted pills gave every stage the same shout, and a filled
           orange "Send to Review" read as urgent whether it held two reviews or none.
           Selection is what the colour marks now. Still three across on a phone — they
-          fit, and the third was otherwise behind a sideways swipe. */}
+          fit, and the third was otherwise behind a sideways swipe.
+
+          `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
+          on a 5px corner, matching the Fitness and Zumba strips. */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3" data-testid="branch-review-subtabs">
         {SUB_TABS.map((t) => (
           <StatTile
@@ -306,7 +309,7 @@ export const BranchReviewPanel = ({ branchId }) => {
             label={t.label}
             value={countFor(t.key)}
             sub={t.sub}
-            icon={t.icon}
+            arrow
             color={t.color}
             active={sub === t.key}
             onClick={() => { setSub(t.key); setDateFilter(null); }}
