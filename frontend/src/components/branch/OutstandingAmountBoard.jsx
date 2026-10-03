@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet, History } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet, History, IndianRupee } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecordCards } from "@/components/branch/RecordCards";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
@@ -75,56 +76,21 @@ const STATUS_META = {
 const StatusBadge = ({ status }) => {
   const meta = STATUS_META[status] || STATUS_META.partial;
   return (
-    <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-semibold ${meta.classes}`}>
+    <span className={`inline-flex whitespace-nowrap items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${meta.classes}`}>
       {meta.label}
     </span>
   );
 };
 
-// Native <select> can't reliably color individual dropdown-list items across
-// browsers — only the closed box. This renders each option as its own colored,
-// rounded row in a custom open list instead.
-const ColorFilterDropdown = ({ value, options, onChange, testId }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  const current = options.find((o) => o.value === value) || options[0];
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`flex h-9 items-center justify-between gap-2 rounded-md border px-3 text-sm font-semibold ${current?.classes || "border-slate-200 bg-white text-slate-700"}`}
-        data-testid={testId}
-      >
-        <span className="truncate">{current?.label}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-      </button>
-      {open && (
-        <div className="absolute left-0 z-20 mt-1 max-h-64 min-w-[170px] space-y-1 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg" data-testid={`${testId}-list`}>
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`block w-full whitespace-nowrap rounded-md border px-3 py-1.5 text-left text-xs font-semibold ${o.classes}`}
-              data-testid={`${testId}-option-${o.value}`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+// The status filter as a row of pills, like the Zumba tab's payment modes, rather than a
+// dropdown. Each lights in its own status colour, so the pill keeps the colour coding the
+// dropdown's options had: [key, label, lit classes].
+const STATUS_FILTERS = [
+  ["all", "All Statuses", "border-sky-600 bg-sky-600"],
+  ["overdue", "Overdue", "border-rose-600 bg-rose-600"],
+  ["due_soon", "Due Soon", "border-amber-500 bg-amber-500"],
+  ["partial", "Partial Paid", "border-sky-600 bg-sky-600"],
+];
 
 const MONTHS_VISIBLE = 5;
 const centeredStart = (idx) => Math.min(Math.max(idx - 2, 0), MONTHS.length - MONTHS_VISIBLE);
@@ -267,6 +233,11 @@ const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
  */
 export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld }) => {
   const collectable = (r) => Boolean(onCollect) && !r.old_client && !r.past_data && r.balance > 0 && canCollect(r);
+  // What a tap on the row opens, on the phone card and the table row alike: the client
+  // popup, or for an old client -- who has no client card -- their instalment form.
+  const openRow = (r) => (r.old_client
+    ? (onCollectOld ? () => onCollectOld(r) : undefined)
+    : (onView ? () => onView(r.lead_id) : undefined));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [month, setMonth] = useState("all");
@@ -333,201 +304,243 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
         <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" arrow color="#7c3aed" active={card === "pending"} onClick={() => pickCard("pending")} />
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3 p-3">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search client or phone..."
-            className="h-9 min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 text-sm"
-            data-testid="outstanding-search"
-          />
-          <ColorFilterDropdown
-            value={status}
-            options={[
-              { value: "all", label: "All Statuses", classes: "border-slate-200 bg-white text-slate-700" },
-              { value: "overdue", label: "Overdue", classes: STATUS_META.overdue.classes },
-              { value: "due_soon", label: "Due Soon", classes: STATUS_META.due_soon.classes },
-              { value: "partial", label: "Partial Paid", classes: STATUS_META.partial.classes },
-            ]}
-            onChange={setStatus}
-            testId="outstanding-status-filter"
-          />
-          <input
-            type="number" value={minAmount} onChange={(e) => setMinAmount(e.target.value)}
-            placeholder="Min amount" className="h-9 w-28 rounded-md border border-slate-200 px-2 text-sm"
-          />
-          <input
-            type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)}
-            placeholder="Max amount" className="h-9 w-28 rounded-md border border-slate-200 px-2 text-sm"
-          />
-          <div className="ml-auto flex flex-wrap gap-2">
-            {/* Money for a course begun on the old Physio Tracker: the client is on no
-                list in the OS until their first instalment is entered here. */}
-            {onNewOld && (
-              <button
-                type="button" onClick={onNewOld}
-                className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
-                data-testid="outstanding-old-client-open"
-              >
-                <History className="h-3.5 w-3.5" /> Old Client Instalment
-              </button>
-            )}
-            <button
-              type="button" onClick={() => downloadCsv(shown)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
-              data-testid="outstanding-export-csv"
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5" /> Export Excel
-            </button>
-            <button
-              type="button" onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
-              data-testid="outstanding-print"
-            >
-              <Printer className="h-3.5 w-3.5" /> Print / PDF
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
       <Card data-testid="accountant-manage-outstanding">
-        <CardContent className="p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Outstanding Amount</p>
-          <RecordCards
-            rows={shown}
-            empty={emptyText}
-            testid="outstanding-cards"
-            card={(r) => ({
-              key: rowKey(r),
-              testid: `accountant-manage-outstanding-card-${rowKey(r)}`,
-              title: r.old_client ? `${r.client_name} · Old client` : r.client_name,
-              subtitle: r.phone || r.branch_name || "—",
-              amount: (
-                <>
-                  <span className="block text-sm font-bold text-amber-600">{fmt(r.balance)}</span>
-                  <span className="block text-[11px] text-slate-400">{fmt(r.paid_amount)} of {fmt(r.total_bill)}</span>
-                </>
-              ),
-              meta: [
-                <StatusBadge status={r.status} />,
-                r.due_date ? <span className="font-semibold text-red-600">Due {r.due_date}</span> : null,
-              ],
-              // Not for a Past Data balance: that is what an Excel sheet said was owed when it
-              // was saved, shown for reading, and no one on the OS set it.
-              actions: (collectable(r) || (!r.past_data && waNumber(r.phone))) ? (
-                <>
-                  {collectable(r) && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onCollect(r); }}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white hover:bg-emerald-700"
-                      data-testid={`outstanding-collect-card-${rowKey(r)}`}
-                    >
-                      <Wallet className="h-3.5 w-3.5" /> Collect
-                    </button>
-                  )}
-                  {!r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} />}
-                </>
-              ) : null,
-              onOpen: r.old_client
-                ? (onCollectOld ? () => onCollectOld(r) : undefined)
-                : (onView ? () => onView(r.lead_id) : undefined),
-            })}
-          />
-
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[62rem] table-fixed border-separate border-spacing-x-0 border-spacing-y-2 text-sm">
-              <thead>
-                <tr>
-                  <th className="w-[5%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">S.No</th>
-                  <th className="w-[15%] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Client</th>
-                  <th className="w-[11%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phone</th>
-                  <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Branch</th>
-                  <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total Bill</th>
-                  <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Paid</th>
-                  <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Balance</th>
-                  <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-red-600">Due Date</th>
-                  <th className="w-[8%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                  <th className="w-[13%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.length === 0 ? (
-                  <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-400">{emptyText}</td></tr>
-                ) : shown.map((r, i) => (
-                  <tr key={rowKey(r)} data-testid={`accountant-manage-outstanding-${rowKey(r)}`}>
-                    <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-2 py-2 text-center text-slate-400">{i + 1}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">
-                      {r.client_name}
-                      {r.old_client && (
-                        <span className="ml-1.5 inline-flex items-center rounded-[5px] border border-indigo-200 bg-indigo-50 px-1.5 py-px align-middle text-[9px] font-semibold uppercase tracking-wide text-indigo-700">
-                          Old client
-                        </span>
-                      )}
-                    </td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.phone || "—"}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.branch_name || "—"}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-700">{fmt(r.total_bill)}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-emerald-600">{fmt(r.paid_amount)}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-amber-600">{fmt(r.balance)}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-red-600">{r.due_date || "—"}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center"><StatusBadge status={r.status} /></td>
-                    <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-2 py-2 text-center">
-                      {/* A plain link, not a boxed button: it is the row's one action, and the
-                          payment history the old row arrow expanded is on the popup it opens.
-                          An old client has no client card, so theirs takes the next
-                          instalment instead. */}
-                      {r.old_client ? (
-                        onCollectOld ? (
-                          <button
-                            type="button" onClick={() => onCollectOld(r)} title="Collect the next instalment"
-                            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
-                            data-testid={`outstanding-collect-old-${r.old_client_id}`}
-                          >
-                            <Wallet className="h-3.5 w-3.5" /> Collect
-                          </button>
-                        ) : <span className="text-slate-300">—</span>
-                      ) : (
-                        <div className="flex items-center justify-center gap-3">
-                          {/* What is due, taken from the list -- the next instalment of a
-                              part-paid fee, or a Consultation Fee never collected. */}
-                          {collectable(r) && (
-                            <button
-                              type="button" onClick={() => onCollect(r)}
-                              title={r.next_installment_number ? `Collect instalment #${r.next_installment_number}` : "Collect the Consultation Fee"}
-                              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
-                              data-testid={`outstanding-collect-${r.lead_id}`}
-                            >
-                              <Wallet className="h-3.5 w-3.5" /> Collect
-                            </button>
-                          )}
-                          <button
-                            type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline"
-                            data-testid={`outstanding-view-${r.lead_id}`}
-                          >
-                            <Eye className="h-4 w-4" /> View
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              {shown.length > 0 && (
-                <tfoot>
-                  <tr>
-                    <td colSpan={4} className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Totals</td>
-                    <td className="px-3 py-2 text-center text-xs font-bold text-slate-700">{fmt(footer.total_bill)}</td>
-                    <td className="px-3 py-2 text-center text-xs font-bold text-emerald-600">{fmt(footer.paid_amount)}</td>
-                    <td className="px-3 py-2 text-center text-xs font-bold text-amber-600">{fmt(footer.balance)}</td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tfoot>
+        <CardContent className="p-0">
+          {/* One toolbar, then the table, as on the Zumba tab: status and amount on the
+              left, search and the buttons at the right. On a window too narrow for all
+              three groups they wrap onto their own lines rather than interleaving. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="outstanding-status-filter">
+              {STATUS_FILTERS.map(([key, label, on]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStatus(key)}
+                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
+                    status === key
+                      ? `${on} text-white shadow-sm`
+                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+                  }`}
+                  data-testid={`outstanding-status-filter-option-${key}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="hidden h-6 w-px bg-slate-200 xl:block" aria-hidden="true" />
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number" value={minAmount} onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="Min amount" className="h-8 w-28 text-xs"
+                data-testid="outstanding-min-amount"
+              />
+              <Input
+                type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)}
+                placeholder="Max amount" className="h-8 w-28 text-xs"
+                data-testid="outstanding-max-amount"
+              />
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name or phone"
+                className="h-8 w-44 text-xs"
+                data-testid="outstanding-search"
+              />
+              <button
+                type="button" onClick={() => downloadCsv(shown)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                data-testid="outstanding-export-csv"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Export Excel
+              </button>
+              <button
+                type="button" onClick={() => window.print()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                data-testid="outstanding-print"
+              >
+                <Printer className="h-3.5 w-3.5" /> Print / PDF
+              </button>
+              {/* Money for a course begun on the old Physio Tracker: the client is on no
+                  list in the OS until their first instalment is entered here. The one
+                  button that creates something, so it takes the blue, as Zumba's add does. */}
+              {onNewOld && (
+                <button
+                  type="button" onClick={onNewOld}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-700"
+                  data-testid="outstanding-old-client-open"
+                >
+                  <History className="h-3.5 w-3.5" /> Old Client Instalment
+                </button>
               )}
-            </table>
+            </div>
+          </div>
+
+          <div className="p-3 md:hidden">
+            <RecordCards
+              rows={shown}
+              empty={emptyText}
+              testid="outstanding-cards"
+              card={(r) => ({
+                key: rowKey(r),
+                testid: `accountant-manage-outstanding-card-${rowKey(r)}`,
+                title: r.old_client ? `${r.client_name} · Old client` : r.client_name,
+                subtitle: r.phone || r.branch_name || "—",
+                amount: (
+                  <>
+                    <span className="block text-sm font-bold text-amber-600">{fmt(r.balance)}</span>
+                    <span className="block text-[11px] text-slate-400">{fmt(r.paid_amount)} of {fmt(r.total_bill)}</span>
+                  </>
+                ),
+                meta: [
+                  <StatusBadge status={r.status} />,
+                  r.due_date ? <span className="font-semibold text-red-600">Due {r.due_date}</span> : null,
+                ],
+                // Not for a Past Data balance: that is what an Excel sheet said was owed when it
+                // was saved, shown for reading, and no one on the OS set it.
+                actions: (collectable(r) || (!r.past_data && waNumber(r.phone))) ? (
+                  <>
+                    {collectable(r) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onCollect(r); }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                        data-testid={`outstanding-collect-card-${rowKey(r)}`}
+                      >
+                        <Wallet className="h-3.5 w-3.5" /> Collect
+                      </button>
+                    )}
+                    {!r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} />}
+                  </>
+                ) : null,
+                onOpen: openRow(r),
+              })}
+            />
+          </div>
+
+          <div className="hidden md:block">
+            {shown.length === 0 ? (
+              <p className="px-4 py-12 text-center text-sm text-slate-400">{emptyText}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[64rem] text-left text-sm">
+                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    {/* One fact per column, every header and cell on a single line. */}
+                    <tr className="whitespace-nowrap">
+                      <th className="w-[4%] px-3 py-2.5">S.No</th>
+                      <th className="w-[17%] px-3 py-2.5">Client</th>
+                      <th className="w-[10%] px-3 py-2.5">Phone</th>
+                      <th className="w-[12%] px-3 py-2.5">Branch</th>
+                      <th className="w-[9%] px-3 py-2.5">Total Bill</th>
+                      <th className="w-[8%] px-3 py-2.5">Paid</th>
+                      <th className="w-[9%] px-3 py-2.5">Balance</th>
+                      <th className="w-[9%] px-3 py-2.5">Due Date</th>
+                      <th className="w-[9%] px-3 py-2.5">Status</th>
+                      <th className="w-[8%] px-3 py-2.5 text-center">Payment</th>
+                      <th className="w-[5%] px-3 py-2.5 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {shown.map((r, i) => {
+                      const open = openRow(r);
+                      return (
+                        <tr
+                          key={rowKey(r)}
+                          onClick={open}
+                          className={`whitespace-nowrap align-middle hover:bg-slate-50/60 ${open ? "cursor-pointer" : ""}`}
+                          data-testid={`accountant-manage-outstanding-${rowKey(r)}`}
+                        >
+                          <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p className="max-w-[13rem] truncate text-sm font-semibold leading-5 text-slate-800" title={r.client_name}>{r.client_name || "—"}</p>
+                              {r.old_client && (
+                                <span className="inline-flex shrink-0 items-center rounded-[5px] border border-indigo-200 bg-indigo-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-indigo-700">
+                                  Old client
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                          <td className="px-3 py-3">
+                            {r.branch_name
+                              ? <p className="max-w-[10rem] truncate text-xs leading-5 text-slate-600" title={r.branch_name}>{r.branch_name}</p>
+                              : <span className="text-xs leading-5 text-slate-300">—</span>}
+                          </td>
+                          <td className="px-3 py-3 text-xs leading-5 text-slate-700">{fmt(r.total_bill)}</td>
+                          <td className="px-3 py-3 text-xs font-semibold leading-5 text-emerald-700">{fmt(r.paid_amount)}</td>
+                          <td className="px-3 py-3 text-xs font-semibold leading-5 text-amber-600">{fmt(r.balance)}</td>
+                          <td className="px-3 py-3">
+                            {r.due_date
+                              ? <p className="text-xs font-semibold leading-5 text-rose-600">{r.due_date}</p>
+                              : <span className="text-xs leading-5 text-slate-300">—</span>}
+                          </td>
+                          <td className="px-3 py-3"><StatusBadge status={r.status} /></td>
+                          {/* What is due, taken from the list -- the next instalment of a
+                              part-paid fee, or a Consultation Fee never collected; an old
+                              client's next instalment on their own form. The cell swallows the
+                              click so the button does not also open the row behind it. */}
+                          <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            {r.old_client ? (
+                              onCollectOld ? (
+                                <button
+                                  type="button" onClick={() => onCollectOld(r)} title="Collect the next instalment"
+                                  className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                                  data-testid={`outstanding-collect-old-${r.old_client_id}`}
+                                >
+                                  <IndianRupee className="h-3 w-3" /> Collect
+                                </button>
+                              ) : <span className="text-xs leading-7 text-slate-300">—</span>
+                            ) : collectable(r) ? (
+                              <button
+                                type="button" onClick={() => onCollect(r)}
+                                title={r.next_installment_number ? `Collect instalment #${r.next_installment_number}` : "Collect the Consultation Fee"}
+                                className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                                data-testid={`outstanding-collect-${r.lead_id}`}
+                              >
+                                <IndianRupee className="h-3 w-3" /> Collect
+                              </button>
+                            ) : (
+                              <span className="text-xs leading-7 text-slate-300">—</span>
+                            )}
+                          </td>
+                          {/* Opens the client popup, where the payment history and the
+                              WhatsApp reminder live. An old client has no client card, so
+                              theirs has nothing here but the Collect beside it. */}
+                          <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            {!r.old_client && onView ? (
+                              <button
+                                type="button"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700"
+                                onClick={() => onView(r.lead_id)}
+                                title="View"
+                                aria-label="View"
+                                data-testid={`outstanding-view-${r.lead_id}`}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <span className="text-xs leading-7 text-slate-300">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                    <tr className="whitespace-nowrap">
+                      <td colSpan={4} className="px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Totals</td>
+                      <td className="px-3 py-3 text-xs font-extrabold text-slate-700">{fmt(footer.total_bill)}</td>
+                      <td className="px-3 py-3 text-xs font-extrabold text-emerald-700">{fmt(footer.paid_amount)}</td>
+                      <td className="px-3 py-3 text-xs font-extrabold text-amber-600">{fmt(footer.balance)}</td>
+                      <td colSpan={4}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
