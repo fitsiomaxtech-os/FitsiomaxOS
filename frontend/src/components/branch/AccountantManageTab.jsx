@@ -62,15 +62,14 @@ const MAIN_TABS = [
  */
 const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month", "custom"];
 
-// Every tab a bordered button, the picked one filled solid in its own colour.
+// Every tab edged in a flowing RGB spectrum (.rgb-tab, index.css), the picked one filled
+// with it. The rest keep their own colour in their lettering, so Discount still reads
+// amber and the two closing tabs emerald.
 const mainTabClasses = (tab, active) => {
-  if (tab.tone === "discount") {
-    return active ? "border-amber-600 bg-amber-600 text-white shadow-sm" : "border-amber-200 bg-amber-50/40 text-amber-700 hover:border-amber-300 hover:bg-amber-50";
-  }
-  if (tab.tone === "closing") {
-    return active ? "border-emerald-600 bg-emerald-600 text-white shadow-sm" : "border-emerald-200 bg-emerald-50/40 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50";
-  }
-  return active ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-sky-50/40 text-slate-600 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700";
+  if (active) return "rgb-tab rgb-tab-active text-white shadow-md";
+  if (tab.tone === "discount") return "rgb-tab text-amber-700";
+  if (tab.tone === "closing") return "rgb-tab text-emerald-700";
+  return "rgb-tab text-slate-600 hover:text-sky-700";
 };
 
 /**
@@ -704,7 +703,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 onClick={() => setTab(t.key)}
                 title={badge?.title}
                 aria-label={badge ? `${t.label} (${badge.title})` : undefined}
-                className={`relative h-10 shrink-0 whitespace-nowrap rounded-lg border px-2.5 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
+                className={`relative h-10 shrink-0 whitespace-nowrap rounded-lg px-2.5 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
                 data-testid={`accountant-manage-maintab-${t.key}`}
               >
                 {t.label}

@@ -128,6 +128,45 @@ code {
     margin: 0 8px;
 }
 
+/* Accountant Manage's tab row: an RGB edge that flows round every tab, and the picked
+   tab filled with the spectrum. The inner fill is a padding-box layer laid over a
+   border-box gradient, so only the 2px border shows the colours; the picked tab clears
+   that fill and takes a deeper spectrum that white lettering still reads on. The flow
+   stops for a desk set to reduce motion, leaving the colours standing. */
+@keyframes rgb-tab-flow {
+    to {
+        background-position: 0 0, 200% 0;
+    }
+}
+
+.rgb-tab {
+    --rgb-tab-fill: #fff;
+    --rgb-tab-spectrum: #ef4444, #f59e0b, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444;
+    border: 2px solid transparent;
+    background:
+        linear-gradient(var(--rgb-tab-fill), var(--rgb-tab-fill)) padding-box,
+        linear-gradient(90deg, var(--rgb-tab-spectrum)) border-box;
+    background-size: 100% 100%, 200% 100%;
+    animation: rgb-tab-flow 4s linear infinite;
+}
+
+.rgb-tab:hover {
+    --rgb-tab-fill: #f8fafc;
+}
+
+.rgb-tab-active,
+.rgb-tab-active:hover {
+    --rgb-tab-fill: transparent;
+    --rgb-tab-spectrum: #e11d48, #c026d3, #7c3aed, #2563eb, #0891b2, #059669, #e11d48;
+    text-shadow: 0 1px 1px rgb(0 0 0 / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rgb-tab {
+        animation: none;
+    }
+}
+
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;
