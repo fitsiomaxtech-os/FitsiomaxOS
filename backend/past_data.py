@@ -160,6 +160,7 @@ FINDINGS = {
     "unknown_session_status": "Session Status is not Completed or Upcoming -- not put on the physio's board",
     "bad_session_date": "A date in Completed / Upcoming Dates that could not be read -- that session NOT imported",
     "bad_session_time": "Session Time that could not be read -- its sessions kept without a time",
+    "repeated_session_date": "Same session date written twice in one Sessions row -- read once",
     "no_session_dates": "Sessions row with no Completed or Upcoming Dates -- NOT imported",
     "unknown_review_status": "Review Status is not Completed or Pending",
     "unknown_payment_for": "Payment For is not Consultation Fee or Treatment Fee -- filed under the course running on its date",

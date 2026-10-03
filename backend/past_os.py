@@ -35,7 +35,7 @@ Nothing here touches a database -- see past_data.py.
 import re
 import uuid
 from datetime import date, datetime, time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from past_data import (
     HEADER_SEARCH_ROWS, PastData, PastDataError, _add_totals, _flag, amount, day, match_key,
@@ -197,6 +197,7 @@ MOMENT_FORMATS = (
     "%d-%m-%Y %I:%M %p", "%d/%m/%Y %I:%M %p", "%Y-%m-%d %H:%M:%S",
 )
 CLOCK_FORMATS = ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H")
+DAY_OF_MONTH = re.compile(r"^\d{1,2}$")
 
 
 # ------------------------------------------------------------------------------ cleaners
@@ -240,14 +241,42 @@ def clock(value: Any) -> str:
     return ""
 
 
-def dates(value: Any) -> List[Any]:
-    """A cell listing one date per session -- "21-09-2026, 22-09-2026", with commas,
-    semicolons or line breaks between them -- or the single date Excel kept as a date."""
+def dates(value: Any) -> Tuple[List[str], List[str]]:
+    """A cell listing one date per session, as (the dates read, as moment() writes them; what
+    could not be read, as written) -- or the single date Excel kept as a date.
+
+    Commas, semicolons or line breaks between them, and a day of the month alone for a day
+    whose month and year the next full date gives: "21, 22, 23-09-2026, 1, 2 - 10 - 2026" is
+    21, 22 and 23 September and 1 and 2 October. A day with no full date after it has no
+    month, and is not read."""
     if isinstance(value, (datetime, date)):
-        return [value]
+        return [moment(value)], []
     # Not through text(), which would fold the line breaks into spaces.
     written = value if isinstance(value, str) else text(value)
-    return [p.strip() for p in re.split(r"[,;\n]+", written) if p.strip()]
+    read: List[str] = []
+    unread: List[str] = []
+    waiting: List[str] = []
+    for piece in re.split(r"[,;\n]+", written):
+        piece = re.sub(r"\s*([-/])\s*", r"\1", piece.strip())
+        if not piece:
+            continue
+        if DAY_OF_MONTH.match(piece):
+            waiting.append(piece)
+            continue
+        at = moment(piece)
+        if not at:
+            # Reported alone: the days before it still wait for the next full date.
+            unread.append(piece)
+            continue
+        for d in waiting:
+            try:
+                read.append(date(int(at[:4]), int(at[5:7]), int(d)).isoformat())
+            except ValueError:
+                unread.append(f"{d}-{at[5:7]}-{at[:4]}")
+        read.append(at)
+        waiting = []
+    unread += [f"{d} (no month and year after it)" for d in waiting]
+    return read, unread
 
 
 def _pick(table: Dict[str, str], value: Any) -> str:
@@ -723,8 +752,9 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Di
     """The sessions one Sessions row holds, each {session_no, at, status, remarks}.
 
     A row is a client's course, one row however many days it ran: the days done listed in
-    Completed Dates, the days still to come in Upcoming Dates, each at the Session Time
-    unless it was written with its own. Numbered later, in date order (past_data_live._days).
+    Completed Dates, the days still to come in Upcoming Dates (a day alone takes the month of
+    the full date after it -- see dates()), each at the Session Time unless it was written
+    with its own. Numbered later, in date order (past_data_live._days).
     A row laid out the first way -- Session No, Date & Time, Status -- is one session."""
     at_time = clock(record.get("time"))
     if text(record.get("time")) and not at_time:
@@ -742,13 +772,19 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Di
                               who, record.get("status")),
             "remarks": text(record.get("remarks")),
         })
+    seen = set()
     for key, status in (("completed_dates", "Completed"), ("upcoming_dates", "Upcoming")):
-        for written in dates(record.get(key)):
-            at = moment(written)
-            if not at:
-                data.note("bad_session_date", SESSIONS, where, f"{who}: '{text(written)}'")
+        read, unread = dates(record.get(key))
+        for written in unread:
+            data.note("bad_session_date", SESSIONS, where, f"{who}: '{written}'")
+        for at in map(timed, read):
+            # "6, 8, 6-10-2026": the full date is a session of its own, so a day written
+            # before it as well is one session written twice.
+            if at in seen:
+                data.note("repeated_session_date", SESSIONS, where, f"{who}: {at}")
                 continue
-            found.append({"session_no": None, "at": timed(at), "status": status, "remarks": ""})
+            seen.add(at)
+            found.append({"session_no": None, "at": at, "status": status, "remarks": ""})
     if not found and not any(text(record.get(k)) for k in ("completed_dates", "upcoming_dates")):
         data.note("no_session_dates", SESSIONS, where, who)
     return found

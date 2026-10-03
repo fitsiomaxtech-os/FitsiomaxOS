@@ -257,6 +257,46 @@ def test_one_row_per_client_lists_its_session_dates():
     assert past_data.summary(data)["sessions"] == 5 and data.tab_rows["Sessions"] == 1
 
 
+def test_days_alone_take_the_month_of_the_full_date_after_them():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Bala", "9000000001")],
+        "Physio": [child(2, "FM-1", course="Treatment", start_date=datetime(2026, 9, 20))],
+        "Sessions": [child(2, "FM-1", course="Treatment", time="10:00",
+                           completed_dates="21, 22, 29-09-2026, 1, 2 - 10 - 2026",
+                           upcoming_dates="5, 6 18:30, 7, 8-10-2026 9:00, 9")],
+    })
+    sessions = data.clients[0]["sessions"]
+    assert [(s["at"], s["status"]) for s in sessions] == [
+        ("2026-09-21 10:00", "Completed"), ("2026-09-22 10:00", "Completed"), ("2026-09-29 10:00", "Completed"),
+        ("2026-10-01 10:00", "Completed"), ("2026-10-02 10:00", "Completed"),
+        ("2026-10-05 10:00", "Upcoming"), ("2026-10-07 10:00", "Upcoming"), ("2026-10-08 09:00", "Upcoming"),
+    ]
+    # "6 18:30" is not a day alone, and 9 has no full date after it: both reported, never guessed.
+    assert [f.detail for f in data.findings if f.code == "bad_session_date"] == [
+        "Test Bala: '6 18:30'", "Test Bala: '9 (no month and year after it)'"]
+
+
+def test_a_date_written_twice_is_read_once():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Bala", "9000000001")],
+        "Sessions": [child(2, "FM-1", course="Treatment", completed_dates="2, 4, 6, 8, 6 - 10 - 2026",
+                           upcoming_dates="8-10-2026")],
+    })
+    assert [(s["at"], s["status"]) for s in data.clients[0]["sessions"]] == [
+        ("2026-10-02", "Completed"), ("2026-10-04", "Completed"), ("2026-10-06", "Completed"), ("2026-10-08", "Completed")]
+    assert [f.detail for f in data.findings if f.code == "repeated_session_date"] == [
+        "Test Bala: 2026-10-06", "Test Bala: 2026-10-08"]
+
+
+def test_a_day_the_month_does_not_have_is_reported():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Bala", "9000000001")],
+        "Sessions": [child(2, "FM-1", course="Treatment", completed_dates="30, 31, 1-09-2026")],
+    })
+    assert [s["at"] for s in data.clients[0]["sessions"]] == ["2026-09-01", "2026-09-30"]
+    assert "Test Bala: '31-09-2026'" in [f.detail for f in data.findings]
+
+
 def test_a_single_date_cell_and_no_session_time():
     data = build({
         "Leads": [lead(2, "FM-1", "Test Arun", "9000000001")],
