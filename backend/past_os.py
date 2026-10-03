@@ -8,6 +8,8 @@ still being treated: one workbook, five tabs, read at the same time in one uploa
   Leads     one row per client: who they are, and where they stand (Current Stage, one of
             the OS's own fifteen stage names, and the date of each step on the way there)
   Physio    one row per course: Treatment or Rehab, the package, its sessions and its price
+            -- and, on the same row, the Sessions tab's three columns for that course, so
+            the two tabs can be kept as one
   Sessions  one row per course of a client's: the dates done and the dates to come, listed
             in two cells, at what time and by which physio (or, as the tab was first laid
             out and is still read, one row per session)
@@ -94,6 +96,11 @@ COLUMNS = {
         "physio": "Physio Name",
         "completed_date": "Completed Date",
         "notes": "Notes",
+        # The course's sessions, on its own row -- the Sessions tab's columns, so the two
+        # tabs can be one (see _row_sessions).
+        "time": "Session Time",
+        "completed_dates": "Completed Dates",
+        "upcoming_dates": "Upcoming Dates",
     },
     SESSIONS: {
         "client_excel_id": "Patient ID",
@@ -491,7 +498,18 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
                   + (" -- more than one client matches" if len(candidates) > 1 else ""))
         return None
 
-    # -- courses, off the Physio tab
+    def add_session(client: dict, session: dict, treatment: Optional[dict]) -> None:
+        """A session onto its client, and counted on its course."""
+        if treatment:
+            session["treatment_excel_id"] = treatment["excel_id"]
+            if session["status"] == "Completed":
+                treatment["sessions_completed"] += 1
+            elif session["status"] == "Upcoming":
+                treatment["sessions_upcoming"] += 1
+        client["sessions"].append(session)
+        data.sessions_read += 1
+
+    # -- courses, off the Physio tab, each with the sessions on its own row
     courses: Dict[str, List[Dict[str, Any]]] = {}
     for record in tabs.get(PHYSIO, []):
         where = f"{PHYSIO} · row {record['_row']}"
@@ -516,6 +534,13 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         )
         data.treatments.append(treatment)
         courses.setdefault(client["id"], []).append(treatment)
+        if any(text(record.get(k)) for k in ("completed_dates", "upcoming_dates")):
+            for session in _row_sessions(data, record, where, client["name"], PHYSIO):
+                session.update(course=course, physio=treatment["physio"], row=where)
+                add_session(client, session, treatment)
+    if data.sessions_read and SESSIONS in data.tabs_missing:
+        # The Physio tab carried them: a sheet laid out so has no Sessions tab to miss.
+        data.tabs_missing.remove(SESSIONS)
 
     # -- sessions and reviews, onto the client (and each session counted on its course)
     for record in tabs.get(SESSIONS, []):
@@ -528,16 +553,8 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         for session in _row_sessions(data, record, where, client["name"]):
             session.update(course=course, physio=text(record.get("physio")), row=where)
             treatment = _course_for(courses.get(client["id"], []), session["at"][:10], course)
-            if treatment:
-                session["treatment_excel_id"] = treatment["excel_id"]
-                if session["status"] == "Completed":
-                    treatment["sessions_completed"] += 1
-                elif session["status"] == "Upcoming":
-                    treatment["sessions_upcoming"] += 1
-            else:
-                unplaced = True
-            client["sessions"].append(session)
-            data.sessions_read += 1
+            unplaced = unplaced or not treatment
+            add_session(client, session, treatment)
         if unplaced:
             # Once for the row, however many of its dates had no course to go on.
             _flag(client, "session_no_course")
@@ -760,8 +777,10 @@ def _treatment(client: dict, excel_id: str, *, service: str, course: str, physio
     }
 
 
-def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Dict[str, Any]]:
-    """The sessions one Sessions row holds, each {session_no, at, status, remarks}.
+def _row_sessions(data: PastData, record: dict, where: str, who: str,
+                  tab: str = SESSIONS) -> List[Dict[str, Any]]:
+    """The sessions one Sessions row -- or one Physio row, which can carry its course's
+    session columns itself -- holds, each {session_no, at, status, remarks}.
 
     A row is a client's course, one row however many days it ran: the days done listed in
     Completed Dates, the days still to come in Upcoming Dates (a day alone takes the month of
@@ -770,7 +789,7 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Di
     A row laid out the first way -- Session No, Date & Time, Status -- is one session."""
     at_time = clock(record.get("time"))
     if text(record.get("time")) and not at_time:
-        data.note("bad_session_time", SESSIONS, where, f"{who}: '{text(record.get('time'))}'")
+        data.note("bad_session_time", tab, where, f"{who}: '{text(record.get('time'))}'")
 
     def timed(at: str) -> str:
         return f"{at} {at_time}" if at_time and len(at) == 10 else at
@@ -780,7 +799,7 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Di
         found.append({
             "session_no": whole(record.get("session_no")),
             "at": timed(moment(record.get("at"))),
-            "status": _status(data, SESSION_STATUSES, "unknown_session_status", SESSIONS, where,
+            "status": _status(data, SESSION_STATUSES, "unknown_session_status", tab, where,
                               who, record.get("status")),
             "remarks": text(record.get("remarks")),
         })
@@ -788,17 +807,17 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Di
     for key, status in (("completed_dates", "Completed"), ("upcoming_dates", "Upcoming")):
         read, unread = dates(record.get(key))
         for written in unread:
-            data.note("bad_session_date", SESSIONS, where, f"{who}: '{written}'")
+            data.note("bad_session_date", tab, where, f"{who}: '{written}'")
         for at in map(timed, read):
             # "6, 8, 6-10-2026": the full date is a session of its own, so a day written
             # before it as well is one session written twice.
             if at in seen:
-                data.note("repeated_session_date", SESSIONS, where, f"{who}: {at}")
+                data.note("repeated_session_date", tab, where, f"{who}: {at}")
                 continue
             seen.add(at)
             found.append({"session_no": None, "at": at, "status": status, "remarks": ""})
     if not found and not any(text(record.get(k)) for k in ("completed_dates", "upcoming_dates")):
-        data.note("no_session_dates", SESSIONS, where, who)
+        data.note("no_session_dates", tab, where, who)
     return found
 
 

@@ -8,7 +8,7 @@ from datetime import datetime, time as dt_time
 import pytest
 
 import past_data
-from past_data import PastDataError, read_workbook
+from past_data import PastData, PastDataError, read_workbook
 from past_os import COLUMNS, build, clock, moment
 
 
@@ -169,6 +169,43 @@ def test_leads_keep_the_patient_id_and_the_other_tabs_go_by_phone():
     bala, anbu = data.clients
     assert (bala["excel_id"], bala["sessions_completed"], bala["reviews_count"]) == ("PAR-1", 2, 1)
     assert (anbu["reviews_count"], anbu["paid_total"]) == (1, 1500)
+
+
+def test_the_physio_tab_carries_its_courses_sessions():
+    """Physio and Sessions as one tab: each course's dates on its own row, so a renewal's
+    sessions are its own by the row they are on, not by their dates."""
+    data = build({
+        "Leads": [lead(2, "PAR-1", "Test Bala", "8825587322")],
+        "Physio": [phone_child(2, "8825587322", course="Treatment", package="First", physio="Test Salma",
+                               start_date=datetime(2026, 9, 20), time="10:00",
+                               completed_dates="21, 22, 23-09-2026"),
+                   phone_child(3, "8825587322", course="Treatment", package="Renewal", physio="Test Kavi",
+                               start_date=datetime(2026, 10, 1), time="18:00",
+                               completed_dates="1-10-2026", upcoming_dates="5, 6-10-2026"),
+                   # A course not started yet: no dates, nothing said.
+                   phone_child(4, "8825587322", course="Rehab", start_date=datetime(2026, 11, 1))],
+    }, PastData(tabs_missing=["Sessions"]))
+    assert codes(data) == [] and data.tabs_missing == []
+    first, renewal, rehab = data.treatments
+    assert (first["sessions_completed"], first["sessions_upcoming"]) == (3, 0)
+    assert (renewal["sessions_completed"], renewal["sessions_upcoming"]) == (1, 2)
+    assert (rehab["sessions_completed"], rehab["sessions_upcoming"]) == (0, 0)
+    sessions = data.clients[0]["sessions"]
+    assert [(s["at"], s["physio"], s["treatment_excel_id"]) for s in sessions[:2]] == [
+        ("2026-09-21 10:00", "Test Salma", first["excel_id"]), ("2026-09-22 10:00", "Test Salma", first["excel_id"])]
+    assert {s["treatment_excel_id"] for s in sessions[3:]} == {renewal["excel_id"]}
+    assert sessions[-1]["at"] == "2026-10-06 18:00" and past_data.summary(data)["sessions"] == 6
+
+
+def test_a_bad_date_on_the_physio_tab_is_reported_there():
+    data = build({
+        "Leads": [lead(2, "PAR-1", "Test Bala", "8825587322")],
+        "Physio": [phone_child(2, "8825587322", course="Treatment", completed_dates="21, 31-09-2026")],
+    })
+    # 31 September is no day, so the 21 before it has no month either.
+    assert [(f.code, f.sheet, f.detail) for f in data.findings] == [
+        ("bad_session_date", "Physio", "Test Bala: '31-09-2026'"),
+        ("bad_session_date", "Physio", "Test Bala: '21 (no month and year after it)'")]
 
 
 def test_a_family_on_one_phone_needs_the_name_on_the_other_tabs():
