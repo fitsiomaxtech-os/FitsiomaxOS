@@ -69,7 +69,7 @@ const mainTabClasses = (tab, active) => {
   if (tab.tone === "closing") {
     return active ? "bg-emerald-600 text-white shadow-sm" : "text-emerald-700 hover:bg-emerald-50";
   }
-  return active ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50";
+  return active ? "bg-sky-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50";
 };
 
 // The Summary's four cards, each one the view under it: the two piles the income side is
