@@ -23,9 +23,10 @@ export const emptyTender = {
   cheque_number: "", transfer_reference: "",
 };
 
-export const CollectField = ({ label, value, onChange, placeholder, testid, inputMode, type, max }) => (
+// `compact` is the tighter size the Old Client Instalment form uses to fit one screen.
+export const CollectField = ({ label, value, onChange, placeholder, testid, inputMode, type, max, compact = false }) => (
   <label className="block">
-    <span className="mb-1 block text-xs font-semibold text-slate-700">{label}</span>
+    <span className={`${compact ? "mb-0.5" : "mb-1"} block text-xs font-semibold text-slate-700`}>{label}</span>
     <input
       type={type}
       max={max}
@@ -33,7 +34,7 @@ export const CollectField = ({ label, value, onChange, placeholder, testid, inpu
       onChange={onChange}
       placeholder={placeholder}
       inputMode={inputMode}
-      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+      className={`${compact ? "h-9" : "h-10"} w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400`}
       data-testid={testid}
     />
   </label>
@@ -73,17 +74,17 @@ export const tenderPayload = (draft) => {
 };
 
 /** The five mode buttons and, under them, the fields the picked one is traced by. */
-export const TenderFields = ({ draft, setDraft, testid }) => (
+export const TenderFields = ({ draft, setDraft, testid, compact = false }) => (
   <>
     <div>
-      <span className="mb-1 block text-xs font-semibold text-slate-700">Payment Mode</span>
+      <span className={`${compact ? "mb-0.5" : "mb-1"} block text-xs font-semibold text-slate-700`}>Payment Mode</span>
       <div className="grid grid-cols-3 gap-1.5">
         {COLLECT_MODES.map((m) => (
           <button
             key={m.value}
             type="button"
             onClick={() => setDraft({ payment_mode: m.value })}
-            className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${draft.payment_mode === m.value ? m.active : m.classes}`}
+            className={`rounded-md border px-2 ${compact ? "py-1.5" : "py-2"} text-xs font-semibold transition ${draft.payment_mode === m.value ? m.active : m.classes}`}
             data-testid={`${testid}-mode-${m.value}`}
           >
             {m.label}
@@ -94,30 +95,30 @@ export const TenderFields = ({ draft, setDraft, testid }) => (
 
     {draft.payment_mode === "upi" && (
       <div className="space-y-3 rounded-lg border border-sky-100 bg-sky-50/50 p-3">
-        <CollectField label="UPI Transaction ID" value={draft.upi_transaction_id} onChange={(e) => setDraft({ upi_transaction_id: e.target.value })} placeholder="e.g. 428301947281" testid={`${testid}-upi-txn`} />
+        <CollectField label="UPI Transaction ID" value={draft.upi_transaction_id} onChange={(e) => setDraft({ upi_transaction_id: e.target.value })} placeholder="e.g. 428301947281" compact={compact} testid={`${testid}-upi-txn`} />
       </div>
     )}
 
     {draft.payment_mode === "card" && (
       <div className="space-y-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
-        <CollectField label="Transaction ID *" value={draft.card_transaction_id} onChange={(e) => setDraft({ card_transaction_id: e.target.value })} placeholder="From the card terminal slip" testid={`${testid}-card-txn`} />
+        <CollectField label="Transaction ID *" value={draft.card_transaction_id} onChange={(e) => setDraft({ card_transaction_id: e.target.value })} placeholder="From the card terminal slip" compact={compact} testid={`${testid}-card-txn`} />
       </div>
     )}
 
     {draft.payment_mode === "account_transfer" && (
       <div className="space-y-3 rounded-lg border border-cyan-100 bg-cyan-50/50 p-3">
-        <CollectField label="Account Number *" value={draft.account_number} onChange={(e) => setDraft({ account_number: e.target.value })} placeholder="Only the last 4 digits are stored" testid={`${testid}-transfer-account-number`} />
-        <CollectField label="Account Holder Name *" value={draft.account_holder_name} onChange={(e) => setDraft({ account_holder_name: e.target.value })} placeholder="Name on the account" testid={`${testid}-transfer-account-holder`} />
-        <CollectField label="Bank Name *" value={draft.bank_name} onChange={(e) => setDraft({ bank_name: e.target.value })} placeholder="e.g. HDFC Bank" testid={`${testid}-transfer-bank`} />
-        <CollectField label="IFSC Code *" value={draft.ifsc_code} onChange={(e) => setDraft({ ifsc_code: e.target.value })} placeholder="e.g. HDFC0001234" testid={`${testid}-transfer-ifsc`} />
-        <CollectField label="Reference / UTR No. *" value={draft.transfer_reference} onChange={(e) => setDraft({ transfer_reference: e.target.value })} placeholder="e.g. 302411223344" testid={`${testid}-transfer-reference`} />
+        <CollectField label="Account Number *" value={draft.account_number} onChange={(e) => setDraft({ account_number: e.target.value })} placeholder="Only the last 4 digits are stored" compact={compact} testid={`${testid}-transfer-account-number`} />
+        <CollectField label="Account Holder Name *" value={draft.account_holder_name} onChange={(e) => setDraft({ account_holder_name: e.target.value })} placeholder="Name on the account" compact={compact} testid={`${testid}-transfer-account-holder`} />
+        <CollectField label="Bank Name *" value={draft.bank_name} onChange={(e) => setDraft({ bank_name: e.target.value })} placeholder="e.g. HDFC Bank" compact={compact} testid={`${testid}-transfer-bank`} />
+        <CollectField label="IFSC Code *" value={draft.ifsc_code} onChange={(e) => setDraft({ ifsc_code: e.target.value })} placeholder="e.g. HDFC0001234" compact={compact} testid={`${testid}-transfer-ifsc`} />
+        <CollectField label="Reference / UTR No. *" value={draft.transfer_reference} onChange={(e) => setDraft({ transfer_reference: e.target.value })} placeholder="e.g. 302411223344" compact={compact} testid={`${testid}-transfer-reference`} />
       </div>
     )}
 
     {draft.payment_mode === "cheque" && (
       <div className="space-y-3 rounded-lg border border-amber-100 bg-amber-50/50 p-3">
-        <CollectField label="Bank Name *" value={draft.bank_name} onChange={(e) => setDraft({ bank_name: e.target.value })} placeholder="e.g. HDFC Bank" testid={`${testid}-cheque-bank`} />
-        <CollectField label="Cheque Number *" value={draft.cheque_number} onChange={(e) => setDraft({ cheque_number: e.target.value })} placeholder="e.g. 004512" testid={`${testid}-cheque-number`} />
+        <CollectField label="Bank Name *" value={draft.bank_name} onChange={(e) => setDraft({ bank_name: e.target.value })} placeholder="e.g. HDFC Bank" compact={compact} testid={`${testid}-cheque-bank`} />
+        <CollectField label="Cheque Number *" value={draft.cheque_number} onChange={(e) => setDraft({ cheque_number: e.target.value })} placeholder="e.g. 004512" compact={compact} testid={`${testid}-cheque-number`} />
       </div>
     )}
   </>

@@ -175,7 +175,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
       data-testid="old-client-dialog"
     >
       <div role="dialog" aria-modal="true" aria-labelledby="old-client-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3.5 text-white">
+        <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-white">
           <div className="flex min-w-0 items-center gap-2">
             <History className="h-5 w-5 shrink-0" />
             <p id="old-client-title" className="min-w-0 truncate text-base font-semibold">Old Client Instalment</p>
@@ -185,15 +185,15 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-3">
           {!branchId && (
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-slate-700">Branch *</span>
+              <span className="mb-0.5 block text-xs font-semibold text-slate-700">Branch *</span>
               <select
                 value={branch}
                 onChange={(e) => { setBranch(e.target.value); backToSearch(); }}
                 disabled={Boolean(picked || isNew)}
-                className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:bg-slate-50"
+                className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:bg-slate-50"
                 data-testid="old-client-branch"
               >
                 <option value="">Pick the branch the money was taken at</option>
@@ -321,27 +321,27 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
               </div>
             </div>
           ) : (
-            <div className="space-y-3" data-testid="old-client-form">
+            <div className="space-y-2.5" data-testid="old-client-form">
               <div className="flex items-center justify-end">
                 <button type="button" onClick={picked ? () => setEditing(false) : backToSearch} className="text-[11px] font-semibold text-slate-500 hover:underline">
                   {picked ? "Done" : "Back to search"}
                 </button>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <CollectField label="Client Name" value={client.name} onChange={(e) => setC({ name: e.target.value })} testid="old-client-name" />
-                <CollectField label="Phone" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} inputMode="tel" testid="old-client-phone" />
-                <CollectField label="Old Patient ID" value={client.old_patient_id} onChange={(e) => setC({ old_patient_id: e.target.value })} testid="old-client-old-id" />
-                <CollectField label="Package" value={client.package} onChange={(e) => setC({ package: e.target.value })} testid="old-client-package" />
+              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+                <CollectField compact label="Client Name" value={client.name} onChange={(e) => setC({ name: e.target.value })} testid="old-client-name" />
+                <CollectField compact label="Phone" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} inputMode="tel" testid="old-client-phone" />
+                <CollectField compact label="Old Patient ID" value={client.old_patient_id} onChange={(e) => setC({ old_patient_id: e.target.value })} testid="old-client-old-id" />
+                <CollectField compact label="Package" value={client.package} onChange={(e) => setC({ package: e.target.value })} testid="old-client-package" />
               </div>
               <div>
-                <span className="mb-1 block text-xs font-semibold text-slate-700">Paid For</span>
+                <span className="mb-0.5 block text-xs font-semibold text-slate-700">Paid For</span>
                 <div className="grid grid-cols-4 gap-1.5">
                   {CATEGORIES.map(([key, label]) => (
                     <button
                       key={key}
                       type="button"
                       onClick={() => setC({ category: key })}
-                      className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${
+                      className={`rounded-md border px-2 py-1.5 text-xs font-semibold transition ${
                         client.category === key ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
                       }`}
                       data-testid={`old-client-category-${key}`}
@@ -351,58 +351,55 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <CollectField label="Total Course Fee" value={client.total_fee} onChange={(e) => setC({ total_fee: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-total" />
-                <CollectField label="Paid in Old Tracker" value={client.paid_before} onChange={(e) => setC({ paid_before: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-paid-before" />
-                <CollectField label="Instalments Paid There" value={client.instalments_before} onChange={(e) => setC({ instalments_before: e.target.value })} placeholder="1" inputMode="numeric" testid="old-client-instalments-before" />
+              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-3">
+                <CollectField compact label="Total Course Fee" value={client.total_fee} onChange={(e) => setC({ total_fee: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-total" />
+                <CollectField compact label="Paid in Old Tracker" value={client.paid_before} onChange={(e) => setC({ paid_before: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-paid-before" />
+                <CollectField compact label="Instalments Paid There" value={client.instalments_before} onChange={(e) => setC({ instalments_before: e.target.value })} placeholder="1" inputMode="numeric" testid="old-client-instalments-before" />
               </div>
             </div>
           ))}
 
           {showPayment && (
-            <div className="space-y-3 border-t border-slate-100 pt-4" data-testid="old-client-payment">
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div className="space-y-2.5 border-t border-slate-100 pt-3" data-testid="old-client-payment">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Instalment #{number}</p>
                 <div className="text-right">
                   <p className="text-[10px] font-semibold uppercase text-emerald-800/80">Balance</p>
-                  <p className="text-xl font-bold text-emerald-800" data-testid="old-client-balance">{hasTotal ? fmt(owed) : "—"}</p>
+                  <p className="text-lg font-bold leading-tight text-emerald-800" data-testid="old-client-balance">{hasTotal ? fmt(owed) : "—"}</p>
                 </div>
               </div>
 
-              <div>
-                <CollectField label="Amount Paid *" value={pay.amount} onChange={(e) => setP({ amount: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-amount" />
-                {owed > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button" onClick={() => setP({ amount: String(owed) })}
-                      className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      data-testid="old-client-amount-full"
-                    >
-                      Full balance {fmt(owed)}
-                    </button>
-                    {amount > 0 && amount <= owed + 0.01 && (
-                      <p className="text-xs text-slate-600">Balance after this payment: <span className="font-semibold">{fmt(owed - amount)}</span></p>
-                    )}
-                  </div>
-                )}
+              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-3">
+                <CollectField compact label="Amount Paid *" value={pay.amount} onChange={(e) => setP({ amount: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-amount" />
+                <CollectField compact label="Paid On" type="date" max={today} value={pay.paid_on} onChange={(e) => setP({ paid_on: e.target.value })} testid="old-client-paid-on" />
+                <CollectField compact label="Next Instalment Due" type="date" value={pay.next_due_date} onChange={(e) => setP({ next_due_date: e.target.value })} testid="old-client-next-due" />
               </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <CollectField label="Paid On" type="date" max={today} value={pay.paid_on} onChange={(e) => setP({ paid_on: e.target.value })} testid="old-client-paid-on" />
-                <CollectField label="Next Instalment Due" type="date" value={pay.next_due_date} onChange={(e) => setP({ next_due_date: e.target.value })} testid="old-client-next-due" />
-              </div>
+              {owed > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button" onClick={() => setP({ amount: String(owed) })}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    data-testid="old-client-amount-full"
+                  >
+                    Full balance {fmt(owed)}
+                  </button>
+                  {amount > 0 && amount <= owed + 0.01 && (
+                    <p className="text-xs text-slate-600">Balance after this payment: <span className="font-semibold">{fmt(owed - amount)}</span></p>
+                  )}
+                </div>
+              )}
               {pay.paid_on && pay.paid_on < today && (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900" data-testid="old-client-backdated">
                   Back-dated: this goes into {fmtDay(pay.paid_on)}&apos;s revenue and closing count. A day whose books are already closed can&apos;t take it.
                 </p>
               )}
 
-              <TenderFields draft={pay} setDraft={setP} testid="old-client-collect" />
+              <TenderFields compact draft={pay} setDraft={setP} testid="old-client-collect" />
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-2.5">
           <button
             type="button" onClick={onClose} disabled={saving}
             className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:opacity-50"
