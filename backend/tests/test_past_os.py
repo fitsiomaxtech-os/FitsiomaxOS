@@ -155,6 +155,22 @@ def test_a_sheet_without_patient_ids_ties_its_tabs_by_phone():
     assert data.payments[0]["client_id"] == bala["id"] and bala["paid_total"] == 1500
 
 
+def test_leads_keep_the_patient_id_and_the_other_tabs_go_by_phone():
+    data = build({
+        "Leads": [lead(2, "PAR-1", "Test Bala", "8825587322"), lead(3, "PAR-2", "Test Anbu", "9344123286")],
+        "Physio": [phone_child(2, "8825587322", course="Treatment", start_date=datetime(2026, 9, 20))],
+        "Sessions": [phone_child(2, "8825587322", completed_dates="21, 22-09-2026")],
+        "Reviews": [phone_child(2, "8825587322"), phone_child(3, "9344123286")],
+        "Payments": [phone_child(2, "9344123286", consultation_fee=1500, consultation_date=datetime(2026, 9, 18),
+                                 consultation_mode="Cash")],
+    })
+    # A review with nothing but the phone is a review; its blank Status is not reported.
+    assert codes(data) == []
+    bala, anbu = data.clients
+    assert (bala["excel_id"], bala["sessions_completed"], bala["reviews_count"]) == ("PAR-1", 2, 1)
+    assert (anbu["reviews_count"], anbu["paid_total"]) == (1, 1500)
+
+
 def test_a_family_on_one_phone_needs_the_name_on_the_other_tabs():
     data = build({
         "Leads": [lead(2, None, "Test Mala", "9000000005"), lead(3, None, "Test Ravi", "9000000005")],

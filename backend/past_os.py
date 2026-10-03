@@ -552,8 +552,10 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
             "review_no": whole(record.get("review_no")),
             "at": moment(record.get("at")),
             "head_physio": text(record.get("head_physio")),
+            # Nothing reads a review's Status, so one left blank -- a review written down by
+            # the client's phone alone -- is not worth a word; one off the list still is.
             "status": _status(data, REVIEW_STATUSES, "unknown_review_status", REVIEWS, where,
-                              client["name"], record.get("status")),
+                              client["name"], record.get("status")) if text(record.get("status")) else "",
             "physio_notes": text(record.get("physio_notes")),
             "head_physio_notes": text(record.get("head_physio_notes")),
             "row": where,
