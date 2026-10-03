@@ -518,7 +518,7 @@ def test_a_payment_with_no_date_is_neither_paid_nor_owed():
     assert (consultation["state"], consultation["amount_paid"], consultation["outstanding"]) == ("unknown", None, 0)
     assert (first["state"], first["amount_paid"], first["outstanding"]) == ("unknown", None, 0)
     details = [f.detail for f in data.findings if f.code == "no_status"]
-    assert details == ["Test Bala: Rs.1500, Consultation: no Consultation Date",
+    assert details == ["Test Bala: Rs.1500, Consultation: no Consultation Paid Date",
                        "Test Bala: Rs.2800, Instalment 1: no Paid Date or Due Date that reads as a date ('31-09-2026')"]
     assert "no_payments" in codes(data) and "no_payments" in past_data.NOT_IMPORTED
     assert data.clients[0]["paid_total"] == 0
@@ -615,10 +615,50 @@ def test_read_workbook_reads_a_payments_row_per_client(tmp_path):
     })
     data = read_workbook(path)
     assert codes(data) == ["payment_no_course"] and data.tab_rows["Payments"] == 1
-    assert [(p["payment_for"], p["installment"], p["state"]) for p in data.payments] == [
-        ("Consultation Fee", None, "paid"), ("Treatment Fee", 1, "paid"), ("Treatment Fee", 2, "unpaid")]
+    assert [(p["payment_for"], p["installment"], p["state"], p["mode"]) for p in data.payments] == [
+        ("Consultation Fee", None, "paid", "cash"), ("Treatment Fee", 1, "paid", "upi"),
+        ("Treatment Fee", 2, "unpaid", "")]
     client = data.clients[0]
     assert (client["paid_total"], client["outstanding_total"]) == (11100, 9600)
+
+
+def test_the_consultation_is_paid_at_once_under_its_three_columns(tmp_path):
+    """Consultation Fee, Consultation Paid Date and Payment Mode -- no instalments -- and the
+    older copy's Consultation Date and Consultation Mode, still read."""
+    assert [COLUMNS["Payments"][k] for k in ("consultation_fee", "consultation_date", "consultation_mode")] == [
+        "Consultation Fee", "Consultation Paid Date", "Payment Mode"]
+    for date_header, mode_header in (("Consultation Paid Date", "Payment Mode"),
+                                     ("Consultation Date", "Consultation Mode")):
+        columns = {"phone": "Phone", "consultation_fee": "Consultation Fee",
+                   "consultation_date": date_header, "consultation_mode": mode_header,
+                   "instalment_1_amount": "Instalment 1 Amount", "instalment_1_paid_date": "Instalment 1 Paid Date",
+                   "instalment_1_mode": "Instalment 1 Mode"}
+        path = _workbook(tmp_path / f"{date_header}.xlsx", {
+            "Leads": (COLUMNS["Leads"], [{"name": "Test Bala", "phone": "8825587322", "current_stage": "Fee Collected"}]),
+            "Payments": (columns, [{"phone": "8825587322", "consultation_fee": 500,
+                                    "consultation_date": datetime(2026, 9, 5), "consultation_mode": "GPay",
+                                    "instalment_1_amount": 6000, "instalment_1_paid_date": datetime(2026, 9, 6),
+                                    "instalment_1_mode": "Cash"}]),
+        })
+        data = read_workbook(path)
+        assert [(p["payment_for"], p["installment"], p["amount_paid"], p["paid_date"], p["mode"])
+                for p in data.payments] == [
+            ("Consultation Fee", None, 500, "2026-09-05", "upi"),
+            ("Treatment Fee", 1, 6000, "2026-09-06", "cash")], date_header
+
+
+@pytest.mark.parametrize("word", ["Instalment", "Installment"])
+def test_a_payments_tab_with_a_fifth_instalment_is_refused(tmp_path, word):
+    columns = {"phone": "Phone", "consultation_fee": "Consultation Fee"}
+    for n in range(1, 6):
+        columns.update({f"instalment_{n}_amount": f"{word} {n} Amount", f"instalment_{n}_paid_date": f"{word} {n} Paid Date"})
+    path = _workbook(tmp_path / "OSDATAX.xlsx", {
+        "Leads": (COLUMNS["Leads"], [{"name": "Test Bala", "phone": "8825587322", "current_stage": "Fee Collected"}]),
+        "Payments": (columns, [{"phone": "8825587322", "instalment_1_amount": 6000,
+                                "instalment_1_paid_date": datetime(2026, 9, 6)}]),
+    })
+    with pytest.raises(PastDataError, match="4 instalments at most -- remove the Instalment 5 columns"):
+        read_workbook(path)
 
 
 def test_read_workbook_reads_a_sheet_without_patient_id(tmp_path):

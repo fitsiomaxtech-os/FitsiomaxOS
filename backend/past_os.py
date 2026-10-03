@@ -15,9 +15,10 @@ still being treated: one workbook, five tabs, read at the same time in one uploa
             out and is still read, one row per session)
   Reviews   one row per review, by the Head Physio
   Payments  one row per client (and Service Type, when a client is on two): the consultation
-            fee, and each instalment of the service's fee -- its amount, Paid Date or Due
-            Date, and mode -- in columns of its own (or, as the tab was first laid out and is
-            still read, one row per payment)
+            fee, paid at once -- its Consultation Paid Date and Payment Mode -- and up to four
+            instalments of the service's fee -- each one's amount, Paid Date or Due Date, and
+            mode -- in columns of their own (or, as the tab was first laid out and is still
+            read, one row per payment)
 
 -- so one sheet on the Import/Export list holds three kinds of data at once, which its Type
 column shows as Lead, Sessions (the Physio, Sessions and Reviews tabs) and Revenue (the
@@ -137,11 +138,13 @@ COLUMNS = {
         # Which service the row's instalments paid for; blank, the course running on each
         # one's date. A client on two services at once has a row for each.
         "service_type": "Service Type",
-        # A row per client: the consultation fee, then the treatment fee's instalments, each
-        # in four columns of its own -- see INSTALMENT_COLUMN.
+        # A row per client: the consultation fee, paid at once -- it has no instalments --
+        # then the treatment fee's instalments, each in four columns of its own -- see
+        # INSTALMENT_COLUMN. Payment Mode, on a row per client, is the consultation's: the
+        # first layout's header too, so which it is the tab's layout says (see _header).
         "consultation_fee": "Consultation Fee",
-        "consultation_date": "Consultation Date",
-        "consultation_mode": "Consultation Mode",
+        "consultation_date": "Consultation Paid Date",
+        "consultation_mode": "Payment Mode",
         # The tab's first layout, a row per payment -- still read, so a workbook filled in
         # that way imports as it did.
         "payment_for": "Payment For",
@@ -157,17 +160,21 @@ COLUMNS = {
     },
 }
 
-# The Payments tab's instalment columns, as many as a client's plan has: "Instalment 1
-# Amount", "Instalment 1 Paid Date", "Instalment 1 Due Date", "Instalment 1 Mode", then 2...
-# Read as instalment_<n>_<part>. "Installment" is the same header.
+# The Payments tab's instalment columns, one set for each of the fee's four instalments at
+# most: "Instalment 1 Amount", "Instalment 1 Paid Date", "Instalment 1 Due Date", "Instalment
+# 1 Mode", then 2, 3 and 4. Read as instalment_<n>_<part>. "Installment" is the same header.
+# A tab with an Instalment 5 column is refused, not read short (see _records).
+INSTALMENTS = 4
 INSTALMENT_COLUMN = re.compile(r"^instal{1,2}ment(\d+)(amount|paiddate|duedate|mode)$")
 INSTALMENT_PARTS = {"amount": "amount", "paiddate": "paid_date", "duedate": "due_date", "mode": "mode"}
 
 # A column's header in an older copy of the template, still read when the new one is not
-# there: Service Type was Course.
+# there: Service Type was Course, and the consultation's Paid Date and Payment Mode were its
+# Consultation Date and Consultation Mode.
 FORMER_HEADERS = {
     PHYSIO: {"course": "Course"},
     SESSIONS: {"course": "Course"},
+    PAYMENTS: {"consultation_date": "Consultation Date", "consultation_mode": "Consultation Mode"},
 }
 
 # Without these a tab cannot be read. The other tabs also need a Patient ID or a Phone column
@@ -363,8 +370,20 @@ def _header(rows, tab: str):
                     if numbered:
                         n, part = int(numbered.group(1)), INSTALMENT_PARTS[numbered.group(2)]
                         where.setdefault(f"instalment_{n}_{part}", i)
+                # Payment Mode is each payment's on a tab laid out the first way, whose
+                # consultation mode is then Consultation Mode's alone; on a row per client it
+                # is the consultation's, and no payment's of the first layout.
+                if _first_layout(where):
+                    where["consultation_mode"] = position.get(squash(former["consultation_mode"]))
+                else:
+                    where["mode"] = None
             return at, where
     return None
+
+
+def _first_layout(where: Dict[str, Optional[int]]) -> bool:
+    """Whether a Payments tab's headers hold the first layout's Status or Amount."""
+    return where.get("status") is not None or where.get("amount") is not None
 
 
 def _one_row_payments(where: Dict[str, Optional[int]]) -> bool:
@@ -373,13 +392,18 @@ def _one_row_payments(where: Dict[str, Optional[int]]) -> bool:
         i is not None for key, i in where.items() if key.startswith("instalment_"))
 
 
+def _beyond_instalments(where: Dict[str, Optional[int]]) -> List[int]:
+    """The instalment numbers a Payments tab's headers have past INSTALMENTS."""
+    return sorted({n for n in (int(key.split("_")[1]) for key in where if key.startswith("instalment_"))
+                   if not 1 <= n <= INSTALMENTS})
+
+
 def required(tab: str, where: Dict[str, Optional[int]]) -> List[str]:
     """The fields a tab cannot be read without, as its header row lays it out: REQUIRED's,
     and on a Payments tab laid out a row per payment -- or with either of that layout's
     Status and Amount among its headers -- both of them."""
     need = list(REQUIRED[tab])
-    first_layout = where.get("status") is not None or where.get("amount") is not None
-    if tab == PAYMENTS and (first_layout or not _one_row_payments(where)):
+    if tab == PAYMENTS and (_first_layout(where) or not _one_row_payments(where)):
         need += ["status", "amount"]
     return need
 
@@ -412,6 +436,12 @@ def _records(ws, tab: str) -> List[Dict[str, Any]]:
         missing.append("Phone (or Patient ID)")
     if missing:
         raise PastDataError(f"'{ws.title.strip()}': missing column(s) {', '.join(missing)}")
+    beyond = _beyond_instalments(where) if tab == PAYMENTS else []
+    if beyond:
+        # Refused rather than read short, so no instalment's money is left behind unread.
+        raise PastDataError(
+            f"'{ws.title.strip()}': a fee has {INSTALMENTS} instalments at most -- remove the "
+            + ", ".join(f"Instalment {n}" for n in beyond) + " columns")
     records = []
     for number, row in enumerate(rows[at + 1:], start=at + 2):
         row = row or ()
@@ -847,8 +877,8 @@ def _row_payments(record: dict, where: str, kind: str = "") -> List[Dict[str, An
     """The payments one Payments row holds, each with its own excel_id, what it was for, its
     amount (`figure`), its days, its mode, and `state` as _state reads it.
 
-    A row is a client: the Consultation Fee, Paid on its Consultation Date, and each of the
-    treatment fee's instalments -- Paid when it has a Paid Date, Pending when it has only a
+    A row is a client: the Consultation Fee, Paid on its Consultation Paid Date, and each of
+    the treatment fee's instalments -- Paid when it has a Paid Date, Pending when it has only a
     Due Date. One with no date is neither, and reported (`unread` says why), since a guess
     either way moves money. A row laid out the first way -- Payment For, Status, Amount --
     is one payment."""
@@ -882,7 +912,7 @@ def _row_payments(record: dict, where: str, kind: str = "") -> List[Dict[str, An
             "payment_for": "Consultation Fee" if n is None else f"{kind or 'Treatment'} Fee",
             "installment": n, "figure": amount(cells[0]), "paid_day": paid_day, "due_day": due_day,
             "mode": cells[3], "state": state, "status": {"paid": "Paid", "unpaid": "Pending"}.get(state, ""),
-            "unread": f"{label}: no " + ("Consultation Date" if n is None else "Paid Date or Due Date")
+            "unread": f"{label}: no " + ("Consultation Paid Date" if n is None else "Paid Date or Due Date")
                       + (f" that reads as a date ('{dates_written}')" if dates_written else ""),
             "reference_no": "", "bank": "", "notes": "",
         })
