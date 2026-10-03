@@ -214,6 +214,24 @@ const SummaryCard = ({ label, ...rest }) => (
   <StatTile label={label} testid={`outstanding-summary-${label.toLowerCase().replace(/\s+/g, "-")}`} {...rest} />
 );
 
+/**
+ * The summary cards double as the list's filter, like the Patients strip: the rows a card
+ * shows are the rows its figure is summed from, both read off this one table, so the two
+ * can never disagree. Total Outstanding and Pending Clients count the same rows -- every
+ * balance still open -- so either one brings back the full list.
+ */
+const CARD_FILTERS = {
+  all: () => true,
+  overdue: (r) => r.status === "overdue",
+  due_today: (r, today) => r.due_date === today,
+  pending: () => true,
+};
+
+const CARD_EMPTY = {
+  overdue: "Nothing overdue.",
+  due_today: "Nothing due today.",
+};
+
 const toCsv = (rows) => {
   const header = ["S.No", "Client", "Phone", "Branch", "Total Bill", "Paid Amount", "Outstanding Balance", "Due Date", "Status"];
   const lines = rows.map((r, i) => [
@@ -239,8 +257,11 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
   const [month, setMonth] = useState("all");
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
+  const [card, setCard] = useState("all");
 
   const today = todayIso();
+  // A second press on the lit card puts the list back to everything.
+  const pickCard = (key) => setCard((cur) => (cur === key ? "all" : key));
 
   const filtered = useMemo(() => rows.filter((r) => {
     if (search) {
@@ -257,10 +278,11 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
   }), [rows, search, status, month, minAmount, maxAmount]);
 
   // Counts alongside the sums, so each card's second line says how many clients are behind
-  // the figure rather than leaving a number with no sense of scale.
+  // the figure rather than leaving a number with no sense of scale. Taken before the card
+  // filter, so picking one card leaves the other three showing their own figures.
   const totals = useMemo(() => {
-    const overdueRows = filtered.filter((r) => r.status === "overdue");
-    const dueTodayRows = filtered.filter((r) => r.due_date === today);
+    const overdueRows = filtered.filter((r) => CARD_FILTERS.overdue(r, today));
+    const dueTodayRows = filtered.filter((r) => CARD_FILTERS.due_today(r, today));
     return {
       totalOutstanding: filtered.reduce((s, r) => s + r.balance, 0),
       overdue: overdueRows.reduce((s, r) => s + r.balance, 0),
@@ -271,23 +293,29 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
     };
   }, [filtered, today]);
 
-  const footer = useMemo(() => filtered.reduce((acc, r) => ({
+  // What the list, its totals row and the export carry: the filters above, narrowed to the
+  // picked card.
+  const shown = useMemo(() => filtered.filter((r) => CARD_FILTERS[card](r, today)), [filtered, card, today]);
+  const emptyText = CARD_EMPTY[card] || "No outstanding balances.";
+
+  const footer = useMemo(() => shown.reduce((acc, r) => ({
     total_bill: acc.total_bill + (r.total_bill || 0),
     paid_amount: acc.paid_amount + (r.paid_amount || 0),
     balance: acc.balance + (r.balance || 0),
-  }), { total_bill: 0, paid_amount: 0, balance: 0 }), [filtered]);
+  }), { total_bill: 0, paid_amount: 0, balance: 0 }), [shown]);
 
   return (
     <div className="space-y-4" data-testid="outstanding-amount-board">
       <MonthFilterBar month={month} setMonth={setMonth} />
 
       {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
-          on a 5px corner, matching the Fitness, Patients and Review strips. */}
+          on a 5px corner, matching the Fitness, Patients and Review strips. Each one
+          filters the list below -- see CARD_FILTERS. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <SummaryCard label="Total Outstanding" value={fmt(totals.totalOutstanding)} sub={plural(totals.pendingClients, "client")} arrow color="#d97706" />
-        <SummaryCard label="Overdue Amount" value={fmt(totals.overdue)} sub={plural(totals.overdueClients, "client")} arrow color="#e11d48" />
-        <SummaryCard label="Due Today" value={fmt(totals.dueToday)} sub={plural(totals.dueTodayClients, "client")} arrow color="#0284c7" />
-        <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" arrow color="#7c3aed" />
+        <SummaryCard label="Total Outstanding" value={fmt(totals.totalOutstanding)} sub={plural(totals.pendingClients, "client")} arrow color="#d97706" active={card === "all"} onClick={() => pickCard("all")} />
+        <SummaryCard label="Overdue Amount" value={fmt(totals.overdue)} sub={plural(totals.overdueClients, "client")} arrow color="#e11d48" active={card === "overdue"} onClick={() => pickCard("overdue")} />
+        <SummaryCard label="Due Today" value={fmt(totals.dueToday)} sub={plural(totals.dueTodayClients, "client")} arrow color="#0284c7" active={card === "due_today"} onClick={() => pickCard("due_today")} />
+        <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" arrow color="#7c3aed" active={card === "pending"} onClick={() => pickCard("pending")} />
       </div>
 
       <Card>
@@ -320,7 +348,7 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
           />
           <div className="ml-auto flex gap-2">
             <button
-              type="button" onClick={() => downloadCsv(filtered)}
+              type="button" onClick={() => downloadCsv(shown)}
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
               data-testid="outstanding-export-csv"
             >
@@ -341,8 +369,8 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
         <CardContent className="p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Outstanding Amount</p>
           <RecordCards
-            rows={filtered}
-            empty="No outstanding balances."
+            rows={shown}
+            empty={emptyText}
             testid="outstanding-cards"
             card={(r) => ({
               key: r.lead_id,
@@ -383,9 +411,9 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-400">No outstanding balances.</td></tr>
-                ) : filtered.map((r, i) => (
+                {shown.length === 0 ? (
+                  <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-400">{emptyText}</td></tr>
+                ) : shown.map((r, i) => (
                   <tr key={r.lead_id} data-testid={`accountant-manage-outstanding-${r.lead_id}`}>
                     <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-2 py-2 text-center text-slate-400">{i + 1}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">{r.client_name}</td>
@@ -410,7 +438,7 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
                   </tr>
                 ))}
               </tbody>
-              {filtered.length > 0 && (
+              {shown.length > 0 && (
                 <tfoot>
                   <tr>
                     <td colSpan={4} className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Totals</td>
