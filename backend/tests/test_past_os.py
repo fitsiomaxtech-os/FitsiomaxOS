@@ -289,6 +289,62 @@ def test_a_session_with_no_course_is_reported_once_per_row():
     assert data.clients[0]["sessions_completed"] == 3
 
 
+def instalments(**parts):
+    """{"instalment_<n>_<part>": cell} off i1_amount=2800, i1_paid_date=..."""
+    out = {}
+    for key, value in parts.items():
+        n, part = key[1:].split("_", 1)
+        out[f"instalment_{n}_{part}"] = value
+    return out
+
+
+def test_one_payments_row_per_client():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Bala", "9000000001")],
+        "Physio": [child(2, "FM-1", course="Treatment", sessions=14, amount=8400, start_date=datetime(2026, 9, 19))],
+        "Payments": [child(2, "FM-1", consultation_fee=1500, consultation_date=datetime(2026, 9, 18),
+                           consultation_mode="Cash", **instalments(
+                               i1_amount=2800, i1_paid_date="20-09-2026", i1_mode="UPI",
+                               i2_amount=2800, i2_paid_date=datetime(2026, 9, 27), i2_mode="Cash",
+                               i3_amount=2800, i3_due_date=datetime(2026, 10, 10)))],
+    })
+    assert codes(data) == []
+    consultation, first, second, third = data.payments
+    assert [p["excel_id"] for p in data.payments] == [
+        "Payments · row 2 · Consultation", "Payments · row 2 · Instalment 1",
+        "Payments · row 2 · Instalment 2", "Payments · row 2 · Instalment 3"]
+    assert (consultation["state"], consultation["amount_paid"], consultation["paid_date"], consultation["mode"]) == (
+        "paid", 1500, "2026-09-18", "cash")
+    consult_course = next(t for t in data.treatments if t["course"] == "Consultation")
+    assert consultation["treatment_id"] == consult_course["id"]
+    assert [(p["installment"], p["state"], p["paid_date"], p["mode"]) for p in (first, second)] == [
+        (1, "paid", "2026-09-20", "upi"), (2, "paid", "2026-09-27", "cash")]
+    assert (third["state"], third["outstanding"], third["due_date"], third["status_as_written"]) == (
+        "unpaid", 2800, "2026-10-10", "Pending")
+    course = next(t for t in data.treatments if t["course"] == "Treatment")
+    assert {p["treatment_id"] for p in (first, second, third)} == {course["id"]}
+    client = data.clients[0]
+    assert (client["paid_total"], client["outstanding_total"]) == (7100, 2800)
+
+
+def test_a_payment_with_no_date_is_neither_paid_nor_owed():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Bala", "9000000001"), lead(3, "FM-2", "Test Anbu", "9000000002")],
+        "Physio": [child(2, "FM-1", course="Treatment")],
+        "Payments": [child(2, "FM-1", consultation_fee=1500, consultation_mode="Cash",
+                           **instalments(i1_amount=2800, i1_paid_date="31-09-2026", i1_mode="UPI")),
+                     child(3, "FM-2", phone="9000000002")],
+    })
+    consultation, first = data.payments
+    assert (consultation["state"], consultation["amount_paid"], consultation["outstanding"]) == ("unknown", None, 0)
+    assert (first["state"], first["amount_paid"], first["outstanding"]) == ("unknown", None, 0)
+    details = [f.detail for f in data.findings if f.code == "no_status"]
+    assert details == ["Test Bala: Rs.1500, Consultation: no Consultation Date",
+                       "Test Bala: Rs.2800, Instalment 1: no Paid Date or Due Date that reads as a date ('31-09-2026')"]
+    assert "no_payments" in codes(data) and "no_payments" in past_data.NOT_IMPORTED
+    assert data.clients[0]["paid_total"] == 0
+
+
 @pytest.mark.parametrize("written,read", [
     (dt_time(10, 0), "10:00"),
     (datetime(1899, 12, 30, 18, 30), "18:30"),
@@ -358,6 +414,32 @@ def test_read_workbook_reads_a_sessions_row_per_client(tmp_path):
     client = data.clients[0]
     assert (client["sessions_completed"], client["sessions_upcoming"]) == (3, 2)
     assert client["sessions"][0]["at"] == "2026-10-07 10:00" and client["sessions"][-1]["at"] == "2026-10-14 10:00"
+
+
+def test_read_workbook_reads_a_payments_row_per_client(tmp_path):
+    """The Payments tab as the template now lays it out: as many instalment columns as the
+    plan has, "Installment" spelt either way, and no Status, Amount or Reference No."""
+    columns = {k: COLUMNS["Payments"][k] for k in (
+        "client_excel_id", "phone", "name", "consultation_fee", "consultation_date", "consultation_mode")}
+    for n in (1, 2):
+        word = "Instalment" if n == 1 else "Installment"
+        columns.update({f"instalment_{n}_amount": f"{word} {n} Amount", f"instalment_{n}_paid_date": f"{word} {n} Paid Date",
+                        f"instalment_{n}_due_date": f"{word} {n} Due Date", f"instalment_{n}_mode": f"{word} {n} Mode"})
+    path = _workbook(tmp_path / "OSDATAX.xlsx", {
+        "Leads": (COLUMNS["Leads"], [{"excel_id": "FM-1", "name": "Test Anbu", "phone": "9000000001",
+                                      "current_stage": "Physio Assign"}]),
+        "Payments": (columns, [{"client_excel_id": "FM-1", "consultation_fee": 1500,
+                                "consultation_date": datetime(2026, 9, 18), "consultation_mode": "Cash",
+                                "instalment_1_amount": 9600, "instalment_1_paid_date": datetime(2026, 9, 18),
+                                "instalment_1_mode": "UPI", "instalment_2_amount": 9600,
+                                "instalment_2_due_date": datetime(2026, 10, 18)}]),
+    })
+    data = read_workbook(path)
+    assert codes(data) == ["payment_no_course"] and data.tab_rows["Payments"] == 1
+    assert [(p["payment_for"], p["installment"], p["state"]) for p in data.payments] == [
+        ("Consultation Fee", None, "paid"), ("Treatment Fee", 1, "paid"), ("Treatment Fee", 2, "unpaid")]
+    client = data.clients[0]
+    assert (client["paid_total"], client["outstanding_total"]) == (11100, 9600)
 
 
 def test_a_payments_tab_without_status_is_refused(tmp_path):

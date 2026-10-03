@@ -152,7 +152,8 @@ FINDINGS = {
     "no_patient_id": "Leads row with no Patient ID -- its other rows are matched by phone and name",
     "unknown_stage": "Current Stage is not one of the OS stages -- placed at Leads",
     "no_client": "Row names nobody on the Leads tab -- NOT imported",
-    "no_status": "Payment with an amount but no Paid / Pending Status -- not counted as paid",
+    "no_status": "Payment with an amount but no Paid / Pending Status, or no Paid Date or Due Date -- not counted as paid or owed",
+    "no_payments": "Payments row with no Consultation Fee and no Instalment -- NOT imported",
     "payment_no_course": "Treatment Fee with no course on the Physio tab -- kept under a course of its own",
     "session_no_course": "Session with no course of its kind on the Physio tab",
     "unknown_course": "Course is not Treatment or Rehab -- read as Treatment",
@@ -171,7 +172,7 @@ FINDINGS = {
 NOT_IMPORTED = {
     "duplicate_id", "row_without_id", "missing_client", "missing_treatment",
     "enquiry_no_client", "enquiry_ambiguous", "no_name_row", "no_client", "sample_row",
-    "no_session_dates", "bad_session_date",
+    "no_session_dates", "bad_session_date", "no_payments",
 }
 
 

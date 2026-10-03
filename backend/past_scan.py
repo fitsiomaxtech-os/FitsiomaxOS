@@ -215,11 +215,11 @@ def _reading(book, layout: str) -> Dict[str, dict]:
         import past_os
         for name in past_os.TAB_ORDER:
             ws = past_os._tab(book, name)
-            found = past_os._header(ws.rows, past_os.COLUMNS[name]) if ws is not None else None
+            found = past_os._header(ws.rows, name) if ws is not None else None
             if not found:
                 continue
             at, where = found
-            need = list(past_os.REQUIRED[name])
+            need = past_os.required(name, where)
             if name == past_os.LEADS:
                 # What tells the workbook for the OS Data one (past_os.detect), and the ID the
                 # other tabs find their client by.

@@ -12,7 +12,9 @@ still being treated: one workbook, five tabs, read at the same time in one uploa
             in two cells, at what time and by which physio (or, as the tab was first laid
             out and is still read, one row per session)
   Reviews   one row per review, by the Head Physio
-  Payments  one row per payment: Consultation Fee or Treatment Fee, Paid or Pending
+  Payments  one row per client: the consultation fee, and each instalment of the treatment
+            fee -- its amount, Paid Date or Due Date, and mode -- in columns of its own (or,
+            as the tab was first laid out and is still read, one row per payment)
 
 -- so one sheet on the Import/Export list holds three kinds of data at once, which its Type
 column shows as Lead, Sessions (the Physio, Sessions and Reviews tabs) and Revenue (the
@@ -122,6 +124,13 @@ COLUMNS = {
         "client_excel_id": "Patient ID",
         "phone": "Phone",
         "name": "Name",
+        # A row per client: the consultation fee, then the treatment fee's instalments, each
+        # in four columns of its own -- see INSTALMENT_COLUMN.
+        "consultation_fee": "Consultation Fee",
+        "consultation_date": "Consultation Date",
+        "consultation_mode": "Consultation Mode",
+        # The tab's first layout, a row per payment -- still read, so a workbook filled in
+        # that way imports as it did.
         "payment_for": "Payment For",
         "installment": "Instalment No",
         "status": "Status",
@@ -135,14 +144,21 @@ COLUMNS = {
     },
 }
 
+# The Payments tab's instalment columns, as many as a client's plan has: "Instalment 1
+# Amount", "Instalment 1 Paid Date", "Instalment 1 Due Date", "Instalment 1 Mode", then 2...
+# Read as instalment_<n>_<part>. "Installment" is the same header.
+INSTALMENT_COLUMN = re.compile(r"^instal{1,2}ment(\d+)(amount|paiddate|duedate|mode)$")
+INSTALMENT_PARTS = {"amount": "amount", "paiddate": "paid_date", "duedate": "due_date", "mode": "mode"}
+
 # Without these a tab cannot be read. The other tabs also need a Patient ID or a Phone column
-# to tie a row to its client -- checked on its own, since either one will do.
+# to tie a row to its client -- checked on its own, since either one will do -- and a
+# Payments tab laid out a row per payment its Status and Amount (see required()).
 REQUIRED = {
     LEADS: ("name", "phone", "current_stage"),
     PHYSIO: (),
     SESSIONS: (),
     REVIEWS: (),
-    PAYMENTS: ("status", "amount"),
+    PAYMENTS: (),
 }
 
 # The OS's stage names, in the order a client moves through them (the template's Listed
@@ -272,9 +288,10 @@ def _tab(workbook, name: str):
     return next((ws for ws in workbook.worksheets if squash(ws.title) == squash(name)), None)
 
 
-def _header(rows, columns: Dict[str, str]):
+def _header(rows, tab: str):
     """(the header row's index, field -> column) off the first row holding at least two of
-    this tab's headers, or None."""
+    this tab's headers, or None. On Payments, every instalment column the row has as well."""
+    columns = COLUMNS[tab]
     wanted = {squash(h) for h in columns.values()}
     for at, row in enumerate(rows[:HEADER_SEARCH_ROWS]):
         cells = [squash(c) for c in (row or ())]
@@ -282,8 +299,32 @@ def _header(rows, columns: Dict[str, str]):
             position: Dict[str, int] = {}
             for i, cell in enumerate(cells):
                 position.setdefault(cell, i)
-            return at, {key: position.get(squash(header)) for key, header in columns.items()}
+            where = {key: position.get(squash(header)) for key, header in columns.items()}
+            if tab == PAYMENTS:
+                for i, cell in enumerate(cells):
+                    numbered = INSTALMENT_COLUMN.match(cell)
+                    if numbered:
+                        n, part = int(numbered.group(1)), INSTALMENT_PARTS[numbered.group(2)]
+                        where.setdefault(f"instalment_{n}_{part}", i)
+            return at, where
     return None
+
+
+def _one_row_payments(where: Dict[str, Optional[int]]) -> bool:
+    """Whether a Payments tab's headers lay it out a row per client."""
+    return where.get("consultation_fee") is not None or any(
+        i is not None for key, i in where.items() if key.startswith("instalment_"))
+
+
+def required(tab: str, where: Dict[str, Optional[int]]) -> List[str]:
+    """The fields a tab cannot be read without, as its header row lays it out: REQUIRED's,
+    and on a Payments tab laid out a row per payment -- or with either of that layout's
+    Status and Amount among its headers -- both of them."""
+    need = list(REQUIRED[tab])
+    first_layout = where.get("status") is not None or where.get("amount") is not None
+    if tab == PAYMENTS and (first_layout or not _one_row_payments(where)):
+        need += ["status", "amount"]
+    return need
 
 
 def detect(workbook) -> bool:
@@ -303,11 +344,11 @@ def _records(ws, tab: str) -> List[Dict[str, Any]]:
     Rows with nothing in them -- the template runs to row 1000 -- are passed over."""
     columns = COLUMNS[tab]
     rows = list(ws.iter_rows(values_only=True))
-    found = _header(rows, columns)
+    found = _header(rows, tab)
     if not found:
         raise PastDataError(f"'{ws.title.strip()}': no header row in its first rows")
     at, where = found
-    missing = [columns[key] for key in REQUIRED[tab] if where[key] is None]
+    missing = [columns[key] for key in required(tab, where) if where[key] is None]
     if tab != LEADS and where.get("client_excel_id") is None and where.get("phone") is None:
         missing.append("Patient ID (or Phone)")
     if missing:
@@ -488,78 +529,79 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         client = owner(record, PAYMENTS, where)
         if not client:
             continue
-        payment_for = text(record.get("payment_for"))
-        status = text(record.get("status"))
-        figure = amount(record.get("amount"))
-        paid_day, due_day = day(record.get("paid_date")), day(record.get("due_date"))
-        state = _state(status, figure)
-        if not squash(payment_for).startswith("consult") and squash(payment_for) not in TREATMENT_FEE:
-            data.note("unknown_payment_for", PAYMENTS, where, f"{client['name']}: '{payment_for or '(blank)'}'")
+        found = _row_payments(record, where)
+        if not found:
+            data.note("no_payments", PAYMENTS, where, client["name"])
+        for entry in found:
+            at, payment_for, figure = entry["excel_id"], entry["payment_for"], entry["figure"]
+            paid_day, due_day, state = entry["paid_day"], entry["due_day"], entry["state"]
+            if not squash(payment_for).startswith("consult") and squash(payment_for) not in TREATMENT_FEE:
+                data.note("unknown_payment_for", PAYMENTS, at, f"{client['name']}: '{payment_for or '(blank)'}'")
 
-        if squash(payment_for).startswith("consult"):
-            treatment = consultations.get(client["id"])
-            if not treatment:
-                treatment = _treatment(
-                    client, f"{client['excel_id']} · {CONSULTATION}", service=CONSULTATION,
-                    course=CONSULTATION, physio=client["consultant"],
-                    start_date=client["journey"].get("consultation_visit_date") or paid_day or due_day,
-                )
-                consultations[client["id"]] = treatment
-                data.treatments.append(treatment)
-        else:
-            treatment = _course_for(courses.get(client["id"], []), paid_day or due_day)
-            if not treatment:
-                treatment = placeholders.get(client["id"])
+            if squash(payment_for).startswith("consult"):
+                treatment = consultations.get(client["id"])
                 if not treatment:
                     treatment = _treatment(
-                        client, f"{client['excel_id']} · Treatment", service="Treatment", course="Treatment",
-                        start_date=paid_day or due_day, status="",
+                        client, f"{client['excel_id']} · {CONSULTATION}", service=CONSULTATION,
+                        course=CONSULTATION, physio=client["consultant"],
+                        start_date=client["journey"].get("consultation_visit_date") or paid_day or due_day,
                     )
-                    _flag(treatment, "payment_no_course")
-                    data.note("payment_no_course", PAYMENTS, where, client["name"])
-                    placeholders[client["id"]] = treatment
+                    consultations[client["id"]] = treatment
                     data.treatments.append(treatment)
+            else:
+                treatment = _course_for(courses.get(client["id"], []), paid_day or due_day)
+                if not treatment:
+                    treatment = placeholders.get(client["id"])
+                    if not treatment:
+                        treatment = _treatment(
+                            client, f"{client['excel_id']} · Treatment", service="Treatment", course="Treatment",
+                            start_date=paid_day or due_day, status="",
+                        )
+                        _flag(treatment, "payment_no_course")
+                        data.note("payment_no_course", PAYMENTS, at, client["name"])
+                        placeholders[client["id"]] = treatment
+                        data.treatments.append(treatment)
 
-        payment = {
-            "id": str(uuid.uuid4()),
-            "excel_id": where,
-            "client_id": client["id"],
-            "treatment_id": treatment["id"],
-            "treatment_excel_id": treatment["excel_id"],
-            "client_excel_id": client["excel_id"],
-            "name": text(record.get("name")) or client["name"],
-            "installment": whole(record.get("installment")),
-            "installments_total": None,
-            "amount_due": figure,
-            "amount_paid": figure if state == "paid" else None,
-            "balance": None,
-            "outstanding": (figure or 0) if state == "unpaid" else 0,
-            "due_date": due_day,
-            "paid_date": paid_day if state == "paid" else "",
-            "mode": payment_mode(record.get("mode")),
-            "mode_as_written": text(record.get("mode")),
-            "state": state,
-            "status_as_written": status,
-            "payment_for": payment_for,
-            "reference_no": text(record.get("reference_no")),
-            "bank": text(record.get("bank")),
-            "notes": text(record.get("remarks")),
-            "tab": PAYMENTS,
-            "flags": [],
-        }
-        if figure is None:
-            _flag(payment, "unknown_state")
-            data.note("unknown_state", PAYMENTS, where, f"{client['name']}: no Amount")
-        elif state == "unknown":
-            _flag(payment, "no_status")
-            data.note("no_status", PAYMENTS, where, f"{client['name']}: Rs.{figure}, Status '{status or '(blank)'}'")
-        if state == "paid" and not payment["mode"]:
-            _flag(payment, "check_mode")
-            data.note("check_mode", PAYMENTS, where, f"mode '{payment['mode_as_written'] or '(blank)'}'")
-        if state == "paid" and not paid_day:
-            _flag(payment, "no_date")
-            data.note("no_date", PAYMENTS, where, client["name"])
-        data.payments.append(payment)
+            payment = {
+                "id": str(uuid.uuid4()),
+                "excel_id": at,
+                "client_id": client["id"],
+                "treatment_id": treatment["id"],
+                "treatment_excel_id": treatment["excel_id"],
+                "client_excel_id": client["excel_id"],
+                "name": text(record.get("name")) or client["name"],
+                "installment": entry["installment"],
+                "installments_total": None,
+                "amount_due": figure,
+                "amount_paid": figure if state == "paid" else None,
+                "balance": None,
+                "outstanding": (figure or 0) if state == "unpaid" else 0,
+                "due_date": due_day,
+                "paid_date": paid_day if state == "paid" else "",
+                "mode": payment_mode(entry["mode"]),
+                "mode_as_written": text(entry["mode"]),
+                "state": state,
+                "status_as_written": entry["status"],
+                "payment_for": payment_for,
+                "reference_no": entry["reference_no"],
+                "bank": entry["bank"],
+                "notes": entry["notes"],
+                "tab": PAYMENTS,
+                "flags": [],
+            }
+            if figure is None:
+                _flag(payment, "unknown_state")
+                data.note("unknown_state", PAYMENTS, at, f"{client['name']}: no Amount")
+            elif state == "unknown":
+                _flag(payment, "no_status")
+                data.note("no_status", PAYMENTS, at, f"{client['name']}: Rs.{figure}, {entry['unread']}")
+            if state == "paid" and not payment["mode"]:
+                _flag(payment, "check_mode")
+                data.note("check_mode", PAYMENTS, at, f"mode '{payment['mode_as_written'] or '(blank)'}'")
+            if state == "paid" and not paid_day:
+                _flag(payment, "no_date")
+                data.note("no_date", PAYMENTS, at, client["name"])
+            data.payments.append(payment)
 
     _add_totals(data)
     for client in data.clients:
@@ -709,6 +751,52 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Di
             found.append({"session_no": None, "at": timed(at), "status": status, "remarks": ""})
     if not found and not any(text(record.get(k)) for k in ("completed_dates", "upcoming_dates")):
         data.note("no_session_dates", SESSIONS, where, who)
+    return found
+
+
+def _row_payments(record: dict, where: str) -> List[Dict[str, Any]]:
+    """The payments one Payments row holds, each with its own excel_id, what it was for, its
+    amount (`figure`), its days, its mode, and `state` as _state reads it.
+
+    A row is a client: the Consultation Fee, Paid on its Consultation Date, and each of the
+    treatment fee's instalments -- Paid when it has a Paid Date, Pending when it has only a
+    Due Date. One with no date is neither, and reported (`unread` says why), since a guess
+    either way moves money. A row laid out the first way -- Payment For, Status, Amount --
+    is one payment."""
+    found = []
+    if any(text(record.get(k)) for k in ("payment_for", "installment", "status", "amount", "paid_date",
+                                           "due_date", "mode", "reference_no", "bank", "remarks")):
+        status, figure = text(record.get("status")), amount(record.get("amount"))
+        found.append({
+            "excel_id": where, "payment_for": text(record.get("payment_for")),
+            "installment": whole(record.get("installment")), "figure": figure,
+            "paid_day": day(record.get("paid_date")), "due_day": day(record.get("due_date")),
+            "mode": record.get("mode"), "state": _state(status, figure), "status": status,
+            "unread": f"Status '{status or '(blank)'}'",
+            "reference_no": text(record.get("reference_no")), "bank": text(record.get("bank")),
+            "notes": text(record.get("remarks")),
+        })
+    parts = [(None, "consultation_fee", "consultation_date", None, "consultation_mode")]
+    numbers = sorted({int(key.split("_")[1]) for key in record if key.startswith("instalment_")})
+    parts += [(n, f"instalment_{n}_amount", f"instalment_{n}_paid_date", f"instalment_{n}_due_date",
+               f"instalment_{n}_mode") for n in numbers]
+    for n, fee, paid, due, mode in parts:
+        cells = [record.get(key) if key else None for key in (fee, paid, due, mode)]
+        if not any(text(c) for c in cells):
+            continue
+        paid_day, due_day = day(cells[1]), day(cells[2])
+        state = "paid" if paid_day else "unpaid" if due_day else "unknown"
+        label = "Consultation" if n is None else f"Instalment {n}"
+        dates_written = " / ".join(text(c) for c in cells[1:3] if text(c))
+        found.append({
+            "excel_id": f"{where} · {label}",
+            "payment_for": "Consultation Fee" if n is None else "Treatment Fee",
+            "installment": n, "figure": amount(cells[0]), "paid_day": paid_day, "due_day": due_day,
+            "mode": cells[3], "state": state, "status": {"paid": "Paid", "unpaid": "Pending"}.get(state, ""),
+            "unread": f"{label}: no " + ("Consultation Date" if n is None else "Paid Date or Due Date")
+                      + (f" that reads as a date ('{dates_written}')" if dates_written else ""),
+            "reference_no": "", "bank": "", "notes": "",
+        })
     return found
 
 

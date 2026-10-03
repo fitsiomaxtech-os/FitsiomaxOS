@@ -283,6 +283,30 @@ def test_the_os_data_workbook_can_leave_a_tab_out(tmp_path):
         read_workbook(path, picks(scanned, off={("Leads", "Current Stage")}))
 
 
+def test_the_os_data_instalment_columns_are_read_and_can_be_turned_off(tmp_path):
+    columns = {k: COLUMNS["Payments"][k] for k in ("client_excel_id", "name", "consultation_fee", "consultation_date")}
+    for n in (1, 2):
+        columns.update({f"instalment_{n}_amount": f"Instalment {n} Amount",
+                        f"instalment_{n}_paid_date": f"Instalment {n} Paid Date"})
+    path = _workbook(tmp_path / "OSDATAX.xlsx", {
+        "Leads": (COLUMNS["Leads"], [{"excel_id": "FM-1", "name": "Test Arun", "phone": "9000000001",
+                                     "current_stage": "RNR"}]),
+        "Payments": (columns, [{"client_excel_id": "FM-1", "consultation_fee": 500,
+                                "consultation_date": datetime(2026, 9, 1), "instalment_1_amount": 3000,
+                                "instalment_1_paid_date": datetime(2026, 9, 2), "instalment_2_amount": 3000,
+                                "instalment_2_paid_date": datetime(2026, 9, 9)}]),
+    })
+    scanned = scan_file(path)
+    payments = columns_of(tabs_of(scanned)["Payments"])
+    assert all(c["used"] and c["on"] for c in payments.values())
+    assert {h for h, c in payments.items() if c["required"]} == {"Patient ID"}
+
+    assert len(read_workbook(path, picks(scanned)).payments) == 3
+    data = read_workbook(path, picks(scanned, off={("Payments", "Instalment 2 Amount"),
+                                                   ("Payments", "Instalment 2 Paid Date")}))
+    assert [p["excel_id"] for p in data.payments] == ["Payments · row 2 · Consultation", "Payments · row 2 · Instalment 1"]
+
+
 def test_a_revenue_sheet_reads_without_a_column_turned_off(tmp_path):
     from openpyxl import Workbook
 
