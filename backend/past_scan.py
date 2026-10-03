@@ -222,7 +222,8 @@ def _reading(book, layout: str) -> Dict[str, dict]:
             need = past_os.required(name, where)
             if name == past_os.LEADS:
                 # What tells the workbook for the OS Data one (past_os.detect), and the ID the
-                # other tabs find their client by.
+                # other tabs find their client by, when the sheet has one (Phone otherwise,
+                # which REQUIRED already holds).
                 need += ["excel_id", "current_stage"]
             else:
                 need.append("client_excel_id" if where.get("client_excel_id") is not None else "phone")

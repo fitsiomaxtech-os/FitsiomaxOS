@@ -20,9 +20,11 @@ still being treated: one workbook, five tabs, read at the same time in one uploa
 column shows as Lead, Sessions (the Physio, Sessions and Reviews tabs) and Revenue (the
 Payments tab). Every tab but Leads may be missing, or empty.
 
-Rows are tied to their client by Patient ID -- the first column of every tab -- and, where a
-row has none, by phone and name, which is the register's own rule (same_person). A row that
-names nobody on the Leads tab is left out and reported, never guessed onto somebody.
+Rows are tied to their client by Patient ID and, where a row has none -- or the sheet has
+no Patient ID at all, and ties its tabs together by Phone alone -- by phone, and by name as
+well when several clients share the number, which is the register's own rule (same_person).
+A row that names nobody on the Leads tab is left out and reported, never guessed onto
+somebody.
 
 Into the same three tables the other two readers write: a client per Leads row (sessions and
 reviews carried on the client, since nothing in the OS reads them from here but the client's
@@ -357,13 +359,15 @@ def required(tab: str, where: Dict[str, Optional[int]]) -> List[str]:
 
 
 def detect(workbook) -> bool:
-    """Whether this is the OS Data workbook: a Leads tab with Patient ID and Current Stage
-    among its headers. Asked of every upload that is not the register."""
+    """Whether this is the OS Data workbook: a Leads tab with Current Stage among its
+    headers, and Patient ID or Phone -- whichever the sheet ties its tabs together by. Asked
+    of every upload that is not the register."""
     ws = _tab(workbook, LEADS)
     if ws is None:
         return False
     for row in ws.iter_rows(min_row=1, max_row=HEADER_SEARCH_ROWS, values_only=True):
-        if {"patientid", "currentstage"} <= {squash(c) for c in (row or ())}:
+        headers = {squash(c) for c in (row or ())}
+        if "currentstage" in headers and headers & {"patientid", "phone"}:
             return True
     return False
 
@@ -379,7 +383,7 @@ def _records(ws, tab: str) -> List[Dict[str, Any]]:
     at, where = found
     missing = [columns[key] for key in required(tab, where) if where[key] is None]
     if tab != LEADS and where.get("client_excel_id") is None and where.get("phone") is None:
-        missing.append("Patient ID (or Phone)")
+        missing.append("Phone (or Patient ID)")
     if missing:
         raise PastDataError(f"'{ws.title.strip()}': missing column(s) {', '.join(missing)}")
     records = []
@@ -419,9 +423,11 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
     data.layout = "os"
     data.tab_rows = {name: len(tabs.get(name) or []) for name in TAB_ORDER if name in tabs}
 
-    # -- clients, off the Leads tab
+    # -- clients, off the Leads tab. A sheet with no Patient ID on any row ties its tabs
+    # together by Phone alone, so a client without one is how it is laid out, not a slip.
     by_excel: Dict[str, Dict[str, Any]] = {}
-    sample_ids = set()
+    sample_ids, sample_keys = set(), set()
+    ids_used = any(text(r.get("excel_id")) for r in tabs.get(LEADS, []))
     for record in tabs.get(LEADS, []):
         where = f"{LEADS} · row {record['_row']}"
         name = text(record.get("name"))
@@ -435,19 +441,21 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
             data.note("sample_row", LEADS, excel_id or where, name)
             if excel_id:
                 sample_ids.add(excel_id)
+            if match_key(record.get("phone")):
+                sample_keys.add(match_key(record.get("phone")))
             continue
         if excel_id and excel_id in by_excel:
             data.note("duplicate_id", LEADS, excel_id, where)
             continue
         client = _client(record, excel_id or where, data)
-        if not excel_id:
+        if not excel_id and ids_used:
             _flag(client, "no_patient_id")
             data.note("no_patient_id", LEADS, where, name)
         by_excel[client["excel_id"]] = client
         data.clients.append(client)
     if not data.clients:
         raise PastDataError(
-            "the Leads tab has no clients" + (" -- only the template's sample row" if sample_ids else "")
+            "the Leads tab has no clients" + (" -- only the template's sample row" if sample_ids or sample_keys else "")
         )
     for client in data.clients:
         written = client["branch_as_written"] or "(blank)"
@@ -477,6 +485,8 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         candidates = [c for c in by_key.get(key, []) if not name or same_person(c["name"], name)] if key else []
         if len(candidates) == 1:
             return candidates[0]
+        if not candidates and key in sample_keys:
+            return None
         data.note("no_client", tab, where, f"{name or '(no name)'}: {text(record.get('phone')) or '(no phone)'}"
                   + (" -- more than one client matches" if len(candidates) > 1 else ""))
         return None

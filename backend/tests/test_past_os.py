@@ -117,14 +117,54 @@ def test_a_rehab_session_does_not_count_on_a_treatment_course():
 
 def test_a_row_without_patient_id_is_matched_by_phone_and_name():
     data = build({
-        "Leads": [lead(2, None, "Test Indu", "9000000009")],
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001"), lead(3, None, "Test Indu", "9000000009")],
         "Payments": [{"client_excel_id": None, "phone": 9000000009, "name": "Test Indu", "payment_for": "Treatment Fee",
                       "status": "Paid", "amount": 3000, "paid_date": datetime(2026, 9, 15), "mode": "Bank Transfer", "_row": 2}],
     })
-    client = data.clients[0]
-    assert client["excel_id"] == "Leads · row 2" and "no_patient_id" in client["flags"]
+    client = data.clients[1]
+    # The other rows have IDs, so this one's missing ID is a slip, and said so.
+    assert client["excel_id"] == "Leads · row 3" and "no_patient_id" in client["flags"]
     assert data.payments[0]["client_id"] == client["id"] and data.payments[0]["mode"] == "account_transfer"
     assert "payment_no_course" in codes(data)
+
+
+def phone_child(n, phone, name="", **extra):
+    record = {"phone": phone, "name": name, "_row": n}
+    record.update(extra)
+    return record
+
+
+def test_a_sheet_without_patient_ids_ties_its_tabs_by_phone():
+    data = build({
+        "Leads": [lead(2, None, "Test Bala", "88255 87322"), lead(3, None, "Test Anbu", "9344123286"),
+                  lead(4, None, "Sample Priya", "9000000000")],
+        "Physio": [phone_child(2, "8825587322", course="Treatment", physio="Test Salma", start_date=datetime(2026, 9, 20)),
+                   phone_child(3, 9344123286.0, course="Treatment", start_date=datetime(2026, 10, 6))],
+        "Sessions": [phone_child(2, "+91 8825587322", completed_dates="21, 22-09-2026"),
+                     phone_child(3, "9344123286", upcoming_dates="13-10-2026"),
+                     phone_child(4, "9000000000", completed_dates="1-10-2026")],
+        "Payments": [phone_child(2, "8825587322", consultation_fee=1500, consultation_date=datetime(2026, 9, 18),
+                                 consultation_mode="Cash")],
+    })
+    # No Patient ID anywhere is the sheet's layout, not a slip; the sample row's children are
+    # passed over like the sample row itself.
+    assert codes(data) == ["sample_row"]
+    bala, anbu = data.clients
+    assert "no_patient_id" not in bala["flags"] + anbu["flags"]
+    assert (bala["sessions_completed"], anbu["sessions_upcoming"]) == (2, 1)
+    assert data.payments[0]["client_id"] == bala["id"] and bala["paid_total"] == 1500
+
+
+def test_a_family_on_one_phone_needs_the_name_on_the_other_tabs():
+    data = build({
+        "Leads": [lead(2, None, "Test Mala", "9000000005"), lead(3, None, "Test Ravi", "9000000005")],
+        "Sessions": [phone_child(2, "9000000005", completed_dates="21-09-2026"),
+                     phone_child(3, "9000000005", "Test Ravi", completed_dates="22-09-2026")],
+    })
+    mala, ravi = data.clients
+    assert mala["sessions"] == [] and [s["at"] for s in ravi["sessions"]] == ["2026-09-22"]
+    assert [f.detail for f in data.findings if f.code == "no_client"] == [
+        "(no name): 9000000005 -- more than one client matches"]
 
 
 def test_a_row_naming_nobody_is_left_out():
@@ -480,6 +520,21 @@ def test_read_workbook_reads_a_payments_row_per_client(tmp_path):
         ("Consultation Fee", None, "paid"), ("Treatment Fee", 1, "paid"), ("Treatment Fee", 2, "unpaid")]
     client = data.clients[0]
     assert (client["paid_total"], client["outstanding_total"]) == (11100, 9600)
+
+
+def test_read_workbook_reads_a_sheet_without_patient_id(tmp_path):
+    """Phone, not Patient ID, ties every tab together -- and tells the workbook for this one."""
+    def without_id(tab):
+        return {k: v for k, v in COLUMNS[tab].items() if k not in ("excel_id", "client_excel_id")}
+
+    path = _workbook(tmp_path / "OSDATAX.xlsx", {
+        "Leads": (without_id("Leads"), [{"name": "Test Bala", "phone": "8825587322", "current_stage": "Physio Assign"}]),
+        "Sessions": ({k: without_id("Sessions")[k] for k in ("phone", "time", "completed_dates")},
+                     [{"phone": "8825587322", "time": "10:00", "completed_dates": "21, 22-09-2026"}]),
+    })
+    data = read_workbook(path)
+    assert data.layout == "os" and "no_patient_id" not in codes(data)
+    assert [s["at"] for s in data.clients[0]["sessions"]] == ["2026-09-21 10:00", "2026-09-22 10:00"]
 
 
 def test_a_payments_tab_without_status_is_refused(tmp_path):
