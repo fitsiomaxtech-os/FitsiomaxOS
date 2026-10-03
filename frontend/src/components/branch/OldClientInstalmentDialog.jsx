@@ -178,10 +178,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
         <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3.5 text-white">
           <div className="flex min-w-0 items-center gap-2">
             <History className="h-5 w-5 shrink-0" />
-            <div className="min-w-0">
-              <p id="old-client-title" className="text-base font-semibold">Old Client Instalment</p>
-              <p className="truncate text-[11px] text-white/80">A course started on the old Physio Tracker</p>
-            </div>
+            <p id="old-client-title" className="min-w-0 truncate text-base font-semibold">Old Client Instalment</p>
           </div>
           <button type="button" onClick={() => !saving && onClose()} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" aria-label="Close" data-testid="old-client-close">
             <X className="h-4 w-4" />
@@ -325,17 +322,16 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
             </div>
           ) : (
             <div className="space-y-3" data-testid="old-client-form">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Client and old course</p>
+              <div className="flex items-center justify-end">
                 <button type="button" onClick={picked ? () => setEditing(false) : backToSearch} className="text-[11px] font-semibold text-slate-500 hover:underline">
                   {picked ? "Done" : "Back to search"}
                 </button>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <CollectField label="Client Name" value={client.name} onChange={(e) => setC({ name: e.target.value })} placeholder="As in the old tracker" testid="old-client-name" />
-                <CollectField label="Phone" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} placeholder="10-digit mobile" inputMode="tel" testid="old-client-phone" />
-                <CollectField label="Old Patient ID" value={client.old_patient_id} onChange={(e) => setC({ old_patient_id: e.target.value })} placeholder="From the old tracker" testid="old-client-old-id" />
-                <CollectField label="Package" value={client.package} onChange={(e) => setC({ package: e.target.value })} placeholder="e.g. 12 Session Pack" testid="old-client-package" />
+                <CollectField label="Client Name" value={client.name} onChange={(e) => setC({ name: e.target.value })} testid="old-client-name" />
+                <CollectField label="Phone" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} inputMode="tel" testid="old-client-phone" />
+                <CollectField label="Old Patient ID" value={client.old_patient_id} onChange={(e) => setC({ old_patient_id: e.target.value })} testid="old-client-old-id" />
+                <CollectField label="Package" value={client.package} onChange={(e) => setC({ package: e.target.value })} testid="old-client-package" />
               </div>
               <div>
                 <span className="mb-1 block text-xs font-semibold text-slate-700">Paid For</span>
@@ -365,11 +361,8 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
 
           {showPayment && (
             <div className="space-y-3 border-t border-slate-100 pt-4" data-testid="old-client-payment">
-              <div className="flex items-end justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Instalment #{number}</p>
-                  <p className="text-[11px] text-emerald-900/80">{client.name || (picked ? "Old client" : "New old client")}</p>
-                </div>
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Instalment #{number}</p>
                 <div className="text-right">
                   <p className="text-[10px] font-semibold uppercase text-emerald-800/80">Balance</p>
                   <p className="text-xl font-bold text-emerald-800" data-testid="old-client-balance">{hasTotal ? fmt(owed) : "—"}</p>
