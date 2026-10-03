@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,11 @@ import { CloseBookHistoryPanel } from "@/components/branch/CloseBookHistoryPanel
 import { OldClientInstalmentDialog } from "@/components/branch/OldClientInstalmentDialog";
 import { ScheduleCollectDialog, collectWhat } from "@/components/branch/ScheduleCollectDialog";
 import { loadSession } from "@/lib/session";
+
+// The Consultations board, for its patient and Collect popups only (`popupOnly`). Loaded
+// when a Consultation Fee is first collected from Payment Schedule, not with this tab:
+// it is the largest module in the app and most visits here never need it.
+const ConsultationsBoard = lazy(() => import("@/components/ConsultationsBoard"));
 
 // Three tabs, not the ten this page used to carry: Consultation/Session/Diet/Store
 // Collections were each a copy of Summary's own card-click-to-filter table scoped to one
@@ -300,13 +305,8 @@ const PaymentModes = ({ tx }) => {
  *              is dropped (those pills already are it) and the branch is read straight
  *              off the prop on every render, so an empty one means All Branches rather
  *              than "pick your own", which is what a bare branchId would mean.
- * @param onOpenConsultationFee  Takes a Payment Schedule row's Consultation Fee to the
- *              Consultation tab's own Collect (Branch Admin), which asks for the package,
- *              any discount and the mode's details before its Confirm & Collect, and holds
- *              the prescription gate. Left out where there is no such tab, and the row's
- *              Collect takes the fee in full on ScheduleCollectDialog instead.
  */
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, onOpenConsultationFee = null }) => {
+export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -347,6 +347,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   const [oldClientForm, setOldClientForm] = useState(null);
   // The Payment Schedule row whose due money is being collected, while its popup is open.
   const [collectRow, setCollectRow] = useState(null);
+  // A Consultation Fee being collected on the Consultations board's own popups, mounted
+  // over this tab: { row, n, opened }. `n` remounts it per Collect; `opened` stops it
+  // reopening the fee each time its list reloads behind the patient.
+  const [consultFee, setConsultFee] = useState(null);
   const role = useMemo(sessionRole, []);
   const canRecordOld = OLD_CLIENT_ROLES.has(role);
   const canCollectRow = useCallback(
@@ -447,14 +451,14 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   const viewingRow = useMemo(() => outstanding.find((r) => r.lead_id === viewingLeadId), [outstanding, viewingLeadId]);
   const viewingCollectable = Boolean(viewingRow) && !viewingRow.old_client && !viewingRow.past_data && viewingRow.balance > 0 && canCollectRow(viewingRow);
   // A Collect on a Payment Schedule row, from the table or the client popup. An instalment
-  // is one fixed figure and is taken here. A Consultation Fee goes to the Consultation tab
-  // where there is one: a first collection there picks the package, agrees any discount
-  // and dates any balance before the mode's own Confirm & Collect, and waits on the
-  // prescription -- none of which this tab's short popup asks.
+  // is one fixed figure and is taken on this tab's short popup. A Consultation Fee opens the
+  // Consultation tab's own Collect right here, over this page: a first collection picks the
+  // package, agrees any discount and dates any balance before the mode's own Confirm &
+  // Collect, and waits on the prescription -- none of which the short popup asks.
   const collectScheduleRow = (row) => {
-    if (onOpenConsultationFee && collectWhat(row) === "consultation") {
+    if (collectWhat(row) === "consultation") {
       setViewingLeadId(null);
-      onOpenConsultationFee(row);
+      setConsultFee({ row, n: Date.now(), opened: false });
       return;
     }
     setCollectRow(row);
@@ -914,6 +918,23 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             afterCollect(`${fmt(tx.gross)} collected from ${tx.client_name}`, tx);
           }}
         />
+      )}
+      {consultFee && (
+        <Suspense fallback={null}>
+          <ConsultationsBoard
+            key={consultFee.n}
+            popupOnly
+            // The row's own branch: Super Admin's Finance board can be on All Branches.
+            branchId={consultFee.row.branch_id || branchId}
+            viewerRole="branch_admin"
+            autoOpenLeadId={consultFee.opened ? null : consultFee.row.lead_id}
+            autoOpenFee="consultation"
+            onAutoOpened={() => setConsultFee((c) => c && { ...c, opened: true })}
+            // Closed with or without the money taken -- either way this list is reloaded,
+            // so a fee collected there drops off it.
+            onPopupClosed={() => { setConsultFee(null); load(); }}
+          />
+        </Suspense>
       )}
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} testid="accountant-receipt" />
     </div>

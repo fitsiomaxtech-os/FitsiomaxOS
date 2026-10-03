@@ -2453,7 +2453,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3586,9 +3586,28 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
       if (autoOpenFee) openRowFee(match, autoOpenFee);
       else setSelectedLead(match);
       onAutoOpened && onAutoOpened();
+    } else if (popupOnly) {
+      // Mounted for this one patient and drawing nothing else, so a patient not on the
+      // list would leave the desk looking at a page where nothing happened.
+      toast.info("This client is not on the Consultations list");
+      onPopupClosed && onPopupClosed();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenLeadId, autoOpenFee, board.leads]);
+
+  // `popupOnly` is mounted by another tab -- Accountant Manage's Payment Schedule -- for one
+  // patient's popups and nothing else, so with the patient closed it has nothing left to
+  // show, and the tab that mounted it is told so it can take it down and reload.
+  const hadPopupLead = useRef(false);
+  useEffect(() => {
+    if (!popupOnly) return;
+    if (selectedLead) hadPopupLead.current = true;
+    else if (hadPopupLead.current) {
+      hadPopupLead.current = false;
+      onPopupClosed && onPopupClosed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popupOnly, selectedLead]);
 
   const stageColor = useCallback(
     (name) => stages.find((s) => s.name === name)?.color || "#64748b",
@@ -6368,6 +6387,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
 
   return (
     <div className="space-y-3" data-testid="consultations-board">
+      {/* `popupOnly`: none of the list -- only the patient and the popups over it, below. */}
+      {!popupOnly && (<>
       {/* Stage Head Bar — Pre-Sales / Branch Leads style sticky segmented tabs.
           Suppressed when embedded inside Branch Leads' own unified stage bar. */}
       {showOwnStageBar && (
@@ -6979,6 +7000,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
         </CardContent>
       </Card>
       )}
+      </>)}
 
       {/* Detail / move-stage dialog */}
       {selectedLead && (
