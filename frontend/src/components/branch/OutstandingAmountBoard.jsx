@@ -279,16 +279,9 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
     };
   }, [filtered, today]);
 
-  // What the list, its totals row and the export carry: the filters above, narrowed to the
-  // picked card.
+  // What the list and the export carry: the filters above, narrowed to the picked card.
   const shown = useMemo(() => filtered.filter((r) => CARD_FILTERS[card](r, today)), [filtered, card, today]);
   const emptyText = CARD_EMPTY[card] || "No outstanding balances.";
-
-  const footer = useMemo(() => shown.reduce((acc, r) => ({
-    total_bill: acc.total_bill + (r.total_bill || 0),
-    paid_amount: acc.paid_amount + (r.paid_amount || 0),
-    balance: acc.balance + (r.balance || 0),
-  }), { total_bill: 0, paid_amount: 0, balance: 0 }), [shown]);
 
   return (
     <div className="space-y-4" data-testid="outstanding-amount-board">
@@ -529,15 +522,6 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                       );
                     })}
                   </tbody>
-                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
-                    <tr className="whitespace-nowrap">
-                      <td colSpan={4} className="px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Totals</td>
-                      <td className="px-3 py-3 text-xs font-extrabold text-slate-700">{fmt(footer.total_bill)}</td>
-                      <td className="px-3 py-3 text-xs font-extrabold text-emerald-700">{fmt(footer.paid_amount)}</td>
-                      <td className="px-3 py-3 text-xs font-extrabold text-amber-600">{fmt(footer.balance)}</td>
-                      <td colSpan={4}></td>
-                    </tr>
-                  </tfoot>
                 </table>
               </div>
             )}
