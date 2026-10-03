@@ -7,8 +7,7 @@ import { LedgerCard } from "@/components/ui/ledger-card";
 import { EntriesPanel } from "@/components/finance/BranchCashBoard";
 import {
   getBranches, getFinanceExpenses, createFinanceExpense,
-  getBranchCash, createCashHandover, listCashHandovers, cancelCashHandover,
-  createCashReturn, listCashReturns, cancelCashReturn,
+  getBranchCash, createCashHandover, createCashReturn,
   listVendors, createVendor,
 } from "@/lib/api";
 import { DENOMINATIONS, noteTotal, countedNotes, noteBreakdown, notesLabel } from "@/lib/denominations";
@@ -900,191 +899,6 @@ const CashByBranchList = ({ rows }) => {
   );
 };
 
-/** Every handover sent up, newest first — not only the ones still in the air. A pending
-    one can still be pulled back; a received one is there to be read back against, which
-    is the whole reason the accountant counts it in. */
-const HandoverList = ({ handovers, onCancel, showBranch }) => {
-  if (!handovers.length) {
-    return (
-      <EmptyList testid="branch-handover-empty">
-        Nothing handed over yet. Hand over cash sends the drawer up to the accountant.
-      </EmptyList>
-    );
-  }
-
-  const chip = (h) => {
-    if (h.status === "received") {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-          <CheckCircle2 className="h-3 w-3" /> Received
-        </span>
-      );
-    }
-    if (h.status === "cancelled") {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-          <XCircle className="h-3 w-3" /> Cancelled
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-        <Clock className="h-3 w-3" /> Waiting to be received
-      </span>
-    );
-  };
-
-  return (
-    <>
-      <div className="space-y-2 sm:hidden" data-testid="branch-handover-list-mobile">
-        {handovers.map((h) => (
-          <div key={h.id} className="rounded-xl border border-slate-200 bg-white p-3" data-testid={`branch-handover-card-${h.id}`}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-slate-800">{fmt(h.amount)}</p>
-                <p className="truncate text-xs text-slate-500">to {h.handed_to || "—"} · {h.on || "—"}</p>
-                {showBranch && h.branch_name ? <p className="truncate text-[11px] text-slate-400">{h.branch_name}</p> : null}
-              </div>
-              {chip(h)}
-            </div>
-            {h.status === "pending" && (
-              <button
-                type="button"
-                onClick={() => onCancel(h.id)}
-                className="mt-2 text-[11px] text-slate-400 underline hover:text-rose-600"
-                data-testid={`branch-handover-cancel-${h.id}`}
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <ListFrame testid="branch-handover-list-desktop">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-4 py-2.5 font-semibold">Date</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
-              <th className="px-4 py-2.5 font-semibold">Handed To</th>
-              <th className="px-4 py-2.5 font-semibold">Notes Counted</th>
-              <th className="px-4 py-2.5 font-semibold">Status</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {handovers.map((h) => (
-              <tr key={h.id} className="align-top hover:bg-slate-50" data-testid={`branch-handover-${h.id}`}>
-                <td className="whitespace-nowrap px-4 py-3 text-slate-500">{h.on || "—"}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-slate-800">
-                  {fmt(h.amount)}
-                  {h.received_amount != null && Math.abs(h.variance) >= 0.01 ? (
-                    <span className="mt-0.5 block text-[10px] font-normal text-amber-700">counted in {fmt(h.received_amount)}</span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-slate-700">{h.handed_to || "—"}</p>
-                  {showBranch && h.branch_name ? <p className="text-[11px] text-slate-400">{h.branch_name}</p> : null}
-                  {/* Who said this cash was on its way. Worth a line since the accountant
-                      can raise one against a branch as well as receive it, so a branch
-                      reading its own drawer can see a handover it did not send up. */}
-                  {h.raised_by ? <p className="text-[11px] text-slate-400">raised by {h.raised_by}</p> : null}
-                  {h.note ? <p className="text-[11px] text-slate-400">{h.note}</p> : null}
-                </td>
-                <td className="px-4 py-3 text-[11px] text-slate-400">
-                  {notesLabel(h.cash_denominations)
-                    ? `${notesLabel(h.cash_denominations)}${Number(h.cash_coins) > 0 ? ` + Rs.${h.cash_coins} coins` : ""}`
-                    : "—"}
-                </td>
-                <td className="px-4 py-3">{chip(h)}</td>
-                <td className="px-4 py-3 text-right">
-                  {h.status === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={() => onCancel(h.id)}
-                      className="text-[11px] text-slate-400 underline hover:text-rose-600"
-                      data-testid={`branch-handover-cancel-${h.id}`}
-                    >
-                      Cancel
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </ListFrame>
-    </>
-  );
-};
-
-/** Cash that came back into the drawer, newest first. One recorded by mistake can be
-    cancelled, which takes it back off Cash in hand. */
-const CashReturnList = ({ returns, onCancel, showBranch }) => {
-  if (!returns.length) {
-    return (
-      <EmptyList testid="branch-cash-return-empty">
-        No cash returned yet. Cash return records cash coming back into the drawer.
-      </EmptyList>
-    );
-  }
-
-  return (
-    <ListFrame testid="branch-cash-return-list">
-      <table className="w-full min-w-[640px] text-sm">
-        <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
-          <tr>
-            <th className="px-4 py-2.5 font-semibold">Date</th>
-            <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
-            <th className="px-4 py-2.5 font-semibold">Returned By</th>
-            <th className="px-4 py-2.5 font-semibold">Notes Counted</th>
-            <th className="px-4 py-2.5" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {returns.map((r) => {
-            const cancelled = r.status === "cancelled";
-            return (
-              <tr key={r.id} className={`align-top hover:bg-slate-50 ${cancelled ? "opacity-60" : ""}`} data-testid={`branch-cash-return-${r.id}`}>
-                <td className="whitespace-nowrap px-4 py-3 text-slate-500">{r.on || "—"}</td>
-                <td className={`whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums ${cancelled ? "text-slate-400 line-through" : "text-emerald-700"}`}>
-                  + {fmt(r.amount)}
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-slate-700">{r.returned_by || "—"}</p>
-                  {showBranch && r.branch_name ? <p className="text-[11px] text-slate-400">{r.branch_name}</p> : null}
-                  {r.raised_by ? <p className="text-[11px] text-slate-400">recorded by {r.raised_by}</p> : null}
-                  {r.note ? <p className="text-[11px] text-slate-400">{r.note}</p> : null}
-                </td>
-                <td className="px-4 py-3 text-[11px] text-slate-400">
-                  {notesLabel(r.cash_denominations)
-                    ? `${notesLabel(r.cash_denominations)}${Number(r.cash_coins) > 0 ? ` + Rs.${r.cash_coins} coins` : ""}`
-                    : "—"}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {cancelled ? (
-                    <span className="text-[11px] text-slate-400">Cancelled</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onCancel(r.id)}
-                      className="text-[11px] text-slate-400 underline hover:text-rose-600"
-                      data-testid={`branch-cash-return-cancel-${r.id}`}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </ListFrame>
-  );
-};
-
 /**
  * @param branchId  Whose drawer to show. Cash in hand belongs to a branch, so with no
  *                  branch in view the card and the handover button are left out.
@@ -1103,9 +917,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   const [adding, setAdding] = useState(false);
   const [handingOver, setHandingOver] = useState(false);
   const [cash, setCash] = useState(null);
-  const [handovers, setHandovers] = useState([]);
   const [returning, setReturning] = useState(false);
-  const [cashReturns, setCashReturns] = useState([]);
   const [cashFailed, setCashFailed] = useState(false);
   // Which Cash In Hand card is open (section "cash"). Cash in hand, the answer, to start with.
   const [cashCard, setCashCard] = useState("cash_in_hand");
@@ -1142,8 +954,8 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
 
   useEffect(() => { load(); }, [load]);
 
-  // The drawer and its handovers, reloaded whenever the expenses are — a cash expense
-  // draws the drawer down as it is raised.
+  // The drawer, reloaded whenever the expenses are — a cash expense draws the drawer down
+  // as it is raised.
   //
   // Asked for with no branch too, which is where this desk usually sits: /finance/branch-cash
   // answers a branch with its own five figures and no branch with the roll-up across every
@@ -1152,21 +964,13 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   // each.
   const loadCash = useCallback(async () => {
     try {
-      // Settled one by one: a list that fails to load should not take the drawer with it.
-      const scope = branchId ? { branch_id: branchId } : {};
-      const [box, ho, ret] = await Promise.allSettled([
-        getBranchCash(scope), listCashHandovers(scope), listCashReturns(scope),
-      ]);
-      setCash(box.status === "fulfilled" ? box.value : null);
-      setCashFailed(box.status !== "fulfilled");
-      setHandovers(ho.status === "fulfilled" ? ho.value?.handovers || [] : []);
-      setCashReturns(ret.status === "fulfilled" ? ret.value?.cash_returns || [] : []);
+      setCash(await getBranchCash(branchId ? { branch_id: branchId } : {}));
+      setCashFailed(false);
       setCashVersion((v) => v + 1);
       onChangedRef.current?.();
     } catch {
       setCash(null);
-      setHandovers([]);
-      setCashReturns([]);
+      setCashFailed(true);
     }
   }, [branchId]);
 
@@ -1176,26 +980,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
     if (branchId) { setBranches([]); return; }
     getBranches().then((b) => setBranches(b || [])).catch(() => setBranches([]));
   }, [branchId]);
-
-  const pullBackHandover = async (id) => {
-    try {
-      await cancelCashHandover(id);
-      toast.success("Handover cancelled");
-      loadCash();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not cancel that");
-    }
-  };
-
-  const pullBackReturn = async (id) => {
-    try {
-      await cancelCashReturn(id);
-      toast.success("Cash return cancelled");
-      loadCash();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not cancel that");
-    }
-  };
 
   // The piles, counted once here rather than read off the endpoint's own totals for the
   // cards and off the rows for the lists: the figure on a card and the rows it opens are
@@ -1286,15 +1070,15 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   const list = LISTS[activeView];
 
   // The drawer as cards (section "cash"): every movement the balance is made of, in the order
-  // the sum works, then the answer, then the two record lists. Each card opens what it was
-  // summed from -- the movements through /finance/branch-cash/entries, the same rows Branch
-  // Cash opens, so a card and its list agree. In transit and Opening / corrections only show
-  // when they hold something, as they did as lines of the table these cards replace.
+  // the sum works, then the answer. Each card opens what it was summed from -- the movements
+  // through /finance/branch-cash/entries, the same rows Branch Cash opens, so a card and its
+  // list agree. In transit and Opening / corrections only show when they hold something, as
+  // they did as lines of the table these cards replace. The Handovers and Cash returns record
+  // cards that closed the row were taken off at the branch's request.
   //
-  // A caption only where it carries a figure (the approved / awaiting split, how many
-  // handovers are in transit): a fixed line under each card only said its label again.
+  // A caption only where it carries a figure (the approved / awaiting split): a fixed line
+  // under each card only said its label again.
   const f = cashFigures || {};
-  const inTransitHandovers = handovers.filter((h) => h.status === "pending").length;
   const CASH_CARDS = cashFigures ? [
     {
       key: "collected_cash",
@@ -1325,19 +1109,11 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       color: f.cash_in_hand < 0 ? "#e11d48" : "#0284c7",
       value: fmt(f.cash_in_hand),
     },
-    {
-      key: "handovers",
-      label: "Handovers",
-      color: "#7c3aed",
-      value: handovers.length,
-      sub: inTransitHandovers ? `${inTransitHandovers} in transit` : undefined,
-    },
-    { key: "cash_returns", label: "Cash returns", color: "#4f46e5", value: cashReturns.length },
   ] : [];
   // A card that is gone -- In transit once it is received, a branch switched -- falls back to
   // Cash in hand rather than leaving its list open under no card.
   const openCash = CASH_CARDS.some((c) => c.key === cashCard) ? cashCard : "cash_in_hand";
-  const CASH_COLS = { 7: "xl:grid-cols-7", 8: "xl:grid-cols-8", 9: "xl:grid-cols-9" };
+  const CASH_COLS = { 5: "xl:grid-cols-5", 6: "xl:grid-cols-6", 7: "xl:grid-cols-7" };
   // What the two dialogs check an amount against. One branch's drawer or nothing: the
   // roll-up is several drawers added up, and "that is more than is in it" said against a
   // figure spread over every branch would be a check on nothing.
@@ -1363,7 +1139,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       </Button>
     </>
   );
-  const cashOwnList = openCash === "handovers" || openCash === "cash_returns" || (openCash === "cash_in_hand" && byBranch);
+  const cashOwnList = openCash === "cash_in_hand" && byBranch;
 
   return (
     <div className={activeView === "cash" ? "space-y-3" : "space-y-4"} data-testid="branch-expenses-panel">
@@ -1434,10 +1210,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
               <EmptyList testid="branch-cash-loading">
                 {cashFailed ? "Could not load cash in hand — refresh to try again." : "Loading cash in hand…"}
               </EmptyList>
-            ) : openCash === "handovers" ? (
-              <HandoverList handovers={handovers} onCancel={pullBackHandover} showBranch={!branchId} />
-            ) : openCash === "cash_returns" ? (
-              <CashReturnList returns={cashReturns} onCancel={pullBackReturn} showBranch={!branchId} />
             ) : (
               <CashByBranchList rows={byBranch} />
             )}
