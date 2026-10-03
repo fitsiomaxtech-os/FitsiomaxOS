@@ -2632,7 +2632,7 @@ async def revenue_overview(
             "old_client": True,
             # So Collect can open the form on this client's branch from an all-branch read.
             "branch_id": c.get("branch_id"),
-            "client_name": s["name"],
+            "client_name": s["name"] or "Old client",
             "phone": s["phone"],
             "email": "",
             "branch_name": s["branch_name"],
@@ -3414,11 +3414,13 @@ async def record_old_client_payment(
     else:
         if not fields:
             raise HTTPException(status_code=400, detail="Enter the old client's details")
-        twins = await v3_col("old_clients").find({"branch_id": branch["id"], "phone": fields["phone"]}, {"_id": 0}).to_list(50)
+        # Only a phone can say two records are one client; a client entered without one
+        # cannot be matched.
+        twins = await v3_col("old_clients").find({"branch_id": branch["id"], "phone": fields["phone"]}, {"_id": 0}).to_list(50) if fields["phone"] else []
         if any(old_clients.same_course(t, fields) for t in twins):
             raise HTTPException(
                 status_code=409,
-                detail=f"{fields['name']} is already an old client here for this course. Search their phone and pick them from the list.",
+                detail=f"{fields['name'] or 'This client'} is already an old client here for this course. Search their phone and pick them from the list.",
             )
         client = {
             "id": str(uuid.uuid4()),
@@ -3430,16 +3432,19 @@ async def record_old_client_payment(
         }
         payments = []
 
+    # Capped at the balance only where the total fee is on file -- without it there is no
+    # balance to cap at.
+    capped = old_clients.has_total(client)
     owed = old_clients.balance(client, payments)
-    if owed <= 0:
-        raise HTTPException(status_code=400, detail=f"Nothing is owed on {client['name']}'s old course")
+    if capped and owed <= 0:
+        raise HTTPException(status_code=400, detail=f"Nothing is owed on {old_clients.display_name(client)}'s old course")
     if not payload.payment_mode and not payload.payment_lines:
         raise HTTPException(status_code=400, detail="Pick how this payment was made")
     if payload.amount is None and not payload.payment_lines:
         raise HTTPException(status_code=400, detail="Enter the amount paid")
     mode, amount, mode_fields, detail_suffix = _tender(payload, payload.amount or 0, "instalment")
     amount = round(amount, 2)
-    if amount > owed + 0.01:
+    if capped and amount > owed + 0.01:
         raise HTTPException(status_code=400, detail=f"Rs.{amount:g} is more than the Rs.{owed:g} still owed on this course")
 
     number = old_clients.next_instalment(client, payments)
@@ -3478,7 +3483,7 @@ async def record_old_client_payment(
 
     history = payments + [pay]
     return {
-        "message": f"Instalment #{number} recorded for {client['name']}",
+        "message": f"Instalment #{number} recorded for {old_clients.display_name(client)}",
         "transaction": _old_client_txn_row(pay, client, history, branch["branch_name"]),
         "old_client": old_clients.summary(client, history, today, branch["branch_name"]),
     }

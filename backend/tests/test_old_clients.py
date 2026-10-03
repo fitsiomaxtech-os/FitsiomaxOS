@@ -31,10 +31,9 @@ def test_clean_client_tidies_name_and_phone():
 
 
 @pytest.mark.parametrize("over, says", [
-    ({"name": " "}, "name"),
     ({"phone": "12345"}, "10-digit"),
     ({"category": "zumba"}, "what the old course was for"),
-    ({"total_fee": 0}, "total fee"),
+    ({"total_fee": -1}, "less than zero"),
     ({"paid_before": -1}, "less than zero"),
     ({"paid_before": 30000}, "fully paid"),
     ({"next_due_date": "15/10/2026"}, "YYYY-MM-DD"),
@@ -42,6 +41,23 @@ def test_clean_client_tidies_name_and_phone():
 def test_clean_client_refuses(over, says):
     with pytest.raises(OldClientError, match=says):
         old_clients.clean_client({**FORM, **over})
+
+
+def test_clean_client_takes_a_blank_name_phone_and_total():
+    c = old_clients.clean_client({"name": " ", "phone": "", "category": "", "total_fee": None, "paid_before": None})
+    assert c["name"] == "" and c["phone"] == "" and c["category"] == "session"
+    assert c["total_fee"] == 0 and c["paid_before"] == 0
+    assert not old_clients.has_total(c)
+    assert old_clients.display_name(c) == "Old client"
+    # Paid on the tracker with no total given is not "fully paid" -- there is nothing to compare.
+    assert old_clients.clean_client({**FORM, "total_fee": 0, "paid_before": 5000})["paid_before"] == 5000
+
+
+def test_no_total_means_no_balance_on_the_receipt_and_not_paid_up():
+    c = _client(total_fee=0)
+    pays = [_pay("P1", 4000, "2026-09-02T06:30:00+00:00")]
+    assert old_clients.balances_after(c, pays) == {"P1": None}
+    assert old_clients.summary(c, pays, TODAY)["status"] != "paid"
 
 
 def test_money_paid_before_counts_as_at_least_one_instalment():
@@ -118,3 +134,5 @@ def test_same_course_is_phone_line_and_package():
     assert old_clients.same_course(a, {**a, "package": "12 session pack"})
     assert not old_clients.same_course(a, {**a, "category": "rehab"})
     assert not old_clients.same_course(a, {**a, "phone": "9000000000"})
+    # Two clients entered without a phone are not one client.
+    assert not old_clients.same_course({**a, "phone": ""}, {**a, "phone": ""})

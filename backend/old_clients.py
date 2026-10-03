@@ -61,25 +61,35 @@ def money(value) -> float:
         return 0.0
 
 
+def has_total(client: dict) -> bool:
+    """Whether the old course's total fee is on file. It is optional -- the desk does not
+    always have the tracker to hand -- and without it there is no balance to cap an
+    instalment at or to show on Payment Schedule."""
+    return money(client.get("total_fee")) > 0
+
+
+def display_name(client: dict) -> str:
+    return client.get("name") or "Old client"
+
+
 def clean_client(fields: dict) -> dict:
-    """The client half of the form, checked and tidied. Raises OldClientError on the first
-    thing wrong, in the order the form asks for them."""
+    """The client half of the form, checked and tidied. Nothing on it is required -- the
+    name, the phone and the total fee are all optional -- but what is typed has to make
+    sense. Raises OldClientError on the first thing wrong, in the order the form asks."""
     name = " ".join(str(fields.get("name") or "").split())
-    if not name:
-        raise OldClientError("Enter the client's name")
     phone = clean_phone(fields.get("phone"))
-    if len(phone) != 10:
-        raise OldClientError("Enter the client's 10-digit phone number")
-    category = fields.get("category") or ""
+    if phone and len(phone) != 10:
+        raise OldClientError("Phone must be a 10-digit number")
+    category = fields.get("category") or "session"
     if category not in CATEGORIES:
         raise OldClientError("Pick what the old course was for")
     total_fee = money(fields.get("total_fee"))
-    if total_fee <= 0:
-        raise OldClientError("Enter the course's total fee from the old tracker")
+    if total_fee < 0:
+        raise OldClientError("Total course fee cannot be less than zero")
     paid_before = money(fields.get("paid_before"))
     if paid_before < 0:
         raise OldClientError("Paid in the old tracker cannot be less than zero")
-    if paid_before >= total_fee:
+    if total_fee > 0 and paid_before >= total_fee:
         raise OldClientError("The old tracker already shows this course as fully paid")
     try:
         instalments_before = int(fields.get("instalments_before") or 0)
@@ -208,7 +218,7 @@ def summary(client: dict, payments: List[dict], today: str, branch_name: str = "
         "balance": owed,
         "next_instalment_number": next_instalment(client, ordered),
         "next_due_date": client.get("next_due_date") or "",
-        "status": owed_status(client.get("next_due_date") or "", today) if owed > 0 else "paid",
+        "status": owed_status(client.get("next_due_date") or "", today) if owed > 0 or not has_total(client) else "paid",
         "payments": [
             {
                 "id": p.get("id"),
@@ -226,7 +236,10 @@ def summary(client: dict, payments: List[dict], today: str, branch_name: str = "
 def balances_after(client: dict, payments: List[dict]) -> Dict[str, float]:
     """Payment id -> what was still owed once that instalment was in, oldest first. What a
     receipt prints as Balance Due: reissued a month later, it has to say what it said on
-    the day, not what the client owes now."""
+    the day, not what the client owes now. None for each where the total was never given:
+    the receipt then leaves Balance Due off rather than print a Rs.0 nobody worked out."""
+    if not has_total(client):
+        return {p.get("id"): None for p in payments}
     left = money(client.get("total_fee")) - money(client.get("paid_before"))
     out: Dict[str, float] = {}
     for p in sorted(payments, key=lambda p: p.get("created_at") or ""):
@@ -236,9 +249,11 @@ def balances_after(client: dict, payments: List[dict]) -> Dict[str, float]:
 
 
 def same_course(a: dict, b: dict) -> bool:
-    """Two records for one client's one course: same phone, same line, same package."""
+    """Two records for one client's one course: same phone, same line, same package. Never
+    without a phone -- two clients entered with none are not thereby the same person."""
     return (
-        a.get("phone") == b.get("phone")
+        bool(a.get("phone"))
+        and a.get("phone") == b.get("phone")
         and a.get("category") == b.get("category")
         and (a.get("package") or "").lower() == (b.get("package") or "").lower()
     )

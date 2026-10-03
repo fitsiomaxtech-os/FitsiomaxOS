@@ -119,7 +119,9 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
 
   // The figures the payment half reads, off the form as it stands -- so correcting the
   // total on an existing client moves the balance in front of the desk before it is saved.
+  // The total fee is optional; without it there is no balance to show or to cap at.
   const total = Number(client.total_fee) || 0;
+  const hasTotal = total > 0;
   const before = Number(client.paid_before) || 0;
   const paidHere = picked ? Number(picked.paid_on_os) || 0 : 0;
   const owed = Math.max(round2(total - before - paidHere), 0);
@@ -130,13 +132,13 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
 
   const submit = async () => {
     if (!branch) { toast.error("Pick the branch this payment was taken at"); return; }
-    if (!client.name.trim()) { toast.error("Enter the client's name"); return; }
-    if (digitsOf(client.phone).slice(-10).length !== 10) { toast.error("Enter the client's 10-digit phone number"); return; }
-    if (!(total > 0)) { toast.error("Enter the course's total fee from the old tracker"); return; }
-    if (before >= total) { toast.error("The old tracker already shows this course as fully paid"); return; }
+    // Only the amount is required. The rest is optional, but checked when it is typed.
+    const phoneDigits = digitsOf(client.phone);
+    if (phoneDigits && phoneDigits.slice(-10).length !== 10) { toast.error("Phone must be a 10-digit number"); return; }
+    if (hasTotal && before >= total) { toast.error("The old tracker already shows this course as fully paid"); return; }
     if (!(amount > 0)) { toast.error("Enter the amount paid"); return; }
-    if (amount > owed + 0.01) { toast.error(`That is more than the ${fmt(owed)} still owed on this course`); return; }
-    if (!pay.paid_on || pay.paid_on > today) { toast.error("Paid on cannot be a future date"); return; }
+    if (hasTotal && amount > owed + 0.01) { toast.error(`That is more than the ${fmt(owed)} still owed on this course`); return; }
+    if (pay.paid_on && pay.paid_on > today) { toast.error("Paid on cannot be a future date"); return; }
     const tender = tenderPayload(pay);
     if (tender.error) { toast.error(tender.error); return; }
 
@@ -145,7 +147,8 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
       const res = await recordOldClientPayment({
         ...tender.payload,
         amount,
-        paid_on: pay.paid_on,
+        // Left blank, the server takes it as today.
+        paid_on: pay.paid_on || undefined,
         branch_id: branch,
         old_client_id: picked?.id || undefined,
         // Sent for an existing client too: it is how a correction, and the next due date
@@ -232,12 +235,12 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                         key={c.id}
                         type="button"
                         onClick={() => pick(c)}
-                        disabled={c.balance <= 0}
+                        disabled={c.total_fee > 0 && c.balance <= 0}
                         className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-slate-200 disabled:hover:bg-white"
                         data-testid={`old-client-result-${c.id}`}
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold text-slate-800">{c.name}</span>
+                          <span className="block truncate text-sm font-semibold text-slate-800">{c.name || "Old client"}</span>
                           <span className="block truncate text-[11px] text-slate-500">
                             {[c.phone, c.old_patient_id && `ID ${c.old_patient_id}`, c.category_label, c.package].filter(Boolean).join(" · ")}
                           </span>
@@ -247,8 +250,13 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                             <span className="block text-sm font-bold text-amber-600">{fmt(c.balance)} due</span>
                             <span className="block text-[10px] text-slate-400">Next: instalment #{c.next_instalment_number}</span>
                           </span>
-                        ) : (
+                        ) : c.total_fee > 0 ? (
                           <span className="shrink-0 text-xs font-semibold text-emerald-600">Paid up</span>
+                        ) : (
+                          <span className="shrink-0 text-right">
+                            <span className="block text-xs font-semibold text-slate-500">Total not set</span>
+                            <span className="block text-[10px] text-slate-400">Next: instalment #{c.next_instalment_number}</span>
+                          </span>
                         )}
                       </button>
                     ))}
@@ -287,7 +295,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
             <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3" data-testid="old-client-picked">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-800">{client.name}</p>
+                  <p className="truncate text-sm font-bold text-slate-800">{client.name || "Old client"}</p>
                   <p className="truncate text-[11px] text-slate-500">
                     {[client.phone, client.old_patient_id && `ID ${client.old_patient_id}`].filter(Boolean).join(" · ")}
                   </p>
@@ -303,7 +311,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-md bg-white px-2 py-1.5">
                   <p className="text-[10px] font-semibold uppercase text-slate-400">Course fee</p>
-                  <p className="text-sm font-bold text-slate-800">{fmt(total)}</p>
+                  <p className="text-sm font-bold text-slate-800">{hasTotal ? fmt(total) : "Not set"}</p>
                 </div>
                 <div className="rounded-md bg-white px-2 py-1.5">
                   <p className="text-[10px] font-semibold uppercase text-slate-400">Paid so far</p>
@@ -311,7 +319,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                 </div>
                 <div className="rounded-md bg-white px-2 py-1.5">
                   <p className="text-[10px] font-semibold uppercase text-slate-400">Balance</p>
-                  <p className="text-sm font-bold text-amber-600">{fmt(owed)}</p>
+                  <p className="text-sm font-bold text-amber-600">{hasTotal ? fmt(owed) : "—"}</p>
                 </div>
               </div>
             </div>
@@ -324,13 +332,13 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                 </button>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <CollectField label="Client Name *" value={client.name} onChange={(e) => setC({ name: e.target.value })} placeholder="As in the old tracker" testid="old-client-name" />
-                <CollectField label="Phone *" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} placeholder="10-digit mobile" inputMode="tel" testid="old-client-phone" />
+                <CollectField label="Client Name" value={client.name} onChange={(e) => setC({ name: e.target.value })} placeholder="As in the old tracker" testid="old-client-name" />
+                <CollectField label="Phone" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} placeholder="10-digit mobile" inputMode="tel" testid="old-client-phone" />
                 <CollectField label="Old Patient ID" value={client.old_patient_id} onChange={(e) => setC({ old_patient_id: e.target.value })} placeholder="From the old tracker" testid="old-client-old-id" />
                 <CollectField label="Package" value={client.package} onChange={(e) => setC({ package: e.target.value })} placeholder="e.g. 12 Session Pack" testid="old-client-package" />
               </div>
               <div>
-                <span className="mb-1 block text-xs font-semibold text-slate-700">Paid For *</span>
+                <span className="mb-1 block text-xs font-semibold text-slate-700">Paid For</span>
                 <div className="grid grid-cols-4 gap-1.5">
                   {CATEGORIES.map(([key, label]) => (
                     <button
@@ -348,8 +356,8 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <CollectField label="Total Course Fee *" value={client.total_fee} onChange={(e) => setC({ total_fee: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-total" />
-                <CollectField label="Paid in Old Tracker *" value={client.paid_before} onChange={(e) => setC({ paid_before: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-paid-before" />
+                <CollectField label="Total Course Fee" value={client.total_fee} onChange={(e) => setC({ total_fee: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-total" />
+                <CollectField label="Paid in Old Tracker" value={client.paid_before} onChange={(e) => setC({ paid_before: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-paid-before" />
                 <CollectField label="Instalments Paid There" value={client.instalments_before} onChange={(e) => setC({ instalments_before: e.target.value })} placeholder="1" inputMode="numeric" testid="old-client-instalments-before" />
               </div>
             </div>
@@ -360,11 +368,11 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
               <div className="flex items-end justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Instalment #{number}</p>
-                  <p className="text-[11px] text-emerald-900/80">{client.name || "New old client"}</p>
+                  <p className="text-[11px] text-emerald-900/80">{client.name || (picked ? "Old client" : "New old client")}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-semibold uppercase text-emerald-800/80">Balance</p>
-                  <p className="text-xl font-bold text-emerald-800" data-testid="old-client-balance">{fmt(owed)}</p>
+                  <p className="text-xl font-bold text-emerald-800" data-testid="old-client-balance">{hasTotal ? fmt(owed) : "—"}</p>
                 </div>
               </div>
 
@@ -387,7 +395,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <CollectField label="Paid On *" type="date" max={today} value={pay.paid_on} onChange={(e) => setP({ paid_on: e.target.value })} testid="old-client-paid-on" />
+                <CollectField label="Paid On" type="date" max={today} value={pay.paid_on} onChange={(e) => setP({ paid_on: e.target.value })} testid="old-client-paid-on" />
                 <CollectField label="Next Instalment Due" type="date" value={pay.next_due_date} onChange={(e) => setP({ next_due_date: e.target.value })} testid="old-client-next-due" />
               </div>
               {pay.paid_on && pay.paid_on < today && (
