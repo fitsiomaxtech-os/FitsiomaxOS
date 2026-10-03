@@ -197,6 +197,25 @@ def test_the_physio_tab_carries_its_courses_sessions():
     assert sessions[-1]["at"] == "2026-10-06 18:00" and past_data.summary(data)["sessions"] == 6
 
 
+def test_every_service_type_is_read_as_its_own():
+    data = build({
+        "Leads": [lead(2, "PAR-1", "Test Bala", "8825587322")],
+        "Physio": [phone_child(2, "8825587322", course="Treatment", start_date=datetime(2026, 9, 1),
+                               completed_dates="2, 3-09-2026"),
+                   phone_child(3, "8825587322", course="fitness", package="Gym Monthly", amount=3000,
+                               start_date=datetime(2026, 9, 1), completed_dates="2-09-2026"),
+                   phone_child(4, "8825587322", course="DIET", start_date=datetime(2026, 9, 5)),
+                   phone_child(5, "8825587322", course="Zumba", start_date=datetime(2026, 9, 5)),
+                   phone_child(6, "8825587322", course="Rehab", start_date=datetime(2026, 9, 6))],
+    })
+    assert codes(data) == []
+    treatment, fitness, diet, zumba, rehab = data.treatments
+    assert [t["course"] for t in data.treatments] == ["Treatment", "Fitness", "Diet", "Zumba", "Rehab"]
+    # The Accountant files each one's payments by the service's words.
+    assert fitness["service"] == "Fitness · Gym Monthly" and diet["service"] == "Diet"
+    assert (treatment["sessions_completed"], fitness["sessions_completed"]) == (2, 1)
+
+
 def test_a_bad_date_on_the_physio_tab_is_reported_there():
     data = build({
         "Leads": [lead(2, "PAR-1", "Test Bala", "8825587322")],
@@ -588,6 +607,21 @@ def test_read_workbook_reads_a_sheet_without_patient_id(tmp_path):
     data = read_workbook(path)
     assert data.layout == "os" and "no_patient_id" not in codes(data)
     assert [s["at"] for s in data.clients[0]["sessions"]] == ["2026-09-21 10:00", "2026-09-22 10:00"]
+
+
+def test_service_type_is_read_under_its_old_header_course(tmp_path):
+    def headers(service_header):
+        return {"phone": "Phone", "course": service_header, "start_date": "Physio Assign Date"}
+
+    for service_header in ("Service Type", "Course"):
+        path = _workbook(tmp_path / f"{service_header}.xlsx", {
+            "Leads": (COLUMNS["Leads"], [{"excel_id": "PAR-1", "name": "Test Bala", "phone": "8825587322",
+                                          "current_stage": "Physio Assign"}]),
+            "Physio": (headers(service_header), [{"phone": "8825587322", "course": "Rehab",
+                                                  "start_date": datetime(2026, 9, 1)}]),
+        })
+        assert [t["course"] for t in read_workbook(path).treatments] == ["Rehab"], service_header
+    assert COLUMNS["Physio"]["course"] == COLUMNS["Sessions"]["course"] == "Service Type"
 
 
 def test_a_payments_tab_without_status_is_refused(tmp_path):

@@ -88,7 +88,7 @@ COLUMNS = {
         "client_excel_id": "Patient ID",
         "phone": "Phone",
         "name": "Name",
-        "course": "Course",
+        "course": "Service Type",
         "package": "Package Name",
         "sessions": "Sessions",
         "amount": "Package Amount",
@@ -106,7 +106,7 @@ COLUMNS = {
         "client_excel_id": "Patient ID",
         "phone": "Phone",
         "name": "Name",
-        "course": "Course",
+        "course": "Service Type",
         "physio": "Physio Name",
         "time": "Session Time",
         "completed_dates": "Completed Dates",
@@ -159,6 +159,13 @@ COLUMNS = {
 INSTALMENT_COLUMN = re.compile(r"^instal{1,2}ment(\d+)(amount|paiddate|duedate|mode)$")
 INSTALMENT_PARTS = {"amount": "amount", "paiddate": "paid_date", "duedate": "due_date", "mode": "mode"}
 
+# A column's header in an older copy of the template, still read when the new one is not
+# there: Service Type was Course.
+FORMER_HEADERS = {
+    PHYSIO: {"course": "Course"},
+    SESSIONS: {"course": "Course"},
+}
+
 # Without these a tab cannot be read. The other tabs also need a Patient ID or a Phone column
 # to tie a row to its client -- checked on its own, since either one will do -- and a
 # Payments tab laid out a row per payment its Status and Amount (see required()).
@@ -189,7 +196,10 @@ DEPARTMENTS = {
     "onlinefitness": "online_fitness",
 }
 GENDERS = {"male": "Male", "female": "Female", "other": "Other"}
-COURSES = {"treatment": "Treatment", "rehab": "Rehab"}
+# Service Type: what the course is for. Treatment and Rehab are the physio's, and go on to
+# the physio board at Move to live; the others are the OS's own other services, kept in Past
+# Data with their payments filed under them (past_data_live.category_for).
+SERVICE_TYPES = {s.lower(): s for s in ("Treatment", "Rehab", "Fitness", "Diet", "Zumba")}
 SESSION_STATUSES = {"completed": "Completed", "upcoming": "Upcoming"}
 REVIEW_STATUSES = {"completed": "Completed", "pending": "Pending"}
 # Payment For, the template's other value beside the consultation fee.
@@ -299,11 +309,11 @@ def _is_sample(record: dict) -> bool:
 
 
 def _course(data: PastData, tab: str, where: str, who: str, value: Any) -> str:
-    """Treatment or Rehab. Anything else written in the cell ("Physio 1-on-1") is a
-    treatment course by another name, read as one and reported, so its sessions and payments
-    still find it."""
+    """The Service Type, one of SERVICE_TYPES; blank is Treatment. Anything else written in
+    the cell ("Physio 1-on-1") is a treatment course by another name, read as one and
+    reported, so its sessions and payments still find it."""
     written = text(value)
-    course = COURSES.get(squash(written), "")
+    course = SERVICE_TYPES.get(squash(written), "")
     if not course and written:
         data.note("unknown_course", tab, where, f"{who}: '{written}'")
     return course or "Treatment"
@@ -329,8 +339,8 @@ def _tab(workbook, name: str):
 def _header(rows, tab: str):
     """(the header row's index, field -> column) off the first row holding at least two of
     this tab's headers, or None. On Payments, every instalment column the row has as well."""
-    columns = COLUMNS[tab]
-    wanted = {squash(h) for h in columns.values()}
+    columns, former = COLUMNS[tab], FORMER_HEADERS.get(tab, {})
+    wanted = {squash(h) for h in [*columns.values(), *former.values()]}
     for at, row in enumerate(rows[:HEADER_SEARCH_ROWS]):
         cells = [squash(c) for c in (row or ())]
         if len(wanted & set(cells)) >= 2:
@@ -338,6 +348,9 @@ def _header(rows, tab: str):
             for i, cell in enumerate(cells):
                 position.setdefault(cell, i)
             where = {key: position.get(squash(header)) for key, header in columns.items()}
+            for key, header in former.items():
+                if where[key] is None:
+                    where[key] = position.get(squash(header))
             if tab == PAYMENTS:
                 for i, cell in enumerate(cells):
                     numbered = INSTALMENT_COLUMN.match(cell)

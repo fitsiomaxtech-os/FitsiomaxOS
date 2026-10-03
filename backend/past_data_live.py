@@ -434,7 +434,7 @@ def _days(client: dict, course: dict, kind: str, physio: dict, staff: dict, lead
     mine = [
         s for s in client.get("sessions") or []
         if s.get("treatment_excel_id") == course.get("excel_id")
-        or (not s.get("treatment_excel_id") and is_rehab(s.get("course")) == (kind == REHAB))
+        or (not s.get("treatment_excel_id") and str(s.get("course") or "").strip().lower() == kind)
     ]
     known = [s for s in mine if s.get("status") in DAY_STATUS]
     ordered = sorted(known, key=lambda s: (s.get("at") or "9999", s.get("session_no") or 0))
@@ -556,7 +556,9 @@ def care_for(client: dict, courses: List[dict], payments: List[dict], *, staff: 
         fields.update(package_paid=fee, package_payment_mode=mode)
     sold = [t for t in courses
             if t.get("course") != past_os.CONSULTATION and "payment_no_course" not in (t.get("flags") or [])]
-    treatment = _latest([t for t in sold if not is_rehab(t.get("course"))])
+    # The physio's two Service Types. Fitness, Diet and Zumba stay in Past Data: they are
+    # neither the lead's treatment package nor days on the physio board.
+    treatment = _latest([t for t in sold if str(t.get("course") or "").strip().lower() == TREATMENT])
     rehab = _latest([t for t in sold if is_rehab(t.get("course"))])
 
     if treatment:
