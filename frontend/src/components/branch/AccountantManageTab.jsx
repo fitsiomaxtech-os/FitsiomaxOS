@@ -8,7 +8,7 @@ import { LedgerCard } from "@/components/ui/ledger-card";
 import { toast } from "@/components/ui/sonner";
 import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
-import { rangeFor } from "@/lib/dateRange";
+import { rangeFor, todayIso } from "@/lib/dateRange";
 import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
@@ -62,14 +62,45 @@ const MAIN_TABS = [
  */
 const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month", "custom"];
 
+// Every tab a bordered button, the picked one filled solid in its own colour.
 const mainTabClasses = (tab, active) => {
   if (tab.tone === "discount") {
-    return active ? "bg-amber-600 text-white shadow-sm" : "text-amber-700 hover:bg-amber-50";
+    return active ? "border-amber-600 bg-amber-600 text-white shadow-sm" : "border-amber-200 bg-amber-50/40 text-amber-700 hover:border-amber-300 hover:bg-amber-50";
   }
   if (tab.tone === "closing") {
-    return active ? "bg-emerald-600 text-white shadow-sm" : "text-emerald-700 hover:bg-emerald-50";
+    return active ? "border-emerald-600 bg-emerald-600 text-white shadow-sm" : "border-emerald-200 bg-emerald-50/40 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50";
   }
-  return active ? "bg-sky-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50";
+  return active ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-sky-50/40 text-slate-600 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700";
+};
+
+/**
+ * What a tab has waiting on it, on the tab's top-right corner: a red count, or a blue dot
+ * where the tab only needs to say that something is there. The ring behind it pings so a
+ * tab nobody has opened yet still catches the eye, and the count pops in again whenever it
+ * changes (keyed on it). Both motions are motion-safe: a desk set to reduce motion still
+ * gets the badge, standing still. White-ringed so it reads on a filled tab as well.
+ */
+const TabBadge = ({ badge }) => {
+  if (!badge) return null;
+  if (badge.dot) {
+    return (
+      <span className="pointer-events-none absolute -right-1 -top-1 flex h-2.5 w-2.5" aria-hidden="true">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75 motion-safe:animate-ping" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-500 ring-2 ring-white" />
+      </span>
+    );
+  }
+  return (
+    <span className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px]" aria-hidden="true">
+      <span className="absolute inset-0 rounded-full bg-rose-400 opacity-75 motion-safe:animate-ping" />
+      <span
+        key={badge.count}
+        className="relative inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-300"
+      >
+        {badge.count > 99 ? "99+" : badge.count}
+      </span>
+    </span>
+  );
 };
 
 // The Summary's four cards, each one the view under it: the two piles the income side is
@@ -570,6 +601,20 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
     [transactions],
   );
 
+  // What the tab row flags (TabBadge). Payment Schedule counts the clients whose instalment
+  // is overdue or falls due today -- the two cards on that board that are a call to make
+  // now, read with the same rules. Summary dots while collections are waiting on the
+  // accountant's signature.
+  const tabBadges = useMemo(() => {
+    const today = todayIso();
+    const due = outstanding.filter((r) => r.status === "overdue" || r.due_date === today).length;
+    const waiting = stagePiles.requested.count;
+    return {
+      summary: waiting > 0 ? { dot: true, title: `${countLabel(waiting, "payment")} awaiting approval` } : null,
+      schedule: due > 0 ? { count: due, title: `${countLabel(due, "client")} overdue or due today` } : null,
+    };
+  }, [outstanding, stagePiles]);
+
   // The scope chip that read all of this back in words is gone with the header it sat in.
   // It described the branch select and the range row directly beneath it, both of which say
   // what they are set to on their own faces, so it was a third control's worth of screen
@@ -648,17 +693,25 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             </select>
           </div>
         )}
-        <div className="flex shrink-0 flex-nowrap gap-1 min-[1900px]:gap-1.5">
-          {MAIN_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`h-10 shrink-0 whitespace-nowrap rounded-md px-2 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
-              data-testid={`accountant-manage-maintab-${t.key}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* gap-2, not gap-1: a badge stands 6px out past its tab's right edge, and any
+            less would put it on the next tab's border. */}
+        <div className="flex shrink-0 flex-nowrap gap-2 min-[1900px]:gap-2.5">
+          {MAIN_TABS.map((t) => {
+            const badge = tabBadges[t.key];
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                title={badge?.title}
+                aria-label={badge ? `${t.label} (${badge.title})` : undefined}
+                className={`relative h-10 shrink-0 whitespace-nowrap rounded-lg border px-2.5 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
+                data-testid={`accountant-manage-maintab-${t.key}`}
+              >
+                {t.label}
+                <TabBadge badge={badge} />
+              </button>
+            );
+          })}
         </div>
         {/* How the figures are narrowed, on the Summary page only: which side of the
             business, then how the money came in. In this row rather than a strip of their

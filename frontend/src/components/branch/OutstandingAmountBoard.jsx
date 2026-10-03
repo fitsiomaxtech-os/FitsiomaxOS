@@ -7,10 +7,12 @@ import { RecordCards } from "@/components/branch/RecordCards";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { waNumber } from "@/lib/phone";
 import { isHandheld } from "@/lib/receipt";
+// The local date, not toISOString()'s UTC one, which in IST reads yesterday until 5:30am --
+// and Accountant Manage's Payment Schedule badge counts Due Today off this same helper.
+import { todayIso } from "@/lib/dateRange";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
-const todayIso = () => new Date().toISOString().slice(0, 10);
 const longDate = (iso) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
 /** The WhatsApp wording for one row — the same points the automatic reminder email makes
