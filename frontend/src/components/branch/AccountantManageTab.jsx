@@ -64,21 +64,24 @@ const mainTabClasses = (tab, active) => {
   return active ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50";
 };
 
-// The Summary's four cards, each one the view under it: the two piles the income side is
-// read in, the drawer, and the money that went out. Approved first -- the signed-off figure
-// is the one read first, the waiting pile after it. Emerald for signed off and amber for
-// waiting on somebody, the colours the expense piles wear for the same two states.
+// The Summary's five cards, each one the view under it: the two piles the income side is
+// read in, the drawer, the money that went out, and the payment book whole. Approved first
+// -- the signed-off figure is the one read first, the waiting pile after it. Emerald for
+// signed off and amber for waiting on somebody, the colours the expense piles wear for the
+// same two states.
 //
 // Where a collection stands between the desk that took it and the books is one of two
 // piles, not three: the moment a collection is taken it is awaiting approval (see stageOf),
-// and every row is in exactly one of them, so there is no "all" card -- it would be a total
-// no one is responsible for.
+// and every row is in exactly one of them. Payment Record is not a third pile but both read
+// together -- every collection in the range, signed off or not -- so it stands last, after
+// the figures someone is answerable for, as the record they are cut from.
 const SUMMARY_CARDS = [
   { key: "approved", label: "Income Approved", color: "#059669", hint: "Signed off by the accountant" },
   { key: "requested", label: "Awaiting Approval", color: "#d97706", hint: "Taken at the desk, waiting for the accountant to sign it off" },
   // The drawer between money in and money out: what the branch should be holding now.
   { key: "cash", label: "Cash In Hand", color: "#0284c7" },
   { key: "expenses", label: "Expenses", color: "#e11d48" },
+  { key: "record", label: "Payment Record", color: "#4f46e5", hint: "Every payment taken, approved or awaiting approval" },
 ];
 
 /** Which of the two one collection is in. Everything not yet signed off is awaiting it. */
@@ -397,8 +400,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // pile before anything else is what keeps the cards and the rows under them the same
   // money. Filtering afterwards would leave the tiles counting a pile the table is not
   // showing.
+  // Payment Record is both piles at once, so it narrows nothing.
   const stagedTxns = useMemo(
-    () => transactions.filter((t) => stageOf(t) === incomeStage),
+    () => (incomeStage === "record" ? transactions : transactions.filter((t) => stageOf(t) === incomeStage)),
     [transactions, incomeStage],
   );
 
@@ -631,18 +635,19 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
       ) : tab === "summary" ? (
         <div className="space-y-4" data-testid="accountant-manage-summary">
-          {/* The four cards, each the view under it (Zumba's summary cards, ui/ledger-card):
-              the two income piles, the drawer, and the money that went out. The picked one is
-              filled in its colour. Where only signed-off money counts there is no pile to move
-              to, so Awaiting Approval is a figure to read rather than a card to press.
+          {/* The five cards, each the view under it (Zumba's summary cards, ui/ledger-card):
+              the two income piles, the drawer, the money that went out, and every payment
+              taken. The picked one is filled in its colour. Where only signed-off money counts
+              there is no pile to move to, so Awaiting Approval is a figure to read rather than
+              a card to press -- Payment Record still opens, being a record and not income.
 
               The book line that sat under them (Revenue, Expense, Profit, Total Expense) is
-              gone: the branch asked for these four and nothing else. */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="accountant-manage-ledger-filter">
+              gone: the branch asked for these cards and nothing else. */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="accountant-manage-ledger-filter">
             {SUMMARY_CARDS.map((c) => {
-              const pile = c.key === "approved" || c.key === "requested";
-              const stage = approvedOnly ? "approved" : incomeStage;
-              const picked = pile ? ledger === "income" && stage === c.key : ledger === c.key;
+              // The income-side cards, each opening the income ledger at its own pile.
+              const pile = c.key === "approved" || c.key === "requested" || c.key === "record";
+              const picked = pile ? ledger === "income" && incomeStage === c.key : ledger === c.key;
               const pendingExpense = Number(expenseTotals.pending_total) || 0;
               const card = {
                 approved: { value: stagePiles.approved.total, sub: countLabel(stagePiles.approved.count, "payment") },
@@ -661,6 +666,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   sub: pendingExpense > 0
                     ? `+ ${fmt(pendingExpense)} awaiting approval`
                     : countLabel(Number(expenseTotals.approved_count) || 0, "approved expense"),
+                },
+                record: {
+                  value: stagePiles.approved.total + stagePiles.requested.total,
+                  sub: countLabel(stagePiles.approved.count + stagePiles.requested.count, "payment"),
                 },
               }[c.key];
               const readOnly = approvedOnly && c.key === "requested";
@@ -705,7 +714,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               while -- but a row read across wants one card repeated, and drawing one of
               them bigger turned the other seven into its footnotes.
 
-              The same card as the four above (ui/ledger-card), so the two rows read as one
+              The same card as the five above (ui/ledger-card), so the two rows read as one
               set: white at rest, the picked one filled solid in its own colour. */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8">
             {REVENUE_VIEWS.map((v) => (
