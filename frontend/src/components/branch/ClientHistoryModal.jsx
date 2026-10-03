@@ -4,6 +4,7 @@ import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRigh
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
+import { CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const fmtDate = (d) => (d ? (d.length > 10 ? d.slice(0, 16).replace("T", " ") : d) : "—");
@@ -59,25 +60,8 @@ const fmtDayTime = (d) => {
   return `${dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}, ${dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
 };
 
-// The same four modes, colours and mode-specific fields the Consultations board
-// collects with — a payment recorded from here has to be indistinguishable from one
-// recorded there, or Accountant Manage ends up with two grades of record.
-const COLLECT_MODES = [
-  { value: "cash", label: "Cash", classes: "border-emerald-300 bg-emerald-50 text-emerald-700", active: "border-emerald-500 bg-emerald-600 text-white" },
-  { value: "upi", label: "UPI", classes: "border-sky-300 bg-sky-50 text-sky-700", active: "border-sky-500 bg-sky-600 text-white" },
-  { value: "card", label: "Card", classes: "border-violet-300 bg-violet-50 text-violet-700", active: "border-violet-500 bg-violet-600 text-white" },
-  { value: "account_transfer", label: "Account Transfer", classes: "border-cyan-300 bg-cyan-50 text-cyan-700", active: "border-cyan-500 bg-cyan-600 text-white" },
-  { value: "cheque", label: "Cheque", classes: "border-amber-300 bg-amber-50 text-amber-700", active: "border-amber-500 bg-amber-600 text-white" },
-];
-
-const emptyCollectDraft = {
-  amount: "",
-  payment_mode: "cash",
-  upi_transaction_id: "",
-  card_transaction_id: "",
-  account_number: "", account_holder_name: "", bank_name: "", ifsc_code: "",
-  cheque_number: "", transfer_reference: "",
-};
+// The modes and their fields are CollectTender's, shared with the Old Client Instalment form.
+const emptyCollectDraft = { amount: "", ...emptyTender };
 
 /** A payment's discount as a percentage of the price it was taken off, to 2dp with any
  *  trailing zeros dropped (25, not 25.00). Null when there's no original price to measure
@@ -88,20 +72,6 @@ const discountPct = (tx) => {
   if (!Number.isFinite(original) || original <= 0 || !Number.isFinite(discount) || !discount) return null;
   return Number((Math.abs(discount) / original * 100).toFixed(2));
 };
-
-const CollectField = ({ label, value, onChange, placeholder, testid, inputMode }) => (
-  <label className="block">
-    <span className="mb-1 block text-xs font-semibold text-slate-700">{label}</span>
-    <input
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      inputMode={inputMode}
-      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
-      data-testid={testid}
-    />
-  </label>
-);
 
 /** The reference a paid installment carries, as short chips — how it was paid and the
  *  proof of it. Nothing renders for a mode that has no reference (cash). */
@@ -444,42 +414,12 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
       toast.error(`That is more than the ${fmt(pastTotal)} this client owes`);
       return;
     }
-    const mode = draft.payment_mode;
-    const payload = { payment_mode: mode, amount };
-    // Validated here as well as on the server so the popup keeps what was typed —
-    // a round trip that fails would otherwise send them back to an empty form.
-    if (mode === "upi") {
-      payload.upi_transaction_id = draft.upi_transaction_id.trim();
-    } else if (mode === "card") {
-      // The terminal's transaction id, and nothing else — the desk cannot read an account
-      // number or an IFSC off a card, so asking for them only ever got them invented.
-      if (!draft.card_transaction_id.trim()) {
-        toast.error("Card Transaction ID is required");
-        return;
-      }
-      payload.card_transaction_id = draft.card_transaction_id.trim();
-    } else if (mode === "account_transfer") {
-      if (!draft.account_number.trim() || !draft.account_holder_name.trim() || !draft.bank_name.trim() || !draft.ifsc_code.trim()) {
-        toast.error("Account Number, Account Holder Name, Bank Name and IFSC Code are required");
-        return;
-      }
-      if (!draft.transfer_reference.trim()) {
-        toast.error("Reference / UTR No. is required for an Account Transfer");
-        return;
-      }
-      payload.account_number = draft.account_number.trim();
-      payload.account_holder_name = draft.account_holder_name.trim();
-      payload.bank_name = draft.bank_name.trim();
-      payload.ifsc_code = draft.ifsc_code.trim();
-      payload.transfer_reference = draft.transfer_reference.trim();
-    } else if (mode === "cheque") {
-      if (!draft.bank_name.trim() || !draft.cheque_number.trim()) {
-        toast.error("Bank Name and Cheque Number are required");
-        return;
-      }
-      payload.bank_name = draft.bank_name.trim();
-      payload.cheque_number = draft.cheque_number.trim();
+    const tender = tenderPayload(draft);
+    if (tender.error) {
+      toast.error(tender.error);
+      return;
     }
+    const payload = { ...tender.payload, amount };
 
     setRecording(true);
     try {
@@ -869,51 +809,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
                   )}
                 </div>
 
-                <div>
-                  <span className="mb-1 block text-xs font-semibold text-slate-700">Payment Mode</span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {COLLECT_MODES.map((m) => (
-                      <button
-                        key={m.value}
-                        type="button"
-                        onClick={() => setDraft({ payment_mode: m.value })}
-                        className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${collectDraft.payment_mode === m.value ? m.active : m.classes}`}
-                        data-testid={`client-collect-mode-${m.value}`}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {collectDraft.payment_mode === "upi" && (
-                  <div className="space-y-3 rounded-lg border border-sky-100 bg-sky-50/50 p-3">
-                    <CollectField label="UPI Transaction ID" value={collectDraft.upi_transaction_id} onChange={(e) => setDraft({ upi_transaction_id: e.target.value })} placeholder="e.g. 428301947281" testid="client-collect-upi-txn" />
-                  </div>
-                )}
-
-                {collectDraft.payment_mode === "card" && (
-                  <div className="space-y-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
-                    <CollectField label="Transaction ID *" value={collectDraft.card_transaction_id} onChange={(e) => setDraft({ card_transaction_id: e.target.value })} placeholder="From the card terminal slip" testid="client-collect-card-txn" />
-                  </div>
-                )}
-
-                {collectDraft.payment_mode === "account_transfer" && (
-                  <div className="space-y-3 rounded-lg border border-cyan-100 bg-cyan-50/50 p-3">
-                    <CollectField label="Account Number *" value={collectDraft.account_number} onChange={(e) => setDraft({ account_number: e.target.value })} placeholder="Only the last 4 digits are stored" testid="client-collect-transfer-account-number" />
-                    <CollectField label="Account Holder Name *" value={collectDraft.account_holder_name} onChange={(e) => setDraft({ account_holder_name: e.target.value })} placeholder="Name on the account" testid="client-collect-transfer-account-holder" />
-                    <CollectField label="Bank Name *" value={collectDraft.bank_name} onChange={(e) => setDraft({ bank_name: e.target.value })} placeholder="e.g. HDFC Bank" testid="client-collect-transfer-bank" />
-                    <CollectField label="IFSC Code *" value={collectDraft.ifsc_code} onChange={(e) => setDraft({ ifsc_code: e.target.value })} placeholder="e.g. HDFC0001234" testid="client-collect-transfer-ifsc" />
-                    <CollectField label="Reference / UTR No. *" value={collectDraft.transfer_reference} onChange={(e) => setDraft({ transfer_reference: e.target.value })} placeholder="e.g. 302411223344" testid="client-collect-transfer-reference" />
-                  </div>
-                )}
-
-                {collectDraft.payment_mode === "cheque" && (
-                  <div className="space-y-3 rounded-lg border border-amber-100 bg-amber-50/50 p-3">
-                    <CollectField label="Bank Name *" value={collectDraft.bank_name} onChange={(e) => setDraft({ bank_name: e.target.value })} placeholder="e.g. HDFC Bank" testid="client-collect-cheque-bank" />
-                    <CollectField label="Cheque Number *" value={collectDraft.cheque_number} onChange={(e) => setDraft({ cheque_number: e.target.value })} placeholder="e.g. 004512" testid="client-collect-cheque-number" />
-                  </div>
-                )}
+                <TenderFields draft={collectDraft} setDraft={setDraft} testid="client-collect" />
               </div>
             </div>
 

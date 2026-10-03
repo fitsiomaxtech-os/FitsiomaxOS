@@ -543,6 +543,11 @@ export const markInstallmentPaid = async (leadId, installmentNumber, payload) =>
 // Money against a Past Data client's sheet balance, paid off oldest due first. Same payload
 // as an installment's; the amount may be anything up to the whole balance.
 export const collectPastBalance = async (leadId, payload) => (await api.post(`/finance/past-balance/${leadId}/collect`, payload)).data;
+// Old clients: a course begun on the old Physio Tracker, paid off here an instalment at a
+// time (backend/old_clients.py). The search also names the branch's OS clients on that
+// name or phone, so money for a course the OS already has goes to that client instead.
+export const searchOldClients = async (params = {}) => (await api.get("/finance/old-clients", { params })).data;
+export const recordOldClientPayment = async (payload) => (await api.post("/finance/old-clients/payments", payload)).data;
 
 // Whose consultant book the board will show, and whether it belongs to the caller. My
 // Consultation reads it so it can never present somebody else's appointments as your own.

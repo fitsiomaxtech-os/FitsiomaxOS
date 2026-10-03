@@ -18,6 +18,7 @@ from utils import PAST_MOVE_FIELD, clinic_today, generate_transaction_id
 # v3_zumba.py already each carry their own copy of this counter; a fourth would be a
 # fourth place for the note list and the must-agree rule to drift apart.
 from routers.v3_packages import _notes_label, _settle_cash_count, _denomination_total
+import old_clients
 import past_data_live
 
 
@@ -329,12 +330,13 @@ class ApproveTransactionInput(BaseModel):
     cheque_number: Optional[str] = None
 
 
-# The four books a collection can be written in. Store sales carry no lead, and Zumba and
-# Fitness keep their money on the registration -- so a payment has to be looked for in all
-# four, in this order, by anything that writes to one. Named once here because approve,
-# unapprove and the request step below each used to carry their own copy of the ladder,
-# and a fifth desk taking money would have had to be remembered in three places.
-TRANSACTION_COLLECTIONS = ("lead_activity", "inventory_movements", "zumba_registrations", "fitness_registrations")
+# The five books a collection can be written in. Store sales carry no lead, Zumba and
+# Fitness keep their money on the registration, and an old client's instalment has no lead
+# behind it either (old_clients.py) -- so a payment has to be looked for in all five, in this
+# order, by anything that writes to one. Named once here because approve, unapprove and the
+# request step below each used to carry their own copy of the ladder; the fifth book was
+# added here and nowhere else.
+TRANSACTION_COLLECTIONS = ("lead_activity", "inventory_movements", "zumba_registrations", "fitness_registrations", "old_client_payments")
 
 
 async def _update_transaction_row(activity_id: str, update: dict) -> bool:
@@ -622,8 +624,9 @@ async def delete_transaction(
     money. Behind the same Developer Access switch as the expense bin.
 
     Undone at the source, not only hidden: a patient's fee reads owed again, a store sale's
-    quantity goes back on the shelf, and a Zumba or Fitness registration keeps its fee and
-    term with nothing paid against it -- the same reset reset-all-payments does, for one.
+    quantity goes back on the shelf, a Zumba or Fitness registration keeps its fee and term
+    with nothing paid against it, and an old client owes the instalment again -- the same
+    reset reset-all-payments does, for one.
     """
     if not await expense_delete_enabled():
         raise HTTPException(status_code=403, detail="Delete is switched off in Developer Access")
@@ -654,6 +657,11 @@ async def delete_transaction(
     res = await v3_col("fitness_registrations").update_one({"id": activity_id}, {"$set": {**cleared, "payments": []}, "$unset": unset})
     if res.matched_count:
         return {"message": "Fitness payment deleted -- the fee is owed again"}
+    # The old client's balance is worked out from the instalments left, so removing the row
+    # is the whole of the undo.
+    res = await v3_col("old_client_payments").delete_one({"id": activity_id})
+    if res.deleted_count:
+        return {"message": "Old client instalment deleted -- the balance is owed again"}
     raise HTTPException(status_code=404, detail="Payment not found")
 
 
@@ -901,6 +909,51 @@ async def finance_approvals(
                 "approved": is_approved,
                 "approved_by": reg.get("approved_by") or "",
                 "approved_at": reg.get("approved_at") or "",
+            })
+
+    # Old clients' instalments (old_clients.py). Each lands on the revenue line its course
+    # was for, so the category pills find it where Summary counts it.
+    if category in (None, "", "all") or category in old_clients.CATEGORIES:
+        old_query = {}
+        if branch_id:
+            old_query["branch_id"] = branch_id
+        if date_query:
+            old_query["created_at"] = date_query
+        pays = await v3_col("old_client_payments").find(old_query, {"_id": 0}).to_list(5000)
+        clients = await _old_clients_by_id({p.get("old_client_id") for p in pays})
+        for pay in pays:
+            bid = pay.get("branch_id")
+            if mode_branch_ids is not None and bid not in mode_branch_ids:
+                continue
+            client = clients.get(pay.get("old_client_id")) or {}
+            cat = client.get("category") or "session"
+            if category not in (None, "", "all") and cat != category:
+                continue
+            pm = pay.get("payment_mode") or "unknown"
+            if payment_mode and payment_mode not in ("all", "") and pm != payment_mode:
+                continue
+            rows.append({
+                "id": pay.get("id", ""),
+                # No lead -- see old_clients.py -- so empty rather than faked, the same way a
+                # counter sale's is.
+                "lead_id": "",
+                "patient_name": client.get("name") or "Old client",
+                "patient_phone": client.get("phone") or "",
+                "branch_id": bid,
+                "branch_name": branch_map.get(bid, {}).get("branch_name", ""),
+                "category": cat,
+                "amount": float(pay.get("amount") or 0),
+                "payment_mode": pm,
+                # Written onto the row's details line in the fee collections' own shape, so
+                # it reads back through the same parser theirs do.
+                "payment_ref": _reference_of(pay.get("details", "")),
+                "collected_by": pay.get("created_by", ""),
+                "collected_at": pay.get("created_at", ""),
+                "approved": bool(pay.get("approved")),
+                "approved_by": pay.get("approved_by") or "",
+                "approved_at": pay.get("approved_at") or "",
+                "old_client": True,
+                "instalment_number": pay.get("instalment_number"),
             })
 
     rows.sort(key=lambda r: r["collected_at"], reverse=True)
@@ -2374,6 +2427,48 @@ async def revenue_overview(
             **_approval_state(reg),
         })
 
+    # Old clients' instalments: courses begun on the old Physio Tracker and paid off here
+    # (old_clients.py). Their own book, like the class fees above, because there is no lead
+    # behind them -- but every one is money the desk took, so it is counted, approved and
+    # drawn into the drawer as any other collection is. Each lands on the revenue line its
+    # course was for.
+    old_query = {}
+    if branch_id:
+        old_query["branch_id"] = branch_id
+    if date_query:
+        old_query["created_at"] = date_query
+    old_rows = await v3_col("old_client_payments").find(old_query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    if vertical_mode in ("online", "offline"):
+        old_rows = [p for p in old_rows if (p.get("branch_id") in online_branch_ids) == (vertical_mode == "online")]
+    old_book = await _old_client_book({p.get("old_client_id") for p in old_rows})
+
+    for pay in old_rows:
+        client, history = old_book.get(pay.get("old_client_id")) or ({}, [])
+        amount = float(pay.get("amount") or 0)
+        category = client.get("category") or "session"
+        if category == "rehab":
+            rehab_total += amount
+        elif category == "diet":
+            diet_total += amount
+        elif category == "consultation":
+            consultation_total += amount
+        else:
+            category = "session"
+            session_total += amount
+        bid = pay.get("branch_id")
+        bname = _branch_label(bid, branch_name_map)
+        day = (pay.get("created_at") or "")[:10]
+        split = _lines_to_split(pay.get("payment_lines"))
+
+        d = by_day.setdefault(day, _empty_day(day))
+        d[category] += amount
+
+        b = by_branch_acc.setdefault(bid or "unknown", _empty_branch(bid, bname))
+        b[f"{category}_total"] += amount
+
+        _tally_modes(pay.get("payment_mode") or "unknown", amount, split, day)
+        transactions.append(_old_client_txn_row(pay, client, history, bname))
+
     # Past Data's trial clients (Move to live): the Excel payments of the clients moved onto
     # the Past Data branch, read off the sheet rather than out of the payment trail -- see
     # past_data_live.py. Only on a read of one branch, the only place those clients are, so
@@ -2515,6 +2610,38 @@ async def revenue_overview(
             "next_installment_amount": None,
             "next_installment_fee_label": None,
             "past_data": True,
+        })
+    # Old clients still paying off a Physio Tracker course. Every one the branch holds, not
+    # only those with an instalment in the range above: what is owed is a right-now figure.
+    # No lead_id -- the row is keyed and collected by old_client_id instead.
+    owing_query = {"branch_id": branch_id} if branch_id else {}
+    owing = await v3_col("old_clients").find(owing_query, {"_id": 0}).to_list(5000)
+    if vertical_mode in ("online", "offline"):
+        owing = [c for c in owing if (c.get("branch_id") in online_branch_ids) == (vertical_mode == "online")]
+    owing_payments = await _old_client_payments([c["id"] for c in owing])
+    for c in owing:
+        s = old_clients.summary(c, owing_payments.get(c["id"], []), today, branch_name_map.get(c.get("branch_id"), ""))
+        if s["balance"] <= 0:
+            continue
+        outstanding_clients.append({
+            "lead_id": "",
+            "old_client_id": c["id"],
+            "old_client": True,
+            # So Collect can open the form on this client's branch from an all-branch read.
+            "branch_id": c.get("branch_id"),
+            "client_name": s["name"],
+            "phone": s["phone"],
+            "email": "",
+            "branch_name": s["branch_name"],
+            "balance": s["balance"],
+            "total_bill": s["total_fee"],
+            "paid_amount": round(s["paid_before"] + s["paid_on_os"], 2),
+            "due_date": s["next_due_date"] or None,
+            "status": s["status"],
+            "next_installment_number": s["next_instalment_number"],
+            "next_installment_fee": None,
+            "next_installment_amount": None,
+            "next_installment_fee_label": f"{s['category_label']} (old course)",
         })
     outstanding_clients.sort(key=lambda r: -r["balance"])
     payment_schedule.sort(key=lambda r: r["due_date"])
@@ -3069,6 +3196,289 @@ async def collect_past_balance(
         "created_at": _now(),
     })
     return {"message": "Payment collected", "transaction_id": transaction_id, "balance": round(balance - amount, 2)}
+
+
+# ---------------------------------------------------------------------------
+# Old clients -- instalments on a course begun on the old Physio Tracker.
+# ---------------------------------------------------------------------------
+#
+# See old_clients.py for why these are a payments-only record and not leads. Entered from
+# Accountant Manage > Payment Record; each instalment is one collection of its own, read into
+# revenue_overview and /finance/approvals beside the Zumba and Fitness money, and sent up,
+# approved and deleted through the same TRANSACTION_COLLECTIONS ladder as they are.
+
+# The desk that takes the money, the Accountant and Super Admin. Not the business desk.
+OLD_CLIENT_ROLES = ("branch_admin", "super_admin", "accountant")
+# How many old clients one search hands back. A desk looking somebody up types until the
+# list is short; a long one only scrolls the form.
+OLD_CLIENT_RESULTS = 8
+
+
+class OldClientFields(BaseModel):
+    name: Optional[str] = ""
+    phone: Optional[str] = ""
+    old_patient_id: Optional[str] = ""
+    # One of old_clients.CATEGORIES: session (Treatment), rehab, consultation, diet.
+    category: Optional[str] = ""
+    package: Optional[str] = ""
+    total_fee: Optional[float] = None
+    paid_before: Optional[float] = 0
+    instalments_before: Optional[int] = None
+    next_due_date: Optional[str] = ""
+
+
+class OldClientPaymentInput(V3MarkInstallmentPaidInput):
+    # Ignored for a Branch Admin, who records their own branch's money and nobody else's.
+    branch_id: Optional[str] = None
+    # An old client already on file. Left out, `client` is a new one.
+    old_client_id: Optional[str] = None
+    # The client and their old course. Required for a new one; sent with an existing one it
+    # corrects what is on file -- a mistyped total is otherwise a wrong balance for good.
+    client: Optional[OldClientFields] = None
+    # YYYY-MM-DD, today when left out. Never a future day, nor one whose book is closed.
+    paid_on: Optional[str] = None
+
+
+async def _old_clients_by_id(ids) -> dict:
+    ids = [i for i in ids if i]
+    if not ids:
+        return {}
+    rows = await v3_col("old_clients").find({"id": {"$in": ids}}, {"_id": 0}).to_list(len(ids))
+    return {c["id"]: c for c in rows}
+
+
+async def _old_client_payments(client_ids) -> dict:
+    """Old client id -> every instalment taken on the OS, oldest first."""
+    client_ids = [i for i in client_ids if i]
+    if not client_ids:
+        return {}
+    rows = await v3_col("old_client_payments").find(
+        {"old_client_id": {"$in": client_ids}}, {"_id": 0},
+    ).sort("created_at", 1).to_list(100000)
+    out: dict = {}
+    for p in rows:
+        out.setdefault(p["old_client_id"], []).append(p)
+    return out
+
+
+async def _old_client_book(client_ids) -> dict:
+    """Old client id -> (the client, all their instalments): what a ledger row needs to say
+    what was still owed after it."""
+    client_ids = [i for i in client_ids if i]
+    clients = await _old_clients_by_id(client_ids)
+    payments = await _old_client_payments(client_ids)
+    return {cid: (c, payments.get(cid, [])) for cid, c in clients.items()}
+
+
+def _old_client_txn_row(pay: dict, client: dict, history: list, branch_name: str) -> dict:
+    """One old client instalment in revenue_overview's transaction shape."""
+    amount = float(pay.get("amount") or 0)
+    return {
+        "id": pay.get("id", ""),
+        "transaction_id": pay.get("transaction_id") or "",
+        "date": pay.get("created_at", ""),
+        "branch_name": branch_name,
+        "source": client.get("category") or "session",
+        "gross": amount,
+        # An instalment is a piece of a price agreed on the old tracker, so there is nothing
+        # here to have been discounted. Carried so every row in this list is one shape.
+        "discount": 0.0,
+        "original_amount": None,
+        "discount_reason": None,
+        "tax": 0.0,
+        "net": amount,
+        "collected_by": pay.get("created_by", ""),
+        # No lead -- see old_clients.py. The Payment Record groups these by old_client_id
+        # instead, and the client-history eye skips them rather than opening on nothing.
+        "lead_id": "",
+        "old_client_id": pay.get("old_client_id", ""),
+        "old_client": True,
+        "instalment_number": pay.get("instalment_number"),
+        "client_name": client.get("name") or "Old client",
+        "phone": client.get("phone", ""),
+        # The old tracker's own patient ID, which is the number this client's file goes by.
+        "patient_number": client.get("old_patient_id", ""),
+        "payment_mode": pay.get("payment_mode") or "unknown",
+        "payment_split": _lines_to_split(pay.get("payment_lines")),
+        "client_balance": old_clients.balance(client, history),
+        # What was left once this instalment was in -- what its receipt says, reissued or not.
+        "balance_after": old_clients.balances_after(client, history).get(pay.get("id")),
+        "payment_paid_amount": None,
+        "payment_due_amount": None,
+        "payment_due_date": None,
+        "session_package_label": client.get("package") or None,
+        "session_total": None,
+        "session_paid": None,
+        "session_due": None,
+        "session_status": None,
+        **_approval_state(pay),
+    }
+
+
+async def _old_client_branch(user: V3UserOut, branch_id: Optional[str]) -> dict:
+    if is_branch_admin_role(user.role):
+        branch_id = user.branch_id
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="Pick the branch this payment was taken at")
+    branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1, "branch_name": 1})
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    return branch
+
+
+@router.get("/finance/old-clients")
+async def search_old_clients(
+    q: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles(*OLD_CLIENT_ROLES)),
+):
+    """The Old Client Instalment form's search: this branch's old clients whose name, phone
+    or old patient ID matches -- the most recent ones when nothing is typed -- each with what
+    is still owed and the number the next instalment goes under.
+
+    Beside them, the branch's own OS clients on that name or phone. A course that IS on the
+    OS is collected from that client's own card, and showing them here is what stops the
+    desk opening an old-client record for money the OS already has a schedule for."""
+    branch = await _old_client_branch(user, branch_id)
+    today = clinic_today()
+    clients = await v3_col("old_clients").find({"branch_id": branch["id"]}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    found = [c for c in clients if old_clients.matches(c, q)][:OLD_CLIENT_RESULTS]
+    payments = await _old_client_payments([c["id"] for c in found])
+
+    os_clients = []
+    text = " ".join((q or "").split())
+    if len(text) >= 3:
+        digits = re.sub(r"\D", "", text)
+        either = [{"name": {"$regex": re.escape(text), "$options": "i"}}]
+        if len(digits) >= 3:
+            either.append({"phone": {"$regex": re.escape(digits)}})
+        leads = await v3_col("leads").find(
+            {"branch_id": branch["id"], "$or": either},
+            {"_id": 0, "id": 1, "name": 1, "phone": 1, "patient_number": 1},
+        ).to_list(5)
+        os_clients = [
+            {"id": l["id"], "name": l.get("name") or "", "phone": l.get("phone") or "", "patient_number": l.get("patient_number") or ""}
+            for l in leads
+        ]
+
+    return {
+        "old_clients": [old_clients.summary(c, payments.get(c["id"], []), today, branch["branch_name"]) for c in found],
+        "os_clients": os_clients,
+    }
+
+
+@router.post("/finance/old-clients/payments")
+async def record_old_client_payment(
+    payload: OldClientPaymentInput,
+    user: V3UserOut = Depends(v3_require_roles(*OLD_CLIENT_ROLES)),
+):
+    """Accountant Manage > Payment Record > Old Client Instalment: one instalment taken
+    against a course begun on the old Physio Tracker.
+
+    Real money, so it is recorded as any collection is: its own transaction id, awaiting the
+    accountant's approval, and counted in revenue, the drawer and the closing count on the
+    day it was paid. That day may be an earlier one -- receipts collected before this screen
+    existed -- but never a future one, and never a day whose book is closed: a closed book is
+    what was true when it was signed, and reopening it is the accountant's call, not this
+    form's.
+
+    A new old client is written with their first instalment here, in one go, so there is no
+    record of a client with nothing ever paid on the OS. Paid up to the balance and no
+    further: the course's total, less what the tracker says was paid, less every instalment
+    already taken."""
+    branch = await _old_client_branch(user, payload.branch_id)
+    today = clinic_today()
+    try:
+        day = old_clients.check_day(payload.paid_on, today)
+        fields = old_clients.clean_client(payload.client.model_dump()) if payload.client else None
+    except old_clients.OldClientError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    book = await _book_for(branch["id"], day)
+    if book and (book.get("status") or "closed") == "closed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"The books for {day} are closed. Ask the accountant to reopen that day before adding a payment to it.",
+        )
+
+    if payload.old_client_id:
+        client = await v3_col("old_clients").find_one({"id": payload.old_client_id}, {"_id": 0})
+        if not client or client.get("branch_id") != branch["id"]:
+            raise HTTPException(status_code=404, detail="Old client not found")
+        payments = (await _old_client_payments([client["id"]])).get(client["id"], [])
+        if fields:
+            client = {**client, **fields}
+    else:
+        if not fields:
+            raise HTTPException(status_code=400, detail="Enter the old client's details")
+        twins = await v3_col("old_clients").find({"branch_id": branch["id"], "phone": fields["phone"]}, {"_id": 0}).to_list(50)
+        if any(old_clients.same_course(t, fields) for t in twins):
+            raise HTTPException(
+                status_code=409,
+                detail=f"{fields['name']} is already an old client here for this course. Search their phone and pick them from the list.",
+            )
+        client = {
+            "id": str(uuid.uuid4()),
+            "branch_id": branch["id"],
+            **fields,
+            "created_by": user.full_name,
+            "created_by_role": user.role,
+            "created_at": _now(),
+        }
+        payments = []
+
+    owed = old_clients.balance(client, payments)
+    if owed <= 0:
+        raise HTTPException(status_code=400, detail=f"Nothing is owed on {client['name']}'s old course")
+    if not payload.payment_mode and not payload.payment_lines:
+        raise HTTPException(status_code=400, detail="Pick how this payment was made")
+    if payload.amount is None and not payload.payment_lines:
+        raise HTTPException(status_code=400, detail="Enter the amount paid")
+    mode, amount, mode_fields, detail_suffix = _tender(payload, payload.amount or 0, "instalment")
+    amount = round(amount, 2)
+    if amount > owed + 0.01:
+        raise HTTPException(status_code=400, detail=f"Rs.{amount:g} is more than the Rs.{owed:g} still owed on this course")
+
+    number = old_clients.next_instalment(client, payments)
+    transaction_id = await generate_transaction_id(branch["id"])
+    now = _now()
+    if payload.old_client_id:
+        if fields:
+            await v3_col("old_clients").update_one(
+                {"id": client["id"]},
+                {"$set": {**fields, "updated_by": user.full_name, "updated_at": now}},
+            )
+    else:
+        await v3_col("old_clients").insert_one(client.copy())
+
+    pay = {
+        "id": str(uuid.uuid4()),
+        "transaction_id": transaction_id,
+        "old_client_id": client["id"],
+        "branch_id": branch["id"],
+        "instalment_number": number,
+        "amount": amount,
+        "payment_mode": mode,
+        **mode_fields,
+        "details": old_clients.details_line(amount, mode, number, client, detail_suffix, transaction_id),
+        "paid_on": day,
+        "created_at": old_clients.stamp_for(day, today, now),
+        # When it was typed in, beside when it was paid -- the same thing for today's money,
+        # and the audit trail for a back-dated receipt.
+        "entered_at": now,
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "approved": False,
+        "income_requested": False,
+    }
+    await v3_col("old_client_payments").insert_one(pay.copy())
+
+    history = payments + [pay]
+    return {
+        "message": f"Instalment #{number} recorded for {client['name']}",
+        "transaction": _old_client_txn_row(pay, client, history, branch["branch_name"]),
+        "old_client": old_clients.summary(client, history, today, branch["branch_name"]),
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet } from "lucide-react";
+import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecordCards } from "@/components/branch/RecordCards";
@@ -251,7 +251,16 @@ const downloadCsv = (rows) => {
   URL.revokeObjectURL(url);
 };
 
-export const OutstandingAmountBoard = ({ rows, onView }) => {
+// A row's own key. An old client's balance (backend/old_clients.py) has no lead behind it,
+// so it goes by the old client it belongs to.
+const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
+
+/**
+ * @param onCollectOld  Opens the Old Client Instalment form on an old client's row. Their
+ *              balance has no client card to open, so this is that row's one action; left
+ *              out where the desk may not take the money, and the row offers none.
+ */
+export const OutstandingAmountBoard = ({ rows, onView, onCollectOld }) => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [month, setMonth] = useState("all");
@@ -373,9 +382,9 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
             empty={emptyText}
             testid="outstanding-cards"
             card={(r) => ({
-              key: r.lead_id,
-              testid: `accountant-manage-outstanding-card-${r.lead_id}`,
-              title: r.client_name,
+              key: rowKey(r),
+              testid: `accountant-manage-outstanding-card-${rowKey(r)}`,
+              title: r.old_client ? `${r.client_name} · Old client` : r.client_name,
               subtitle: r.phone || r.branch_name || "—",
               amount: (
                 <>
@@ -390,7 +399,9 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
               // Not for a Past Data balance: that is what an Excel sheet said was owed when it
               // was saved, shown for reading, and no one on the OS set it.
               actions: !r.past_data && waNumber(r.phone) ? <ReminderButton row={r} today={today} /> : null,
-              onOpen: onView ? () => onView(r.lead_id) : undefined,
+              onOpen: r.old_client
+                ? (onCollectOld ? () => onCollectOld(r) : undefined)
+                : (onView ? () => onView(r.lead_id) : undefined),
             })}
           />
 
@@ -414,9 +425,16 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
                 {shown.length === 0 ? (
                   <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-400">{emptyText}</td></tr>
                 ) : shown.map((r, i) => (
-                  <tr key={r.lead_id} data-testid={`accountant-manage-outstanding-${r.lead_id}`}>
+                  <tr key={rowKey(r)} data-testid={`accountant-manage-outstanding-${rowKey(r)}`}>
                     <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-2 py-2 text-center text-slate-400">{i + 1}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">{r.client_name}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">
+                      {r.client_name}
+                      {r.old_client && (
+                        <span className="ml-1.5 inline-flex items-center rounded-[5px] border border-indigo-200 bg-indigo-50 px-1.5 py-px align-middle text-[9px] font-semibold uppercase tracking-wide text-indigo-700">
+                          Old client
+                        </span>
+                      )}
+                    </td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.phone || "—"}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{r.branch_name || "—"}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-700">{fmt(r.total_bill)}</td>
@@ -426,14 +444,28 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center"><StatusBadge status={r.status} /></td>
                     <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-2 py-2 text-center">
                       {/* A plain link, not a boxed button: it is the row's one action, and the
-                          payment history the old row arrow expanded is on the popup it opens. */}
-                      <button
-                        type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline"
-                        data-testid={`outstanding-view-${r.lead_id}`}
-                      >
-                        <Eye className="h-4 w-4" /> View
-                      </button>
+                          payment history the old row arrow expanded is on the popup it opens.
+                          An old client has no client card, so theirs takes the next
+                          instalment instead. */}
+                      {r.old_client ? (
+                        onCollectOld ? (
+                          <button
+                            type="button" onClick={() => onCollectOld(r)} title="Collect the next instalment"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
+                            data-testid={`outstanding-collect-old-${r.old_client_id}`}
+                          >
+                            <Wallet className="h-4 w-4" /> Collect
+                          </button>
+                        ) : <span className="text-slate-300">—</span>
+                      ) : (
+                        <button
+                          type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline"
+                          data-testid={`outstanding-view-${r.lead_id}`}
+                        >
+                          <Eye className="h-4 w-4" /> View
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

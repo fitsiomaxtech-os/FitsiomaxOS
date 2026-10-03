@@ -1464,6 +1464,10 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
     activity_deleted = (await v3_col("lead_activity").delete_many({})).deleted_count
     zumba_deleted = (await v3_col("zumba_registrations").delete_many({})).deleted_count
     fitness_deleted = (await v3_col("fitness_registrations").delete_many({})).deleted_count
+    # Old clients are people on the books the way a registration is (old_clients.py), and go
+    # with their instalments for the same reason the payment rows in lead_activity go above.
+    old_clients_deleted = (await v3_col("old_clients").delete_many({})).deleted_count
+    await v3_col("old_client_payments").delete_many({})
     await v3_col("zumba_referral_dismissals").delete_many({})
     await v3_col("fitness_referral_dismissals").delete_many({})
     diet_days_deleted = (await v3_col("diet_sessions").delete_many({})).deleted_count
@@ -1492,6 +1496,7 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
         "rehab_sessions_deleted": rehab_days_deleted,
         "zumba_registrations_deleted": zumba_deleted,
         "fitness_registrations_deleted": fitness_deleted,
+        "old_clients_deleted": old_clients_deleted,
         "leads_reset": leads_result.modified_count,
         "sessions_deleted": sessions_deleted,
         "weekly_assessments_deleted": assessments_deleted,
@@ -1552,7 +1557,8 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
 
     Patients keep their stage, branch, packages and prices; only what was paid is cleared,
     so every fee reads as owed again. Zumba and Fitness registrations keep their fee and
-    term with nothing paid against it. Store sales are deleted and their quantity is put
+    term with nothing paid against it, and old clients their course with no instalment taken
+    on the OS. Store sales are deleted and their quantity is put
     back on the shelf, so a branch's stock count still agrees with its ledger of adds and
     transfers. The cash book (expenses, petty cash, handovers, adjustments including the
     opening cash, closing counts and closed books), payroll, and HR's advance and expense
@@ -1584,6 +1590,9 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
     fitness_result = await v3_col("fitness_registrations").update_many(
         {}, {"$set": {**registration_set, "payments": []}, "$unset": REGISTRATION_APPROVAL_UNSET}
     )
+    # Old clients keep their course and what the old tracker says was paid on it; the
+    # instalments taken on the OS go, so each balance reads as it did before any of them.
+    old_client_payments_deleted = (await v3_col("old_client_payments").delete_many({})).deleted_count
 
     # Put sold stock back before the sales go, one increment per item per branch. Skipped for
     # an item since deleted from the catalogue: its stock rows went with it, and restoring
@@ -1623,6 +1632,7 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
         "payments_deleted": payments_deleted,
         "zumba_registrations_cleared": zumba_result.modified_count,
         "fitness_registrations_cleared": fitness_result.modified_count,
+        "old_client_payments_deleted": old_client_payments_deleted,
         "store_sales_deleted": store_sales_deleted,
         "cash_book_deleted": cash_book_deleted,
         "payslips_deleted": payslips_deleted,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight } from "lucide-react";
+import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -16,6 +16,8 @@ import { receiptFromTransaction } from "@/lib/receipt";
 import { OutstandingAmountBoard } from "@/components/branch/OutstandingAmountBoard";
 import { ClosingBalancePanel } from "@/components/branch/ClosingBalancePanel";
 import { CloseBookHistoryPanel } from "@/components/branch/CloseBookHistoryPanel";
+import { OldClientInstalmentDialog } from "@/components/branch/OldClientInstalmentDialog";
+import { loadSession } from "@/lib/session";
 
 // Three tabs, not the ten this page used to carry: Consultation/Session/Diet/Store
 // Collections were each a copy of Summary's own card-click-to-filter table scoped to one
@@ -146,6 +148,7 @@ const [, ...CATEGORY_VIEWS] = REVENUE_VIEWS;
 const revenueNoun = (key) => (key === "store" ? "sale" : key === "zumba" || key === "fitness" ? "registration" : "payment");
 
 const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 // What a receipt calls each of the ledger's sources. The table's own column shows the
 // bare category, which is the right length for a column and the wrong words for a
@@ -163,11 +166,32 @@ const RECEIPT_PAID_FOR = {
 };
 
 /** One ledger row as a receipt. Named here rather than inside receiptFromTransaction
- *  because the source vocabulary is this desk's, not the receipt's. */
-const receiptForTxn = (tx) => receiptFromTransaction({
-  ...tx,
-  paidFor: RECEIPT_PAID_FOR[tx.source] || titleCase(tx.source || ""),
-});
+ *  because the source vocabulary is this desk's, not the receipt's. An old client's
+ *  instalment says which one it was, the course it was against, and what was left after
+ *  it -- the three things a client paying off a course in pieces checks the paper for. */
+const receiptForTxn = (tx) => {
+  const r = receiptFromTransaction({
+    ...tx,
+    paidFor: RECEIPT_PAID_FOR[tx.source] || titleCase(tx.source || ""),
+  });
+  if (!tx.old_client) return r;
+  return {
+    ...r,
+    paidFor: `${r.paidFor} · Instalment #${tx.instalment_number}`,
+    packageName: tx.session_package_label || "",
+    balanceDue: tx.balance_after != null ? fmt(tx.balance_after) : "",
+  };
+};
+
+// Who may enter an old client's instalment: the branch desk that takes the money, the
+// Accountant and Super Admin -- the server's OLD_CLIENT_ROLES. Every Branch Admin variant
+// counts as the branch desk, as is_branch_admin_role has it on the server.
+const OLD_CLIENT_ROLES = new Set([
+  "super_admin", "accountant",
+  "branch_admin", "online_physio_admin", "online_fitness_admin",
+  "branch_admin_physio", "branch_admin_fitness", "branch_admin_physio_fitness",
+]);
+const canRecordOldClients = () => OLD_CLIENT_ROLES.has(String(loadSession()?.user?.role || "").trim().toLowerCase());
 
 // What the server calls money it cannot put under a branch -- see _branch_label in
 // v3_finance.py. One is a client who was never given a branch, the other a branch id
@@ -181,7 +205,6 @@ const UNPLACED = ["Unassigned", "Former branch"];
 // toISOString(), which east of Greenwich turns local midnight into the previous day, so
 // This Week and This Month each opened a day early.
 
-const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const countLabel = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 const PAYMENT_MODE_STYLES = {
@@ -311,6 +334,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // The receipt for one collection on the ledger, reissued from the desk that keeps it.
   // The eye beside it opens the client; this opens the piece of paper.
   const [receipt, setReceipt] = useState(null);
+  // The Old Client Instalment form: null when shut, otherwise what it opens on -- nothing
+  // from Payment Record's button, one old client from Payment Schedule's Collect.
+  const [oldClientForm, setOldClientForm] = useState(null);
+  const canRecordOld = useMemo(canRecordOldClients, []);
 
   // A scoped board still wants the list: nothing on it picks from it, but the scope chip
   // names the branch off it, and without the names it can only say "This branch".
@@ -705,6 +732,26 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
           {ledger === "income" && (
           <>
+          {/* Payment Record is every payment taken, so it is where a payment the OS had no
+              way to take goes in: an instalment on a course begun on the old Physio
+              Tracker, for a client whose history never came across. */}
+          {incomeStage === "record" && canRecordOld && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[5px] border border-indigo-200 bg-indigo-50 px-3 py-2" data-testid="accountant-manage-old-client-bar">
+              <p className="text-xs text-indigo-900">
+                <span className="font-semibold">Old client paying an instalment?</span>{" "}
+                For a course started on the old Physio Tracker. It gets a receipt and goes for approval like any other payment.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setOldClientForm({})}
+                className="h-9 shrink-0 gap-1.5 bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-700"
+                data-testid="accountant-manage-old-client-open"
+              >
+                <History className="h-4 w-4" /> Old Client Instalment
+              </Button>
+            </div>
+          )}
+
           {/* All eight on one line where there is room for eight, stepping down to four
               and then two rather than squeezing: at lg an eighth of the width is narrower
               than the card's own text column.
@@ -795,7 +842,12 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           )}
         </div>
       ) : tab === "schedule" ? (
-        <OutstandingAmountBoard rows={outstanding} onView={setViewingLeadId} onChanged={load} />
+        <OutstandingAmountBoard
+          rows={outstanding}
+          onView={setViewingLeadId}
+          onChanged={load}
+          onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id } }) : undefined}
+        />
       ) : tab === "closebooks" ? (
         // Reads a month of signed-off days and nothing else, so it takes the branch from
         // up here and picks its own month -- see the panel.
@@ -813,6 +865,23 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           above — one dialog for the four finance pages instead of a copy per page. */}
 
       {viewingLeadId && <ClientHistoryModal leadId={viewingLeadId} onClose={() => setViewingLeadId(null)} onChanged={load} />}
+      {oldClientForm && (
+        <OldClientInstalmentDialog
+          branchId={branchId}
+          branches={branches}
+          startWith={oldClientForm.startWith || null}
+          onClose={() => setOldClientForm(null)}
+          onSaved={(res) => {
+            toast.success(res.message || "Instalment recorded");
+            setOldClientForm(null);
+            load();
+            loadExpenseTotals();
+            // The receipt straight away, as the other Collect popups hand one over: the
+            // client is standing at the desk waiting for it.
+            if (res.transaction) setReceipt(receiptForTxn(res.transaction));
+          }}
+        />
+      )}
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} testid="accountant-receipt" />
     </div>
   );
@@ -1031,16 +1100,19 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt }) => {
 // Money with no lead behind it — a counter sale, a Zumba or Fitness registration — carries
 // no lead_id at all (see the store/zumba/fitness loops in v3_finance.py's revenue-overview),
 // so it keys on its own record and stays the single row it has always been rather than
-// collapsing a day of counter sales into one client called "Counter sale".
+// collapsing a day of counter sales into one client called "Counter sale". An old client's
+// instalments have no lead either, but they are one person's, so they gather under the old
+// client they were paid against.
 const groupPaymentsByClient = (rows) => {
   const acc = new Map();
   rows.forEach((tx, i) => {
-    const key = tx.lead_id || `txn:${tx.id || i}`;
+    const key = tx.lead_id || (tx.old_client_id ? `old:${tx.old_client_id}` : `txn:${tx.id || i}`);
     let g = acc.get(key);
     if (!g) {
       g = {
         key,
         lead_id: tx.lead_id || "",
+        old_client: Boolean(tx.old_client),
         client_name: tx.client_name || "Unknown",
         phone: "",
         total: 0,
@@ -1074,6 +1146,13 @@ const groupPaymentsByClient = (rows) => {
 };
 
 const dayOf = (d) => (d || "").slice(0, 10);
+
+/** Marks a row as an old client's -- a course from the old Physio Tracker, paid off here. */
+const OldClientTag = () => (
+  <span className="ml-1.5 inline-flex items-center rounded-[5px] border border-indigo-200 bg-indigo-50 px-1.5 py-px align-middle text-[9px] font-semibold uppercase tracking-wide text-indigo-700">
+    Old client
+  </span>
+);
 // Two of anything is what these columns hold; the rest are one click away with a row each,
 // so the collapsed cell counts them rather than wrapping to four lines.
 const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.length - 2) });
@@ -1138,6 +1217,7 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                   <p className="truncate font-semibold text-slate-800">
                     <span className="mr-1.5 font-normal text-slate-400">{i + 1}.</span>
                     {g.client_name}
+                    {g.old_client && <OldClientTag />}
                   </p>
                   <p className="truncate text-xs text-slate-500">{g.phone || "—"}</p>
                 </div>
@@ -1206,6 +1286,7 @@ const RevenueDetailTable = ({ rows, onView, onReceipt }) => {
                     <td className="px-3 py-2.5 text-center text-slate-400">{i + 1}</td>
                     <td className="px-3 py-2.5 font-medium text-slate-800">
                       {g.client_name}
+                      {g.old_client && <OldClientTag />}
                       {many && (
                         <span className="block text-[10px] font-normal text-slate-400">{countLabel(g.payments.length, "payment")}</span>
                       )}

@@ -174,6 +174,12 @@ CORE_INDEXES = [
     ("past_clients", [("id", 1)], "id"),
     ("past_treatments", [("client_id", 1)], "client_id"),
     ("past_payments", [("client_id", 1)], "client_id"),
+    # Old clients -- see old_clients.py. The search reads one branch's; a client's balance
+    # is summed from every instalment of theirs; and the finance reads take a branch's
+    # instalments over a date range.
+    ("old_clients", [("branch_id", 1), ("created_at", -1)], "branch_recent"),
+    ("old_client_payments", [("old_client_id", 1)], "old_client_id"),
+    ("old_client_payments", [("branch_id", 1), ("created_at", -1)], "branch_recent"),
 ]
 
 
