@@ -2555,6 +2555,9 @@ async def revenue_overview(
                 "total_bill": detail["total_bill"],
                 "paid_amount": detail["paid_amount"],
                 "due_date": detail["due_date"],
+                # When the bill was raised -- the date Payment Schedule's range goes by for a
+                # balance with no due date set.
+                "bill_date": str(l.get("created_at") or "")[:10],
                 "status": detail["status"],
                 "next_installment_number": detail["next_installment_number"],
                 "next_installment_fee": detail["next_installment_fee"],
@@ -2607,6 +2610,7 @@ async def revenue_overview(
             "total_bill": round(paid + owed["balance"], 2),
             "paid_amount": round(paid, 2),
             "due_date": owed["due_date"] or None,
+            "bill_date": str(lead.get("created_at") or "")[:10],
             "status": owed["status"],
             "next_installment_number": None,
             "next_installment_fee": None,
@@ -2640,6 +2644,7 @@ async def revenue_overview(
             "total_bill": s["total_fee"],
             "paid_amount": round(s["paid_before"] + s["paid_on_os"], 2),
             "due_date": s["next_due_date"] or None,
+            "bill_date": str(c.get("created_at") or "")[:10],
             "status": s["status"],
             "next_installment_number": s["next_instalment_number"],
             "next_installment_fee": None,

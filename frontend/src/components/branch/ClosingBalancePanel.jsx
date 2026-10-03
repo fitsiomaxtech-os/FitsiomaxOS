@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Banknote, BookCheck, BookLock, BookOpen, CalendarDays, CreditCard, Smartphone, RefreshCw, Save, TrendingDown, TrendingUp, Check, AlertTriangle, Wallet, X, CalendarClock, Lock, Unlock } from "lucide-react";
+import { Banknote, BookCheck, BookLock, BookOpen, CalendarDays, CreditCard, Smartphone, Save, TrendingDown, TrendingUp, Check, AlertTriangle, Wallet, CalendarClock, Lock, Unlock } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { maskDayMonthYear, manualToIso, isoToManual } from "@/components/DateFilterPopover";
+import { isoToManual } from "@/components/DateFilterPopover";
 import { getClosingBalance, getClosingBalanceHistory, saveClosingBalance, closeBook, reopenBook, getRevenueOverview, getFinanceExpenses } from "@/lib/api";
 import { loadSession } from "@/lib/session";
 import { DENOMINATIONS, noteTotal, countedNotes, noteBreakdown } from "@/lib/denominations";
@@ -19,14 +19,6 @@ const todayIso = () => toIso(new Date());
 const fromIso = (iso) => new Date(`${iso}T00:00:00`);
 const shiftDays = (iso, n) => { const d = fromIso(iso); d.setDate(d.getDate() + n); return toIso(d); };
 
-// Sunday-start, the same week Accountant Manage's own This Week preset counts — two
-// screens on one page disagreeing about where a week begins is a difference nobody can
-// see and everybody has to explain.
-const startOfWeek = (iso) => { const d = fromIso(iso); d.setDate(d.getDate() - d.getDay()); return toIso(d); };
-const endOfWeek = (iso) => shiftDays(startOfWeek(iso), 6);
-const startOfMonth = (iso) => { const d = fromIso(iso); return toIso(new Date(d.getFullYear(), d.getMonth(), 1)); };
-const endOfMonth = (iso) => { const d = fromIso(iso); return toIso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); };
-
 /** Every date from `start` to `end`, oldest first. Both ends are inclusive: a range that
  *  quietly dropped its last day would report a month as counted while the 31st sat
  *  uncounted and invisible. */
@@ -40,21 +32,6 @@ const dayLabel = (iso) => {
   const d = fromIso(iso);
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" });
 };
-
-/**
- * How far back the tab is reading, and the shape of the answer it gets.
- *
- * Daily is one evening's count — the form. The other three are the same evenings read
- * back: a closing balance is a per-day fact whatever window is asked for, so Weekly and
- * Monthly list the days rather than adding them into one figure. A week's drawer is not
- * seven drawers' worth of money; it is the same drawer, seven times.
- */
-const PERIODS = [
-  { key: "day", label: "Daily" },
-  { key: "week", label: "Weekly" },
-  { key: "month", label: "Monthly" },
-  { key: "custom", label: "Custom" },
-];
 
 /**
  * The three ways a branch settles, and the one thing each is checked by.
@@ -978,75 +955,26 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
 /**
  * Closing Balance — what the desk holds when it shuts, against what the day says it took.
  *
- * One branch, and either one evening or a run of them. The period is this panel's own
- * control rather than the tab's range above it, because the two ask different questions of
- * the same figures: the tab narrows a ledger, this narrows a set of counts, and a single
- * count still belongs to a single named evening whatever window is on screen. Daily is the
- * form; Weekly, Monthly and Custom read the evenings back.
+ * One branch, and either one evening or a run of them, over Accountant Manage's own date
+ * range like every other tab on it. A window of one day -- Today, Yesterday, or a custom
+ * range of a single date -- is that evening's count, the form. A longer one reads its
+ * evenings back. All has no window to read, so it opens on tonight's count, which is what
+ * the desk comes to this tab to do.
  *
  * `expected` is worked out here rather than stored on the record — see the note above
  * save_closing_balance in v3_finance.py.
  *
- * @param branchId  The branch whose drawer this is. Required — "All Branches" has no
- *                  drawer to count, and the panel says so rather than adding four
- *                  branches' cash into one meaningless total.
+ * @param branchId   The branch whose drawer this is. Required — "All Branches" has no
+ *                   drawer to count, and the panel says so rather than adding four
+ *                   branches' cash into one meaningless total.
+ * @param start/end  The range from the filter at the top, both empty on All.
+ * @param refreshKey That row's Refresh.
+ * @param onPickDay  Narrows the top filter to one day, for a row in the history that opens
+ *                   its own evening -- the only window a count can be recorded in.
  */
-export const ClosingBalancePanel = ({ branchId }) => {
-  const [period, setPeriod] = useState("day");
-  // The day being counted, and the day the week and month are read around. One control
-  // rather than three: picking the 9th and switching to Monthly asks about September,
-  // which is the same question a second date picker would have had to be told twice.
-  const [day, setDay] = useState(todayIso());
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  // Typed in a dialog rather than picked inline, the same way Accountant Manage's own
-  // custom range is: two calendar fields in a toolbar each open a month grid over the
-  // figures behind them, and a range is quicker typed than navigated to twice.
-  const [showCustom, setShowCustom] = useState(false);
-  const [fromText, setFromText] = useState("");
-  const [toText, setToText] = useState("");
-  // Where to fall back to if the dialog is dismissed with nothing set — leaving the panel
-  // on Custom with no range would show a filter that filters nothing.
-  const [periodBeforeCustom, setPeriodBeforeCustom] = useState("day");
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [busy, setBusy] = useState(false);
-
-  const { start, end } = useMemo(() => {
-    if (period === "week") return { start: startOfWeek(day), end: endOfWeek(day) };
-    if (period === "month") return { start: startOfMonth(day), end: endOfMonth(day) };
-    if (period === "custom") return { start: customFrom, end: customTo };
-    return { start: day, end: day };
-  }, [period, day, customFrom, customTo]);
-
-  const openCustom = () => {
-    if (period !== "custom") setPeriodBeforeCustom(period);
-    setFromText(isoToManual(customFrom));
-    setToText(isoToManual(customTo));
-    setShowCustom(true);
-  };
-
-  const customFromIso = manualToIso(fromText);
-  const customToIso = manualToIso(toText);
-  // Both must parse and be the right way round — a reversed range comes back empty and
-  // reads as a month nobody counted rather than as a mistake in the dialog.
-  const rangeValid = !!customFromIso && !!customToIso && customFromIso <= customToIso;
-
-  const applyCustom = () => {
-    if (!rangeValid) return;
-    setCustomFrom(customFromIso);
-    setCustomTo(customToIso);
-    setPeriod("custom");
-    setShowCustom(false);
-  };
-
-  const dismissCustom = () => {
-    setShowCustom(false);
-    if (!customFrom || !customTo) setPeriod(periodBeforeCustom);
-  };
-
-  /** A row in the history opening its own evening: the window becomes that one day, which
-   *  is the only window a count can be recorded in. */
-  const openDay = (on) => { setDay(on); setPeriod("day"); };
+export const ClosingBalancePanel = ({ branchId, start = "", end = "", refreshKey = 0, onPickDay }) => {
+  const single = !start || !end || start === end;
+  const day = start || end || todayIso();
 
   if (!branchId) {
     return (
@@ -1062,157 +990,27 @@ export const ClosingBalancePanel = ({ branchId }) => {
 
   return (
     <div className="space-y-4" data-testid="closing-balance-panel">
-      {/* One row, read left to right: how far back, which day it is anchored on, and what
-          that comes to as a range. The date keeps its own control in every period because
-          it is what the window is built from — defaulted to today, since a branch counting
-          up after midnight is closing yesterday and needs to be able to say so. */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
-        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5" data-testid="closing-balance-periods">
-          {PERIODS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => (p.key === "custom" ? openCustom() : setPeriod(p.key))}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-                period === p.key ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
-              }`}
-              data-testid={`closing-balance-period-${p.key}`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {period !== "custom" && (
-          <div className="flex items-center gap-2 pl-1">
-            <label htmlFor="closing-balance-date" className="text-xs font-medium text-slate-600">
-              {period === "day" ? "Closing day:" : period === "week" ? "Week of:" : "Month of:"}
-            </label>
-            <Input
-              id="closing-balance-date"
-              type="date"
-              value={day}
-              max={todayIso()}
-              onChange={(e) => setDay(e.target.value || todayIso())}
-              className="h-9 w-40"
-              data-testid="closing-balance-date"
-            />
-          </div>
+      {/* Which evening, or which run of them -- the filter at the top sets it, and this
+          says what that came to, since the count form below never names its own day. */}
+      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-600" data-testid="closing-balance-window">
+        <CalendarDays className="h-3.5 w-3.5 text-emerald-600" />
+        {single ? (
+          <>Closing day: <span className="font-semibold text-slate-800">{isoToManual(day)}</span></>
+        ) : (
+          <>Evenings from <span className="font-semibold text-slate-800">{isoToManual(start)}</span> to <span className="font-semibold text-slate-800">{isoToManual(end)}</span></>
         )}
+      </p>
 
-        {/* The window actually in force. On Daily it would only repeat the date box beside
-            it, so it is shown for the three periods that resolve to something the picker
-            does not already say. */}
-        {period !== "day" && start && end && (
-          <button
-            type="button"
-            onClick={period === "custom" ? openCustom : undefined}
-            className={`flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 ${
-              period === "custom" ? "hover:border-emerald-300 hover:text-emerald-700" : "cursor-default"
-            }`}
-            data-testid="closing-balance-range-chip"
-          >
-            <CalendarDays className="h-3.5 w-3.5" />
-            {isoToManual(start)} to {isoToManual(end)}
-          </button>
-        )}
-
-        <Button
-          onClick={() => setRefreshKey((n) => n + 1)}
-          disabled={busy}
-          title="Refresh"
-          aria-label="Refresh"
-          className="ml-auto h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
-          data-testid="closing-balance-refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
-
-      {period === "day" ? (
-        <DayCount branchId={branchId} day={day} refreshKey={refreshKey} onBusy={setBusy} />
-      ) : period === "custom" && !(customFrom && customTo) ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 py-12 text-center" data-testid="closing-balance-custom-unset">
-          <CalendarDays className="mx-auto h-8 w-8 text-slate-300" />
-          <p className="mt-3 text-sm font-medium text-slate-600">Pick the two dates to read between</p>
-          <button type="button" onClick={openCustom} className="mt-1 text-xs font-medium text-emerald-700 hover:underline">
-            Set a custom range
-          </button>
-        </div>
+      {single ? (
+        <DayCount branchId={branchId} day={day} refreshKey={refreshKey} />
       ) : (
         <ClosingBalanceHistory
           branchId={branchId}
           start={start}
           end={end}
           refreshKey={refreshKey}
-          onBusy={setBusy}
-          onOpenDay={openDay}
+          onOpenDay={(on) => onPickDay?.(on)}
         />
-      )}
-
-      {showCustom && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) dismissCustom(); }}
-          data-testid="closing-balance-custom-modal"
-        >
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <p className="text-base font-semibold text-slate-900">Custom Range</p>
-              <button
-                type="button"
-                onClick={dismissCustom}
-                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100"
-                aria-label="Close"
-                data-testid="closing-balance-custom-close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                { label: "From", text: fromText, set: setFromText, iso: customFromIso, tid: "from" },
-                { label: "To", text: toText, set: setToText, iso: customToIso, tid: "to" },
-              ].map((f) => (
-                <div key={f.tid}>
-                  <label className="text-xs font-medium text-slate-500">{f.label}</label>
-                  <input
-                    value={f.text}
-                    onChange={(e) => f.set(maskDayMonthYear(e.target.value, f.text))}
-                    onKeyDown={(e) => { if (e.key === "Enter") applyCustom(); }}
-                    inputMode="numeric"
-                    maxLength={10}
-                    placeholder="DD-MM-YYYY"
-                    className={`h-9 w-full rounded-md border bg-white px-3 text-sm outline-none focus:ring-1 ${
-                      f.text && !f.iso
-                        ? "border-red-300 focus:border-red-400 focus:ring-red-400"
-                        : "border-slate-200 focus:border-emerald-400 focus:ring-emerald-400"
-                    }`}
-                    data-testid={`closing-balance-custom-${f.tid}`}
-                  />
-                </div>
-              ))}
-              <p className="text-[11px] text-slate-400" data-testid="closing-balance-custom-hint">
-                {customFromIso && customToIso && customFromIso > customToIso
-                  ? "The From date is after the To date."
-                  : "Type both dates as DD-MM-YYYY, e.g. 04-08-2026."}
-              </p>
-            </div>
-
-            <div className="mt-5 flex gap-2">
-              <Button variant="outline" onClick={dismissCustom} className="flex-1" data-testid="closing-balance-custom-cancel">Cancel</Button>
-              <Button
-                onClick={applyCustom}
-                disabled={!rangeValid}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                data-testid="closing-balance-custom-apply"
-              >
-                Apply
-              </Button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

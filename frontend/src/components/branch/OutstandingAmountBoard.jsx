@@ -232,8 +232,11 @@ const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
  *              balance has no client card to open, so this is that row's one action; left
  *              out where the desk may not take the money, and the row offers none.
  * @param onNewOld  Opens the same form empty, for an old client not on this list yet.
+ * @param startDate/endDate  Accountant Manage's date range, both empty on All. A row is in
+ *              it by its due date, or where none is set by the day its bill was raised --
+ *              the same due date the month strip above goes by.
  */
-export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld }) => {
+export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld, startDate = "", endDate = "" }) => {
   const collectable = (r) => Boolean(onCollect) && !r.old_client && !r.past_data && r.balance > 0 && canCollect(r);
   // What a tap on the row opens, on the phone card and the table row alike: the client
   // popup, or for an old client -- who has no client card -- their instalment form.
@@ -260,10 +263,14 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
     if (month !== "all") {
       if (!r.due_date || Number(r.due_date.slice(5, 7)) - 1 !== Number(month)) return false;
     }
+    if (startDate || endDate) {
+      const day = (r.due_date || r.bill_date || "").slice(0, 10);
+      if (!day || (startDate && day < startDate) || (endDate && day > endDate)) return false;
+    }
     if (minAmount && r.balance < Number(minAmount)) return false;
     if (maxAmount && r.balance > Number(maxAmount)) return false;
     return true;
-  }), [rows, search, status, month, minAmount, maxAmount]);
+  }), [rows, search, status, month, startDate, endDate, minAmount, maxAmount]);
 
   // Counts alongside the sums, so each card's second line says how many clients are behind
   // the figure rather than leaving a number with no sense of scale. Taken before the card
@@ -283,7 +290,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
 
   // What the list and the export carry: the filters above, narrowed to the picked card.
   const shown = useMemo(() => filtered.filter((r) => CARD_FILTERS[card](r, today)), [filtered, card, today]);
-  const emptyText = CARD_EMPTY[card] || "No outstanding balances.";
+  const emptyText = CARD_EMPTY[card] || (startDate || endDate ? "No outstanding balances due in this date range." : "No outstanding balances.");
 
   return (
     <div className="space-y-4" data-testid="outstanding-amount-board">

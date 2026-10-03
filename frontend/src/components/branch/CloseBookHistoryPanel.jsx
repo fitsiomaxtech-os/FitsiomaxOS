@@ -1,30 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Banknote, BookCheck, CalendarDays, ChevronDown, ChevronRight, CreditCard, RefreshCw, Smartphone, Unlock, Wallet } from "lucide-react";
+import { Banknote, BookCheck, CalendarDays, ChevronDown, ChevronRight, CreditCard, Smartphone, Unlock, Wallet } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
 import { getClosingBalanceHistory } from "@/lib/api";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
-// Local clock, not toISOString(): east of Greenwich that converts to UTC first and hands
-// back last month for the whole of the first evening of a new one.
-const thisMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
+const dayText = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
-/** The first and last day of a "YYYY-MM". Day 0 of the next month is the last of this one,
- *  which is the only way to get 28, 29, 30 and 31 right without a table of them. */
-const monthRange = (month) => {
-  const [y, m] = (month || thisMonth()).split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();
-  return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, "0")}` };
-};
-
-const monthLabel = (month) => {
-  const { start } = monthRange(month);
-  return new Date(`${start}T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+/** The window in words, for the empty state: "on 3 Oct 2026", "between ... and ...". */
+const windowText = (start, end) => {
+  if (start && end) return start === end ? `on ${dayText(start)}` : `between ${dayText(start)} and ${dayText(end)}`;
+  if (start) return `since ${dayText(start)}`;
+  if (end) return `up to ${dayText(end)}`;
+  return "yet";
 };
 
 const stampedAt = (iso) => {
@@ -177,37 +166,35 @@ const BookRow = ({ book, open, onToggle }) => {
 /**
  * Close Books — History: every day this branch signed its books off.
  *
- * A month at a time rather than the tab's own range, and a month picker rather than two
- * dates: books are closed one evening at a time and read back one month at a time, which
- * is how a branch is asked about them ("send me September"). The panel beside this one
- * owns the day and the range; this one owns the month.
+ * Over Accountant Manage's own date range, like every other tab on it: `start` and `end`
+ * come down from the filter at the top, both empty on All, which reads every book the
+ * branch ever closed. `refreshKey` is that row's Refresh.
  *
  * Nothing here is recomputed. Every figure comes off the book as it was signed -- see the
  * note above CloseBookInput in v3_finance.py -- which is the whole reason a book stores its
  * own totals: a history that recalculated them would quietly rewrite what people put their
  * names to as the underlying days changed.
  */
-export const CloseBookHistoryPanel = ({ branchId }) => {
-  const [month, setMonth] = useState(thisMonth());
+export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshKey = 0 }) => {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDay, setOpenDay] = useState(null);
 
-  const { start, end } = useMemo(() => monthRange(month), [month]);
-
   const load = useCallback(async () => {
-    if (!branchId || !month) return;
+    if (!branchId) return;
     setLoading(true);
     try {
-      const data = await getClosingBalanceHistory({ branch_id: branchId, start_date: start, end_date: end });
-      // Newest first: a month is read from the day it ended, not from the day it began.
+      const data = await getClosingBalanceHistory({ branch_id: branchId, start_date: start || undefined, end_date: end || undefined });
+      // Newest first: a window is read from the day it ended, not from the day it began.
       setBooks([...(data?.books || [])].sort((a, b) => (a.on < b.on ? 1 : -1)));
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Could not load the closed books");
       setBooks([]);
     }
     setLoading(false);
-  }, [branchId, month, start, end]);
+    setOpenDay(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, start, end, refreshKey]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -237,59 +224,32 @@ export const CloseBookHistoryPanel = ({ branchId }) => {
     <div className="space-y-4" data-testid="close-book-history-panel">
       {/* The page says what it is before it says what the numbers are — the same shape the
           board above this one uses for its own head. */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="inline-flex items-center gap-2 font-heading text-xl font-semibold tracking-tight text-slate-900">
-            <CalendarDays className="h-5 w-5 text-amber-500" aria-hidden="true" />
-            Close Books — History
-          </h3>
-          <p className="mt-0.5 text-sm text-slate-600">
-            Every day the books were closed, with actual vs computed balance per payment mode.
-          </p>
-        </div>
-        <Button
-          onClick={load}
-          disabled={loading}
-          title="Refresh"
-          aria-label="Refresh"
-          className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
-          data-testid="close-book-refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+      <div>
+        <h3 className="inline-flex items-center gap-2 font-heading text-xl font-semibold tracking-tight text-slate-900">
+          <CalendarDays className="h-5 w-5 text-amber-500" aria-hidden="true" />
+          Close Books — History
+        </h3>
+        <p className="mt-0.5 text-sm text-slate-600">
+          Every day the books were closed, with actual vs computed balance per payment mode.
+        </p>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* A month input rather than two dates: the window is always a whole month here,
-              and a range picker would invite one that isn't, then have to say why it can't
-              have it. */}
-          <label htmlFor="close-book-month" className="sr-only">Month</label>
-          <input
-            id="close-book-month"
-            type="month"
-            value={month}
-            max={thisMonth()}
-            onChange={(e) => { setMonth(e.target.value || thisMonth()); setOpenDay(null); }}
-            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-[15px] text-slate-700 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
-            data-testid="close-book-month"
-          />
-          {books.length > 0 && (
-            <span className="text-xs text-slate-500" data-testid="close-book-summary">
-              <span className="font-semibold text-slate-700">{summary.closed}</span> closed
-              {summary.differed > 0 ? ` · ${summary.differed} with a difference` : summary.closed > 0 ? " · all matched" : ""}
-              {summary.reopened > 0 ? ` · ${summary.reopened} reopened` : ""}
-            </span>
-          )}
-        </div>
+        {books.length > 0 && (
+          <p className="mb-3 text-xs text-slate-500" data-testid="close-book-summary">
+            <span className="font-semibold text-slate-700">{summary.closed}</span> closed
+            {summary.differed > 0 ? ` · ${summary.differed} with a difference` : summary.closed > 0 ? " · all matched" : ""}
+            {summary.reopened > 0 ? ` · ${summary.reopened} reopened` : ""}
+          </p>
+        )}
 
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2">
           {loading ? (
             <p className="py-10 text-center text-sm text-slate-400" data-testid="close-book-loading">Loading…</p>
           ) : books.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 py-10 text-center" data-testid="close-book-empty">
               <BookCheck className="mx-auto h-7 w-7 text-slate-200" />
-              <p className="mt-2 text-sm text-slate-500">No books were closed in {monthLabel(month)}.</p>
+              <p className="mt-2 text-sm text-slate-500">No books were closed {windowText(start, end)}.</p>
               <p className="mt-0.5 text-xs text-slate-400">
                 A day appears here once it has been counted and signed off on the Closing Balance tab.
               </p>

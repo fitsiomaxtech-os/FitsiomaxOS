@@ -370,6 +370,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   const [preset, setPreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  // Bumped by the toolbar's Refresh, for the Closing Balance and Close Books panels, which
+  // load their own figures rather than reading this board's.
+  const [refreshKey, setRefreshKey] = useState(0);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [viewingLeadId, setViewingLeadId] = useState(null);
@@ -623,14 +626,16 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // what they are set to on their own faces, so it was a third control's worth of screen
   // spent repeating two.
 
-  // The range and Refresh. Hidden on Closing Balance and Close Books, which carry their
-  // own Daily/Weekly/Monthly control over which evenings are counted -- two date controls
-  // over one set of figures would leave the desk asking which is in force.
+  // The range and Refresh, in force on every tab: Summary and Discount Applied by the day
+  // the money came in, Payment Schedule by the day a balance falls due, Closing Balance and
+  // Close Books by the evenings counted and signed. Those two once carried their own
+  // period controls instead; one control for the whole board leaves nobody asking which
+  // date is in force.
   //
   // On a phone, in this board's own bar, it shares a line with the payment-mode dropdown
   // and grows to fill it. Its 3rem basis is the Refresh button and the gap before it, which
   // leaves the two dropdowns the same width rather than this one a button narrower.
-  const dateControls = tab !== "closing" && tab !== "closebooks" ? (
+  const dateControls = (
     <div
       className={`flex flex-nowrap items-center gap-2 ${toolbarTarget ? "shrink-0" : "min-w-0 flex-[1_1_3rem] sm:ml-auto sm:flex-none"}`}
       data-testid="accountant-manage-date-filter"
@@ -647,7 +652,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         testid="accountant-manage-window"
       />
       <Button
-        onClick={() => { load(); loadExpenseTotals(); }}
+        onClick={() => { load(); loadExpenseTotals(); setRefreshKey((n) => n + 1); }}
         disabled={loading}
         title="Refresh"
         aria-label="Refresh"
@@ -657,7 +662,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       </Button>
     </div>
-  ) : null;
+  );
 
   return (
     <div className="space-y-4" data-testid="accountant-manage-tab">
@@ -957,16 +962,23 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           canCollect={canCollectRow}
           onNewOld={canRecordOld ? () => setOldClientForm({}) : undefined}
           onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id } }) : undefined}
+          startDate={startDate}
+          endDate={endDate}
         />
       ) : tab === "closebooks" ? (
-        // Reads a month of signed-off days and nothing else, so it takes the branch from
-        // up here and picks its own month -- see the panel.
-        <CloseBookHistoryPanel branchId={branchId} />
+        // The signed-off days inside the range at the top -- see the panel.
+        <CloseBookHistoryPanel branchId={branchId} start={startDate} end={endDate} refreshKey={refreshKey} />
       ) : tab === "closing" ? (
-        // Counts one evening at a time and reads a week or a month of them back, on its
-        // own period control rather than the tab's range -- see the panel. The branch is
-        // the only thing it takes from up here.
-        <ClosingBalancePanel branchId={branchId} />
+        // One evening's count when the range is a single day, the evenings read back when
+        // it is longer -- see the panel. A history row opening its own evening narrows the
+        // range at the top to that day.
+        <ClosingBalancePanel
+          branchId={branchId}
+          start={startDate}
+          end={endDate}
+          refreshKey={refreshKey}
+          onPickDay={(on) => pickDates("custom", on, on)}
+        />
       ) : (
         <DiscountAppliedBoard rows={discountedTxns} onView={setViewingLeadId} onReceipt={(tx) => setReceipt(receiptForTxn(tx))} />
       )}
