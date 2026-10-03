@@ -8,7 +8,9 @@ still being treated: one workbook, five tabs, read at the same time in one uploa
   Leads     one row per client: who they are, and where they stand (Current Stage, one of
             the OS's own fifteen stage names, and the date of each step on the way there)
   Physio    one row per course: Treatment or Rehab, the package, its sessions and its price
-  Sessions  one row per session: when, Completed or Upcoming, by which physio
+  Sessions  one row per course of a client's: the dates done and the dates to come, listed
+            in two cells, at what time and by which physio (or, as the tab was first laid
+            out and is still read, one row per session)
   Reviews   one row per review, by the Head Physio
   Payments  one row per payment: Consultation Fee or Treatment Fee, Paid or Pending
 
@@ -30,7 +32,7 @@ Nothing here touches a database -- see past_data.py.
 """
 import re
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional
 
 from past_data import (
@@ -94,10 +96,15 @@ COLUMNS = {
         "phone": "Phone",
         "name": "Name",
         "course": "Course",
+        "physio": "Physio Name",
+        "time": "Session Time",
+        "completed_dates": "Completed Dates",
+        "upcoming_dates": "Upcoming Dates",
+        # The tab's first layout, a row per session -- still read, so a workbook filled in
+        # that way imports as it did.
         "session_no": "Session No",
         "at": "Date & Time",
         "status": "Status",
-        "physio": "Physio Name",
         "remarks": "Remarks",
     },
     REVIEWS: {
@@ -173,6 +180,7 @@ MOMENT_FORMATS = (
     "%d-%m-%Y %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M",
     "%d-%m-%Y %I:%M %p", "%d/%m/%Y %I:%M %p", "%Y-%m-%d %H:%M:%S",
 )
+CLOCK_FORMATS = ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H")
 
 
 # ------------------------------------------------------------------------------ cleaners
@@ -195,6 +203,35 @@ def moment(value: Any) -> str:
         except ValueError:
             continue
     return day(value)
+
+
+def clock(value: Any) -> str:
+    """A time-of-day cell as "HH:MM", or "" when it holds none. Excel keeps a typed 10:00 as a
+    time (or a fraction of a day); a time typed as text is read in the shapes people type."""
+    if isinstance(value, datetime):
+        value = value.time()
+    if isinstance(value, time):
+        return value.strftime("%H:%M")
+    if isinstance(value, float) and 0 < value < 1:
+        minutes = min(round(value * 24 * 60), 24 * 60 - 1)
+        return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    written = text(value).upper()
+    for fmt in CLOCK_FORMATS:
+        try:
+            return datetime.strptime(written, fmt).strftime("%H:%M")
+        except ValueError:
+            continue
+    return ""
+
+
+def dates(value: Any) -> List[Any]:
+    """A cell listing one date per session -- "21-09-2026, 22-09-2026", with commas,
+    semicolons or line breaks between them -- or the single date Excel kept as a date."""
+    if isinstance(value, (datetime, date)):
+        return [value]
+    # Not through text(), which would fold the line breaks into spaces.
+    written = value if isinstance(value, str) else text(value)
+    return [p.strip() for p in re.split(r"[,;\n]+", written) if p.strip()]
 
 
 def _pick(table: Dict[str, str], value: Any) -> str:
@@ -407,29 +444,24 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
         if not client:
             continue
         course = _course(data, SESSIONS, where, client["name"], record.get("course"))
-        at = moment(record.get("at"))
-        session = {
-            "course": course,
-            "session_no": whole(record.get("session_no")),
-            "at": at,
-            "status": _status(data, SESSION_STATUSES, "unknown_session_status", SESSIONS, where,
-                              client["name"], record.get("status")),
-            "physio": text(record.get("physio")),
-            "remarks": text(record.get("remarks")),
-            "row": where,
-        }
-        treatment = _course_for(courses.get(client["id"], []), at[:10], course)
-        if treatment:
-            session["treatment_excel_id"] = treatment["excel_id"]
-            if session["status"] == "Completed":
-                treatment["sessions_completed"] += 1
-            elif session["status"] == "Upcoming":
-                treatment["sessions_upcoming"] += 1
-        else:
+        unplaced = False
+        for session in _row_sessions(data, record, where, client["name"]):
+            session.update(course=course, physio=text(record.get("physio")), row=where)
+            treatment = _course_for(courses.get(client["id"], []), session["at"][:10], course)
+            if treatment:
+                session["treatment_excel_id"] = treatment["excel_id"]
+                if session["status"] == "Completed":
+                    treatment["sessions_completed"] += 1
+                elif session["status"] == "Upcoming":
+                    treatment["sessions_upcoming"] += 1
+            else:
+                unplaced = True
+            client["sessions"].append(session)
+            data.sessions_read += 1
+        if unplaced:
+            # Once for the row, however many of its dates had no course to go on.
             _flag(client, "session_no_course")
             data.note("session_no_course", SESSIONS, where, f"{client['name']}: {course}")
-        client["sessions"].append(session)
-        data.sessions_read += 1
 
     for record in tabs.get(REVIEWS, []):
         where = f"{REVIEWS} · row {record['_row']}"
@@ -643,6 +675,41 @@ def _treatment(client: dict, excel_id: str, *, service: str, course: str, physio
         "sessions_upcoming": 0,
         "flags": [],
     }
+
+
+def _row_sessions(data: PastData, record: dict, where: str, who: str) -> List[Dict[str, Any]]:
+    """The sessions one Sessions row holds, each {session_no, at, status, remarks}.
+
+    A row is a client's course, one row however many days it ran: the days done listed in
+    Completed Dates, the days still to come in Upcoming Dates, each at the Session Time
+    unless it was written with its own. Numbered later, in date order (past_data_live._days).
+    A row laid out the first way -- Session No, Date & Time, Status -- is one session."""
+    at_time = clock(record.get("time"))
+    if text(record.get("time")) and not at_time:
+        data.note("bad_session_time", SESSIONS, where, f"{who}: '{text(record.get('time'))}'")
+
+    def timed(at: str) -> str:
+        return f"{at} {at_time}" if at_time and len(at) == 10 else at
+
+    found = []
+    if any(text(record.get(k)) for k in ("session_no", "at", "status", "remarks")):
+        found.append({
+            "session_no": whole(record.get("session_no")),
+            "at": timed(moment(record.get("at"))),
+            "status": _status(data, SESSION_STATUSES, "unknown_session_status", SESSIONS, where,
+                              who, record.get("status")),
+            "remarks": text(record.get("remarks")),
+        })
+    for key, status in (("completed_dates", "Completed"), ("upcoming_dates", "Upcoming")):
+        for written in dates(record.get(key)):
+            at = moment(written)
+            if not at:
+                data.note("bad_session_date", SESSIONS, where, f"{who}: '{text(written)}'")
+                continue
+            found.append({"session_no": None, "at": timed(at), "status": status, "remarks": ""})
+    if not found and not any(text(record.get(k)) for k in ("completed_dates", "upcoming_dates")):
+        data.note("no_session_dates", SESSIONS, where, who)
+    return found
 
 
 def _course_for(courses: List[Dict[str, Any]], when: str, kind: str = "") -> Optional[Dict[str, Any]]:

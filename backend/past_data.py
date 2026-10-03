@@ -157,6 +157,9 @@ FINDINGS = {
     "session_no_course": "Session with no course of its kind on the Physio tab",
     "unknown_course": "Course is not Treatment or Rehab -- read as Treatment",
     "unknown_session_status": "Session Status is not Completed or Upcoming -- not put on the physio's board",
+    "bad_session_date": "A date in Completed / Upcoming Dates that could not be read -- that session NOT imported",
+    "bad_session_time": "Session Time that could not be read -- its sessions kept without a time",
+    "no_session_dates": "Sessions row with no Completed or Upcoming Dates -- NOT imported",
     "unknown_review_status": "Review Status is not Completed or Pending",
     "unknown_payment_for": "Payment For is not Consultation Fee or Treatment Fee -- filed under the course running on its date",
     "sample_row": "The template's sample row (a name starting \"Sample\") -- NOT imported",
@@ -168,6 +171,7 @@ FINDINGS = {
 NOT_IMPORTED = {
     "duplicate_id", "row_without_id", "missing_client", "missing_treatment",
     "enquiry_no_client", "enquiry_ambiguous", "no_name_row", "no_client", "sample_row",
+    "no_session_dates", "bad_session_date",
 }
 
 

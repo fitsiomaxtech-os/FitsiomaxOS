@@ -3,13 +3,13 @@ read in one go and tied together by Patient ID.
 
 Synthetic people only -- no row of a real sheet goes into a file.
 """
-from datetime import datetime
+from datetime import datetime, time as dt_time
 
 import pytest
 
 import past_data
 from past_data import PastDataError, read_workbook
-from past_os import COLUMNS, build, moment
+from past_os import COLUMNS, build, clock, moment
 
 
 def lead(n, pid, name, phone, stage="Physio Assign", **extra):
@@ -234,6 +234,76 @@ def test_template_values_raise_nothing():
     assert not {"unknown_course", "unknown_session_status", "unknown_review_status", "unknown_payment_for"} & set(codes(data))
 
 
+def test_one_row_per_client_lists_its_session_dates():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001")],
+        "Physio": [child(2, "FM-1", course="Treatment", sessions=11, start_date=datetime(2026, 9, 20))],
+        "Sessions": [child(2, "FM-1", course="Treatment", physio="Test Salma", time=dt_time(10, 0),
+                           completed_dates="21-09-2026, 22-09-2026;\n23/09/2026",
+                           upcoming_dates="07-10-2026 18:30, 08-10-2026")],
+    })
+    assert codes(data) == []
+    client = data.clients[0]
+    assert [(s["at"], s["status"]) for s in client["sessions"]] == [
+        ("2026-09-21 10:00", "Completed"), ("2026-09-22 10:00", "Completed"), ("2026-09-23 10:00", "Completed"),
+        # A date written with its own time keeps it.
+        ("2026-10-07 18:30", "Upcoming"), ("2026-10-08 10:00", "Upcoming"),
+    ]
+    assert {s["physio"] for s in client["sessions"]} == {"Test Salma"}
+    assert (client["sessions_completed"], client["sessions_upcoming"]) == (3, 2)
+    course = data.treatments[0]
+    assert (course["sessions_completed"], course["sessions_upcoming"]) == (3, 2)
+    assert {s["treatment_excel_id"] for s in client["sessions"]} == {course["excel_id"]}
+    assert past_data.summary(data)["sessions"] == 5 and data.tab_rows["Sessions"] == 1
+
+
+def test_a_single_date_cell_and_no_session_time():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001")],
+        "Sessions": [child(2, "FM-1", course="Rehab", completed_dates=datetime(2026, 9, 21))],
+    })
+    assert [(s["at"], s["status"]) for s in data.clients[0]["sessions"]] == [("2026-09-21", "Completed")]
+
+
+def test_unreadable_session_dates_and_times_are_reported():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001"), lead(3, "FM-2", "Test Bala", "9000000002")],
+        "Physio": [child(2, "FM-1", course="Treatment"), child(3, "FM-2", course="Treatment")],
+        "Sessions": [child(2, "FM-1", course="Treatment", time="morning",
+                           completed_dates="21-09-2026, 31-09-2026, 22-09"),
+                     child(3, "FM-2", course="Treatment", physio="Test Salma")],
+    })
+    assert [f.code for f in data.findings].count("bad_session_date") == 2
+    assert "bad_session_time" in codes(data) and "no_session_dates" in codes(data)
+    arun, bala = data.clients
+    assert [s["at"] for s in arun["sessions"]] == ["2026-09-21"] and bala["sessions"] == []
+    assert "no_session_dates" in past_data.NOT_IMPORTED
+
+
+def test_a_session_with_no_course_is_reported_once_per_row():
+    data = build({
+        "Leads": [lead(2, "FM-1", "Test Arun", "9000000001")],
+        "Sessions": [child(2, "FM-1", course="Treatment", completed_dates="21-09-2026, 22-09-2026, 23-09-2026")],
+    })
+    assert [f.code for f in data.findings] == ["session_no_course"]
+    assert data.clients[0]["sessions_completed"] == 3
+
+
+@pytest.mark.parametrize("written,read", [
+    (dt_time(10, 0), "10:00"),
+    (datetime(1899, 12, 30, 18, 30), "18:30"),
+    (0.4375, "10:30"),
+    ("10:00", "10:00"),
+    ("6:30 pm", "18:30"),
+    ("10 AM", "10:00"),
+    (10, "10:00"),
+    ("morning", ""),
+    (None, ""),
+])
+def test_clock(written, read):
+    assert clock(written) == read
+
+
 def test_moment_keeps_a_time_and_drops_midnight():
     assert moment(datetime(2026, 9, 4, 11, 30)) == "2026-09-04 11:30"
     assert moment(datetime(2026, 9, 4)) == "2026-09-04"
@@ -267,6 +337,27 @@ def test_read_workbook_reads_the_os_data_workbook(tmp_path):
     assert data.layout == "os" and data.types == ["lead", "sessions", "revenue"]
     assert data.tabs == ["Leads", "Reviews", "Payments"] and data.tabs_missing == ["Physio", "Sessions"]
     assert data.payments[0]["state"] == "unpaid" and data.clients[0]["reviews_count"] == 1
+
+
+def test_read_workbook_reads_a_sessions_row_per_client(tmp_path):
+    """The Sessions tab as the template now lays it out: no Session No, Date & Time, Status or
+    Remarks -- a row per client's course, its dates in two cells."""
+    columns = {k: COLUMNS["Sessions"][k] for k in (
+        "client_excel_id", "phone", "name", "course", "physio", "time", "completed_dates", "upcoming_dates")}
+    path = _workbook(tmp_path / "OSDATAX.xlsx", {
+        "Leads": (COLUMNS["Leads"], [{"excel_id": "FM-1", "name": "Test Arun", "phone": "9000000001",
+                                      "current_stage": "Physio Assign"}]),
+        "Physio": (COLUMNS["Physio"], [{"client_excel_id": "FM-1", "course": "Treatment", "sessions": 11,
+                                        "start_date": datetime(2026, 10, 6)}]),
+        "Sessions": (columns, [{"client_excel_id": "FM-1", "course": "Treatment", "physio": "Test Salma",
+                                "time": dt_time(10, 0), "completed_dates": "07-10-2026, 08-10-2026\n09-10-2026",
+                                "upcoming_dates": "13-10-2026, 14-10-2026"}]),
+    })
+    data = read_workbook(path)
+    assert codes(data) == [] and data.tab_rows["Sessions"] == 1
+    client = data.clients[0]
+    assert (client["sessions_completed"], client["sessions_upcoming"]) == (3, 2)
+    assert client["sessions"][0]["at"] == "2026-10-07 10:00" and client["sessions"][-1]["at"] == "2026-10-14 10:00"
 
 
 def test_a_payments_tab_without_status_is_refused(tmp_path):
