@@ -55,7 +55,7 @@ export const FINANCE_DATE_PRESETS = ["all", "today", "yesterday", "this_week", "
  * grid is there for the times you are not. Whichever is used the other follows, because
  * they are one value shown two ways rather than two controls to reconcile.
  */
-const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onClose, testid }) => {
+const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onClose, phoneRail = true, testid }) => {
   const [fromText, setFromText] = useState(() => isoToManual(from));
   const [toText, setToText] = useState(() => isoToManual(to));
   // Which end the next tap on the grid fills. Starts on From and moves itself to To, so
@@ -142,9 +142,13 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
         <div className="flex flex-col sm:flex-row">
           {/* The windows this board offers, in the order the toolbar offers them. flex and
               not a one-column grid from sm up: grid rows stretch to fill the dialog, which
-              would spread six buttons down the whole height of the calendar beside them. */}
+              would spread six buttons down the whole height of the calendar beside them.
+
+              Not on a phone opened from the dropdown (`phoneRail` false): the windows are
+              the dropdown's own options, picked a tap before this opened, and six of them
+              across a phone-wide dialog clip to "This …" and "Last …". */}
           <div
-            className="flex gap-1 border-b border-[#EFEAE0] p-2 sm:w-44 sm:shrink-0 sm:flex-col sm:gap-0.5 sm:border-b-0 sm:border-r sm:p-3"
+            className={`${phoneRail ? "flex" : "hidden sm:flex"} gap-1 border-b border-[#EFEAE0] p-2 sm:w-44 sm:shrink-0 sm:flex-col sm:gap-0.5 sm:border-b-0 sm:border-r sm:p-3`}
             data-testid={`${testid}-presets`}
           >
             {presets.map((key) => (
@@ -421,6 +425,7 @@ export const FinanceDateFilter = ({
           onPreset={(key) => { onChange(key, customFrom, customTo); setOpen(false); }}
           onClose={() => setOpen(false)}
           onApply={(f, t) => { onChange("custom", f, t); setOpen(false); }}
+          phoneRail={!mobileSelect}
           testid={`${testid}-custom`}
         />
       )}
