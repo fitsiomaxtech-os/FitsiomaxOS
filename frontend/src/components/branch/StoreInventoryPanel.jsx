@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Pill, FlaskConical, Dumbbell, Plus, PackagePlus, ShoppingCart, ArrowRightLeft, Pencil, Trash2,
-  Search, AlertTriangle, Boxes, IndianRupee, X, History,
+  Plus, PackagePlus, ShoppingCart, ArrowRightLeft, Pencil, Trash2, Search, X, History,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +27,7 @@ import {
  */
 const CATEGORIES = {
   tablet: {
-    noun: "Tablet", plural: "Tablets", icon: Pill,
+    noun: "Tablet", plural: "Tablets",
     units: ["Strip", "Bottle", "Tube", "Sachet", "Pack", "Box"], defaultUnit: "Strip", low: 10,
     searchHint: "Search tablet or brand...",
     empty: "No tablets yet — add one to start tracking stock.",
@@ -36,7 +35,7 @@ const CATEGORIES = {
     brandPlaceholder: "e.g. Calpol",
   },
   supplementary: {
-    noun: "Supplement", plural: "Supplements", icon: FlaskConical,
+    noun: "Supplement", plural: "Supplements",
     units: ["Bottle", "Sachet", "Pack", "Box", "Tube"], defaultUnit: "Bottle", low: 10,
     searchHint: "Search supplement or brand...",
     empty: "No supplements yet — add one to start tracking stock.",
@@ -44,7 +43,7 @@ const CATEGORIES = {
     brandPlaceholder: "e.g. Optimum Nutrition",
   },
   equipment: {
-    noun: "Equipment", plural: "Equipment", icon: Dumbbell,
+    noun: "Equipment", plural: "Equipment",
     units: ["Piece", "Set", "Pair", "Box", "Pack"], defaultUnit: "Piece", low: 2,
     searchHint: "Search equipment or brand...",
     empty: "No equipment yet — add one to start tracking stock.",
@@ -387,11 +386,13 @@ export const StoreInventoryPanel = ({ category = "tablet", branchId, reloadToken
 
   return (
     <div className="space-y-4" data-testid={tid("inventory-panel")}>
+      {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
+          on a 5px corner, matching the Fitness, Patients and Review strips. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label={CAT.plural} value={summary?.items ?? "—"} sub="in the catalogue" icon={CAT.icon} color="#7c3aed" />
-        <StatTile label="In Stock" value={summary?.units ?? "—"} sub={`worth ${fmt(summary?.stock_value)}`} icon={Boxes} color="#0284c7" />
-        <StatTile label="Low Stock" value={summary?.low_stock ?? "—"} sub={`${summary?.out_of_stock ?? 0} fully out`} icon={AlertTriangle} color="#d97706" />
-        <StatTile label="Sold Today" value={fmt(summary?.sold_today_amount)} sub={`${summary?.sold_today_qty ?? 0} units`} icon={IndianRupee} color="#059669" />
+        <StatTile label={CAT.plural} value={summary?.items ?? "—"} sub="in the catalogue" arrow color="#7c3aed" />
+        <StatTile label="In Stock" value={summary?.units ?? "—"} sub={`worth ${fmt(summary?.stock_value)}`} arrow color="#0284c7" />
+        <StatTile label="Low Stock" value={summary?.low_stock ?? "—"} sub={`${summary?.out_of_stock ?? 0} fully out`} arrow color="#d97706" />
+        <StatTile label="Sold Today" value={fmt(summary?.sold_today_amount)} sub={`${summary?.sold_today_qty ?? 0} units`} arrow color="#059669" />
       </div>
 
       <Card>
