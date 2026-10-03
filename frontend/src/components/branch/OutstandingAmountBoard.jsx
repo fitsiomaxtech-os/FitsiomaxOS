@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet, AlertCircle, AlarmClock, CalendarClock, Users } from "lucide-react";
+import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecordCards } from "@/components/branch/RecordCards";
@@ -281,11 +281,13 @@ export const OutstandingAmountBoard = ({ rows, onView }) => {
     <div className="space-y-4" data-testid="outstanding-amount-board">
       <MonthFilterBar month={month} setMonth={setMonth} />
 
+      {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
+          on a 5px corner, matching the Fitness, Patients and Review strips. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <SummaryCard label="Total Outstanding" value={fmt(totals.totalOutstanding)} sub={plural(totals.pendingClients, "client")} icon={AlertCircle} color="#d97706" />
-        <SummaryCard label="Overdue Amount" value={fmt(totals.overdue)} sub={plural(totals.overdueClients, "client")} icon={AlarmClock} color="#e11d48" />
-        <SummaryCard label="Due Today" value={fmt(totals.dueToday)} sub={plural(totals.dueTodayClients, "client")} icon={CalendarClock} color="#0284c7" />
-        <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" icon={Users} color="#7c3aed" />
+        <SummaryCard label="Total Outstanding" value={fmt(totals.totalOutstanding)} sub={plural(totals.pendingClients, "client")} arrow color="#d97706" />
+        <SummaryCard label="Overdue Amount" value={fmt(totals.overdue)} sub={plural(totals.overdueClients, "client")} arrow color="#e11d48" />
+        <SummaryCard label="Due Today" value={fmt(totals.dueToday)} sub={plural(totals.dueTodayClients, "client")} arrow color="#0284c7" />
+        <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" arrow color="#7c3aed" />
       </div>
 
       <Card>
