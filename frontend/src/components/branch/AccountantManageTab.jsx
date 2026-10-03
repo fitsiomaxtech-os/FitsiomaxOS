@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, History } from "lucide-react";
+import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -17,6 +17,7 @@ import { OutstandingAmountBoard } from "@/components/branch/OutstandingAmountBoa
 import { ClosingBalancePanel } from "@/components/branch/ClosingBalancePanel";
 import { CloseBookHistoryPanel } from "@/components/branch/CloseBookHistoryPanel";
 import { OldClientInstalmentDialog } from "@/components/branch/OldClientInstalmentDialog";
+import { ScheduleCollectDialog, collectWhat } from "@/components/branch/ScheduleCollectDialog";
 import { loadSession } from "@/lib/session";
 
 // Three tabs, not the ten this page used to carry: Consultation/Session/Diet/Store
@@ -66,24 +67,22 @@ const mainTabClasses = (tab, active) => {
   return active ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50";
 };
 
-// The Summary's five cards, each one the view under it: the two piles the income side is
-// read in, the drawer, the money that went out, and the payment book whole. Approved first
-// -- the signed-off figure is the one read first, the waiting pile after it. Emerald for
-// signed off and amber for waiting on somebody, the colours the expense piles wear for the
-// same two states.
+// The Summary's four cards, each one the view under it: the two piles the income side is
+// read in, the drawer, and the money that went out. Approved first -- the signed-off figure
+// is the one read first, the waiting pile after it. Emerald for signed off and amber for
+// waiting on somebody, the colours the expense piles wear for the same two states.
 //
 // Where a collection stands between the desk that took it and the books is one of two
 // piles, not three: the moment a collection is taken it is awaiting approval (see stageOf),
-// and every row is in exactly one of them. Payment Record is not a third pile but both read
-// together -- every collection in the range, signed off or not -- so it stands last, after
-// the figures someone is answerable for, as the record they are cut from.
+// and every row is in exactly one of them. The Payment Record card that read both piles at
+// once was taken off at the branch's request; its Old Client Instalment button lives on
+// Payment Schedule now.
 const SUMMARY_CARDS = [
   { key: "approved", label: "Income Approved", color: "#059669", hint: "Signed off by the accountant" },
   { key: "requested", label: "Awaiting Approval", color: "#d97706", hint: "Taken at the desk, waiting for the accountant to sign it off" },
   // The drawer between money in and money out: what the branch should be holding now.
   { key: "cash", label: "Cash In Hand", color: "#0284c7" },
   { key: "expenses", label: "Expenses", color: "#e11d48" },
-  { key: "record", label: "Payment Record", color: "#4f46e5", hint: "Every payment taken, approved or awaiting approval" },
 ];
 
 /** Which of the two one collection is in. Everything not yet signed off is awaiting it. */
@@ -160,38 +159,42 @@ const RECEIPT_PAID_FOR = {
   treatment: "Treatment Fee",
   rehab: "Rehab Fee",
   diet: "Diet Fee",
+  diet_chart: "Diet Chart Fee",
   store: "Store Purchase",
   zumba: "Zumba Registration",
   fitness: "Fitness Membership",
 };
 
 /** One ledger row as a receipt. Named here rather than inside receiptFromTransaction
- *  because the source vocabulary is this desk's, not the receipt's. An old client's
- *  instalment says which one it was, the course it was against, and what was left after
- *  it -- the three things a client paying off a course in pieces checks the paper for. */
+ *  because the source vocabulary is this desk's, not the receipt's. An instalment -- an
+ *  old client's, or one collected off Payment Schedule -- says which one it was and what
+ *  was left after it, the two things a client paying in pieces checks the paper for. */
 const receiptForTxn = (tx) => {
   const r = receiptFromTransaction({
     ...tx,
     paidFor: RECEIPT_PAID_FOR[tx.source] || titleCase(tx.source || ""),
   });
-  if (!tx.old_client) return r;
   return {
     ...r,
-    paidFor: `${r.paidFor} · Instalment #${tx.instalment_number}`,
-    packageName: tx.session_package_label || "",
-    balanceDue: tx.balance_after != null ? fmt(tx.balance_after) : "",
+    ...(tx.instalment_number ? { paidFor: `${r.paidFor} · Instalment #${tx.instalment_number}` } : {}),
+    ...(tx.old_client ? { packageName: tx.session_package_label || "" } : {}),
+    ...(tx.balance_after != null ? { balanceDue: fmt(tx.balance_after) } : {}),
   };
 };
 
-// Who may enter an old client's instalment: the branch desk that takes the money, the
-// Accountant and Super Admin -- the server's OLD_CLIENT_ROLES. Every Branch Admin variant
-// counts as the branch desk, as is_branch_admin_role has it on the server.
-const OLD_CLIENT_ROLES = new Set([
-  "super_admin", "accountant",
+// Who may take which money here, as the endpoints behind each button allow it. Every Branch
+// Admin variant is the branch desk, as is_branch_admin_role has it on the server.
+const BRANCH_DESK_ROLES = [
   "branch_admin", "online_physio_admin", "online_fitness_admin",
   "branch_admin_physio", "branch_admin_fitness", "branch_admin_physio_fitness",
-]);
-const canRecordOldClients = () => OLD_CLIENT_ROLES.has(String(loadSession()?.user?.role || "").trim().toLowerCase());
+];
+// An old client's instalment: the server's OLD_CLIENT_ROLES.
+const OLD_CLIENT_ROLES = new Set([...BRANCH_DESK_ROLES, "super_admin", "accountant"]);
+// Payment Schedule's Collect: an instalment through mark_installment_paid, a Consultation
+// Fee through collect_package_payment -- which the Accountant is not on.
+const INSTALMENT_ROLES = new Set([...BRANCH_DESK_ROLES, "super_admin", "accountant", "business_dev"]);
+const CONSULTATION_FEE_ROLES = new Set([...BRANCH_DESK_ROLES, "super_admin", "business_dev"]);
+const sessionRole = () => String(loadSession()?.user?.role || "").trim().toLowerCase();
 
 // What the server calls money it cannot put under a branch -- see _branch_label in
 // v3_finance.py. One is a client who was never given a branch, the other a branch id
@@ -335,9 +338,16 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // The eye beside it opens the client; this opens the piece of paper.
   const [receipt, setReceipt] = useState(null);
   // The Old Client Instalment form: null when shut, otherwise what it opens on -- nothing
-  // from Payment Record's button, one old client from Payment Schedule's Collect.
+  // from Payment Schedule's button, one old client from that row's Collect.
   const [oldClientForm, setOldClientForm] = useState(null);
-  const canRecordOld = useMemo(canRecordOldClients, []);
+  // The Payment Schedule row whose due money is being collected, while its popup is open.
+  const [collectRow, setCollectRow] = useState(null);
+  const role = useMemo(sessionRole, []);
+  const canRecordOld = OLD_CLIENT_ROLES.has(role);
+  const canCollectRow = useCallback(
+    (row) => (collectWhat(row) === "instalment" ? INSTALMENT_ROLES : CONSULTATION_FEE_ROLES).has(role),
+    [role],
+  );
 
   // A scoped board still wants the list: nothing on it picks from it, but the scope chip
   // names the branch off it, and without the names it can only say "This branch".
@@ -413,6 +423,15 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
   useEffect(() => { loadExpenseTotals(); }, [loadExpenseTotals]);
 
+  // A collection taken from this board: the figures reloaded and the receipt handed over,
+  // as every Collect popup does -- the client is at the desk waiting for it.
+  const afterCollect = (message, tx) => {
+    toast.success(message);
+    load();
+    loadExpenseTotals();
+    if (tx) setReceipt(receiptForTxn(tx));
+  };
+
   const k = data?.kpis || {};
   // `data?.x || []` builds a fresh array on every render, so every memo keyed on one was
   // re-running each time and memoising nothing. Held steady here instead.
@@ -427,9 +446,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // pile before anything else is what keeps the cards and the rows under them the same
   // money. Filtering afterwards would leave the tiles counting a pile the table is not
   // showing.
-  // Payment Record is both piles at once, so it narrows nothing.
   const stagedTxns = useMemo(
-    () => (incomeStage === "record" ? transactions : transactions.filter((t) => stageOf(t) === incomeStage)),
+    () => transactions.filter((t) => stageOf(t) === incomeStage),
     [transactions, incomeStage],
   );
 
@@ -662,18 +680,17 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
       ) : tab === "summary" ? (
         <div className="space-y-4" data-testid="accountant-manage-summary">
-          {/* The five cards, each the view under it (Zumba's summary cards, ui/ledger-card):
-              the two income piles, the drawer, the money that went out, and every payment
-              taken. The picked one is filled in its colour. Where only signed-off money counts
-              there is no pile to move to, so Awaiting Approval is a figure to read rather than
-              a card to press -- Payment Record still opens, being a record and not income.
+          {/* The four cards, each the view under it (Zumba's summary cards, ui/ledger-card):
+              the two income piles, the drawer, and the money that went out. The picked one is
+              filled in its colour. Where only signed-off money counts there is no pile to move
+              to, so Awaiting Approval is a figure to read rather than a card to press.
 
               The book line that sat under them (Revenue, Expense, Profit, Total Expense) is
               gone: the branch asked for these cards and nothing else. */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="accountant-manage-ledger-filter">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="accountant-manage-ledger-filter">
             {SUMMARY_CARDS.map((c) => {
               // The income-side cards, each opening the income ledger at its own pile.
-              const pile = c.key === "approved" || c.key === "requested" || c.key === "record";
+              const pile = c.key === "approved" || c.key === "requested";
               const picked = pile ? ledger === "income" && incomeStage === c.key : ledger === c.key;
               const pendingExpense = Number(expenseTotals.pending_total) || 0;
               const card = {
@@ -693,10 +710,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   sub: pendingExpense > 0
                     ? `+ ${fmt(pendingExpense)} awaiting approval`
                     : countLabel(Number(expenseTotals.approved_count) || 0, "approved expense"),
-                },
-                record: {
-                  value: stagePiles.approved.total + stagePiles.requested.total,
-                  sub: countLabel(stagePiles.approved.count + stagePiles.requested.count, "payment"),
                 },
               }[c.key];
               const readOnly = approvedOnly && c.key === "requested";
@@ -732,26 +745,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
           {ledger === "income" && (
           <>
-          {/* Payment Record is every payment taken, so it is where a payment the OS had no
-              way to take goes in: an instalment on a course begun on the old Physio
-              Tracker, for a client whose history never came across. */}
-          {incomeStage === "record" && canRecordOld && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[5px] border border-indigo-200 bg-indigo-50 px-3 py-2" data-testid="accountant-manage-old-client-bar">
-              <p className="text-xs text-indigo-900">
-                <span className="font-semibold">Old client paying an instalment?</span>{" "}
-                For a course started on the old Physio Tracker. It gets a receipt and goes for approval like any other payment.
-              </p>
-              <Button
-                type="button"
-                onClick={() => setOldClientForm({})}
-                className="h-9 shrink-0 gap-1.5 bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-700"
-                data-testid="accountant-manage-old-client-open"
-              >
-                <History className="h-4 w-4" /> Old Client Instalment
-              </Button>
-            </div>
-          )}
-
           {/* All eight on one line where there is room for eight, stepping down to four
               and then two rather than squeezing: at lg an eighth of the width is narrower
               than the card's own text column.
@@ -846,6 +839,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           rows={outstanding}
           onView={setViewingLeadId}
           onChanged={load}
+          onCollect={setCollectRow}
+          canCollect={canCollectRow}
+          onNewOld={canRecordOld ? () => setOldClientForm({}) : undefined}
           onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id } }) : undefined}
         />
       ) : tab === "closebooks" ? (
@@ -872,13 +868,18 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           startWith={oldClientForm.startWith || null}
           onClose={() => setOldClientForm(null)}
           onSaved={(res) => {
-            toast.success(res.message || "Instalment recorded");
             setOldClientForm(null);
-            load();
-            loadExpenseTotals();
-            // The receipt straight away, as the other Collect popups hand one over: the
-            // client is standing at the desk waiting for it.
-            if (res.transaction) setReceipt(receiptForTxn(res.transaction));
+            afterCollect(res.message || "Instalment recorded", res.transaction);
+          }}
+        />
+      )}
+      {collectRow && (
+        <ScheduleCollectDialog
+          row={collectRow}
+          onClose={() => setCollectRow(null)}
+          onCollected={(tx) => {
+            setCollectRow(null);
+            afterCollect(`${fmt(tx.gross)} collected from ${tx.client_name}`, tx);
           }}
         />
       )}

@@ -3203,7 +3203,7 @@ async def collect_past_balance(
 # ---------------------------------------------------------------------------
 #
 # See old_clients.py for why these are a payments-only record and not leads. Entered from
-# Accountant Manage > Payment Record; each instalment is one collection of its own, read into
+# Accountant Manage > Payment Schedule; each instalment is one collection of its own, read into
 # revenue_overview and /finance/approvals beside the Zumba and Fitness money, and sent up,
 # approved and deleted through the same TRANSACTION_COLLECTIONS ladder as they are.
 
@@ -3288,7 +3288,7 @@ def _old_client_txn_row(pay: dict, client: dict, history: list, branch_name: str
         "tax": 0.0,
         "net": amount,
         "collected_by": pay.get("created_by", ""),
-        # No lead -- see old_clients.py. The Payment Record groups these by old_client_id
+        # No lead -- see old_clients.py. The Summary's table groups these by old_client_id
         # instead, and the client-history eye skips them rather than opening on nothing.
         "lead_id": "",
         "old_client_id": pay.get("old_client_id", ""),
@@ -3372,7 +3372,7 @@ async def record_old_client_payment(
     payload: OldClientPaymentInput,
     user: V3UserOut = Depends(v3_require_roles(*OLD_CLIENT_ROLES)),
 ):
-    """Accountant Manage > Payment Record > Old Client Instalment: one instalment taken
+    """Accountant Manage > Payment Schedule > Old Client Instalment: one instalment taken
     against a course begun on the old Physio Tracker.
 
     Real money, so it is recorded as any collection is: its own transaction id, awaiting the

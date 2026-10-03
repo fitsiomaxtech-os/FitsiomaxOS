@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet } from "lucide-react";
+import { Eye, ChevronDown, ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet, History } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecordCards } from "@/components/branch/RecordCards";
@@ -256,11 +256,17 @@ const downloadCsv = (rows) => {
 const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
 
 /**
+ * @param onCollect     Collects what a client's row has due (ScheduleCollectDialog) -- the
+ *              per-row Collect the old Partial Payment tab had. `canCollect(row)` says which
+ *              rows the desk may take it on; a Past Data balance is never one of them, since
+ *              its popup (View) collects against the sheet.
  * @param onCollectOld  Opens the Old Client Instalment form on an old client's row. Their
  *              balance has no client card to open, so this is that row's one action; left
  *              out where the desk may not take the money, and the row offers none.
+ * @param onNewOld  Opens the same form empty, for an old client not on this list yet.
  */
-export const OutstandingAmountBoard = ({ rows, onView, onCollectOld }) => {
+export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld }) => {
+  const collectable = (r) => Boolean(onCollect) && !r.old_client && !r.past_data && r.balance > 0 && canCollect(r);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [month, setMonth] = useState("all");
@@ -355,7 +361,18 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollectOld }) => {
             type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)}
             placeholder="Max amount" className="h-9 w-28 rounded-md border border-slate-200 px-2 text-sm"
           />
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
+            {/* Money for a course begun on the old Physio Tracker: the client is on no
+                list in the OS until their first instalment is entered here. */}
+            {onNewOld && (
+              <button
+                type="button" onClick={onNewOld}
+                className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+                data-testid="outstanding-old-client-open"
+              >
+                <History className="h-3.5 w-3.5" /> Old Client Instalment
+              </button>
+            )}
             <button
               type="button" onClick={() => downloadCsv(shown)}
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
@@ -398,7 +415,22 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollectOld }) => {
               ],
               // Not for a Past Data balance: that is what an Excel sheet said was owed when it
               // was saved, shown for reading, and no one on the OS set it.
-              actions: !r.past_data && waNumber(r.phone) ? <ReminderButton row={r} today={today} /> : null,
+              actions: (collectable(r) || (!r.past_data && waNumber(r.phone))) ? (
+                <>
+                  {collectable(r) && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onCollect(r); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                      data-testid={`outstanding-collect-card-${rowKey(r)}`}
+                    >
+                      <Wallet className="h-3.5 w-3.5" /> Collect
+                    </button>
+                  )}
+                  {!r.past_data && waNumber(r.phone) && <ReminderButton row={r} today={today} />}
+                </>
+              ) : null,
               onOpen: r.old_client
                 ? (onCollectOld ? () => onCollectOld(r) : undefined)
                 : (onView ? () => onView(r.lead_id) : undefined),
@@ -410,15 +442,15 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollectOld }) => {
               <thead>
                 <tr>
                   <th className="w-[5%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">S.No</th>
-                  <th className="w-[17%] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Client</th>
-                  <th className="w-[12%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phone</th>
-                  <th className="w-[11%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Branch</th>
+                  <th className="w-[15%] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Client</th>
+                  <th className="w-[11%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phone</th>
+                  <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Branch</th>
                   <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total Bill</th>
                   <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Paid</th>
                   <th className="w-[10%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Balance</th>
                   <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-red-600">Due Date</th>
-                  <th className="w-[9%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                  <th className="w-[8%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
+                  <th className="w-[8%] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                  <th className="w-[13%] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -451,20 +483,34 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollectOld }) => {
                         onCollectOld ? (
                           <button
                             type="button" onClick={() => onCollectOld(r)} title="Collect the next instalment"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
+                            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
                             data-testid={`outstanding-collect-old-${r.old_client_id}`}
                           >
-                            <Wallet className="h-4 w-4" /> Collect
+                            <Wallet className="h-3.5 w-3.5" /> Collect
                           </button>
                         ) : <span className="text-slate-300">—</span>
                       ) : (
-                        <button
-                          type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline"
-                          data-testid={`outstanding-view-${r.lead_id}`}
-                        >
-                          <Eye className="h-4 w-4" /> View
-                        </button>
+                        <div className="flex items-center justify-center gap-3">
+                          {/* What is due, taken from the list -- the next instalment of a
+                              part-paid fee, or a Consultation Fee never collected. */}
+                          {collectable(r) && (
+                            <button
+                              type="button" onClick={() => onCollect(r)}
+                              title={r.next_installment_number ? `Collect instalment #${r.next_installment_number}` : "Collect the Consultation Fee"}
+                              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                              data-testid={`outstanding-collect-${r.lead_id}`}
+                            >
+                              <Wallet className="h-3.5 w-3.5" /> Collect
+                            </button>
+                          )}
+                          <button
+                            type="button" onClick={() => onView && onView(r.lead_id)} title="View Details"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline"
+                            data-testid={`outstanding-view-${r.lead_id}`}
+                          >
+                            <Eye className="h-4 w-4" /> View
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

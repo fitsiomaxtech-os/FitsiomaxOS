@@ -4,7 +4,7 @@ are still paying it off at the branch an instalment at a time.
 Their history was never brought across, so the OS has no lead, no package and no schedule
 for them -- and with none of those there was no Collect button, no transaction id and no
 receipt for the second and third instalments the desk was being handed. Accountant Manage >
-Payment Record > Old Client Instalment is the way in for that money.
+Payment Schedule > Old Client Instalment is the way in for that money.
 
 A payments-only record, on purpose. An old client is not a lead: putting one on the branch
 as a lead would land them in Branch Leads, in this month's lead counts and in front of the
