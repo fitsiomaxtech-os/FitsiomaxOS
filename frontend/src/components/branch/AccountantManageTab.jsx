@@ -76,22 +76,24 @@ const mainTabClasses = (tab, active) => {
 /**
  * What a tab has waiting on it, on the tab's top-right corner: a red count, or a blue dot
  * where the tab only needs to say that something is there. The ring behind it pings so a
- * tab nobody has opened yet still catches the eye, and the count pops in again whenever it
- * changes (keyed on it). Both motions are motion-safe: a desk set to reduce motion still
- * gets the badge, standing still. White-ringed so it reads on a filled tab as well.
+ * tab nobody has opened yet still catches the eye, the count pops in again whenever it
+ * changes (keyed on it), and the whole badge, ring and all, cycles round the RGB spectrum
+ * (.rgb-badge, index.css) -- the badge only, never the tab under it. All three motions are
+ * motion-safe: a desk set to reduce motion still gets the badge, standing still in its own
+ * red or blue. White-ringed so it reads on a filled tab as well.
  */
 const TabBadge = ({ badge }) => {
   if (!badge) return null;
   if (badge.dot) {
     return (
-      <span className="pointer-events-none absolute -right-1 -top-1 flex h-2.5 w-2.5" aria-hidden="true">
+      <span className="rgb-badge pointer-events-none absolute -right-1 -top-1 flex h-2.5 w-2.5" aria-hidden="true">
         <span className="absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75 motion-safe:animate-ping" />
         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-500 ring-2 ring-white" />
       </span>
     );
   }
   return (
-    <span className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px]" aria-hidden="true">
+    <span className="rgb-badge pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px]" aria-hidden="true">
       <span className="absolute inset-0 rounded-full bg-rose-400 opacity-75 motion-safe:animate-ping" />
       <span
         key={badge.count}

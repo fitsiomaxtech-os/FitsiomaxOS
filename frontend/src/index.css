@@ -128,6 +128,31 @@ code {
     margin: 0 8px;
 }
 
+/* A tab's notification badge (Accountant Manage), cycling round the RGB spectrum. A
+   hue-rotate filter on the badge's wrapper, so the ping ring and the core turn together
+   while white -- the count and the ring round the badge -- stays white, and the rotation
+   holds lightness, so the count reads as well on green or blue as it does on red. The
+   badge only; the tab under it keeps its own colour. Stands still in its base colour for
+   a desk set to reduce motion. */
+@keyframes rgb-badge-cycle {
+    from {
+        filter: hue-rotate(0deg);
+    }
+    to {
+        filter: hue-rotate(360deg);
+    }
+}
+
+.rgb-badge {
+    animation: rgb-badge-cycle 3s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rgb-badge {
+        animation: none;
+    }
+}
+
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;
