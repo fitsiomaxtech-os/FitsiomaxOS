@@ -8,6 +8,7 @@ import { LedgerCard } from "@/components/ui/ledger-card";
 import { toast } from "@/components/ui/sonner";
 import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { rangeFor, todayIso } from "@/lib/dateRange";
 import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
@@ -625,8 +626,15 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // The range and Refresh. Hidden on Closing Balance and Close Books, which carry their
   // own Daily/Weekly/Monthly control over which evenings are counted -- two date controls
   // over one set of figures would leave the desk asking which is in force.
+  //
+  // On a phone, in this board's own bar, it shares a line with the payment-mode dropdown
+  // and grows to fill it. Its 3rem basis is the Refresh button and the gap before it, which
+  // leaves the two dropdowns the same width rather than this one a button narrower.
   const dateControls = tab !== "closing" && tab !== "closebooks" ? (
-    <div className={`flex shrink-0 flex-nowrap items-center gap-2 ${toolbarTarget ? "" : "ml-auto"}`} data-testid="accountant-manage-date-filter">
+    <div
+      className={`flex flex-nowrap items-center gap-2 ${toolbarTarget ? "shrink-0" : "min-w-0 flex-[1_1_3rem] sm:ml-auto sm:flex-none"}`}
+      data-testid="accountant-manage-date-filter"
+    >
       <FinanceDateFilter
         preset={preset}
         customFrom={customFrom}
@@ -635,6 +643,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         presets={DATE_PRESETS}
         variant="inline"
         filterIcon
+        mobileSelect
         testid="accountant-manage-window"
       />
       <Button
@@ -663,11 +672,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           is narrowed to. The branch select keeps its condition: the boards that pass a fixed
           branch have nothing to choose, and the row starts at the tabs for them.
 
-          flex-nowrap, and the only scroll container on this line. Wrapping put the range on
-          a second row under the tabs, which is a second band of controls above the figures
-          and moves the whole page down whenever the row is one button too wide. Everything
-          in here is shrink-0 and gives back padding rather than width under 1900px, so on any
-          ordinary desk it simply fits; a phone scrolls this one strip sideways instead.
+          From sm up, every group in here is shrink-0 and gives back padding rather than
+          width under 1900px, so on any ordinary desk the row simply fits.
 
           Under 1900px, not under 2xl. The full-size type and padding were taken back at
           1536px, some 240px before this row had the width for them, so every laptop
@@ -675,19 +681,27 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           right edge at once -- and since this strip hides its scrollbar, what that looked
           like was a Custom Range button sliced down the middle and no Refresh at all.
 
-          90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
-          itself, so the tabs, modes and windows fit on one desk line without the strip
+          A phone is laid out for its width instead of shrunk to it. The same groups, all
+          shrink-0, overran the bar's right edge there: "Closing B", "Ch" and half a Refresh
+          button, with the rest of the page dragged sideways after them. Below sm the bar
+          is three lines, every one of them the bar's own width -- the tabs, three to a line;
+          the All/Offline/Online pills where the board carries them; then the payment modes
+          and the date windows each folded into a dropdown, side by side, with Refresh.
+
+          90% from sm up, this bar only. zoom rather than transform: scale — zoom shrinks the
+          box itself, so the tabs, modes and windows fit on one desk line without the strip
           scrolling, and the bar stays flush with the board's edges instead of leaving the
-          gap a scaled-down full-width row would. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm" style={{ zoom: 0.9 }} data-testid="accountant-manage-maintabs">
+          gap a scaled-down full-width row would. Not on a phone, where the bar is laid out
+          to fit and 90% of 12px type was only harder to read. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
-          <div className="flex shrink-0 items-center gap-2 border-r border-slate-200 pl-1.5 pr-2 min-[1900px]:pr-3">
+          <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
             <label htmlFor="accountant-manage-branch" className="text-xs font-medium text-slate-600">Branch:</label>
             <select
               id="accountant-manage-branch"
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="h-10 rounded-md border border-slate-200 px-2 text-xs text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 min-[1900px]:text-sm"
+              className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-xs text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:flex-none min-[1900px]:text-sm"
               data-testid="accountant-manage-branch-select"
             >
               <option value="">All Branches</option>
@@ -696,8 +710,13 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           </div>
         )}
         {/* gap-2, not gap-1: a badge stands 6px out past its tab's right edge, and any
-            less would put it on the next tab's border. */}
-        <div className="flex shrink-0 flex-nowrap gap-2 min-[1900px]:gap-2.5">
+            less would put it on the next tab's border.
+
+            On a phone the five wrap, three to a line at a 30% basis, and each grows to share
+            its line -- so the last two split theirs in half rather than leaving a hole. A
+            name too long for a third of a phone breaks onto a second line inside a 44px tab
+            instead of being cut off at the edge. */}
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap min-[1900px]:gap-2.5">
           {MAIN_TABS.map((t) => {
             const badge = tabBadges[t.key];
             return (
@@ -706,7 +725,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 onClick={() => setTab(t.key)}
                 title={badge?.title}
                 aria-label={badge ? `${t.label} (${badge.title})` : undefined}
-                className={`relative h-10 shrink-0 whitespace-nowrap rounded-lg border px-2.5 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
+                className={`relative h-11 min-w-0 grow basis-[30%] rounded-lg border px-1.5 text-center text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:h-10 sm:shrink-0 sm:grow-0 sm:basis-auto sm:whitespace-nowrap sm:px-2.5 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
                 data-testid={`accountant-manage-maintab-${t.key}`}
               >
                 {t.label}
@@ -720,8 +739,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             own, so the board keeps to one bar under the page's tabs. */}
         {tab === "summary" && (
           <>
+            {/* Three short words: a line of their own on a phone, a third each. */}
             {verticalModeFilter && (
-              <div className="flex shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2" data-testid="accountant-manage-vertical-mode-filter">
+              <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-nowrap sm:items-center sm:border-l sm:border-slate-200 sm:pl-2" data-testid="accountant-manage-vertical-mode-filter">
                 {VERTICAL_MODES.map(([key, label]) => (
                   <button
                     key={key}
@@ -737,7 +757,20 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 ))}
               </div>
             )}
-            <div className="flex shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2" data-testid="accountant-manage-payment-mode-filter">
+            {/* Six buttons are wider than a phone, so there they are one dropdown, sharing a
+                line with the date dropdown -- see dateControls. */}
+            <FilterSelect
+              value={paymentModeFilter}
+              onChange={setPaymentModeFilter}
+              active={paymentModeFilter !== "all"}
+              accent="indigo"
+              label="Payment mode"
+              className="flex-1 sm:hidden"
+              testid="accountant-manage-payment-mode-select"
+            >
+              {PAYMENT_MODES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </FilterSelect>
+            <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2 sm:flex" data-testid="accountant-manage-payment-mode-filter">
               {PAYMENT_MODES.map(([key, label]) => (
                 <button
                   key={key}

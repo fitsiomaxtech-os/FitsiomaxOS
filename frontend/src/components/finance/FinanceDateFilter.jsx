@@ -2,8 +2,17 @@ import { useEffect, useState } from "react";
 import { CalendarDays, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MilkCalendar } from "@/components/ui/milk-calendar";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { maskDayMonthYear, manualToIso, isoToManual } from "@/components/DateFilterPopover";
 import { DATE_PRESET_LABELS, DATE_PRESET_SHORT } from "@/lib/dateRange";
+
+// The phone dropdown's option that opens the dialog rather than naming a window. Never the
+// select's value, so picking it fires every time -- including while a custom range is
+// already the one in force, which is when somebody wants to change it.
+const PICK_RANGE = "__pick";
+
+// DD-MM: a range spelt out in a select half a phone wide has no room for the years.
+const shortDay = (iso) => isoToManual(iso).slice(0, 5);
 
 /**
  * Every window the finance book is read through, in the order they are reached for: the
@@ -229,6 +238,10 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
  * @param variant     how the row is dressed, and whether it scrolls itself. See VARIANTS.
  * @param filterIcon  whether to close the row with a calendar button onto the same dialog
  *                    Custom Range opens, and light it while a range is in force. See below.
+ * @param mobileSelect  below sm, the windows as one dropdown in place of the row, the chip
+ *                    and the calendar button. Opt-in, for a board whose phone toolbar has
+ *                    other filters to fit beside this one: the dropdown spells a custom
+ *                    range out as its own option, and its Custom Range… opens the dialog.
  */
 
 /**
@@ -283,19 +296,43 @@ const VARIANTS = {
 export const FinanceDateFilter = ({
   preset, customFrom = "", customTo = "", onChange,
   presets = FINANCE_DATE_PRESETS, variant = "toolbar", filterIcon = false,
-  testid = "finance-date",
+  mobileSelect = false, testid = "finance-date",
 }) => {
   const [open, setOpen] = useState(false);
   const hasRange = preset === "custom" && customFrom && customTo;
   const V = VARIANTS[variant] || VARIANTS.toolbar;
   const compact = variant === "pill";
+  // Where the phone has the dropdown, the row and the chip are sm-and-up only.
+  const rowShown = mobileSelect ? "hidden sm:flex" : "flex";
 
   return (
-    <div className={`flex min-w-0 items-center ${V.gap}`} data-testid={testid}>
+    <div className={`flex min-w-0 items-center ${V.gap} ${mobileSelect ? "flex-1 sm:flex-initial" : ""}`} data-testid={testid}>
+      {mobileSelect && (
+        <FilterSelect
+          value={preset}
+          onChange={(key) => (key === PICK_RANGE ? setOpen(true) : onChange(key, customFrom, customTo))}
+          active={preset !== "all"}
+          label="Date range"
+          title={hasRange ? `${isoToManual(customFrom)} to ${isoToManual(customTo)}` : undefined}
+          className="flex-1 sm:hidden"
+          testid={`${testid}-select`}
+        >
+          {presets.filter((key) => key !== "custom").map((key) => (
+            // "All" on its own beside the payment-mode dropdown's "All Modes" would not say
+            // all of what.
+            <option key={key} value={key}>{key === "all" ? "All Dates" : DATE_PRESET_LABELS[key]}</option>
+          ))}
+          {preset === "custom" && (
+            <option value="custom">{hasRange ? `${shortDay(customFrom)} – ${shortDay(customTo)}` : DATE_PRESET_LABELS.custom}</option>
+          )}
+          {presets.includes("custom") && <option value={PICK_RANGE}>Custom Range…</option>}
+        </FilterSelect>
+      )}
+
       {/* flex-nowrap over a sideways scroll, not flex-wrap: see the note above on why this
           stays one row at every width. The bar itself is hidden where the browser allows
           it, since a scrollbar under seven buttons reads as a broken control. */}
-      <div className={`flex flex-nowrap items-center ${V.gap} ${
+      <div className={`${rowShown} flex-nowrap items-center ${V.gap} ${
         V.scrolls ? "min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "shrink-0"
       }`}>
         {presets.map((key) => (
@@ -342,7 +379,7 @@ export const FinanceDateFilter = ({
           it. The figures are filtered by it, so it has to be readable without opening
           anything. */}
       {hasRange && (
-        <span className="flex shrink-0 items-center" data-testid={`${testid}-chip`}>
+        <span className={`${rowShown} shrink-0 items-center`} data-testid={`${testid}-chip`}>
           <button
             type="button"
             onClick={() => setOpen(true)}
