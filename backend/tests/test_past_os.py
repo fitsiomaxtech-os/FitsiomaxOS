@@ -216,6 +216,33 @@ def test_every_service_type_is_read_as_its_own():
     assert (treatment["sessions_completed"], fitness["sessions_completed"]) == (2, 1)
 
 
+def test_a_payments_row_goes_to_its_service_type():
+    """Treatment and Fitness running at once: each payments row's instalments go to the
+    course of its own Service Type, not to whichever started last."""
+    data = build({
+        "Leads": [lead(2, "PAR-1", "Test Anbu", "9344123286")],
+        "Physio": [phone_child(2, "9344123286", course="Treatment", start_date=datetime(2026, 9, 1)),
+                   phone_child(3, "9344123286", course="Fitness", package="Gym Monthly", start_date=datetime(2026, 9, 10))],
+        "Payments": [phone_child(2, "9344123286", service_type="Treatment", consultation_fee=1500,
+                                 consultation_date=datetime(2026, 8, 30), consultation_mode="Cash",
+                                 **instalments(i1_amount=9600, i1_paid_date=datetime(2026, 9, 1), i1_mode="UPI",
+                                               i2_amount=9600, i2_due_date=datetime(2026, 10, 20))),
+                     phone_child(3, "9344123286", service_type="fitness",
+                                 **instalments(i1_amount=3000, i1_paid_date=datetime(2026, 9, 10), i1_mode="Cash")),
+                     # A Diet fee with no Diet course: kept under a Diet course of its own.
+                     phone_child(4, "9344123286", service_type="Diet",
+                                 **instalments(i1_amount=1000, i1_paid_date=datetime(2026, 9, 12), i1_mode="Cash"))],
+    })
+    assert [f.code for f in data.findings] == ["payment_no_course"]
+    treatment, fitness = data.treatments[:2]
+    by_id = {t["id"]: t for t in data.treatments}
+    assert [(p["payment_for"], by_id[p["treatment_id"]]["course"]) for p in data.payments] == [
+        ("Consultation Fee", "Consultation"), ("Treatment Fee", "Treatment"), ("Treatment Fee", "Treatment"),
+        ("Fitness Fee", "Fitness"), ("Diet Fee", "Diet")]
+    assert (treatment["paid_total"], treatment["outstanding_total"], fitness["paid_total"]) == (9600, 9600, 3000)
+    assert by_id[data.payments[-1]["treatment_id"]]["service"] == "Diet"
+
+
 def test_a_bad_date_on_the_physio_tab_is_reported_there():
     data = build({
         "Leads": [lead(2, "PAR-1", "Test Bala", "8825587322")],

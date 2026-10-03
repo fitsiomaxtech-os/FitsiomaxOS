@@ -14,9 +14,10 @@ still being treated: one workbook, five tabs, read at the same time in one uploa
             in two cells, at what time and by which physio (or, as the tab was first laid
             out and is still read, one row per session)
   Reviews   one row per review, by the Head Physio
-  Payments  one row per client: the consultation fee, and each instalment of the treatment
-            fee -- its amount, Paid Date or Due Date, and mode -- in columns of its own (or,
-            as the tab was first laid out and is still read, one row per payment)
+  Payments  one row per client (and Service Type, when a client is on two): the consultation
+            fee, and each instalment of the service's fee -- its amount, Paid Date or Due
+            Date, and mode -- in columns of its own (or, as the tab was first laid out and is
+            still read, one row per payment)
 
 -- so one sheet on the Import/Export list holds three kinds of data at once, which its Type
 column shows as Lead, Sessions (the Physio, Sessions and Reviews tabs) and Revenue (the
@@ -133,6 +134,9 @@ COLUMNS = {
         "client_excel_id": "Patient ID",
         "phone": "Phone",
         "name": "Name",
+        # Which service the row's instalments paid for; blank, the course running on each
+        # one's date. A client on two services at once has a row for each.
+        "service_type": "Service Type",
         # A row per client: the consultation fee, then the treatment fee's instalments, each
         # in four columns of its own -- see INSTALMENT_COLUMN.
         "consultation_fee": "Consultation Fee",
@@ -204,6 +208,8 @@ SESSION_STATUSES = {"completed": "Completed", "upcoming": "Upcoming"}
 REVIEW_STATUSES = {"completed": "Completed", "pending": "Pending"}
 # Payment For, the template's other value beside the consultation fee.
 TREATMENT_FEE = {"treatmentfee", "treatment"}
+# What an instalment paid for, by its Service Type: "Fitness Fee"...
+SERVICE_FEES = TREATMENT_FEE | {squash(f"{s} Fee") for s in SERVICE_TYPES.values()}
 
 # What a desk types into a cell to say "nothing here".
 BLANKS = {"-", "--", "—", "–", "na", "n/a", "nil", "none"}
@@ -594,19 +600,21 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
 
     # -- payments, each under the course it paid for
     consultations: Dict[str, Dict[str, Any]] = {}
-    placeholders: Dict[str, Dict[str, Any]] = {}
+    placeholders: Dict[tuple, Dict[str, Any]] = {}
     for record in tabs.get(PAYMENTS, []):
         where = f"{PAYMENTS} · row {record['_row']}"
         client = owner(record, PAYMENTS, where)
         if not client:
             continue
-        found = _row_payments(record, where)
+        kind = (_course(data, PAYMENTS, where, client["name"], record.get("service_type"))
+                if text(record.get("service_type")) else "")
+        found = _row_payments(record, where, kind)
         if not found:
             data.note("no_payments", PAYMENTS, where, client["name"])
         for entry in found:
             at, payment_for, figure = entry["excel_id"], entry["payment_for"], entry["figure"]
             paid_day, due_day, state = entry["paid_day"], entry["due_day"], entry["state"]
-            if not squash(payment_for).startswith("consult") and squash(payment_for) not in TREATMENT_FEE:
+            if not squash(payment_for).startswith("consult") and squash(payment_for) not in SERVICE_FEES:
                 data.note("unknown_payment_for", PAYMENTS, at, f"{client['name']}: '{payment_for or '(blank)'}'")
 
             if squash(payment_for).startswith("consult"):
@@ -620,17 +628,18 @@ def build(tabs: Dict[str, List[Dict[str, Any]]], data: Optional[PastData] = None
                     consultations[client["id"]] = treatment
                     data.treatments.append(treatment)
             else:
-                treatment = _course_for(courses.get(client["id"], []), paid_day or due_day)
+                treatment = _course_for(courses.get(client["id"], []), paid_day or due_day, kind)
                 if not treatment:
-                    treatment = placeholders.get(client["id"])
+                    service = kind or "Treatment"
+                    treatment = placeholders.get((client["id"], service))
                     if not treatment:
                         treatment = _treatment(
-                            client, f"{client['excel_id']} · Treatment", service="Treatment", course="Treatment",
+                            client, f"{client['excel_id']} · {service}", service=service, course=service,
                             start_date=paid_day or due_day, status="",
                         )
                         _flag(treatment, "payment_no_course")
-                        data.note("payment_no_course", PAYMENTS, at, client["name"])
-                        placeholders[client["id"]] = treatment
+                        data.note("payment_no_course", PAYMENTS, at, f"{client['name']}: {service}")
+                        placeholders[(client["id"], service)] = treatment
                         data.treatments.append(treatment)
 
             payment = {
@@ -834,7 +843,7 @@ def _row_sessions(data: PastData, record: dict, where: str, who: str,
     return found
 
 
-def _row_payments(record: dict, where: str) -> List[Dict[str, Any]]:
+def _row_payments(record: dict, where: str, kind: str = "") -> List[Dict[str, Any]]:
     """The payments one Payments row holds, each with its own excel_id, what it was for, its
     amount (`figure`), its days, its mode, and `state` as _state reads it.
 
@@ -870,7 +879,7 @@ def _row_payments(record: dict, where: str) -> List[Dict[str, Any]]:
         dates_written = " / ".join(text(c) for c in cells[1:3] if text(c))
         found.append({
             "excel_id": f"{where} · {label}",
-            "payment_for": "Consultation Fee" if n is None else "Treatment Fee",
+            "payment_for": "Consultation Fee" if n is None else f"{kind or 'Treatment'} Fee",
             "installment": n, "figure": amount(cells[0]), "paid_day": paid_day, "due_day": due_day,
             "mode": cells[3], "state": state, "status": {"paid": "Paid", "unpaid": "Pending"}.get(state, ""),
             "unread": f"{label}: no " + ("Consultation Date" if n is None else "Paid Date or Due Date")
