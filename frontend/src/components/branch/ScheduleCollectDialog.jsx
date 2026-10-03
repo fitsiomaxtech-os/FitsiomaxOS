@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Wallet, X } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
@@ -42,6 +42,19 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
   const [draft, setDraft] = useState({ ...emptyTender });
   const [saving, setSaving] = useState(false);
   const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
+
+  // Escape shuts this popup and nothing under it. Opened over the client popup, that one
+  // listens for Escape on window too; caught here on the way down and stopped, it never
+  // hears it, so the client popup stays open behind as Cancel would leave it.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      if (!saving) onClose();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [saving, onClose]);
 
   const submit = async () => {
     if (!(amount > 0)) { toast.error("Nothing is due to collect"); return; }

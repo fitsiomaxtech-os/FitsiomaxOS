@@ -437,6 +437,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // re-running each time and memoising nothing. Held steady here instead.
   const transactions = useMemo(() => data?.transactions || [], [data]);
   const outstanding = useMemo(() => data?.outstanding_clients || [], [data]);
+  // The client popup's Collect: the open client's Payment Schedule row, when that row is
+  // one its own Collect button would take -- the board's rule, read off the same row.
+  const viewingRow = useMemo(() => outstanding.find((r) => r.lead_id === viewingLeadId), [outstanding, viewingLeadId]);
+  const viewingCollectable = Boolean(viewingRow) && !viewingRow.old_client && !viewingRow.past_data && viewingRow.balance > 0 && canCollectRow(viewingRow);
 
   // How it was paid, which is the one cut left on this list. Whether a collection has
   // been signed off is the Accountant's own Approvals tab, and asking it here too gave a
@@ -860,7 +864,14 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       {/* The Custom Range dialog moved into FinanceDateFilter, which opens it from the row
           above — one dialog for the four finance pages instead of a copy per page. */}
 
-      {viewingLeadId && <ClientHistoryModal leadId={viewingLeadId} onClose={() => setViewingLeadId(null)} onChanged={load} />}
+      {viewingLeadId && (
+        <ClientHistoryModal
+          leadId={viewingLeadId}
+          onClose={() => setViewingLeadId(null)}
+          onChanged={load}
+          onCollect={viewingCollectable ? () => setCollectRow(viewingRow) : undefined}
+        />
+      )}
       {oldClientForm && (
         <OldClientInstalmentDialog
           branchId={branchId}
@@ -879,6 +890,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           onClose={() => setCollectRow(null)}
           onCollected={(tx) => {
             setCollectRow(null);
+            // Taken from the client popup, the popup goes too: what it showed is now out of
+            // date, and the receipt is what comes next.
+            setViewingLeadId(null);
             afterCollect(`${fmt(tx.gross)} collected from ${tx.client_name}`, tx);
           }}
         />

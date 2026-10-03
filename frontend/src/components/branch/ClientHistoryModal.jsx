@@ -296,8 +296,12 @@ const RECENT_PAYMENTS = 3;
  * Portalled to <body> and sized to its content, capped by the viewport (dvh), so no board
  * it opens from can clip it. It floats over the page on a phone as on a desktop, never
  * taking the whole screen; past the cap the body scrolls and the footer stays in view.
+ *
+ * @param onCollect  Collects a balance this popup has no form for -- a Consultation Fee
+ *              assigned and never collected -- the way the board's own row Collect does.
+ *              Handed in only where the board can take it; left out, no button.
  */
-export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
+export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
@@ -386,10 +390,11 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
   // What Collect takes. An installment on the OS's own schedule first; otherwise a Past
   // Data client's sheet balance, which the server pays off oldest due first and which may
   // be collected a row at a time or all at once. A balance on neither — a Consultation Fee
-  // never collected — belongs to the client's card in Consultations, where collecting it
-  // also moves them on.
+  // never collected — goes to the board's own Collect (`onCollect`), which takes it the way
+  // Consultations does and so moves the client on too.
   const pastTotal = Math.round(pastOwed.reduce((s, r) => s + (Number(r.amount) || 0), 0) * 100) / 100;
   const collectKind = pd.next_installment_number ? "installment" : pastOwed.length > 0 ? "past" : null;
+  const feeCollect = !collectKind && due > 0 && Boolean(onCollect);
 
   /** Opens the confirmation popup rather than collecting on the spot. Money changing
    *  hands off a single unguarded click is how a client gets charged twice. */
@@ -535,7 +540,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
                 <MoneyTile label="Collected" value={fmt(collected)} tone="text-teal-700" />
               </div>
 
-              {((due > 0 && data.next_due_date) || data.last_payment_date || collectKind) && (
+              {((due > 0 && data.next_due_date) || data.last_payment_date || collectKind || feeCollect) && (
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
                     {due > 0 && data.next_due_date && <span>Next due <span className="font-semibold text-slate-800">{fmtDay(data.next_due_date)}</span></span>}
@@ -548,6 +553,15 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged }) => {
                       data-testid="client-history-record-payment"
                     >
                       <Wallet className="h-4 w-4" /> {recording ? "Saving..." : collectLabel}
+                    </button>
+                  )}
+                  {feeCollect && (
+                    <button
+                      type="button" onClick={onCollect}
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 sm:w-auto"
+                      data-testid="client-history-collect-fee"
+                    >
+                      <Wallet className="h-4 w-4" /> Collect Consultation Fee
                     </button>
                   )}
                 </div>
