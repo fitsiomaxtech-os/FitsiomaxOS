@@ -2548,6 +2548,9 @@ async def revenue_overview(
                 "phone": l.get("phone", ""),
                 "email": l.get("email", ""),
                 "branch_name": branch_name_map.get(l.get("branch_id"), ""),
+                # Which Branch Admin tab holds this patient -- House Visit or Consultation --
+                # for a Collect that hands the Consultation Fee to that tab's own popup.
+                "visit_type": l.get("visit_type"),
                 "balance": detail["balance"],
                 "total_bill": detail["total_bill"],
                 "paid_amount": detail["paid_amount"],

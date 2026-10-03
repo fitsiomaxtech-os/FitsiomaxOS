@@ -300,8 +300,13 @@ const PaymentModes = ({ tx }) => {
  *              is dropped (those pills already are it) and the branch is read straight
  *              off the prop on every render, so an empty one means All Branches rather
  *              than "pick your own", which is what a bare branchId would mean.
+ * @param onOpenConsultationFee  Takes a Payment Schedule row's Consultation Fee to the
+ *              Consultation tab's own Collect (Branch Admin), which asks for the package,
+ *              any discount and the mode's details before its Confirm & Collect, and holds
+ *              the prescription gate. Left out where there is no such tab, and the row's
+ *              Collect takes the fee in full on ScheduleCollectDialog instead.
  */
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null }) => {
+export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, onOpenConsultationFee = null }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -441,6 +446,19 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // one its own Collect button would take -- the board's rule, read off the same row.
   const viewingRow = useMemo(() => outstanding.find((r) => r.lead_id === viewingLeadId), [outstanding, viewingLeadId]);
   const viewingCollectable = Boolean(viewingRow) && !viewingRow.old_client && !viewingRow.past_data && viewingRow.balance > 0 && canCollectRow(viewingRow);
+  // A Collect on a Payment Schedule row, from the table or the client popup. An instalment
+  // is one fixed figure and is taken here. A Consultation Fee goes to the Consultation tab
+  // where there is one: a first collection there picks the package, agrees any discount
+  // and dates any balance before the mode's own Confirm & Collect, and waits on the
+  // prescription -- none of which this tab's short popup asks.
+  const collectScheduleRow = (row) => {
+    if (onOpenConsultationFee && collectWhat(row) === "consultation") {
+      setViewingLeadId(null);
+      onOpenConsultationFee(row);
+      return;
+    }
+    setCollectRow(row);
+  };
 
   // How it was paid, which is the one cut left on this list. Whether a collection has
   // been signed off is the Accountant's own Approvals tab, and asking it here too gave a
@@ -843,7 +861,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           rows={outstanding}
           onView={setViewingLeadId}
           onChanged={load}
-          onCollect={setCollectRow}
+          onCollect={collectScheduleRow}
           canCollect={canCollectRow}
           onNewOld={canRecordOld ? () => setOldClientForm({}) : undefined}
           onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id } }) : undefined}
@@ -869,7 +887,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           leadId={viewingLeadId}
           onClose={() => setViewingLeadId(null)}
           onChanged={load}
-          onCollect={viewingCollectable ? () => setCollectRow(viewingRow) : undefined}
+          onCollect={viewingCollectable ? () => collectScheduleRow(viewingRow) : undefined}
         />
       )}
       {oldClientForm && (

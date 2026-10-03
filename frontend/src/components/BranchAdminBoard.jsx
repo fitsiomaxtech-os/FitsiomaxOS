@@ -1028,6 +1028,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // embedded ConsultationsBoard which lead to auto-open once it loads, so the handoff lands
   // straight on that lead's own rich modal instead of just the filtered list.
   const [autoOpenLeadId, setAutoOpenLeadId] = useState(null);
+  // And which fee's Collect to open on that lead, when the handoff is for money -- see
+  // openConsultationFee below.
+  const [autoOpenFee, setAutoOpenFee] = useState(null);
 
   // The bell's number, kept beside the board rather than inside it: the count is wanted
   // on every tab, and the board it belongs to is only mounted while somebody is looking
@@ -1626,7 +1629,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // memoised, and an arrow written inline at the mount is a new prop on every render of
   // this board -- which is often, since forty-odd pieces of state up here have nothing to
   // do with that list. Handing it a fresh one each time would re-render the whole of it.
-  const clearAutoOpenLead = useCallback(() => setAutoOpenLeadId(null), []);
+  const clearAutoOpenLead = useCallback(() => { setAutoOpenLeadId(null); setAutoOpenFee(null); }, []);
+
+  // Accountant Manage's Payment Schedule Collect on a Consultation Fee. Taken on the
+  // Consultation tab's own popups -- package, discount, balance date, the mode's own
+  // Confirm & Collect -- with the prescription gate in front, rather than on a thinner
+  // copy of them; the same handoff the Branch Leads popup makes for a stage.
+  const openConsultationFee = useCallback((row) => {
+    setAutoOpenLeadId(row.lead_id);
+    setAutoOpenFee("consultation");
+    setActiveView(row.visit_type === "home" ? "branch_home_visit" : "branch_consultation");
+  }, []);
 
   // "All Stages" is the count of every lead matching the active Date Filter/search —
   // every lead in the branch when neither is set.
@@ -1837,7 +1850,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       ) : activeView === "records" ? (
         <RecordsPanel branchId={branchId} />
       ) : activeView === "accountant_mgmt" ? (
-        <AccountantManageTab branchId={branchId} />
+        <AccountantManageTab branchId={branchId} onOpenConsultationFee={openConsultationFee} />
       ) : (
         <>
           {/* Stage Head Bar — Pre-Sales style sticky segmented tabs, and the same block
@@ -2225,6 +2238,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               // see consultationCounts.
               onCountChange={handleConsultationCounts}
               autoOpenLeadId={autoOpenLeadId}
+              autoOpenFee={autoOpenFee}
               onAutoOpened={clearAutoOpenLead}
               // Driven by the toolbar above: passing externalSearch hides this board's own
               // search row, which is also where its date filter and green refresh lived.

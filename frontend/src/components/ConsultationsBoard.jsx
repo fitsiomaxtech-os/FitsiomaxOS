@@ -2453,7 +2453,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, onAutoOpened, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3574,14 +3574,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // Branch Leads' own lead popup hands off a specific lead here (rather than duplicating
   // this board's stage-specific popups) — once this board's own data has loaded, find that
   // lead and open its detail modal directly.
+  //
+  // With `autoOpenFee` it opens that fee's Collect on top, as the row's own fee button
+  // would -- Accountant Manage's Payment Schedule hands a Consultation Fee here rather than
+  // keep a thinner copy of this board's popups. openRowFee holds every gate that button
+  // does: no prescription on file opens the patient on the uploader instead.
   useEffect(() => {
     if (!autoOpenLeadId || !(board.leads || []).length) return;
     const match = board.leads.find((l) => l.id === autoOpenLeadId);
     if (match) {
-      setSelectedLead(match);
+      if (autoOpenFee) openRowFee(match, autoOpenFee);
+      else setSelectedLead(match);
       onAutoOpened && onAutoOpened();
     }
-  }, [autoOpenLeadId, board.leads]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenLeadId, autoOpenFee, board.leads]);
 
   const stageColor = useCallback(
     (name) => stages.find((s) => s.name === name)?.color || "#64748b",
