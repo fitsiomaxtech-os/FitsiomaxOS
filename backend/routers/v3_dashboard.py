@@ -1147,10 +1147,16 @@ async def v3_dashboard_leads_trend(
     # bottom of it reads this. Group-wide and read-only, like the rest of that tab.
     _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev")),
 ):
-    """Leads, Appointments, Treatments and Revenue per Physiotherapy branch, by calendar
-    month, most recent last. The route keeps its leads-trend name because callers and
-    tests already use it; each branch now carries a `series` of all four alongside the
-    original `values`, which stays the leads row.
+    """Leads, Appointments, Treatments and Revenue per branch, by calendar month, most
+    recent last. The route keeps its leads-trend name because callers and tests already
+    use it; each branch now carries a `series` of all four alongside the original
+    `values`, which stays the leads row.
+
+    Every live branch, whatever its service type — the same list /dashboard/overview
+    hands the Analytics tab's branch filter. This used to keep offline_physiotherapy
+    branches only, so a branch on any other type (Anna Nagar) was offered in the filter
+    above the chart and had no line on it: picking it faded every line there was and
+    highlighted nothing.
 
     All four are counted exactly as /dashboard/overview counts them, field for field, so
     a headline card and the line drawn under it cannot disagree about what the metric is.
@@ -1164,7 +1170,7 @@ async def v3_dashboard_leads_trend(
     from February to April as though the month never happened.
     """
     branches = await v3_col("branches").find(
-        live_branch_query({"vertical": "offline_physiotherapy"}), {"_id": 0, "id": 1, "branch_name": 1}
+        live_branch_query(), {"_id": 0, "id": 1, "branch_name": 1}
     ).to_list(500)
     if not branches:
         return {"months": [], "branches": []}
