@@ -870,24 +870,28 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
             The cards carry `compact` for the narrow width a phone leaves them: below sm the
             corner disc steps out and the label takes the whole card.
 
+            On a phone they also wear the Zumba strip's card (`arrow="phone"`): white, grey
+            label with the chevron, the figure in the card's colour, no caption. From sm up
+            they keep the disc and the sub-lines.
+
             Treatment Completed used to be a fourth card here. It counted finished patients,
             not days — the one figure in the row that did not answer to the date above it —
             and the Completed pill in the tool bar already opens that same list with its
             count beside it. */}
         <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
           <StatTile
-            compact
+            compact arrow="phone"
             icon={Calendar} label="Total Days" value={filterStats.total} color={TILE.total}
             onClick={() => setRowFilter("all")} active={rowFilter === "all"} testid="physio-stat-total"
           />
           <StatTile
-            compact
+            compact arrow="phone"
             icon={CheckCircle2} label="Completed" value={filterStats.completed} color={TILE.done}
             sub={filterStats.total ? `${Math.round((filterStats.completed / filterStats.total) * 100)}% done` : null}
             onClick={() => setRowFilter(rowFilter === "completed" ? "all" : "completed")} active={rowFilter === "completed"} testid="physio-stat-completed"
           />
           <StatTile
-            compact
+            compact arrow="phone"
             icon={Clock} label="Pending" value={filterStats.pending} sub="Days left" color={TILE.pending}
             onClick={() => setRowFilter(rowFilter === "pending" ? "all" : "pending")} active={rowFilter === "pending"} testid="physio-stat-pending"
           />

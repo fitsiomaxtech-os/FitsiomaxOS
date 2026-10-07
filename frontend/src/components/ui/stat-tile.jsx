@@ -28,6 +28,11 @@ import { ChevronRight } from "lucide-react";
  * 5px corner -- the look the finance cards and Zumba's own strip already wear. Opt-in so
  * the money, physio and review boards keep the disc they were built around.
  *
+ * `arrow="phone"` is that arrow card below sm only, and the disc card from sm up. On the
+ * phone it is label, chevron and figure and nothing else — the sub-line steps out with
+ * the disc, as the Zumba card it copies has none — and a compact card's figure keeps its
+ * full size, since a three-across row of short counts has the room for it.
+ *
  * Two slots for controls that belong to one card rather than to the list under it:
  * `footer` on a rule beneath the figure, and `corner` on the top line, running up to the
  * icon with the icon on its right. Corner is for a control that reads as a property of
@@ -43,13 +48,17 @@ export const StatTile = ({
   // loses the inner clicks. So the chrome moves to a wrapper and only the figure stays
   // pressable.
   const wrapped = !!footer || !!corner;
+  const phoneArrow = arrow === "phone";
+  const fullArrow = !!arrow && !phoneArrow;
+  // What the phone drops: the disc and icon under `compact` or a phone-only arrow.
+  const phoneHidden = compact || phoneArrow ? "hidden sm:block" : "";
   const Tag = onClick ? "button" : "div";
   const tagProps = onClick ? { type: "button", onClick } : {};
   // h-full so a row of these comes out level. Their container stretches each cell to the
   // tallest, but a tile that only claims its content height floats at the top of that
   // cell — which is what left one card with a footer standing taller than the three
   // beside it.
-  const chrome = `relative h-full w-full overflow-hidden ${arrow ? "rounded-[5px]" : "rounded-xl"} border bg-white text-left shadow-sm transition ${
+  const chrome = `relative h-full w-full overflow-hidden ${fullArrow ? "rounded-[5px]" : phoneArrow ? "rounded-[5px] sm:rounded-xl" : "rounded-xl"} border bg-white text-left shadow-sm transition ${
     active ? "border-transparent" : `border-slate-200 ${onClick ? "hover:shadow-md" : ""}`
   }`;
   const body = (
@@ -65,16 +74,21 @@ export const StatTile = ({
           (Branch Admin's Fitness-style strips) drops both and carries the ledger
           card's chevron instead -- see ui/ledger-card and ZumbaPanel's own card, which
           these strips match. */}
-      {!arrow && (
+      {!fullArrow && (
         <span
           aria-hidden
-          className={`pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full sm:-right-6 sm:-top-6 sm:h-20 sm:w-20 ${compact ? "hidden sm:block" : ""}`}
+          className={`pointer-events-none absolute -right-5 -top-5 h-16 w-16 rounded-full sm:-right-6 sm:-top-6 sm:h-20 sm:w-20 ${phoneHidden}`}
           style={{ background: `linear-gradient(135deg, ${color}2E, ${color}0D)` }}
         />
       )}
-      {Icon && !corner && !arrow && <Icon aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact ? "hidden sm:block" : ""}`} style={{ color }} />}
-      {arrow && !corner && (
+      {Icon && !corner && !fullArrow && <Icon aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${phoneHidden}`} style={{ color }} />}
+      {fullArrow && !corner && (
         <ChevronRight aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact ? "hidden sm:block" : ""}`} />
+      )}
+      {/* The phone's own chevron. On a compact card it is a size down and tucked into the
+          padding, so a nine-letter label like COMPLETED still fits on one line beside it. */}
+      {phoneArrow && !corner && (
+        <ChevronRight aria-hidden className={`absolute text-slate-400 sm:hidden ${compact ? "right-1.5 top-2 h-3 w-3" : "right-2.5 top-2.5 h-3.5 w-3.5"}`} />
       )}
       {/* The right padding keeps a long label out from under the icon; the figure shrinks
           on a phone because two cards to a row leaves about 130px and "Rs.4,32,704" does
@@ -90,10 +104,10 @@ export const StatTile = ({
           that same reserve plus the 30px the control is inset by below — the two move
           together or the label slides under the thing the space was kept for. */}
       <p className={`font-bold uppercase leading-tight tracking-wider text-slate-500 sm:text-[11px] ${compact ? "text-[9px] tracking-wide" : "text-[10px]"} ${
-        corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? "break-words pr-0 sm:pr-9" : "break-words pr-7 sm:pr-9"
+        corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? `break-words ${phoneArrow ? "pr-3" : "pr-0"} sm:pr-9` : "break-words pr-7 sm:pr-9"
       }`}>{label}</p>
-      <p className={`mt-1 font-extrabold sm:text-2xl ${compact ? "text-base" : "text-xl"}`} style={{ color }}>{value}</p>
-      {sub && <p className={`mt-0.5 leading-tight text-slate-400 sm:text-[10px] ${compact ? "text-[8px]" : "text-[10px]"}`}>{sub}</p>}
+      <p className={`mt-1 font-extrabold sm:text-2xl ${compact && !phoneArrow ? "text-base" : "text-xl"}`} style={{ color }}>{value}</p>
+      {sub && <p className={`mt-0.5 leading-tight text-slate-400 sm:text-[10px] ${compact ? "text-[8px]" : "text-[10px]"} ${phoneArrow ? "hidden sm:block" : ""}`}>{sub}</p>}
     </Tag>
   );
 
