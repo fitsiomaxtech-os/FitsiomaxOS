@@ -690,6 +690,15 @@ async def upload_employee_photo(
 
     Same gate as create/update employee: whoever may edit the record may set its picture.
     """
+    return {"url": await save_photo(file)}
+
+
+async def save_photo(file: UploadFile) -> str:
+    """Check one uploaded headshot, write it under PHOTO_DIR, and answer with its served path.
+
+    Shared with My Profile's own upload (routers/v3_me.py), so a photo somebody sets on
+    themselves passes the same checks and lands in the same place as one HR sets for them.
+    """
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in PHOTO_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Only JPG, PNG or WEBP images are allowed")
@@ -703,7 +712,7 @@ async def upload_employee_photo(
     filename = f"{uuid.uuid4()}{ext}"
     with open(os.path.join(PHOTO_DIR, filename), "wb") as f:
         f.write(contents)
-    return {"url": f"/api/v3/uploads/employees/{filename}"}
+    return f"/api/v3/uploads/employees/{filename}"
 
 
 MODE_ONLINE = "online"

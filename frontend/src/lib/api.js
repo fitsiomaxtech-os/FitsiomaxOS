@@ -761,6 +761,17 @@ export const eodReports = async ({ from, to } = {}) => (await api.get("/eod-repo
 // endpoints answer for everybody, these answer for whoever holds the token -- which is why
 // every role may call them.
 export const myProfile = async () => (await api.get("/me/profile")).data;
+// My own profile photo — the one thing on My Profile everybody writes for themselves. Both
+// answer { photo_url }. No explicit Content-Type, for the multipart boundary (as above).
+export const uploadMyPhoto = async (file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return (await api.post("/me/photo", form)).data;
+};
+export const removeMyPhoto = async () => (await api.delete("/me/photo")).data;
+// Fired with { detail: photo_url } after either of the two above, so App can swap the
+// signed-in user's copy and the header avatar changes without a reload.
+export const MY_PHOTO_CHANGED_EVENT = "me:photo-changed";
 export const myAttendance = async (month) => (await api.get("/me/attendance", { params: month ? { month } : {} })).data;
 
 // The three that write. They post into the very list HR decides on -- see

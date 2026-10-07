@@ -39,7 +39,7 @@ import calendar
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from database import v3_col
@@ -66,6 +66,9 @@ from routers.v3_hr_ops import (
 # several. Same reason v3_hr_ops.py imports it: two implementations would print one branch
 # on HR's tab and another on the person's own profile.
 from routers.v3_hr import resolve_employee_branches
+# And HR's headshot store, so a photo somebody sets on themselves is checked and kept exactly
+# like one HR set for them.
+from routers.v3_hr import save_photo
 # What a day amounts to, and which days the branch is closed. The same module HR's register
 # reads, so a person's own month and the register cannot disagree about their Tuesday.
 from attendance_rules import DEFAULTS as RULE_DEFAULTS, day_status, is_week_off, rules_of
@@ -224,6 +227,45 @@ async def my_profile(user: V3UserOut = Depends(v3_current_user)):
         "aadhar": _masked(emp.get("aadhar") or ""),
         **profile,
     }
+
+
+# ---------- my photo ----------
+
+async def _linked_employee_id(user: V3UserOut) -> str:
+    """The employee record this login is linked to, if that record still exists."""
+    account = await v3_col("users").find_one({"id": user.id}, {"_id": 0, "employee_id": 1})
+    emp_id = (account or {}).get("employee_id") or ""
+    if emp_id and await v3_col("employees").count_documents({"id": emp_id}, limit=1):
+        return emp_id
+    return ""
+
+
+@router.post("/photo")
+async def set_my_photo(file: UploadFile = File(...), user: V3UserOut = Depends(v3_current_user)):
+    """Everybody sets their own profile photo -- the one field on this page that is theirs to write.
+
+    It goes where HR's upload puts it, on the employee record, so HR's directory and the
+    person's own header show the same face. A login with no employee behind it keeps the
+    photo on the login instead; sign-in and /auth/me fall back to that copy (see
+    _employee_photo in routers/v3_auth.py).
+    """
+    url = await save_photo(file)
+    emp_id = await _linked_employee_id(user)
+    if emp_id:
+        await v3_col("employees").update_one({"id": emp_id}, {"$set": {"photo_url": url, "updated_at": now_iso()}})
+    else:
+        await v3_col("users").update_one({"id": user.id}, {"$set": {"photo_url": url}})
+    return {"photo_url": url}
+
+
+@router.delete("/photo")
+async def remove_my_photo(user: V3UserOut = Depends(v3_current_user)):
+    """Back to the initial. Clears both copies, so the login's one cannot show through."""
+    emp_id = await _linked_employee_id(user)
+    if emp_id:
+        await v3_col("employees").update_one({"id": emp_id}, {"$set": {"photo_url": "", "updated_at": now_iso()}})
+    await v3_col("users").update_one({"id": user.id}, {"$set": {"photo_url": ""}})
+    return {"photo_url": ""}
 
 
 # ---------- my attendance ----------

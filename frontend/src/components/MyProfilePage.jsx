@@ -24,12 +24,13 @@
  * page can make that reads another person's record.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Banknote,
   BriefcaseBusiness,
   CalendarDays,
   CalendarOff,
+  Camera,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -39,6 +40,7 @@ import {
   Home,
   KeyRound,
   Layers,
+  Loader2,
   LogIn,
   LogOut,
   ShieldAlert,
@@ -47,7 +49,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { getBranches, myAttendance, myProfile } from "@/lib/api";
+import { getBranches, myAttendance, myProfile, MY_PHOTO_CHANGED_EVENT, removeMyPhoto, uploadMyPhoto } from "@/lib/api";
+import { toast } from "@/components/ui/sonner";
 // The branch's working / leave days — the same calendar Management → Calendar sets.
 import { BranchMonthlyCalendar } from "@/components/branch/BranchMonthlyCalendar";
 import { CLOCK_CHANGED_EVENT } from "@/components/ClockWidget";
@@ -744,10 +747,146 @@ const WORK_TYPES = { online: "Online", offline: "Offline", both: "Online & Offli
 const SERVICES = { physio: "Physiotherapy", fitness: "Fitness", both: "Physiotherapy & Fitness" };
 const titleCase = (s) => String(s || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// ---------- my photo ----------
+
+// A phone camera shot runs 3–8MB and the server takes 5MB at most, so the picture is shrunk
+// in the browser first. 640px on its longest side is still sharp at every size an avatar is
+// drawn. Anything the browser cannot decode goes up as chosen, and the server answers for it.
+const PHOTO_MAX_EDGE = 640;
+const shrinkPhoto = (file) => new Promise((resolve) => {
+  const src = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const ctx = canvas.getContext("2d");
+    // White under a transparent PNG, which JPEG would otherwise turn black.
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(src);
+    canvas.toBlob(
+      (blob) => resolve(blob ? new File([blob], "photo.jpg", { type: "image/jpeg" }) : file),
+      "image/jpeg",
+      0.85,
+    );
+  };
+  img.onerror = () => { URL.revokeObjectURL(src); resolve(file); };
+  img.src = src;
+});
+
+/** Upload / remove for the signed-in person's own photo. `setData` is the profile's setter. */
+const useMyPhoto = (setData) => {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const done = (url, message) => {
+    setData((d) => (d ? { ...d, photo_url: url } : d));
+    window.dispatchEvent(new CustomEvent(MY_PHOTO_CHANGED_EVENT, { detail: url }));
+    toast.success(message);
+  };
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!String(file.type).startsWith("image/")) { toast.error("Choose a JPG, PNG or WEBP image"); return; }
+    setBusy(true);
+    try {
+      const { photo_url } = await uploadMyPhoto(await shrinkPhoto(file));
+      done(photo_url, "Profile photo updated");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not upload the photo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await removeMyPhoto();
+      done("", "Profile photo removed");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not remove the photo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return {
+    busy,
+    remove,
+    pick: () => inputRef.current?.click(),
+    input: (
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} data-testid="my-profile-photo-input" />
+    ),
+  };
+};
+
+/** The avatar with a camera badge on it; tapping either opens the picker. */
+const PhotoAvatar = ({ person, size, photo }) => (
+  <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <button
+      type="button"
+      onClick={photo.pick}
+      disabled={photo.busy}
+      className="block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+      aria-label={person?.photo_url ? "Change profile photo" : "Upload profile photo"}
+      data-testid="my-profile-photo"
+    >
+      <EmployeeAvatar employee={person} size={size} className="text-2xl" />
+    </button>
+    {photo.busy && (
+      <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/70">
+        <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+      </span>
+    )}
+    <button
+      type="button"
+      onClick={photo.pick}
+      disabled={photo.busy}
+      className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-white shadow hover:bg-emerald-700 disabled:opacity-60"
+      aria-label="Choose a photo"
+      data-testid="my-profile-photo-camera"
+    >
+      <Camera className="h-3.5 w-3.5" />
+    </button>
+  </div>
+);
+
+const PhotoActions = ({ person, photo, className = "" }) => (
+  <div className={`flex items-center gap-3 text-xs font-semibold ${className}`}>
+    <button
+      type="button"
+      onClick={photo.pick}
+      disabled={photo.busy}
+      className="text-emerald-700 hover:underline disabled:opacity-60"
+      data-testid="my-profile-photo-upload"
+    >
+      {person?.photo_url ? "Change photo" : "Upload photo"}
+    </button>
+    {person?.photo_url && (
+      <button
+        type="button"
+        onClick={photo.remove}
+        disabled={photo.busy}
+        className="text-rose-600 hover:underline disabled:opacity-60"
+        data-testid="my-profile-photo-remove"
+      >
+        Remove
+      </button>
+    )}
+  </div>
+);
+
 const ProfileTab = ({ roleLabel }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const photo = useMyPhoto(setData);
 
   useEffect(() => {
     let live = true;
@@ -788,7 +927,8 @@ const ProfileTab = ({ roleLabel }) => {
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <Panel title="Personal information" icon={UserRound} testid="my-profile-personal">
           <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
-            <EmployeeAvatar employee={data} size={64} className="text-2xl" />
+            {photo.input}
+            <PhotoAvatar person={data} size={64} photo={photo} />
             <div className="min-w-0">
               <p className="truncate text-base font-semibold text-slate-800" data-testid="my-profile-name">{data.full_name}</p>
               <p className="truncate text-xs text-slate-500">{data.designation || roleLabel}</p>
@@ -797,6 +937,7 @@ const ProfileTab = ({ roleLabel }) => {
                   {data.employee_code}
                 </span>
               )}
+              <PhotoActions person={data} photo={photo} className="mt-1.5" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -865,7 +1006,7 @@ const ProfileTab = ({ roleLabel }) => {
           wrong phone number and says nothing about how to fix it makes the reader hunt for
           somebody to tell. */}
       <p className="hidden text-center text-xs text-slate-400 md:block" data-testid="my-profile-footnote">
-        These details are held by HR. Anything wrong here is corrected on your employee record — ask HR to update it.
+        Apart from your photo, these details are held by HR. Anything wrong here is corrected on your employee record — ask HR to update it.
       </p>
     </div>
   );
@@ -875,6 +1016,7 @@ const ProfileTab = ({ roleLabel }) => {
 const PhoneProfileList = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const photo = useMyPhoto(setData);
 
   useEffect(() => {
     let live = true;
@@ -910,28 +1052,35 @@ const PhoneProfileList = () => {
   ];
 
   return (
-    <dl className="divide-y divide-slate-100 px-1" data-testid="my-profile-profile-tab">
-      {rows.map(([label, value, testid]) => (
-        <div key={label} className="flex gap-2 py-3 text-sm">
-          <dt className="w-32 shrink-0 text-slate-500">{label}</dt>
-          <dd className="min-w-0 flex-1 break-all font-medium text-slate-800" data-testid={testid}>{value || "—"}</dd>
+    <div data-testid="my-profile-profile-tab">
+      <div className="flex flex-col items-center gap-2 border-b border-slate-100 pb-4 pt-1">
+        {photo.input}
+        <PhotoAvatar person={data} size={88} photo={photo} />
+        <PhotoActions person={data} photo={photo} className="text-sm" />
+      </div>
+      <dl className="divide-y divide-slate-100 px-1">
+        {rows.map(([label, value, testid]) => (
+          <div key={label} className="flex gap-2 py-3 text-sm">
+            <dt className="w-32 shrink-0 text-slate-500">{label}</dt>
+            <dd className="min-w-0 flex-1 break-all font-medium text-slate-800" data-testid={testid}>{value || "—"}</dd>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 py-3 text-sm">
+          <dt className="w-32 shrink-0 text-slate-500">Status</dt>
+          <dd className="min-w-0 flex-1">
+            {data.status ? (
+              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                {titleCase(data.status)}
+              </span>
+            ) : <span className="font-medium text-slate-800">—</span>}
+          </dd>
         </div>
-      ))}
-      <div className="flex items-center gap-2 py-3 text-sm">
-        <dt className="w-32 shrink-0 text-slate-500">Status</dt>
-        <dd className="min-w-0 flex-1">
-          {data.status ? (
-            <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-              {titleCase(data.status)}
-            </span>
-          ) : <span className="font-medium text-slate-800">—</span>}
-        </dd>
-      </div>
-      <div className="flex gap-2 py-3 text-sm">
-        <dt className="w-32 shrink-0 text-slate-500">Joining Date</dt>
-        <dd className="min-w-0 flex-1 font-medium text-slate-800" data-testid="my-profile-joining">{prettyDate(data.joining_date) || "—"}</dd>
-      </div>
-    </dl>
+        <div className="flex gap-2 py-3 text-sm">
+          <dt className="w-32 shrink-0 text-slate-500">Joining Date</dt>
+          <dd className="min-w-0 flex-1 font-medium text-slate-800" data-testid="my-profile-joining">{prettyDate(data.joining_date) || "—"}</dd>
+        </div>
+      </dl>
+    </div>
   );
 };
 

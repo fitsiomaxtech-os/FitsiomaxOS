@@ -39,11 +39,14 @@ async def _employee_photo(user: dict) -> str:
     are joined by users.employee_id, which is absent on every account created without an
     employee behind it.
     """
+    # A login with nobody on the books behind it can still set its own photo from My
+    # Profile, which keeps it on the login itself -- the fallback below.
+    own = (user or {}).get("photo_url") or ""
     emp_id = (user or {}).get("employee_id")
     if not emp_id:
-        return ""
+        return own
     emp = await v3_col("employees").find_one({"id": emp_id}, {"_id": 0, "photo_url": 1})
-    return (emp or {}).get("photo_url") or ""
+    return (emp or {}).get("photo_url") or own
 
 
 async def _issue_session(user: dict) -> V3LoginResponse:
@@ -140,7 +143,7 @@ async def v3_login_resend_2fa(payload: V3TwoFactorResendRequest):
 async def v3_me(user: V3UserOut = Depends(v3_current_user)):
     # employee_id is not on V3UserOut, and v3_current_user drops everything the model does
     # not name, so the link has to be read again rather than carried through.
-    row = await v3_col("users").find_one({"id": user.id}, {"_id": 0, "employee_id": 1})
+    row = await v3_col("users").find_one({"id": user.id}, {"_id": 0, "employee_id": 1, "photo_url": 1})
     return user.model_copy(update={"photo_url": await _employee_photo(row)})
 
 

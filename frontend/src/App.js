@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import "@/App.css";
 import { LoginPage } from "@/pages/LoginPage";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
-import { apiMe } from "@/lib/api";
+import { apiMe, MY_PHOTO_CHANGED_EVENT } from "@/lib/api";
 
 /**
  * Everything behind the login screen is split out of the first download.
@@ -67,6 +67,21 @@ function App() {
       .catch(() => { /* keep cached profile if the refresh fails */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth?.token]);
+
+  // My Profile's photo upload, deep inside whichever board is open — told here so the
+  // header avatar, drawn from this copy of the user, changes with it.
+  useEffect(() => {
+    const onPhoto = (e) => {
+      setAuth((prev) => {
+        if (!prev?.user) return prev;
+        const next = { ...prev, user: { ...prev.user, photo_url: e.detail || "" } };
+        saveSession(next);
+        return next;
+      });
+    };
+    window.addEventListener(MY_PHOTO_CHANGED_EVENT, onPhoto);
+    return () => window.removeEventListener(MY_PHOTO_CHANGED_EVENT, onPhoto);
+  }, []);
 
   const handleLogin = (loginResponse) => {
     saveSession(loginResponse);
