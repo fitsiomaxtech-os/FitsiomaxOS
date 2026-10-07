@@ -507,10 +507,10 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
       {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
           on a 5px corner, matching the Fitness, Review and Patients strips. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Absences" value={absences.length} sub="today and ahead" arrow color="#e11d48" active={filter === null} onClick={() => setFilter(null)} testid="physio-absence-tile-count" />
-        <StatTile label="Need a plan" value={totals.waiting} sub="patients still booked" arrow color="#d97706" active={filter === "waiting"} onClick={() => pickFilter("waiting")} testid="physio-absence-tile-waiting" />
-        <StatTile label="Handed over" value={totals.reassigned} sub="to another physio" arrow color="#0284c7" active={filter === "reassigned"} onClick={() => pickFilter("reassigned")} testid="physio-absence-tile-reassigned" />
-        <StatTile label="Waiting" value={totals.released} sub="for a new date" arrow color="#64748b" active={filter === "released"} onClick={() => pickFilter("released")} testid="physio-absence-tile-released" />
+        <StatTile label="Absences" value={absences.length} arrow color="#e11d48" active={filter === null} onClick={() => setFilter(null)} testid="physio-absence-tile-count" />
+        <StatTile label="Need a plan" value={totals.waiting} arrow color="#d97706" active={filter === "waiting"} onClick={() => pickFilter("waiting")} testid="physio-absence-tile-waiting" />
+        <StatTile label="Handed over" value={totals.reassigned} arrow color="#0284c7" active={filter === "reassigned"} onClick={() => pickFilter("reassigned")} testid="physio-absence-tile-reassigned" />
+        <StatTile label="Waiting" value={totals.released} arrow color="#64748b" active={filter === "released"} onClick={() => pickFilter("released")} testid="physio-absence-tile-released" />
       </div>
 
       {/* Mark absent */}

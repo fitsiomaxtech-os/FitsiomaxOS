@@ -363,19 +363,19 @@ const TypePill = ({ review }) => {
  */
 const TILES = {
   consultant: [
-    { key: "", label: "All", figure: "total", sub: () => "Every consultant review", color: "#4f46e5" },
-    { key: "rated", label: "Consultation Review", figure: "average", sub: (f) => `${f.rated} ratings · 7-day + anytime`, color: "#f59e0b" },
-    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★ · every 7 days of treatment`, color: "#059669" },
-    { key: "anytime", label: "Anytime", figure: "anytime", sub: () => "From the Feedback tab", color: "#0284c7" },
+    { key: "", label: "All", figure: "total", color: "#4f46e5" },
+    { key: "rated", label: "Consultation Review", figure: "average", sub: (f) => `${f.rated} ratings`, color: "#f59e0b" },
+    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★`, color: "#059669" },
+    { key: "anytime", label: "Anytime", figure: "anytime", color: "#0284c7" },
   ],
   physio: [
-    { key: "", label: "All", figure: "total", sub: () => "Every physio review", color: "#4f46e5" },
-    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★ · every 7 days of treatment`, color: "#059669" },
+    { key: "", label: "All", figure: "total", color: "#4f46e5" },
+    { key: "weekly", label: "7 Days Review", figure: "weekly", sub: (f) => `Avg ${f.weeklyAvg ?? "—"} ★`, color: "#059669" },
     { key: "rated", label: "Average Rating", figure: "average", sub: (f) => `${f.rated} ratings`, color: "#f59e0b" },
-    { key: "anytime", label: "Anytime", figure: "anytime", sub: () => "From the Feedback tab", color: "#0284c7" },
+    { key: "anytime", label: "Anytime", figure: "anytime", color: "#0284c7" },
   ],
   branch_admin: [
-    { key: "", label: "All", figure: "total", sub: () => "Every branch admin review", color: "#4f46e5" },
+    { key: "", label: "All", figure: "total", color: "#4f46e5" },
     { key: "rated", label: "Average Rating", figure: "average", sub: (f) => `${f.rated} ratings`, color: "#f59e0b" },
   ],
 };
@@ -391,7 +391,6 @@ const STAFF_TILES = {
     key: "no_comment",
     label: "Without Review",
     figure: "noComment",
-    sub: () => "Rated, no words from the client",
     color: "#64748b",
   })),
 };
@@ -780,7 +779,7 @@ export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly =
             key={t.key || "all"}
             label={t.label}
             value={t.figure === "average" ? (figures.average != null ? `${figures.average} ★` : "—") : figures[t.figure]}
-            sub={t.sub(figures)}
+            sub={t.sub?.(figures)}
             arrow
             color={t.color}
             active={source === t.key}

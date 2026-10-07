@@ -99,12 +99,12 @@ const feeParts = (l) => [
  * a card and the rows it counts can never be named differently in two places.
  */
 const CARDS = [
-  { key: "all", label: "All", sub: "on the roll", color: "#6366f1" },
-  { key: "consultation", label: "Consultations", sub: "seen by a physio", color: "#0284c7" },
-  { key: "treatment", label: "Treatments", sub: "on a course", color: "#059669" },
-  { key: "rehab", label: "Rehab", sub: "programme booked", color: "#d97706" },
-  { key: "fitness", label: "Fitness", sub: "gym members", color: "#7c3aed" },
-  { key: "zumba", label: "Zumba", sub: "class members", color: "#db2777" },
+  { key: "all", label: "All", color: "#6366f1" },
+  { key: "consultation", label: "Consultations", color: "#0284c7" },
+  { key: "treatment", label: "Treatments", color: "#059669" },
+  { key: "rehab", label: "Rehab", color: "#d97706" },
+  { key: "fitness", label: "Fitness", color: "#7c3aed" },
+  { key: "zumba", label: "Zumba", color: "#db2777" },
 ];
 
 const SERVICE_LABEL = {
@@ -320,7 +320,6 @@ export const PatientsPortalPanel = ({ branchId }) => {
             key={c.key}
             label={c.label}
             value={counts[c.key] ?? 0}
-            sub={c.sub}
             arrow
             color={c.color}
             active={card === c.key}

@@ -12,9 +12,9 @@ import { to12h, endTime12h } from "@/lib/time";
 // Each row already names the Head Physio it went to, so the branch can see who has what
 // without a separate view for it.
 const SUB_TABS = [
-  { key: "send", label: "Send to Review", icon: Send, color: "#d97706", sub: "waiting to be sent" },
-  { key: "pending", label: "Pending Review", icon: Clock, color: "#0284c7", sub: "sent, not yet written" },
-  { key: "complete", label: "Review Complete", icon: CheckCircle2, color: "#059669", sub: "written up" },
+  { key: "send", label: "Send to Review", icon: Send, color: "#d97706" },
+  { key: "pending", label: "Pending Review", icon: Clock, color: "#0284c7" },
+  { key: "complete", label: "Review Complete", icon: CheckCircle2, color: "#059669" },
 ];
 
 /**
@@ -308,7 +308,6 @@ export const BranchReviewPanel = ({ branchId }) => {
             key={t.key}
             label={t.label}
             value={countFor(t.key)}
-            sub={t.sub}
             arrow
             color={t.color}
             active={sub === t.key}

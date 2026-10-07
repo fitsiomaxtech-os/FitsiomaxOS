@@ -379,14 +379,13 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
 
   const figures = useMemo(() => ({
     vendors: { value: visible.length || "—", sub: `${visible.filter((v) => v.active !== false).length} switched on` },
-    stock: { value: visibleStock.length || "—", sub: "in the stock list" },
+    stock: { value: visibleStock.length || "—" },
     outstanding: {
       value: fmt(owing.reduce((sum, v) => sum + Number(v.balance || 0), 0)),
-      sub: owing.length ? `${owing.length} vendor${owing.length === 1 ? "" : "s"} to pay` : "nothing to pay",
+      sub: owing.length ? `${owing.length} vendor${owing.length === 1 ? "" : "s"} to pay` : undefined,
     },
     spend: {
       value: fmt(supplying.reduce((sum, v) => sum + Number(v.spend || 0), 0)),
-      sub: "stock booked in, at cost",
     },
   }), [visible, visibleStock, owing, supplying]);
 
