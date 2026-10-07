@@ -266,7 +266,25 @@ const weekDatesFor = (iso) => {
   const sunday = shiftIso(iso, -new Date(`${iso}T00:00:00`).getDay());
   return Array.from({ length: 7 }, (_, i) => shiftIso(sunday, i));
 };
+// The phone's strip: five days with `iso` in the middle. Five cells cannot hold a Sun-Sat
+// week, and a window that steps by five keeps every day of the week reachable.
+const windowDatesFor = (iso) => Array.from({ length: 5 }, (_, i) => shiftIso(iso, i - 2));
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+/** True below md — the width the bottom bar is drawn at. Read rather than left to CSS
+ *  because the strip's dates and its arrows' step both change with it. */
+const usePhone = () => {
+  const query = "(max-width: 767px)";
+  const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setPhone(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return phone;
+};
 
 // Tile colours. The money boards give every card its own hex and read it back for the
 // figure, the corner disc and the selected ring, so the colour is the card's identity
@@ -496,7 +514,11 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
   // move the whole week without disturbing which single day is highlighted.
   const [weekAnchor, setWeekAnchor] = useState(todayIso);
 
-  const stripDates = useMemo(() => weekDatesFor(weekAnchor), [weekAnchor]);
+  // A phone shows five days around the anchor and steps five at a time; wider screens keep
+  // the Sun-Sat week and step a week.
+  const phone = usePhone();
+  const stripStep = phone ? 5 : 7;
+  const stripDates = useMemo(() => (phone ? windowDatesFor(weekAnchor) : weekDatesFor(weekAnchor)), [phone, weekAnchor]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -912,7 +934,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
           a date is a control that does nothing when it is used, which reads as broken. */}
       {subTab === "all" && (
       <div className="mb-3 flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2" data-testid="physio-treatment-week-strip">
-        <button type="button" onClick={() => setWeekAnchor((a) => shiftIso(a, -7))} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Previous week" data-testid="physio-week-prev">
+        <button type="button" onClick={() => setWeekAnchor((a) => shiftIso(a, -stripStep))} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label={phone ? "Previous days" : "Previous week"} data-testid="physio-week-prev">
           <ChevronLeft className="h-4 w-4" />
         </button>
 
@@ -920,8 +942,8 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
           <p className="mb-1 text-center text-[11px] font-semibold text-slate-600">
             {new Date(`${weekAnchor}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </p>
-          <div className="grid grid-cols-7 gap-1">
-          {stripDates.map((date, i) => {
+          <div className={`grid gap-1 ${phone ? "grid-cols-5" : "grid-cols-7"}`}>
+          {stripDates.map((date) => {
             const day = parseInt(date.split("-")[2], 10);
             const isSelected = date === selectedDate;
             const isToday = date === todayIso;
@@ -934,7 +956,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
                 className={`flex flex-col items-center gap-0.5 rounded-lg py-1 transition ${isSelected ? "bg-sky-600" : "hover:bg-slate-50"}`}
                 data-testid={`physio-day-${date}`}
               >
-                <span className={`text-[9px] font-semibold ${isSelected ? "text-sky-100" : "text-slate-400"}`}>{DAY_LETTERS[i]}</span>
+                <span className={`text-[9px] font-semibold ${isSelected ? "text-sky-100" : "text-slate-400"}`}>{DAY_LETTERS[new Date(`${date}T00:00:00`).getDay()]}</span>
                 <span
                   className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
                     isSelected ? "bg-white/20 text-white" : isToday ? "bg-sky-100 text-sky-700" : "text-slate-600"
@@ -949,7 +971,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
           </div>
         </div>
 
-        <button type="button" onClick={() => setWeekAnchor((a) => shiftIso(a, 7))} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Next week" data-testid="physio-week-next">
+        <button type="button" onClick={() => setWeekAnchor((a) => shiftIso(a, stripStep))} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label={phone ? "Next days" : "Next week"} data-testid="physio-week-next">
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
