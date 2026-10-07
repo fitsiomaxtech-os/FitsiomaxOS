@@ -8,22 +8,14 @@ import {
   BadgeIndianRupee,
   BarChart3,
   Building2,
-  CalendarCheck,
-  Clock,
-  FileSpreadsheet,
   Headphones,
-  IndianRupee,
   LayoutDashboard,
   Megaphone,
-  Percent,
   RefreshCw,
   Search,
   Settings,
-  Sparkles,
   Star,
   Store,
-  TrendingDown,
-  TrendingUp,
   UserPlus,
   Users,
   X,
@@ -33,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { StatTile } from "@/components/ui/stat-tile";
 import {
   getBdSummary,
   getBdSummaryRows,
@@ -661,6 +654,9 @@ const TREND_BASELINE = "#e4e4e7";
  * The dots are the point of it, not decoration. The curve between two readings is
  * interpolation; the dots are the only places on the line where the ink is a measurement,
  * which is exactly how OverAll Growth puts it.
+ *
+ * The dashboard cards pass their own `color`, so the line matches the figure above it, as
+ * on the Zumba strip whose card they wear. TREND_INK is only the fallback.
  */
 //
 // `fromZero` pins the bottom of the plot at 0, which is right for a daily count. A running
@@ -690,8 +686,10 @@ function Sparkline({ data, color = TREND_INK, fromZero = true }) {
     return () => ro.disconnect();
   }, []);
 
+  // A hairline, not a stroke: the card is one figure, and the line under it is only the
+  // shape of the week. At 2px with 2px dots it read as a chart of its own.
   const h = 26;
-  const r = 2;
+  const r = 1.5;
   // Inset by the marker's radius at all four edges, so a dot at the highest or lowest
   // reading sits inside the box instead of half outside it.
   const plotW = Math.max(1, w - r * 2);
@@ -713,7 +711,7 @@ function Sparkline({ data, color = TREND_INK, fromZero = true }) {
           d={smoothPath(pts)}
           fill="none"
           stroke={color}
-          strokeWidth="2"
+          strokeWidth="1.25"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
@@ -724,59 +722,6 @@ function Sparkline({ data, color = TREND_INK, fromZero = true }) {
         ))}
       </svg>
     </span>
-  );
-}
-
-/* ─── KPI Card ─── */
-/**
- * A figure on this board, in the shape Super Admin > HR Admin > Dashboard uses: white,
- * a two-pixel slate rule, the label small and capitalised above a large dark number.
- *
- * A card with an `onClick` renders as a button and opens the rows behind it; one without
- * renders as plain text, so a card that leads nowhere never invites a click that does
- * nothing. That is HR's rule for these tiles and it is the reason the blank card at the
- * end of the second group is inert rather than a dead button.
- *
- * `trend` and `sparkline` are what HR's tiles do not carry. The pill is tinted by
- * direction -- green for a rise, red for a fall -- because on a white card the direction
- * has to come from the pill's own colour rather than from an arrow on a translucent chip.
- */
-function KpiCard({ label, value, icon: Icon, trend, sparkline, sparklineFromZero = true, onClick, open, testid }) {
-  const Tag = onClick ? "button" : "div";
-  const trendTone = trend?.direction === "up"
-    ? "bg-emerald-50 text-emerald-700"
-    : trend?.direction === "down"
-      ? "bg-rose-50 text-rose-700"
-      : "bg-slate-100 text-slate-500";
-  return (
-    <Tag
-      {...(onClick ? { type: "button", onClick } : {})}
-      className={`w-full rounded-xl border-2 bg-white px-4 py-3.5 text-left transition ${
-        open
-          ? "border-sky-500 shadow-sm"
-          : `border-slate-200 ${onClick ? "cursor-pointer hover:border-sky-300 hover:shadow-sm" : ""}`
-      }`}
-      {...(onClick ? { "aria-expanded": !!open } : {})}
-      data-testid={testid}
-    >
-      <span className={`flex items-center gap-1.5 ${open ? "text-sky-700" : "text-slate-500"}`}>
-        {Icon && <Icon className="h-4 w-4 shrink-0" />}
-        <span className="truncate text-[11px] font-bold uppercase tracking-wider">{label}</span>
-      </span>
-      <span className="mt-1 block text-3xl font-extrabold text-slate-800">{value}</span>
-      {trend && (
-        <span className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${trendTone}`}>
-          {trend.direction === "up" && <TrendingUp className="h-3 w-3" />}
-          {trend.direction === "down" && <TrendingDown className="h-3 w-3" />}
-          {trend.text}
-        </span>
-      )}
-      {sparkline && (
-        <span className="mt-1.5 block">
-          <Sparkline data={sparkline} fromZero={sparklineFromZero} />
-        </span>
-      )}
-    </Tag>
   );
 }
 
@@ -995,14 +940,12 @@ const CARD_GROUPS = [
   {
     key: "onboarding",
     label: "OnBoarding",
-    hint: "The pipeline as it stands today",
     icon: UserPlus,
     cols: "lg:grid-cols-5",
   },
   {
     key: "statistics",
     label: "systematic statistics",
-    hint: "What the desk and the estate have built",
     icon: BarChart3,
     cols: "lg:grid-cols-4",
   },
@@ -1072,20 +1015,6 @@ const ALL_DATES = { key: "all", label: "All", from: null, to: null };
 const buildCardGroups = (summary) => {
   const weekTrendCounts = (summary.week_trend || []).map((d) => d.count);
   const todayCount = summary.today_leads || 0;
-  const yesterdayCount = weekTrendCounts.length >= 2 ? weekTrendCounts[weekTrendCounts.length - 2] : null;
-  const todayTrend = yesterdayCount === null ? null : todayCount === yesterdayCount
-    ? { direction: "flat", text: "Same as yesterday" }
-    : todayCount > yesterdayCount
-      ? { direction: "up", text: `+${todayCount - yesterdayCount} vs yesterday` }
-      : { direction: "down", text: `-${yesterdayCount - todayCount} vs yesterday` };
-
-  const weekChangePct = summary.leads_last_week
-    ? Math.round(((summary.leads_this_week - summary.leads_last_week) / summary.leads_last_week) * 100)
-    : null;
-  const weekTrend = weekChangePct === null ? null : {
-    direction: weekChangePct >= 0 ? "up" : "down",
-    text: `${weekChangePct >= 0 ? "+" : ""}${weekChangePct}% vs last week`,
-  };
 
   // Total Leads' own line: the running total at the close of each of the seven days. It
   // used to be the same daily counts Today's Leads draws, so the two cards carried one
@@ -1100,17 +1029,17 @@ const buildCardGroups = (summary) => {
 
   const cards = {
     onboarding: [
-      { key: "total", metric: "total", label: "Total Leads", value: summary.total_leads, icon: Users, trend: weekTrend, sparkline: totalTrend, sparklineFromZero: false },
-      { key: "today", metric: "today", label: "Today's Leads", value: todayCount, icon: Sparkles, trend: todayTrend, sparkline: weekTrendCounts },
-      { key: "followup", metric: "followup", label: "Active Follow-ups", value: followUp, icon: Clock },
-      { key: "appointments", metric: "appointments", label: "Appointments", value: summary.total_appointments, icon: CalendarCheck },
-      { key: "converted", metric: "converted", label: "Converted", value: summary.completed_appointments, icon: TrendingUp },
+      { key: "total", metric: "total", label: "Total Leads", value: summary.total_leads, color: "#0284c7", sparkline: totalTrend, sparklineFromZero: false },
+      { key: "today", metric: "today", label: "Today's Leads", value: todayCount, color: "#9333ea", sparkline: weekTrendCounts },
+      { key: "followup", metric: "followup", label: "Active Follow-ups", value: followUp, color: "#ca8a04" },
+      { key: "appointments", metric: "appointments", label: "Appointments", value: summary.total_appointments, color: "#0d9488" },
+      { key: "converted", metric: "converted", label: "Converted", value: summary.completed_appointments, color: "#16a34a" },
     ],
     statistics: [
-      { key: "revenue", metric: "revenue", label: "Revenue Generated", value: formatMoney(summary.revenue_generated), icon: IndianRupee },
-      { key: "conversion", metric: "conversion", label: "Conversion Rate", value: `${summary.conversion_rate}%`, icon: Percent },
-      { key: "branches", metric: "branches", label: "Branches", value: summary.total_branches, icon: Building2 },
-      { key: "sheets", metric: "sheets", label: "Connected Sheets", value: summary.total_connections, icon: FileSpreadsheet },
+      { key: "revenue", metric: "revenue", label: "Revenue Generated", value: formatMoney(summary.revenue_generated), color: "#16a34a" },
+      { key: "conversion", metric: "conversion", label: "Conversion Rate", value: `${summary.conversion_rate}%`, color: "#ea580c" },
+      { key: "branches", metric: "branches", label: "Branches", value: summary.total_branches, color: "#4f46e5" },
+      { key: "sheets", metric: "sheets", label: "Connected Sheets", value: summary.total_connections, color: "#0284c7" },
     ],
   };
 
@@ -1564,21 +1493,26 @@ function DashboardTab({
         ) : (
           <div className="space-y-4">
             <div className="space-y-2" data-testid={`bd-group-${activeCardGroup.key}`}>
-              {/* The label is the tab now; what is left to say is what the row is about. */}
-              <p className="text-[11px] text-slate-400" data-testid={`bd-group-hint-${activeCardGroup.key}`}>{activeCardGroup.hint}</p>
               {/* The same grid HR Admin's Dashboard lays its row out on -- two up on a
                   phone, the group's own width across on a desk. */}
               <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 ${activeCardGroup.cols}`} data-testid={`bd-metrics-${activeCardGroup.key}`}>
+                {/* The Zumba strip's card, arrow and all: white, a grey label with the
+                    chevron in the corner, the figure in the card's own colour, and the open
+                    card ringed in it. The trend line rides in the caption slot, under the
+                    figure, in that same colour. */}
                 {activeCardGroup.cards.map((m) => (
-                  <KpiCard
+                  <StatTile
                     key={m.key}
+                    arrow
                     label={m.label}
                     value={m.value}
-                    icon={m.icon}
-                    trend={m.trend}
-                    sparkline={m.sparkline}
-                    sparklineFromZero={m.sparklineFromZero}
-                    open={openMetric === m.metric}
+                    color={m.color}
+                    sub={m.sparkline && (
+                      <span className="mt-1.5 block">
+                        <Sparkline data={m.sparkline} color={m.color} fromZero={m.sparklineFromZero !== false} />
+                      </span>
+                    )}
+                    active={openMetric === m.metric}
                     onClick={m.metric ? () => onOpenCard(m.metric) : undefined}
                     testid={`bd-metric-${m.key}`}
                   />
