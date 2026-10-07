@@ -3,8 +3,8 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 /**
  * QuickDateFilterBar
  *
- * A horizontal row of one-tap date ranges — All, Today, This Week, This Month,
- * Last 90 Days — with the shared date popover on the end for everything else.
+ * A horizontal row of one-tap date ranges — All, Today, Yesterday, This Week,
+ * This Month, Last 90 Days — with the shared date popover on the end for everything else.
  *
  * This is a *second*, independent date control, added beside the existing
  * DateFilterPopover rather than replacing it. Nothing in DateFilterPopover.jsx is
@@ -56,6 +56,7 @@ const mondayOf = (d) => {
 };
 const sundayOf = (d) => { const m = mondayOf(d); const n = new Date(m); n.setDate(n.getDate() + 6); return n; };
 const daysBack = (d, n) => { const x = startOfDay(d); x.setDate(x.getDate() - n); return x; };
+const yesterday = () => daysBack(new Date(), 1);
 const tomorrow = () => daysBack(new Date(), -1);
 
 /**
@@ -77,6 +78,7 @@ const tomorrow = () => daysBack(new Date(), -1);
 export const QUICK_DATE_PRESETS = [
   { key: "all", label: "All", short: "All", micro: "All", range: () => ({ from: null, to: null }) },
   { key: "today", label: "Today", short: "Today", micro: "1D", range: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+  { key: "yesterday", label: "Yesterday", short: "Yday", micro: "-1D", range: () => ({ from: yesterday(), to: endOfDay(yesterday()) }) },
   { key: "tomorrow", label: "Tomorrow", short: "Tmrw", micro: "+1D", optional: true, range: () => ({ from: tomorrow(), to: endOfDay(tomorrow()) }) },
   { key: "this_week", label: "This Week", short: "Week", micro: "1W", range: () => ({ from: mondayOf(new Date()), to: endOfDay(sundayOf(new Date())) }) },
   { key: "this_month", label: "This Month", short: "Month", micro: "1M", range: () => { const t = new Date(); return { from: startOfDay(new Date(t.getFullYear(), t.getMonth(), 1)), to: endOfDay(new Date(t.getFullYear(), t.getMonth() + 1, 0)) }; } },
