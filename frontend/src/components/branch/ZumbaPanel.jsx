@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
+import { StatTile } from "@/components/ui/stat-tile";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
 
 // How a registration arrived, as the branch would say it. A referral is recorded against
@@ -634,14 +635,14 @@ const sourceDetail = (r) => (r.source === MASTER && r.master_name ? `Refer Maste
 // The colours run warm through the sources and cool through the four that follow, so the
 // two halves of the row stay legible without drawing a box around either.
 const CARDS = [
-  { key: "all", label: "All", color: "#9333ea", ledger: "purple", sub: "on the roll" },
-  { key: "direct", label: "Direct", color: "#ca8a04", ledger: "yellow", sub: "nobody referred them" },
-  { key: "consultant", label: "Consultant", color: "#ea580c", ledger: "orange", sub: "from a consultation" },
+  { key: "all", label: "All", color: "#9333ea", sub: "on the roll" },
+  { key: "direct", label: "Direct", color: "#ca8a04", sub: "nobody referred them" },
+  { key: "consultant", label: "Consultant", color: "#ea580c", sub: "from a consultation" },
   // Master is the leads a master brought in — a referral filed against a named master,
   // which is what the Zumba Master View's Refer Customer writes and what this card is
   // asked for. It held the branch-sourced count until that board existed and there was a
   // real master's referral to point it at.
-  { key: "masters", label: "Refer Master", color: "#0284c7", ledger: "sky", sub: "brought by a master" },
+  { key: "masters", label: "Refer Master", color: "#0284c7", sub: "brought by a master" },
   // The last four are counts of people, like the four before them, but they answer what
   // became of a customer rather than where they came from: is the money settled, and are
   // they still turning up. The revenue split that used to sit here said the same thing
@@ -660,65 +661,18 @@ const CARDS = [
   // yet a press on it emptied the list and said nothing else; the branch asked for the
   // details back. The list underneath has a column for none of what the figure is made of.
   //
-  // Every card on the strip wears the Accountant Summary's ledger card (see LedgerCard).
-  { key: "payment_done", label: "Payment Done", color: "#059669", ledger: "emerald", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
-  { key: "due_payment", label: "Due Payment", color: "#d97706", ledger: "amber", money: "due_total", count: "due_payment", countSub: (n) => `owed by ${n}` },
+  // Every card on the strip wears the Fitness tab's card (ui/stat-tile with `arrow`).
+  { key: "payment_done", label: "Payment Done", color: "#059669", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
+  { key: "due_payment", label: "Due Payment", color: "#d97706", money: "due_total", count: "due_payment", countSub: (n) => `owed by ${n}` },
   // One card, not two: Discontinue and Leave are both "not turning up", and splitting
   // them across the row asked the branch to read two numbers to learn one thing. The
   // distinction survives where it is actually useful — on the row, which says which — and
   // the server still counts them apart, so nothing downstream is coarsened by this.
-  { key: "discontinued", label: "Discontinue", color: "#e11d48", ledger: "rose", sub: "left the class", sum: ["discontinued", "leave"] },
+  { key: "discontinued", label: "Discontinue", color: "#e11d48", sub: "left the class", sum: ["discontinued", "leave"] },
 ];
 
-// Whole class names, not `bg-${tone}-50` built at runtime: Tailwind only compiles the
-// class names it can read in the source.
-const LEDGER_TONES = {
-  purple: { border: "border-purple-200", bg: "bg-purple-50/60", text: "text-purple-700", sub: "text-purple-600" },
-  yellow: { border: "border-yellow-200", bg: "bg-yellow-50/60", text: "text-yellow-700", sub: "text-yellow-600" },
-  orange: { border: "border-orange-200", bg: "bg-orange-50/60", text: "text-orange-700", sub: "text-orange-600" },
-  sky: { border: "border-sky-200", bg: "bg-sky-50/60", text: "text-sky-700", sub: "text-sky-600" },
-  emerald: { border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
-  amber: { border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
-  rose: { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-700", sub: "text-rose-600" },
-};
-
-/**
- * The Accountant Summary's ledger card (Income / Cash in hand / Expenses): tinted, 2px
- * corners, the picked one outlined in its own colour. There one card is always picked, so
- * the rest step back to 70%; here "All" is the resting state, so a card only steps back
- * while another card on the strip is the filter — otherwise all three would sit faded.
- *
- * The shadow is two soft layers rather than one hard drop — a tight contact shadow and a
- * wide faint one — so the card lifts off the page without a visible edge; hover deepens both.
- */
-const LedgerCard = ({ label, value, sub, tone, hex, color, active, dimmed, onClick, testid }) => {
-  // A card backed by a Zumba stage is drawn from that stage's colour, which is any hex
-  // Super Admin picks — so inline, since Tailwind only has the tones written out above.
-  // The same recipe as the tones: a faint wash, a light border, the colour on the text.
-  const t = hex ? { border: "", bg: "", text: "", sub: "opacity-80" } : LEDGER_TONES[tone];
-  const box = hex ? { borderColor: active ? hex : `${hex}55`, background: `${hex}0f` } : (active ? { borderColor: color } : undefined);
-  const ink = hex ? { color: hex } : undefined;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`h-full w-full rounded-[2px] border ${t.border} ${t.bg} p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
-      style={box}
-      data-testid={testid}
-    >
-      <div className="flex items-start justify-between gap-1">
-        <p className={`min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px] ${t.text}`} style={ink}>{label}</p>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400 sm:h-4 sm:w-4" aria-hidden="true" />
-      </div>
-      <p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${t.text}`} style={ink}>{value}</p>
-      {sub && <p className={`mt-0.5 text-[10px] leading-tight sm:text-[11px] ${t.sub}`} style={ink}>{sub}</p>}
-    </button>
-  );
-};
-
-// Stage colours are stored as #rrggbb; anything else falls back to the card's own tone
-// rather than building a broken `${hex}55`.
+// Stage colours are stored as #rrggbb; anything else falls back to the card's own colour
+// rather than drawing the figure and ring in a colour the browser cannot read.
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 const amountDue = (r) => Number(r?.fee_amount || 0) - Number(r?.fee_paid || 0);
@@ -1826,9 +1780,12 @@ export const ZumbaPanel = ({ branchId }) => {
 
           No minimum width and no scroller: nine cards divide whatever width there is, so
           the row ends exactly where the page does. What gives instead is the label, which
-          truncates and carries the full text on `title`. */}
+          truncates and carries the full text on `title`.
+
+          The Fitness tab's card, `arrow` and all: white, a grey label and the figure in the
+          card's colour, the picked one ringed in it. */}
       <div
-        className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4 lg:grid-cols-7"
+        className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-4 lg:grid-cols-7"
         data-testid="zumba-summary"
       >
         {CARDS.map((c) => {
@@ -1839,7 +1796,6 @@ export const ZumbaPanel = ({ branchId }) => {
           const hex = stage && HEX_COLOR.test(stage.color || "") ? stage.color : null;
           const props = {
             label: stage?.name || c.label,
-            hex,
             value: c.money
               ? rupees(summary?.[c.money])
               : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0),
@@ -1853,7 +1809,7 @@ export const ZumbaPanel = ({ branchId }) => {
               : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key))),
             testid: `zumba-card-${c.key}`,
           };
-          return <LedgerCard key={c.key} {...props} tone={c.ledger} dimmed={card !== "all" && card !== c.key} />;
+          return <StatTile key={c.key} {...props} arrow />;
         })}
       </div>
 

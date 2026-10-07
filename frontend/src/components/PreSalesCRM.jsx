@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays } from "lucide-react";
+import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, RefreshCw, UserPlus, BarChart3, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageTabBar } from "@/components/ui/stage-tab";
+import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp } from "@/lib/time";
 
@@ -1185,7 +1186,6 @@ export const PreSalesCRM = ({
               label={c.label}
               value={c.value}
               active={stageFilter === c.key}
-              dimmed={stageFilter !== kpiCardModels[0].key && stageFilter !== c.key}
               color={c.color}
               hoverColor={c.hoverColor}
               selectedColor={c.selectedColor}
@@ -1572,7 +1572,6 @@ export const PreSalesCRM = ({
                   label={c.label}
                   value={c.value}
                   active={stageFilter === c.key}
-                  dimmed={stageFilter !== kpiCardModels[0].key && stageFilter !== c.key}
                   color={c.color}
                   hoverColor={c.hoverColor}
                   selectedColor={c.selectedColor}
@@ -1965,41 +1964,28 @@ const ProfileTab = ({ currentUser, branches, onLogout }) => {
 /**
  * One stage's count, and the control that filters the table to it.
  *
- * Wears Branch Admin > Zumba's summary card (LedgerCard in ZumbaPanel): a faint wash of
- * the card's colour, 2px corners, an uppercase caption with a chevron, the figure under
- * it, and a two-layer shadow that lifts it off the page. The colour is inline because it
- * is whatever hex the stage carries, which Tailwind cannot know ahead of time.
- *
- * `dimmed` steps a card back while another one on the row is the filter, the same as the
- * Zumba strip does, so the picked card reads without needing a heavier outline.
+ * Wears Branch Admin > Fitness's summary card (ui/stat-tile with `arrow`): white, a grey
+ * uppercase label with a chevron, the figure in the card's colour, and the picked card
+ * ringed in it. The colour is whatever hex the stage carries, which StatTile takes inline.
  *
  * `hoverColor` and `selectedColor` are a Pre-Sales stage's own hover and picked colours
  * from CI/CD ROOTS. Each falls back to `color`, so a card without them (Total Leads, every
  * master-view card) draws the way it always has.
  */
-const KpiCard = ({ label, value, color, hoverColor, selectedColor, active, dimmed, onClick, testid }) => {
+const KpiCard = ({ label, value, color, hoverColor, selectedColor, active, onClick, testid }) => {
   const [hovered, setHovered] = useState(false);
   // Picked wins over hovered: the card under the pointer that is already the filter keeps
   // saying so.
   const ink = active ? (selectedColor || color) : hovered && hoverColor ? hoverColor : color;
   return (
-  <button
-    type="button"
-    onClick={onClick}
-    onMouseEnter={() => setHovered(true)}
-    onMouseLeave={() => setHovered(false)}
-    aria-pressed={active}
-    data-testid={testid}
-    title={label}
-    className={`h-full w-full min-w-0 rounded-[2px] border p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] sm:p-4 ${dimmed ? "opacity-70 hover:opacity-100" : ""}`}
-    style={{ borderColor: active ? ink : `${ink}55`, background: active && selectedColor ? `${ink}1f` : `${ink}0f` }}
-  >
-    <div className="flex items-start justify-between gap-1">
-      <p className="min-w-0 break-words text-[10px] font-bold uppercase leading-tight tracking-wider sm:text-[11px]" style={{ color: ink }}>{label}</p>
-      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400 sm:h-4 sm:w-4" aria-hidden="true" />
+    <div
+      className="h-full min-w-0"
+      title={label}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <StatTile label={label} value={value} color={ink} active={active} onClick={onClick} testid={testid} arrow />
     </div>
-    <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" style={{ color: ink }}>{value}</p>
-  </button>
   );
 };
 
