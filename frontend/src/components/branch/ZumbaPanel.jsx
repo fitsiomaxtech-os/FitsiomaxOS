@@ -635,14 +635,14 @@ const sourceDetail = (r) => (r.source === MASTER && r.master_name ? `Refer Maste
 // The colours run warm through the sources and cool through the four that follow, so the
 // two halves of the row stay legible without drawing a box around either.
 const CARDS = [
-  { key: "all", label: "All", color: "#9333ea", sub: "on the roll" },
-  { key: "direct", label: "Direct", color: "#ca8a04", sub: "nobody referred them" },
-  { key: "consultant", label: "Consultant", color: "#ea580c", sub: "from a consultation" },
+  { key: "all", label: "All", color: "#9333ea" },
+  { key: "direct", label: "Direct", color: "#ca8a04" },
+  { key: "consultant", label: "Consultant", color: "#ea580c" },
   // Master is the leads a master brought in — a referral filed against a named master,
   // which is what the Zumba Master View's Refer Customer writes and what this card is
   // asked for. It held the branch-sourced count until that board existed and there was a
   // real master's referral to point it at.
-  { key: "masters", label: "Refer Master", color: "#0284c7", sub: "brought by a master" },
+  { key: "masters", label: "Refer Master", color: "#0284c7" },
   // The last four are counts of people, like the four before them, but they answer what
   // became of a customer rather than where they came from: is the money settled, and are
   // they still turning up. The revenue split that used to sit here said the same thing
@@ -668,7 +668,7 @@ const CARDS = [
   // them across the row asked the branch to read two numbers to learn one thing. The
   // distinction survives where it is actually useful — on the row, which says which — and
   // the server still counts them apart, so nothing downstream is coarsened by this.
-  { key: "discontinued", label: "Discontinue", color: "#e11d48", sub: "left the class", sum: ["discontinued", "leave"] },
+  { key: "discontinued", label: "Discontinue", color: "#e11d48", sum: ["discontinued", "leave"] },
 ];
 
 // Stage colours are stored as #rrggbb; anything else falls back to the card's own colour
@@ -1799,9 +1799,9 @@ export const ZumbaPanel = ({ branchId }) => {
             value: c.money
               ? rupees(summary?.[c.money])
               : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0),
-            sub: c.countSub
-              ? c.countSub(pluralCustomers(Number(summary?.[c.count || c.key]) || 0))
-              : c.sub,
+            // A caption only where it carries a figure: the customer count behind a money
+            // card. The guide lines the count cards used to wear are gone.
+            sub: c.countSub && c.countSub(pluralCustomers(Number(summary?.[c.count || c.key]) || 0)),
             color: hex || c.color,
             active: c.key === "payment_done" ? paymentDoneOpen : card === c.key,
             onClick: () => (c.key === "payment_done"

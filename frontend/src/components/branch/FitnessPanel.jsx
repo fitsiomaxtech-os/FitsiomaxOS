@@ -213,15 +213,15 @@ export const FitnessPanel = ({ branchId }) => {
     // Everyone on the tab, referrals included -- so the number always matches the list
     // this card opens. "On the roll" stopped being true of all of them the moment
     // referrals joined it: a patient waiting to be taken on is not a member yet.
-    { key: "all", label: "All", value: counts.all, color: "#6366f1", sub: "everyone here" },
+    { key: "all", label: "All", value: counts.all, color: "#6366f1" },
     // Sent by a Consultant who ticked Fitness on the consultation, and waiting for this
     // branch to take them on. Second so it sits beside All: it is the card a branch opens
     // the tab to check, and the only one with something waiting to be done on every row.
-    { key: "referred", label: "Referred", value: counts.referred, color: "#0284c7", sub: "from a consultation" },
-    { key: "current", label: "Current", value: counts.current, color: "#059669", sub: "training now" },
-    { key: "unpaid", label: "Not Paid", value: counts.unpaid_this_month, color: "#dc2626", sub: "due this month" },
-    { key: "paid", label: "Paid Up", value: counts.paid, color: "#0284c7", sub: "nothing owed" },
-    { key: "discontinued", label: "Discontinued", value: counts.discontinued, color: "#64748b", sub: "left the gym" },
+    { key: "referred", label: "Referred", value: counts.referred, color: "#0284c7" },
+    { key: "current", label: "Current", value: counts.current, color: "#059669" },
+    { key: "unpaid", label: "Not Paid", value: counts.unpaid_this_month, color: "#dc2626" },
+    { key: "paid", label: "Paid Up", value: counts.paid, color: "#0284c7" },
+    { key: "discontinued", label: "Discontinued", value: counts.discontinued, color: "#64748b" },
   ];
 
   const monthStart = data.month_start || "";
@@ -334,7 +334,6 @@ export const FitnessPanel = ({ branchId }) => {
             key={c.key}
             label={c.label}
             value={c.value ?? 0}
-            sub={c.sub}
             arrow
             color={c.color}
             active={card === c.key}
