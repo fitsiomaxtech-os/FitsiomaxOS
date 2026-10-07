@@ -1731,8 +1731,12 @@ const COLS_PLAIN_WITH_ACTION = {
 // My Consultation's plain table, ending in an Action column that holds only an arrow. The
 // arrow is narrow, so it costs the seven reporting columns a point each at most. Must total
 // 100, same as the other four.
+//
+// Patient gives up three points to Appointment there: its rows are the name alone (see
+// `oneLineRows`), and the appointment is one line, "Sat, 12 Sept - 3:15 PM", which needs
+// about 170px where the stacked chip needed 110.
 const COLS_PLAIN_WITH_ARROW = {
-  sno: "w-[4%]", patient: "w-[22%]", appt: "w-[13%]", expert: "w-[14%]", stage: "w-[15%]",
+  sno: "w-[4%]", patient: "w-[19%]", appt: "w-[17%]", expert: "w-[14%]", stage: "w-[14%]",
   phone: "w-[13%]", pno: "w-[13%]", arrow: "w-[6%]",
 };
 
@@ -2461,7 +2465,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -6659,7 +6663,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1160px]" : showDiscountColumn ? "min-w-[1060px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? "min-w-[940px]" : "min-w-[880px]"}`}>
+          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1160px]" : showDiscountColumn ? "min-w-[1060px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
             <thead className="sticky top-0 z-10 bg-slate-500 text-xs uppercase text-white">
               <tr>
                 <th className={`${cols.sno} px-3 py-2 text-left align-middle`}>S.No</th>
@@ -6733,7 +6737,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                           got to, not what was decided, and those are different questions.
                           Truncated with the whole of it on hover — this column is a tenth
                           of the table, and a plan can run to four services. */}
-                      <PlanLine parts={leadPlanParts(l)} testId={`cons-plan-${l.id}`} />
+                      {/* My Consultation reads the name alone, one line per row: there every
+                          row is a consultation, so the plan under it said "Consultation" on
+                          every one of them. */}
+                      {!oneLineRows && <PlanLine parts={leadPlanParts(l)} testId={`cons-plan-${l.id}`} />}
                     </td>
                     {/* Every cell sits on the row's middle, not its top. The patient
                         column runs to two lines — the name and what was decided under
@@ -6748,7 +6755,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
                       {l.appointment_date ? (
                         <span
-                          className={`flex w-full flex-col items-center rounded-md border px-2 py-1 align-middle font-semibold ${appointmentTone(l.appointment_date)}`}
+                          className={`flex w-full items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLineRows ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
                           data-testid={`cons-appt-${l.id}`}
                         >
                           {/* Stacked, because this column is a narrow slice of a
@@ -6769,8 +6776,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                             <Calendar className="h-3 w-3 shrink-0" />
                             {apptDayLabel(l.appointment_date)}
                           </span>
+                          {/* One line on My Consultation: "Sat, 12 Sept - 3:15 PM". */}
                           {l.appointment_time && (
-                            <span className="whitespace-nowrap text-[11px] font-bold opacity-90">{to12h(l.appointment_time)}</span>
+                            <span className="whitespace-nowrap text-[11px] font-bold opacity-90">
+                              {oneLineRows && "- "}{to12h(l.appointment_time)}
+                            </span>
                           )}
                         </span>
                       ) : <span className="block text-center text-slate-400">—</span>}

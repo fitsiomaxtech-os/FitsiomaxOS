@@ -141,8 +141,10 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  *  - `ledgerCards` — the summary cards drawn as the finance boards' ledger card (Branch
  *    Admin's Zumba strip): arrow in the corner, the picked one filled in its colour.
  *  - `rowArrow` — an Action column with an arrow at the end of the consultations table.
+ *  - `oneLineRows` — that table's rows on one line: the name alone, no plan under it, and
+ *    the appointment as "Sat, 12 Sept - 3:15 PM" rather than stacked.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false }) => {
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   const withProfile = roleLabel !== undefined;
   const profileOpen = withProfile && workTab === "profile";
@@ -690,6 +692,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               // House-visit patients are worked from the House Visit tab instead.
               homeVisitScope="exclude"
               rowArrow={rowArrow}
+              oneLineRows={oneLineRows}
             />
           </div>
 
@@ -748,6 +751,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               reloadToken={refreshTick}
               homeVisitScope="only"
               rowArrow={rowArrow}
+              oneLineRows={oneLineRows}
             />
           </div>
 

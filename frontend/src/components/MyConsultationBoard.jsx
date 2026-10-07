@@ -687,6 +687,7 @@ export const MyConsultationBoard = ({ user, search = "", onSearchChange, branche
         toolbarLead={toolbarLead}
         ledgerCards
         rowArrow
+        oneLineRows
       />
 
       {slotsFor && (
