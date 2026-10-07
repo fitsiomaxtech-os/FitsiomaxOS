@@ -1079,22 +1079,17 @@ export const CRMPage = ({ auth, onLogout }) => {
                 <p className="text-[10px] font-semibold tracking-wide text-sky-600 sm:text-xs" data-testid="role-board-brand-subtitle">
                   FitsiomaxOS
                 </p>
-                {/* On a phone the board title costs a whole line to say something the user
-                    already knows, so these two boards show who is signed in instead. The
-                    desktop header is untouched. */}
                 <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl" data-testid="role-board-title">
                   {/* On a phone the board title is the least useful thing that could sit
                       here: whoever is holding it already knows which board they opened,
                       and what they cannot see is which account they are signed in as —
                       the desktop shows that in the corner, and a phone has no corner to
-                      spare. Pre-Sales joins Head Physio and HR in trading one for the
-                      other below sm. */}
-                  {showHeadPhysioBoard || showHumanResourceBoard || showPreSalesBoard || showMarketingHeadBoard ? (
-                    <>
-                      <span className="sm:hidden">{auth.user.full_name}</span>
-                      <span className="hidden sm:inline">{boardTitle}</span>
-                    </>
-                  ) : boardTitle}
+                      spare. So every board trades one for the other below sm (all of them
+                      since 2026-10-07, asked for on the Business Development board). The
+                      title stands in for an account with no name on file. The desktop
+                      header is untouched. */}
+                  <span className="sm:hidden">{auth.user.full_name || boardTitle}</span>
+                  <span className="hidden sm:inline">{boardTitle}</span>
                 </h1>
               </div>
               {/* Sales Head only — see the note on presalesView. The board stands its own
