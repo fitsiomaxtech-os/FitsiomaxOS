@@ -18,7 +18,6 @@ import {
   SlidersHorizontal,
   Trash2,
   RefreshCw,
-  UserCircle,
   UserPlus,
   Users,
   X,
@@ -33,6 +32,7 @@ import { CandidateSheetPanel } from "@/components/hr/CandidateSheetPanel";
 import { RecruitmentStagesPanel } from "@/components/hr/RecruitmentStagesPanel";
 import { to12h } from "@/lib/time";
 import { MyProfilePage } from "@/components/MyProfilePage";
+import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import {
   recruitmentBoard,
   recruitmentCreateCandidate,
@@ -362,7 +362,7 @@ export const HumanResourceBoard = ({ user, roleLabel = "", onLogout }) => {
           }`}
           data-testid="hr-nav-profile"
         >
-          <UserCircle className="h-5 w-5" />
+          <ProfileNavGlyph user={user} size={22} />
           Profile
         </button>
       </nav>

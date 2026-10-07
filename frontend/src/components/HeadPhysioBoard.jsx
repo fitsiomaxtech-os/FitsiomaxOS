@@ -33,6 +33,7 @@ import { RescheduledTag } from "@/components/ui/lead-marks";
 import { DayStripFilter, todayFilter, isDayKey } from "@/components/DayStripFilter";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { MyProfilePage } from "@/components/MyProfilePage";
+import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import {
   getHPMyCalendar,
   hpRecommendPackage,
@@ -1012,7 +1013,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                   now white, which that pale mint would have swallowed — a translucent
                   white reads as the same chip and leaves the icon legible. */}
               <span className={`flex h-9 w-9 items-center justify-center rounded-full transition ${active ? "bg-white/20" : ""}`}>
-                <Icon className="h-5 w-5" />
+                {t.key === PROFILE_TAB.key ? <ProfileNavGlyph user={user} size={26} /> : <Icon className="h-5 w-5" />}
               </span>
             </button>
           );

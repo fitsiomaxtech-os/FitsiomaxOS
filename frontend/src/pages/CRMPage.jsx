@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Store,
   Stethoscope,
-  UserCircle,
   UserPlus,
   Users,
   Workflow,
@@ -49,7 +48,7 @@ import {
   updateLead,
 } from "@/lib/api";
 import { toast, Toaster } from "@/components/ui/sonner";
-import { EmployeeAvatar } from "@/components/ui/employee-avatar";
+import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
 // Everyone's own clock, in the bar above every board. Static rather than one of the
 // lazy boards below: it is on screen for every role from the first paint, so splitting
 // it would only add a round trip to the one control that is always there.
@@ -1330,7 +1329,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 className={`flex flex-1 items-center justify-center py-3.5 ${showProfile ? "text-white" : "text-slate-200"}`}
                 data-testid="super-admin-nav-profile"
               >
-                <UserCircle className="h-6 w-6" />
+                <ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />
               </button>
             </div>
           </div>
@@ -1418,7 +1417,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 className={`flex flex-1 items-center justify-center py-3.5 ${showProfile ? "text-white" : "text-slate-200"}`}
                 data-testid="role-bottom-nav-profile"
               >
-                <UserCircle className="h-6 w-6" />
+                <ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />
               </button>
             </div>
           </div>

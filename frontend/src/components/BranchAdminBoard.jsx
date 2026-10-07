@@ -29,7 +29,6 @@ import {
   UserX,
   Clock,
   MoreHorizontal,
-  UserCircle,
   Star,
   AlertCircle,
   PhoneOff,
@@ -76,7 +75,7 @@ import {
   listStoreItems,
 } from "@/lib/api";
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
-import { EmployeeAvatar } from "@/components/ui/employee-avatar";
+import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
 import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
@@ -2908,7 +2907,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             data-testid="branch-bottom-nav-profile"
           >
             {profileOpen && <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-white" />}
-            <UserCircle className="h-[18px] w-[18px] flex-none" />
+            <ProfileNavGlyph user={currentUser} size={20} iconClassName="h-[18px] w-[18px]" />
             <span className="w-full truncate text-center text-[9px] font-semibold leading-tight">Profile</span>
           </button>
         </div>

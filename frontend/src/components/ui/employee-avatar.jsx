@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UserCircle } from "lucide-react";
 
 /**
  * An employee's face where there is one, their initial where there is not.
@@ -50,6 +51,33 @@ export const EmployeeAvatar = ({
       onError={() => setFailed(true)}
       className={`shrink-0 rounded-full object-cover ${className}`}
       style={box}
+    />
+  );
+};
+
+/**
+ * The My Profile button on a phone's bottom bar: the signed-in person's own photo once
+ * they have set one, the outline glyph until then.
+ *
+ * Not EmployeeAvatar's initial as the fallback: on a bar of outline glyphs a lettered disc
+ * reads as a different kind of button, and the glyph is what the bar has always shown
+ * there. The ring is drawn in the button's text colour, so the photo lights up with the
+ * rest of the bar when Profile is the open tab. `user` is App's copy of the login, which
+ * My Profile's upload updates in place, so the bar changes the moment the photo is saved.
+ */
+export const ProfileNavGlyph = ({ user, size = 24, iconClassName = "h-5 w-5" }) => {
+  const [failed, setFailed] = useState(false);
+  const url = user?.photo_url || "";
+  useEffect(() => { setFailed(false); }, [url]);
+
+  if (!url || failed) return <UserCircle className={`flex-none ${iconClassName}`} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      onError={() => setFailed(true)}
+      className="flex-none rounded-full object-cover ring-2 ring-current"
+      style={{ width: size, height: size }}
     />
   );
 };

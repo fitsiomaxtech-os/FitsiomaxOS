@@ -10,7 +10,6 @@ import {
   Search,
   Stethoscope,
   Upload,
-  UserCircle,
   Users,
   X,
 } from "lucide-react";
@@ -22,6 +21,7 @@ import { ZoomableImage, ZoomablePdf } from "@/components/ui/zoomable-view";
 import { dietChartUrl, dietConsultations, dietPatients, dietSessions, recommendDietChart, saveDietConsultationReport, sendDietChart } from "@/lib/api";
 import { to12h } from "@/lib/time";
 import { MyProfilePage } from "@/components/MyProfilePage";
+import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 
 /**
  * Diet Master View — the Nutrition Coach's own board.
@@ -197,7 +197,7 @@ export const DietBoard = ({ coachId, user, roleLabel, onLogout } = {}) => {
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition ${activeTab === "profile" ? "text-white" : "text-slate-200"}`}
               data-testid="diet-bottom-tab-profile"
             >
-              <UserCircle className="h-5 w-5" />
+              <ProfileNavGlyph user={user} size={22} />
               Profile
             </button>
           )}
