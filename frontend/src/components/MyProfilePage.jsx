@@ -30,15 +30,22 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CalendarOff,
+  Check,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Clock,
+  FileText,
   Home,
   KeyRound,
+  Layers,
+  LogIn,
   LogOut,
   ShieldAlert,
   ShieldCheck,
   UserRound,
+  Users,
+  X,
 } from "lucide-react";
 import { getBranches, myAttendance, myProfile } from "@/lib/api";
 // The branch's working / leave days — the same calendar Management → Calendar sets.
@@ -332,6 +339,143 @@ const MonthSummary = ({ totals, month, today, workload }) => {
   );
 };
 
+// ---------- attendance, on a phone ----------
+//
+// The phone's Attendance screen (view "summary" / "history") is cards rather than the
+// desktop's label-and-value lists: a month card, Today with its status beside the date,
+// and each figure in a tile with its own glyph, so a glance finds the number without
+// reading down a column of labels. Same figures, same order; the desktop is untouched.
+
+const PhoneCard = ({ title, icon: Icon, children, testid }) => (
+  <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm" data-testid={testid}>
+    {title && (
+      <h3 className="mb-3 flex items-center gap-2.5 text-base font-semibold text-slate-900">
+        <Icon className="h-5 w-5 text-sky-600" />
+        {title}
+      </h3>
+    )}
+    {children}
+  </section>
+);
+
+/** A figure with its glyph in a tinted square beside it. `className` is the tile itself:
+ *  bordered white on Today, tinted on the month. */
+const PhoneFigure = ({ icon: Icon, tone, label, value, className = "", testid }) => (
+  <div className={`flex min-w-0 items-center gap-2.5 rounded-xl p-2.5 ${className}`} data-testid={testid}>
+    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+      <Icon className="h-5 w-5" />
+    </span>
+    <span className="min-w-0">
+      <span className="block truncate text-xs text-slate-500">{label}</span>
+      <span className="block truncate text-base font-bold leading-tight text-slate-900">{value}</span>
+    </span>
+  </div>
+);
+
+const NO_TIME = "– – –";
+
+const PhoneToday = ({ row, today }) => {
+  const style = statusOf(row || {});
+  // Nothing pressed yet is the screen's own blue rather than the grey of a blank cell.
+  const box = style === STATUS_STYLES.out ? "bg-sky-50 text-sky-600" : style.cls;
+  const when = today ? new Date(`${today}T00:00:00`) : null;
+  const card = "border border-slate-200 bg-white";
+  return (
+    <PhoneCard testid="my-attendance-today">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-slate-500">Today</p>
+          {when && (
+            <>
+              <p className="text-2xl font-bold leading-tight text-slate-900" data-testid="my-attendance-today-date">{dayNumber(today)}</p>
+              <p className="text-sm text-slate-500">{when.toLocaleDateString("en-GB", { weekday: "long" })}</p>
+            </>
+          )}
+        </div>
+        <div className={`flex min-w-[6.5rem] shrink-0 flex-col items-center justify-center rounded-xl px-4 py-3 ${box}`} data-testid="my-attendance-today-status">
+          <span className="text-xs font-medium">Status</span>
+          <span className="mt-1 text-base font-bold">{style.label}</span>
+        </div>
+      </div>
+      <div className="my-4 border-t border-slate-100" />
+      <div className="grid grid-cols-2 gap-2">
+        <PhoneFigure icon={LogIn} tone="bg-emerald-50 text-emerald-600" label="Login" value={prettyTime(row?.clock_in) || NO_TIME} className={card} testid="my-attendance-today-in" />
+        <PhoneFigure icon={LogOut} tone="bg-rose-50 text-rose-600" label="Logout" value={prettyTime(row?.clock_out) || NO_TIME} className={card} testid="my-attendance-today-out" />
+        <PhoneFigure icon={Layers} tone="bg-sky-50 text-sky-600" label="Sessions" value={row?.sessions ?? 0} className={card} testid="my-attendance-today-sessions" />
+        <PhoneFigure icon={Clock} tone="bg-emerald-50 text-emerald-600" label="On the clock" value={hours(row?.login_minutes)} className={card} testid="my-attendance-today-login" />
+      </div>
+    </PhoneCard>
+  );
+};
+
+const PhoneMonthCounts = ({ totals }) => (
+  <PhoneCard title="This Month" icon={CalendarDays} testid="my-attendance-counts">
+    <div className="grid grid-cols-2 gap-2">
+      <PhoneFigure icon={CalendarDays} tone="bg-sky-100 text-sky-600" label="Working days" value={totals?.working_days ?? 0} className="bg-sky-50/70" testid="my-attendance-working-days" />
+      <PhoneFigure icon={UserRound} tone="bg-emerald-100 text-emerald-600" label="Present days" value={totals?.present_days ?? 0} className="bg-emerald-50/70" testid="my-attendance-present-days" />
+      <PhoneFigure icon={X} tone="bg-rose-100 text-rose-600" label="Absent" value={totals?.absent_days ?? 0} className="bg-rose-50/70" testid="my-attendance-absent-days" />
+      <PhoneFigure icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />
+    </div>
+  </PhoneCard>
+);
+
+const PHONE_WORKLOAD_ICONS = { clients: Users, appointments: CalendarDays, treatments: FileText, consultations: FileText, completed: Check };
+
+/** Today's book, three across. Pending is left to the desktop: it is Today's less
+ *  Completed, both already here, and a fourth tile would not fit the row. */
+const PhoneWorkload = ({ workload }) => {
+  const tiles = (WORKLOAD_TILES[workload?.kind] || []).filter(([, key]) => key !== "pending");
+  if (!tiles.length) return null;
+  return (
+    <PhoneCard title="Today's Work" icon={ClipboardList} testid="my-attendance-workload">
+      <div className={`grid gap-2 ${tiles.length === 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+        {tiles.map(([label, key]) => {
+          const Icon = PHONE_WORKLOAD_ICONS[key] || ClipboardList;
+          return (
+            <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5" data-testid={`my-attendance-workload-${key}`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${key === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <p className="mt-2 min-h-[2rem] text-[11px] leading-4 text-slate-500">{label}</p>
+              <p className="mt-1 text-lg font-bold leading-tight text-slate-900">{workload[key] ?? 0}</p>
+            </div>
+          );
+        })}
+      </div>
+    </PhoneCard>
+  );
+};
+
+/** The month's hours, the same figures the desktop lists, two to a row. */
+const PhoneHours = ({ totals, today }) => {
+  const behind = (totals?.balance_minutes || 0) < 0;
+  const figures = [
+    ["Expected", plainHours(totals?.expected_minutes), "text-slate-900", `${totals?.working_days ?? 0} days × 8h`, "expected"],
+    ["Worked", plainHours(totals?.worked_minutes), "text-emerald-600", "Actual hours", "worked"],
+    ["Extra", signedHours(totals?.extra_minutes), "text-emerald-600", "Overtime", "overtime"],
+    ["On breaks", plainHours(totals?.break_minutes), "text-amber-600", "Off the clock", "breaks"],
+    (totals?.permission_minutes || 0) > 0 && [
+      "Permission", plainHours(totals?.permission_minutes), "text-sky-600",
+      `${totals?.permission_days ?? 0} day${totals?.permission_days === 1 ? "" : "s"}, approved`, "permission",
+    ],
+    ["Expected so far", plainHours(totals?.expected_to_date_minutes), "text-slate-900", `Up to ${dayNumber(today)}`, "expected-to-date"],
+    ["Balance", signedHours(totals?.balance_minutes), behind ? "text-rose-600" : "text-emerald-600", behind ? "Behind, so far" : "In hand", "balance"],
+  ].filter(Boolean);
+  return (
+    <PhoneCard title="Hours" icon={Clock} testid="my-attendance-hours">
+      <div className="grid grid-cols-2 gap-2">
+        {figures.map(([label, value, tone, sub, key]) => (
+          <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5" data-testid={`my-attendance-${key}`}>
+            <p className="truncate text-xs text-slate-500">{label}</p>
+            <p className={`text-lg font-bold leading-tight ${tone}`}>{value}</p>
+            <p className="truncate text-[11px] text-slate-400">{sub}</p>
+          </div>
+        ))}
+      </div>
+    </PhoneCard>
+  );
+};
+
 /** Every day of the month, newest first.
  *
  *  A table on a desktop and a stack of cards on a phone. Eleven columns do not survive a
@@ -491,9 +635,38 @@ const AttendanceTab = ({ view = "all" }) => {
     [rows, data?.today],
   );
   const isThisMonth = month === thisMonth();
+  // "summary" and "history" are only ever the phone's screens; "all" is the desktop's.
+  const phone = view !== "all";
 
   return (
-    <div className="space-y-4" data-testid="my-profile-attendance-tab">
+    <div className={phone ? "space-y-3" : "space-y-4"} data-testid="my-profile-attendance-tab">
+      {phone ? (
+        <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMonth(shiftMonth(month, -1))}
+            className="rounded-full p-2 text-slate-600 active:bg-slate-100"
+            aria-label="Previous month"
+            data-testid="my-attendance-prev"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <span className="flex items-center gap-2 text-base font-semibold text-slate-900" data-testid="my-attendance-month">
+            <CalendarDays className="h-5 w-5 text-slate-500" />
+            {monthLabel(month)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setMonth(shiftMonth(month, 1))}
+            disabled={isThisMonth}
+            className="rounded-full p-2 text-slate-600 active:bg-slate-100 disabled:opacity-30"
+            aria-label="Next month"
+            data-testid="my-attendance-next"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      ) : (
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
         <button
           type="button"
@@ -518,6 +691,7 @@ const AttendanceTab = ({ view = "all" }) => {
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
+      )}
 
       {error && (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" data-testid="my-attendance-error">
@@ -529,7 +703,15 @@ const AttendanceTab = ({ view = "all" }) => {
         <p className="py-16 text-center text-sm text-slate-400" data-testid="my-attendance-loading">Loading your month…</p>
       ) : (
         <>
-          {view !== "history" && (
+          {view === "summary" && (
+            <>
+              {isThisMonth && <PhoneToday row={todayRow} today={data?.today} />}
+              <PhoneMonthCounts totals={data?.totals} />
+              {isThisMonth && <PhoneWorkload workload={data?.workload} />}
+              <PhoneHours totals={data?.totals} today={data?.today} />
+            </>
+          )}
+          {view === "all" && (
             <>
               {isThisMonth && <TodayStrip row={todayRow} standard={data?.standard} today={data?.today} />}
               <MonthSummary
@@ -817,14 +999,13 @@ const usePhone = () => {
   return phone;
 };
 
-// The same sections as the tabs, as a settings list: what each one is called, and what is
-// behind it, so the line under the title answers "is it in here" before it is opened.
+// The same sections as the tabs, as a settings list: one row per section, the title alone.
 const MENU_ITEMS = [
-  { key: "profile", title: "Profile", sub: "Name, profile picture, employee details", icon: UserRound },
-  { key: "security", title: "Account", sub: "Password, two-step verification", icon: KeyRound },
-  { key: "attendance", title: "Attendance", sub: "Today, month hours, history", icon: Clock },
-  { key: "calendar", title: "Monthly Calendar", sub: "Branch working and leave days", icon: CalendarDays },
-  { key: "timeoff", title: "Time Off", sub: "Leave and permission requests", icon: CalendarOff },
+  { key: "profile", title: "Profile", icon: UserRound },
+  { key: "security", title: "Account", icon: KeyRound },
+  { key: "attendance", title: "Attendance", icon: Clock },
+  { key: "calendar", title: "Monthly Calendar", icon: CalendarDays },
+  { key: "timeoff", title: "Time Off", icon: CalendarOff },
 ];
 
 /**
@@ -890,7 +1071,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
       )}
 
       <ul className="divide-y divide-slate-100">
-        {items.map(({ key, title, sub, icon: Icon }) => (
+        {items.map(({ key, title, icon: Icon }) => (
           <li key={key}>
             <button
               type="button"
@@ -899,10 +1080,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
               data-testid={`my-profile-menu-${key}`}
             >
               <Icon className="h-5 w-5 shrink-0 text-slate-600" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-medium text-slate-800">{title}</span>
-                <span className="block truncate text-xs text-slate-500">{sub}</span>
-              </span>
+              <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-800">{title}</span>
               <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
             </button>
           </li>
