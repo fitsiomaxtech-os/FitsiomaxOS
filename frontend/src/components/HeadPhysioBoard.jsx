@@ -979,7 +979,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
           way back. Mounted only while it is the tab — it reads a month of attendance. */}
       {profileOpen && (
         <div className="sm:hidden">
-          <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setWorkTab("consultations")} onLogout={onLogout} phoneBar />
+          <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setWorkTab("consultations")} onLogout={onLogout} phoneBar timeOffInHeader />
         </div>
       )}
 

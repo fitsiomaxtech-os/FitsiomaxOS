@@ -7,6 +7,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  CalendarOff,
   Headphones,
   LayoutDashboard,
   LogOut,
@@ -101,6 +102,8 @@ const FeedbackBoard = lazy(() => import("@/components/branch/FeedbackBoard").the
 // that every single role can reach, so bundling it would put it in front of every first
 // paint in the building.
 const MyProfilePage = lazy(() => import("@/components/MyProfilePage").then((m) => ({ default: m.MyProfilePage })));
+// Time Off on its own, opened from the Physio and Consultant phone headers.
+const TimeOffPage = lazy(() => import("@/components/MyTimeOff").then((m) => ({ default: m.TimeOffPage })));
 
 /**
  * What sits under the header while a board's chunk is on the wire.
@@ -494,6 +497,7 @@ export const CRMPage = ({ auth, onLogout }) => {
   const [showProfile, setShowProfile] = useState(false);
   const [showPhysioCalendar, setShowPhysioCalendar] = useState(false);
   const [showHPCalendar, setShowHPCalendar] = useState(false);
+  const [showTimeOff, setShowTimeOff] = useState(false);
   // The Consultant board's search text. The box itself is the board's: the left rail on a
   // desk, the tool bar's magnifier on a phone. It used to open from a header button on a
   // phone, which moved into the board's tool bar with Search / Date Filter / Refresh.
@@ -1004,6 +1008,11 @@ export const CRMPage = ({ auth, onLogout }) => {
                 <button type="button" onClick={() => setShowPhysioCalendar(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" data-testid="physio-mobile-header-calendar">
                   <CalendarDays className="h-5 w-5" />
                 </button>
+                {/* Time Off up here rather than as a row of the Profile menu: asking for a
+                    day off is a thing done from wherever the physio is, not a setting. */}
+                <button type="button" onClick={() => setShowTimeOff(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" aria-label="Time Off" title="Time Off" data-testid="physio-mobile-header-timeoff">
+                  <CalendarOff className="h-5 w-5" />
+                </button>
                 {/* No profile or logout here: the bottom bar's Profile opens My Profile, and
                     Logout sits on its Security tab. */}
               </div>
@@ -1138,6 +1147,21 @@ export const CRMPage = ({ auth, onLogout }) => {
                   <span className="hidden sm:inline">Calendar</span>
                 </button>
               )}
+              {/* Time Off on a phone, for the two boards that carry it here instead of in
+                  the Profile menu (see timeOffInHeader on MyProfilePage). Below sm the
+                  Physio has its own header above, so this one is theirs from sm to md. */}
+              {(showHeadPhysioBoard || showPhysioBoard) && (
+                <button
+                  type="button"
+                  onClick={() => setShowTimeOff(true)}
+                  className={`${showHeadPhysioBoard ? "inline-flex" : "hidden sm:inline-flex"} h-8 shrink-0 items-center justify-center rounded-[2px] border border-slate-200 px-2 text-slate-600 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] transition-colors hover:bg-slate-50 sm:h-11 sm:px-3 md:hidden`}
+                  aria-label="Time Off"
+                  title="Time Off"
+                  data-testid="header-timeoff-button"
+                >
+                  <CalendarOff className="h-4 w-4" />
+                </button>
+              )}
               {/* One bell, one place, for everyone who has post to read. It used to sit in
                   the header for Super Admin and down inside the tab strip on the Branch
                   Admin board, so the same thing lived in two places and only one of them
@@ -1228,6 +1252,10 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         {showHeadPhysioBoard && showHPCalendar && (
           <HeadPhysioCalendarModal branchId={auth?.user?.branch_id} onClose={() => setShowHPCalendar(false)} />
+        )}
+
+        {(showPhysioBoard || showHeadPhysioBoard) && showTimeOff && (
+          <TimeOffPage onClose={() => setShowTimeOff(false)} />
         )}
 
         </Suspense>
@@ -1444,6 +1472,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               phoneBar={logoutInProfile}
               keepBack={!profileInFooter}
               hideTimeOff={showSuperAdminBoard}
+              timeOffInHeader={showPhysioBoard || showHeadPhysioBoard}
             />
           </Suspense>
         ) : (

@@ -29,13 +29,13 @@ import {
   Banknote,
   BriefcaseBusiness,
   CalendarDays,
+  CalendarOff,
   ChevronLeft,
   ChevronRight,
   Clock,
   Home,
   KeyRound,
   LogOut,
-  Palmtree,
   ShieldAlert,
   ShieldCheck,
   UserRound,
@@ -68,7 +68,7 @@ const TABS = [
   // what am I asking for, and who am I on the books. What Time Off writes also lands on
   // the tab to its left -- an approved leave marks those days, an approved permission
   // notes its hours on one of them.
-  { key: "timeoff", label: "Time Off", short: "Leave", icon: Palmtree },
+  { key: "timeoff", label: "Time Off", short: "Leave", icon: CalendarOff },
   { key: "profile", label: "My Profile", short: "Profile", icon: UserRound },
   // Last, because it is the tab opened on purpose rather than in passing. The three before
   // it are read — what did I work, what did I ask for, what do they have on me — and this
@@ -824,7 +824,7 @@ const MENU_ITEMS = [
   { key: "security", title: "Account", sub: "Password, two-step verification", icon: KeyRound },
   { key: "attendance", title: "Attendance", sub: "Today, month hours, history", icon: Clock },
   { key: "calendar", title: "Monthly Calendar", sub: "Branch working and leave days", icon: CalendarDays },
-  { key: "timeoff", title: "Time Off", sub: "Leave and permission requests", icon: Palmtree },
+  { key: "timeoff", title: "Time Off", sub: "Leave and permission requests", icon: CalendarOff },
 ];
 
 /**
@@ -928,8 +928,8 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
 // ---------- the page ----------
 
 // The Physio board's phone bar: five tabs in one row, so four go to their glyph and Leave
-// goes to its word. Leave is the one kept in words because its glyph — a palm tree — does
-// not say "leave" to anyone who has not already learned it.
+// goes to its word. Leave is the one kept in words because no glyph says "leave" as
+// plainly as the word does.
 const PHONE_BAR_MODES = { calendar: "icon", attendance: "icon", timeoff: "text", profile: "icon", security: "icon" };
 const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: PHONE_BAR_MODES[t.key] }));
 
@@ -947,7 +947,10 @@ const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: PHONE_BAR_MODES[t.key] })
 // `keepBack` keeps Back on a phone with the one-row bar, for a host with no bottom bar to
 // leave by (BDE, Accountant open this from the header).
 // `phoneMenu` swaps the tabs for PhoneProfileMenu below md, for every host.
-export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, hideTimeOff = false, phoneMenu = true }) => {
+// `timeOffInHeader` is for a host whose phone header carries Time Off as its own button
+// (Physio, Consultant): the phone menu then leaves the row out, so it is not in two places.
+// The desktop tabs keep it — the header button is phones only.
+export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, hideTimeOff = false, phoneMenu = true, timeOffInHeader = false }) => {
   const [tab, setTab] = useState("attendance");
   const phone = usePhone();
   // Super Admin has no one above them to ask for leave, so the tab is not offered.
@@ -955,7 +958,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
   const phoneTabs = hideTimeOff ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
 
   if (phoneMenu && phone) {
-    return <PhoneProfileMenu user={user} onLogout={onLogout} hideTimeOff={hideTimeOff} onBack={keepBack || !phoneBar ? onBack : null} />;
+    return <PhoneProfileMenu user={user} onLogout={onLogout} hideTimeOff={hideTimeOff || timeOffInHeader} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
 
   return (

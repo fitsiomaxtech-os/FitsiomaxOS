@@ -184,7 +184,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout } = {}) => {
           reads a month of attendance, which is not a request to make for a tab nobody
           opened. */}
       {activeTab === "profile" && (
-        <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setActiveTab("treatment")} onLogout={onLogout} phoneBar />
+        <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setActiveTab("treatment")} onLogout={onLogout} phoneBar timeOffInHeader={!physioId} />
       )}
 
       {/* Phones only. It used to render at every width, so a desk got a bar pinned

@@ -389,4 +389,29 @@ export const TimeOffTab = () => {
   );
 };
 
+/**
+ * Time Off on its own, full-screen — for the phone headers that carry it as a button
+ * (Physio, Consultant) rather than as a row of the profile menu. Phones only, like the
+ * button that opens it; from md up Time Off is a tab of My Profile.
+ */
+export const TimeOffPage = ({ onClose }) => (
+  <div className="fixed inset-0 z-50 flex flex-col bg-slate-50 md:hidden" data-testid="my-timeoff-page">
+    <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
+      <button
+        type="button"
+        onClick={onClose}
+        className="-ml-1 rounded-full p-1.5 text-slate-700 active:bg-slate-100"
+        aria-label="Back"
+        data-testid="my-timeoff-page-back"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+      <h2 className="text-lg font-semibold text-slate-800">Time Off</h2>
+    </div>
+    <div className="flex-1 overflow-y-auto p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+      <TimeOffTab />
+    </div>
+  </div>
+);
+
 export default TimeOffTab;
