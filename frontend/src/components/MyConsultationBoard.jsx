@@ -47,7 +47,7 @@ const BranchPicker = ({ value, branches, onPick }) => {
     <>
       <Button
         variant="outline"
-        className="h-10 justify-between gap-2 sm:w-64"
+        className="h-10 w-40 shrink-0 justify-between gap-2 px-3"
         onClick={() => setOpen(true)}
         data-testid="my-consultation-branch-trigger"
       >
@@ -151,7 +151,7 @@ const ConsultantPicker = ({ branchId, excludeId, onPick }) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="h-10 justify-between gap-2 bg-sky-600 text-white hover:bg-sky-700 sm:w-64" data-testid="my-consultation-consultant-trigger">
+        <Button className="h-10 shrink-0 justify-between gap-2 bg-sky-600 px-3 text-white hover:bg-sky-700" data-testid="my-consultation-consultant-trigger">
           <span className="flex min-w-0 items-center gap-2">
             <Stethoscope className="h-4 w-4 shrink-0" />
             <span className="truncate">Consultants{consultants.length ? ` (${consultants.length})` : ""}</span>
@@ -246,7 +246,7 @@ const ConsultBranchSwitches = () => {
         onClick={() => setOpen(true)}
         title="Take consultations at — branch On/Off"
         aria-label="Take consultations at — branch On/Off"
-        className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
         data-testid="my-consultation-branch-switches-open"
       >
         <Building2 className="h-4 w-4" />
@@ -625,41 +625,45 @@ export const MyConsultationBoard = ({ user, search = "", onSearchChange, branche
   const closeSlots = useCallback(() => setSlotsFor(null), []);
   const notMine = resolved && !resolved.is_mine;
 
+  // The start of the board's own tool bar rather than a row above it: branch, whose day,
+  // whose book, then the board's search, dates and refresh — one row on a wide screen.
+  const toolbarLead = (
+    <>
+      <BranchPicker value={branchId} branches={branches} onPick={setBranchId} />
+
+      {/* Beside the branch picker because it answers the same first question — which
+          branch — and then whose day at it. Replaced Assign Consultations here. */}
+      <ConsultantPicker
+        branchId={branchId}
+        excludeId={resolved?.is_mine ? resolved.consultant_id : null}
+        onPick={setSlotsFor}
+      />
+
+      {/* Whose book this is, said once at the top. The page is named after the reader
+          and lists only their patients now, so the name is confirmation rather than a
+          warning — and the tag beside it is the same one their rows wear downstream,
+          so the reader recognises their own work on a Branch Admin's screen too. */}
+      {resolved?.is_mine && resolved.consultant_name && (
+        <div
+          className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3"
+          data-testid="my-consultation-whoami"
+        >
+          <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+          <span className="text-xs font-semibold text-slate-700">{resolved.consultant_name}</span>
+          {resolved.is_super_admin && (
+            <span className="rounded-[4px] border border-slate-300 bg-slate-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-slate-600">
+              Head Chief
+            </span>
+          )}
+        </div>
+      )}
+
+      {resolved?.is_super_admin && <ConsultBranchSwitches />}
+    </>
+  );
+
   return (
     <div className="space-y-4" data-testid="my-consultation-board">
-      <div className="flex flex-wrap items-center gap-2">
-        <BranchPicker value={branchId} branches={branches} onPick={setBranchId} />
-
-        {/* Beside the branch picker because it answers the same first question — which
-            branch — and then whose day at it. Replaced Assign Consultations here. */}
-        <ConsultantPicker
-          branchId={branchId}
-          excludeId={resolved?.is_mine ? resolved.consultant_id : null}
-          onPick={setSlotsFor}
-        />
-
-        {/* Whose book this is, said once at the top. The page is named after the reader
-            and lists only their patients now, so the name is confirmation rather than a
-            warning — and the tag beside it is the same one their rows wear downstream,
-            so the reader recognises their own work on a Branch Admin's screen too. */}
-        {resolved?.is_mine && resolved.consultant_name && (
-          <div
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-            data-testid="my-consultation-whoami"
-          >
-            <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-            <span className="text-xs font-semibold text-slate-700">{resolved.consultant_name}</span>
-            {resolved.is_super_admin && (
-              <span className="rounded-[4px] border border-slate-300 bg-slate-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-slate-600">
-                Head Chief
-              </span>
-            )}
-          </div>
-        )}
-
-        {resolved?.is_super_admin && <ConsultBranchSwitches />}
-      </div>
-
       {notMine && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2" data-testid="my-consultation-not-mine">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
@@ -680,6 +684,9 @@ export const MyConsultationBoard = ({ user, search = "", onSearchChange, branche
         mine
         search={search}
         onSearchChange={onSearchChange}
+        toolbarLead={toolbarLead}
+        ledgerCards
+        rowArrow
       />
 
       {slotsFor && (

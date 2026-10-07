@@ -1728,6 +1728,14 @@ const COLS_PLAIN_WITH_ACTION = {
   phone: "w-[12%]", pno: "w-[12%]", action: "w-[12%]",
 };
 
+// My Consultation's plain table, ending in an Action column that holds only an arrow. The
+// arrow is narrow, so it costs the seven reporting columns a point each at most. Must total
+// 100, same as the other four.
+const COLS_PLAIN_WITH_ARROW = {
+  sno: "w-[4%]", patient: "w-[22%]", appt: "w-[13%]", expert: "w-[14%]", stage: "w-[15%]",
+  phone: "w-[13%]", pno: "w-[13%]", arrow: "w-[6%]",
+};
+
 // The one shape every stage panel in the lead card takes: a header band naming what is on
 // screen with its state at the far end, a row of controls that stays put, and a body under
 // them that swaps. Written once because it was hand-copied into four panels and had already
@@ -2453,7 +2461,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3384,13 +3392,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // is the fee every one of those stages is actually waiting on.
   const stageRowFee = STAGE_ROW_FEE[stageFilter] || "consultation";
   const stageRowFeeSpec = ROW_FEES[stageRowFee];
+  // An Action column with an arrow at the end of the row (My Consultation). Only on the
+  // plain table: a row that already ends in a fee button has its action column.
+  const showRowArrow = rowArrow && !showDiscountColumn && !showStageFeeAction;
   const cols = showFeeAction
     ? COLS_WITH_ACTION
     : showDiscountColumn
       ? COLS_WITH_DISCOUNT
       : showStageFeeAction
         ? COLS_PLAIN_WITH_ACTION
-        : COLS_PLAIN;
+        : showRowArrow
+          ? COLS_PLAIN_WITH_ARROW
+          : COLS_PLAIN;
 
   // How many patients are behind each fee, counted off the stage's own rows. Carried on the
   // tab itself as a badge, so that Rehab holds eight and Diet five is readable from the row
@@ -6646,7 +6659,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1160px]" : showDiscountColumn ? "min-w-[1060px]" : showStageFeeAction ? "min-w-[980px]" : "min-w-[880px]"}`}>
+          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1160px]" : showDiscountColumn ? "min-w-[1060px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? "min-w-[940px]" : "min-w-[880px]"}`}>
             <thead className="sticky top-0 z-10 bg-slate-500 text-xs uppercase text-white">
               <tr>
                 <th className={`${cols.sno} px-3 py-2 text-left align-middle`}>S.No</th>
@@ -6681,6 +6694,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     Fee" over a column of Rehab Fee buttons is the column reporting one fee
                     and collecting another. */}
                 {showStageFeeAction && <th className={`${cols.action} px-3 py-2 text-left align-middle`}>{stageRowFeeSpec.label}</th>}
+                {showRowArrow && <th className={`${cols.arrow} px-3 py-2 text-center align-middle`}>Action</th>}
               </tr>
             </thead>
             {/* Every cell top-aligns, and every single-line one carries leading-5 so its
@@ -6965,11 +6979,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                         </td>
                       );
                     })()}
+                    {showRowArrow && (
+                      // The row already opens the patient; the arrow says so. A button that
+                      // does nothing of its own, so a press on it is the row's click.
+                      <td className="px-3 py-3 text-center align-middle">
+                        <button
+                          type="button"
+                          aria-label={`Open ${l.name || "patient"}`}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          data-testid={`cons-row-open-${l.id}`}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : showStageFeeAction ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
+                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : (showStageFeeAction || showRowArrow) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
                   {loading
                     ? "Loading…"
                     // An empty tab is not an empty stage: saying "no leads in consultations"

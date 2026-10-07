@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatTile } from "@/components/ui/stat-tile";
+import { LedgerCard } from "@/components/ui/ledger-card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { ConsultationsBoard, leadPlanParts, PlanLine } from "@/components/ConsultationsBoard";
@@ -132,7 +133,16 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * Operations or Branch Control is not the person it shows, and their profile does not
  * belong on someone else's bar.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, search = "", onSearchChange, roleLabel, onLogout }) => {
+/**
+ * Three for My Consultation alone, so the Consultant's own board and the supervisors' views
+ * keep the look they have:
+ *  - `toolbarLead` — controls set at the start of the tool bar, ahead of the search, so the
+ *    host's pickers and the board's search and dates read as one row rather than two.
+ *  - `ledgerCards` — the summary cards drawn as the finance boards' ledger card (Branch
+ *    Admin's Zumba strip): arrow in the corner, the picked one filled in its colour.
+ *  - `rowArrow` — an Action column with an arrow at the end of the consultations table.
+ */
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   const withProfile = roleLabel !== undefined;
   const profileOpen = withProfile && workTab === "profile";
@@ -441,6 +451,37 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
   const assignedBranchIds = branchIds && branchIds.length ? branchIds : (branchId ? [branchId] : []);
   const effectiveBranchId = assignedBranchIds[0] || branchId || "all";
 
+  // Inside the All card rather than above the list: All is the only tab that merges three
+  // queues, so the control that picks between them belongs to that card and to no other.
+  //
+  // On the card's top line, running up to its icon, rather than on a rule beneath the
+  // figure. Under it the three buttons read as a strip of their own — a second card grafted
+  // to the bottom of this one — and pushed the count and its caption up off the line the
+  // other three cards keep. In the corner they read as what they are: which of the things
+  // this card counts it is showing.
+  //
+  // `onFill` when the card behind it is filled solid (a picked ledger card), where the
+  // dark pill and grey words would vanish into the colour: white takes their place.
+  const allKindFilter = (onFill) => (
+    <div className="flex items-center gap-1" data-testid="hp-all-kind-filter">
+      {ALL_KINDS.map((k) => (
+        <button
+          key={k.key}
+          type="button"
+          onClick={() => { setWorkTab("all"); setAllKind(k.key); }}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+            allKind === k.key
+              ? (onFill ? "bg-white text-slate-900" : "bg-slate-900 text-white")
+              : (onFill ? "text-white/85 hover:bg-white/20" : "text-slate-500 hover:bg-slate-100")
+          }`}
+          data-testid={`hp-all-kind-${k.key}`}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     // Bottom padding on phones clears the fixed bottom bar, so the last row of any list
     // is still reachable instead of sitting underneath it.
@@ -457,14 +498,20 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
       {/* One row on a phone too: the day strip on the left, Search / Date Filter / Refresh
           on the right — the Physio board's tool bar, in the same order. The strip used to
           take the full width on a row of its own with the two buttons pushed under it. */}
-      <div className={`flex-nowrap items-center gap-2 bg-white p-2 sm:flex-wrap lg:flex-nowrap ${profileOpen ? "hidden sm:flex" : "flex"}`}>
+      {/* With a lead (My Consultation's pickers) the row is longer than a laptop is wide,
+          so it wraps until 2xl: the pickers and the search on the first line, the dates
+          and the two buttons on the second. From 2xl up it is the one row, sized to fit
+          without the dates scrolling (narrower search, a dense strip); on a screen just
+          past 2xl that does not quite fit, the strip gives a few pixels to its scroller. */}
+      <div className={`items-center gap-2 bg-white p-2 ${toolbarLead ? "flex-wrap 2xl:flex-nowrap" : "flex-nowrap sm:flex-wrap lg:flex-nowrap"} ${profileOpen ? "hidden sm:flex" : "flex"}`}>
+        {toolbarLead}
         {/* One search for the whole board, so it works on Review, Rehab and All and not
             only on Consultations. Hidden on a phone, where the header's magnifier does the
             same job without costing a row of vertical space above the lists.
             The rail carries the width; the field inside is what stays capped, so the rail
             can go on balancing the right one after the field has stopped growing. */}
-        <div className="hidden min-w-0 sm:block sm:flex-1 sm:basis-0">
-          <div className="relative max-w-xs" data-testid="hp-header-search">
+        <div className={toolbarLead ? "hidden shrink-0 sm:block" : "hidden min-w-0 sm:block sm:flex-1 sm:basis-0"}>
+          <div className={`relative ${toolbarLead ? "w-40" : "max-w-xs"}`} data-testid="hp-header-search">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
@@ -497,12 +544,15 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
             </button>
           </div>
         )}
+        {/* On a phone the lead's pickers fill the lines above, so the strip and its two
+            buttons start a line of their own rather than squeezing in beside a picker. */}
+        {toolbarLead && <div className="h-0 basis-full sm:hidden" aria-hidden />}
         {/* The strip and the calendar icon drive the same single scope; a range typed into
             the calendar simply leaves none of the day buttons lit. */}
         <div className={`min-w-0 flex-1 justify-center sm:w-auto sm:flex-initial ${phoneSearchOpen ? "hidden sm:flex" : "flex"}`}>
-          <DayStripFilter value={dateRange} onChange={setDateRange} testid="hp-date-filter" />
+          <DayStripFilter value={dateRange} onChange={setDateRange} testid="hp-date-filter" dense={!!toolbarLead} />
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:ml-0 sm:flex-1 sm:basis-0 sm:gap-2">
+        <div className={`flex shrink-0 items-center justify-end gap-1.5 sm:gap-2 ${toolbarLead ? "ml-auto" : "sm:ml-0 sm:flex-1 sm:basis-0"}`}>
           {/* Phone only; from sm up the box in the left rail is always on screen. Only
               where the host owns a search to drive — a supervisor's board passes none. */}
           {onSearchChange && !phoneSearchOpen && (
@@ -584,43 +634,30 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                 // at 10.5rem the three buttons and the icon have nowhere to go, and the
                 // card clips rather than wraps. The grid from sm up sizes them equally.
                 <div key={t.key} className={`h-full shrink-0 sm:w-auto ${t.key === "all" ? "w-[13.5rem]" : "w-[10.5rem]"}`}>
-                  <StatTile
-                    label={t.label}
-                    value={n}
-                    sub={sub}
-                    icon={t.icon}
-                    color={t.color}
-                    active={workTab === t.key}
-                    onClick={() => setWorkTab(t.key)}
-                    testid={`hp-work-tab-${t.key}`}
-                    // Inside the All card rather than above the list: All is the only tab
-                    // that merges three queues, so the control that picks between them
-                    // belongs to that card and to no other.
-                    //
-                    // On the card's top line, running up to its icon, rather than on a rule
-                    // beneath the figure. Under it the three buttons read as a strip of
-                    // their own — a second card grafted to the bottom of this one — and
-                    // pushed the count and its caption up off the line the other three
-                    // cards keep. In the corner they read as what they are: which of the
-                    // things this card counts it is showing.
-                    corner={t.key === "all" ? (
-                      <div className="flex items-center gap-1" data-testid="hp-all-kind-filter">
-                        {ALL_KINDS.map((k) => (
-                          <button
-                            key={k.key}
-                            type="button"
-                            onClick={() => { setWorkTab("all"); setAllKind(k.key); }}
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
-                              allKind === k.key ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"
-                            }`}
-                            data-testid={`hp-all-kind-${k.key}`}
-                          >
-                            {k.label}
-                          </button>
-                        ))}
-                      </div>
-                    ) : undefined}
-                  />
+                  {ledgerCards ? (
+                    <LedgerCard
+                      label={t.label}
+                      value={n}
+                      sub={sub}
+                      color={t.color}
+                      active={workTab === t.key}
+                      onClick={() => setWorkTab(t.key)}
+                      testid={`hp-work-tab-${t.key}`}
+                      corner={t.key === "all" ? allKindFilter(workTab === "all") : undefined}
+                    />
+                  ) : (
+                    <StatTile
+                      label={t.label}
+                      value={n}
+                      sub={sub}
+                      icon={t.icon}
+                      color={t.color}
+                      active={workTab === t.key}
+                      onClick={() => setWorkTab(t.key)}
+                      testid={`hp-work-tab-${t.key}`}
+                      corner={t.key === "all" ? allKindFilter(false) : undefined}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -652,6 +689,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               reloadToken={refreshTick}
               // House-visit patients are worked from the House Visit tab instead.
               homeVisitScope="exclude"
+              rowArrow={rowArrow}
             />
           </div>
 
@@ -709,6 +747,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               onAutoOpened={clearHvAutoOpenLead}
               reloadToken={refreshTick}
               homeVisitScope="only"
+              rowArrow={rowArrow}
             />
           </div>
 

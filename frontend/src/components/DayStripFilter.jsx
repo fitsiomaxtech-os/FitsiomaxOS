@@ -27,6 +27,8 @@ import { useEffect, useMemo, useRef } from "react";
  *  - back / forward: how many days either side of today to offer. Four each way, so
  *    Yesterday is the last of the past four and Tomorrow the first of the next four —
  *    the two named days sit against Today rather than adrift in a longer run.
+ *  - dense: a little less padding and gap, for a tool bar that has other controls to fit
+ *    on the same row (My Consultation's pickers). The same buttons, about 40px narrower.
  */
 
 const startOfDay = (d) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
@@ -68,7 +70,7 @@ export const todayFilter = () => dayFilter(new Date(), 0);
 /** True for a value this strip produced, as opposed to a range from the calendar. */
 export const isDayKey = (key) => /^day_\d{4}-\d{2}-\d{2}$/.test(String(key || ""));
 
-export const DayStripFilter = ({ value, onChange, testid = "day-strip", back = 4, forward = 4 }) => {
+export const DayStripFilter = ({ value, onChange, testid = "day-strip", back = 4, forward = 4, dense = false }) => {
   const activeKey = value?.key || "all";
 
   // Rebuilt only when the window changes, not on every keystroke elsewhere on the board.
@@ -96,7 +98,7 @@ export const DayStripFilter = ({ value, onChange, testid = "day-strip", back = 4
   }, []);
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5" data-testid={testid}>
+    <div className={`flex min-w-0 items-center ${dense ? "gap-1" : "gap-1.5"}`} data-testid={testid}>
       {/* All is pinned outside the scroller: it is the way back to an unfiltered board,
           and a reset that scrolls away is a reset nobody finds. Orange throughout —
           it is the one button here that is not a date, and the colour says so at a
@@ -105,7 +107,7 @@ export const DayStripFilter = ({ value, onChange, testid = "day-strip", back = 4
         type="button"
         onClick={() => onChange(null)}
         aria-pressed={activeKey === "all"}
-        className={`h-10 shrink-0 rounded-md px-3 text-xs font-semibold transition sm:text-[13px] ${
+        className={`h-10 shrink-0 rounded-md ${dense ? "px-2.5" : "px-3"} text-xs font-semibold transition sm:text-[13px] ${
           activeKey === "all"
             ? "bg-orange-500 text-white shadow-sm"
             : "border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100"
@@ -119,7 +121,7 @@ export const DayStripFilter = ({ value, onChange, testid = "day-strip", back = 4
           every width under about 1100px, and the row is a strip you push along. */}
       <div
         ref={scrollerRef}
-        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto scroll-smooth py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={`flex min-w-0 flex-1 items-center ${dense ? "gap-1" : "gap-1.5"} overflow-x-auto scroll-smooth py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
         data-testid={`${testid}-scroller`}
       >
         {days.map((d) => {
@@ -132,7 +134,7 @@ export const DayStripFilter = ({ value, onChange, testid = "day-strip", back = 4
               onClick={() => onChange({ key: d.key, label: d.label, from: d.from, to: d.to })}
               aria-pressed={active}
               title={d.date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
-              className={`h-10 shrink-0 whitespace-nowrap rounded-md px-3 text-xs font-medium transition sm:text-[13px] ${
+              className={`h-10 shrink-0 whitespace-nowrap rounded-md ${dense ? "px-2.5" : "px-3"} text-xs font-medium transition sm:text-[13px] ${
                 active
                   ? "bg-sky-600 text-white shadow-sm"
                   // Today keeps a mark of its own while unselected, so the middle of the
