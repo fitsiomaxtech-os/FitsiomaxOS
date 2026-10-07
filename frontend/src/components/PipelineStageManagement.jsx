@@ -559,8 +559,8 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const toggleExpenseDelete = async () => {
     const next = !expenseDelete;
     const ok = window.confirm(next
-      ? "Turn the Accountant Approvals delete button ON?\n\nThe accountant gets a bin icon on every payment in Income Approval and every expense in Expenses Approval and the Expense tab. Deleting a payment resets that fee on the patient so it is owed again. It cannot be undone."
-      : "Turn the Accountant Approvals delete button OFF?\n\nThe bin icon disappears from the accountant's Approvals and Expense tab, and the server refuses the request even if one is sent. Nothing already deleted comes back.");
+      ? "Turn the Accountant Approvals delete button ON?\n\nThe accountant gets a bin icon on every payment in Income Approval and every expense in Expenses Approval and the Expense tab. A Branch Admin gets one on their own branch's expenses in Accountant Manage. Deleting a payment resets that fee on the patient so it is owed again; deleting a cash expense puts it back in the drawer. It cannot be undone."
+      : "Turn the Accountant Approvals delete button OFF?\n\nThe bin icon disappears from the accountant's Approvals and Expense tab and from the Branch Admin's Accountant Manage, and the server refuses the request even if one is sent. Nothing already deleted comes back.");
     if (!ok) return;
     setSavingExpenseDelete(true);
     try {
@@ -857,7 +857,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
             {[
               { key: "physio-day-lock", label: "Physio Treatment Days lock", value: dayLock, saving: savingDayLock, onFlip: toggleDayLock, on: "LOCKED", off: "UNLOCKED" },
               { key: "lead-delete-button", label: "Branch Leads delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
-              { key: "expense-delete-button", label: "Accountant Approvals delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
+              { key: "expense-delete-button", label: "Accountant Approvals & Branch Accountant Manage delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
               { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
             ].map((row) => (

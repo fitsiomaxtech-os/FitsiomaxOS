@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDownToLine, CheckCircle2, Clock, Coins, HandCoins, Plus, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, CheckCircle2, Clock, Coins, HandCoins, Plus, Trash2, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { LedgerCard } from "@/components/ui/ledger-card";
 import { EntriesPanel } from "@/components/finance/BranchCashBoard";
 import {
-  getBranches, getFinanceExpenses, createFinanceExpense,
+  getBranches, getFinanceExpenses, createFinanceExpense, deleteFinanceExpense,
   getBranchCash, createCashHandover, createCashReturn,
   listVendors, createVendor,
 } from "@/lib/api";
@@ -734,7 +734,22 @@ const VendorTag = () => (
   </span>
 );
 
-const ExpenseList = ({ rows, loading, empty, showBranch, testid }) => {
+/** The bin on an expense, given only while Developer Access has the delete switch on. */
+const DeleteBin = ({ row, onDelete, busy, testid }) => (
+  <button
+    type="button"
+    onClick={() => onDelete(row)}
+    disabled={busy}
+    className="text-slate-300 transition hover:text-rose-600 disabled:opacity-40"
+    title="Delete this expense"
+    aria-label="Delete this expense"
+    data-testid={testid}
+  >
+    <Trash2 className="h-4 w-4" />
+  </button>
+);
+
+const ExpenseList = ({ rows, loading, empty, showBranch, testid, onDelete, deletingId }) => {
   if (loading) return <EmptyList testid={`${testid}-loading`}>Loading…</EmptyList>;
   if (!rows.length) return <EmptyList testid="branch-expense-empty">{empty}</EmptyList>;
 
@@ -762,10 +777,15 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid }) => {
               {showBranch && r.branch_name ? <span>· {r.branch_name}</span> : null}
               {r.reference ? <span>· {r.reference}</span> : null}
             </div>
-            <div className="mt-2">
-              <StatusChip row={r} />
-              {r.rejected && r.rejection_reason ? (
-                <span className="mt-1 block text-[10px] text-rose-600">{r.rejection_reason}</span>
+            <div className="mt-2 flex items-start justify-between gap-2">
+              <div>
+                <StatusChip row={r} />
+                {r.rejected && r.rejection_reason ? (
+                  <span className="mt-1 block text-[10px] text-rose-600">{r.rejection_reason}</span>
+                ) : null}
+              </div>
+              {onDelete ? (
+                <DeleteBin row={r} onDelete={onDelete} busy={deletingId === r.id} testid={`branch-expense-card-delete-${r.id}`} />
               ) : null}
             </div>
           </div>
@@ -783,6 +803,7 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid }) => {
               <th className="px-4 py-2.5 font-semibold">Reference</th>
               <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
               <th className="px-4 py-2.5 font-semibold">Status</th>
+              {onDelete ? <th className="w-10 px-4 py-2.5"><span className="sr-only">Delete</span></th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -819,6 +840,11 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid }) => {
                     <span className="mt-0.5 block text-[10px] text-rose-600">{r.rejection_reason}</span>
                   ) : null}
                 </td>
+                {onDelete ? (
+                  <td className="px-4 py-3 text-right">
+                    <DeleteBin row={r} onDelete={onDelete} busy={deletingId === r.id} testid={`branch-expense-delete-${r.id}`} />
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -911,6 +937,9 @@ const CashByBranchList = ({ rows }) => {
 export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", startDate, endDate }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Developer Access's expense delete switch, read back on the list.
+  const [deleteEnabled, setDeleteEnabled] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   // Which of the four piles is open. It opens on the request log rather than the drawer:
   // the drawer is only there when a branch is picked, and this is the expense side.
   const [view, setView] = useState(section === "cash" ? "cash" : "request");
@@ -944,6 +973,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
         end_date: endDate || undefined,
       });
       setRows(data.expenses || []);
+      setDeleteEnabled(!!data.delete_enabled);
       onChangedRef.current?.();
     } catch {
       setRows([]);
@@ -975,6 +1005,23 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   }, [branchId]);
 
   useEffect(() => { loadCash(); }, [loadCash]);
+
+  // Deleting one puts its cash back in the drawer (the server drops its movement), so the
+  // drawer is read again with the list.
+  const removeExpense = async (r) => {
+    if (!window.confirm(`Delete this ${r.category || ""} expense of ${fmt(r.amount)}${r.paid_to ? ` paid to ${r.paid_to}` : ""}?\n\nIt cannot be undone.`)) return;
+    setDeletingId(r.id);
+    try {
+      await deleteFinanceExpense(r.id);
+      toast.success("Expense deleted");
+      load();
+      loadCash();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete that expense");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     if (branchId) { setBranches([]); return; }
@@ -1200,6 +1247,7 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
             branchId={branchId || ""}
             showBranch={!branchId}
             toolbar={cashActions}
+            onDeleted={() => { load(); loadCash(); }}
           />
         ) : (
           <div className="space-y-2">
@@ -1238,6 +1286,8 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
             empty={list.empty}
             showBranch={!branchId}
             testid="branch-expense-list"
+            onDelete={deleteEnabled ? removeExpense : null}
+            deletingId={deletingId}
           />
         </>
       )}

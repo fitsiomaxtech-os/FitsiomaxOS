@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, Coins, HandCoins, Layers, ShieldCheck, X } from "lucide-react";
+import { Building2, Coins, HandCoins, Layers, ShieldCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SummaryTile } from "@/components/ui/summary-tile";
 import { toast } from "@/components/ui/sonner";
-import { getBranches, getBranchCash, getBranchCashEntries, setBranchCashAdjustment, receiveCashHandover } from "@/lib/api";
+import {
+  getBranches, getBranchCash, getBranchCashEntries, setBranchCashAdjustment, receiveCashHandover, deleteFinanceExpense,
+} from "@/lib/api";
 import { notesLabel } from "@/lib/denominations";
 
 const fmt = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -46,24 +48,52 @@ const KIND_LABEL = {
  *
  *  toolbar: buttons to sit on the Type filter's row. Given, the title row goes -- the
  *  picked card above already says what is open -- and the filter and buttons are one line
- *  over the table rather than three. */
-export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar }) => {
+ *  over the table rather than three.
+ *
+ *  A spent row carries a bin while Developer Access has the expense delete switch on (the
+ *  list says which). onDeleted: told after one goes, so the figures above are read again. */
+export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onDeleted }) => {
   const [rows, setRows] = useState(null);
   const [type, setType] = useState(ALL);
+  const [deleteEnabled, setDeleteEnabled] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let live = true;
     setRows(null);
-    setType(ALL);
     getBranchCashEntries({ kind, ...(branchId ? { branch_id: branchId } : {}) })
-      .then((d) => { if (live) setRows(d?.rows || []); })
+      .then((d) => {
+        if (!live) return;
+        setRows(d?.rows || []);
+        setDeleteEnabled(!!d?.delete_enabled);
+      })
       .catch((e) => {
         if (!live) return;
         setRows([]);
         toast.error(e?.response?.data?.detail || "Could not load those entries");
       });
     return () => { live = false; };
-  }, [kind, branchId]);
+  }, [kind, branchId, version]);
+
+  // A new card or branch starts on every type; a reload after a delete keeps the one picked.
+  useEffect(() => { setType(ALL); }, [kind, branchId]);
+
+  const removeExpense = async (r) => {
+    if (!window.confirm(`Delete this expense of ${fmt(Math.abs(r.amount))}${r.party ? ` paid to ${r.party}` : ""}?\n\nIt cannot be undone.`)) return;
+    setDeletingId(r.expense_id);
+    try {
+      await deleteFinanceExpense(r.expense_id);
+      toast.success("Expense deleted");
+      setVersion((v) => v + 1);
+      onDeleted?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete that expense");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+  const showBin = deleteEnabled && (rows || []).some((r) => r.expense_id);
 
   const types = useMemo(() => {
     const m = new Map();
@@ -118,6 +148,7 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar }) =
                 <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Detail</th>
                 <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Status</th>
                 <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Amount</th>
+                {showBin && <th className="w-10 px-3 py-2.5"><span className="sr-only">Delete</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -130,6 +161,23 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar }) =
                   <td className="px-3 py-2 text-slate-500">{r.detail || "—"}</td>
                   <td className="px-3 py-2 text-slate-500">{r.status || "—"}</td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${r.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(r.amount)}</td>
+                  {showBin && (
+                    <td className="px-3 py-2 text-right">
+                      {r.expense_id ? (
+                        <button
+                          type="button"
+                          onClick={() => removeExpense(r)}
+                          disabled={deletingId === r.expense_id}
+                          className="text-slate-300 transition hover:text-rose-600 disabled:opacity-40"
+                          title="Delete this expense"
+                          aria-label="Delete this expense"
+                          data-testid={`branch-cash-entry-delete-${r.expense_id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -1355,10 +1355,20 @@ async def reject_expense(
 
 
 @router.delete("/finance/expenses/{expense_id}")
-async def delete_expense(expense_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "business_dev"))):
+async def delete_expense(
+    expense_id: str,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "business_dev", "branch_admin")),
+):
     if not await expense_delete_enabled():
         raise HTTPException(status_code=403, detail="Expense delete is switched off in Developer Access")
-    res = await v3_col("expenses").delete_one({"id": expense_id})
+    # A Branch Admin clears their own branch's expenses (Accountant Manage) and no other's.
+    # Another branch's id reads as not found rather than forbidden, as the list does.
+    query = {"id": expense_id}
+    if is_branch_admin_role(user.role):
+        if not user.branch_id:
+            raise HTTPException(status_code=400, detail="Your account is not attached to a branch")
+        query["branch_id"] = user.branch_id
+    res = await v3_col("expenses").delete_one(query)
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Expense not found")
     # An expense that drew the tin down puts it back when it is deleted. Removing the
@@ -4602,6 +4612,8 @@ async def get_branch_cash_entries(
             amount = round(float(e.get("amount") or 0), 2)
             rows.append({
                 "id": f"exp-{e.get('id')}",
+                # What the bin on the row deletes, when Developer Access has it on.
+                "expense_id": e.get("id"),
                 "date": e.get("expense_date") or "",
                 "branch_name": branch_name_map.get(e.get("branch_id"), ""),
                 "type": "Spent" if ledger else (e.get("category") or "Uncategorized"),
@@ -4670,6 +4682,7 @@ async def get_branch_cash_entries(
         "branch_id": branch_id or None,
         "rows": rows,
         "total": round(sum(r["amount"] for r in rows), 2),
+        "delete_enabled": await expense_delete_enabled(),
     }
 
 
