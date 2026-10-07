@@ -32,6 +32,7 @@ import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { StatTile } from "@/components/ui/stat-tile";
+import { NotifyCard } from "@/components/ui/notify-card";
 import { PhysioTreatmentChips } from "@/components/ui/physio-treatment-chips";
 import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
 import { MyProfilePage } from "@/components/MyProfilePage";
@@ -1506,8 +1507,23 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot }) {
           actually moves through, one bucket at a time; New Review is the default.
           The same tile the Treatment summary uses, so both tabs of this board filter
           through one control rather than two that happen to sit on the same screen.
-          Three across on a phone; all five from sm up. */}
-      <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3" data-testid="physio-review-buckets">
+          All five across from sm up. A phone gets the stacked rows below instead, with
+          the count badged on each card's corner. */}
+      <div className="mb-3 grid grid-cols-1 gap-2.5 sm:hidden" data-testid="physio-review-buckets-phone">
+        {REVIEW_TABS.map((t) => (
+          <NotifyCard
+            key={t.key}
+            icon={t.icon}
+            label={t.label}
+            value={counts[t.key]}
+            color={t.color}
+            active={bucket === t.key}
+            onClick={() => setBucket(t.key)}
+            testid={`physio-review-bucket-phone-${t.key}`}
+          />
+        ))}
+      </div>
+      <div className="mb-3 hidden grid-cols-5 gap-3 sm:grid" data-testid="physio-review-buckets">
         {REVIEW_TABS.map((t) => (
           <StatTile
             key={t.key}
