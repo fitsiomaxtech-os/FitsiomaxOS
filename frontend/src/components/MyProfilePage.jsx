@@ -62,6 +62,7 @@ import { TimeOffTab } from "@/components/MyTimeOff";
 // what it writes is the login itself.
 import { SecurityTab } from "@/components/MySecurity";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
+import { PhotoEditor } from "@/components/ui/photo-editor";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 // The same formatters the header clock and HR's register read a day with, so an hour and
 // a half is not "1h 30m" here and "90m" three screens away.
@@ -749,38 +750,19 @@ const titleCase = (s) => String(s || "").replace(/[_-]+/g, " ").replace(/\b\w/g,
 
 // ---------- my photo ----------
 
-// A phone camera shot runs 3–8MB and the server takes 5MB at most, so the picture is shrunk
-// in the browser first. 640px on its longest side is still sharp at every size an avatar is
-// drawn. Anything the browser cannot decode goes up as chosen, and the server answers for it.
-const PHOTO_MAX_EDGE = 640;
-const shrinkPhoto = (file) => new Promise((resolve) => {
-  const src = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(img.naturalWidth * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
-    const ctx = canvas.getContext("2d");
-    // White under a transparent PNG, which JPEG would otherwise turn black.
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(src);
-    canvas.toBlob(
-      (blob) => resolve(blob ? new File([blob], "photo.jpg", { type: "image/jpeg" }) : file),
-      "image/jpeg",
-      0.85,
-    );
-  };
-  img.onerror = () => { URL.revokeObjectURL(src); resolve(file); };
-  img.src = src;
-});
-
-/** Upload / remove for the signed-in person's own photo. `setData` is the profile's setter. */
+/**
+ * Upload / edit / remove for the signed-in person's own photo. `setData` is the profile's
+ * setter. Nothing is uploaded straight off the picker: every photo, new or the current one
+ * opened again with Edit, goes through PhotoEditor first, and only its Save sends a file —
+ * a 512px square JPEG, so even a phone's full-size camera shot arrives well under the
+ * server's 5MB cap.
+ */
 const useMyPhoto = (setData) => {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  // What the editor has open: { url, owned } — owned when it is a blob: URL this hook made
+  // for a picked file, and so has to be released when the editor closes.
+  const [editing, setEditing] = useState(null);
 
   const done = (url, message) => {
     setData((d) => (d ? { ...d, photo_url: url } : d));
@@ -788,15 +770,27 @@ const useMyPhoto = (setData) => {
     toast.success(message);
   };
 
-  const onFile = async (e) => {
+  const closeEditor = () => {
+    setEditing((cur) => {
+      if (cur?.owned) URL.revokeObjectURL(cur.url);
+      return null;
+    });
+  };
+
+  const onFile = (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     if (!String(file.type).startsWith("image/")) { toast.error("Choose a JPG, PNG or WEBP image"); return; }
+    setEditing({ url: URL.createObjectURL(file), owned: true });
+  };
+
+  const save = async (file) => {
     setBusy(true);
     try {
-      const { photo_url } = await uploadMyPhoto(await shrinkPhoto(file));
+      const { photo_url } = await uploadMyPhoto(file);
       done(photo_url, "Profile photo updated");
+      closeEditor();
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Could not upload the photo");
     } finally {
@@ -820,8 +814,12 @@ const useMyPhoto = (setData) => {
     busy,
     remove,
     pick: () => inputRef.current?.click(),
-    input: (
-      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} data-testid="my-profile-photo-input" />
+    edit: (url) => { if (url) setEditing({ url, owned: false }); },
+    elements: (
+      <>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} data-testid="my-profile-photo-input" />
+        <PhotoEditor source={editing?.url || null} saving={busy} onCancel={closeEditor} onSave={save} title="Adjust profile photo" />
+      </>
     ),
   };
 };
@@ -869,15 +867,26 @@ const PhotoActions = ({ person, photo, className = "" }) => (
       {person?.photo_url ? "Change photo" : "Upload photo"}
     </button>
     {person?.photo_url && (
-      <button
-        type="button"
-        onClick={photo.remove}
-        disabled={photo.busy}
-        className="text-rose-600 hover:underline disabled:opacity-60"
-        data-testid="my-profile-photo-remove"
-      >
-        Remove
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => photo.edit(person.photo_url)}
+          disabled={photo.busy}
+          className="text-sky-700 hover:underline disabled:opacity-60"
+          data-testid="my-profile-photo-edit"
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={photo.remove}
+          disabled={photo.busy}
+          className="text-rose-600 hover:underline disabled:opacity-60"
+          data-testid="my-profile-photo-remove"
+        >
+          Remove
+        </button>
+      </>
     )}
   </div>
 );
@@ -927,7 +936,7 @@ const ProfileTab = ({ roleLabel }) => {
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <Panel title="Personal information" icon={UserRound} testid="my-profile-personal">
           <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
-            {photo.input}
+            {photo.elements}
             <PhotoAvatar person={data} size={64} photo={photo} />
             <div className="min-w-0">
               <p className="truncate text-base font-semibold text-slate-800" data-testid="my-profile-name">{data.full_name}</p>
@@ -1054,7 +1063,7 @@ const PhoneProfileList = () => {
   return (
     <div data-testid="my-profile-profile-tab">
       <div className="flex flex-col items-center gap-2 border-b border-slate-100 pb-4 pt-1">
-        {photo.input}
+        {photo.elements}
         <PhotoAvatar person={data} size={88} photo={photo} />
         <PhotoActions person={data} photo={photo} className="text-sm" />
       </div>
