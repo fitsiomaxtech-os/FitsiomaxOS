@@ -348,7 +348,7 @@ const MonthSummary = ({ totals, month, today, workload }) => {
 // History instead. The desktop is untouched.
 
 const PhoneCard = ({ title, icon: Icon, children, testid }) => (
-  <section className="rounded-2xl border border-slate-200/80 bg-white p-2.5 shadow-sm" data-testid={testid}>
+  <section className="rounded-md border border-slate-200/80 bg-white p-2.5 shadow-sm" data-testid={testid}>
     {title && (
       <h3 className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-900">
         <Icon className="h-4 w-4 text-sky-600" />
@@ -362,8 +362,8 @@ const PhoneCard = ({ title, icon: Icon, children, testid }) => (
 /** One figure, stacked: glyph in a tinted square, its name, its value. Four fit across a
  *  phone. `className` is the tile itself: bordered white on Today, tinted on the month. */
 const PhoneStat = ({ icon: Icon, tone, label, value, className = "", testid }) => (
-  <div className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center ${className}`} data-testid={testid}>
-    <span className={`mx-auto flex h-6 w-6 items-center justify-center rounded-lg ${tone}`}>
+  <div className={`min-w-0 rounded-md px-0.5 py-1.5 text-center ${className}`} data-testid={testid}>
+    <span className={`mx-auto flex h-6 w-6 items-center justify-center rounded-md ${tone}`}>
       <Icon className="h-3.5 w-3.5" />
     </span>
     <span className="mt-1 block truncate text-[10px] leading-tight tracking-tight text-slate-500">{label}</span>
@@ -388,7 +388,7 @@ const PhoneToday = ({ row, today }) => {
           </p>
           {when && <p className="text-xl font-bold leading-tight text-slate-900" data-testid="my-attendance-today-date">{dayNumber(today)}</p>}
         </div>
-        <div className={`flex min-w-[5.5rem] shrink-0 flex-col items-center justify-center rounded-xl px-3 py-1.5 ${box}`} data-testid="my-attendance-today-status">
+        <div className={`flex min-w-[5.5rem] shrink-0 flex-col items-center justify-center rounded-md px-3 py-1.5 ${box}`} data-testid="my-attendance-today-status">
           <span className="text-[10px] font-medium">Status</span>
           <span className="text-sm font-bold leading-tight">{style.label}</span>
         </div>
@@ -428,9 +428,9 @@ const PhoneWorkload = ({ workload }) => {
         {tiles.map(([label, key]) => {
           const Icon = PHONE_WORKLOAD_ICONS[key] || ClipboardList;
           return (
-            <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-1.5" data-testid={`my-attendance-workload-${key}`}>
+            <div key={key} className="min-w-0 rounded-md border border-slate-200 bg-white p-1.5" data-testid={`my-attendance-workload-${key}`}>
               <div className="flex items-center justify-between gap-1">
-                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${key === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${key === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>
                   <Icon className="h-3.5 w-3.5" />
                 </span>
                 <span className="truncate text-base font-bold text-slate-900">{workload[key] ?? 0}</span>
@@ -465,7 +465,7 @@ const PhoneHours = ({ totals, today }) => {
     <PhoneCard title="Hours" icon={Clock} testid="my-attendance-hours">
       <div className="grid grid-cols-2 gap-2">
         {figures.map(([label, value, tone, sub, key]) => (
-          <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2" data-testid={`my-attendance-${key}`}>
+          <div key={key} className="min-w-0 rounded-md border border-slate-200 bg-white p-2" data-testid={`my-attendance-${key}`}>
             <p className="truncate text-xs text-slate-500">{label}</p>
             <p className={`text-base font-bold leading-tight ${tone}`}>{value}</p>
             <p className="truncate text-[11px] text-slate-400">{sub}</p>
@@ -485,7 +485,7 @@ const PhoneHours = ({ totals, today }) => {
 const MonthTable = ({ rows }) => {
   if (!rows.length) {
     return (
-      <p className="rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center text-sm text-slate-400" data-testid="my-attendance-empty">
+      <p className="rounded-md border border-dashed border-slate-200 bg-white py-10 text-center text-sm text-slate-400 sm:rounded-xl" data-testid="my-attendance-empty">
         Nothing recorded this month yet.
       </p>
     );
@@ -504,7 +504,7 @@ const MonthTable = ({ rows }) => {
                 <span className="text-sm font-semibold text-slate-800">
                   {dayNumber(r.date)} <span className="font-normal text-slate-400">{r.weekday}</span>
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.cls}`}>{style.label}</span>
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${style.cls}`}>{style.label}</span>
               </div>
               <p className="mt-1 text-xs text-slate-500">
                 {prettyTime(r.clock_in) || "—"} <span className="text-slate-300">→</span> {prettyTime(r.clock_out) || "—"}
@@ -641,11 +641,11 @@ const AttendanceTab = ({ view = "all" }) => {
   return (
     <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
       {phone ? (
-        <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-0.5 shadow-sm">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white p-0.5 shadow-sm">
           <button
             type="button"
             onClick={() => setMonth(shiftMonth(month, -1))}
-            className="rounded-full p-1.5 text-slate-600 active:bg-slate-100"
+            className="rounded-md p-1.5 text-slate-600 active:bg-slate-100"
             aria-label="Previous month"
             data-testid="my-attendance-prev"
           >
@@ -659,7 +659,7 @@ const AttendanceTab = ({ view = "all" }) => {
             type="button"
             onClick={() => setMonth(shiftMonth(month, 1))}
             disabled={isThisMonth}
-            className="rounded-full p-1.5 text-slate-600 active:bg-slate-100 disabled:opacity-30"
+            className="rounded-md p-1.5 text-slate-600 active:bg-slate-100 disabled:opacity-30"
             aria-label="Next month"
             data-testid="my-attendance-next"
           >
@@ -694,7 +694,7 @@ const AttendanceTab = ({ view = "all" }) => {
       )}
 
       {error && (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" data-testid="my-attendance-error">
+        <p className={`${phone ? "rounded-md" : "rounded-xl"} border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700`} data-testid="my-attendance-error">
           {error}
         </p>
       )}
@@ -1039,7 +1039,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
             <button
               type="button"
               onClick={() => setOpen("attendance-history")}
-              className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 active:bg-sky-100"
+              className="shrink-0 rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 active:bg-sky-100"
               data-testid="my-attendance-view-history"
             >
               View History
