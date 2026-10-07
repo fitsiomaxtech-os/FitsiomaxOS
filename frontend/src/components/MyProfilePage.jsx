@@ -342,15 +342,16 @@ const MonthSummary = ({ totals, month, today, workload }) => {
 // ---------- attendance, on a phone ----------
 //
 // The phone's Attendance screen (view "summary" / "history") is cards rather than the
-// desktop's label-and-value lists: a month card, Today with its status beside the date,
-// and each figure in a tile with its own glyph, so a glance finds the number without
-// reading down a column of labels. Same figures, same order; the desktop is untouched.
+// desktop's label-and-value lists, sized so the summary — the month, Today, This Month,
+// Today's Work — sits on one screen between the header and the bottom bar without a
+// scroll. That is why the figures run four across and the month's hours live on View
+// History instead. The desktop is untouched.
 
 const PhoneCard = ({ title, icon: Icon, children, testid }) => (
-  <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm" data-testid={testid}>
+  <section className="rounded-2xl border border-slate-200/80 bg-white p-2.5 shadow-sm" data-testid={testid}>
     {title && (
-      <h3 className="mb-3 flex items-center gap-2.5 text-base font-semibold text-slate-900">
-        <Icon className="h-5 w-5 text-sky-600" />
+      <h3 className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <Icon className="h-4 w-4 text-sky-600" />
         {title}
       </h3>
     )}
@@ -358,17 +359,15 @@ const PhoneCard = ({ title, icon: Icon, children, testid }) => (
   </section>
 );
 
-/** A figure with its glyph in a tinted square beside it. `className` is the tile itself:
- *  bordered white on Today, tinted on the month. */
-const PhoneFigure = ({ icon: Icon, tone, label, value, className = "", testid }) => (
-  <div className={`flex min-w-0 items-center gap-2.5 rounded-xl p-2.5 ${className}`} data-testid={testid}>
-    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
-      <Icon className="h-5 w-5" />
+/** One figure, stacked: glyph in a tinted square, its name, its value. Four fit across a
+ *  phone. `className` is the tile itself: bordered white on Today, tinted on the month. */
+const PhoneStat = ({ icon: Icon, tone, label, value, className = "", testid }) => (
+  <div className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center ${className}`} data-testid={testid}>
+    <span className={`mx-auto flex h-6 w-6 items-center justify-center rounded-lg ${tone}`}>
+      <Icon className="h-3.5 w-3.5" />
     </span>
-    <span className="min-w-0">
-      <span className="block truncate text-xs text-slate-500">{label}</span>
-      <span className="block truncate text-base font-bold leading-tight text-slate-900">{value}</span>
-    </span>
+    <span className="mt-1 block truncate text-[10px] leading-tight tracking-tight text-slate-500">{label}</span>
+    <span className="mt-0.5 block truncate text-sm font-bold leading-tight text-slate-900">{value}</span>
   </div>
 );
 
@@ -382,27 +381,24 @@ const PhoneToday = ({ row, today }) => {
   const card = "border border-slate-200 bg-white";
   return (
     <PhoneCard testid="my-attendance-today">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm text-slate-500">Today</p>
-          {when && (
-            <>
-              <p className="text-2xl font-bold leading-tight text-slate-900" data-testid="my-attendance-today-date">{dayNumber(today)}</p>
-              <p className="text-sm text-slate-500">{when.toLocaleDateString("en-GB", { weekday: "long" })}</p>
-            </>
-          )}
+          <p className="truncate text-xs text-slate-500">
+            Today{when && ` · ${when.toLocaleDateString("en-GB", { weekday: "long" })}`}
+          </p>
+          {when && <p className="text-xl font-bold leading-tight text-slate-900" data-testid="my-attendance-today-date">{dayNumber(today)}</p>}
         </div>
-        <div className={`flex min-w-[6.5rem] shrink-0 flex-col items-center justify-center rounded-xl px-4 py-3 ${box}`} data-testid="my-attendance-today-status">
-          <span className="text-xs font-medium">Status</span>
-          <span className="mt-1 text-base font-bold">{style.label}</span>
+        <div className={`flex min-w-[5.5rem] shrink-0 flex-col items-center justify-center rounded-xl px-3 py-1.5 ${box}`} data-testid="my-attendance-today-status">
+          <span className="text-[10px] font-medium">Status</span>
+          <span className="text-sm font-bold leading-tight">{style.label}</span>
         </div>
       </div>
-      <div className="my-4 border-t border-slate-100" />
-      <div className="grid grid-cols-2 gap-2">
-        <PhoneFigure icon={LogIn} tone="bg-emerald-50 text-emerald-600" label="Login" value={prettyTime(row?.clock_in) || NO_TIME} className={card} testid="my-attendance-today-in" />
-        <PhoneFigure icon={LogOut} tone="bg-rose-50 text-rose-600" label="Logout" value={prettyTime(row?.clock_out) || NO_TIME} className={card} testid="my-attendance-today-out" />
-        <PhoneFigure icon={Layers} tone="bg-sky-50 text-sky-600" label="Sessions" value={row?.sessions ?? 0} className={card} testid="my-attendance-today-sessions" />
-        <PhoneFigure icon={Clock} tone="bg-emerald-50 text-emerald-600" label="On the clock" value={hours(row?.login_minutes)} className={card} testid="my-attendance-today-login" />
+      <div className="my-2 border-t border-slate-100" />
+      <div className="grid grid-cols-4 gap-1.5">
+        <PhoneStat icon={LogIn} tone="bg-emerald-50 text-emerald-600" label="Login" value={prettyTime(row?.clock_in) || NO_TIME} className={card} testid="my-attendance-today-in" />
+        <PhoneStat icon={LogOut} tone="bg-rose-50 text-rose-600" label="Logout" value={prettyTime(row?.clock_out) || NO_TIME} className={card} testid="my-attendance-today-out" />
+        <PhoneStat icon={Layers} tone="bg-sky-50 text-sky-600" label="Sessions" value={row?.sessions ?? 0} className={card} testid="my-attendance-today-sessions" />
+        <PhoneStat icon={Clock} tone="bg-emerald-50 text-emerald-600" label="On the clock" value={hours(row?.login_minutes)} className={card} testid="my-attendance-today-login" />
       </div>
     </PhoneCard>
   );
@@ -410,34 +406,36 @@ const PhoneToday = ({ row, today }) => {
 
 const PhoneMonthCounts = ({ totals }) => (
   <PhoneCard title="This Month" icon={CalendarDays} testid="my-attendance-counts">
-    <div className="grid grid-cols-2 gap-2">
-      <PhoneFigure icon={CalendarDays} tone="bg-sky-100 text-sky-600" label="Working days" value={totals?.working_days ?? 0} className="bg-sky-50/70" testid="my-attendance-working-days" />
-      <PhoneFigure icon={UserRound} tone="bg-emerald-100 text-emerald-600" label="Present days" value={totals?.present_days ?? 0} className="bg-emerald-50/70" testid="my-attendance-present-days" />
-      <PhoneFigure icon={X} tone="bg-rose-100 text-rose-600" label="Absent" value={totals?.absent_days ?? 0} className="bg-rose-50/70" testid="my-attendance-absent-days" />
-      <PhoneFigure icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />
+    <div className="grid grid-cols-4 gap-1.5">
+      <PhoneStat icon={CalendarDays} tone="bg-sky-100 text-sky-600" label="Working days" value={totals?.working_days ?? 0} className="bg-sky-50/70" testid="my-attendance-working-days" />
+      <PhoneStat icon={UserRound} tone="bg-emerald-100 text-emerald-600" label="Present days" value={totals?.present_days ?? 0} className="bg-emerald-50/70" testid="my-attendance-present-days" />
+      <PhoneStat icon={X} tone="bg-rose-100 text-rose-600" label="Absent" value={totals?.absent_days ?? 0} className="bg-rose-50/70" testid="my-attendance-absent-days" />
+      <PhoneStat icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />
     </div>
   </PhoneCard>
 );
 
 const PHONE_WORKLOAD_ICONS = { clients: Users, appointments: CalendarDays, treatments: FileText, consultations: FileText, completed: Check };
 
-/** Today's book, three across. Pending is left to the desktop: it is Today's less
- *  Completed, both already here, and a fourth tile would not fit the row. */
+/** Today's book in one row. Pending is left to the desktop: it is Today's less
+ *  Completed, both already here, and the row has no room for it. */
 const PhoneWorkload = ({ workload }) => {
   const tiles = (WORKLOAD_TILES[workload?.kind] || []).filter(([, key]) => key !== "pending");
   if (!tiles.length) return null;
   return (
     <PhoneCard title="Today's Work" icon={ClipboardList} testid="my-attendance-workload">
-      <div className={`grid gap-2 ${tiles.length === 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+      <div className={`grid gap-1.5 ${tiles.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
         {tiles.map(([label, key]) => {
           const Icon = PHONE_WORKLOAD_ICONS[key] || ClipboardList;
           return (
-            <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5" data-testid={`my-attendance-workload-${key}`}>
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${key === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>
-                <Icon className="h-4 w-4" />
-              </span>
-              <p className="mt-2 min-h-[2rem] text-[11px] leading-4 text-slate-500">{label}</p>
-              <p className="mt-1 text-lg font-bold leading-tight text-slate-900">{workload[key] ?? 0}</p>
+            <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-1.5" data-testid={`my-attendance-workload-${key}`}>
+              <div className="flex items-center justify-between gap-1">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${key === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="truncate text-base font-bold text-slate-900">{workload[key] ?? 0}</span>
+              </div>
+              <p className="mt-1 line-clamp-2 min-h-[1.5rem] text-[10px] leading-3 text-slate-500">{label}</p>
             </div>
           );
         })}
@@ -446,7 +444,9 @@ const PhoneWorkload = ({ workload }) => {
   );
 };
 
-/** The month's hours, the same figures the desktop lists, two to a row. */
+/** The month's hours, the same figures the desktop lists, two to a row. On View History
+ *  rather than the summary: the summary is kept to one screen, and the hours are the
+ *  month's detail, read alongside its days. */
 const PhoneHours = ({ totals, today }) => {
   const behind = (totals?.balance_minutes || 0) < 0;
   const figures = [
@@ -465,9 +465,9 @@ const PhoneHours = ({ totals, today }) => {
     <PhoneCard title="Hours" icon={Clock} testid="my-attendance-hours">
       <div className="grid grid-cols-2 gap-2">
         {figures.map(([label, value, tone, sub, key]) => (
-          <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5" data-testid={`my-attendance-${key}`}>
+          <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2" data-testid={`my-attendance-${key}`}>
             <p className="truncate text-xs text-slate-500">{label}</p>
-            <p className={`text-lg font-bold leading-tight ${tone}`}>{value}</p>
+            <p className={`text-base font-bold leading-tight ${tone}`}>{value}</p>
             <p className="truncate text-[11px] text-slate-400">{sub}</p>
           </div>
         ))}
@@ -639,27 +639,27 @@ const AttendanceTab = ({ view = "all" }) => {
   const phone = view !== "all";
 
   return (
-    <div className={phone ? "space-y-3" : "space-y-4"} data-testid="my-profile-attendance-tab">
+    <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
       {phone ? (
-        <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm">
+        <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-0.5 shadow-sm">
           <button
             type="button"
             onClick={() => setMonth(shiftMonth(month, -1))}
-            className="rounded-full p-2 text-slate-600 active:bg-slate-100"
+            className="rounded-full p-1.5 text-slate-600 active:bg-slate-100"
             aria-label="Previous month"
             data-testid="my-attendance-prev"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <span className="flex items-center gap-2 text-base font-semibold text-slate-900" data-testid="my-attendance-month">
-            <CalendarDays className="h-5 w-5 text-slate-500" />
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-900" data-testid="my-attendance-month">
+            <CalendarDays className="h-4 w-4 text-slate-500" />
             {monthLabel(month)}
           </span>
           <button
             type="button"
             onClick={() => setMonth(shiftMonth(month, 1))}
             disabled={isThisMonth}
-            className="rounded-full p-2 text-slate-600 active:bg-slate-100 disabled:opacity-30"
+            className="rounded-full p-1.5 text-slate-600 active:bg-slate-100 disabled:opacity-30"
             aria-label="Next month"
             data-testid="my-attendance-next"
           >
@@ -708,9 +708,9 @@ const AttendanceTab = ({ view = "all" }) => {
               {isThisMonth && <PhoneToday row={todayRow} today={data?.today} />}
               <PhoneMonthCounts totals={data?.totals} />
               {isThisMonth && <PhoneWorkload workload={data?.workload} />}
-              <PhoneHours totals={data?.totals} today={data?.today} />
             </>
           )}
+          {view === "history" && <PhoneHours totals={data?.totals} today={data?.today} />}
           {view === "all" && (
             <>
               {isThisMonth && <TodayStrip row={todayRow} standard={data?.standard} today={data?.today} />}
@@ -1023,7 +1023,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
     const history = open === "attendance-history";
     const item = history ? { title: "Attendance History" } : items.find((i) => i.key === open);
     return (
-      <div className="space-y-4" data-testid={`my-profile-screen-${open}`}>
+      <div className="space-y-3" data-testid={`my-profile-screen-${open}`}>
         <div className="flex items-center gap-2">
           <button
             type="button"
