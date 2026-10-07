@@ -593,27 +593,22 @@ const ReviewList = ({ rows, meta, loading, empty, onOpen, staff = false, average
  *
  * `physioOnly` — the same narrowing without the rest of `mine`: the Branch Admin board,
  * where this desk only ever answers for its Physios, so the kind switch has nothing to
- * switch between and goes away.
- *
- * `branchPicker` — `branchId` is the opening pick rather than a pin, and the branch filter
- * is offered on top of it. The Branch Admin board passes it: that reader starts on their
- * own branch and can widen to any other, or to all of them. The server agrees with this —
- * it stopped holding a Branch Admin to their own branch on 2026-09-21 (see
- * backend/routers/v3_client_reviews.py) — so without that prop this panel is still pinned
- * by whatever branchId it was handed.
+ * switch between and goes away. That board hands in its own branch as a pin, so there is no
+ * branch picker either: the Physio picker is the only one left. (It offered every branch
+ * from 2026-09-21 to 2026-10-07; pinned back by request, and the server holds a Branch Admin
+ * to their own branch again — see backend/routers/v3_client_reviews.py.)
  *
  * `staffView` — the HR Admin mount, read by Super Admin and BDE. The same reviews in the
  * order a staff desk reads them: the Physio first, the client's stars and words named as
  * the client's, and the Physio's own average treatment rating closing the row. The branch
  * boards keep the client-first table (COLUMNS above).
  */
-export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly = false, branchPicker = false, staffView = false }) => {
+export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly = false, staffView = false }) => {
   const [data, setData] = useState({ consultant: [], physio: [], summary: {} });
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState([]);
-  // Offered where no branch was handed in — the HR Admin view across branches — and where
-  // one was handed in as an opening pick rather than a pin (`branchPicker`).
-  const [branch, setBranch] = useState(branchPicker ? branchId || "" : "");
+  // Only offered where no branch was handed in — the HR Admin view across branches.
+  const [branch, setBranch] = useState("");
   // Physio Review opens first: the weekly review every 7 days of treatment rates the Physio.
   const [kind, setKind] = useState("physio");
   // Set only by the tiles: where the review came from (see TILES).
@@ -623,15 +618,8 @@ export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly =
   const [dateFilter, setDateFilter] = useState(null);
   const [open, setOpen] = useState(null);
 
-  const showBranchFilter = branchPicker || (!branchId && !mine);
-  // With the picker offered, the pick is the whole answer: "" is every branch, including
-  // for a reader who was handed one.
-  const scope = branchPicker ? branch || null : branchId || branch || null;
-
-  // A board that swaps the branch under a mounted panel sends it back to that branch.
-  // Every board that does so remounts on the swap, so this fires on a real change only —
-  // never undoing a reader's own widening to All Branches.
-  useEffect(() => { if (branchPicker) setBranch(branchId || ""); }, [branchPicker, branchId]);
+  const showBranchFilter = !branchId && !mine;
+  const scope = branchId || branch || null;
 
   const load = useCallback(() => {
     setLoading(true);

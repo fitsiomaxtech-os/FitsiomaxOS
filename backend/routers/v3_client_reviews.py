@@ -32,11 +32,10 @@ Every review is its own row, with a `kind` (who is rated) and a `source` (what p
 Rows written by the first flow (one row per client with both ratings, no `kind`) are still
 read by management: list_client_reviews splits each into its consultant and physio halves.
 
-Read by management only: Super Admin, BDE and a Branch Admin across every branch. The
-Branch Admin used to be held to their own branch here; that was opened on 2026-09-21 by
-request, so their Client Reviews tab now reads and filters every branch like the other two
-desks. Nothing else a Branch Admin reads was widened with it. BDE is admitted by BDE_ROLES
-rather than the one slug: the Business Development
+Read by management only: Super Admin and BDE across every branch, a Branch Admin for their
+own branch. (The Branch Admin read every branch from 2026-09-21 to 2026-10-07; pinned back by
+request, so their Client Reviews tab answers for their own Physios only.) BDE is admitted by
+BDE_ROLES rather than the one slug: the Business Development
 Executive is `business_dev`, but a login created before migrate_designation_roles ran still
 holds the typed `business_development_executive` (see DEFAULT_ROLES in routers/v3_hr.py),
 and that desk reads these figures for the company.
@@ -49,7 +48,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from database import v3_col
-from deps import v3_require_roles, is_head_physio_role
+from deps import v3_require_roles, is_branch_admin_role, is_head_physio_role
 from physio_scope import consultant_of_lead, resolve_consultant_doctor
 from routers.v3_feedback import _rating
 from routers.v3_patient_portal import _current_patient_lead_id, _lead_or_404
@@ -503,10 +502,9 @@ async def list_client_reviews(
 ):
     """Every review management may read, split into Consultant, Physio and Branch Admin Review.
 
-    Super Admin, BDE and a Branch Admin read every branch and may narrow to one by passing
-    `branch_id` -- the Branch Admin board sends its own branch as the opening pick, and the
-    reader may widen it from there. A Consultant reads their own patients' reviews, across
-    branches -- never the Branch Admin ones, which are about the desk.
+    A Branch Admin is always held to their own branch, whatever they pass. Super Admin and
+    BDE read every branch and may narrow to one. A Consultant reads their own patients'
+    reviews, across branches -- never the Branch Admin ones, which are about the desk.
     """
     empty = summarise([])
     nothing = {"consultant": [], "physio": [], "branch_admin": [],
@@ -520,6 +518,10 @@ async def list_client_reviews(
             return nothing
         if branch_id:
             query["branch_id"] = branch_id
+    elif is_branch_admin_role(user.role):
+        if not user.branch_id:
+            return nothing
+        query["branch_id"] = user.branch_id
     elif branch_id:
         query["branch_id"] = branch_id
 
