@@ -2288,7 +2288,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 const slot = apptSlotLabel(lead);
                 const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
-                const hasDetails = lead.email || slot || fu || np?.reminder || lead.assigned_physio_name;
+                // All Stages is the whole branch at a glance, every stage mixed together, so
+                // its card says only who, their number and where they stand: the name, the
+                // phone and the stage. The Patient Number, city, marks and the stage's own
+                // lines (appointment, follow-up, reminder) belong to a stage's pill, where
+                // they are what the list is being worked for. Call, WhatsApp and Delete stay:
+                // they are what is done from a card, not more to read on it.
+                const allStages = !stageFilter;
+                const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || lead.assigned_physio_name);
                 // The reference card's single row (see ui/lead-row-card). Reaching the patient
                 // is the commonest thing done from this list, so Call and WhatsApp sit on the
                 // card rather than three taps deep behind the lead popup. Anything a stage
@@ -2298,10 +2305,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={<><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
+                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
                     badge={rowStage || "—"}
                     badgeColor={rowStage ? stageColor(rowStage) : null}
-                    idLine={[lead.patient_number, lead.phone || "—", cityAnswer(lead)]}
+                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, lead.phone || "—", cityAnswer(lead)]}
                     wa={waNumber(lead.phone)}
                     onOpen={() => setSelectedLead(lead)}
                     // The desk row's bin, on the phone: same rule for who sees it, same
