@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from database import v3_col
-from utils import CLINIC_UTC_OFFSET, clinic_day_of, live_branch_query, without_past_moves
+from utils import CLINIC_UTC_OFFSET, clinic_day_of, clinic_today, live_branch_query, without_past_moves
 from stage_utils import get_closing_stage_name
 from deps import v3_current_user, v3_require_roles
 from constants import V3_STAGES, V3_BRANCH_STAGES
@@ -28,6 +28,20 @@ async def _stage_names(stage_type: str, fallback: list) -> list:
     rows = await v3_col("pipeline_stages").find({"type": stage_type}, {"_id": 0, "name": 1}).sort("order", 1).to_list(200)
     names = [r["name"] for r in rows]
     return names or fallback
+
+
+def _clinic_today_window() -> tuple:
+    """Today on the clinic's clock, as the [start, end) pair of UTC stamps created_at is
+    stored in. Shared by the Today's Leads card and the list it opens, so the two cannot
+    come back different lengths.
+
+    It used to be UTC midnight, which is 05:30 IST: at eleven in the morning "today" was
+    five and a half hours old, and a sheet lead -- dated on the ad account's clock, see
+    enquiry_created_at -- did not reach it until four in the afternoon. The card read 0 on
+    mornings the desk had new leads.
+    """
+    today = clinic_today()
+    return _clinic_day_start_utc(today), _clinic_day_start_utc(today, plus_days=1)
 
 
 @router.get("/dashboard/bd-summary")
@@ -108,46 +122,46 @@ async def v3_bd_summary(
     recent_out = [V3LeadOut(**r) for r in recent_leads]
 
     # Time-bucketed lead volume — real, computed straight off created_at, no invented figures.
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Every bucket is a clinic day (or a run of them), so today's trend bucket and the card
+    # are the same window -- see _clinic_today_window.
     # Bounded above as well as below: a lead with a mistyped future created_at is not
     # today's, and without the upper bound it counted here while the week_trend bucket for
     # today (which is bounded) left it out -- the card and its trend line disagreed.
-    today_end = today_start + timedelta(days=1)
+    today_start, today_end = _clinic_today_window()
     today_leads = await v3_col("leads").count_documents(lead_filter({
-        "created_at": {"$gte": today_start.isoformat(), "$lt": today_end.isoformat()}
+        "created_at": {"$gte": today_start, "$lt": today_end}
     }))
 
-    week_start = today_start - timedelta(days=6)
+    today = date.fromisoformat(clinic_today())
+
+    def opens(day: date) -> str:
+        return _clinic_day_start_utc(day.isoformat())
+
+    week_start = today - timedelta(days=6)
     prev_week_start = week_start - timedelta(days=7)
-    leads_this_week = await v3_col("leads").count_documents(lead_filter({"created_at": {"$gte": week_start.isoformat()}}))
+    leads_this_week = await v3_col("leads").count_documents(lead_filter({"created_at": {"$gte": opens(week_start)}}))
     leads_last_week = await v3_col("leads").count_documents(lead_filter({
-        "created_at": {"$gte": prev_week_start.isoformat(), "$lt": week_start.isoformat()}
+        "created_at": {"$gte": opens(prev_week_start), "$lt": opens(week_start)}
     }))
 
     week_trend = []
     for i in range(6, -1, -1):
-        day_start = today_start - timedelta(days=i)
-        day_end = day_start + timedelta(days=1)
+        day = today - timedelta(days=i)
         count = await v3_col("leads").count_documents(lead_filter({
-            "created_at": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}
+            "created_at": {"$gte": opens(day), "$lt": opens(day + timedelta(days=1))}
         }))
-        week_trend.append({"date": day_start.strftime("%Y-%m-%d"), "count": count})
+        week_trend.append({"date": day.isoformat(), "count": count})
 
     month_trend = []
-    month_cursor = today_start.replace(day=1)
+    month_cursor = today.replace(day=1)
     months = []
     for _ in range(6):
         months.append(month_cursor)
-        prev_month_end = month_cursor - timedelta(days=1)
-        month_cursor = prev_month_end.replace(day=1)
+        month_cursor = (month_cursor - timedelta(days=1)).replace(day=1)
     for month_start in reversed(months):
-        if month_start.month == 12:
-            next_month = month_start.replace(year=month_start.year + 1, month=1)
-        else:
-            next_month = month_start.replace(month=month_start.month + 1)
+        next_month = (month_start + timedelta(days=32)).replace(day=1)
         count = await v3_col("leads").count_documents(lead_filter({
-            "created_at": {"$gte": month_start.isoformat(), "$lt": next_month.isoformat()}
+            "created_at": {"$gte": opens(month_start), "$lt": opens(next_month)}
         }))
         month_trend.append({"month": month_start.strftime("%Y-%m"), "count": count})
 
@@ -277,22 +291,16 @@ async def v3_bd_summary_rows(
     if start_date or end_date:
         appt_match["created_at"] = lead_match.get("created_at", {})
 
-    # Copied from today_leads in /dashboard/bd-summary above, deliberately including its
-    # remaining quirk: UTC midnight rather than the clinic day. That is not what this
-    # codebase does elsewhere (clinic_day_of/CLINIC_UTC_OFFSET are right there), but the
-    # card's number is counted that way, and a list that silently corrected it would come
-    # back a different length from the figure that was clicked. Fix the two together or
-    # not at all -- as the upper bound was.
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
+    # The same clinic-day window today_leads in /dashboard/bd-summary counts, from the same
+    # helper, so the list is exactly the figure that was clicked.
+    today_start, today_end = _clinic_today_window()
 
     # Which collection, and which query over it, per card. Named the same as the metric
     # keys the cards carry so the two can be read side by side.
     if metric in {"total", "today", "followup", "revenue"}:
         query = dict(lead_match)
         if metric == "today":
-            query["created_at"] = {"$gte": today_start.isoformat(), "$lt": today_end.isoformat()}
+            query["created_at"] = {"$gte": today_start, "$lt": today_end}
         elif metric == "followup":
             query["stage"] = "Follow Up"
         elif metric == "revenue":

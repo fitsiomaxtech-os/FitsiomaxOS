@@ -98,6 +98,20 @@ def test_a_multi_day_range_spans_every_day_it_names():
     assert not in_window(stored_stamp("2026-09-04T00:00:00"), window)
 
 
+def test_todays_leads_card_counts_the_clinic_day_not_the_utc_one(monkeypatch):
+    """The Business Development desk's Today's Leads card. It opened at UTC midnight --
+    05:30 IST -- and read 0 at eleven in the morning on a day with new leads."""
+    import routers.v3_dashboard as dashboard
+    monkeypatch.setattr(dashboard, "clinic_today", lambda: DAY)
+    lo, hi = dashboard._clinic_today_window()
+    window = {"created_at": {"$gte": lo, "$lt": hi}}
+    assert window == _utc_stamp_range_query("created_at", DAY, DAY)
+    for wall in ("2026-09-03T00:00:00", "2026-09-03T00:35:00", "2026-09-03T05:29:59", "2026-09-03T23:59:59"):
+        assert in_window(stored_stamp(wall), window), f"{wall} is today's lead"
+    for wall in ("2026-09-02T23:59:59", "2026-09-04T00:00:00"):
+        assert not in_window(stored_stamp(wall), window), f"{wall} is not today's lead"
+
+
 # ------------------------------------------------------------------- absent / unusable
 
 def test_no_dates_is_no_clause_on_either_clock():

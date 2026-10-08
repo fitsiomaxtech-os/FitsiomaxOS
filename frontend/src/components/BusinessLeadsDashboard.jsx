@@ -169,11 +169,10 @@ const REFRESH_WITHHELD_TABS = ["dashboard", "finance", "hr", "packages"];
  * return an empty list for the very day that was asked for.
  *
  * Local calendar days, not UTC ones -- the same reading `toIso` gives every other board
- * in here. A range therefore means the day the desk is having, which is not quite the day
- * the "Today's Leads" card counts (that one is UTC midnight, in the backend, deliberately
- * -- see the note on BD_ROWS_LIMIT). The two disagree for leads that arrive between
- * midnight and 5:30am IST, and fixing that belongs with the card's own definition rather
- * than here.
+ * in here. The backend still compares these wall-clock bounds against UTC stamps, so a
+ * range is 5:30 hours off the clinic day the "Today's Leads" card now counts (see
+ * _clinic_today_window in v3_dashboard.py). The two disagree for leads that arrive
+ * between midnight and 5:30am IST.
  */
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
