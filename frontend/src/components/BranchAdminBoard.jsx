@@ -2304,6 +2304,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     idLine={[lead.patient_number, lead.phone || "—", cityAnswer(lead)]}
                     wa={waNumber(lead.phone)}
                     onOpen={() => setSelectedLead(lead)}
+                    // The desk row's bin, on the phone: same rule for who sees it, same
+                    // typed-DELETE dialog, same purge.
+                    onDelete={canDeleteLeads ? () => setRowDelete(lead) : null}
                     testid="branch-card"
                     details={hasDetails ? (
                       <>
@@ -2775,8 +2778,15 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           leads={[rowDelete]}
           purge
           onClose={() => setRowDelete(null)}
-          onDeleted={() => {
+          onDeleted={(res) => {
+            const gone = rowDelete.id;
             setRowDelete(null);
+            // Off the list at once, then the board fetched again for the stage counts. A
+            // full board can take a few seconds to come back, and a card that is still
+            // there after "1 patient deleted" reads as a delete that didn't work.
+            if (res?.deleted > 0) {
+              setBoardData((prev) => ({ ...prev, leads: (prev.leads || []).filter((l) => l.id !== gone) }));
+            }
             loadBoard();
           }}
         />

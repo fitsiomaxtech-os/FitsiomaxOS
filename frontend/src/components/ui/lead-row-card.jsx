@@ -1,4 +1,4 @@
-import { Phone } from "lucide-react";
+import { Phone, Trash2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 
 /**
@@ -19,7 +19,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * reference has them; it truncates at the end, so on a narrow phone the last part is the
  * one cut short.
  *
- * `wa` is the number from lib/phone's waNumber; without one the buttons are left off, as
+ * `wa` is the number from lib/phone's waNumber; without one Call and WhatsApp are left off, as
  * there is nobody to ring. They are anchors rather than buttons so tel: and the WhatsApp
  * handoff are the browser's own, and stop propagation so tapping one doesn't also open
  * the card behind it.
@@ -27,11 +27,17 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * `badgeColor` is a hex, set inline for the reason StatTile gives: a `bg-${tone}-100`
  * built at runtime compiles to nothing. Left unset the badge is plain grey.
  *
+ * `onDelete`, when given, adds a bin button after WhatsApp — the desk table's Action
+ * cell, on the phone. Icon-only at every width, as it is on the desk, and rose so it is
+ * not mistaken for one of the two ways of reaching the patient. The list decides who
+ * gets it and what confirming it asks; the card only draws it.
+ *
  * `mark` replaces the initial in the avatar circle — a select-mode checkbox, say.
  * `className` carries the card's border and fill, so a picked card can be tinted.
  *
- * Test ids are `${testid}-${id}`, `${testid}-call-${id}` and `${testid}-whatsapp-${id}`,
- * which is what each list's cards were already called before they shared this.
+ * Test ids are `${testid}-${id}`, `${testid}-call-${id}`, `${testid}-whatsapp-${id}` and
+ * `${testid}-delete-${id}`, which is what each list's cards were already called before
+ * they shared this.
  */
 export const LeadRowCard = ({
   id,
@@ -44,6 +50,7 @@ export const LeadRowCard = ({
   wa = null,
   details = null,
   onOpen,
+  onDelete = null,
   className = "border-slate-200 bg-white",
   testid,
 }) => {
@@ -89,28 +96,43 @@ export const LeadRowCard = ({
             {badge}
           </span>
         )}
-        {wa && (
+        {(wa || onDelete) && (
           <div className="flex shrink-0 gap-1 sm:gap-1.5">
-            <a
-              href={`tel:${wa}`}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              aria-label="Call"
-              className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 active:bg-slate-100 sm:w-auto sm:px-2.5"
-              data-testid={`${testid}-call-${id}`}
-            >
-              <Phone className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
-            </a>
-            <a
-              href={`https://wa.me/${wa}`}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              aria-label="WhatsApp"
-              className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20 sm:w-auto sm:px-2.5"
-              data-testid={`${testid}-whatsapp-${id}`}
-            >
-              <WhatsAppIcon className="h-3.5 w-3.5" /><span className="hidden sm:inline">WhatsApp</span>
-            </a>
+            {wa && (<>
+              <a
+                href={`tel:${wa}`}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label="Call"
+                className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 active:bg-slate-100 sm:w-auto sm:px-2.5"
+                data-testid={`${testid}-call-${id}`}
+              >
+                <Phone className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
+              </a>
+              <a
+                href={`https://wa.me/${wa}`}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label="WhatsApp"
+                className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20 sm:w-auto sm:px-2.5"
+                data-testid={`${testid}-whatsapp-${id}`}
+              >
+                <WhatsAppIcon className="h-3.5 w-3.5" /><span className="hidden sm:inline">WhatsApp</span>
+              </a>
+            </>)}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label={`Delete ${name || "patient"}`}
+                title="Delete this patient"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-500 active:bg-rose-50"
+                data-testid={`${testid}-delete-${id}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         )}
       </div>
