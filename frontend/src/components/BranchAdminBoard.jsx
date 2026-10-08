@@ -42,6 +42,8 @@ import {
   Eye,
   Home,
   Building2,
+  ArrowDown,
+  ArrowUp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1881,7 +1883,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               answer to the same problem. That buys ~140px and the remaining five fit at
               full size; tapping it takes the whole row, since a search in use is the only
               thing you are doing. Desktop keeps the field open beside everything else. */}
-          <div className="flex items-center gap-1.5 sm:gap-3" data-testid="branch-toolbar">
+          {/* Eight squares on a phone now (search, order, two marks, calendar, refresh,
+              create, pull): 320px of buttons against the 336 a 360px phone leaves inside
+              the page padding. Gaps of 4px fit from 375 up and 2px below it -- at 6px the
+              last button hung off the edge and dragged the whole page sideways. */}
+          <div className="flex items-center gap-1 max-[374px]:gap-0.5 sm:gap-3" data-testid="branch-toolbar">
             {searchOpen ? (
               <div className="relative min-w-0 flex-1 sm:hidden">
                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -2060,7 +2066,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 than dropping to a line of their own. shrink-0 keeps them at full size and
                 lets the search give up the width instead; on the narrowest phones that
                 leaves the placeholder clipped, which costs less than a second row. */}
-            <div className={`${searchOpen ? "hidden sm:flex" : "flex"} shrink-0 items-center gap-1.5 sm:ml-auto sm:gap-3`}>
+            <div className={`${searchOpen ? "hidden sm:flex" : "flex"} shrink-0 items-center gap-1 max-[374px]:gap-0.5 sm:ml-auto sm:gap-3`}>
             {/* Which end of the list opens it. First in the group of actions, immediately
                 before the marks, because it is the widest reading of the board on this row:
                 the marks, the ranges and the search all narrow WHO is listed, and this one
@@ -2084,11 +2090,25 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 phone shows four rows at a time, so which four they are is most of what that
                 screen says. It is the search that gives way for it, collapsing to its icon
                 below sm the way it already does for everything else on this row. */}
+            {/* Phone: the order as one arrow that flips it -- down for New to First, up
+                for Old to First, with the words on title and aria-label -- the same toggle
+                Business Dev's board uses. The 112px dropdown was what pushed this row off
+                the edge of the screen. */}
+            <button
+              type="button"
+              onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
+              title={sortOrder === "newest" ? "New to First — tap for Old to First" : "Old to First — tap for New to First"}
+              aria-label={sortOrder === "newest" ? "Sort: New to First" : "Sort: Old to First"}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 sm:hidden"
+              data-testid="branch-sort-order-toggle"
+            >
+              {sortOrder === "newest" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+            </button>
             <Select value={sortOrder} onValueChange={setSortOrder}>
               <SelectTrigger
                 title="Order the list by date"
                 aria-label="Sort order"
-                className="h-10 w-[112px] shrink-0 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none transition-colors hover:bg-slate-50 focus:ring-2 focus:ring-sky-200 sm:w-[124px]"
+                className="hidden h-10 w-[112px] shrink-0 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none transition-colors hover:bg-slate-50 focus:ring-2 focus:ring-sky-200 sm:flex sm:w-[124px]"
                 data-testid="branch-sort-order"
               >
                 <SelectValue />
@@ -2110,7 +2130,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
                 Lit when active, and pressing the lit one clears it, so the same control
                 both narrows and returns. */}
-            <div className="flex shrink-0 items-center gap-1" data-testid="branch-mark-filters">
+            <div className="flex shrink-0 items-center gap-1 max-[374px]:gap-0.5" data-testid="branch-mark-filters">
                 <button
                   type="button"
                   onClick={() => setMarkFilter((m) => (m === "vip" ? "" : "vip"))}
@@ -2151,7 +2171,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 Consultation tab, where the row's own Custom was the copy that tab actually
                 used; with that gone, hiding it here would leave that tab unable to ask for
                 a range at all. */}
-            <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="branch-date-filter" centered iconOnly />
+            <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="branch-date-filter" centered iconOnly phoneIconOnly />
             <Button
               onClick={() => { loadBoard(); setRefreshTick((n) => n + 1); }}
               disabled={loading}
