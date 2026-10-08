@@ -151,12 +151,15 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 // as a wrapping flex row rather than a grid, so a short last row sits centred under the
 // full one instead of hanging off its left end -- a grid has no way to centre a part-filled
 // row.
-export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false, phoneFlush = false }) => (
+//
+// `className` is added to the bar itself. A wrapper div cannot hide it instead: the wrapper
+// would become the sticky bar's containing block, and the bar would stop sticking.
+export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false, phoneFlush = false, className = "" }) => (
   <div
     // The offset has to clear the sticky page header, which is two different heights:
     // 61px on a phone (py-3 + a 36px logo + border) and 89px from sm up (py-4 + 56px).
     // A flat 88px left a white band under the header on a phone once scrolled.
-    className={`sticky top-[61px] z-10 sm:top-[88px] ${
+    className={`sticky top-[61px] z-10 sm:top-[88px] ${className} ${
       phoneFlush
         ? "-mx-3 -mt-4 bg-slate-50 sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:border-slate-200 sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
         : `-mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur ${

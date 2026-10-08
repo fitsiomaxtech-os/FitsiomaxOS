@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSession } from "@/lib/session";
 import {
   Calendar,
+  CalendarCheck,
   CalendarX,
   CheckCircle2,
   ArrowLeftRight,
@@ -55,6 +56,7 @@ import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/com
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
+import { NotifyCard } from "@/components/ui/notify-card";
 import {
   scheduleBranchAppointment,
   getBranches,
@@ -154,6 +156,32 @@ const BRANCH_LEADS_PHONE_LABELS = {
   [STAGE_ROLE_FALLBACK_NAMES[STAGE_ROLE_APPOINTMENT]]: "Appointment",
   [STAGE_ROLE_FALLBACK_NAMES[STAGE_ROLE_NOT_A_PROSPECT]]: "prospect",
 };
+
+// The icon each Consultation stage wears on its phone card (see the stage cards on the
+// Consultation tab). Matched on a word in the name rather than on the whole name, so a
+// stage Super Admin retitles in CI/CD ROOTS ("Fees Collected") keeps its icon, and a stage
+// nobody foresaw gets the clipboard. Order matters: "Diet Chart" must hit `chart` before
+// `diet`.
+const CONSULTATION_STAGE_ICONS = [
+  ["cancel", CalendarX],
+  ["complete", CheckCircle2],
+  ["chart", ClipboardList],
+  ["diet", Salad],
+  ["rehab", HeartPulse],
+  ["physio", UserCog],
+  ["fee", BadgeIndianRupee],
+  ["visit", Stethoscope],
+  ["book", CalendarCheck],
+];
+const consultationStageIcon = (name) => {
+  const n = String(name || "").toLowerCase();
+  return CONSULTATION_STAGE_ICONS.find(([word]) => n.includes(word))?.[1] || ClipboardCheck;
+};
+
+// A stage's own colour as NotifyCard can tint it: that card adds alpha by appending two hex
+// digits, which only works on a six-digit hex. Anything else gets the slate the list's own
+// stage badge falls back to.
+const notifyHex = (color) => (/^#[0-9a-f]{6}$/i.test(color || "") ? color : "#64748b");
 
 // Does this stage row carry `role`? Trusts the stamp where there is one, so a stage renamed
 // to something that happens to match another role's old name is still itself.
@@ -1329,6 +1357,22 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const onHomeVisitTab = activeView === "branch_home_visit";
   const onConsultationTab = activeView === "branch_consultation" || onHomeVisitTab;
 
+  // On a phone the Consultation tab opens on its stages as a stack of cards, the Review
+  // tab's (see ui/notify-card), and tapping one opens that stage's list with a back bar
+  // above it. Nine stages as full-width rows fill the screen, so the list goes on a screen
+  // of its own rather than under them. House Visit and every width from sm keep the strip.
+  //
+  // Holds the tab the list is open on rather than a bare flag, so that leaving the tab
+  // closes it -- coming back to Consultation lands on the cards again -- while a lead popup
+  // handing a patient over to a stage (onOpenConsultationStage) can set the tab and the
+  // list in one go and have the list stay open.
+  const [phoneStageList, setPhoneStageList] = useState(null);
+  useEffect(() => {
+    setPhoneStageList((on) => (on === activeView ? on : null));
+  }, [activeView]);
+  const phoneStageCards = activeView === "branch_consultation" && phoneStageList !== activeView;
+  const phoneStageListOpen = activeView === "branch_consultation" && phoneStageList === activeView;
+
   // What the cards above the list do when one of them is clicked.
   //
   // StageTabBar toggles: a second click on the lit card asks for null, which on Branch
@@ -1873,9 +1917,40 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // Branch Leads and Consultation: on a phone the strip runs edge to edge straight
             // under the header. House Visit keeps its cards.
             phoneFlush={!onHomeVisitTab}
+            // The Consultation tab's phone wears its stages as cards instead (see
+            // phoneStageCards), so the strip is desk-only there.
+            className={activeView === "branch_consultation" ? "max-sm:hidden" : ""}
             testid="branch-metric"
             plain
           />
+
+          {/* Phone, with one stage's list open: where the strip sat, flush under the header,
+              the stage being read and its count, and the way back to the cards. Coloured as
+              its card was, so the list says which card it came from. */}
+          {phoneStageListOpen && (() => {
+            const hex = notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
+            const Icon = consultationStageIcon(stageFilter);
+            return (
+              <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-consult-phone-back">
+                <button
+                  type="button"
+                  onClick={() => setPhoneStageList(null)}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+                  aria-label="Back to the stage cards"
+                  data-testid="branch-consult-phone-back-btn"
+                >
+                  <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${hex}1F` }}>
+                    <Icon aria-hidden className="h-4 w-4" style={{ color: hex }} />
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{stageFilter}</span>
+                </button>
+                <span className="mr-1 inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold text-white" style={{ background: hex }}>
+                  {consultationCounts[stageFilter] || 0}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* One toolbar for every stage. It used to sit inside the non-consultation
               branch, so selecting a consultation stage swapped in ConsultationsBoard's
@@ -2241,7 +2316,35 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             />
           </div>
 
+          {/* Phone, Consultation tab: the stages as the Review tab's cards, one to a row,
+              under the toolbar and ranges, which still narrow every count here. A tap opens
+              that stage's list on its own screen (see phoneStageList), at the top of it. */}
+          {phoneStageCards && (
+            <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-consult-phone-cards">
+              {consultationOnlyStages.map((s) => (
+                <NotifyCard
+                  key={s.id}
+                  icon={consultationStageIcon(s.name)}
+                  label={s.name}
+                  value={consultationCounts[s.name] || 0}
+                  color={notifyHex(s.color)}
+                  active={stageFilter === s.name}
+                  onClick={() => {
+                    setStageFilter(s.name);
+                    setPhoneStageList(activeView);
+                    window.scrollTo({ top: 0 });
+                  }}
+                  testid={`branch-consult-phone-card-${s.name}`}
+                />
+              ))}
+            </div>
+          )}
+
           {onConsultationTab ? (
+            // Still mounted under the phone cards, only hidden: this board is what counts
+            // them (onCountChange), so unmounting it would leave every card at 0.
+            // `contents` everywhere else, so it stays the root's flex child as before.
+            <div className={phoneStageCards ? "max-sm:hidden sm:contents" : "contents"}>
             <ConsultationsBoard
               // Keyed per tab so a switch between Consultation and House Visit starts
               // from a clean board rather than carrying the other tab's open popup.
@@ -2284,6 +2387,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               // stages fall back to the desk table and every field arrives truncated.
               mobileCards
             />
+            </div>
           ) : (
           <>
 
@@ -2761,8 +2865,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // The Consultation stages moved to their own tab, so the handoff has to go
             // there as well as set the pill — setting the pill alone would leave the
             // reader on Branch Leads with a filter that has no pill and no board.
-            setActiveView(selectedLead.visit_type === "home" ? "branch_home_visit" : "branch_consultation");
+            const view = selectedLead.visit_type === "home" ? "branch_home_visit" : "branch_consultation";
+            setActiveView(view);
             setStageFilter(stage);
+            // On a phone, straight to that stage's list rather than to the cards above it.
+            setPhoneStageList(view);
           }}
           onMoved={() => {
             // Close first, then refresh the list in the background via loadBoard directly
@@ -2870,7 +2977,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             return (
               <BottomNavTab
                 key={tab.key}
-                onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); }}
+                // Clearing phoneStageList too: pressing Consult while one of its stage lists
+                // is open goes back to its cards, as a second tap on a phone tab does.
+                onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); setPhoneStageList(null); }}
                 icon={<Icon className="h-[18px] w-[18px] flex-none" />}
                 label={tab.short}
                 title={tab.label}
