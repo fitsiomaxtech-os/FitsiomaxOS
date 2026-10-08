@@ -454,6 +454,51 @@ const BRANCH_MODE_FILTERS = [
   { key: "offline", label: "Offline" },
 ];
 
+// The leads toolbar's dropdown look — the Handled By filter's, shared with the two branch
+// dropdowns that can sit beside it so the three read as one set. Tinted while it narrows
+// the list, so a filtered table always has something on screen saying so.
+const toolbarSelectClass = (narrowed) => `h-10 w-40 shrink-0 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${
+  narrowed ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+}`;
+
+/**
+ * All/Online/Offline and the branch pills as two toolbar dropdowns (branchFilterInToolbar).
+ * The same state and the same pickMode the rows use, so the branch list still narrows to
+ * the group picked beside it and a group change still lets go of a branch outside it.
+ *
+ * Radix Select refuses an empty value, so "All Branches" rides as "all" and maps back to
+ * the "" sourceFilter holds for every branch.
+ */
+const BranchScopeSelects = ({ mode, onMode, branchId, onBranch, branches, testid }) => (
+  <>
+    <Select value={mode} onValueChange={onMode}>
+      <SelectTrigger title="Online / Offline" aria-label="Online / Offline" className={toolbarSelectClass(mode !== "all")} data-testid={`${testid}-mode`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="border-slate-200">
+        {BRANCH_MODE_FILTERS.map((o) => (
+          <SelectItem key={o.key} value={o.key} className="text-xs text-slate-700" data-testid={`${testid}-mode-${o.key}`}>
+            {o.key === "all" ? "Online & Offline" : o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <Select value={branchId || "all"} onValueChange={(v) => onBranch(v === "all" ? "" : v)}>
+      <SelectTrigger title="Branch" aria-label="Branch" className={toolbarSelectClass(!!branchId)} data-testid={`${testid}-branch`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="max-h-72 border-slate-200">
+        <SelectItem value="all" className="text-xs text-slate-700" data-testid={`${testid}-branch-all`}>All Branches</SelectItem>
+        {branches.map((b) => (
+          <SelectItem key={b.id} value={b.id} className="text-xs text-slate-700" data-testid={`${testid}-branch-${b.id}`}>
+            {branchLabel(b)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </>
+);
+
 /**
  * A row of pills acting as one segmented control — the date presets on the Analytics pane
  * and the Leads range row, and the Handled By filter that sits beside the latter. One
@@ -777,6 +822,12 @@ export const PreSalesCRM = ({
   // Operations' Pre Sales tab: pinned to one rep, on top of whatever branchId already
   // narrows to. Nothing else passes this, so every existing caller is unaffected.
   assignedUserId = null,
+  // Business Development Executive's Marketing View: the leads pane only, with no Leads /
+  // Analytics switch, and the All/Online/Offline group and the branch pills folded into
+  // the toolbar as two dropdowns instead of a row of their own above the cards. Every
+  // other master view leaves both off and keeps its rows.
+  leadsOnly = false,
+  branchFilterInToolbar = false,
 }) => {
   const [stages, setStages] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -817,8 +868,15 @@ export const PreSalesCRM = ({
   const [masterViewOwn, setMasterViewOwn] = useState("leads"); // "leads" | "analytics"
   // The header's copy wins when the page supplies one; otherwise this board keeps its own.
   const headerOwnsViewTabs = typeof onMasterViewChange === "function";
-  const masterView = headerOwnsViewTabs ? masterViewProp : masterViewOwn;
+  // leadsOnly pins the pane rather than only hiding the switch, so nothing can leave the
+  // board on an Analytics pane with no way back.
+  const masterView = leadsOnly ? "leads" : headerOwnsViewTabs ? masterViewProp : masterViewOwn;
   const setMasterView = headerOwnsViewTabs ? onMasterViewChange : setMasterViewOwn;
+  // The two rows above the cards, each of which can stand down: the view tabs when the
+  // header carries them or the board is leads-only, the branch row when its two filters
+  // ride in the toolbar instead.
+  const showViewTabs = !headerOwnsViewTabs && !leadsOnly;
+  const showBranchRow = branches.length > 0 && !branchFilterInToolbar;
   // Which desk's half of the book to read: "all" | "pre_sales" | "branch_admin". Opens on
   // All, the whole picture this view exists to give — the other two are a step in from it.
   const [handledByFilter, setHandledByFilter] = useState("all");
@@ -1096,12 +1154,12 @@ export const PreSalesCRM = ({
           Above the KPI cards, because the cards are counted for whatever these select.
           With the cards on top they read as the page's headline totals, which is not what
           they are the moment a branch pill is on. */}
-      {isSuperAdminMasterView && (
+      {isSuperAdminMasterView && (showViewTabs || showBranchRow) && (
         <div className="space-y-2" data-testid="presales-master-controls">
           {/* A rule under it, the same one the branch tabs carry: it separates the two
               pages from the filters that narrow whichever one is open. Skipped when the
               page header carries them instead — two strips would be two answers. */}
-          {!headerOwnsViewTabs && (
+          {showViewTabs && (
             <div className="flex items-center gap-1 border-b border-slate-200 pb-2" data-testid="presales-view-tabs">
               <PreSalesViewTab active={masterView === "leads"} onClick={() => setMasterView("leads")} testid="presales-view-leads">
                 <Users className="h-4 w-4" />Leads
@@ -1112,7 +1170,7 @@ export const PreSalesCRM = ({
             </div>
           )}
 
-          {branches.length > 0 && (
+          {showBranchRow && (
             <div className="flex flex-wrap items-center gap-2" data-testid="presales-branch-filters">
               {/* Ahead of the pills, not above them: the group and the branches in it are
                   one question narrowing by degrees, and a row of its own would read as a
@@ -1189,16 +1247,22 @@ export const PreSalesCRM = ({
         <div className="shrink-0">
           <QuickDateFilterBar value={dateFilter} onChange={setDateFilter} testid="presales-leads-range" inline showCustom={false} />
         </div>
+        {isSuperAdminMasterView && branchFilterInToolbar && branches.length > 0 && (
+          <BranchScopeSelects
+            mode={modeFilter}
+            onMode={pickMode}
+            branchId={sourceFilter}
+            onBranch={setSourceFilter}
+            branches={modeBranches}
+            testid="presales-toolbar-branch"
+          />
+        )}
         {showHandledByFilter && (
           <Select value={handledByFilter} onValueChange={setHandledByFilter}>
             <SelectTrigger
               title="Handled By"
               aria-label="Handled By"
-              className={`h-10 w-40 shrink-0 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${
-                handledByFilter !== "all"
-                  ? "border-sky-300 bg-sky-50 text-sky-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
+              className={toolbarSelectClass(handledByFilter !== "all")}
               data-testid="presales-leads-range-handled-by"
             >
               <SelectValue />
@@ -1456,7 +1520,7 @@ export const PreSalesCRM = ({
               sit here for branch selection is gone; the pills below replace it. */}
           {isSuperAdminMasterView && (
             <div className="space-y-2" data-testid="presales-mobile-master-controls">
-              {!headerOwnsViewTabs && (
+              {showViewTabs && (
                 <div className="flex items-center gap-1 border-b border-slate-200 pb-2" data-testid="presales-mobile-view-tabs">
                   <PreSalesViewTab active={masterView === "leads"} onClick={() => setMasterView("leads")} testid="presales-mobile-view-leads">
                     <Users className="h-4 w-4" />Leads
@@ -1466,7 +1530,21 @@ export const PreSalesCRM = ({
                   </PreSalesViewTab>
                 </div>
               )}
-              {branches.length > 0 && (
+              {/* The desk toolbar's two dropdowns, on a line of their own: the search row
+                  above has no room left for them. */}
+              {branchFilterInToolbar && branches.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2" data-testid="presales-mobile-branch-selects">
+                  <BranchScopeSelects
+                    mode={modeFilter}
+                    onMode={pickMode}
+                    branchId={sourceFilter}
+                    onBranch={setSourceFilter}
+                    branches={modeBranches}
+                    testid="presales-mobile-toolbar-branch"
+                  />
+                </div>
+              )}
+              {showBranchRow && (
                 <div className="flex flex-wrap items-center gap-2" data-testid="presales-mobile-branch-filters">
                   <SegmentedPillGroup options={BRANCH_MODE_FILTERS} active={modeFilter} onPick={pickMode} testid="presales-mobile-branch-mode" />
                   <div className="flex flex-wrap items-center gap-1.5" data-testid="presales-mobile-branch-pills">

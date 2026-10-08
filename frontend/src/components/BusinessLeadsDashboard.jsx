@@ -430,9 +430,13 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           the same as it is for Super Admin's copy of these tabs.
 
           `embedded` because this board is the host: PreSalesCRM's own phone padding is
-          for a fixed bottom nav, and there is none under this strip. */}
+          for a fixed bottom nav, and there is none under this strip.
+
+          Marketing View alone is `leadsOnly` and `branchFilterInToolbar`: no Leads /
+          Analytics switch, and All/Online/Offline plus the branch pills as two dropdowns
+          in the toolbar rather than two rows above the cards. Sales View keeps both. */}
       {activeTab === "marketing_view" && (
-        <PreSalesCRM role="marketing_head" currentUser={currentUser} embedded />
+        <PreSalesCRM role="marketing_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar />
       )}
 
       {activeTab === "sales_view" && (
