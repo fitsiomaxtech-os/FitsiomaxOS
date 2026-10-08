@@ -10,7 +10,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatTile } from "@/components/ui/stat-tile";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/sonner";
 import { getDashboardOverview, getDashboardLeadsTrend, getLeadsAnalytics, getRevenueOverview, mkGetTeam, getDashboardClients, hrUsers, hrEmployees, hrMeta } from "@/lib/api";
@@ -154,14 +153,16 @@ export const ModeBranchScope = ({ branches, group, onGroup, branchId, onBranch, 
   const allLabel = group === "all" ? "All Branches" : `All ${group === "online" ? "Online" : "Offline"}`;
   return (
     <>
-      <div className="flex shrink-0 items-center gap-0.5 rounded-md border border-slate-200 p-0.5" data-testid={`${testid}-groups`}>
+      {/* h-10 and white, so it lines up with the branch button beside it and the date
+          buttons on Super Admin's row, which sits on the page's grey rather than in a card. */}
+      <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5" data-testid={`${testid}-groups`}>
         {MODE_GROUPS.map((g) => (
           <button
             key={g.key}
             type="button"
             onClick={() => { onGroup(g.key); onBranch(""); }}
             aria-pressed={group === g.key}
-            className={`shrink-0 rounded px-2.5 py-1.5 text-xs font-semibold transition ${
+            className={`h-full shrink-0 rounded px-2.5 text-xs font-semibold transition ${
               group === g.key ? "bg-sky-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
             }`}
             data-testid={`${testid}-group-${g.key}`}
@@ -291,9 +292,12 @@ const slugify = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")
  * counts" per the endpoint's own docstring — this answers where a lead came from, and
  * Revenue is where what it turned into lives.
  */
-const MarketingTab = ({ branches, dateFilter }) => {
-  const [group, setGroup] = useState("all");
-  const [branchId, setBranchId] = useState("");
+const MarketingTab = ({ branches, dateFilter, scope }) => {
+  const [ownGroup, setOwnGroup] = useState("all");
+  const [ownBranchId, setOwnBranchId] = useState("");
+  // The caller's toolbar scope when there is one, for the reason Revenue below gives.
+  const group = scope ? scope.group : ownGroup;
+  const branchId = scope ? scope.branchId : ownBranchId;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -311,7 +315,9 @@ const MarketingTab = ({ branches, dateFilter }) => {
 
   return (
     <div className="space-y-4" data-testid="dashboard-marketing-tab">
-      <ModeBranchFilter branches={branches} group={group} onGroup={setGroup} branchId={branchId} onBranch={setBranchId} testid="dashboard-marketing-filter" />
+      {!scope && (
+        <ModeBranchFilter branches={branches} group={group} onGroup={setOwnGroup} branchId={branchId} onBranch={setOwnBranchId} testid="dashboard-marketing-filter" />
+      )}
       {loading || !data ? (
         <p className="py-16 text-center text-sm text-slate-400">{loading ? "Loading..." : "No data."}</p>
       ) : (
@@ -332,9 +338,11 @@ const MarketingTab = ({ branches, dateFilter }) => {
  * list: how many leads sit in each Pre-Sales stage right now, for whichever branch/vertical
  * group is picked.
  */
-const SalesTab = ({ branches, dateFilter }) => {
-  const [group, setGroup] = useState("all");
-  const [branchId, setBranchId] = useState("");
+const SalesTab = ({ branches, dateFilter, scope }) => {
+  const [ownGroup, setOwnGroup] = useState("all");
+  const [ownBranchId, setOwnBranchId] = useState("");
+  const group = scope ? scope.group : ownGroup;
+  const branchId = scope ? scope.branchId : ownBranchId;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -352,7 +360,9 @@ const SalesTab = ({ branches, dateFilter }) => {
 
   return (
     <div className="space-y-4" data-testid="dashboard-sales-tab">
-      <ModeBranchFilter branches={branches} group={group} onGroup={setGroup} branchId={branchId} onBranch={setBranchId} testid="dashboard-sales-filter" />
+      {!scope && (
+        <ModeBranchFilter branches={branches} group={group} onGroup={setOwnGroup} branchId={branchId} onBranch={setOwnBranchId} testid="dashboard-sales-filter" />
+      )}
       {loading || !data ? (
         <p className="py-16 text-center text-sm text-slate-400">{loading ? "Loading..." : "No data."}</p>
       ) : (
@@ -376,10 +386,10 @@ const SalesTab = ({ branches, dateFilter }) => {
 const RevenueTab = ({ data, loading, dateFilter, scope }) => {
   const [ownGroup, setOwnGroup] = useState("all");
   const [ownBranchId, setOwnBranchId] = useState("");
-  // The scope is the caller's whenever the caller carries one. Super Admin's board passes
-  // nothing and keeps its own chip row below; the Business Development desk hands down the
-  // branch popover already on its toolbar, and the row is left off rather than drawn a
-  // second time under it saying the same thing.
+  // The scope is the caller's whenever the caller carries one. Both boards that mount
+  // these tabs -- Super Admin's and the Business Development desk's -- hand down the
+  // branch popover already on their toolbar, and the chip row is left off rather than
+  // drawn a second time under it saying the same thing.
   const group = scope ? scope.group : ownGroup;
   const branchId = scope ? scope.branchId : ownBranchId;
   const branches = data?.leads?.branches || [];
@@ -417,7 +427,8 @@ const TeamTab = ({ team, loading, branches, roster, rosterLoading, scope }) => {
   const branchId = scope ? scope.branchId : ownBranchId;
   // And the same for the name search. The roster and the two panels are three lists of
   // people on one tab, so one box narrows all three -- typing a name into a toolbar and
-  // having it reach only the middle card would be the box being wrong twice.
+  // having it reach only the middle card would be the box being wrong twice. A scope with
+  // no `search` (Super Admin's toolbar has no box) leaves the roster drawing its own.
   const q = (scope?.search || "").trim().toLowerCase();
 
   if (loading || !team) {
@@ -464,7 +475,7 @@ const TeamTab = ({ team, loading, branches, roster, rosterLoading, scope }) => {
         branches={branches}
         visibleBranches={visibleBranches}
         showUnposted={!branchId && group === "all"}
-        search={scope ? scope.search || "" : undefined}
+        search={scope?.search}
       />
 
       {/* No benchmarkFrom, so the average follows the filter — narrowed to one branch or
@@ -573,7 +584,17 @@ export const useDashboardData = (dateFilter, activeTab, enabled = true) => {
   // re-ask the analytics endpoint each time its parent redrew.
   const branches = useMemo(() => data?.leads?.branches || [], [data]);
 
-  return { data, loading, team, teamLoading, roster, rosterLoading, branches, loadOverview };
+  // Super Admin's Refresh: the overview, and the two Team payloads dropped so they are
+  // asked for again -- now if Team is open, otherwise on the next visit. The once-only rule
+  // above is about a date change, which cannot move them; a press of Refresh is somebody
+  // asking whether anything has.
+  const reload = useCallback(() => {
+    setTeam(null);
+    setRoster(null);
+    return loadOverview();
+  }, [loadOverview]);
+
+  return { data, loading, team, teamLoading, roster, rosterLoading, branches, loadOverview, reload };
 };
 
 /**
@@ -587,9 +608,9 @@ export const useDashboardData = (dateFilter, activeTab, enabled = true) => {
 export const DashboardTabPanel = ({ tab, dateFilter, dash, scope }) => {
   const { data, loading, team, teamLoading, roster, rosterLoading, branches } = dash;
   return tab === "marketing" ? (
-    <MarketingTab branches={branches} dateFilter={dateFilter} />
+    <MarketingTab branches={branches} dateFilter={dateFilter} scope={scope} />
   ) : tab === "sales" ? (
-    <SalesTab branches={branches} dateFilter={dateFilter} />
+    <SalesTab branches={branches} dateFilter={dateFilter} scope={scope} />
   ) : tab === "revenue" ? (
     <RevenueTab data={data} loading={loading} dateFilter={dateFilter} scope={scope} />
   ) : tab === "team" ? (
@@ -602,91 +623,129 @@ export const DashboardTabPanel = ({ tab, dateFilter, dash, scope }) => {
 };
 
 // Super Admin's default landing page — Marketing / Sales / Revenue / Team / Clients /
-// Analytics, each scoped to a date range and, below that, an All/Offline/Online + branch
-// filter.
+// Analytics, each scoped by the one toolbar row above them: a date range, All/Offline/
+// Online, a branch, and Refresh.
 export const DashboardBoard = () => {
   const [dateFilter, setDateFilter] = useState(defaultFilter);
   const [activeTab, setActiveTab] = useState("marketing");
+  // The branch scope, held here rather than inside each tab, so it is drawn once on the
+  // toolbar and means the same thing on all six -- Anna Nagar picked on Marketing is still
+  // Anna Nagar on Revenue. It used to be a chip row of its own under the tab strip, drawn
+  // afresh (and reset to All) by every tab.
+  const [group, setGroup] = useState("all");
+  const [branchId, setBranchId] = useState("");
+  // Bumped by Refresh, and the open tab's key: remounting it re-asks for whatever that tab
+  // fetches for itself (Marketing and Sales' counts, Clients, the Analytics charts), which
+  // reloading the overview alone never reached.
+  const [reloadKey, setReloadKey] = useState(0);
   const dash = useDashboardData(dateFilter, activeTab);
-  const { loading, loadOverview } = dash;
+  const { loading, branches, reload } = dash;
+
+  // No `search`: this toolbar has no box, so Team and Clients keep their own.
+  const scope = useMemo(() => ({ group, onGroup: setGroup, branchId, onBranch: setBranchId }), [group, branchId]);
+
+  const refresh = () => {
+    reload();
+    setReloadKey((k) => k + 1);
+  };
 
   return (
     // No title block. The tab above already reads Dashboard, and the strapline named the
     // five tabs sitting right below it.
     <div className="space-y-4" data-testid="dashboard-board">
-      {/* Five one-tap ranges, then Custom for everything else — the OS's shared date
-          filter, which also carries Yesterday, Last Month and an exact day.
+      {/* One toolbar row, read left to right: which dates, which side of the business,
+          which branch, then Refresh held to the far right. On a phone the six ranges
+          take the first line and the rest wrap onto a second. */}
+      <div className="flex flex-wrap items-center gap-2" data-testid="dashboard-toolbar">
+        {/* Five one-tap ranges, then Custom for everything else — the OS's shared date
+            filter, which also carries Yesterday, Last Month and an exact day.
 
-          Custom only shows a label when the range came from inside it. Picking Today or
-          This Month in there sets the same key a button owns, so the button lights up
-          and Custom goes back to reading "Custom" rather than the two of them naming the
-          same range side by side. */}
-      {/* One row on a phone, six equal columns, nothing off screen. An earlier pass used
-          overflow-x-auto here, which is what put Last 90 Days half past the edge — that
-          row was built to extend beyond the viewport and scroll. A six-column grid can't:
-          every cell is a sixth of the width the container already has.
-          Short labels on a phone, full ones from sm up, and the Custom trigger drops its
-          calendar icon on a phone to spend that width on its label instead.
+            Custom only shows a label when the range came from inside it. Picking Today or
+            This Month in there sets the same key a button owns, so the button lights up
+            and Custom goes back to reading "Custom" rather than the two of them naming the
+            same range side by side.
 
-          On a phone the six share the row edge to edge (flex-1) rather than sitting at
-          their natural widths — six controls bunched to the left with dead space beside
-          them reads like something failed to load. The labels are short enough that an
-          even sixth still fits the longest of them on a 320px screen; min-w-0 + truncate
-          is the fallback if it ever isn't. Desktop keeps natural widths, since stretching
-          six buttons across a 1400px board would be absurd. */}
-      <div className="flex items-center gap-1 sm:flex-wrap sm:gap-2" data-testid="dashboard-date-filter">
-        {DASH_PRESETS.map((p) => {
-          const active = dateFilter.key === p.key;
-          return (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setDateFilter(presetFilter(p))}
-              className={`h-10 min-w-0 flex-1 truncate rounded-md px-1 text-[11px] font-medium transition sm:flex-none sm:px-3 sm:text-sm ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-              data-testid={`dashboard-preset-${p.key}`}
-            >
-              <span className="sm:hidden">{p.short}</span>
-              <span className="hidden sm:inline">{p.label}</span>
-            </button>
-          );
-        })}
-        {/* The trigger is a Button this component doesn't own, so its width, padding, text
-            size and icon are pinned from out here rather than by adding breakpoint props
-            to a control five other boards share. */}
-        <span className="min-w-0 flex-1 sm:flex-none [&_button]:h-10 [&_button]:w-full [&_button]:justify-center [&_button]:px-1 [&_button]:text-[11px] [&_svg]:hidden sm:[&_button]:w-auto sm:[&_button]:px-4 sm:[&_button]:text-sm sm:[&_svg]:inline-block">
-          <DateFilterPopover
-            value={DASH_PRESETS.some((p) => p.key === dateFilter.key) ? null : dateFilter}
-            onChange={(next) => setDateFilter(next || defaultFilter())}
-            testid="dashboard-date-filter-popover"
-            placeholder="Custom"
-            centered
-          />
-        </span>
-        {/* Far right of the filter row, desktop only. It complements the one beside the
-            branch picker rather than duplicating it: that one is sm:hidden, this one is
-            hidden below sm, so exactly one is on screen at any width. Sitting in the
-            header, this one reaches every tab rather than only those that draw the branch
-            section. ml-auto is scoped to sm because below it the six presets already share
-            the row edge to edge and there is no spare width to push into. */}
+            On a phone the six share their line edge to edge (flex-1) with short labels, so
+            nothing sits off screen; min-w-0 + truncate is the fallback if a label ever
+            doesn't fit. From sm up they keep their natural widths. */}
+        <div className="flex w-full min-w-0 items-center gap-1 sm:w-auto sm:gap-2" data-testid="dashboard-date-filter">
+          {DASH_PRESETS.map((p) => {
+            const active = dateFilter.key === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setDateFilter(presetFilter(p))}
+                className={`h-10 min-w-0 flex-1 truncate rounded-md px-1 text-[11px] font-medium transition sm:flex-none sm:px-3 sm:text-sm ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                data-testid={`dashboard-preset-${p.key}`}
+              >
+                <span className="sm:hidden">{p.short}</span>
+                <span className="hidden sm:inline">{p.label}</span>
+              </button>
+            );
+          })}
+          {/* The trigger is a Button this component doesn't own, so its width, padding, text
+              size and icon are pinned from out here rather than by adding breakpoint props
+              to a control five other boards share. */}
+          <span className="min-w-0 flex-1 sm:flex-none [&_button]:h-10 [&_button]:w-full [&_button]:justify-center [&_button]:px-1 [&_button]:text-[11px] [&_svg]:hidden sm:[&_button]:w-auto sm:[&_button]:px-4 sm:[&_button]:text-sm sm:[&_svg]:inline-block">
+            <DateFilterPopover
+              value={DASH_PRESETS.some((p) => p.key === dateFilter.key) ? null : dateFilter}
+              onChange={(next) => setDateFilter(next || defaultFilter())}
+              testid="dashboard-date-filter-popover"
+              placeholder="Custom"
+              centered
+            />
+          </span>
+        </div>
+
+        {/* All / Offline / Online, then the branch as a dropdown -- the Business
+            Development desk's toolbar control, so seven branch chips no longer need a row
+            of their own. */}
+        <ModeBranchScope
+          branches={branches}
+          group={group}
+          onGroup={setGroup}
+          branchId={branchId}
+          onBranch={setBranchId}
+          testid="dashboard-scope"
+        />
+
         <Button
-          onClick={() => loadOverview()}
+          onClick={refresh}
           disabled={loading}
           title="Refresh"
           aria-label="Refresh"
-          className="hidden h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600 sm:ml-auto sm:inline-flex"
-          data-testid="dashboard-refresh-desktop"
+          className="ml-auto h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+          data-testid="dashboard-refresh"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
-      {/* Two rows of three on a phone. Five tabs in one row leaves each about a fifth of
-          the width, which even short single-word labels can't survive comfortably —
-          three columns keeps every label readable, at the cost of the last row holding
-          only two. Desktop keeps the single row. */}
-      <SegmentedTabs tabs={DASH_TABS} value={activeTab} onChange={setActiveTab} testid="dashboard-tab" mobileCols={3} />
+      {/* The six tabs in the toolbar's own style: one button each, white and bordered,
+          the open one filled sky. Two rows of three on a phone, where six in a row leaves
+          each too narrow to read; natural widths from sm up, like the ranges above. */}
+      <div className="grid grid-cols-3 gap-1 sm:flex sm:flex-wrap sm:gap-2" data-testid="dashboard-tab">
+        {DASH_TABS.map((t) => {
+          const Icon = t.icon;
+          const active = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              aria-current={active ? "page" : undefined}
+              className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-[11px] font-medium transition sm:px-3 sm:text-sm ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+              data-testid={`dashboard-tab-${t.key}`}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+              <span className="truncate">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      <DashboardTabPanel tab={activeTab} dateFilter={dateFilter} dash={dash} />
+      <DashboardTabPanel key={reloadKey} tab={activeTab} dateFilter={dateFilter} dash={dash} scope={scope} />
     </div>
   );
 };
@@ -718,7 +777,9 @@ const ClientsTab = ({ branches = [], scope }) => {
   const [ownSearch, setOwnSearch] = useState("");
   // The toolbar's box when the caller carries one, this card's own otherwise -- and only
   // one of the two is ever drawn, so the list is never narrowed by a box nobody can see.
-  const search = scope ? scope.search || "" : ownSearch;
+  // A scope without `search` is a toolbar with no box (Super Admin's), so the card keeps its own.
+  const toolbarSearch = scope?.search !== undefined;
+  const search = toolbarSearch ? scope.search : ownSearch;
 
   useEffect(() => {
     let live = true;
@@ -775,7 +836,7 @@ const ClientsTab = ({ branches = [], scope }) => {
             {current.label}
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{visible.length}</span>
           </p>
-          {!scope && (
+          {!toolbarSearch && (
             <div className="relative ml-auto min-w-0 flex-1 sm:max-w-xs">
               <Input
                 value={search}
