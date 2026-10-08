@@ -462,23 +462,6 @@ const DocumentsPanel = ({ leadId }) => {
 };
 
 /**
- * The three lists the Treatment tab holds, and what each is a list of.
- *
- * All is the day-by-day board this tab has always opened on: the treatment days booked
- * on the date picked in the strip, which is the physio's actual shift. The other two are
- * about the patient rather than the day — who is still mid-course and who has been seen
- * all the way through — so neither is tied to a date, and both are read as a caseload.
- *
- * Ongoing and Completed use the same words the Patients tab already splits its own list
- * with, on purpose: a patient filed under Completed there must not read as Ongoing here.
- */
-const TREATMENT_SUBTABS = [
-  { key: "all", label: "All" },
-  { key: "ongoing", label: "Ongoing" },
-  { key: "completed", label: "Completed" },
-];
-
-/**
  * The client's weekly star rating, as the Physio sees it: stars only. The Treatment
  * Feedback the client wrote beside them is not sent to this board at all (see
  * physio_star_ratings in v3_client_reviews.py) — management and the Consultant read it.
@@ -596,70 +579,6 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
   // just that group. Tapping an already-active tile clears back to "all".
   const [rowFilter, setRowFilter] = useState("all");
 
-  // Which of the three sub-tabs is open. "all" is the day board; the other two swap it
-  // for a caseload list, so the tiles and the week strip — both of which answer questions
-  // about a date — come off screen with it rather than sitting above a list they do not
-  // describe.
-  const [subTab, setSubTab] = useState("all");
-
-  /**
-   * This physio's caseload, split into the two the sub-tabs read it by, plus the count
-   * the Treatment Completed tile shows.
-   *
-   * Finished is a different unit from the three cards beside that tile, which all count
-   * days. "Completed 80" means eighty treatment days are done across everyone; it says
-   * nothing about how many people that finished. These are counts of patients, which is
-   * what answers "how many did we see through to the end" and "who is still mid-course".
-   *
-   * Deliberately not scoped by the date filter. Whether a course is finished is a fact
-   * about the patient as of now, not about a range of days, and pretending otherwise
-   * would need the date each patient's last session landed on. The tile says "of N
-   * patients" so the unit is legible next to the day counts.
-   *
-   * Days done AND the review written. The tile counted the day tally alone, so a patient
-   * landed here the moment their last day was ticked off -- reading as discharged on the
-   * board while the popup one click behind it still said REVIEW DUE, and while the Head
-   * Physio had not seen them. review_pending is the server's answer to the same question
-   * (leads_awaiting_review in v3_reviews.py), so the tile, the Completed sub-tab, the
-   * branch's Completed stage and the Review tab cannot come apart.
-   *
-   * That is one predicate for both lists, so a patient is in exactly one of them: whoever
-   * is not finished is ongoing, including the patient whose days are all ticked off and
-   * whose closing review is still with the CONSULTANT. The card says which of the two is
-   * outstanding rather than leaving "0 days left, still Ongoing" to be puzzled over.
-   *
-   * Declared above visibleRows because that memo reads it, in its body and in its
-   * dependency array. A const is in the temporal dead zone until its own line runs, so
-   * with this below it the memo threw "Cannot access 'courses' before initialization"
-   * on the first render of the tab — a build the compiler and the linter both pass.
-   */
-  const courses = useMemo(() => {
-    const inTreatment = leads.filter((l) => (l.total_sessions || 0) > 0 && inScope(l));
-    const isFinished = (l) => !l.review_pending && (l.completed_sessions || 0) >= l.total_sessions;
-    // One row shape for both lists, so the Ongoing and Completed cards are the same card
-    // reading different numbers rather than two layouts that drift apart.
-    const row = (l) => ({
-      key: `patient-${l.id}`,
-      lead: l,
-      total: l.total_sessions || 0,
-      completed: l.completed_sessions || 0,
-      remaining: Math.max(0, (l.total_sessions || 0) - (l.completed_sessions || 0)),
-      // Every day is done and only the CONSULTANT's write-up is outstanding. Kept on the
-      // Ongoing side — the course is not closed until that review lands — but the card
-      // says which of the two it is waiting on, since "0 days left" and "still ongoing"
-      // read as a contradiction without it.
-      reviewPending: !!l.review_pending,
-      done: isFinished(l),
-    });
-    const done = inTreatment.filter(isFinished);
-    return {
-      done: done.length,
-      patients: inTreatment.length,
-      completed: done.map(row),
-      ongoing: inTreatment.filter((l) => !isFinished(l)).map(row),
-    };
-  }, [leads, inScope]);
-
   // Matches a row against the search box — one definition because the day list and the
   // two caseload lists are searched by the same box in the same toolbar, and a name that
   // finds a patient on one tab must find them on the others. Name only: searching by
@@ -679,24 +598,6 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
     const completed = rows.filter((r) => r.done);
     return [...incomplete, ...completed];
   }, [dayRows, search, rowFilter, matches]);
-
-  /**
-   * The caseload the open sub-tab is showing — Ongoing or Completed, never the day board.
-   *
-   * Sorted so the patient who most needs reading is first. On Ongoing that is whoever has
-   * the fewest days left, which is who is closest to needing a closing review; on
-   * Completed it is simply the longest course first, so the biggest cases are at the top
-   * rather than the list being in whatever order the leads arrived in.
-   */
-  const visiblePatients = useMemo(() => {
-    if (subTab === "all") return [];
-    const q = search.trim().toLowerCase();
-    const rows = (subTab === "completed" ? courses.completed : courses.ongoing)
-      .filter((r) => matches(r.lead, q));
-    return [...rows].sort((a, b) => (
-      subTab === "completed" ? b.total - a.total : a.remaining - b.remaining
-    ));
-  }, [subTab, courses, search, matches]);
 
   // Every treatment day this physio holds, regardless of date — the default when
   // no Meta-style date filter is active.
@@ -777,38 +678,6 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
   // always keeps today selected by default regardless.
   const toolbar = (
     <div className="flex w-full items-center gap-2 md:w-auto" data-testid="physio-treatment-toolbar">
-      {/* All / Ongoing / Completed. It used to sit on its own row above the summary, which
-          on a phone made the top of this tab two rows of chrome before a single figure.
-          It travels with the rest of the toolbar now, so the whole tool bar is the one
-          row: the three filters on the left, the three controls on the right.
-
-          No count on All: the other two count patients, and the list All shows counts
-          days on one date. A number there would be read as the third of three patient
-          counts and would not be one. */}
-      <div
-        className={`${searchOpen ? "hidden md:flex" : "flex"} min-w-0 flex-1 gap-0.5 overflow-x-auto rounded-lg border border-slate-200 bg-white p-0.5 md:flex-none sm:gap-1 sm:p-1`}
-        data-testid="physio-treatment-subtabs"
-      >
-        {TREATMENT_SUBTABS.map((t) => {
-          const count = t.key === "ongoing" ? courses.ongoing.length : t.key === "completed" ? courses.completed.length : null;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setSubTab(t.key)}
-              aria-current={subTab === t.key ? "page" : undefined}
-              className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1.5 text-[11px] font-medium transition sm:px-3 sm:text-xs ${
-                subTab === t.key ? "bg-sky-100 text-sky-700" : "text-slate-500 hover:bg-slate-50"
-              }`}
-              data-testid={`physio-treatment-subtab-${t.key}`}
-            >
-              {t.label}
-              {count !== null && <span className="ml-1 text-[10px] text-slate-400">({count})</span>}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Open, the box takes the room the filter pills were using rather than a row of its
           own — on a phone there is not enough width for both, and the pills are what the
           physio just stopped using. */}
@@ -850,12 +719,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
             <Search className="h-4 w-4" />
           </button>
         )}
-        {/* Day board only, like the tiles it drives. Ongoing and Completed are lists of
-            patients as of now — a date range narrows nothing on either, and a filter that
-            visibly does nothing when it is set reads as a broken one. */}
-        {subTab === "all" && (
-          <DateFilterPopover value={filterValue} onChange={handleFilterChange} testid="physio-treatment-date-filter" centered iconOnly phoneIconOnly />
-        )}
+        <DateFilterPopover value={filterValue} onChange={handleFilterChange} testid="physio-treatment-date-filter" centered iconOnly phoneIconOnly />
         {/* Grey, matching every other Refresh in the OS — it is the one control that acts
             rather than filters, so it should not read as another filter chip. */}
         <Button
@@ -881,12 +745,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
 
       {/* The tinted panel these sat in is gone — the Head Physio cards sit straight on
           the page, and boxing the same cards here made two identical controls look like
-          two different ones. The heading stays: it names the range the counts answer to.
-
-          Day board only. Every figure on these three is scoped to a date range, and above
-          a caseload list that is not tied to a date they would be answering a question
-          nobody on that tab is asking. */}
-      {subTab === "all" && (
+          two different ones. The heading stays: it names the range the counts answer to. */}
       <div className="mb-4" data-testid="physio-treatment-summary">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">{filterValue ? filterValue.label : "Overall Treatment"}</p>
         {/* Three across at every width, phone included. It used to fold two by two below
@@ -899,9 +758,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
             they keep the disc and the sub-lines.
 
             Treatment Completed used to be a fourth card here. It counted finished patients,
-            not days — the one figure in the row that did not answer to the date above it —
-            and the Completed pill in the tool bar already opens that same list with its
-            count beside it. */}
+            not days — the one figure in the row that did not answer to the date above it. */}
         <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
           <StatTile
             compact arrow="phone"
@@ -921,7 +778,6 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
           />
         </div>
       </div>
-      )}
 
       {/* Sun-Sat week strip — today is always the default selection.
           Kept deliberately short: this is a date picker sitting between the summary and
@@ -930,11 +786,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
 
           The arrows sit beside the strip and centre against its full height rather than
           riding in the month line. They step the week — the row of days — so pinned to the
-          label they floated above the thing they move.
-
-          Day board only, with the tiles: a date picker over a list that is not filtered by
-          a date is a control that does nothing when it is used, which reads as broken. */}
-      {subTab === "all" && (
+          label they floated above the thing they move. */}
       <div className="mb-3 flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2" data-testid="physio-treatment-week-strip">
         <button type="button" onClick={() => setWeekAnchor((a) => shiftIso(a, -stripStep))} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label={phone ? "Previous days" : "Previous week"} data-testid="physio-week-prev">
           <ChevronLeft className="h-4 w-4" />
@@ -977,10 +829,8 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      )}
 
-      {subTab === "all" && (
-      visibleRows.length === 0 && !loading ? (
+      {visibleRows.length === 0 && !loading ? (
         <div className="text-center py-16">
           <ClipboardList className="h-10 w-10 text-slate-200 mx-auto mb-3" />
           <p className="text-sm text-slate-400">
@@ -1153,92 +1003,6 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
             </div>
           </div>
         </>
-      ))}
-
-      {/* Ongoing and Completed — the caseload, one card per patient, no date in sight.
-          One list for both: the two differ in which patients they hold and in what the
-          numbers on the card mean, not in shape, and two layouts for that would drift.
-
-          A card at all widths rather than cards-then-table. The day board is read across
-          a column (who is at 8:00, who is at 9:30), which is what a table is for; this is
-          read one patient at a time, and the progress bar is the point of the row. */}
-      {subTab !== "all" && (
-        visiblePatients.length === 0 && !loading ? (
-          <div className="py-16 text-center" data-testid="physio-treatment-caseload-empty">
-            <Users className="mx-auto mb-3 h-10 w-10 text-slate-200" />
-            <p className="text-sm text-slate-400">
-              {search.trim()
-                ? `No ${subTab} patient matches "${search.trim()}"`
-                : subTab === "completed"
-                  ? "No patient has finished their course yet"
-                  : "No patient is mid-course right now"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2" data-testid={`physio-treatment-caseload-${subTab}`}>
-            {visiblePatients.map((r) => {
-              const l = r.lead;
-              const pct = r.total ? Math.round((r.completed / r.total) * 100) : 0;
-              return (
-                <button
-                  type="button"
-                  key={r.key}
-                  onClick={() => setSelectedLead(l)}
-                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
-                    r.done ? "border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50" : "border-slate-200 bg-white hover:border-sky-200"
-                  }`}
-                  data-testid={`physio-caseload-row-${l.id}`}
-                >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                    r.done ? "bg-emerald-100 text-emerald-700" : "bg-sky-50 text-sky-700"
-                  }`}>
-                    {(l.name || "?").charAt(0).toUpperCase()}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-800">{l.name}</p>
-                    {/* How far through the course, as a figure and as a bar. The figure is
-                        what gets read; the bar is what gets scanned down a list of twenty. */}
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <div className="h-1.5 w-full max-w-[180px] overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={`h-full rounded-full ${r.done ? "bg-emerald-500" : "bg-sky-500"}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="shrink-0 text-[10px] font-semibold text-slate-500">
-                        {r.completed} of {r.total} days
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {/* Every day is done and the course still is not: the closing review is
-                        with the CONSULTANT. Said here rather than left to read as "0 days
-                        left, still Ongoing", which is the one thing the card cannot mean. */}
-                    {!r.done && r.reviewPending && r.remaining === 0 && (
-                      <span className="hidden rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-700 sm:inline-flex">
-                        Review due
-                      </span>
-                    )}
-                    {r.done ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">Completed</span>
-                    ) : (
-                      <span className="rounded-full bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-700">
-                        {r.remaining} left
-                      </span>
-                    )}
-                    {/* Named rather than a bare chevron. This list is the answer to "let me
-                        look at that patient", so the row says what pressing it does. */}
-                    <span className="flex items-center gap-0.5 text-[11px] font-semibold text-sky-600" data-testid={`physio-caseload-view-${l.id}`}>
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )
       )}
 
       {selectedLead && (
