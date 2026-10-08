@@ -343,7 +343,8 @@ const OperationsPreSalesTab = ({ branches, actingUser }) => {
       ) : selectedRepId ? (
         // super_admin role so this gets the full desktop table (KPIs, Handled By, the
         // works) — assignedUserId narrows that same table to just this rep's own leads,
-        // rather than trading it for a smaller, separately-built view.
+        // rather than trading it for a smaller, separately-built view. Leads only, with the
+        // branch filters as toolbar dropdowns -- the same shape as the master views.
         <PreSalesCRM
           key={selectedRepId}
           role="super_admin"
@@ -351,6 +352,8 @@ const OperationsPreSalesTab = ({ branches, actingUser }) => {
           branchId={selectedBranchId}
           assignedUserId={selectedRepId}
           embedded
+          leadsOnly
+          branchFilterInToolbar
         />
       ) : (
         <EmptyPrompt text="Pick a Pre Sales rep above to see their leads" testid="ops-presales-empty-person" />

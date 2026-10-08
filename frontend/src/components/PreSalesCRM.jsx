@@ -822,11 +822,12 @@ export const PreSalesCRM = ({
   // Operations' Pre Sales tab: pinned to one rep, on top of whatever branchId already
   // narrows to. Nothing else passes this, so every existing caller is unaffected.
   assignedUserId = null,
-  // Super Admin's Marketing / Sales Master View and the Business Development Executive's
-  // Marketing View / Sales View: the leads pane only, with no Leads / Analytics switch,
-  // and the All/Online/Offline group and the branch pills folded into the toolbar as two
-  // dropdowns instead of a row of their own above the cards. Sales Head's and Marketing
-  // Head's own boards leave both off and keep their rows.
+  // Super Admin's Marketing / Sales Master View and Operations' Pre Sales tab, and the
+  // Business Development Executive's Marketing View / Sales View: the leads pane only,
+  // with no Leads / Analytics switch, and the All/Online/Offline group and the branch
+  // pills folded into the toolbar as two dropdowns instead of a row of their own above
+  // the cards. Sales Head's and Marketing Head's own boards leave both off and keep their
+  // rows.
   leadsOnly = false,
   branchFilterInToolbar = false,
 }) => {
