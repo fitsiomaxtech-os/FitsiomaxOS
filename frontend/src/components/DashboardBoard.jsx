@@ -722,12 +722,11 @@ export const DashboardBoard = () => {
         </Button>
       </div>
 
-      {/* The six tabs in the toolbar's own style: one button each, white and bordered,
-          the open one filled sky. Two rows of three on a phone, where six in a row leaves
-          each too narrow to read; natural widths from sm up, like the ranges above. */}
-      <div className="grid grid-cols-3 gap-1 sm:flex sm:flex-wrap sm:gap-2" data-testid="dashboard-tab">
+      {/* The six tabs in the Super Admin nav's own style: plain text, no box or icon, the
+          open one filled sky. Two rows of three on a phone, where six in a row leaves each
+          too narrow to read; natural widths from sm up. */}
+      <div className="grid grid-cols-3 gap-1 border-b border-slate-200 pb-2 sm:flex sm:flex-wrap sm:gap-2" data-testid="dashboard-tab">
         {DASH_TABS.map((t) => {
-          const Icon = t.icon;
           const active = activeTab === t.key;
           return (
             <button
@@ -735,11 +734,10 @@ export const DashboardBoard = () => {
               type="button"
               onClick={() => setActiveTab(t.key)}
               aria-current={active ? "page" : undefined}
-              className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-[11px] font-medium transition sm:px-3 sm:text-sm ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`min-w-0 truncate rounded-md px-3 py-2 text-sm font-medium transition ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
               data-testid={`dashboard-tab-${t.key}`}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-              <span className="truncate">{t.label}</span>
+              {t.label}
             </button>
           );
         })}
