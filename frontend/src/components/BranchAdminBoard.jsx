@@ -1939,7 +1939,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   aria-label="Back to the stage cards"
                   data-testid="branch-consult-phone-back-btn"
                 >
-                  <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600" />
+                  {/* Nudges left every 1.5s (tailwind.config's nudge-left), so the way back
+                      to the cards is seen. motion-safe: a phone set to reduce motion gets
+                      it still. */}
+                  <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${hex}1F` }}>
                     <Icon aria-hidden className="h-4 w-4" style={{ color: hex }} />
                   </span>
