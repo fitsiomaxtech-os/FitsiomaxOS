@@ -2312,35 +2312,43 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 );
               }
               return visible.map((lead) => {
+                const rowStage = rowStageName(lead);
                 const slot = apptSlotLabel(lead);
                 const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
                 // All Stages is the whole branch at a glance, every stage mixed together, so
-                // its card leaves out the marks and the stage's own lines; those belong to a
-                // stage's pill, where the list is being worked rather than looked over.
+                // its card says only who, their number and where they stand: the name, the
+                // phone and the stage, boxed, then a grey bin and an arrow into the lead (see
+                // `glance` on ui/lead-row-card). The Patient Number, city, marks, the stage's
+                // own lines and Call/WhatsApp belong to a stage's pill, where the list is
+                // being worked rather than looked over.
                 const allStages = !stageFilter;
                 const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || lead.assigned_physio_name);
                 // The reference card's single row (see ui/lead-row-card). Reaching the patient
                 // is the commonest thing done from this list, so Call and WhatsApp sit on the
                 // card rather than three taps deep behind the lead popup. Anything a stage
                 // adds (appointment, follow-up, reminder) goes under the name.
-                // Call, WhatsApp and the bin are the only things on the row's right, on every
-                // pill: the user asked for the stage badge and the All Stages arrow to go.
                 return (
                   <LeadRowCard
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
                     nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
+                    // On the Leads pill the row's right holds only Call, WhatsApp and the
+                    // bin, as the user asked: every row there would read "Leads" anyway.
+                    // The other pills and All Stages keep the badge.
+                    badge={showingMirror ? null : (rowStage || "—")}
+                    badgeColor={rowStage ? stageColor(rowStage) : null}
                     // Where Call and WhatsApp sit on the card the number itself is left
-                    // off — the buttons are how it gets used. A phone too malformed to
-                    // ring keeps it.
-                    idLine={[lead.patient_number, waNumber(lead.phone) ? null : lead.phone, cityAnswer(lead)]}
+                    // off — the buttons are how it gets used. All Stages has neither, so
+                    // it keeps the number; so does a phone too malformed to ring.
+                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, waNumber(lead.phone) ? null : lead.phone, cityAnswer(lead)]}
                     wa={waNumber(lead.phone)}
                     onOpen={() => setSelectedLead(lead)}
                     // The desk row's bin, on the phone: same rule for who sees it, same
                     // typed-DELETE dialog, same purge.
                     onDelete={canDeleteLeads ? () => setRowDelete(lead) : null}
+                    glance={allStages}
                     testid="branch-card"
                     details={hasDetails ? (
                       <>
