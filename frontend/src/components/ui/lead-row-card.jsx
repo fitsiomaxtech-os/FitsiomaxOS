@@ -18,11 +18,17 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * screen and any of these lists) and loses its side borders and corners. The row's own
  * 12px keeps the avatar off the screen edge and in line with the toolbar above.
  *
- * Below sm, Call and WhatsApp are icon-only squares. With their labels the pair is about
- * 150px wide, and that would leave a 360px phone under 100px for the name. From sm up
- * (the user's own phone is about 720px wide) they carry their labels, as the reference
- * shows. The badge is capped and truncates, so a long stage name can't take the name's
- * room either.
+ * Below sm, Call and WhatsApp are bare icons — a sky phone, a green WhatsApp mark — with no
+ * box, border or fill, each on the same 32px tap area the boxes had. With a box round each, every row
+ * carried four (the badge and three buttons) and the column of green and rose squares was
+ * the first thing the eye found, not the names; the user asked for the lighter look. With
+ * their labels the pair is about 150px wide, and that would leave a 360px phone (the
+ * user's own, below sm) under 100px for the name. From sm up they are the bordered,
+ * labelled buttons the reference shows. The badge is capped and truncates, so a long stage
+ * name can't take the name's room either.
+ *
+ * The avatar is sky below sm, the header's brand blue, rather than violet; the name is a
+ * step bigger and the ID line a step darker there, so the text outweighs the icons.
  *
  * `idLine` is the patient number, city and the like, on one line split by "|" as the
  * reference has them; it truncates at the end, so on a narrow phone the last part is the
@@ -38,9 +44,11 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * built at runtime compiles to nothing. Left unset the badge is plain grey.
  *
  * `onDelete`, when given, adds a bin button after WhatsApp — the desk table's Action
- * cell, on the phone. Icon-only at every width, as it is on the desk, and rose so it is
- * not mistaken for one of the two ways of reaching the patient. The list decides who
- * gets it and what confirming it asks; the card only draws it.
+ * cell, on the phone. Icon-only at every width, as it is on the desk. Below sm it is a
+ * plain grey bin that turns rose only while pressed, so the rarest action isn't the
+ * loudest thing on every row; from sm up it is boxed in rose so it is not mistaken for
+ * one of the two ways of reaching the patient. The list decides who gets it and what
+ * confirming it asks; the card only draws it.
  *
  * `glance` is the lighter card Branch Leads draws on All Stages, where the list is the
  * whole branch to be looked over rather than one stage to be worked: no Call or
@@ -91,14 +99,14 @@ export const LeadRowCard = ({
       data-testid={`${testid}-${id}`}
     >
       <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700 sm:bg-violet-100 sm:text-violet-700">
           {mark || name?.charAt(0)?.toUpperCase() || "?"}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="flex min-w-0 items-center text-[13px] font-semibold leading-[18px] text-slate-900 sm:text-sm">
+          <p className="flex min-w-0 items-center text-[14px] font-semibold leading-[18px] text-slate-900 sm:text-sm">
             <span className="truncate">{name || "—"}</span>{nameAddon}
           </p>
-          <p className="mt-0.5 truncate text-[11px] font-medium leading-[14px] text-slate-400">
+          <p className="mt-0.5 truncate text-[11px] font-medium leading-[14px] text-slate-500 sm:text-slate-400">
             {parts.map((part, i) => (
               <span key={i}>
                 {i > 0 && <span className="mx-1 text-slate-300" aria-hidden="true">|</span>}
@@ -121,27 +129,27 @@ export const LeadRowCard = ({
           </span>
         )}
         {(showContact || onDelete) && (
-          <div className="flex shrink-0 gap-1 sm:gap-1.5">
+          <div className="flex shrink-0 sm:gap-1.5">
             {showContact && (<>
               <a
                 href={`tel:${wa}`}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 aria-label="Call"
-                className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 active:bg-slate-100 sm:w-auto sm:px-2.5"
+                className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-full text-sky-600 active:bg-sky-50 sm:w-auto sm:rounded-md sm:border sm:border-slate-200 sm:bg-white sm:px-2.5 sm:text-xs sm:font-semibold sm:text-slate-700 sm:active:bg-slate-100"
                 data-testid={`${testid}-call-${id}`}
               >
-                <Phone className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
+                <Phone className="h-[18px] w-[18px] sm:h-3.5 sm:w-3.5" /><span className="hidden sm:inline">Call</span>
               </a>
               <a
                 href={`https://wa.me/${wa}`}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 aria-label="WhatsApp"
-                className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20 sm:w-auto sm:px-2.5"
+                className="flex h-8 w-8 items-center justify-center gap-1.5 rounded-full text-green-600 active:bg-green-50 sm:w-auto sm:rounded-md sm:border sm:border-[#25D366]/40 sm:bg-[#25D366]/10 sm:px-2.5 sm:text-xs sm:font-semibold sm:text-[#128C7E] sm:active:bg-[#25D366]/20"
                 data-testid={`${testid}-whatsapp-${id}`}
               >
-                <WhatsAppIcon className="h-3.5 w-3.5" /><span className="hidden sm:inline">WhatsApp</span>
+                <WhatsAppIcon className="h-5 w-5 sm:h-3.5 sm:w-3.5" /><span className="hidden sm:inline">WhatsApp</span>
               </a>
             </>)}
             {onDelete && (
@@ -152,11 +160,11 @@ export const LeadRowCard = ({
                 aria-label={`Delete ${name || "patient"}`}
                 title="Delete this patient"
                 className={glance
-                  ? "flex h-8 w-8 items-center justify-center rounded-md text-slate-400 active:bg-slate-100 active:text-rose-500"
-                  : "flex h-8 w-8 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-500 active:bg-rose-50"}
+                  ? "flex h-8 w-8 items-center justify-center rounded-full text-slate-400 active:bg-slate-100 active:text-rose-500 sm:rounded-md"
+                  : "flex h-8 w-8 items-center justify-center rounded-full text-slate-400 active:bg-rose-50 active:text-rose-500 sm:rounded-md sm:border sm:border-rose-200 sm:bg-white sm:text-rose-500"}
                 data-testid={`${testid}-delete-${id}`}
               >
-                <Trash2 className={glance ? "h-4 w-4" : "h-3.5 w-3.5"} />
+                <Trash2 className={glance ? "h-[18px] w-[18px] sm:h-4 sm:w-4" : "h-[18px] w-[18px] sm:h-3.5 sm:w-3.5"} />
               </button>
             )}
           </div>
