@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Calendar as CalendarIcon,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -105,6 +106,9 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   // and the shorthand only ever came from the slug.
   const roleLabel = isCoach ? "Nutritionist" : isRehab ? "Rehab Therapist" : isPhysio ? "Physiotherapist" : "CONSULTANT";
   const roleLabelPlural = isCoach ? "Nutritionists" : isRehab ? "Rehab Therapists" : isPhysio ? "Physiotherapists" : "CONSULTANTS";
+  // Title case for the phone dropdown's placeholder, where the shouted CONSULTANT of the
+  // desk header would be the one capitalised word in a sentence.
+  const roleNoun = isConsultant ? "Consultant" : roleLabel;
   // An empty consultant list is a narrowing, not an absence: consultants are org-wide, so
   // the ones missing here are the ones who work the other arm. Saying "none created yet"
   // sends the reader to HR to create somebody who is already there.
@@ -710,7 +714,33 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     <div className="flex flex-col gap-3 sm:gap-4 lg:h-[calc(100vh-220px)] lg:flex-row" data-testid="head-physio-calendar-root">
       {/* LEFT PANEL — Doctor List */}
       <div className="flex w-full flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:h-full lg:w-72" data-testid="doctor-list-panel">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/60">
+        {/* Phone: the list folds into one dropdown, and the card itself is the dropdown —
+            no header over it, since the placeholder already names who is being picked. A
+            row of 224px cards scrolled sideways showed one and a half names at a time; the
+            phone's own picker shows every one. From sm up the header and cards return. */}
+        <div className="relative sm:hidden">
+          <Stethoscope className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" aria-hidden="true" />
+          <select
+            value={selectedDoctor ? String(selectedDoctor.id) : ""}
+            onChange={(e) => selectDoctor(doctors.find((d) => String(d.id) === e.target.value) || null)}
+            disabled={doctors.length === 0}
+            aria-label={roleLabelPlural}
+            className="h-11 w-full appearance-none bg-white pl-9 pr-9 text-sm font-semibold text-slate-800 outline-none disabled:text-slate-400"
+            data-testid="doctor-select"
+          >
+            <option value="" disabled>
+              {doctors.length === 0 ? `No ${roleNoun.toLowerCase()}s on the team` : `Select ${roleNoun}`}
+            </option>
+            {doctors.map((doc) => (
+              <option key={doc.id} value={String(doc.id)}>
+                {doc.full_name}{doc.is_super_admin ? " · Super Admin" : ""}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        </div>
+
+        <div className="hidden border-b border-slate-100 bg-slate-50/60 p-4 sm:block">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
               <Stethoscope className="h-4 w-4 text-violet-500" /> {roleLabelPlural}
@@ -719,7 +749,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
           </div>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto p-2 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-visible" data-testid="doctor-list">
+        <div className="hidden gap-1.5 overflow-x-auto p-2 sm:flex lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-visible" data-testid="doctor-list">
           {doctors.length === 0 && (
             <p className="text-xs text-slate-400 text-center py-6">
               {emptyLine}
@@ -802,7 +832,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
             >
               <Video className="h-3.5 w-3.5 text-violet-500" /> Google Meet link
             </label>
-            <p className="mt-0.5 text-[10px] text-slate-400">
+            <p className="mt-0.5 hidden text-[10px] text-slate-400 sm:block">
               {selectedDoctor.full_name}&apos;s own room. Sent to the patient when a slot here is booked.
             </p>
             <div className="mt-2 flex items-center gap-1.5">
@@ -855,7 +885,9 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
       </div>
 
       {/* RIGHT PANEL — Calendar */}
-      <div className="flex flex-1 flex-col overflow-visible rounded-xl border border-slate-200 bg-white lg:overflow-hidden" data-testid="calendar-panel">
+      {/* Not drawn at all on a phone until somebody is picked: there it was a card holding
+          only "Select a CONSULTANT to open…", which the dropdown above already says. */}
+      <div className={`${selectedDoctor ? "flex" : "hidden sm:flex"} flex-1 flex-col overflow-visible rounded-xl border border-slate-200 bg-white lg:overflow-hidden`} data-testid="calendar-panel">
         {!selectedDoctor ? (
           <div className="flex-1 flex items-center justify-center" data-testid="calendar-empty-state">
             <div className="text-center">
@@ -865,15 +897,17 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
           </div>
         ) : (
           <>
-            {/* Doctor Header */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
+            {/* Doctor Header. On a phone it keeps only the shift chip and the controls: the
+                name and initial are already on the dropdown right above it, and the count
+                line under them went as text nobody there was reading. */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2.5 sm:flex-nowrap sm:gap-0 sm:p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700">
+                <div className="hidden h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:flex">
                   {selectedDoctor.full_name?.charAt(0)?.toUpperCase()}
                 </div>
                 <div>
                   <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
-                    {selectedDoctor.full_name}
+                    <span className="hidden sm:inline">{selectedDoctor.full_name}</span>
                     {/* The shift is stated on the header rather than left to be inferred
                         from where the grid below starts — the day is being published
                         against it, so it has to be visible while publishing. */}
@@ -905,7 +939,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                       </select>
                     )}
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="hidden text-[11px] text-slate-400 sm:block">
                     {isConsultant
                       ? `${purpose} · ${publishedDays.size} day${publishedDays.size === 1 ? "" : "s"} available`
                       : `${purpose} · ${slotDuration} min · ${(calendarData?.slots || []).length} slots open`}
@@ -973,7 +1007,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
               {/* Month Calendar — scrolls on its own, otherwise the controls below it
                   (duration, type, Mark Whole Day Available, Repeat) get clipped by the
                   row's lg:overflow-hidden with no way to reach them. */}
-              <div className="flex w-full flex-shrink-0 flex-col border-b border-slate-100 p-3 sm:p-5 lg:w-[26rem] lg:border-b-0 lg:border-r lg:overflow-y-auto">
+              <div className={`flex w-full flex-shrink-0 flex-col ${selectedDate ? "border-b" : "sm:border-b"} border-slate-100 p-3 sm:p-5 lg:w-[26rem] lg:border-b-0 lg:border-r lg:overflow-y-auto`}>
                 <div className="flex items-center justify-between mb-4">
                   <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-slate-100" data-testid="cal-prev-month">
                     <ChevronLeft className="h-4 w-4 text-slate-500" />
@@ -1046,15 +1080,17 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     );
                   })}
                 </div>
+                {/* Desk only, like the day hint below: on a phone both were guide text
+                    under a calendar that already shows a leave day struck through. */}
                 {Object.keys(leaveDays).length > 0 && (
-                  <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400" data-testid="calendar-leave-legend">
+                  <p className="mt-2 hidden items-center gap-1.5 text-[10px] text-slate-400 sm:flex" data-testid="calendar-leave-legend">
                     <span className="inline-block h-2.5 w-2.5 rounded border border-rose-200 bg-rose-50" />
                     Branch leave day — set in CALENDAR → MONTHLY CALENDAR
                   </p>
                 )}
 
                 {selectedDate && (
-                  <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400" data-testid="calendar-day-hint">
+                  <p className="mt-4 hidden border-t border-slate-100 pt-3 text-[11px] text-slate-400 sm:block" data-testid="calendar-day-hint">
                     {isConsultant ? (
                       dayShiftLabel
                         ? <>Marked available across <b>{dayShiftLabel}</b>{isOverridden ? " — set for this day only" : ""}. The exact time is agreed with the patient and typed on BRANCH LEADS → APPOINTMENT. </>
@@ -1070,7 +1106,9 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
               </div>
 
               {/* Time Slots Grid */}
-              <div className="w-full flex-shrink-0 p-4 sm:p-5 lg:flex-1 lg:overflow-y-auto">
+              {/* No "Pick a date to open the day…" pane on a phone — nothing is drawn under
+                  the month until a date is picked. */}
+              <div className={`${selectedDate ? "" : "hidden sm:block"} w-full flex-shrink-0 p-4 sm:p-5 lg:flex-1 lg:overflow-y-auto`}>
                 {!selectedDate ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
@@ -1138,7 +1176,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                             {selectedDates.length > 1 ? `Shift for these ${selectedDates.length} days` : "Shift for this day"}
                           </span>
                           {savingDayShift && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
-                          <span className="text-[10px] text-slate-400">
+                          <span className="hidden text-[10px] text-slate-400 sm:inline">
                             {isOverridden
                               ? `One-off — ${selectedDoctor.full_name} stays on ${shift?.shift_name || "their usual day"}.`
                               : "Changes this day only, not their shift."}

@@ -429,6 +429,7 @@ function AbsenceDetail({ absenceId, onClose, onChanged }) {
 
 export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
   const isPhysio = mode === "physio";
+  const tileArrow = isPhysio ? true : "desk";
   const [data, setData] = useState({ absences: [], physios: [] });
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ date: localToday(), physio_id: "", reason: "" });
@@ -505,12 +506,14 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
   return (
     <div className="space-y-4" data-testid={`physio-absence-panel-${mode}`}>
       {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
-          on a 5px corner, matching the Fitness, Review and Patients strips. */}
+          on a 5px corner, matching the Fitness, Review and Patients strips. On Branch
+          Admin's board the chevron is from sm up only, as on every card there; the
+          physio's own board keeps it. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Absences" value={absences.length} arrow color="#e11d48" active={filter === null} onClick={() => setFilter(null)} testid="physio-absence-tile-count" />
-        <StatTile label="Need a plan" value={totals.waiting} arrow color="#d97706" active={filter === "waiting"} onClick={() => pickFilter("waiting")} testid="physio-absence-tile-waiting" />
-        <StatTile label="Handed over" value={totals.reassigned} arrow color="#0284c7" active={filter === "reassigned"} onClick={() => pickFilter("reassigned")} testid="physio-absence-tile-reassigned" />
-        <StatTile label="Waiting" value={totals.released} arrow color="#64748b" active={filter === "released"} onClick={() => pickFilter("released")} testid="physio-absence-tile-released" />
+        <StatTile label="Absences" value={absences.length} arrow={tileArrow} color="#e11d48" active={filter === null} onClick={() => setFilter(null)} testid="physio-absence-tile-count" />
+        <StatTile label="Need a plan" value={totals.waiting} arrow={tileArrow} color="#d97706" active={filter === "waiting"} onClick={() => pickFilter("waiting")} testid="physio-absence-tile-waiting" />
+        <StatTile label="Handed over" value={totals.reassigned} arrow={tileArrow} color="#0284c7" active={filter === "reassigned"} onClick={() => pickFilter("reassigned")} testid="physio-absence-tile-reassigned" />
+        <StatTile label="Waiting" value={totals.released} arrow={tileArrow} color="#64748b" active={filter === "released"} onClick={() => pickFilter("released")} testid="physio-absence-tile-released" />
       </div>
 
       {/* Mark absent */}
@@ -573,11 +576,13 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
         </div>
       </div>
 
+      {/* The sentence is dropped from Branch Admin's phone, where Refresh sits alone at
+          the right. */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">
+        <p className={`text-xs text-slate-500 ${isPhysio ? "" : "hidden sm:block"}`}>
           Every patient booked on an absent day needs another physio or a new date, agreed with the patient.
         </p>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="shrink-0" data-testid="physio-absence-refresh">
+        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="ml-auto shrink-0" data-testid="physio-absence-refresh">
           <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
         </Button>
       </div>

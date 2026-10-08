@@ -241,17 +241,19 @@ export const BranchCalendarPanel = ({ branchId }) => {
   return (
     <div className="space-y-4" data-testid="branch-calendar-panel">
       {/* Sub-tabs */}
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="cal-subtabs">
+      {/* Three even columns on a phone, icon over label, like the MANAGEMENT strip right
+          above it: wrapped as pills the three labels fell into three ragged rows. */}
+      <div className="grid auto-rows-fr grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-wrap sm:gap-2" data-testid="cal-subtabs">
         {/* First, because it is the setting the rest of this panel and the Consultant and
             Physiotherapist calendars obey: which days the branch works at all. */}
-        <button type="button" onClick={() => setSubTab("monthly")} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${subTab === "monthly" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-monthly">
-          <CalendarDays className="h-4 w-4" />Monthly Calendar
+        <button type="button" onClick={() => setSubTab("monthly")} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:flex-row sm:gap-2 sm:px-3 sm:text-sm sm:font-medium ${subTab === "monthly" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-monthly">
+          <CalendarDays className="h-4 w-4 shrink-0" />Monthly Calendar
         </button>
-        <button type="button" onClick={() => setSubTab("schedule")} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${subTab === "schedule" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-schedule">
-          <CalendarIcon className="h-4 w-4" />Calendar by Booked Lists
+        <button type="button" onClick={() => setSubTab("schedule")} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:flex-row sm:gap-2 sm:px-3 sm:text-sm sm:font-medium ${subTab === "schedule" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-schedule">
+          <CalendarIcon className="h-4 w-4 shrink-0" />Calendar by Booked Lists
         </button>
-        <button type="button" onClick={() => setSubTab("upcoming")} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${subTab === "upcoming" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-upcoming">
-          <Clock className="h-4 w-4" />Upcoming Appointments
+        <button type="button" onClick={() => setSubTab("upcoming")} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:flex-row sm:gap-2 sm:px-3 sm:text-sm sm:font-medium ${subTab === "upcoming" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-upcoming">
+          <Clock className="h-4 w-4 shrink-0" />Upcoming Appointments
         </button>
       </div>
 
@@ -369,7 +371,7 @@ export const BranchCalendarPanel = ({ branchId }) => {
 
                 {items.length > shown.length && (
                   <p className="border-t border-slate-100 px-4 py-2 text-xs font-semibold text-sky-600">
-                    +{items.length - shown.length} more · click to see the full list
+                    +{items.length - shown.length} more<span className="hidden sm:inline"> · click to see the full list</span>
                   </p>
                 )}
               </button>
@@ -480,7 +482,7 @@ export const BranchCalendarPanel = ({ branchId }) => {
             </div>
 
             <div className="flex flex-col gap-2.5 border-t-2 border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6 sm:py-3.5">
-              <p className="text-xs leading-snug text-slate-500">Payment Due is the next unpaid Treatment Fee installment on the client's record.</p>
+              <p className="hidden text-xs leading-snug text-slate-500 sm:block">Payment Due is the next unpaid Treatment Fee installment on the client's record.</p>
               <Button variant="outline" className="w-full shrink-0 sm:w-auto" onClick={() => setDayView(null)} data-testid="cal-day-modal-back">Close</Button>
             </div>
           </div>
@@ -490,7 +492,7 @@ export const BranchCalendarPanel = ({ branchId }) => {
       {subTab === "upcoming" && (
       <div className="space-y-4" data-testid="cal-upcoming-list">
         {upcomingGroups.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-400">No upcoming consultations. Use the + on a day in Calendar by Booked Lists to schedule one.</p>
+          <p className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-400">No upcoming consultations.<span className="hidden sm:inline"> Use the + on a day in Calendar by Booked Lists to schedule one.</span></p>
         ) : (
           upcomingGroups.map((g) => (
             <div key={g.date} data-testid={`cal-upcoming-${g.date}`}>

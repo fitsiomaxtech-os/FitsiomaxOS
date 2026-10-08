@@ -296,7 +296,7 @@ function SlotPicker({ session, onClose, onBooked }) {
         ) : (
           <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
             {/* Month grid — a dot marks a day this physio still has room on */}
-            <div className="w-full flex-shrink-0 border-b border-slate-100 p-3 sm:p-4 lg:w-[19.5rem] lg:border-b-0 lg:border-r lg:overflow-y-auto">
+            <div className={`w-full flex-shrink-0 ${pickedDate ? "border-b" : "sm:border-b"} border-slate-100 p-3 sm:p-4 lg:w-[19.5rem] lg:border-b-0 lg:border-r lg:overflow-y-auto`}>
               <div className="mb-2 flex items-center justify-between">
                 <button
                   type="button"
@@ -375,7 +375,7 @@ function SlotPicker({ session, onClose, onBooked }) {
                 the calendar and the times are side-by-side columns that scroll on their
                 own; stacked on a phone, a scroller inside the body's own scroller traps the
                 times in a short box the last of them cannot be reached in. */}
-            <div className="w-full flex-shrink-0 p-3 sm:p-4 lg:flex-1 lg:overflow-y-auto">
+            <div className={`${pickedDate ? "" : "hidden sm:block"} w-full flex-shrink-0 p-3 sm:p-4 lg:flex-1 lg:overflow-y-auto`}>
               {!pickedDate ? (
                 <div className="flex h-full items-center justify-center py-10">
                   <div className="text-center">
@@ -451,10 +451,10 @@ function SlotPicker({ session, onClose, onBooked }) {
         )}
 
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-          <p className="min-w-0 truncate text-[11px] text-slate-400">
+          <p className="hidden min-w-0 truncate text-[11px] text-slate-400 sm:block">
             {pickedDate ? "Picking a time books this day straight away." : "Pick a day with a green dot."}
           </p>
-          <Button variant="outline" size="sm" onClick={onClose} className="shrink-0">Close</Button>
+          <Button variant="outline" size="sm" onClick={onClose} className="ml-auto shrink-0">Close</Button>
         </div>
       </div>
     </div>
@@ -484,18 +484,20 @@ export default function MissedClassPanel() {
   return (
     <div className="space-y-4" data-testid="branch-missed-class-panel">
       {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
-          on a 5px corner, matching the Fitness, Review and Patients strips. */}
+          on a 5px corner, matching the Fitness, Review and Patients strips — and, like
+          them, from sm up only ("desk"): Branch Admin's phone cards carry no arrow. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Days to re-book" value={rows.length} arrow color="#d97706" testid="missed-class-tile-days" />
-        <StatTile label="Patients waiting" value={patients} arrow color="#dc2626" testid="missed-class-tile-patients" />
+        <StatTile label="Days to re-book" value={rows.length} arrow="desk" color="#d97706" testid="missed-class-tile-days" />
+        <StatTile label="Patients waiting" value={patients} arrow="desk" color="#dc2626" testid="missed-class-tile-patients" />
       </div>
 
+      {/* The sentence is desk only; on a phone Refresh sits alone at the right. */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">
+        <p className="hidden text-xs text-slate-500 sm:block">
           A day here is a day the patient has paid for and not been given. Book it onto the physio's calendar,
           after the days they already hold.
         </p>
-        <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh" data-testid="missed-class-refresh">
+        <Button onClick={load} disabled={loading} className="ml-auto h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh" data-testid="missed-class-refresh">
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
@@ -509,7 +511,9 @@ export default function MissedClassPanel() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full table-fixed text-left text-sm">
+          {/* A floor width so a phone scrolls the table inside its box. Six fixed columns
+              squeezed into 330px left "Give a date" spilling out of a 50px cell. */}
+          <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="w-[8%] px-3 py-2.5">S.No</th>

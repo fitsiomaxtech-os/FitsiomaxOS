@@ -103,10 +103,11 @@ export const ZumbaMastersPanel = ({ branchId }) => {
                       <option value="">Nobody</option>
                       {masters.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
-                    <p className="mt-1.5 text-[11px] text-slate-400">
+                    <p className="mt-1.5 hidden text-[11px] text-slate-400 sm:block">
                       {/* Whether anybody said so, or it simply follows from the roster —
                           presenting an arrangement nobody chose as though somebody had is
-                          how a branch ends up disputing a revenue split. */}
+                          how a branch ends up disputing a revenue split. Desk only: on a
+                          phone the dropdown above already names who holds the class. */}
                       {holder
                         ? holder.slot_set ? "Set for this branch" : "Implied — nobody has chosen this yet"
                         : "This class has nobody on it"}

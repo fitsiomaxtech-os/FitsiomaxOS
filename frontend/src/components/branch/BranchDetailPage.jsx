@@ -7,6 +7,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { toast } from "@/components/ui/sonner";
 import { bmDetail, updateBranch, bmReassignAdmin, hrBranchAdminCandidates, bmHeadPhysioCandidates, bmAssignHeadPhysio, bmLeadControlHistory, bmPreSalesMembers, hrUpdateUser, bmTeamCandidates, bmTeamAdd, bmTeamRemove, hrActivateUser, hrDeactivateUser, hrDeleteUserPermanent } from "@/lib/api";
 import { BranchFormDialogV2 } from "@/components/branch/BranchFormDialogV2";
@@ -460,6 +461,8 @@ const TeamTab = ({ staff, branchId, onChanged, reloadToken = 0, readOnly = false
     return out;
   })();
 
+  const deskTabs = [{ key: "all", label: "All", items: groups.flatMap((g) => g.items) }, ...groups];
+
   const runAction = async (label, fn) => {
     try {
       await fn();
@@ -472,13 +475,26 @@ const TeamTab = ({ staff, branchId, onChanged, reloadToken = 0, readOnly = false
 
   return (
     <div className="space-y-3" data-testid="branch-team-tab">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1" data-testid="branch-team-desks">
-        {[{ key: "all", label: "All", items: groups.flatMap((g) => g.items) }, ...groups].map((g) => (
+      {/* On a phone the desk pills fold into one dropdown — wrapped, they took three ragged
+          rows — and the strip's own box goes with them, since the dropdown carries its own.
+          From sm up the pills are unchanged. */}
+      <div className="flex flex-wrap items-center gap-1.5 sm:rounded-lg sm:border sm:border-slate-200 sm:bg-white sm:p-1" data-testid="branch-team-desks">
+        <FilterSelect
+          value={desk}
+          onChange={setDesk}
+          active={desk !== "all"}
+          label="Desk"
+          className="flex-1 sm:hidden"
+          testid="branch-team-desk-select"
+        >
+          {deskTabs.map((g) => <option key={g.key} value={g.key}>{g.label} ({g.items.length})</option>)}
+        </FilterSelect>
+        {deskTabs.map((g) => (
           <button
             key={g.key}
             type="button"
             onClick={() => setDesk(g.key)}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+            className={`hidden shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition sm:inline-flex ${
               desk === g.key ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
             data-testid={`branch-team-desk-${g.key}`}
