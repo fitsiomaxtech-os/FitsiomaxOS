@@ -601,8 +601,11 @@ const ReviewList = ({ rows, meta, loading, empty, onOpen, staff = false, average
  * order a staff desk reads them: the Physio first, the client's stars and words named as
  * the client's, and the Physio's own average treatment rating closing the row. The branch
  * boards keep the client-first table (COLUMNS above).
+ *
+ * `tileArrow` — what the summary tiles take as StatTile's `arrow`. Branch Admin hands in
+ * "desk", the chevron from sm up and none on a phone; Head Physio and HR keep it everywhere.
  */
-export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly = false, staffView = false }) => {
+export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly = false, staffView = false, tileArrow = true }) => {
   const [data, setData] = useState({ consultant: [], physio: [], summary: {} });
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState([]);
@@ -780,7 +783,7 @@ export const ClientReviewsPanel = ({ branchId = null, mine = false, physioOnly =
             label={t.label}
             value={t.figure === "average" ? (figures.average != null ? `${figures.average} ★` : "—") : figures[t.figure]}
             sub={t.sub?.(figures)}
-            arrow
+            arrow={tileArrow}
             color={t.color}
             active={source === t.key}
             onClick={() => setSource((cur) => (cur === t.key ? "" : t.key))}

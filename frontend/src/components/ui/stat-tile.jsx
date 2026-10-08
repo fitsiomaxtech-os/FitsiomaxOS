@@ -33,6 +33,10 @@ import { ChevronRight } from "lucide-react";
  * the disc, as the Zumba card it copies has none — and a compact card's figure keeps its
  * full size, since a three-across row of short counts has the room for it.
  *
+ * `arrow="desk"` is the arrow card with the chevron from sm up only: on the phone it is a
+ * label and a figure, no chevron and no disc, and the label takes the width the chevron
+ * kept. Branch Admin's strips (Zumba, Fitness, Review, Patients, Client Reviews) wear it.
+ *
  * Two slots for controls that belong to one card rather than to the list under it:
  * `footer` on a rule beneath the figure, and `corner` on the top line, running up to the
  * icon with the icon on its right. Corner is for a control that reads as a property of
@@ -49,6 +53,7 @@ export const StatTile = ({
   // pressable.
   const wrapped = !!footer || !!corner;
   const phoneArrow = arrow === "phone";
+  const deskArrow = arrow === "desk";
   const fullArrow = !!arrow && !phoneArrow;
   // What the phone drops: the disc and icon under `compact` or a phone-only arrow.
   const phoneHidden = compact || phoneArrow ? "hidden sm:block" : "";
@@ -83,7 +88,7 @@ export const StatTile = ({
       )}
       {Icon && !corner && !fullArrow && <Icon aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${phoneHidden}`} style={{ color }} />}
       {fullArrow && !corner && (
-        <ChevronRight aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact ? "hidden sm:block" : ""}`} />
+        <ChevronRight aria-hidden className={`absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${compact || deskArrow ? "hidden sm:block" : ""}`} />
       )}
       {/* The phone's own chevron. On a compact card it is a size down and tucked into the
           padding, so a nine-letter label like COMPLETED still fits on one line beside it. */}
@@ -104,7 +109,7 @@ export const StatTile = ({
           that same reserve plus the 30px the control is inset by below — the two move
           together or the label slides under the thing the space was kept for. */}
       <p className={`font-bold uppercase leading-tight tracking-wider text-slate-500 sm:text-[11px] ${compact ? "text-[9px] tracking-wide" : "text-[10px]"} ${
-        corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? `break-words ${phoneArrow ? "pr-3" : "pr-0"} sm:pr-9` : "break-words pr-7 sm:pr-9"
+        corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? `break-words ${phoneArrow ? "pr-3" : "pr-0"} sm:pr-9` : `break-words ${deskArrow ? "pr-0" : "pr-7"} sm:pr-9`
       }`}>{label}</p>
       <p className={`mt-1 font-extrabold sm:text-2xl ${compact && !phoneArrow ? "text-base" : "text-xl"}`} style={{ color }}>{value}</p>
       {sub && <p className={`mt-0.5 leading-tight text-slate-400 sm:text-[10px] ${compact ? "text-[8px]" : "text-[10px]"} ${phoneArrow ? "hidden sm:block" : ""}`}>{sub}</p>}

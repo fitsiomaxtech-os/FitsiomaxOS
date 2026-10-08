@@ -42,10 +42,7 @@ import { ChevronRight } from "lucide-react";
 // `phoneLabel` is what the card reads below md, where six full names will not fit across
 // one row. The stage keeps its real name from md up, so the desk still reads it exactly as
 // CI/CD ROOTS does.
-// `phoneRow` is a card in StageTabBar's one-row phone strip. Six to a row leaves a card on a
-// narrow phone barely wider than "Appointment", so below sm the label drops under the
-// corner arrow rather than running through it.
-export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, borderClass = "", phoneRow = false }) => {
+export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
   const [hovered, setHovered] = useState(false);
@@ -65,7 +62,7 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
         gridded
           ? "w-full min-w-0 px-1 py-2"
           : "min-w-[86px] shrink-0 px-3 py-2.5"
-      } ${phoneRow ? "max-sm:pt-4" : ""} ${
+      } ${
         plain
           ? (active
             ? "bg-sky-100 text-sky-800 ring-2 ring-inset ring-sky-500 shadow-md"
@@ -103,10 +100,11 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       <span className={`mt-0.5 font-bold leading-none sm:text-lg ${gridded ? "text-base" : "text-lg"}`}>{count}</span>
       {/* The corner arrow the finance boards' summary cards carry (see ui/ledger-card), so
           Branch Admin's summary strip and Accountant Manage's own read as the same card.
-          Absolutely placed so the centred label and figure underneath are not shifted by it. */}
+          Absolutely placed so the centred label and figure underneath are not shifted by it.
+          From sm up only: a phone card is the stage and its count, nothing in the corner. */}
       {plain && (
         <ChevronRight
-          className={`absolute right-1.5 top-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 ${phoneRow ? "max-sm:right-1 max-sm:top-1 max-sm:h-3 max-sm:w-3" : ""} ${active ? "text-sky-500" : "text-slate-400"}`}
+          className={`absolute right-1.5 top-1.5 hidden h-3.5 w-3.5 sm:block sm:h-4 sm:w-4 ${active ? "text-sky-500" : "text-slate-400"}`}
           aria-hidden="true"
         />
       )}
@@ -156,7 +154,6 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           testid={`${testid}-total`}
           gridded
           plain={plain}
-          phoneRow={phoneRow}
         />
       )}
       {stages.map((s) => (
@@ -173,7 +170,6 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           testid={`${testid}-${s.name}`}
           gridded
           plain={plain}
-          phoneRow={phoneRow}
         />
       ))}
     </div>

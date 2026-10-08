@@ -1809,7 +1809,7 @@ export const ZumbaPanel = ({ branchId }) => {
               : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key))),
             testid: `zumba-card-${c.key}`,
           };
-          return <StatTile key={c.key} {...props} arrow />;
+          return <StatTile key={c.key} {...props} arrow="desk" />;
         })}
       </div>
 

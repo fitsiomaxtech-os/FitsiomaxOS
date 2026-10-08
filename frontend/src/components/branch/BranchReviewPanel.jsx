@@ -309,14 +309,15 @@ export const BranchReviewPanel = ({ branchId }) => {
           fit, and the third was otherwise behind a sideways swipe.
 
           `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
-          on a 5px corner, matching the Fitness and Zumba strips. */}
+          on a 5px corner, matching the Fitness and Zumba strips. "desk": the chevron is
+          sm-up only, a phone card is label and figure alone. */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3" data-testid="branch-review-subtabs">
         {SUB_TABS.map((t) => (
           <StatTile
             key={t.key}
             label={t.label}
             value={countFor(t.key)}
-            arrow
+            arrow="desk"
             color={t.color}
             active={sub === t.key}
             onClick={() => { setSub(t.key); setDateFilter(null); }}

@@ -313,14 +313,15 @@ export const PatientsPortalPanel = ({ branchId }) => {
 
           `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
           on a 5px corner — the same strip the Fitness tab carries, so the two boards read
-          as one family beside the Zumba strip. */}
+          as one family beside the Zumba strip. "desk": the chevron is sm-up only, a phone
+          card is label and figure alone. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
             key={c.key}
             label={c.label}
             value={counts[c.key] ?? 0}
-            arrow
+            arrow="desk"
             color={c.color}
             active={card === c.key}
             onClick={() => setCard(c.key)}

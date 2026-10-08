@@ -327,14 +327,15 @@ export const FitnessPanel = ({ branchId }) => {
           nothing. Six now, with Referred among them -- keep the two in step.
 
           `arrow` on each tile: no corner disc and no dumbbell, just the ledger card's
-          chevron on a 5px corner, matching the Zumba strip beside this one. */}
+          chevron on a 5px corner, matching the Zumba strip beside this one. "desk": the
+          chevron is sm-up only, a phone card is label and figure alone. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
             key={c.key}
             label={c.label}
             value={c.value ?? 0}
-            arrow
+            arrow="desk"
             color={c.color}
             active={card === c.key}
             onClick={() => setCard(c.key)}
