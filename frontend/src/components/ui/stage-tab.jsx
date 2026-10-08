@@ -45,7 +45,8 @@ import { ChevronRight } from "lucide-react";
 //
 // `flush` is a plain card that, below sm, trades its shadow for a 1px slate border (still
 // the 5px corner), with the picked card washed sky-100 and its label and figure in sky-600
-// rather than ringed. From sm up it is the plain card unchanged. See StageTabBar's phoneFlush.
+// rather than ringed. Its figure is 17px there, 85% of the 20px it was, which the user
+// found too big. From sm up it is the plain card unchanged. See StageTabBar's phoneFlush.
 export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
@@ -111,7 +112,7 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
           </>
         ) : label}
       </span>
-      <span className={`font-bold leading-none sm:mt-0.5 sm:text-lg ${flush ? "mt-1 text-xl" : gridded ? "mt-0.5 text-base" : "mt-0.5 text-lg"}`}>{count}</span>
+      <span className={`font-bold leading-none sm:mt-0.5 sm:text-lg ${flush ? "mt-1 text-[17px]" : gridded ? "mt-0.5 text-base" : "mt-0.5 text-lg"}`}>{count}</span>
       {/* The corner arrow the finance boards' summary cards carry (see ui/ledger-card), so
           Branch Admin's summary strip and Accountant Manage's own read as the same card.
           Absolutely placed so the centred label and figure underneath are not shifted by it.
