@@ -161,7 +161,10 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" data-testid="create-lead-modal">
+    // z-[60], LeadEditModal's level, rather than z-40: the phone bottom navs are z-40 and
+    // come later in the page, so at the same level they drew over this form's footer and
+    // hid Create Lead. The date picker's own overlay sits at z-[70], still above this.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="create-lead-modal">
       {/* Four fields to a row on a wide screen so the whole form, footer included, fits
           the window without scrolling. Capped at the window height all the same, so on a
           short one only the fields scroll and Create Lead stays in sight. */}
