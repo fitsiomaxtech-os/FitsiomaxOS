@@ -710,15 +710,20 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               the tabs above, filtered the other way, so the process is the one a branch
               consultation goes through. Mounted and hidden like those, so the card's
               count stays live. */}
+          {/* On a phone, three equal columns in the All tab's teal, so the two sub-rows
+              read as one control; "Weekly Review" fits a third of a 320px screen only at
+              13px with the side padding trimmed. From tablet up, the orange row as it was. */}
           {workTab === "house_visit" && (
-            <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1" data-testid="hp-house-visit-subtabs">
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-wrap" data-testid="hp-house-visit-subtabs">
               {HOUSE_VISIT_SUBTABS.map((st) => (
                 <button
                   key={st.key}
                   type="button"
                   onClick={() => setHvSub(st.key)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                    hvSub === st.key ? "bg-orange-50 text-orange-700 ring-1 ring-orange-200" : "text-slate-600 hover:bg-slate-50"
+                  className={`whitespace-nowrap rounded-md px-1 py-1.5 text-[13px] font-semibold transition sm:px-3 sm:text-sm ${
+                    hvSub === st.key
+                      ? "bg-teal-50 text-teal-700 ring-1 ring-teal-200 sm:bg-orange-50 sm:text-orange-700 sm:ring-orange-200"
+                      : "text-slate-600 hover:bg-slate-50"
                   }`}
                   data-testid={`hp-house-visit-sub-${st.key}`}
                 >
