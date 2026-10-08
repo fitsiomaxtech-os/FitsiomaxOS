@@ -78,27 +78,6 @@ const WhatsAppIcon = ({ className }) => (
   </svg>
 );
 
-// Each branch or source keeps one colour wherever it appears, picked from its name
-// rather than its position in the list — so one added or reordered later doesn't
-// recolour every row that already reads as "the green branch".
-const BRANCH_TONES = [
-  { chip: "border-emerald-300 bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", hover: "hover:bg-emerald-100" },
-  { chip: "border-sky-300 bg-sky-50 text-sky-700", dot: "bg-sky-500", hover: "hover:bg-sky-100" },
-  { chip: "border-violet-300 bg-violet-50 text-violet-700", dot: "bg-violet-500", hover: "hover:bg-violet-100" },
-  { chip: "border-amber-300 bg-amber-50 text-amber-700", dot: "bg-amber-500", hover: "hover:bg-amber-100" },
-  { chip: "border-rose-300 bg-rose-50 text-rose-700", dot: "bg-rose-500", hover: "hover:bg-rose-100" },
-  { chip: "border-teal-300 bg-teal-50 text-teal-700", dot: "bg-teal-500", hover: "hover:bg-teal-100" },
-  { chip: "border-indigo-300 bg-indigo-50 text-indigo-700", dot: "bg-indigo-500", hover: "hover:bg-indigo-100" },
-  { chip: "border-orange-300 bg-orange-50 text-orange-700", dot: "bg-orange-500", hover: "hover:bg-orange-100" },
-];
-
-const branchTone = (name) => {
-  const s = (name || "").trim().toUpperCase();
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) % 1000003;
-  return BRANCH_TONES[h % BRANCH_TONES.length];
-};
-
 const branchLabel = (b) => b?.branch_name || b?.name || "";
 
 /** A lead's source as words for the line under its name — "google_sheets" reads as
@@ -108,13 +87,10 @@ const sourceLabel = (src) => (src
   : "—");
 
 /**
- * The board's coloured dropdown, shared by the Assigned To column and the Sources
- * filter.
+ * The Assigned To column's dropdown — plain white and slate, no per-branch colours.
  *
- * A native <select> can only be coloured on its closed box — the option list is drawn
- * by the OS and ignores CSS, which is why both of these looked like plain system
- * dropdowns next to the rest of the board. This draws its own list instead, giving
- * every entry its own colour in the trigger and the list alike.
+ * It draws its own list rather than using a native <select>, whose option list is
+ * drawn by the OS and ignores CSS, so it would look out of place next to the board.
  *
  * The panel is position:fixed and measured off the trigger, because the leads table
  * sits in an overflow-auto wrapper that would otherwise clip an absolutely-positioned
@@ -125,7 +101,7 @@ const sourceLabel = (src) => (src
  * that clears the selection — that's the filter's "All Sources"; the assign column has
  * no such row because unassigning a lead isn't a thing you can do here.
  */
-const ColorSelect = ({
+const BranchSelect = ({
   value, options, onChange, placeholder, resetLabel, testid,
   triggerClass = "h-8 min-w-[7.5rem] text-xs", emptyText = "Nothing to choose from.",
 }) => {
@@ -148,7 +124,6 @@ const ColorSelect = ({
   }, [open]);
 
   const current = options.find((o) => o.value === value);
-  const tone = current ? branchTone(current.label) : null;
 
   const toggle = () => {
     if (open) { setOpen(false); return; }
@@ -176,19 +151,16 @@ const ColorSelect = ({
       <button
         type="button"
         onClick={toggle}
-        className={`flex w-full items-center justify-between gap-1.5 rounded-md border px-2 font-semibold transition ${triggerClass} ${tone ? tone.chip : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+        className={`flex w-full items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-2 font-semibold transition hover:bg-slate-50 ${triggerClass} ${current ? "text-slate-700" : "text-slate-500"}`}
         data-testid={testid}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          {tone && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dot}`} />}
-          <span className="truncate">{current ? current.label : placeholder}</span>
-        </span>
+        <span className="truncate">{current ? current.label : placeholder}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
       </button>
 
       {open && pos && (
         <div
-          className="fixed z-50 max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
+          className="fixed z-50 max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
           style={pos}
           data-testid={`${testid}-list`}
         >
@@ -196,7 +168,7 @@ const ColorSelect = ({
             <button
               type="button"
               onClick={() => pick("")}
-              className={`flex w-full items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1.5 text-left text-xs font-semibold transition hover:bg-slate-100 ${!value ? "border-slate-400 bg-slate-100 text-slate-700" : "border-slate-200 bg-white text-slate-600"}`}
+              className={`flex w-full items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-xs font-semibold transition hover:bg-slate-100 ${!value ? "bg-slate-100 text-slate-800" : "text-slate-600"}`}
             >
               <span className="truncate">{resetLabel}</span>
               {!value && <CheckCircle2 className="ml-auto h-3.5 w-3.5 shrink-0 opacity-70" />}
@@ -205,7 +177,6 @@ const ColorSelect = ({
           {options.length === 0 ? (
             <p className="px-2 py-1.5 text-xs text-slate-400">{emptyText}</p>
           ) : options.map((o) => {
-            const t = branchTone(o.label);
             const active = o.value === value;
             return (
               <button
@@ -213,9 +184,8 @@ const ColorSelect = ({
                 type="button"
                 onClick={() => pick(o.value)}
                 title={o.label}
-                className={`flex w-full items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1.5 text-left text-xs font-semibold transition ${t.chip} ${t.hover} ${active ? "ring-1 ring-slate-400" : ""}`}
+                className={`flex w-full items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-xs font-semibold transition hover:bg-slate-100 ${active ? "bg-slate-100 text-slate-800" : "text-slate-600"}`}
               >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${t.dot}`} />
                 <span className="truncate">{o.label}</span>
                 {active && <CheckCircle2 className="ml-auto h-3.5 w-3.5 shrink-0 opacity-70" />}
               </button>
@@ -1400,7 +1370,7 @@ export const PreSalesCRM = ({
                       )}
                       <td className="whitespace-nowrap px-4 py-3 text-slate-500">{(l.created_at || "").slice(0, 10) || "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <ColorSelect
+                        <BranchSelect
                           value={l.branch_id || ""}
                           options={branchOptions}
                           placeholder="— Assign —"
