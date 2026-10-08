@@ -3,11 +3,15 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 
 /**
  * The phone card Branch Admin's patient lists share — Branch Leads, Consultation, House
- * Visit and Review — drawn as a compact list row about 48px tall: a 6px corner, a 1px
- * border and a light shadow, a small avatar on the left, the name over the patient ID
- * beside it, and the badge, Call and WhatsApp in a row on the right. Anything a list adds
+ * Visit and Review — drawn as a compact list row about 48px tall: a small avatar on the
+ * left, the name over the patient ID beside it, and the badge, Call and WhatsApp in a row
+ * on the right. Anything a list adds
  * (an appointment, a follow-up, a review's Consultant) goes in `details`, under the name,
  * and is the only thing that makes a card taller than the row.
+ *
+ * The row has no border, corner, shadow or gap of its own: the list draws one white box
+ * round all of them and a thin line between each (`LEAD_ROW_LIST`), the way a mail inbox
+ * stacks its rows. The user asked for that over separate cards with space between.
  *
  * Below sm, Call and WhatsApp are icon-only squares. With their labels the pair is about
  * 150px wide, and that would leave a 360px phone under 100px for the name. From sm up
@@ -41,12 +45,15 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * card, not a button of its own, so tapping it is tapping the card.
  *
  * `mark` replaces the initial in the avatar circle — a select-mode checkbox, say.
- * `className` carries the card's border and fill, so a picked card can be tinted.
+ * `className` carries the row's fill, so a picked row can be tinted.
  *
  * Test ids are `${testid}-${id}`, `${testid}-call-${id}`, `${testid}-whatsapp-${id}` and
  * `${testid}-delete-${id}`, which is what each list's cards were already called before
  * they shared this.
  */
+/** The box a list of LeadRowCards sits in: one border round them all, a line between each. */
+export const LEAD_ROW_LIST = "divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white";
+
 export const LeadRowCard = ({
   id,
   name,
@@ -60,7 +67,7 @@ export const LeadRowCard = ({
   onOpen,
   onDelete = null,
   glance = false,
-  className = "border-slate-200 bg-white",
+  className = "bg-white",
   testid,
 }) => {
   const parts = idLine.filter(Boolean);
@@ -75,7 +82,7 @@ export const LeadRowCard = ({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); }
       }}
-      className={`w-full cursor-pointer rounded-md border px-2.5 py-1.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition active:bg-slate-50 ${className}`}
+      className={`w-full cursor-pointer px-2.5 py-2 text-left transition active:bg-slate-50 ${className}`}
       data-testid={`${testid}-${id}`}
     >
       <div className="flex items-center gap-2">

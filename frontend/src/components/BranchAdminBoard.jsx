@@ -54,7 +54,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
-import { LeadRowCard } from "@/components/ui/lead-row-card";
+import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   scheduleBranchAppointment,
   getBranches,
@@ -2293,12 +2293,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           {/* Phone list — six columns can't be read at 430px whichever way they're sized,
               so below md the same rows are stacked as cards instead of being pushed off
               the side of a horizontally-scrolling table. */}
-          <div className="space-y-2 md:hidden" data-testid="branch-list-mobile">
+          <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-list-mobile">
             {(() => {
               const visible = (stageFilter ? filteredLeads.filter((l) => matchesBranchStage(l, stages.find((s) => s.name === stageFilter), isConsultationOnlyStage, consultationOpeningStage)) : filteredLeads);
               if (visible.length === 0) {
                 return (
-                  <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-mobile-empty">
+                  <p className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-mobile-empty">
                     No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                   </p>
                 );

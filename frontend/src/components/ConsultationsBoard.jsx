@@ -10,7 +10,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
-import { LeadRowCard } from "@/components/ui/lead-row-card";
+import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
@@ -6551,7 +6551,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
       {showDiscountColumn && feeTabsBar}
 
       {showMobileCards && (
-        <div className="space-y-2 sm:hidden" data-testid="cons-mobile-cards">
+        // Branch Admin's rows sit in one box with a line between each (see ui/lead-row-card);
+        // Head Physio's stacked cards, and the empty note, keep their own space.
+        <div className={`${viewerRole === "branch_admin" && filtered.length > 0 ? LEAD_ROW_LIST : "space-y-2"} sm:hidden`} data-testid="cons-mobile-cards">
           {filtered.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-400">
               {/* Head Physio browses this a day at a time; Branch Admin arrives filtered
@@ -6592,7 +6594,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   idLine={[l.patient_number, wa ? null : l.phone]}
                   wa={wa}
                   onOpen={openCard}
-                  className={picked ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"}
+                  className={picked ? "bg-rose-50" : "bg-white"}
                   testid="cons-card"
                   details={(l.appointment_date || l.assigned_physio_name) ? (
                     <>

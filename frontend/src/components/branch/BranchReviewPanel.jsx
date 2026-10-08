@@ -5,7 +5,7 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StatTile } from "@/components/ui/stat-tile";
-import { LeadRowCard } from "@/components/ui/lead-row-card";
+import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
 import { waNumber } from "@/lib/phone";
@@ -423,7 +423,7 @@ export const BranchReviewPanel = ({ branchId }) => {
         </Empty>
       ) : (
         <>
-        <div className="space-y-2 md:hidden" data-testid="branch-review-mobile">
+        <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-review-mobile">
           {rows.map((r) => <ReviewCard key={r.id} r={r} />)}
         </div>
 
