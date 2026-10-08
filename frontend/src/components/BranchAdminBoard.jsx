@@ -1865,6 +1865,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // leadPillStages) -- six is the most a phone row takes.
             phoneLabels={onConsultationTab ? undefined : BRANCH_LEADS_PHONE_LABELS}
             phoneRow={!onConsultationTab && leadPillStages.length <= 5}
+            // Branch Leads only, again: on a phone its strip is one joined bar straight
+            // under the header. Consultation and House Visit keep their cards.
+            phoneFlush={!onConsultationTab}
             testid="branch-metric"
             plain
           />

@@ -42,7 +42,12 @@ import { ChevronRight } from "lucide-react";
 // `phoneLabel` is what the card reads below md, where six full names will not fit across
 // one row. The stage keeps its real name from md up, so the desk still reads it exactly as
 // CI/CD ROOTS does.
-export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, borderClass = "" }) => {
+//
+// `flush` is a plain card that, below sm, is not a card at all but one cell of a joined
+// strip: square, no shadow, a 1px slate line drawn round it (the row's 1px gaps show it as
+// a divider), and the picked cell washed sky-100 with its label and figure in sky-600 rather
+// than ringed. From sm up it is the plain card unchanged. See StageTabBar's phoneFlush.
+export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
   const [hovered, setHovered] = useState(false);
@@ -56,18 +61,26 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       onMouseLeave={() => setHovered(false)}
       data-testid={testid}
       type="button"
-      className={`relative flex flex-col items-center justify-center text-center transition-all hover:shadow-sm sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
-        plain ? "rounded-[5px]" : "rounded-lg"
+      className={`relative flex flex-col items-center justify-center text-center transition-all sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
+        flush ? "sm:hover:shadow-sm" : "hover:shadow-sm"
       } ${
-        gridded
-          ? "w-full min-w-0 px-1 py-2"
-          : "min-w-[86px] shrink-0 px-3 py-2.5"
+        flush ? "shadow-[0_0_0_1px_#e2e8f0] sm:rounded-[5px]" : plain ? "rounded-[5px]" : "rounded-lg"
       } ${
-        plain
+        flush
+          ? "w-full min-w-0 px-0.5 py-2.5"
+          : gridded
+            ? "w-full min-w-0 px-1 py-2"
+            : "min-w-[86px] shrink-0 px-3 py-2.5"
+      } ${
+        flush
           ? (active
-            ? "bg-sky-100 text-sky-800 ring-2 ring-inset ring-sky-500 shadow-md"
-            : "bg-white text-slate-600 shadow-sm hover:bg-slate-50")
-          : ""
+            ? "bg-sky-100 text-sky-600 sm:text-sky-800 sm:shadow-md sm:ring-2 sm:ring-inset sm:ring-sky-500"
+            : "bg-white text-slate-600 sm:shadow-sm sm:hover:bg-slate-50")
+          : plain
+            ? (active
+              ? "bg-sky-100 text-sky-800 ring-2 ring-inset ring-sky-500 shadow-md"
+              : "bg-white text-slate-600 shadow-sm hover:bg-slate-50")
+            : ""
       } ${plain ? borderClass : ""}`}
       style={
         plain
@@ -86,9 +99,11 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
           In a grid cell the type is tighter still, so a long name wraps inside its
           column rather than widening it. */}
       <span className={`font-semibold sm:text-[11px] sm:leading-tight ${
-        gridded
-          ? "text-[9px] leading-[1.2] [hyphens:auto]"
-          : "text-[11px] leading-tight"
+        flush
+          ? "text-[10px] leading-tight max-[374px]:text-[9px]"
+          : gridded
+            ? "text-[9px] leading-[1.2] [hyphens:auto]"
+            : "text-[11px] leading-tight"
       }`}>
         {phoneLabel && phoneLabel !== label ? (
           <>
@@ -97,7 +112,7 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
           </>
         ) : label}
       </span>
-      <span className={`mt-0.5 font-bold leading-none sm:text-lg ${gridded ? "text-base" : "text-lg"}`}>{count}</span>
+      <span className={`font-bold leading-none sm:mt-0.5 sm:text-lg ${flush ? "mt-1 text-xl" : gridded ? "mt-0.5 text-base" : "mt-0.5 text-lg"}`}>{count}</span>
       {/* The corner arrow the finance boards' summary cards carry (see ui/ledger-card), so
           Branch Admin's summary strip and Accountant Manage's own read as the same card.
           Absolutely placed so the centred label and figure underneath are not shifted by it.
@@ -124,26 +139,43 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 // in BranchAdminBoard -- zoom shrinks the cards themselves, so the row still spans the bar
 // edge to edge. It sits on the inner row, not the sticky bar, because zoom also scales the
 // bar's own `top` and would slide it under the page header.
-export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false }) => (
+//
+// `phoneFlush` is Branch Leads on a phone again, asked for as one joined strip: below sm the
+// bar loses its grey tray, padding, corners and side borders, runs the full screen width
+// (-mx-3 over CRMPage's px-3, as the lead list under it does) and is pulled up over the
+// page's 16px top padding so it sits straight under the header, whose own bottom border is
+// its top edge. The cells join with 1px lines (see StageTab's flush). No zoom on it below
+// sm -- the gaps and padding the 80% was paying for are gone, so the cells are drawn at
+// full size instead. Implies `plain`; from sm up the bar is the plain card strip unchanged.
+export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false, phoneFlush = false }) => (
   <div
     // The offset has to clear the sticky page header, which is two different heights:
     // 61px on a phone (py-3 + a 36px logo + border) and 89px from sm up (py-4 + 56px).
     // A flat 88px left a white band under the header on a phone once scrolled.
-    className={`sticky top-[61px] z-10 -mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur sm:top-[88px] ${
-      // A plain card is white and borderless, so it can only read as its own card if what
-      // lies between the cards is not also white — hence the grey strip under them.
-      plain
-        ? "bg-slate-100/95 supports-[backdrop-filter]:bg-slate-100/80"
-        : "bg-white/95 supports-[backdrop-filter]:bg-white/80"
+    className={`sticky top-[61px] z-10 sm:top-[88px] ${
+      phoneFlush
+        ? "-mx-3 -mt-4 border-b border-slate-200 bg-white sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
+        : `-mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur ${
+          // A plain card is white and borderless, so it can only read as its own card if
+          // what lies between the cards is not also white — hence the grey strip under them.
+          plain
+            ? "bg-slate-100/95 supports-[backdrop-filter]:bg-slate-100/80"
+            : "bg-white/95 supports-[backdrop-filter]:bg-white/80"
+        }`
     }`}
     data-testid={testid}
   >
     {/* Five to a row on a phone, so nine stages land as 5 + 4 and the whole bar is
         visible at once — it used to be a horizontal scroll, which hid the later stages
-        behind a swipe nobody knew to make. Back to a single flex row from sm up. */}
+        behind a swipe nobody knew to make. Back to a single flex row from sm up.
+
+        A flush row keeps 1px gaps for the cells' lines to show through, and clips the
+        lines that would otherwise sit outside its outer edge. */}
     <div className={`grid sm:flex sm:flex-nowrap sm:overflow-visible ${
-      phoneRow ? "grid-flow-col auto-cols-fr max-md:[zoom:0.8]" : "grid-cols-5"
-    } ${plain ? "gap-2" : "gap-1"}`}>
+      phoneRow
+        ? `grid-flow-col auto-cols-fr ${phoneFlush ? "sm:max-md:[zoom:0.8]" : "max-md:[zoom:0.8]"}`
+        : "grid-cols-5"
+    } ${phoneFlush ? "gap-px overflow-hidden sm:gap-2" : plain ? "gap-2" : "gap-1"}`}>
       {!hideAllStages && (
         <StageTab
           label="All Stages"
@@ -153,7 +185,8 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           color="#0ea5e9"
           testid={`${testid}-total`}
           gridded
-          plain={plain}
+          plain={plain || phoneFlush}
+          flush={phoneFlush}
         />
       )}
       {stages.map((s) => (
@@ -169,7 +202,8 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           selectedColor={s.selected_color}
           testid={`${testid}-${s.name}`}
           gridded
-          plain={plain}
+          plain={plain || phoneFlush}
+          flush={phoneFlush}
         />
       ))}
     </div>
