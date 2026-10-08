@@ -2432,6 +2432,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 // is the commonest thing done from this list, so Call and WhatsApp sit on the
                 // card rather than three taps deep behind the lead popup. Anything a stage
                 // adds (appointment, follow-up, reminder) goes under the name.
+                //
+                // Only the Leads pill draws Call, WhatsApp and the bin, as the user asked:
+                // All Stages, RNR, Follow Up, Appointment and Not a Prospect show none of the
+                // three, and tapping the row is how those leads get worked.
+                const rowWa = showingMirror ? waNumber(lead.phone) : null;
                 return (
                   <LeadRowCard
                     key={lead.id}
@@ -2439,19 +2444,19 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     name={lead.name}
                     nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
                     // On the Leads pill the row's right holds only Call, WhatsApp and the
-                    // bin, as the user asked: every row there would read "Leads" anyway.
-                    // The other pills and All Stages keep the badge.
+                    // bin: every row there would read "Leads" anyway. The other pills and
+                    // All Stages keep the badge.
                     badge={showingMirror ? null : (rowStage || "—")}
                     badgeColor={rowStage ? stageColor(rowStage) : null}
                     // Where Call and WhatsApp sit on the card the number itself is left
-                    // off — the buttons are how it gets used. All Stages has neither, so
-                    // it keeps the number; so does a phone too malformed to ring.
-                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, waNumber(lead.phone) ? null : lead.phone, cityAnswer(lead)]}
-                    wa={waNumber(lead.phone)}
+                    // off — the buttons are how it gets used. Everywhere else, and for a
+                    // phone too malformed to ring, the number stays.
+                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, rowWa ? null : lead.phone, cityAnswer(lead)]}
+                    wa={rowWa}
                     onOpen={() => setSelectedLead(lead)}
                     // The desk row's bin, on the phone: same rule for who sees it, same
-                    // typed-DELETE dialog, same purge.
-                    onDelete={canDeleteLeads ? () => setRowDelete(lead) : null}
+                    // typed-DELETE dialog, same purge. Leads pill only, like Call/WhatsApp.
+                    onDelete={showingMirror && canDeleteLeads ? () => setRowDelete(lead) : null}
                     glance={allStages}
                     testid="branch-card"
                     details={hasDetails ? (
