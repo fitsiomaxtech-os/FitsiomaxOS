@@ -43,10 +43,9 @@ import { ChevronRight } from "lucide-react";
 // one row. The stage keeps its real name from md up, so the desk still reads it exactly as
 // CI/CD ROOTS does.
 //
-// `flush` is a plain card that, below sm, is not a card at all but one cell of a joined
-// strip: square, no shadow, a 1px slate line drawn round it (the row's 1px gaps show it as
-// a divider), and the picked cell washed sky-100 with its label and figure in sky-600 rather
-// than ringed. From sm up it is the plain card unchanged. See StageTabBar's phoneFlush.
+// `flush` is a plain card that, below sm, trades its shadow for a 1px slate border (still
+// the 5px corner), with the picked card washed sky-100 and its label and figure in sky-600
+// rather than ringed. From sm up it is the plain card unchanged. See StageTabBar's phoneFlush.
 export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
@@ -64,7 +63,7 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       className={`relative flex flex-col items-center justify-center text-center transition-all sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
         flush ? "sm:hover:shadow-sm" : "hover:shadow-sm"
       } ${
-        flush ? "shadow-[0_0_0_1px_#e2e8f0] sm:rounded-[5px]" : plain ? "rounded-[5px]" : "rounded-lg"
+        flush ? "rounded-[5px] border sm:border-0" : plain ? "rounded-[5px]" : "rounded-lg"
       } ${
         flush
           ? "w-full min-w-0 px-0.5 py-2.5"
@@ -74,8 +73,8 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       } ${
         flush
           ? (active
-            ? "bg-sky-100 text-sky-600 sm:text-sky-800 sm:shadow-md sm:ring-2 sm:ring-inset sm:ring-sky-500"
-            : "bg-white text-slate-600 sm:shadow-sm sm:hover:bg-slate-50")
+            ? "border-sky-200 bg-sky-100 text-sky-600 sm:text-sky-800 sm:shadow-md sm:ring-2 sm:ring-inset sm:ring-sky-500"
+            : "border-slate-200 bg-white text-slate-600 sm:shadow-sm sm:hover:bg-slate-50")
           : plain
             ? (active
               ? "bg-sky-100 text-sky-800 ring-2 ring-inset ring-sky-500 shadow-md"
@@ -140,12 +139,12 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 // edge to edge. It sits on the inner row, not the sticky bar, because zoom also scales the
 // bar's own `top` and would slide it under the page header.
 //
-// `phoneFlush` is Branch Leads and Consultation on a phone, asked for as one joined strip: below sm the
-// bar loses its grey tray and padding and becomes a single white card with the finance
-// boards' 5px corner (see ui/ledger-card), inside the page's own side padding so the corners
-// show, and pulled up over the page's 16px top padding so it sits straight under the header.
-// The cells join with 1px lines (see StageTab's flush). No zoom on it below sm -- the gaps
-// and padding the 80% was paying for are gone, so the cells are drawn at full size instead.
+// `phoneFlush` is Branch Leads and Consultation on a phone: below sm the bar loses its tray,
+// border and padding, runs the full screen width (-mx-3 over CRMPage's px-3) and is pulled
+// up over the page's 16px top padding so it sits straight under the header. What is left is
+// the cards themselves, each its own bordered box with the finance boards' 5px corner (see
+// ui/ledger-card and StageTab's flush), 4px apart. No zoom on it below sm -- the tray's
+// padding the 80% was paying for is gone, so the cards are drawn at full size instead.
 // Implies `plain`; from sm up the bar is the plain card strip unchanged.
 //
 // A flush bar that wraps (Consultation's, more stages than a row) keeps five to a row but
@@ -159,7 +158,7 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
     // A flat 88px left a white band under the header on a phone once scrolled.
     className={`sticky top-[61px] z-10 sm:top-[88px] ${
       phoneFlush
-        ? "-mt-4 rounded-[5px] border border-slate-200 bg-white sm:-mx-1 sm:mt-0 sm:rounded-xl sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
+        ? "-mx-3 -mt-4 bg-slate-50 sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:border-slate-200 sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
         : `-mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur ${
           // A plain card is white and borderless, so it can only read as its own card if
           // what lies between the cards is not also white — hence the grey strip under them.
@@ -174,18 +173,16 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
         visible at once — it used to be a horizontal scroll, which hid the later stages
         behind a swipe nobody knew to make. Back to a single flex row from sm up.
 
-        A flush row keeps 1px gaps for the cells' lines to show through, and clips the
-        lines that would otherwise sit outside its outer edge -- and the picked cell's
-        square corner, rounding inside the bar's 5px. Its columns are equal unless a label
-        cannot fit one: inside the card, a sixth of a 400px phone is ~4px short of
-        "Appointment", so that column alone widens to its word instead of clipping it. */}
+        A flush row's columns are equal unless a label cannot fit one: with the 4px gaps
+        taken out, a sixth of a 400px phone is short of "Appointment", so that column alone
+        widens to its word instead of clipping it. */}
     <div className={`sm:flex sm:flex-nowrap sm:overflow-visible ${
       phoneRow
         ? `grid grid-flow-col ${phoneFlush ? "auto-cols-[minmax(min-content,1fr)] sm:max-md:[zoom:0.8]" : "auto-cols-fr max-md:[zoom:0.8]"}`
         : phoneFlush
-          ? "flex flex-wrap max-sm:justify-center max-sm:[&>*]:basis-[calc((100%_-_4px)/5)]"
+          ? "flex flex-wrap max-sm:justify-center max-sm:[&>*]:basis-[calc((100%_-_16px)/5)]"
           : "grid grid-cols-5"
-    } ${phoneFlush ? "gap-px overflow-hidden rounded-[4px] sm:gap-2 sm:rounded-none" : plain ? "gap-2" : "gap-1"}`}>
+    } ${phoneFlush ? "gap-1 sm:gap-2" : plain ? "gap-2" : "gap-1"}`}>
       {!hideAllStages && (
         <StageTab
           label="All Stages"
