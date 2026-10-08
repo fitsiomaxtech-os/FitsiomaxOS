@@ -111,9 +111,12 @@ export const LoginPage = ({ onLogin }) => {
       />
       <div className="absolute inset-0 bg-white/90 backdrop-blur-[2px]" data-testid="screen1-login-overlay" />
 
+      {/* On phones the card is drawn at 90%. transform: scale rather than zoom — the card is
+          w-full, and zoom leaves a percentage width alone, so only its contents would shrink.
+          The card sits centred in a full-height flex box, so scaling about its centre keeps it there. */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-8 md:px-8 md:py-10">
         <Card
-          className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)]"
+          className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
           data-testid="screen1-login-card"
         >
           <CardHeader className="space-y-1 pb-2 text-center">
