@@ -81,17 +81,22 @@ export const callDayPart = (value) => {
   return "Night";
 };
 
-/** "2026-08-02T08:55:00Z" -> "02:25 pm Afternoon" — the exact minute, then its band. */
-export const callTimeStamp = (value) => {
-  const d = toDate(value);
-  if (!d) return "";
+/** A Date -> "02:25 pm", the minute in IST. */
+const istClock = (d) => {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: CALL_TZ, hour: "2-digit", minute: "2-digit", hour12: true,
   }).formatToParts(d);
   const pick = (type) => parts.find((p) => p.type === type)?.value || "";
   const hh = pick("hour").padStart(2, "0");
   const mm = pick("minute").padStart(2, "0");
-  return `${hh}:${mm} ${pick("dayPeriod").toLowerCase()} ${callDayPart(d)}`;
+  return `${hh}:${mm} ${pick("dayPeriod").toLowerCase()}`;
+};
+
+/** "2026-08-02T08:55:00Z" -> "02:25 pm Afternoon" — the exact minute, then its band. */
+export const callTimeStamp = (value) => {
+  const d = toDate(value);
+  if (!d) return "";
+  return `${istClock(d)} ${callDayPart(d)}`;
 };
 
 /** "2026-08-02T08:55:00Z" -> "02 Aug 2026" — callDateStamp carrying the year.
@@ -107,6 +112,17 @@ export const dateStampFull = (value) => {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: CALL_TZ, day: "2-digit", month: "short", year: "numeric",
   }).format(d);
+};
+
+/** "2026-08-02T08:55:00Z" -> "02 Aug 2026, 02:25 pm" — dateStampFull plus the minute.
+ *
+ * For a column headed "Date & Time", where callTimeStamp's band word ("Afternoon") would
+ * only repeat what the clock already says.
+ */
+export const dateTimeStamp = (value) => {
+  const d = toDate(value);
+  if (!d) return "";
+  return `${dateStampFull(d)}, ${istClock(d)}`;
 };
 
 /** "2026-08-02T08:55:00Z" -> "02 Aug" — the day a stamp belongs to, in IST. */

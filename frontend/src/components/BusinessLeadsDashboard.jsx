@@ -34,6 +34,7 @@ import {
   stagesList,
   updateLead,
 } from "@/lib/api";
+import { dateTimeStamp } from "@/lib/time";
 import { CreateLeadModal } from "@/components/CreateLeadModal";
 // The toolbar controls, every one of them the same instance another board already uses --
 // the five one-tap ranges and the calendar behind them, the green sheet pull, and the
@@ -651,7 +652,8 @@ const DRILL_COLUMNS = {
 
 // A card whose list reads differently from the rest of its kind, keyed by metric. Today's
 // Leads is a call sheet: who, the number to ring, where they belong, where they came from,
-// and the arrow into the lead. Stage and Created say nothing on a list that is all today's.
+// when they arrived (to the minute, in IST), and the arrow into the lead. Stage says
+// nothing on a list that is all today's.
 // `action` is that arrow -- drawn by the table, not read as a value, so search skips it.
 const METRIC_COLUMNS = {
   today: [
@@ -659,6 +661,7 @@ const METRIC_COLUMNS = {
     { key: "phone", label: "Phone", value: (r) => r.phone || "—" },
     { key: "branch", label: "Branch", value: (r, ctx) => ctx.branchName(r.branch_id) },
     { key: "source", label: "Source", value: (r) => r.source_tab || r.source_type || "—" },
+    { key: "created", label: "Date & Time", value: (r) => dateTimeStamp(r.created_at) || "—" },
     { key: "action", label: "Action", action: true, value: () => "" },
   ],
 };
