@@ -49,6 +49,7 @@ import {
 } from "@/lib/api";
 import { toast, Toaster } from "@/components/ui/sonner";
 import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 // Everyone's own clock, in the bar above every board. Static rather than one of the
 // lazy boards below: it is on screen for every role from the first paint, so splitting
 // it would only add a round trip to the one control that is always there.
@@ -1273,59 +1274,39 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         {/* Phone equivalent of the tab strip above: three direct destinations plus a
             "More" sheet for the rest — same pattern as the Physio/Branch Admin/Pre-Sales
-            bottom navs.
-
-            Icons only. Four slots across a phone leave room for a label, but the labels
-            that fit are not the real ones — "Branch Management" arrives as two wrapped
-            lines or an ellipsis, which names the destination no better than its icon does.
-            Each carries its full name on aria-label and title, so the bar is still
-            readable to a screen reader and on a long press. */}
+            bottom navs, and the same slot: glyph in a chip, its name small beneath. */}
         {showSuperAdminBoard && (
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] md:hidden" data-testid="super-admin-bottom-nav">
             <div className="flex items-stretch justify-around">
               {SUPER_ADMIN_BOTTOM_TABS.map((t) => {
                 const Icon = t.icon;
-                const active = !showProfile && superAdminView === t.key;
                 return (
-                  <button
+                  <BottomNavTab
                     key={t.key}
-                    type="button"
                     onClick={() => { setShowProfile(false); setSuperAdminView(t.key); setShowSuperAdminMenu(false); }}
-                    aria-label={t.label}
-                    aria-current={active ? "page" : undefined}
-                    title={t.label}
-                    className={`flex flex-1 items-center justify-center py-3.5 ${active ? "text-white" : "text-slate-200"}`}
+                    icon={<Icon className="h-6 w-6" />}
+                    label={t.label}
+                    active={!showProfile && superAdminView === t.key}
                     data-testid={`super-admin-nav-${t.key}`}
-                  >
-                    <Icon className="h-6 w-6" />
-                  </button>
+                  />
                 );
               })}
-              <button
-                type="button"
+              <BottomNavTab
                 onClick={() => setShowSuperAdminMenu((v) => !v)}
-                aria-label="More"
                 aria-expanded={showSuperAdminMenu}
-                title="More"
-                className={`flex flex-1 items-center justify-center py-3.5 ${
-                  (!showProfile && SUPER_ADMIN_MORE_TABS.some((t) => isSuperAdminTabActive(superAdminView, t.key))) || showSuperAdminMenu ? "text-white" : "text-slate-200"
-                }`}
+                icon={<MoreHorizontal className="h-6 w-6" />}
+                label="More"
+                active={(!showProfile && SUPER_ADMIN_MORE_TABS.some((t) => isSuperAdminTabActive(superAdminView, t.key))) || showSuperAdminMenu}
                 data-testid="super-admin-nav-more"
-              >
-                <MoreHorizontal className="h-6 w-6" />
-              </button>
+              />
               {/* My Profile, and Logout inside it -- the header drops both on a phone. */}
-              <button
-                type="button"
+              <BottomNavTab
                 onClick={() => { setShowProfile(true); setShowSuperAdminMenu(false); }}
-                aria-label="My Profile"
-                aria-current={showProfile ? "page" : undefined}
-                title="My Profile"
-                className={`flex flex-1 items-center justify-center py-3.5 ${showProfile ? "text-white" : "text-slate-200"}`}
+                icon={<ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />}
+                label="My Profile"
+                active={showProfile}
                 data-testid="super-admin-nav-profile"
-              >
-                <ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />
-              </button>
+              />
             </div>
           </div>
         )}
@@ -1372,48 +1353,34 @@ export const CRMPage = ({ auth, onLogout }) => {
             <div className="flex items-stretch justify-around">
               {phoneFooter.stops.map((t) => {
                 const Icon = t.icon;
-                const active = !showProfile && t.active;
                 return (
-                  <button
+                  <BottomNavTab
                     key={t.key}
-                    type="button"
                     onClick={() => { setShowProfile(false); setShowSuperAdminMenu(false); t.onSelect(); }}
-                    aria-label={t.label}
-                    aria-current={active ? "page" : undefined}
-                    title={t.label}
-                    className={`flex flex-1 items-center justify-center py-3.5 ${active ? "text-white" : "text-slate-200"}`}
+                    icon={<Icon className="h-6 w-6" />}
+                    label={t.label}
+                    active={!showProfile && t.active}
                     data-testid={`role-bottom-nav-${t.key}`}
-                  >
-                    <Icon className="h-6 w-6" />
-                  </button>
+                  />
                 );
               })}
               {phoneFooter.more.length > 0 && (
-                <button
-                  type="button"
+                <BottomNavTab
                   onClick={() => setShowSuperAdminMenu((v) => !v)}
-                  aria-label="More"
                   aria-expanded={showSuperAdminMenu}
-                  title="More"
-                  className={`flex flex-1 items-center justify-center py-3.5 ${
-                    (!showProfile && phoneFooter.more.some((t) => t.active)) || showSuperAdminMenu ? "text-white" : "text-slate-200"
-                  }`}
+                  icon={<MoreHorizontal className="h-6 w-6" />}
+                  label="More"
+                  active={(!showProfile && phoneFooter.more.some((t) => t.active)) || showSuperAdminMenu}
                   data-testid="role-bottom-nav-more"
-                >
-                  <MoreHorizontal className="h-6 w-6" />
-                </button>
+                />
               )}
-              <button
-                type="button"
+              <BottomNavTab
                 onClick={() => { setShowProfile(true); setShowSuperAdminMenu(false); }}
-                aria-label="My Profile"
-                aria-current={showProfile ? "page" : undefined}
-                title="My Profile"
-                className={`flex flex-1 items-center justify-center py-3.5 ${showProfile ? "text-white" : "text-slate-200"}`}
+                icon={<ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />}
+                label="My Profile"
+                active={showProfile}
                 data-testid="role-bottom-nav-profile"
-              >
-                <ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />
-              </button>
+              />
             </div>
           </div>
         )}

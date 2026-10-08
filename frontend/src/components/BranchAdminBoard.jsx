@@ -76,6 +76,7 @@ import {
 } from "@/lib/api";
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
 import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
@@ -2862,54 +2863,37 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <div className="grid" style={{ gridTemplateColumns: `repeat(${bottomTabs.length + 2}, minmax(0, 1fr))` }}>
           {bottomTabs.map((tab) => {
             const Icon = tab.icon;
-            const active = !profileOpen && activeView === tab.key;
             return (
-              <button
+              <BottomNavTab
                 key={tab.key}
-                type="button"
                 onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); }}
-                aria-current={active ? "page" : undefined}
-                className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-2 transition-colors ${
-                  active ? "text-white" : "text-slate-200 active:text-white"
-                }`}
+                icon={<Icon className="h-[18px] w-[18px] flex-none" />}
+                label={tab.short}
+                title={tab.label}
+                aria-label={tab.label}
+                active={!profileOpen && activeView === tab.key}
                 data-testid={`branch-bottom-nav-${tab.key}`}
-              >
-                {/* The strip sits on the top edge, where the desk tabs carry their underline. */}
-                {active && <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-white" />}
-                <Icon className="h-[18px] w-[18px] flex-none" />
-                <span className="w-full truncate text-center text-[9px] font-semibold leading-tight">{tab.short}</span>
-              </button>
+              />
             );
           })}
           {/* Lit while one of the tabs it holds is open, so the bar still says where you
               are once you have navigated into the sheet and it has closed behind you. */}
-          <button
-            type="button"
+          <BottomNavTab
             onClick={() => setShowMoreMenu((v) => !v)}
             aria-expanded={showMoreMenu}
-            className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-2 transition-colors ${
-              (!profileOpen && moreTabs.some((t) => t.key === activeView)) || showMoreMenu ? "text-white" : "text-slate-200 active:text-white"
-            }`}
+            icon={<MoreHorizontal className="h-[18px] w-[18px] flex-none" />}
+            label="More"
+            active={(!profileOpen && moreTabs.some((t) => t.key === activeView)) || showMoreMenu}
             data-testid="branch-bottom-nav-more"
-          >
-            {!profileOpen && moreTabs.some((t) => t.key === activeView) && <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-white" />}
-            <MoreHorizontal className="h-[18px] w-[18px] flex-none" />
-            <span className="w-full truncate text-center text-[9px] font-semibold leading-tight">More</span>
-          </button>
+          />
           {/* My Profile, and Logout on its Security tab -- the phone header carries neither. */}
-          <button
-            type="button"
+          <BottomNavTab
             onClick={() => { setProfileOpen(true); setShowMoreMenu(false); }}
-            aria-current={profileOpen ? "page" : undefined}
-            className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-2 transition-colors ${
-              profileOpen ? "text-white" : "text-slate-200 active:text-white"
-            }`}
+            icon={<ProfileNavGlyph user={currentUser} size={20} iconClassName="h-[18px] w-[18px]" />}
+            label="Profile"
+            active={profileOpen}
             data-testid="branch-bottom-nav-profile"
-          >
-            {profileOpen && <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-white" />}
-            <ProfileNavGlyph user={currentUser} size={20} iconClassName="h-[18px] w-[18px]" />
-            <span className="w-full truncate text-center text-[9px] font-semibold leading-tight">Profile</span>
-          </button>
+          />
         </div>
       </nav>
       )}

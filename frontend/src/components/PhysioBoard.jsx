@@ -37,6 +37,7 @@ import { PhysioTreatmentChips } from "@/components/ui/physio-treatment-chips";
 import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { SESSION_PAYMENT_REFRESH_EVENT } from "@/components/SessionPaymentBell";
 import { PhysioAbsencePanel } from "@/components/PhysioAbsencePanel";
 import {
@@ -195,36 +196,17 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout } = {}) => {
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
           {(physioId ? BOTTOM_TABS.filter((t) => t.key !== "absence") : BOTTOM_TABS).map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.key;
-            const count = badgeFor[tab.key] || 0;
             return (
-              <button
+              <BottomNavTab
                 key={tab.key}
-                type="button"
                 onClick={() => setActiveTab(tab.key)}
-                title={tab.label}
-                aria-label={tab.label}
-                aria-current={isActive ? "page" : undefined}
-                className={`flex flex-1 items-center justify-center py-3.5 transition ${
-                  isActive ? "text-white" : "text-slate-200"
-                }`}
+                icon={tab.key === PROFILE_TAB.key ? <ProfileNavGlyph user={user} size={26} /> : <Icon className="h-5 w-5" />}
+                label={tab.label}
+                active={activeTab === tab.key}
+                badge={badgeFor[tab.key] || 0}
+                badgeTestId={`physio-bottom-tab-badge-${tab.key}`}
                 data-testid={`physio-bottom-tab-${tab.key}`}
-              >
-                {/* The selected glyph is picked out by a disc behind it, not by the word
-                    under it: with the labels gone, white-on-slate against slate-on-slate
-                    is too small a difference to find at a glance. */}
-                <span className={`relative flex h-9 w-9 items-center justify-center rounded-full ${isActive ? "bg-white/20" : ""}`}>
-                  {tab.key === PROFILE_TAB.key ? <ProfileNavGlyph user={user} size={26} /> : <Icon className="h-5 w-5" />}
-                  {count > 0 && (
-                    <span
-                      className="absolute right-0 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white"
-                      data-testid={`physio-bottom-tab-badge-${tab.key}`}
-                    >
-                      {count > 99 ? "99+" : count}
-                    </span>
-                  )}
-                </span>
-              </button>
+              />
             );
           })}
         </div>

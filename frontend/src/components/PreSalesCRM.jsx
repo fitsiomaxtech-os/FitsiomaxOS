@@ -17,6 +17,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageTabBar } from "@/components/ui/stage-tab";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp } from "@/lib/time";
@@ -1748,18 +1749,15 @@ export const PreSalesCRM = ({
           <div className="mx-auto flex max-w-lg items-stretch justify-around">
             {PRESALES_TABS.map((t) => {
               const Icon = t.icon;
-              const active = activeTab === t.key;
               return (
-                <button
+                <BottomNavTab
                   key={t.key}
-                  type="button"
                   onClick={() => setActiveTab(t.key)}
-                  className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors ${active ? "text-white" : "text-slate-200"}`}
+                  icon={<Icon className="h-5 w-5" />}
+                  label={t.label}
+                  active={activeTab === t.key}
                   data-testid={`presales-nav-${t.key}`}
-                >
-                  <Icon className="h-5 w-5" />
-                  {t.label}
-                </button>
+                />
               );
             })}
           </div>

@@ -33,6 +33,7 @@ import { RecruitmentStagesPanel } from "@/components/hr/RecruitmentStagesPanel";
 import { to12h } from "@/lib/time";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import {
   recruitmentBoard,
   recruitmentCreateCandidate,
@@ -333,38 +334,30 @@ export const HumanResourceBoard = ({ user, roleLabel = "", onLogout }) => {
       )}
 
       {/* Same destinations as the desktop tabs above, from the one VIEWS array so the two
-          surfaces can't drift apart. */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] md:hidden" data-testid="hr-bottom-nav">
+          surfaces can't drift apart. On the slate the other boards' bars use, with the same
+          chip on the open tab -- it was the one phone nav still white. */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.06)] md:hidden" data-testid="hr-bottom-nav">
         {VIEWS.map((v) => {
           const Icon = v.icon;
-          const active = view === v.key;
           return (
-            <button
+            <BottomNavTab
               key={v.key}
-              type="button"
               onClick={() => setView(v.key)}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium leading-tight ${
-                active ? "text-indigo-600" : "text-slate-400"
-              }`}
+              icon={<Icon className="h-5 w-5" />}
+              label={v.label}
+              active={view === v.key}
               data-testid={`hr-nav-${v.key}`}
-            >
-              <Icon className="h-5 w-5" />
-              {v.label}
-            </button>
+            />
           );
         })}
         {/* My Profile, and Logout on its Security tab -- the phone header carries neither. */}
-        <button
-          type="button"
+        <BottomNavTab
           onClick={() => setView("profile")}
-          className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium leading-tight ${
-            view === "profile" ? "text-indigo-600" : "text-slate-400"
-          }`}
+          icon={<ProfileNavGlyph user={user} size={22} />}
+          label="Profile"
+          active={view === "profile"}
           data-testid="hr-nav-profile"
-        >
-          <ProfileNavGlyph user={user} size={22} />
-          Profile
-        </button>
+        />
       </nav>
 
       {showAdd && (

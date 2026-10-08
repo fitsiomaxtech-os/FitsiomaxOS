@@ -34,6 +34,7 @@ import { DayStripFilter, todayFilter, isDayKey } from "@/components/DayStripFilt
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import {
   getHPMyCalendar,
   hpRecommendPackage,
@@ -1010,33 +1011,19 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
       {/* Mobile bottom bar — the Head Physio works this board on a phone between
           patients, and this is the board's only tab row there: the summary cards are
           drawn from tablet up. Same tabs, thumb-high. */}
-      {/* Glyphs only, like the Physio board's bar: with My Profile added a fourth
-          column leaves "Weekly Review" nowhere to go but two lines. Each keeps its name in
-          title/aria-label for a long press and a screen reader. */}
+      {/* Same slot as the Physio board's bar: glyph in a chip, its name small beneath. */}
       <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.06)] sm:hidden" data-testid="hp-bottom-nav">
         {bottomTabs.map((t) => {
           const Icon = t.icon;
-          const active = workTab === t.key;
           return (
-            <button
+            <BottomNavTab
               key={t.key}
-              type="button"
               onClick={() => setWorkTab(t.key)}
-              title={t.label}
-              aria-label={t.label}
-              aria-current={active ? "page" : undefined}
-              className={`flex flex-1 items-center justify-center py-3.5 transition ${
-                active ? "text-white" : "text-slate-200"
-              }`}
+              icon={t.key === PROFILE_TAB.key ? <ProfileNavGlyph user={user} size={26} /> : <Icon className="h-5 w-5" />}
+              label={t.label}
+              active={workTab === t.key}
               data-testid={`hp-bottom-nav-${t.key}`}
-            >
-              {/* The active pill was bg-teal-100. On the slate bar the icon inside it is
-                  now white, which that pale mint would have swallowed — a translucent
-                  white reads as the same chip and leaves the icon legible. */}
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full transition ${active ? "bg-white/20" : ""}`}>
-                {t.key === PROFILE_TAB.key ? <ProfileNavGlyph user={user} size={26} /> : <Icon className="h-5 w-5" />}
-              </span>
-            </button>
+            />
           );
         })}
       </nav>

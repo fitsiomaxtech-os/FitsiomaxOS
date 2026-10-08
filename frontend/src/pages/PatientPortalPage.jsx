@@ -2355,19 +2355,23 @@ function PortalDashboard({ onLogout, onSwitchPatient }) {
             // clearFeedbackBadge and patient_portal_my_feedback's seen stamp.
             const badge = t.key === "feedback" ? (data.feedback_unread || 0)
               : t.key === "sessions" ? (reviews?.weeks_pending?.length || 0) : 0;
+            // On a phone, the same slot as the staff boards' BottomNavTab: glyph in a chip
+            // that lights on the open tab, its name at 0.55rem beneath. From md up every
+            // md: class puts back the white desktop bar exactly as it was.
             return (
               <button
                 key={t.key}
                 type="button"
                 onClick={() => setActiveTab(t.key)}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition ${isActive ? "text-white md:text-sky-600" : "text-slate-200 md:text-slate-400"}`}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pb-1.5 pt-1 text-[0.55rem] leading-tight transition md:px-0 md:py-2.5 md:text-[10px] md:font-medium md:leading-normal ${isActive ? "font-semibold text-white md:text-sky-600" : "font-medium text-slate-200 md:text-slate-400"}`}
                 data-testid={`patient-portal-tab-${t.key}`}
               >
-                <span className="relative shrink-0">
+                <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full md:h-auto md:w-auto md:bg-transparent ${isActive ? "bg-white/20" : ""}`}>
                   <Icon className="h-5 w-5 shrink-0" />
                   {badge > 0 && (
                     <span
-                      className="absolute -right-2.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border border-slate-500 bg-rose-500 px-1 text-[9px] font-bold leading-none text-white md:border-white"
+                      className="absolute right-0 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border border-slate-500 bg-rose-500 px-1 text-[9px] font-bold leading-none text-white md:-right-2.5 md:-top-1.5 md:border-white"
                       data-testid={`patient-portal-tab-badge-${t.key}`}
                     >
                       {badge > 9 ? "9+" : badge}

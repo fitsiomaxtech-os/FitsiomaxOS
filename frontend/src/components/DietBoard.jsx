@@ -22,6 +22,7 @@ import { dietChartUrl, dietConsultations, dietPatients, dietSessions, recommendD
 import { to12h } from "@/lib/time";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
+import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 
 /**
  * Diet Master View — the Nutrition Coach's own board.
@@ -168,38 +169,26 @@ export const DietBoard = ({ coachId, user, roleLabel, onLogout } = {}) => {
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
           {VIEW_TABS.map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.key;
-            const count = badgeFor[tab.key] || 0;
             return (
-              <button
+              <BottomNavTab
                 key={tab.key}
-                type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition ${isActive ? "text-white" : "text-slate-200"}`}
+                icon={<Icon className="h-5 w-5" />}
+                label={tab.label}
+                active={activeTab === tab.key}
+                badge={badgeFor[tab.key] || 0}
                 data-testid={`diet-bottom-tab-${tab.key}`}
-              >
-                <span className="relative">
-                  <Icon className="h-5 w-5" />
-                  {count > 0 && (
-                    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
-                      {count > 99 ? "99+" : count}
-                    </span>
-                  )}
-                </span>
-                {tab.label}
-              </button>
+              />
             );
           })}
           {user && (
-            <button
-              type="button"
+            <BottomNavTab
               onClick={() => setActiveTab("profile")}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition ${activeTab === "profile" ? "text-white" : "text-slate-200"}`}
+              icon={<ProfileNavGlyph user={user} size={22} />}
+              label="Profile"
+              active={activeTab === "profile"}
               data-testid="diet-bottom-tab-profile"
-            >
-              <ProfileNavGlyph user={user} size={22} />
-              Profile
-            </button>
+            />
           )}
         </div>
       </div>
