@@ -1,4 +1,4 @@
-import { ChevronRight, Phone, Trash2 } from "lucide-react";
+import { Phone, Trash2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 
 /**
@@ -35,7 +35,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * `idLine` is the patient number, city and the like, on one line split by "|" as the
  * reference has them; it truncates at the end, so on a narrow phone the last part is the
  * one cut short. The lists leave the phone number out of it wherever Call and WhatsApp
- * are drawn (the user asked for that); only `glance` and an unringable number show it.
+ * are drawn (the user asked for that); only an unringable number shows it.
  *
  * `wa` is the number from lib/phone's waNumber; without one Call and WhatsApp are left off, as
  * there is nobody to ring. They are anchors rather than buttons so tel: and the WhatsApp
@@ -51,13 +51,6 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * loudest thing on every row; from sm up it is boxed in rose so it is not mistaken for
  * one of the two ways of reaching the patient. The list decides who gets it and what
  * confirming it asks; the card only draws it.
- *
- * `glance` is the lighter card Branch Leads draws on All Stages, where the list is the
- * whole branch to be looked over rather than one stage to be worked: no Call or
- * WhatsApp, the stage boxed with a 4px corner and a border (the worked lists' badge has
- * a 5px corner and none), the bin a plain grey
- * icon, and a grey arrow at the end that says the card opens. The arrow is part of the
- * card, not a button of its own, so tapping it is tapping the card.
  *
  * `mark` replaces the initial in the avatar circle — a select-mode checkbox, say.
  * `className` carries the row's fill, so a picked row can be tinted.
@@ -81,12 +74,10 @@ export const LeadRowCard = ({
   details = null,
   onOpen,
   onDelete = null,
-  glance = false,
   className = "bg-white",
   testid,
 }) => {
   const parts = idLine.filter(Boolean);
-  const showContact = wa && !glance;
   return (
     // A div, not a button: Call and WhatsApp are themselves interactive, and a button
     // inside a button is invalid markup that browsers resolve by dropping one of them.
@@ -119,20 +110,18 @@ export const LeadRowCard = ({
         </div>
         {badge && (
           <span
-            className={glance
-              ? "max-w-[120px] shrink-0 truncate rounded-[4px] border px-2 py-0.5 text-[11px] font-medium leading-4 sm:max-w-[160px]"
-              : "max-w-[76px] shrink-0 truncate rounded-[5px] px-2 py-0.5 text-[10px] font-medium leading-4 sm:max-w-[140px] sm:text-[11px]"}
+            className="max-w-[76px] shrink-0 truncate rounded-[5px] px-2 py-0.5 text-[10px] font-medium leading-4 sm:max-w-[140px] sm:text-[11px]"
             style={badgeColor
-              ? { background: `${badgeColor}1a`, color: badgeColor, borderColor: `${badgeColor}40` }
-              : { background: "#f1f5f9", color: "#475569", borderColor: "#e2e8f0" }}
+              ? { background: `${badgeColor}1a`, color: badgeColor }
+              : { background: "#f1f5f9", color: "#475569" }}
             title={typeof badge === "string" ? badge : undefined}
           >
             {badge}
           </span>
         )}
-        {(showContact || onDelete) && (
+        {(wa || onDelete) && (
           <div className="flex shrink-0 sm:gap-1.5">
-            {showContact && (<>
+            {wa && (<>
               <a
                 href={`tel:${wa}`}
                 onClick={(e) => e.stopPropagation()}
@@ -161,17 +150,14 @@ export const LeadRowCard = ({
                 onKeyDown={(e) => e.stopPropagation()}
                 aria-label={`Delete ${name || "patient"}`}
                 title="Delete this patient"
-                className={glance
-                  ? "flex h-8 w-8 items-center justify-center rounded-full text-slate-400 active:bg-slate-100 active:text-rose-500 sm:rounded-md"
-                  : "flex h-8 w-8 items-center justify-center rounded-full text-slate-400 active:bg-rose-50 active:text-rose-500 sm:rounded-md sm:border sm:border-rose-200 sm:bg-white sm:text-rose-500"}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 active:bg-rose-50 active:text-rose-500 sm:rounded-md sm:border sm:border-rose-200 sm:bg-white sm:text-rose-500"
                 data-testid={`${testid}-delete-${id}`}
               >
-                <Trash2 className={glance ? "h-[18px] w-[18px] sm:h-4 sm:w-4" : "h-[18px] w-[18px] sm:h-3.5 sm:w-3.5"} />
+                <Trash2 className="h-[18px] w-[18px] sm:h-3.5 sm:w-3.5" />
               </button>
             )}
           </div>
         )}
-        {glance && <ChevronRight className="-ml-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
       </div>
       {/* Lined up under the name: the avatar's 32px and the 8px gap after it. */}
       {details && (
