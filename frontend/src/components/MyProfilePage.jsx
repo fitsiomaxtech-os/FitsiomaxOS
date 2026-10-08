@@ -51,6 +51,16 @@ import {
 } from "lucide-react";
 import { getBranches, myAttendance, myProfile, MY_PHOTO_CHANGED_EVENT, removeMyPhoto, uploadMyPhoto } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 // The branch's working / leave days — the same calendar Management → Calendar sets.
 import { BranchMonthlyCalendar } from "@/components/branch/BranchMonthlyCalendar";
 import { CLOCK_CHANGED_EVENT } from "@/components/ClockWidget";
@@ -1174,6 +1184,7 @@ const MENU_ITEMS = [
 // `onBack` is for a host with no bottom bar to leave by: the menu then carries its own way out.
 const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
   const [open, setOpen] = useState(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const items = hideTimeOff ? MENU_ITEMS.filter((i) => i.key !== "timeoff") : MENU_ITEMS;
 
@@ -1247,7 +1258,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
           <li>
             <button
               type="button"
-              onClick={onLogout}
+              onClick={() => setConfirmLogout(true)}
               className="flex w-full items-center gap-4 py-3.5 text-left text-rose-600 active:bg-rose-50"
               data-testid="my-profile-menu-logout"
             >
@@ -1257,6 +1268,32 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
           </li>
         )}
       </ul>
+
+      {/* The row sits last in a list a thumb scrolls through, so a stray tap there would end
+          the session; this asks once. Phones only — the menu itself is phones only. */}
+      <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm gap-5 rounded-2xl p-5" data-testid="my-profile-logout-confirm">
+          <AlertDialogHeader className="items-center space-y-3 text-center sm:text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+              <LogOut className="h-6 w-6" />
+            </span>
+            <AlertDialogTitle className="text-base text-slate-800">Log out?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px] text-slate-500">
+              You will need your password to sign back in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="grid grid-cols-2 gap-3 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-11 rounded-xl" data-testid="my-profile-logout-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onLogout}
+              className="h-11 rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+              data-testid="my-profile-logout-confirm-button"
+            >
+              Log out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
