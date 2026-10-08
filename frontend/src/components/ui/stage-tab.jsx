@@ -141,12 +141,12 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 // bar's own `top` and would slide it under the page header.
 //
 // `phoneFlush` is Branch Leads on a phone again, asked for as one joined strip: below sm the
-// bar loses its grey tray, padding, corners and side borders, runs the full screen width
-// (-mx-3 over CRMPage's px-3, as the lead list under it does) and is pulled up over the
-// page's 16px top padding so it sits straight under the header, whose own bottom border is
-// its top edge. The cells join with 1px lines (see StageTab's flush). No zoom on it below
-// sm -- the gaps and padding the 80% was paying for are gone, so the cells are drawn at
-// full size instead. Implies `plain`; from sm up the bar is the plain card strip unchanged.
+// bar loses its grey tray and padding and becomes a single white card with the finance
+// boards' 5px corner (see ui/ledger-card), inside the page's own side padding so the corners
+// show, and pulled up over the page's 16px top padding so it sits straight under the header.
+// The cells join with 1px lines (see StageTab's flush). No zoom on it below sm -- the gaps
+// and padding the 80% was paying for are gone, so the cells are drawn at full size instead.
+// Implies `plain`; from sm up the bar is the plain card strip unchanged.
 export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false, phoneFlush = false }) => (
   <div
     // The offset has to clear the sticky page header, which is two different heights:
@@ -154,7 +154,7 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
     // A flat 88px left a white band under the header on a phone once scrolled.
     className={`sticky top-[61px] z-10 sm:top-[88px] ${
       phoneFlush
-        ? "-mx-3 -mt-4 border-b border-slate-200 bg-white sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
+        ? "-mt-4 rounded-[5px] border border-slate-200 bg-white sm:-mx-1 sm:mt-0 sm:rounded-xl sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
         : `-mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur ${
           // A plain card is white and borderless, so it can only read as its own card if
           // what lies between the cards is not also white — hence the grey strip under them.
@@ -170,12 +170,15 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
         behind a swipe nobody knew to make. Back to a single flex row from sm up.
 
         A flush row keeps 1px gaps for the cells' lines to show through, and clips the
-        lines that would otherwise sit outside its outer edge. */}
+        lines that would otherwise sit outside its outer edge -- and the picked cell's
+        square corner, rounding inside the bar's 5px. Its columns are equal unless a label
+        cannot fit one: inside the card, a sixth of a 400px phone is ~4px short of
+        "Appointment", so that column alone widens to its word instead of clipping it. */}
     <div className={`grid sm:flex sm:flex-nowrap sm:overflow-visible ${
       phoneRow
-        ? `grid-flow-col auto-cols-fr ${phoneFlush ? "sm:max-md:[zoom:0.8]" : "max-md:[zoom:0.8]"}`
+        ? `grid-flow-col ${phoneFlush ? "auto-cols-[minmax(min-content,1fr)] sm:max-md:[zoom:0.8]" : "auto-cols-fr max-md:[zoom:0.8]"}`
         : "grid-cols-5"
-    } ${phoneFlush ? "gap-px overflow-hidden sm:gap-2" : plain ? "gap-2" : "gap-1"}`}>
+    } ${phoneFlush ? "gap-px overflow-hidden rounded-[4px] sm:gap-2 sm:rounded-none" : plain ? "gap-2" : "gap-1"}`}>
       {!hideAllStages && (
         <StageTab
           label="All Stages"
