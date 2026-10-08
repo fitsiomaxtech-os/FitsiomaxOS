@@ -191,9 +191,11 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout } = {}) => {
       )}
 
       {/* Phones only. It used to render at every width, so a desk got a bar pinned
-          across the bottom of the window for a switcher that belongs at the top. */}
+          across the bottom of the window for a switcher that belongs at the top.
+          The row is drawn at 85%, this bar only — the other boards' bars keep full size.
+          zoom rather than transform: scale, so the bar's own height shrinks with it. */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] md:hidden" data-testid="physio-bottom-nav">
-        <div className="mx-auto flex max-w-lg items-stretch justify-around">
+        <div className="mx-auto flex max-w-lg items-stretch justify-around" style={{ zoom: 0.85 }}>
           {(physioId ? BOTTOM_TABS.filter((t) => t.key !== "absence") : BOTTOM_TABS).map((tab) => {
             const Icon = tab.icon;
             return (
