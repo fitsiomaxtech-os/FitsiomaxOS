@@ -73,8 +73,12 @@ const blank = {
  *   sheet importer files an answer under and the key that board's columns read back. A
  *   lead typed in here and one that arrived off the sheet then land in the same place.
  *   Empty for every board that has none, and the section is then not drawn at all.
+ * @param branchPicker Draws Branch as a field of its own, whatever the Department -- the
+ *   Business Development board's Add Lead, the desk that routes every lead it types in. A
+ *   branch picked there is sent as picked. Everywhere else an online Department still
+ *   clears it, and the Offline-only list under the fields stays the way a lead gets one.
  */
-export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepartment = null, formQuestions = [] }) => {
+export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepartment = null, formQuestions = [], branchPicker = false }) => {
   const [form, setForm] = useState({
     ...blank,
     ...(branchId ? { branch_id: branchId } : {}),
@@ -88,6 +92,15 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
   useEffect(() => {
     getBranches().then(setBranches).catch((e) => console.warn("[load failed]", e?.message || e));
   }, []);
+
+  // The picker's own order, the one every other branch list in the OS uses: offline
+  // branches first, alphabetical, the online arms trailing.
+  const pickerBranches = [...branches].sort((a, b) => {
+    const online = (v) => String(v || "").startsWith("online_");
+    return online(a.vertical) - online(b.vertical)
+      || String(a.branch_name || "").localeCompare(String(b.branch_name || ""));
+  });
+  const showPicker = branchPicker && !branchId;
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
   const setExtra = (k, v) => setExtraFields((p) => ({ ...p, [k]: v }));
@@ -128,7 +141,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
     if (payload.age === "") payload.age = null;
     else payload.age = Number(payload.age);
     if (branchId) payload.branch_id = branchId;
-    else if (!["offline_physio", "offline_fitness"].includes(payload.department)) payload.branch_id = "";
+    else if (!showPicker && !["offline_physio", "offline_fitness"].includes(payload.department)) payload.branch_id = "";
     payload.source_type = "manual";
     // Left blank, the lead reads as "Manual" rather than as an empty channel -- the
     // dashboards group on source_tab and an empty string would be its own silent bucket.
@@ -236,10 +249,24 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
               <Field label="Age"><Input type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-create-age" /></Field>
               <Field label="Gender"><Select value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDER_OPTIONS]} testid="lead-create-gender" /></Field>
               <Field label="Occupation"><Input value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-create-occupation" /></Field>
-              <Field label="Expected Consultation Date" className="sm:col-span-2"><MilkDateInput centered confirm title="Expected Consultation Date" value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
+              <Field label="Expected Consultation Date" className={showPicker ? "" : "sm:col-span-2"}><MilkDateInput centered confirm title="Expected Consultation Date" value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
+              {showPicker && (
+                <Field label="Assign Branch">
+                  {/* Left blank, the lead lands Unassigned, as it always has. */}
+                  <select
+                    className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm"
+                    value={form.branch_id}
+                    onChange={(e) => set("branch_id", e.target.value)}
+                    data-testid="lead-create-branch-select"
+                  >
+                    <option value="">Select Branch</option>
+                    {pickerBranches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+                  </select>
+                </Field>
+              )}
             </div>
 
-            {!branchId && ["offline_physio", "offline_fitness"].includes(form.department) && (
+            {!branchId && !showPicker && ["offline_physio", "offline_fitness"].includes(form.department) && (
               <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 p-3" data-testid="lead-create-branch-section">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-700">Assign to Branch</p>
                 <div className="grid gap-2 sm:grid-cols-2 max-h-44 overflow-y-auto">

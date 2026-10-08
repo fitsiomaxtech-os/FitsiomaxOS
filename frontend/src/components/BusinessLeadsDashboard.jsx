@@ -535,12 +535,14 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
       )}
 
       {showCreateLead && (
+        // `branchPicker`: this desk routes what it types in, so Branch is a field of its
+        // own here rather than a list that appears only for an Offline department.
+        // reloadAll, not just the cards, so the open list shows the new lead and its branch.
         <CreateLeadModal
           isSuperAdmin
+          branchPicker
           onClose={() => setShowCreateLead(false)}
-          onSaved={() => {
-            loadDashboard();
-          }}
+          onSaved={reloadAll}
         />
       )}
 
