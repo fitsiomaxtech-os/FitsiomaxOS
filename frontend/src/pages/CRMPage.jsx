@@ -1510,12 +1510,15 @@ export const CRMPage = ({ auth, onLogout }) => {
           </div>
         )}
 
+        {/* Sales Master View and Marketing Master View: leads only, with All/Online/Offline
+            and the branch pills as two toolbar dropdowns -- the same shape as the Business
+            Development Executive's Sales View and Marketing View. */}
         {showSuperAdminBoard && superAdminView === "presales" && (
-          <PreSalesCRM onManageStages={() => setSuperAdminView("stages")} role={role} currentUser={auth.user} />
+          <PreSalesCRM onManageStages={() => setSuperAdminView("stages")} role={role} currentUser={auth.user} leadsOnly branchFilterInToolbar />
         )}
 
         {showSuperAdminBoard && superAdminView === "marketing_master" && (
-          <PreSalesCRM role="marketing_head" currentUser={auth.user} />
+          <PreSalesCRM role="marketing_head" currentUser={auth.user} leadsOnly branchFilterInToolbar />
         )}
 
         {showPreSalesBoard && (

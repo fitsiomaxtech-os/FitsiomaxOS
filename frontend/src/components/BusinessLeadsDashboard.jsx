@@ -434,7 +434,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
 
           Both are `leadsOnly` and `branchFilterInToolbar`: no Leads / Analytics switch,
           and All/Online/Offline plus the branch pills as two dropdowns in the toolbar
-          rather than two rows above the cards. Super Admin's copies keep both rows. */}
+          rather than two rows above the cards, as Super Admin's two master views have. */}
       {activeTab === "marketing_view" && (
         <PreSalesCRM role="marketing_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar />
       )}
