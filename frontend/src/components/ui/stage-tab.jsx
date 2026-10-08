@@ -39,7 +39,13 @@ import { ChevronRight } from "lucide-react";
 // `hoverColor` and `selectedColor` are a stage's own hover and picked colours, set in CI/CD
 // ROOTS (Pre-Sales only for now). Either left unset falls back to `color`, so a bar whose
 // stages carry neither draws exactly as it did before they existed.
-export const StageTab = ({ label, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, borderClass = "" }) => {
+// `phoneLabel` is what the card reads below md, where six full names will not fit across
+// one row. The stage keeps its real name from md up, so the desk still reads it exactly as
+// CI/CD ROOTS does.
+// `phoneRow` is a card in StageTabBar's one-row phone strip. Six to a row leaves a card on a
+// narrow phone barely wider than "Appointment", so below sm the label drops under the
+// corner arrow rather than running through it.
+export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, borderClass = "", phoneRow = false }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
   const [hovered, setHovered] = useState(false);
@@ -59,7 +65,7 @@ export const StageTab = ({ label, count, active, onClick, color, hoverColor, sel
         gridded
           ? "w-full min-w-0 px-1 py-2"
           : "min-w-[86px] shrink-0 px-3 py-2.5"
-      } ${
+      } ${phoneRow ? "max-sm:pt-4" : ""} ${
         plain
           ? (active
             ? "bg-sky-100 text-sky-800 ring-2 ring-inset ring-sky-500 shadow-md"
@@ -86,14 +92,21 @@ export const StageTab = ({ label, count, active, onClick, color, hoverColor, sel
         gridded
           ? "text-[9px] leading-[1.2] [hyphens:auto]"
           : "text-[11px] leading-tight"
-      }`}>{label}</span>
+      }`}>
+        {phoneLabel && phoneLabel !== label ? (
+          <>
+            <span className="md:hidden">{phoneLabel}</span>
+            <span className="hidden md:inline">{label}</span>
+          </>
+        ) : label}
+      </span>
       <span className={`mt-0.5 font-bold leading-none sm:text-lg ${gridded ? "text-base" : "text-lg"}`}>{count}</span>
       {/* The corner arrow the finance boards' summary cards carry (see ui/ledger-card), so
           Branch Admin's summary strip and Accountant Manage's own read as the same card.
           Absolutely placed so the centred label and figure underneath are not shifted by it. */}
       {plain && (
         <ChevronRight
-          className={`absolute right-1.5 top-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 ${active ? "text-sky-500" : "text-slate-400"}`}
+          className={`absolute right-1.5 top-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 ${phoneRow ? "max-sm:right-1 max-sm:top-1 max-sm:h-3 max-sm:w-3" : ""} ${active ? "text-sky-500" : "text-slate-400"}`}
           aria-hidden="true"
         />
       )}
@@ -103,7 +116,17 @@ export const StageTab = ({ label, count, active, onClick, color, hoverColor, sel
 
 // `hideAllStages` drops the leading "All Stages" pill (stage pills still toggle
 // off on a second click, so the filter can always be cleared).
-export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false }) => (
+//
+// `phoneLabels` maps a stage's name to the shorter one its card reads below md (see
+// StageTab's phoneLabel). Keyed by the name rather than the role, so a stage Super Admin
+// renames stops being shortened and reads as its new name instead of a stale abbreviation.
+//
+// `phoneRow` is Branch Leads on a phone: every card in one row instead of five to a row,
+// and the cards drawn at 80%. zoom rather than transform: scale, as on the desk tab strip
+// in BranchAdminBoard -- zoom shrinks the cards themselves, so the row still spans the bar
+// edge to edge. It sits on the inner row, not the sticky bar, because zoom also scales the
+// bar's own `top` and would slide it under the page header.
+export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false }) => (
   <div
     // The offset has to clear the sticky page header, which is two different heights:
     // 61px on a phone (py-3 + a 36px logo + border) and 89px from sm up (py-4 + 56px).
@@ -120,7 +143,9 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
     {/* Five to a row on a phone, so nine stages land as 5 + 4 and the whole bar is
         visible at once — it used to be a horizontal scroll, which hid the later stages
         behind a swipe nobody knew to make. Back to a single flex row from sm up. */}
-    <div className={`grid grid-cols-5 sm:flex sm:flex-nowrap sm:overflow-visible ${plain ? "gap-2" : "gap-1"}`}>
+    <div className={`grid sm:flex sm:flex-nowrap sm:overflow-visible ${
+      phoneRow ? "grid-flow-col auto-cols-fr max-md:[zoom:0.8]" : "grid-cols-5"
+    } ${plain ? "gap-2" : "gap-1"}`}>
       {!hideAllStages && (
         <StageTab
           label="All Stages"
@@ -131,12 +156,14 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           testid={`${testid}-total`}
           gridded
           plain={plain}
+          phoneRow={phoneRow}
         />
       )}
       {stages.map((s) => (
         <StageTab
           key={s.id}
           label={s.name}
+          phoneLabel={phoneLabels[s.name]}
           count={counts?.[s.name] || 0}
           active={stageFilter === s.name}
           onClick={() => setStageFilter(stageFilter === s.name ? null : s.name)}
@@ -146,6 +173,7 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           testid={`${testid}-${s.name}`}
           gridded
           plain={plain}
+          phoneRow={phoneRow}
         />
       ))}
     </div>

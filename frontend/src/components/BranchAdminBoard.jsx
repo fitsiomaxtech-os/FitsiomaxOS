@@ -143,6 +143,14 @@ const STAGE_ROLE_FALLBACK_NAMES = {
   [STAGE_ROLE_NOT_A_PROSPECT]: "Not a prospect",
 };
 
+// What the Branch Leads cards read on a phone, where six full names will not sit in one
+// row. Display only, and below md only -- the stage is still stored and shown on the desk
+// under its real name (see StageTabBar's phoneLabels).
+const BRANCH_LEADS_PHONE_LABELS = {
+  [STAGE_ROLE_FALLBACK_NAMES[STAGE_ROLE_APPOINTMENT]]: "Appointment",
+  [STAGE_ROLE_FALLBACK_NAMES[STAGE_ROLE_NOT_A_PROSPECT]]: "prospect",
+};
+
 // Does this stage row carry `role`? Trusts the stamp where there is one, so a stage renamed
 // to something that happens to match another role's old name is still itself.
 const stageHasRole = (stage, role) => (
@@ -1856,6 +1864,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // patients who have reached treatment with a figure that includes those who
             // never will.
             hideAllStages={onConsultationTab}
+            // Branch Leads only: its six cards fit one row on a phone once shortened. The
+            // Consultation pills are more than a row can hold and keep wrapping five across,
+            // and so does a Pre-Sales-fed branch's strip, which keeps every stage (see
+            // leadPillStages) -- six is the most a phone row takes.
+            phoneLabels={onConsultationTab ? undefined : BRANCH_LEADS_PHONE_LABELS}
+            phoneRow={!onConsultationTab && leadPillStages.length <= 5}
             testid="branch-metric"
             plain
           />
