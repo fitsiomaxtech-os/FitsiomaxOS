@@ -1045,20 +1045,22 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
  * they work through, so it no longer takes a slot alongside them.
  */
 export const HeadPhysioCalendarModal = ({ branchId, onClose }) => (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-3" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="hp-calendar-modal">
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-2 sm:p-3" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="hp-calendar-modal">
     <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-      {/* Black, not slate. The grey read as a disabled bar rather than a header, and it
-          is the same grey the phone nav uses two levels down. */}
-      <div className="flex items-center justify-between bg-slate-900 px-6 py-4 text-white">
+      {/* Black, not slate, from tablet up. The grey read as a disabled bar rather than a
+          header, and it is the same grey the phone nav uses two levels down. On a phone
+          the header is plain white with a rule under it: a solid black band took a
+          sixth of a small screen to say "My Calendar". */}
+      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 text-slate-900 sm:border-b-0 sm:bg-slate-900 sm:px-6 sm:py-4 sm:text-white">
         <div className="flex items-center gap-2.5">
           <CalendarClock className="h-5 w-5" />
-          <p className="text-lg font-bold">My Calendar</p>
+          <p className="text-base font-bold sm:text-lg">My Calendar</p>
         </div>
         <button onClick={onClose} className="rounded-lg border-2 border-orange-200 bg-orange-100 p-2 text-orange-600 hover:bg-orange-200" data-testid="hp-calendar-modal-close">
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5">
         <MyCalendarTab branchId={branchId} />
       </div>
     </div>
@@ -1194,7 +1196,9 @@ function MyCalendarTab({ branchId }) {
     <div className="space-y-4" data-testid="hp-calendar-tab">
       {/* The filter decides what the grid under it is counting, so it sits above: read
           top-down it says "show me X", then "here is where X falls". */}
-      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1" data-testid="hp-calendar-filter">
+      {/* Two by two on a phone: four across doesn't fit there, and wrapping left
+          Available alone on a second line. From tablet up, the one row. */}
+      <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-wrap" data-testid="hp-calendar-filter">
         {CALENDAR_FILTERS.map((f) => {
           const active = kindFilter === f.key;
           return (
@@ -1202,7 +1206,7 @@ function MyCalendarTab({ branchId }) {
               key={f.key}
               type="button"
               onClick={() => { setKindFilter(f.key); setSelectedDate(null); }}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition sm:justify-start ${active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
               data-testid={`hp-calendar-filter-${f.key}`}
             >
               {f.key !== "all" && <span className={`h-2 w-2 rounded-full ${SLOT_KINDS[f.key].dot}`} aria-hidden />}
@@ -1223,7 +1227,7 @@ function MyCalendarTab({ branchId }) {
           onBack={() => setSelectedDate(null)}
         />
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white p-4" data-testid="hp-calendar-month">
+        <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:p-4" data-testid="hp-calendar-month">
           <div className="mb-3 flex items-center justify-between">
             <button type="button" onClick={() => shiftMonth(-1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Previous month" data-testid="hp-calendar-prev-month">
               <ChevronLeft className="h-4 w-4" />
@@ -1281,7 +1285,7 @@ function MyCalendarTab({ branchId }) {
 /** One day's slots, reached by picking that day out of the month. */
 function DaySlots({ date, slots, booked, onBack }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4" data-testid={`hp-calendar-dayview-${date}`}>
+    <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4" data-testid={`hp-calendar-dayview-${date}`}>
       <div className="mb-3 flex items-center gap-2">
         <button type="button" onClick={onBack} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Back to the month" data-testid="hp-calendar-back">
           <ChevronLeft className="h-4 w-4" />
