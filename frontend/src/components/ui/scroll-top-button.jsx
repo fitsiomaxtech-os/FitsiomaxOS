@@ -4,7 +4,8 @@ import { ArrowUp } from "lucide-react";
 /**
  * A round "back to top" arrow for a long phone list: it stays out of sight until the
  * page has been scrolled down past `threshold` pixels, then fades in at the bottom right,
- * clear of the slate bottom nav, and one tap brings the page back to the top. The user
+ * clear of the slate bottom nav, at 80% opacity so the row under it still shows through
+ * (the user asked for 80%), and one tap brings the page back to the top. The user
  * asked for it so the bottom of a long lead list isn't a long swipe back up.
  *
  * It watches the window because that is what scrolls on these screens: CRMPage is a
@@ -38,7 +39,7 @@ export const ScrollTopButton = ({ threshold = 400, className = "md:hidden", ...p
       aria-hidden={!shown}
       tabIndex={shown ? 0 : -1}
       className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg shadow-slate-900/20 transition-all duration-200 active:bg-sky-700 ${
-        shown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
+        shown ? "translate-y-0 opacity-80" : "pointer-events-none translate-y-3 opacity-0"
       } ${className}`}
       {...props}
     >
