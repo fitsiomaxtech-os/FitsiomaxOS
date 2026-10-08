@@ -2294,6 +2294,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 const rowStage = rowStageName(lead);
                 const hex = rowStage ? stageColor(rowStage) : null;
                 const wa = waNumber(lead.phone);
+                const city = cityAnswer(lead);
+                // Patient number, phone and city: one dotted line from sm up, as the reference
+                // card has them. Below sm the Call and WhatsApp pair leaves about 100px beside
+                // it, so the parts stack one to a line instead of wrapping mid-line and
+                // stranding a dot on a line of its own.
+                const idLine = [lead.patient_number, lead.phone || "—", city].filter(Boolean);
+                const slot = apptSlotLabel(lead);
+                const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
+                const np = showNotProspectColumns ? notProspectLabel(lead) : null;
+                const hasDetails = lead.email || slot || fu || np?.reminder || lead.assigned_physio_name;
                 return (
                   // A div, not a button: the Call and WhatsApp actions below are
                   // themselves interactive, and a button inside a button is invalid
@@ -2306,105 +2316,99 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedLead(lead); }
                     }}
-                    className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-left transition active:bg-slate-50"
+                    className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition active:bg-slate-50 sm:p-4"
                     data-testid={`branch-card-${lead.id}`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                    {/* One row, as the reference card draws it: the avatar, then two lines
+                        beside it — the name across from the stage, and the number across
+                        from Call and WhatsApp. Two flex rows rather than one grid: a grid
+                        column is as wide as its widest cell, so the badge's would take the
+                        buttons' width and cut a 412px phone's name off at "Amreen Offline
+                        Fi…". Anything a stage adds (appointment, follow-up, reminder) drops
+                        under the name; the Updated date is gone. */}
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:h-12 sm:w-12 sm:text-base">
                         {lead.name?.charAt(0)?.toUpperCase() || "?"}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="truncate font-semibold text-slate-900">{lead.name}<TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></span>
+                      <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="min-w-0 truncate text-[15px] font-semibold leading-tight text-slate-900 sm:text-base">
+                            {lead.name}<TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact />
+                          </p>
                           <span
-                            className="shrink-0 rounded-[5px] border px-2 py-0.5 text-[10px] font-medium"
+                            className="shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:text-xs"
                             style={hex ? { background: `${hex}14`, color: hex, border: `1px solid ${hex}33` } : { background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}
                           >
                             {rowStage ? rowStage : "—"}
                           </span>
                         </div>
-                        {lead.patient_number && <p className="truncate font-mono text-[10px] text-slate-400">{lead.patient_number}</p>}
-                        <p className="mt-1 truncate text-xs text-slate-600">
-                          {lead.phone || "—"}
-                          {/* Beside the phone, not under it. The card already runs five
-                              rows deep and a city is two words — its own line would push
-                              the appointment, which is what this card is opened for, off
-                              the bottom of a phone's first screenful. */}
-                          {(() => {
-                            const city = cityAnswer(lead);
-                            return city ? <span className="text-slate-400"> · {city}</span> : null;
-                          })()}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="flex min-w-0 flex-col text-[11px] font-medium leading-snug text-slate-400 sm:flex-row sm:flex-wrap sm:gap-x-1.5 sm:text-xs">
+                            {idLine.flatMap((part, i) => [
+                              i > 0 && <span key={`dot-${i}`} className="hidden sm:inline" aria-hidden="true">•</span>,
+                              <span key={i} className="truncate">{part}</span>,
+                            ])}
+                          </p>
+                          {/* Reaching the patient is the commonest thing done from this list,
+                              and on a phone it was three taps deep behind the lead popup.
+                              Anchors rather than buttons so tel: and the WhatsApp handoff are
+                              the browser's own — and stopPropagation so tapping one doesn't
+                              also open the lead behind it. */}
+                          {wa && (
+                            <div className="flex shrink-0 gap-1 sm:gap-2">
+                              <a
+                                href={`tel:${wa}`}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 active:bg-slate-100 sm:h-10 sm:gap-1.5 sm:px-4 sm:text-sm"
+                                data-testid={`branch-card-call-${lead.id}`}
+                              >
+                                <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Call
+                              </a>
+                              <a
+                                href={`https://wa.me/${wa}`}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-[#25D366]/40 bg-[#25D366]/10 px-2 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20 sm:h-10 sm:gap-1.5 sm:px-4 sm:text-sm"
+                                data-testid={`branch-card-whatsapp-${lead.id}`}
+                              >
+                                <WhatsAppIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> WhatsApp
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {hasDetails && (
+                      <div className="mt-1.5 min-w-0 space-y-0.5 pl-[52px] sm:mt-2.5 sm:pl-16">
                         {lead.email && <p className="truncate text-xs text-slate-500">{lead.email}</p>}
-                        {(() => {
-                          const slot = apptSlotLabel(lead);
-                          if (!slot) return null;
-                          return (
-                            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-appt-${lead.id}`}>
-                              <Calendar className="h-3 w-3 text-slate-400" />
-                              <span className="font-semibold text-slate-700">{[slot.date, slot.time].filter(Boolean).join(" · ")}</span>
-                              {!lead.assigned_physio_name && <span className="font-medium text-amber-600">Pre-Sales request</span>}
-                            </p>
-                          );
-                        })()}
+                        {slot && (
+                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-appt-${lead.id}`}>
+                            <Calendar className="h-3 w-3 text-slate-400" />
+                            <span className="font-semibold text-slate-700">{[slot.date, slot.time].filter(Boolean).join(" · ")}</span>
+                            {!lead.assigned_physio_name && <span className="font-medium text-amber-600">Pre-Sales request</span>}
+                          </p>
+                        )}
                         {/* The same Follow Up line the table draws, on the same stage and
                             under the same rule. A phone is where a branch actually works a
                             call list, so leaving this to the desk table would hide it from
                             the reader most likely to be looking for it. */}
-                        {showFollowUpColumn && (() => {
-                          const fu = followUpSlotLabel(lead);
-                          if (!fu) return null;
-                          return (
-                            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-followup-${lead.id}`}>
-                              <Clock className={`h-3 w-3 ${fu.overdue ? "text-rose-500" : "text-slate-400"}`} />
-                              <span className={`font-semibold ${fu.overdue ? "text-rose-600" : "text-slate-700"}`}>{[fu.date, fu.time].filter(Boolean).join(" · ")}</span>
-                              {fu.overdue && <span className="font-medium text-rose-500">Overdue</span>}
-                            </p>
-                          );
-                        })()}
-                        {showNotProspectColumns && (() => {
-                          const np = notProspectLabel(lead);
-                          if (!np.reminder) return null;
-                          return (
-                            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-reminder-${lead.id}`}>
-                              <Bell className={`h-3 w-3 ${np.due ? "text-rose-500" : "text-slate-400"}`} />
-                              <span className="text-slate-500">Reminder call</span>
-                              <span className={`font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
-                              <span className={`font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
-                            </p>
-                          );
-                        })()}
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-slate-400">
-                          {lead.assigned_physio_name && <span className="truncate">Physio: {lead.assigned_physio_name}</span>}
-                          <span>Updated {(lead.updated_at || "").slice(0, 10)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Reaching the patient is the commonest thing done from this list, and
-                        on a phone it was three taps deep behind the lead popup. Anchors
-                        rather than buttons so tel: and the WhatsApp handoff are the
-                        browser's own — and stopPropagation so tapping one doesn't also
-                        open the lead behind it. */}
-                    {wa && (
-                      <div className="mt-2.5 flex gap-2 border-t border-slate-100 pt-2.5">
-                        <a
-                          href={`tel:${wa}`}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 active:bg-slate-100"
-                          data-testid={`branch-card-call-${lead.id}`}
-                        >
-                          <Phone className="h-3.5 w-3.5" /> Call
-                        </a>
-                        <a
-                          href={`https://wa.me/${wa}`}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#25D366]/40 bg-[#25D366]/10 py-2 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20"
-                          data-testid={`branch-card-whatsapp-${lead.id}`}
-                        >
-                          <WhatsAppIcon className="h-3.5 w-3.5" /> WhatsApp
-                        </a>
+                        {fu && (
+                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-followup-${lead.id}`}>
+                            <Clock className={`h-3 w-3 ${fu.overdue ? "text-rose-500" : "text-slate-400"}`} />
+                            <span className={`font-semibold ${fu.overdue ? "text-rose-600" : "text-slate-700"}`}>{[fu.date, fu.time].filter(Boolean).join(" · ")}</span>
+                            {fu.overdue && <span className="font-medium text-rose-500">Overdue</span>}
+                          </p>
+                        )}
+                        {np?.reminder && (
+                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-reminder-${lead.id}`}>
+                            <Bell className={`h-3 w-3 ${np.due ? "text-rose-500" : "text-slate-400"}`} />
+                            <span className="text-slate-500">Reminder call</span>
+                            <span className={`font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
+                            <span className={`font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
+                          </p>
+                        )}
+                        {lead.assigned_physio_name && <p className="truncate text-[10px] text-slate-400">Physio: {lead.assigned_physio_name}</p>}
                       </div>
                     )}
                   </div>
