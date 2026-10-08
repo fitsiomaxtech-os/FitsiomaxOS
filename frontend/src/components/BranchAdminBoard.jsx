@@ -3857,17 +3857,20 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             colours. Every chip in it had been picked to survive that background: white on
             20% white, a name with no colour of its own inheriting the band's. Those are
             set against the page now instead. */}
-        <div className="relative border-b border-slate-200 bg-white px-5 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200">{avatarFirstChar}</span>
-              <div>
+        {/* On a phone the avatar, the name block and the buttons share one centre line,
+            and the padding is the same 16px the tabs and cards below start at. Top-aligned
+            buttons beside a centred avatar read as three things that missed each other. */}
+        <div className="relative border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex items-center justify-between gap-2 sm:items-start sm:gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
+              <div className="min-w-0">
                 <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /></p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {lead.patient_number && (
-                    <span className="rounded-[5px] bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
+                    <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
                   )}
-                  <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700" data-testid="branch-lead-stage">
+                  <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 sm:px-2.5" data-testid="branch-lead-stage">
                     {/* Named the same way the row that opened this popup was: opened from
                         Leads it reads Leads, and the pipeline below highlights Leads too. */}
                     {headerStageName ? headerStageName : "No Stage"}
@@ -3891,12 +3894,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   <ArrowLeftRight className="h-3.5 w-3.5" />
                 </button>
               )}
+              {/* Icon only on a phone, the same square as Branch Transfer beside it; the
+                  word comes back from sm up, where the header has room for it. */}
               <button
                 onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-1.5 rounded-[5px] border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+                title="Edit"
+                aria-label="Edit"
+                className="inline-flex items-center gap-1.5 rounded-[5px] border border-slate-200 bg-white p-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 sm:px-2.5 sm:py-1"
                 data-testid="branch-lead-edit"
               >
-                <Pencil className="h-3.5 w-3.5" /> Edit
+                <Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit</span>
               </button>
               <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="branch-lead-close">
                 <X className="h-4 w-4" />
@@ -3906,7 +3913,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
         </div>
 
         {/* Pill tabs */}
-        <div className="flex flex-wrap gap-1.5 border-b border-slate-100 bg-slate-50/60 px-5 py-2.5" data-testid="branch-lead-tabs">
+        <div className="flex flex-wrap gap-1.5 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5" data-testid="branch-lead-tabs">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -3919,7 +3926,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50/30 p-5" data-testid="branch-lead-content">
+        <div className="flex-1 overflow-y-auto bg-slate-50/30 p-4 sm:p-5" data-testid="branch-lead-content">
           {activeTab === "overview" && (
             <div className="space-y-3">
               <div className="overflow-hidden rounded-xl border border-sky-100 bg-white shadow-sm">
@@ -4161,9 +4168,18 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><ChevronRight className="h-4 w-4" /></span>
                   <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Pipeline Stage</p>
                 </div>
-                <div className="flex flex-wrap gap-2 px-4 py-3">
+                {/* Three equal columns on a phone, so the six pills sit in two even rows
+                    instead of wrapping wherever their widths happen to break. From sm up
+                    they go back to a wrapping row of natural widths. */}
+                <div className="grid grid-cols-3 gap-1.5 px-3 py-3 sm:flex sm:flex-wrap sm:gap-2 sm:px-4">
                   {(pipelineStages || []).map((s) => {
                     const stage = s.name;
+                    // "Appointment Date & Time" is too long for a third of a phone, so
+                    // the cell says Appointment there. Only a trailing "Date & Time" is
+                    // dropped: a stage renamed to anything else keeps its own name.
+                    const phoneLabel = stage === appointmentStageName
+                      ? (stage.replace(/\s*date\s*(&|and)\s*time\s*$/i, "") || stage)
+                      : stage;
                     // The mirrored "Leads" pill reads the lead's Pre-Sales stage instead of
                     // its branch stage, and is never a move target: it exists to show where
                     // the lead already is, and writing to it would move the lead inside the
@@ -4254,11 +4270,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         disabled={isActive || notYetReached || isMirror || blockedFromAppointment}
                         onClick={handleClick}
                         title={blockedFromAppointment ? `${stage} is not reachable from Appointment — the consultation moves the patient on from here` : undefined}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:shadow-md disabled:cursor-not-allowed ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
+                        className={`rounded-lg px-1 py-1.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:px-3 sm:text-xs ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid={`branch-stage-btn-${stage}`}
                       >
-                        {stage}
+                        {phoneLabel === stage ? stage : (
+                          <>
+                            <span className="sm:hidden">{phoneLabel}</span>
+                            <span className="hidden sm:inline">{stage}</span>
+                          </>
+                        )}
                       </button>
                     );
                   })}
@@ -4275,7 +4296,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         disabled={isActive}
                         onClick={() => setCancelDraft(true)}
                         title="Moves this lead to Cancel in Branch Consultation"
-                        className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90"
+                        className="rounded-lg px-1 py-1.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:px-3 sm:text-xs"
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid="branch-stage-btn-consultation-cancel"
                       >
