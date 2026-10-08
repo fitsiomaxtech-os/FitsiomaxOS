@@ -10,6 +10,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
@@ -6569,6 +6570,48 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
             const rowStage = rowStageName(l);
             const hex = stageColor(rowStage);
             const wa = waNumber(l.phone);
+            const openCard = () => { if (selectMode) toggleSelectOne(l.id); else { setSelectedLead(l); setDetailTab("overview"); } };
+            // Branch Admin's Consultation and House Visit tabs draw the same one-row card as
+            // its Branch Leads list (see ui/lead-row-card), so the three read as one list
+            // split three ways. Head Physio, the other board with phone cards, keeps the
+            // stacked card below.
+            if (viewerRole === "branch_admin") {
+              const picked = selectMode && selectedIds.has(l.id);
+              return (
+                <LeadRowCard
+                  key={l.id}
+                  id={l.id}
+                  name={l.name}
+                  nameAddon={<><TransferredTag lead={l} className="ml-1" compact /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" compact /></>}
+                  mark={selectMode ? (
+                    <input type="checkbox" checked={selectedIds.has(l.id)} readOnly className="h-4 w-4" data-testid={`cons-card-select-${l.id}`} />
+                  ) : null}
+                  badge={l[stageField] || "—"}
+                  badgeColor={hex}
+                  idLine={[l.patient_number, l.phone || "—"]}
+                  wa={wa}
+                  onOpen={openCard}
+                  className={picked ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"}
+                  testid="cons-card"
+                  details={(l.appointment_date || l.assigned_physio_name) ? (
+                    <>
+                      {l.appointment_date && (
+                        <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]">
+                          <Calendar className="h-3 w-3 text-slate-400" />
+                          <span className="font-semibold text-slate-700">{[l.appointment_date, l.appointment_time ? to12h(l.appointment_time) : ""].filter(Boolean).join(" · ")}</span>
+                        </p>
+                      )}
+                      {l.assigned_physio_name && (
+                        <p className="flex min-w-0 items-center text-[10px] text-slate-400">
+                          <span className="truncate">Expert: {l.assigned_physio_name}</span>
+                          {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
+                        </p>
+                      )}
+                    </>
+                  ) : null}
+                />
+              );
+            }
             return (
               // A div, not a button: the Call and WhatsApp actions below are interactive
               // themselves, and a button inside a button is markup the browser resolves

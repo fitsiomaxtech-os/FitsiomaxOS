@@ -52,6 +52,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   scheduleBranchAppointment,
   getBranches,
@@ -657,14 +658,6 @@ const FollowUpHeaderCell = ({ show, widthClass }) => (show ? (
     <span className="sr-only">Follow-up date &amp; time</span>
   </th>
 ) : null);
-
-/** lucide has no WhatsApp glyph and the brand mark can't be approximated with a generic
- *  chat bubble — staff scan for this exact shape. */
-const WhatsAppIcon = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884a9.82 9.82 0 016.988 2.896 9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.885-9.885 9.885M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.359.101 11.943c0 2.096.549 4.142 1.595 5.945L0 24l6.305-1.654a11.94 11.94 0 005.71 1.454h.005c6.585 0 11.946-5.359 11.949-11.945a11.87 11.87 0 00-3.44-8.406" />
-  </svg>
-);
 
 /** 128 bits from the platform CSPRNG — the share link's only key, so it can't be a
  *  counter or anything derived from the patient's own details. */
@@ -2292,95 +2285,28 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               }
               return visible.map((lead) => {
                 const rowStage = rowStageName(lead);
-                const hex = rowStage ? stageColor(rowStage) : null;
-                const wa = waNumber(lead.phone);
-                const city = cityAnswer(lead);
-                // Patient number, phone and city: one dotted line from sm up, as the reference
-                // card has them. Below sm the Call and WhatsApp pair leaves about 100px beside
-                // it, so the parts stack one to a line instead of wrapping mid-line and
-                // stranding a dot on a line of its own.
-                const idLine = [lead.patient_number, lead.phone || "—", city].filter(Boolean);
                 const slot = apptSlotLabel(lead);
                 const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
                 const hasDetails = lead.email || slot || fu || np?.reminder || lead.assigned_physio_name;
+                // The reference card's single row (see ui/lead-row-card). Reaching the patient
+                // is the commonest thing done from this list, so Call and WhatsApp sit on the
+                // card rather than three taps deep behind the lead popup. Anything a stage
+                // adds (appointment, follow-up, reminder) goes under the name.
                 return (
-                  // A div, not a button: the Call and WhatsApp actions below are
-                  // themselves interactive, and a button inside a button is invalid
-                  // markup that browsers resolve by dropping one of them.
-                  <div
+                  <LeadRowCard
                     key={lead.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedLead(lead)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedLead(lead); }
-                    }}
-                    className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition active:bg-slate-50 sm:p-4"
-                    data-testid={`branch-card-${lead.id}`}
-                  >
-                    {/* One row, as the reference card draws it: the avatar, then two lines
-                        beside it — the name across from the stage, and the number across
-                        from Call and WhatsApp. Two flex rows rather than one grid: a grid
-                        column is as wide as its widest cell, so the badge's would take the
-                        buttons' width and cut a 412px phone's name off at "Amreen Offline
-                        Fi…". Anything a stage adds (appointment, follow-up, reminder) drops
-                        under the name; the Updated date is gone. */}
-                    <div className="flex items-center gap-3 sm:gap-4">
-                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:h-12 sm:w-12 sm:text-base">
-                        {lead.name?.charAt(0)?.toUpperCase() || "?"}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="min-w-0 truncate text-[15px] font-semibold leading-tight text-slate-900 sm:text-base">
-                            {lead.name}<TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact />
-                          </p>
-                          <span
-                            className="shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:text-xs"
-                            style={hex ? { background: `${hex}14`, color: hex, border: `1px solid ${hex}33` } : { background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}
-                          >
-                            {rowStage ? rowStage : "—"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="flex min-w-0 flex-col text-[11px] font-medium leading-snug text-slate-400 sm:flex-row sm:flex-wrap sm:gap-x-1.5 sm:text-xs">
-                            {idLine.flatMap((part, i) => [
-                              i > 0 && <span key={`dot-${i}`} className="hidden sm:inline" aria-hidden="true">•</span>,
-                              <span key={i} className="truncate">{part}</span>,
-                            ])}
-                          </p>
-                          {/* Reaching the patient is the commonest thing done from this list,
-                              and on a phone it was three taps deep behind the lead popup.
-                              Anchors rather than buttons so tel: and the WhatsApp handoff are
-                              the browser's own — and stopPropagation so tapping one doesn't
-                              also open the lead behind it. */}
-                          {wa && (
-                            <div className="flex shrink-0 gap-1 sm:gap-2">
-                              <a
-                                href={`tel:${wa}`}
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 active:bg-slate-100 sm:h-10 sm:gap-1.5 sm:px-4 sm:text-sm"
-                                data-testid={`branch-card-call-${lead.id}`}
-                              >
-                                <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Call
-                              </a>
-                              <a
-                                href={`https://wa.me/${wa}`}
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-[#25D366]/40 bg-[#25D366]/10 px-2 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20 sm:h-10 sm:gap-1.5 sm:px-4 sm:text-sm"
-                                data-testid={`branch-card-whatsapp-${lead.id}`}
-                              >
-                                <WhatsAppIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> WhatsApp
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {hasDetails && (
-                      <div className="mt-1.5 min-w-0 space-y-0.5 pl-[52px] sm:mt-2.5 sm:pl-16">
+                    id={lead.id}
+                    name={lead.name}
+                    nameAddon={<><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
+                    badge={rowStage || "—"}
+                    badgeColor={rowStage ? stageColor(rowStage) : null}
+                    idLine={[lead.patient_number, lead.phone || "—", cityAnswer(lead)]}
+                    wa={waNumber(lead.phone)}
+                    onOpen={() => setSelectedLead(lead)}
+                    testid="branch-card"
+                    details={hasDetails ? (
+                      <>
                         {lead.email && <p className="truncate text-xs text-slate-500">{lead.email}</p>}
                         {slot && (
                           <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-appt-${lead.id}`}>
@@ -2409,9 +2335,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           </p>
                         )}
                         {lead.assigned_physio_name && <p className="truncate text-[10px] text-slate-400">Physio: {lead.assigned_physio_name}</p>}
-                      </div>
-                    )}
-                  </div>
+                      </>
+                    ) : null}
+                  />
                 );
               });
             })()}

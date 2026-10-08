@@ -5,8 +5,10 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StatTile } from "@/components/ui/stat-tile";
+import { LeadRowCard } from "@/components/ui/lead-row-card";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
+import { waNumber } from "@/lib/phone";
 
 // Three views onto one pipeline: waiting to be sent, sent and still outstanding, done.
 // Each row already names the Head Physio it went to, so the branch can see who has what
@@ -16,6 +18,14 @@ const SUB_TABS = [
   { key: "pending", label: "Pending Review", icon: Clock, color: "#0284c7" },
   { key: "complete", label: "Review Complete", icon: CheckCircle2, color: "#059669" },
 ];
+
+// A review's status as its phone card's badge, in its sub-tab's own colour. Overdue, a
+// sent review past its date, is worked out per row and shown over this.
+const REVIEW_STATUS = {
+  send_to_review: { label: "Send to Review", color: "#d97706" },
+  sent: { label: "Pending", color: "#0284c7" },
+  completed: { label: "Completed", color: "#059669" },
+};
 
 /**
  * The date a review means on each tab, and what to call it.
@@ -229,65 +239,63 @@ export const BranchReviewPanel = ({ branchId }) => {
   // Same row as a card, for phones. Seven columns can't hold their width there — the
   // table scrolled sideways and left Physio, Weeks, the Send button and View all
   // off-screen, so the one thing this tab exists to do couldn't be reached.
-  const ReviewCard = ({ r, index }) => {
+  //
+  // Drawn as the one-row card Branch Leads, Consultation and House Visit use (see
+  // ui/lead-row-card): the review's status where they show a stage, Call and WhatsApp
+  // beside the numbers. Tapping the card is View, as tapping a lead opens it; Send and
+  // Reassign stay a button of their own under the details, since sending is the thing
+  // this tab is for.
+  const ReviewCard = ({ r }) => {
     const overdue = r.status === "sent" && r.review_date && r.review_date < (data.today || "");
+    const status = overdue ? { label: "Overdue", color: "#e11d48" } : REVIEW_STATUS[r.status];
+    // A button inside the card: its own click and key presses must not also open View.
+    const own = (fn) => ({
+      onClick: (e) => { e.stopPropagation(); fn(); },
+      onKeyDown: (e) => e.stopPropagation(),
+    });
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-3" data-testid={`branch-review-card-${r.id}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-slate-800">
-              <span className="mr-1.5 font-semibold text-slate-300">{index + 1}.</span>{r.lead_name}
+      <LeadRowCard
+        id={r.id}
+        name={r.lead_name}
+        badge={status?.label}
+        badgeColor={status?.color}
+        idLine={[r.patient_number, r.phone || "—"]}
+        wa={waNumber(r.phone)}
+        onOpen={() => setViewing(r)}
+        testid="branch-review-card"
+        details={(
+          <>
+            <p className="truncate text-[11px] text-slate-500">
+              <span className="font-semibold text-slate-700">{r.treatment_days} treatment days</span>
+              {r.session_package_name && <> · {r.session_package_name}</>}
             </p>
-            {r.patient_number && <p className="truncate font-mono text-[10px] text-slate-400">{r.patient_number}</p>}
-          </div>
-          {overdue && <span className="shrink-0 rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">OVERDUE</span>}
-        </div>
-
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">{r.treatment_days} treatment days</span>
-          {r.session_package_name && <span>{r.session_package_name}</span>}
-        </div>
-
-        <dl className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-xs">
-          <div className="flex justify-between gap-2">
-            <dt className="text-slate-400">Phone</dt>
-            <dd className="truncate font-medium text-slate-700">{r.phone || "—"}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-slate-400">Physio</dt>
-            <dd className="truncate font-medium text-slate-700">{r.physio_name || "—"}</dd>
-          </div>
-          {sub !== "send" && (
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-400">CONSULTANT</dt>
-              <dd className="min-w-0 text-right">
+            <p className="truncate text-[10px] text-slate-400">Physio: {r.physio_name || "—"}</p>
+            {sub !== "send" && (
+              <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]">
+                <CalendarIcon className={`h-3 w-3 ${overdue ? "text-rose-500" : "text-slate-400"}`} />
+                <span className={`font-semibold ${overdue ? "text-rose-600" : "text-slate-700"}`}>
+                  {dmy(r.review_date)}{r.review_time ? ` · ${to12h(r.review_time)}` : ""}
+                </span>
                 <span className="truncate font-medium text-violet-700">{r.head_physio_name || "—"}</span>
-                <p className={`text-[10px] ${overdue ? "text-rose-600" : "text-slate-400"}`}>
-                  review {dmy(r.review_date)}{r.review_time ? ` · ${to12h(r.review_time)}` : ""}
-                  {r.status === "completed" && <span className="ml-1 font-semibold text-emerald-600">· completed</span>}
-                </p>
-              </dd>
-            </div>
-          )}
-        </dl>
-
-        {r.reason && <p className="mt-1.5 text-[10px] text-slate-400">{r.reason}</p>}
-
-        <div className="mt-2.5 flex gap-2 border-t border-slate-100 pt-2.5">
-          {r.status === "send_to_review" ? (
-            <Button size="sm" className="flex-1 bg-amber-600 text-xs text-white hover:bg-amber-700" onClick={() => openSend(r)} data-testid={`branch-review-card-send-${r.id}`}>
-              <Send className="mr-1.5 h-3.5 w-3.5" /> Send to CONSULTANT
-            </Button>
-          ) : r.status === "sent" ? (
-            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => openSend(r)} data-testid={`branch-review-card-reassign-${r.id}`}>
-              Reassign
-            </Button>
-          ) : null}
-          <Button size="sm" variant="outline" className={`text-xs ${r.status === "completed" ? "flex-1" : ""}`} onClick={() => setViewing(r)} data-testid={`branch-review-card-view-${r.id}`}>
-            View
-          </Button>
-        </div>
-      </div>
+              </p>
+            )}
+            {r.reason && <p className="text-[10px] text-slate-400">{r.reason}</p>}
+            {r.status === "send_to_review" ? (
+              <div className="pt-1.5">
+                <Button size="sm" className="bg-amber-600 text-xs text-white hover:bg-amber-700" {...own(() => openSend(r))} data-testid={`branch-review-card-send-${r.id}`}>
+                  <Send className="mr-1.5 h-3.5 w-3.5" /> Send to CONSULTANT
+                </Button>
+              </div>
+            ) : r.status === "sent" ? (
+              <div className="pt-1.5">
+                <Button size="sm" variant="outline" className="text-xs" {...own(() => openSend(r))} data-testid={`branch-review-card-reassign-${r.id}`}>
+                  Reassign
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )}
+      />
     );
   };
 
@@ -414,7 +422,7 @@ export const BranchReviewPanel = ({ branchId }) => {
       ) : (
         <>
         <div className="space-y-2 md:hidden" data-testid="branch-review-mobile">
-          {rows.map((r, i) => <ReviewCard key={r.id} r={r} index={i} />)}
+          {rows.map((r) => <ReviewCard key={r.id} r={r} />)}
         </div>
 
         <div className="hidden overflow-auto rounded-xl border border-slate-200 bg-white md:block">
