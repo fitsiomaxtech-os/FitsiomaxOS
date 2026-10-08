@@ -601,12 +601,11 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
       <div className={`space-y-4 ${profileOpen ? "hidden sm:block" : ""}`} data-testid="hp-work-view">
           {/* The board's navigation and its stage filter in one. Each card carries the
               count behind it, so the day's workload reads without opening anything.
-              Two-up on phones, four across from tablet; the bottom bar stays for
-              thumb reach. */}
-          {/* items-stretch on the phone row too, so the cards come out level there as well
-              as in the grid — they hold different amounts of text and the row has to answer
-              to the tallest rather than each card to itself. */}
-          <div className={`-mx-1 flex items-stretch gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid ${TAB_GRID_COLS[VISIBLE_WORK_TABS.length] || "sm:grid-cols-4"} sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0`} data-testid="hp-work-tabs">
+              From tablet up only: on a phone the bottom bar is the navigation, and a
+              second row of the same tabs above the list only pushed the patients down. */}
+          {/* items-stretch so the cards come out level — they hold different amounts of
+              text and the row has to answer to the tallest rather than each card to itself. */}
+          <div className={`hidden items-stretch gap-3 sm:grid ${TAB_GRID_COLS[VISIBLE_WORK_TABS.length] || "sm:grid-cols-4"}`} data-testid="hp-work-tabs">
             {VISIBLE_WORK_TABS.map((t) => {
               const n = t.key === "client_reviews" ? "★"
                 : t.key === "consultations" ? (consultStages[firstStage] || 0)
@@ -630,13 +629,8 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                 : t.key === "review" ? when
                 : t.key === "house_visit" ? `to do ${when}`
                 : `everything ${when}`;
-              // The wrapper keeps the phone's side-scrolling row of fixed-width cards; the
-              // tile itself fills whatever it is given.
               return (
-                // Wider on a phone where the card carries the kind filter in its corner:
-                // at 10.5rem the three buttons and the icon have nowhere to go, and the
-                // card clips rather than wraps. The grid from sm up sizes them equally.
-                <div key={t.key} className={`h-full shrink-0 sm:w-auto ${t.key === "all" ? "w-[13.5rem]" : "w-[10.5rem]"}`}>
+                <div key={t.key} className="h-full">
                   {ledgerCards ? (
                     <LedgerCard
                       label={t.label}
@@ -781,6 +775,27 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                   it: a Consultant at Parrys reads Parrys, not the company. "all" is the
                   no-branch-assigned case, where there is nothing to hold them to. */}
               <ClientReviewsPanel branchId={effectiveBranchId === "all" ? null : effectiveBranchId} mine={mine} />
+            </div>
+          )}
+
+          {/* Phone only: the All card that carries this filter in its corner isn't drawn
+              on a phone, so the filter sits over the list instead, styled like House
+              Visit's row. */}
+          {workTab === "all" && (
+            <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:hidden" data-testid="hp-all-kind-filter-phone">
+              {ALL_KINDS.map((k) => (
+                <button
+                  key={k.key}
+                  type="button"
+                  onClick={() => setAllKind(k.key)}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    allKind === k.key ? "bg-teal-50 text-teal-700 ring-1 ring-teal-200" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                  data-testid={`hp-all-kind-phone-${k.key}`}
+                >
+                  {k.label}
+                </button>
+              ))}
             </div>
           )}
 
@@ -988,7 +1003,8 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
       {loading && <div className="fixed bottom-20 right-4 z-40 rounded-md bg-slate-900 px-3 py-2 text-sm text-white sm:bottom-4">Loading...</div>}
 
       {/* Mobile bottom bar — the Head Physio works this board on a phone between
-          patients, where the cards at the top are a stretch away. Same tabs, thumb-high. */}
+          patients, and this is the board's only tab row there: the summary cards are
+          drawn from tablet up. Same tabs, thumb-high. */}
       {/* Glyphs only, like the Physio board's bar: with My Profile added a fourth
           column leaves "Weekly Review" nowhere to go but two lines. Each keeps its name in
           title/aria-label for a long press and a screen reader. */}
