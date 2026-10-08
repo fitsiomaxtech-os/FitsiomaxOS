@@ -35,7 +35,8 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  *
  * `glance` is the lighter card Branch Leads draws on All Stages, where the list is the
  * whole branch to be looked over rather than one stage to be worked: no Call or
- * WhatsApp, the stage boxed with a 4px corner instead of a pill, the bin a plain grey
+ * WhatsApp, the stage boxed with a 4px corner and a border (the worked lists' badge has
+ * a 5px corner and none), the bin a plain grey
  * icon, and a grey arrow at the end that says the card opens. The arrow is part of the
  * card, not a button of its own, so tapping it is tapping the card.
  *
@@ -98,7 +99,7 @@ export const LeadRowCard = ({
           <span
             className={glance
               ? "max-w-[120px] shrink-0 truncate rounded-[4px] border px-2 py-0.5 text-[11px] font-medium leading-4 sm:max-w-[160px]"
-              : "max-w-[76px] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium leading-4 sm:max-w-[140px] sm:text-[11px]"}
+              : "max-w-[76px] shrink-0 truncate rounded-[5px] px-2 py-0.5 text-[10px] font-medium leading-4 sm:max-w-[140px] sm:text-[11px]"}
             style={badgeColor
               ? { background: `${badgeColor}1a`, color: badgeColor, borderColor: `${badgeColor}40` }
               : { background: "#f1f5f9", color: "#475569", borderColor: "#e2e8f0" }}
