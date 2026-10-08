@@ -13,6 +13,11 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * round all of them and a thin line between each (`LEAD_ROW_LIST`), the way a mail inbox
  * stacks its rows. The user asked for that over separate cards with space between.
  *
+ * Below sm the box runs the full width of the screen, as the user asked: it steps out
+ * over the page's 12px side padding (CRMPage's px-3, the only side padding between the
+ * screen and any of these lists) and loses its side borders and corners. The row's own
+ * 12px keeps the avatar off the screen edge and in line with the toolbar above.
+ *
  * Below sm, Call and WhatsApp are icon-only squares. With their labels the pair is about
  * 150px wide, and that would leave a 360px phone under 100px for the name. From sm up
  * (the user's own phone is about 720px wide) they carry their labels, as the reference
@@ -52,7 +57,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * they shared this.
  */
 /** The box a list of LeadRowCards sits in: one border round them all, a line between each. */
-export const LEAD_ROW_LIST = "divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white";
+export const LEAD_ROW_LIST = "-mx-3 divide-y divide-slate-200 overflow-hidden border-y border-slate-200 bg-white sm:mx-0 sm:rounded-lg sm:border-x";
 
 export const LeadRowCard = ({
   id,
@@ -82,7 +87,7 @@ export const LeadRowCard = ({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); }
       }}
-      className={`w-full cursor-pointer px-2.5 py-2 text-left transition active:bg-slate-50 ${className}`}
+      className={`w-full cursor-pointer px-3 py-2 text-left transition active:bg-slate-50 ${className}`}
       data-testid={`${testid}-${id}`}
     >
       <div className="flex items-center gap-2">
