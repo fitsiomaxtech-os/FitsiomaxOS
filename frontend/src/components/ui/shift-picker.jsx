@@ -74,7 +74,8 @@ export const ShiftPickerModal = ({
 
   return (
     <CenteredPicker title={title} onClose={onClose} testid="shift-picker-modal">
-      <p className="mb-2 px-1 text-[11px] leading-snug text-slate-500">
+      {/* Desk only — on a phone the ticks and the summary under them say it already. */}
+      <p className="mb-2 hidden px-1 text-[11px] leading-snug text-slate-500 md:block">
         Tick every window this expert works. Two of them — a morning and an evening — opens
         both halves of the day and leaves the hours between them closed.
       </p>

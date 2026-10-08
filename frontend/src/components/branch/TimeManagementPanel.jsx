@@ -141,7 +141,7 @@ function ShiftCard({ shift, onSaved, onDeleted }) {
           onClick={remove}
           disabled={removing}
           title="Delete this shift"
-          className="shrink-0 rounded-md p-1.5 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500"
+          className="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 md:text-slate-300"
           data-testid={`shift-delete-${shift.id}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -212,7 +212,7 @@ const RuleField = ({ label, hint, children }) => (
   <label className="block">
     <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
     {children}
-    {hint && <span className="mt-1 block text-[10px] leading-snug text-slate-400">{hint}</span>}
+    {hint && <span className="mt-1 hidden text-[10px] leading-snug text-slate-400 md:block">{hint}</span>}
   </label>
 );
 
@@ -263,7 +263,7 @@ const WorkingDayCard = ({ branchId }) => {
 
   if (loading || !rules) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-4" data-testid="working-day-loading">
+      <section className="rounded-xl border border-slate-200 bg-white p-3 md:p-4" data-testid="working-day-loading">
         <p className="flex items-center gap-2 text-xs text-slate-400">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading the working day…
         </p>
@@ -275,17 +275,17 @@ const WorkingDayCard = ({ branchId }) => {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white" data-testid="working-day-card">
-      <div className="border-b border-slate-100 bg-slate-50/60 p-4">
+      <div className="border-b border-slate-100 bg-slate-50/60 p-3 md:p-4">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-          <CalendarDays className="h-4 w-4 text-emerald-500" /> Working Day &amp; Week Off
+          <CalendarDays className="h-4 w-4 shrink-0 text-emerald-500" /> Working Day &amp; Week Off
         </h3>
-        <p className="mt-1 text-[11px] text-slate-400">
+        <p className="mt-1 hidden text-[11px] text-slate-400 md:block">
           When your staff are due in, and which days you are closed. HR&apos;s attendance register reads this to
           decide who was on time, who was half a day and who was absent — this is not the patient booking window above.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-4 md:p-4">
         <RuleField label="Day starts">
           <input
             type="time"
@@ -329,12 +329,14 @@ const WorkingDayCard = ({ branchId }) => {
         </RuleField>
       </div>
 
-      <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+      <div className="border-t border-slate-100 px-3 pb-3 pt-3 md:px-4 md:pb-4">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Week off</p>
-        <p className="mt-0.5 text-[10px] text-slate-400">
+        <p className="mt-0.5 hidden text-[10px] text-slate-400 md:block">
           Days nobody at this branch is expected in. They are never counted absent and never cost pay.
         </p>
-        <div className="mt-2 flex flex-wrap gap-1.5" data-testid="working-day-week-offs">
+        {/* All seven in one row on a phone, where 56px buttons wrapped Sunday (and more)
+            onto a line of its own. */}
+        <div className="mt-2 grid grid-cols-7 gap-1 md:flex md:flex-wrap md:gap-1.5" data-testid="working-day-week-offs">
           {DAY_LABELS.map((label, index) => {
             const off = offDays.includes(index);
             return (
@@ -342,7 +344,7 @@ const WorkingDayCard = ({ branchId }) => {
                 key={label}
                 type="button"
                 onClick={() => toggleDay(index)}
-                className={`h-9 w-14 rounded-md border text-xs font-semibold transition ${
+                className={`h-9 w-full min-w-0 rounded-md border text-xs font-semibold transition md:w-14 ${
                   off
                     ? "border-emerald-500 bg-emerald-500 text-white"
                     : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
@@ -361,8 +363,8 @@ const WorkingDayCard = ({ branchId }) => {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
-        <p className="max-w-lg text-[11px] text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-3 md:px-4">
+        <p className="hidden max-w-lg text-[11px] text-slate-400 md:block">
           Saving applies to days already past as well as days to come: attendance is read from these rules, not
           frozen against them. Anything HR marked by hand on the register stays exactly as they marked it.
         </p>
@@ -370,7 +372,7 @@ const WorkingDayCard = ({ branchId }) => {
           size="sm"
           onClick={save}
           disabled={saving}
-          className="h-8 shrink-0 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+          className="h-9 w-full shrink-0 bg-emerald-600 text-xs text-white hover:bg-emerald-700 md:h-8 md:w-auto"
           data-testid="working-day-save"
         >
           {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
@@ -500,20 +502,23 @@ export const TimeManagementPanel = ({ branchId }) => {
   const rostered = experts.filter((e) => e.shift_id).length;
 
   return (
-    <div className="flex flex-col gap-4" data-testid="time-management-root">
+    // Below md (phones, the user's ~720px one included) every caption on this screen is
+    // dropped and the padding tightens, so the controls themselves fill the card. From md
+    // up nothing changes.
+    <div className="flex flex-col gap-3 md:gap-4" data-testid="time-management-root">
       {/* ------------------------------------------------- The windows themselves */}
       <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-definitions">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-4">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-3 md:flex-wrap md:p-4">
           <div className="min-w-0">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-              <Clock className="h-4 w-4 text-violet-500" /> Shift Timings
+              <Clock className="h-4 w-4 shrink-0 text-violet-500" /> Shift Timings
             </h3>
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-1 hidden text-[11px] text-slate-400 md:block">
               The hours this branch runs. Rename them or move either end — a calendar is only ever opened across the shift its expert is on.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button onClick={loadShifts} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh" data-testid="shifts-refresh">
+            <Button onClick={loadShifts} className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600 md:h-9 md:w-9" title="Refresh" aria-label="Refresh" data-testid="shifts-refresh">
               <RefreshCw className="h-4 w-4" />
             </Button>
             <Button
@@ -527,22 +532,25 @@ export const TimeManagementPanel = ({ branchId }) => {
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-3 md:p-4">
           {adding && (
             <div className="mb-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/40 p-3" data-testid="shift-add-form">
-              <div className="flex flex-wrap items-center gap-2">
+              {/* A phone gets three even rows — name, start to end, Add beside Cancel — where
+                  the wrapping row left the times and buttons scattered at whatever width
+                  each happened to need. md:contents hands the buttons back to the one row. */}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 md:flex md:flex-wrap">
                 <Input
                   value={newShift.name}
                   onChange={(e) => setNewShift((s) => ({ ...s, name: e.target.value }))}
                   placeholder="Shift name (e.g. Late Evening)"
-                  className="h-8 min-w-[10rem] flex-1 text-sm"
+                  className="col-span-3 h-8 text-sm md:min-w-[10rem] md:flex-1"
                   data-testid="shift-new-name"
                 />
                 <input
                   type="time"
                   value={newShift.start_time}
                   onChange={(e) => setNewShift((s) => ({ ...s, start_time: e.target.value }))}
-                  className="h-8 rounded-md border border-slate-200 px-2 text-sm text-slate-700"
+                  className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
                   data-testid="shift-new-start"
                 />
                 <span className="text-xs text-slate-400">to</span>
@@ -550,15 +558,17 @@ export const TimeManagementPanel = ({ branchId }) => {
                   type="time"
                   value={newShift.end_time}
                   onChange={(e) => setNewShift((s) => ({ ...s, end_time: e.target.value }))}
-                  className="h-8 rounded-md border border-slate-200 px-2 text-sm text-slate-700"
+                  className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
                   data-testid="shift-new-end"
                 />
-                <Button size="sm" onClick={create} disabled={creating} className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700" data-testid="shift-new-save">
-                  {creating ? "Adding..." : "Add"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewShift(NEW_SHIFT); }} className="h-8 text-xs">
-                  Cancel
-                </Button>
+                <div className="col-span-3 grid grid-cols-2 gap-2 md:contents">
+                  <Button size="sm" onClick={create} disabled={creating} className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700" data-testid="shift-new-save">
+                    {creating ? "Adding..." : "Add"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewShift(NEW_SHIFT); }} className="h-8 text-xs">
+                    Cancel
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -579,13 +589,13 @@ export const TimeManagementPanel = ({ branchId }) => {
 
       {/* ------------------------------------------------- Who works which of them */}
       <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-roster">
-        <div className="border-b border-slate-100 bg-slate-50/60 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="border-b border-slate-100 bg-slate-50/60 p-3 md:p-4">
+          <div className="flex items-center justify-between gap-2 md:flex-wrap">
             <div className="min-w-0">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                <kind.icon className="h-4 w-4 text-violet-500" /> Who Works Which Shift
+                <kind.icon className="h-4 w-4 shrink-0 text-violet-500" /> Who Works Which Shift
               </h3>
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className="mt-1 hidden text-[11px] text-slate-400 md:block">
                 Pick the calendar, then put each {kind.noun} on a shift — or on two, for a morning
                 and an evening. Their day on {kind.label} opens across those hours only, and stays
                 closed in between.
@@ -617,13 +627,17 @@ export const TimeManagementPanel = ({ branchId }) => {
             </p>
           ) : (
             experts.map((expert) => (
-              <div key={expert.id} className="flex flex-wrap items-center gap-3 p-3" data-testid={`roster-row-${expert.id}`}>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+              // A phone lays the row out as a grid: name across from the shift button, the
+              // hours chip under the name. Wrapped as a flex row it dropped the chip and the
+              // button onto lines of their own at whatever width each needed. The placement
+              // classes are inert from md up, where the row is the one flex line again.
+              <div key={expert.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 p-3 md:flex md:flex-wrap md:gap-3" data-testid={`roster-row-${expert.id}`}>
+                <div className="row-span-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
                   {expert.full_name?.charAt(0)?.toUpperCase() || "E"}
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="col-start-2 row-start-1 min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-800">{expert.full_name}</p>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="truncate text-[10px] text-slate-400 md:whitespace-normal">
                     {expert.specialization || kind.noun}
                     {expert.slots_open > 0 && ` · ${expert.slots_open} slot${expert.slots_open > 1 ? "s" : ""} already published`}
                   </p>
@@ -633,7 +647,7 @@ export const TimeManagementPanel = ({ branchId }) => {
                     written out: "8:00 AM – 9:00 PM" for a morning-and-evening consultant
                     would be a working day they do not work. */}
                 <span
-                  className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  className={`col-span-2 col-start-2 row-start-2 justify-self-start shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold md:whitespace-nowrap ${
                     expert.shift_id ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"
                   }`}
                   data-testid={`roster-window-${expert.id}`}
@@ -642,13 +656,13 @@ export const TimeManagementPanel = ({ branchId }) => {
                     ? hoursLabel({ segments: expert.shift_windows, start_time: expert.shift_start, end_time: expert.shift_end })
                     : "Full day (no shift)"}
                 </span>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2">
                   {assigning === expert.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />}
                   <button
                     type="button"
                     onClick={() => setPicking(expert)}
                     disabled={assigning === expert.id}
-                    className="flex max-w-[15rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    className="flex max-w-[9rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 md:max-w-[15rem]"
                     title="The working windows this expert's day is opened across"
                     data-testid={`roster-select-${expert.id}`}
                   >
@@ -663,7 +677,7 @@ export const TimeManagementPanel = ({ branchId }) => {
           )}
         </div>
 
-        <p className="border-t border-slate-100 px-4 py-3 text-[11px] text-slate-400">
+        <p className="hidden border-t border-slate-100 px-4 py-3 text-[11px] text-slate-400 md:block">
           Moving someone to another shift changes the days opened from now on. Slots already published stay
           as they are — close them from <b>{kind.label} → Unsave</b>, so a patient's booked time is never
           dropped by a settings change.
