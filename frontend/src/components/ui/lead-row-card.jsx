@@ -59,6 +59,9 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * icon, and a grey arrow at the end that says the card opens. The arrow is part of the
  * card, not a button of its own, so tapping it is tapping the card.
  *
+ * `arrow` draws that same grey arrow on a worked card, for a list that leaves Call and
+ * WhatsApp off and opens the lead instead (Branch Leads past its Leads pill).
+ *
  * `mark` replaces the initial in the avatar circle — a select-mode checkbox, say.
  * `className` carries the row's fill, so a picked row can be tinted.
  *
@@ -82,6 +85,7 @@ export const LeadRowCard = ({
   onOpen,
   onDelete = null,
   glance = false,
+  arrow = false,
   className = "bg-white",
   testid,
 }) => {
@@ -171,7 +175,7 @@ export const LeadRowCard = ({
             )}
           </div>
         )}
-        {glance && <ChevronRight className="-ml-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
+        {(glance || arrow) && <ChevronRight className="-ml-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
       </div>
       {/* Lined up under the name: the avatar's 32px and the 8px gap after it. */}
       {details && (

@@ -2458,6 +2458,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     // typed-DELETE dialog, same purge. Leads pill only, like Call/WhatsApp.
                     onDelete={showingMirror && canDeleteLeads ? () => setRowDelete(lead) : null}
                     glance={allStages}
+                    // Every pill but Leads opens the lead rather than ringing it, so its
+                    // rows end in the arrow All Stages already draws.
+                    arrow={!showingMirror}
                     testid="branch-card"
                     details={hasDetails ? (
                       <>
