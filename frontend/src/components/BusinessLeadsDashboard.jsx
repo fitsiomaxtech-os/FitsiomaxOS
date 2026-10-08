@@ -531,6 +531,9 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           onClose={() => setOpenLead(null)}
           onSaved={reloadAll}
           onMoveStage={moveLeadStage}
+          // This desk may delete a lead outright (DELETE /leads/{id} names business_dev),
+          // so its popup carries the button; Sales View's copy of this popup does not.
+          onDeleted={() => { setOpenLead(null); reloadAll(); }}
         />
       )}
 

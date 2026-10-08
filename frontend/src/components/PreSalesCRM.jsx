@@ -2019,9 +2019,12 @@ const rnrDetail = (details) => {
 // pinnedBranchId: set when the board is a single branch's, which is how a Super Admin
 // drilled into a branch gets a branch for the appointment flow — they have none of their
 // own, and without it every appointment asks them to pick one they already chose.
-export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = null, canMoveStage = true, onClose, onSaved, onMoveStage }) => {
+// onDeleted: opt-in Delete beside Edit, through the shared DeleteLeadDialog. Only the
+// Business Development board's Dashboard passes it; called with the id once it is gone.
+export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = null, canMoveStage = true, onClose, onSaved, onMoveStage, onDeleted = null }) => {
   const [tab, setTab] = useState("overview");
   const [showEdit, setShowEdit] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [currentLead, setCurrentLead] = useState(lead);
   const [followUpDraft, setFollowUpDraft] = useState(null); // { date, time, remarks } | null
   const [rescheduleDraft, setRescheduleDraft] = useState(null); // { followupId, date, time, reason } | null
@@ -2086,6 +2089,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
               {currentLead.source_type === "manual" && (
                 <Button size="sm" variant="outline" onClick={() => setShowEdit(true)} className="h-8" data-testid="presales-detail-edit-btn">
                   <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                </Button>
+              )}
+              {onDeleted && (
+                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(true)} className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700" data-testid="presales-detail-delete-btn">
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
                 </Button>
               )}
               <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100" data-testid="presales-detail-close">
@@ -2429,6 +2437,14 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
       {showEdit && (
         <LeadEditModal lead={currentLead} onClose={() => setShowEdit(false)} onSaved={() => { refreshAndKeep(); setShowEdit(false); }} />
+      )}
+
+      {confirmDelete && onDeleted && (
+        <DeleteLeadDialog
+          lead={currentLead}
+          onClose={() => setConfirmDelete(false)}
+          onDeleted={(id) => { setConfirmDelete(false); onDeleted(id); }}
+        />
       )}
 
       {followUpDraft && !showEdit && (
