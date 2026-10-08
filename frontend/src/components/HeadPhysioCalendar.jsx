@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Loader2,
   Pencil,
@@ -883,6 +884,16 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
           </div>
         )}
       </div>
+
+      {/* Phone, nobody picked yet: a chevron bounces up at the dropdown, the prompt Branch
+          Management uses under its own branch picker, and one line with no guide text
+          under it. motion-safe, so with reduced motion the arrow holds still. */}
+      {!selectedDoctor && doctors.length > 0 && (
+        <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center sm:hidden" data-testid="doctor-select-prompt">
+          <ChevronUp className="mx-auto h-5 w-5 text-sky-500 motion-safe:animate-bounce" aria-hidden="true" />
+          <p className="mt-1 text-sm font-semibold text-slate-600">Pick a {roleNoun.toLowerCase()} above to open their calendar</p>
+        </div>
+      )}
 
       {/* RIGHT PANEL — Calendar */}
       {/* Not drawn at all on a phone until somebody is picked: there it was a card holding
