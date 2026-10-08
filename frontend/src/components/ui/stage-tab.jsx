@@ -140,13 +140,18 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 // edge to edge. It sits on the inner row, not the sticky bar, because zoom also scales the
 // bar's own `top` and would slide it under the page header.
 //
-// `phoneFlush` is Branch Leads on a phone again, asked for as one joined strip: below sm the
+// `phoneFlush` is Branch Leads and Consultation on a phone, asked for as one joined strip: below sm the
 // bar loses its grey tray and padding and becomes a single white card with the finance
 // boards' 5px corner (see ui/ledger-card), inside the page's own side padding so the corners
 // show, and pulled up over the page's 16px top padding so it sits straight under the header.
 // The cells join with 1px lines (see StageTab's flush). No zoom on it below sm -- the gaps
 // and padding the 80% was paying for are gone, so the cells are drawn at full size instead.
 // Implies `plain`; from sm up the bar is the plain card strip unchanged.
+//
+// A flush bar that wraps (Consultation's, more stages than a row) keeps five to a row but
+// as a wrapping flex row rather than a grid, so a short last row sits centred under the
+// full one instead of hanging off its left end -- a grid has no way to centre a part-filled
+// row.
 export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false, phoneFlush = false }) => (
   <div
     // The offset has to clear the sticky page header, which is two different heights:
@@ -174,10 +179,12 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
         square corner, rounding inside the bar's 5px. Its columns are equal unless a label
         cannot fit one: inside the card, a sixth of a 400px phone is ~4px short of
         "Appointment", so that column alone widens to its word instead of clipping it. */}
-    <div className={`grid sm:flex sm:flex-nowrap sm:overflow-visible ${
+    <div className={`sm:flex sm:flex-nowrap sm:overflow-visible ${
       phoneRow
-        ? `grid-flow-col ${phoneFlush ? "auto-cols-[minmax(min-content,1fr)] sm:max-md:[zoom:0.8]" : "auto-cols-fr max-md:[zoom:0.8]"}`
-        : "grid-cols-5"
+        ? `grid grid-flow-col ${phoneFlush ? "auto-cols-[minmax(min-content,1fr)] sm:max-md:[zoom:0.8]" : "auto-cols-fr max-md:[zoom:0.8]"}`
+        : phoneFlush
+          ? "flex flex-wrap max-sm:justify-center max-sm:[&>*]:basis-[calc((100%_-_4px)/5)]"
+          : "grid grid-cols-5"
     } ${phoneFlush ? "gap-px overflow-hidden rounded-[4px] sm:gap-2 sm:rounded-none" : plain ? "gap-2" : "gap-1"}`}>
       {!hideAllStages && (
         <StageTab
