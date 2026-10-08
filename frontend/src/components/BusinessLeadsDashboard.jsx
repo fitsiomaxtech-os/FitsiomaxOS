@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -8,6 +8,7 @@ import {
   BadgeIndianRupee,
   BarChart3,
   Building2,
+  ChevronRight,
   Headphones,
   LayoutDashboard,
   Megaphone,
@@ -611,120 +612,6 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
   );
 };
 
-/* ─── Sparkline ─── */
-/**
- * A cubic through the points, as a path string.
- *
- * The same curve OverAll Growth draws (DashboardBoard.jsx's own `smoothPath`), carried
- * here as its own copy the way this codebase already carries `isOnlineVertical` in four
- * files. Keep the two in step: the tension is what makes the line read as the same mark
- * on both screens, and a different one here would be a second house style.
- */
-const smoothPath = (pts) => {
-  if (!pts.length) return "";
-  if (pts.length < 3) return pts.map((p, i) => `${i ? "L" : "M"} ${p[0]},${p[1]}`).join(" ");
-  const t = 0.2; // Low tension: enough to read as a curve, not enough to loop or overshoot far.
-  let d = `M ${pts[0][0]},${pts[0][1]}`;
-  for (let i = 0; i < pts.length - 1; i += 1) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    d += ` C ${p1[0] + (p2[0] - p0[0]) * t},${p1[1] + (p2[1] - p0[1]) * t}`
-      + ` ${p2[0] - (p3[0] - p1[0]) * t},${p2[1] - (p3[1] - p1[1]) * t}`
-      + ` ${p2[0]},${p2[1]}`;
-  }
-  return d;
-};
-
-// OverAll Growth's first ink and its baseline grey — BRANCH_INKS[0] and the hairline
-// under the plot, both from DashboardBoard.jsx.
-const TREND_INK = "#18181b";
-const TREND_BASELINE = "#e4e4e7";
-
-/**
- * The trend line inside a summary card, in OverAll Growth's style.
- *
- * It was a blue line over a blue filled area. That reads as a chart in its own right on a
- * card whose subject is one number, and it was the only blue-on-blue mark on a board
- * whose cards are otherwise white and slate. This is the treatment the OS's own growth
- * chart uses: a near-black cubic, a hairline baseline under it, a dot at every reading,
- * and no fill at all.
- *
- * The dots are the point of it, not decoration. The curve between two readings is
- * interpolation; the dots are the only places on the line where the ink is a measurement,
- * which is exactly how OverAll Growth puts it.
- *
- * The dashboard cards pass their own `color`, so the line matches the figure above it, as
- * on the Zumba strip whose card they wear. TREND_INK is only the fallback.
- */
-//
-// `fromZero` pins the bottom of the plot at 0, which is right for a daily count. A running
-// total is thousands high and moves by tens a day, so on a zero floor it draws as a flat
-// line at the top; it scales to its own low and high instead.
-function Sparkline({ data, color = TREND_INK, fromZero = true }) {
-  // Measured rather than drawn in a stretched viewBox. A viewBox with
-  // preserveAspectRatio="none" is the cheap way to fill a card of unknown width, but it
-  // scales x and y by different factors, and under that a round dot comes out an oval --
-  // on a card this wide, two and a bit times wider than it is tall. Drawing in the box's
-  // own pixels keeps the markers round, which is the half of this style that carries the
-  // meaning.
-  const ref = useRef(null);
-  const [w, setW] = useState(160);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
-    const apply = () => setW(Math.max(40, Math.round(el.clientWidth)));
-    apply();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", apply);
-      return () => window.removeEventListener("resize", apply);
-    }
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // A hairline, not a stroke: the card is one figure, and the line under it is only the
-  // shape of the week. At 2px with 2px dots it read as a chart of its own.
-  const h = 26;
-  const r = 1.5;
-  // Inset by the marker's radius at all four edges, so a dot at the highest or lowest
-  // reading sits inside the box instead of half outside it.
-  const plotW = Math.max(1, w - r * 2);
-  const plotH = h - r * 2;
-
-  if (!data || data.length < 2) return <span ref={ref} className="block h-6" />;
-
-  const max = fromZero ? Math.max(...data, 1) : Math.max(...data);
-  const min = fromZero ? Math.min(...data, 0) : Math.min(...data);
-  const range = Math.max(max - min, 1);
-  const step = plotW / (data.length - 1);
-  const pts = data.map((v, i) => [r + i * step, r + plotH - ((v - min) / range) * plotH]);
-
-  return (
-    <span ref={ref} className="block">
-      <svg width={w} height={h} className="block" aria-hidden="true">
-        <line x1="0" x2={w} y1={h - r} y2={h - r} stroke={TREND_BASELINE} strokeWidth="1" />
-        <path
-          d={smoothPath(pts)}
-          fill="none"
-          stroke={color}
-          strokeWidth="1.25"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        {/* Every reading marked. The curve between them is interpolation; these are the
-            only places on the line where the ink is a measurement. */}
-        {pts.map(([cx, cy], i) => (
-          <circle key={i} cx={cx} cy={cy} r={r} fill={color} />
-        ))}
-      </svg>
-    </span>
-  );
-}
-
 /* ─── Drill-down list ─── */
 
 // What each kind of row is worth showing, in HR Admin's column order: an index, the thing
@@ -763,6 +650,20 @@ const DRILL_COLUMNS = {
   ],
 };
 
+// A card whose list reads differently from the rest of its kind, keyed by metric. Today's
+// Leads is a call sheet: who, the number to ring, where they belong, where they came from,
+// and the arrow into the lead. Stage and Created say nothing on a list that is all today's.
+// `action` is that arrow -- drawn by the table, not read as a value, so search skips it.
+const METRIC_COLUMNS = {
+  today: [
+    { key: "name", label: "Lead", primary: true, value: (r) => r.name || "—" },
+    { key: "phone", label: "Phone", value: (r) => r.phone || "—" },
+    { key: "branch", label: "Branch", value: (r, ctx) => ctx.branchName(r.branch_id) },
+    { key: "source", label: "Source", value: (r) => r.source_tab || r.source_type || "—" },
+    { key: "action", label: "Action", action: true, value: () => "" },
+  ],
+};
+
 /**
  * The rows behind a summary card: a table from tablet up, the same rows as cards on a
  * phone. The Human Resource Master View's list, which is the pattern the OS uses wherever
@@ -785,10 +686,14 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
   );
   const ctx = useMemo(() => ({ branchName }), [branchName]);
   const kind = drill?.kind;
+  const metric = drill?.metric;
   // Both memoised, and not for the arithmetic -- the two `|| []` fallbacks mint a fresh
   // empty array every render, which would be a changed dependency every render and would
   // re-narrow and re-sort the whole list each time anything on this card moved.
-  const columns = useMemo(() => (kind ? (DRILL_COLUMNS[kind] || []) : []), [kind]);
+  const columns = useMemo(
+    () => (kind ? (METRIC_COLUMNS[metric] || DRILL_COLUMNS[kind] || []) : []),
+    [kind, metric],
+  );
   // No column set for the kind that came back means a metric was added to the endpoint
   // without one here. Showing nothing beats rendering rows with no headings, and beats
   // the crash the phone branch below would take reading a first column that isn't there.
@@ -812,6 +717,7 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((r) => columns.some((c) => {
+        if (c.action) return false;
         const main = c.value(r, ctx);
         const sub = c.sub?.(r);
         return `${main ?? ""} ${sub ?? ""}`.toLowerCase().includes(q);
@@ -859,7 +765,10 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
             {/* Phone: the same facts stacked, the primary column as the heading. */}
             <div className="space-y-2 p-3 md:hidden" data-testid="bd-drill-list-mobile">
               {rows.map((r, i) => {
-                const [head, ...rest] = columns;
+                const [head, ...others] = columns;
+                // The arrow column is a chevron beside the name here, not a labelled field.
+                const rest = others.filter((c) => !c.action);
+                const arrow = openRow && others.length !== rest.length;
                 return (
                   <div
                     key={r.id || i}
@@ -867,7 +776,10 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
                     className={`rounded-xl border border-slate-200 bg-white p-3 ${openRow ? "cursor-pointer hover:border-sky-300" : ""}`}
                     data-testid={`bd-drill-card-${r.id || i}`}
                   >
-                    <p className="truncate text-sm font-bold text-slate-800">{head.value(r, ctx)}</p>
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{head.value(r, ctx)}</p>
+                      {arrow && <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-slate-400" />}
+                    </div>
                     {head.sub?.(r) && <p className="truncate text-xs text-slate-500">{head.sub(r)}</p>}
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
                       {rest.map((c) => (
@@ -887,7 +799,7 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
                 <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                   <tr>
                     <th className="px-3 py-2">S.No</th>
-                    {columns.map((c) => <th key={c.key} className="px-3 py-2">{c.label}</th>)}
+                    {columns.map((c) => <th key={c.key} className={`px-3 py-2 ${c.action ? "w-[5%] text-center" : ""}`}>{c.label}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -899,7 +811,23 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
                       data-testid={`bd-drill-row-${r.id || i}`}
                     >
                       <td className="px-3 py-2 text-slate-500">{i + 1}</td>
-                      {columns.map((c) => (
+                      {columns.map((c) => (c.action ? (
+                        // Opens the same popup the row does; the arrow is what says so.
+                        <td key={c.key} className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                          {openRow && (
+                            <button
+                              type="button"
+                              onClick={() => openRow(r)}
+                              title="View lead"
+                              aria-label={`View ${r.name || "lead"}`}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                              data-testid={`bd-drill-open-${r.id || i}`}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          )}
+                        </td>
+                      ) : (
                         <td key={c.key} className="px-3 py-2 text-slate-600">
                           {c.primary ? (
                             <div className="min-w-0">
@@ -908,7 +836,7 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
                             </div>
                           ) : c.value(r, ctx)}
                         </td>
-                      ))}
+                      )))}
                     </tr>
                   ))}
                 </tbody>
@@ -1012,28 +940,21 @@ const ALL_DATES = { key: "all", label: "All", from: null, to: null };
  * `metric` on each card is the key its rows are fetched by -- see BD_ROW_METRICS in
  * backend/routers/v3_dashboard.py. A card with no metric opens nothing.
  */
+// OnBoarding's one colour: every figure and the open card's ring in the same slate, so the
+// row reads as one set and only the ring says which list is open.
+const ONBOARDING_INK = "#475569";
+
 const buildCardGroups = (summary) => {
-  const weekTrendCounts = (summary.week_trend || []).map((d) => d.count);
   const todayCount = summary.today_leads || 0;
-
-  // Total Leads' own line: the running total at the close of each of the seven days. It
-  // used to be the same daily counts Today's Leads draws, so the two cards carried one
-  // identical line and the total's said nothing about the total. Worked back from today's
-  // figure by taking off each later day's arrivals, so its last dot is the card's number.
-  const totalLeads = summary.total_leads || 0;
-  const totalTrend = weekTrendCounts.map((_, i) => (
-    totalLeads - weekTrendCounts.slice(i + 1).reduce((sum, n) => sum + n, 0)
-  ));
-
   const followUp = summary.stage_counts?.["Follow Up"] || 0;
 
   const cards = {
     onboarding: [
-      { key: "total", metric: "total", label: "Total Leads", value: summary.total_leads, color: "#0284c7", sparkline: totalTrend, sparklineFromZero: false },
-      { key: "today", metric: "today", label: "Today's Leads", value: todayCount, color: "#9333ea", sparkline: weekTrendCounts },
-      { key: "followup", metric: "followup", label: "Active Follow-ups", value: followUp, color: "#ca8a04" },
-      { key: "appointments", metric: "appointments", label: "Appointments", value: summary.total_appointments, color: "#0d9488" },
-      { key: "converted", metric: "converted", label: "Converted", value: summary.completed_appointments, color: "#16a34a" },
+      { key: "total", metric: "total", label: "Total Leads", value: summary.total_leads, color: ONBOARDING_INK },
+      { key: "today", metric: "today", label: "Today's Leads", value: todayCount, color: ONBOARDING_INK },
+      { key: "followup", metric: "followup", label: "Active Follow-ups", value: followUp, color: ONBOARDING_INK },
+      { key: "appointments", metric: "appointments", label: "Appointments", value: summary.total_appointments, color: ONBOARDING_INK },
+      { key: "converted", metric: "converted", label: "Converted", value: summary.completed_appointments, color: ONBOARDING_INK },
     ],
     statistics: [
       { key: "revenue", metric: "revenue", label: "Revenue Generated", value: formatMoney(summary.revenue_generated), color: "#16a34a" },
@@ -1498,8 +1419,7 @@ function DashboardTab({
               <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 ${activeCardGroup.cols}`} data-testid={`bd-metrics-${activeCardGroup.key}`}>
                 {/* The Zumba strip's card, arrow and all: white, a grey label with the
                     chevron in the corner, the figure in the card's own colour, and the open
-                    card ringed in it. The trend line rides in the caption slot, under the
-                    figure, in that same colour. */}
+                    card ringed in it. Label and figure only -- no trend line. */}
                 {activeCardGroup.cards.map((m) => (
                   <StatTile
                     key={m.key}
@@ -1507,11 +1427,6 @@ function DashboardTab({
                     label={m.label}
                     value={m.value}
                     color={m.color}
-                    sub={m.sparkline && (
-                      <span className="mt-1.5 block">
-                        <Sparkline data={m.sparkline} color={m.color} fromZero={m.sparklineFromZero !== false} />
-                      </span>
-                    )}
                     active={openMetric === m.metric}
                     onClick={m.metric ? () => onOpenCard(m.metric) : undefined}
                     testid={`bd-metric-${m.key}`}
