@@ -334,7 +334,9 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
   }, [reloadAll]);
 
   return (
-    <div className="space-y-5" data-testid="bd-dashboard-root">
+    // The strip below is display:none on a phone's Dashboard, but space-y only skips
+    // [hidden] siblings, so it would still push the Dashboard down by a gap under nothing.
+    <div className={phoneFooter && activeTab === "dashboard" ? "space-y-0 sm:space-y-5" : "space-y-5"} data-testid="bd-dashboard-root">
       {/* Top navigation, in Branch Admin's shape: underlines on a rule rather than filled
           pills in a floating white card. The pills read as five buttons to press; a desk
           this size wants a nav that says where it is and otherwise gets out of the way.

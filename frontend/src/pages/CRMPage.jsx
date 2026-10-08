@@ -961,6 +961,13 @@ export const CRMPage = ({ auth, onLogout }) => {
       more: [],
     };
 
+  // The BDE's Dashboard on a phone sits flush under the header. Its own tab strip is
+  // hidden there (the footer above carries the tabs), so all that stood between the header
+  // and the Dashboard's sub-tabs was this page's top padding plus the space-y gap the fixed
+  // footer -- a sibling ahead of the board -- leaves on it. Below sm only: from sm up the
+  // strip is back and so is the room above it.
+  const bdPhoneFlush = showBusinessDevBoard && bdTab === "dashboard" && !showProfile;
+
   const filteredAppointmentsForPhysioBoards = appointments;
 
   // Settings' Marketing Source / CI/CD ROOTS switcher. Not a row of its own: each screen
@@ -1255,7 +1262,7 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         </Suspense>
 
-        <div className={`w-full space-y-4 px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
+        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : "space-y-4"} px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
 
         {showSuperAdminBoard && (
           <div className="hidden flex-wrap gap-2 border-b border-slate-200 pb-2 md:flex" data-testid="super-admin-nav">
