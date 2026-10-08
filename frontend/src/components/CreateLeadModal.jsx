@@ -23,6 +23,12 @@ export const DEPARTMENT_OPTIONS = [
   { value: "online_fitness", label: "Online Fitness" },
 ];
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
+// Phone-only sizing, every class below `max-sm:` so the desktop form is untouched: controls
+// a notch shorter with 14px text, and the short fields two to a row. PHONE_WIDE marks a
+// field that keeps a whole row to itself there -- a name, an email, an address.
+const PHONE_CONTROL = "max-sm:h-8 max-sm:text-sm";
+const PHONE_WIDE = "max-sm:col-span-2";
+const GRID = "grid gap-x-4 gap-y-3 max-sm:grid-cols-2 max-sm:gap-x-3 max-sm:gap-y-2 sm:grid-cols-2 lg:grid-cols-4";
 
 /**
  * The ad record a lead arrived on — Meta's own lead export, field for field, in the order
@@ -164,13 +170,14 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
     // z-[60], LeadEditModal's level, rather than z-40: the phone bottom navs are z-40 and
     // come later in the page, so at the same level they drew over this form's footer and
     // hid Create Lead. The date picker's own overlay sits at z-[70], still above this.
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="create-lead-modal">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-sm:p-0" data-testid="create-lead-modal">
       {/* Four fields to a row on a wide screen so the whole form, footer included, fits
           the window without scrolling. Capped at the window height all the same, so on a
-          short one only the fields scroll and Create Lead stays in sight. */}
-      <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-3.5">
-          <h3 className="text-xl font-bold text-slate-900">Add New Lead</h3>
+          short one only the fields scroll and Create Lead stays in sight. On a phone the
+          card is nine tenths of the screen each way, the backdrop showing round it. */}
+      <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-2xl max-sm:max-h-[90%] max-sm:w-[90%]">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-3.5 max-sm:px-4 max-sm:py-2.5">
+          <h3 className="text-xl font-bold text-slate-900 max-sm:text-lg">Add New Lead</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="lead-create-close"><X className="h-5 w-5" /></button>
         </div>
 
@@ -178,7 +185,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
             single uninterrupted page it has always been rather than one lone tab with
             nothing beside it. */}
         {isSuperAdminUser && (
-          <div className="flex shrink-0 gap-1 border-b border-slate-200 px-6" data-testid="lead-create-tabs">
+          <div className="flex shrink-0 gap-1 border-b border-slate-200 px-6 max-sm:px-4" data-testid="lead-create-tabs">
             {[
               { key: "details", label: "Lead Details" },
               { key: "lead_data", label: "Lead Data" },
@@ -187,7 +194,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
-                className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition max-sm:px-3 max-sm:py-2 ${
                   tab === t.key
                     ? "border-indigo-600 text-indigo-600"
                     : "border-transparent text-slate-500 hover:text-slate-700"
@@ -203,17 +210,18 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
         {/* Both panels stay mounted and one is hidden: switching tabs must not empty the
             one you left, and a half-filled ad record is exactly the thing somebody would
             tab away from mid-entry. */}
-        <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 ${tab === "details" ? "" : "hidden"}`} data-testid="lead-create-panel-details">
+        <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 max-sm:space-y-3 max-sm:px-4 max-sm:py-3 ${tab === "details" ? "" : "hidden"}`} data-testid="lead-create-panel-details">
           {/* Standard fields */}
-          <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Name *"><Input value={form.name} onChange={(e) => set("name", e.target.value)} data-testid="lead-create-name" /></Field>
-            <Field label="Phone *"><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="lead-create-phone" /></Field>
-            <Field label="Alternative Phone"><Input value={form.alternative_phone} onChange={(e) => set("alternative_phone", e.target.value)} data-testid="lead-create-altphone" /></Field>
-            <Field label="Email"><Input value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="lead-create-email" /></Field>
-            <Field label="Source">
+          <div className={GRID}>
+            <Field label="Name *" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.name} onChange={(e) => set("name", e.target.value)} data-testid="lead-create-name" /></Field>
+            <Field label="Phone *"><Input className={PHONE_CONTROL} value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="lead-create-phone" /></Field>
+            <Field label="Alternative Phone"><Input className={PHONE_CONTROL} value={form.alternative_phone} onChange={(e) => set("alternative_phone", e.target.value)} data-testid="lead-create-altphone" /></Field>
+            <Field label="Email" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="lead-create-email" /></Field>
+            <Field label="Source" className={PHONE_WIDE}>
               {/* A plain input with a suggestion list rather than a dropdown: the common
                   channels stay one click away, and anything else can just be typed. */}
               <Input
+                className={PHONE_CONTROL}
                 list="lead-create-source-options"
                 value={form.source_tab}
                 onChange={(e) => set("source_tab", e.target.value)}
@@ -223,20 +231,20 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                 {SOURCE_SUGGESTIONS.map((o) => <option key={o} value={o} />)}
               </datalist>
             </Field>
-            <Field label="Address"><Input value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="lead-create-address" /></Field>
-            <Field label="City"><Input value={form.city} onChange={(e) => set("city", e.target.value)} data-testid="lead-create-city" /></Field>
-            <Field label="State"><Input value={form.state} onChange={(e) => set("state", e.target.value)} data-testid="lead-create-state" /></Field>
+            <Field label="Address" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="lead-create-address" /></Field>
+            <Field label="City"><Input className={PHONE_CONTROL} value={form.city} onChange={(e) => set("city", e.target.value)} data-testid="lead-create-city" /></Field>
+            <Field label="State"><Input className={PHONE_CONTROL} value={form.state} onChange={(e) => set("state", e.target.value)} data-testid="lead-create-state" /></Field>
           </div>
 
           {/* Physio Patient Details */}
-          <div className="rounded-lg border border-slate-200 p-4">
-            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Department">
+          <div className="rounded-lg border border-slate-200 p-4 max-sm:p-3">
+            <div className={GRID}>
+              <Field label="Department" className={PHONE_WIDE}>
                 {/* Shown rather than hidden where it is fixed: the department decides which
                     board the lead lands on, and that is worth saying out loud on the form
                     that decides it. Disabled, not removed, so the answer is still read. */}
                 <select
-                  className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${lockedDepartment ? "bg-slate-100 text-slate-500" : ""}`}
+                  className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL} ${lockedDepartment ? "bg-slate-100 text-slate-500" : ""}`}
                   value={form.department}
                   disabled={!!lockedDepartment}
                   title={lockedDepartment ? "Set by the board you are creating this lead from" : undefined}
@@ -247,17 +255,17 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                   {DEPARTMENT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
                 </select>
               </Field>
-              <Field label="Condition / Pain Area"><Input value={form.condition} onChange={(e) => set("condition", e.target.value)} data-testid="lead-create-condition" /></Field>
-              <Field label="Months of Pain"><Input type="number" min="0" value={form.months_of_pain} onChange={(e) => set("months_of_pain", e.target.value)} data-testid="lead-create-months" /></Field>
-              <Field label="Age"><Input type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-create-age" /></Field>
+              <Field label="Condition / Pain Area" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.condition} onChange={(e) => set("condition", e.target.value)} data-testid="lead-create-condition" /></Field>
+              <Field label="Months of Pain"><Input className={PHONE_CONTROL} type="number" min="0" value={form.months_of_pain} onChange={(e) => set("months_of_pain", e.target.value)} data-testid="lead-create-months" /></Field>
+              <Field label="Age"><Input className={PHONE_CONTROL} type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-create-age" /></Field>
               <Field label="Gender"><Select value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDER_OPTIONS]} testid="lead-create-gender" /></Field>
-              <Field label="Occupation"><Input value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-create-occupation" /></Field>
-              <Field label="Expected Consultation Date" className={showPicker ? "" : "sm:col-span-2"}><MilkDateInput centered confirm title="Expected Consultation Date" value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
+              <Field label="Occupation"><Input className={PHONE_CONTROL} value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-create-occupation" /></Field>
+              <Field label="Expected Consultation Date" className={`${PHONE_WIDE} ${showPicker ? "" : "sm:col-span-2"}`}><MilkDateInput centered confirm title="Expected Consultation Date" className={PHONE_CONTROL} value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
               {showPicker && (
-                <Field label="Assign Branch">
+                <Field label="Assign Branch" className={PHONE_WIDE}>
                   {/* Left blank, the lead lands Unassigned, as it always has. */}
                   <select
-                    className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm"
+                    className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL}`}
                     value={form.branch_id}
                     onChange={(e) => set("branch_id", e.target.value)}
                     data-testid="lead-create-branch-select"
@@ -289,11 +297,12 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
               the answers arrive off a Meta form whose options are set there, not here, and
               a fixed list would quietly refuse whatever the form is changed to ask next. */}
           {formQuestions.length > 0 && (
-            <div className="rounded-lg border border-slate-200 p-4" data-testid="lead-create-form-questions">
-              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-slate-200 p-4 max-sm:p-3" data-testid="lead-create-form-questions">
+              <div className={GRID}>
                 {formQuestions.map((q) => (
-                  <Field key={q.key} label={q.label}>
+                  <Field key={q.key} label={q.label} className={PHONE_WIDE}>
                     <Input
+                      className={PHONE_CONTROL}
                       value={extraFields[q.question] ?? ""}
                       onChange={(e) => setExtra(q.question, e.target.value)}
                       data-testid={`lead-create-q-${q.key}`}
@@ -307,18 +316,20 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
         </div>
 
         {isSuperAdminUser && (
-          <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 ${tab === "lead_data" ? "" : "hidden"}`} data-testid="lead-create-panel-lead-data">
-            <div className="rounded-lg border border-slate-200 p-4">
+          <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 max-sm:space-y-3 max-sm:px-4 max-sm:py-3 ${tab === "lead_data" ? "" : "hidden"}`} data-testid="lead-create-panel-lead-data">
+            <div className="rounded-lg border border-slate-200 p-4 max-sm:p-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ad Record</p>
               <p className="mb-3 text-xs text-slate-400">
                 The Meta lead export, field for field. Super Admin only. Leave blank for a walk-in, or for any lead with no advert behind it.
               </p>
-              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className={GRID}>
                 {LEAD_DATA_FIELDS.map((f) => (
-                  <Field key={f.key} label={f.label}>
+                  // Whole rows on a phone except the two short Yes/No pickers: the ids
+                  // are long digit strings that would not show at half width.
+                  <Field key={f.key} label={f.label} className={f.type === "select" ? "" : PHONE_WIDE}>
                     {f.type === "select" ? (
                       <select
-                        className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm"
+                        className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL}`}
                         value={leadData[f.key]}
                         onChange={(e) => setLD(f.key, e.target.value)}
                         data-testid={`lead-data-${f.key}`}
@@ -327,6 +338,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                       </select>
                     ) : (
                       <Input
+                        className={PHONE_CONTROL}
                         placeholder={f.placeholder}
                         value={leadData[f.key]}
                         onChange={(e) => setLD(f.key, e.target.value)}
@@ -340,9 +352,9 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
           </div>
         )}
 
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
-          <Button variant="outline" onClick={onClose} data-testid="lead-create-cancel">Cancel</Button>
-          <Button onClick={submit} className="bg-indigo-600 hover:bg-indigo-700" data-testid="lead-create-submit">Create Lead</Button>
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 max-sm:px-4 max-sm:py-3">
+          <Button variant="outline" onClick={onClose} className="max-sm:h-8" data-testid="lead-create-cancel">Cancel</Button>
+          <Button onClick={submit} className="bg-indigo-600 hover:bg-indigo-700 max-sm:h-8" data-testid="lead-create-submit">Create Lead</Button>
         </div>
       </div>
     </div>
@@ -357,7 +369,7 @@ const Field = ({ label, children, className = "" }) => (
 );
 
 const Select = ({ value, onChange, options, testid }) => (
-  <select className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm" value={value} onChange={(e) => onChange(e.target.value)} data-testid={testid}>
+  <select className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL}`} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testid}>
     {options.map((o) => <option key={o} value={o}>{o || "Select"}</option>)}
   </select>
 );
