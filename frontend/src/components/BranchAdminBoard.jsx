@@ -80,6 +80,7 @@ import {
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
+import { ScrollTopButton } from "@/components/ui/scroll-top-button";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
 import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
@@ -726,6 +727,10 @@ const ARM_LIST_WIDTHS = {
 // them in -- a lead is picked up, consulted, then reviewed -- and because it was the one
 // list a Branch Admin opens hourly that still cost two taps behind More.
 const BOTTOM_NAV_KEYS = ["pipeline", "branch_consultation", "review", "consultations"];
+
+// The tabs that are one long list of patient rows on a phone, so they get the
+// back-to-top arrow (ScrollTopButton). The other tabs are cards, calendars and forms.
+const LIST_VIEWS = ["pipeline", "branch_consultation", "branch_home_visit", "review"];
 
 // The two desks that only exist in a room. Zumba is a class taught in the branch's studio
 // in two fixed morning slots, and Fitness is the gym's membership roll — who is training,
@@ -2832,6 +2837,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
       {loading && (
         <div className="fixed bottom-20 right-4 rounded-md bg-slate-900 px-3 py-2 text-sm text-white md:bottom-4">Loading...</div>
+      )}
+
+      {/* Back-to-top arrow over the phone lists only (Branch Leads, Consultation, House
+          Visit, Review) -- the screens where the user scrolls a long list of rows. Left
+          off while Loading... holds the same corner, and off when Super Admin embeds
+          this board. */}
+      {!embedded && !profileOpen && !loading && LIST_VIEWS.includes(activeView) && (
+        <ScrollTopButton data-testid="branch-scroll-top" />
       )}
 
       {/* Bottom nav — phones only, and only when this board owns the page (not when
