@@ -28,7 +28,9 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * name can't take the name's room either.
  *
  * The avatar is sky below sm, the header's brand blue, rather than violet; the name is a
- * step bigger and the ID line a step darker there, so the text outweighs the icons.
+ * step bigger and the ID line a step darker there, so the text outweighs the icons. The
+ * name there is a neutral black at 85% (rgb(0 0 0 / 85%), the colour the user named)
+ * rather than slate-900's blue-black.
  *
  * `idLine` is the patient number, city and the like, on one line split by "|" as the
  * reference has them; it truncates at the end, so on a narrow phone the last part is the
@@ -103,7 +105,7 @@ export const LeadRowCard = ({
           {mark || name?.charAt(0)?.toUpperCase() || "?"}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="flex min-w-0 items-center text-[14px] font-semibold leading-[18px] text-slate-900 sm:text-sm">
+          <p className="flex min-w-0 items-center text-[14px] font-semibold leading-[18px] text-black/85 sm:text-sm sm:text-slate-900">
             <span className="truncate">{name || "—"}</span>{nameAddon}
           </p>
           <p className="mt-0.5 truncate text-[11px] font-medium leading-[14px] text-slate-500 sm:text-slate-400">
