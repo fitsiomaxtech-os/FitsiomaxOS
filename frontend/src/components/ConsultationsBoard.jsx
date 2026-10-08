@@ -6588,7 +6588,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   ) : null}
                   badge={l[stageField] || "—"}
                   badgeColor={hex}
-                  idLine={[l.patient_number, l.phone || "—"]}
+                  // No number beside Call and WhatsApp (see Branch Leads' card).
+                  idLine={[l.patient_number, wa ? null : l.phone]}
                   wa={wa}
                   onOpen={openCard}
                   className={picked ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"}

@@ -4,7 +4,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 /**
  * The phone card Branch Admin's patient lists share — Branch Leads, Consultation, House
  * Visit and Review — drawn as a compact list row about 48px tall: a 6px corner, a 1px
- * border and a light shadow, a small avatar on the left, the name over "ID | phone"
+ * border and a light shadow, a small avatar on the left, the name over the patient ID
  * beside it, and the badge, Call and WhatsApp in a row on the right. Anything a list adds
  * (an appointment, a follow-up, a review's Consultant) goes in `details`, under the name,
  * and is the only thing that makes a card taller than the row.
@@ -15,9 +15,10 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * shows. The badge is capped and truncates, so a long stage name can't take the name's
  * room either.
  *
- * `idLine` is the patient number, phone and the like, on one line split by "|" as the
+ * `idLine` is the patient number, city and the like, on one line split by "|" as the
  * reference has them; it truncates at the end, so on a narrow phone the last part is the
- * one cut short.
+ * one cut short. The lists leave the phone number out of it wherever Call and WhatsApp
+ * are drawn (the user asked for that); only `glance` and an unringable number show it.
  *
  * `wa` is the number from lib/phone's waNumber; without one Call and WhatsApp are left off, as
  * there is nobody to ring. They are anchors rather than buttons so tel: and the WhatsApp

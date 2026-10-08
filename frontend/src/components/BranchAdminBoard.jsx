@@ -2328,7 +2328,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
                     badge={rowStage || "—"}
                     badgeColor={rowStage ? stageColor(rowStage) : null}
-                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, lead.phone || "—", cityAnswer(lead)]}
+                    // Where Call and WhatsApp sit on the card the number itself is left
+                    // off — the buttons are how it gets used. All Stages has neither, so
+                    // it keeps the number; so does a phone too malformed to ring.
+                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, waNumber(lead.phone) ? null : lead.phone, cityAnswer(lead)]}
                     wa={waNumber(lead.phone)}
                     onOpen={() => setSelectedLead(lead)}
                     // The desk row's bin, on the phone: same rule for who sees it, same

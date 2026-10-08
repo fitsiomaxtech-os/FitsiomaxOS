@@ -259,7 +259,8 @@ export const BranchReviewPanel = ({ branchId }) => {
         name={r.lead_name}
         badge={status?.label}
         badgeColor={status?.color}
-        idLine={[r.patient_number, r.phone || "—"]}
+        // No number beside Call and WhatsApp (see Branch Leads' card).
+        idLine={[r.patient_number, waNumber(r.phone) ? null : r.phone]}
         wa={waNumber(r.phone)}
         onOpen={() => setViewing(r)}
         testid="branch-review-card"
