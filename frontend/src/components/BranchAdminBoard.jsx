@@ -2310,10 +2310,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
                 // All Stages is the whole branch at a glance, every stage mixed together, so
                 // its card says only who, their number and where they stand: the name, the
-                // phone and the stage. The Patient Number, city, marks and the stage's own
-                // lines (appointment, follow-up, reminder) belong to a stage's pill, where
-                // they are what the list is being worked for. Call, WhatsApp and Delete stay:
-                // they are what is done from a card, not more to read on it.
+                // phone and the stage, boxed, then a grey bin and an arrow into the lead (see
+                // `glance` on ui/lead-row-card). The Patient Number, city, marks, the stage's
+                // own lines and Call/WhatsApp belong to a stage's pill, where the list is
+                // being worked rather than looked over.
                 const allStages = !stageFilter;
                 const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || lead.assigned_physio_name);
                 // The reference card's single row (see ui/lead-row-card). Reaching the patient
@@ -2334,6 +2334,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     // The desk row's bin, on the phone: same rule for who sees it, same
                     // typed-DELETE dialog, same purge.
                     onDelete={canDeleteLeads ? () => setRowDelete(lead) : null}
+                    glance={allStages}
                     testid="branch-card"
                     details={hasDetails ? (
                       <>

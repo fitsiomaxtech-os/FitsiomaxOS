@@ -1,4 +1,4 @@
-import { Phone, Trash2 } from "lucide-react";
+import { ChevronRight, Phone, Trash2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 
 /**
@@ -32,6 +32,12 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
  * not mistaken for one of the two ways of reaching the patient. The list decides who
  * gets it and what confirming it asks; the card only draws it.
  *
+ * `glance` is the lighter card Branch Leads draws on All Stages, where the list is the
+ * whole branch to be looked over rather than one stage to be worked: no Call or
+ * WhatsApp, the stage boxed with a 4px corner instead of a pill, the bin a plain grey
+ * icon, and a grey arrow at the end that says the card opens. The arrow is part of the
+ * card, not a button of its own, so tapping it is tapping the card.
+ *
  * `mark` replaces the initial in the avatar circle — a select-mode checkbox, say.
  * `className` carries the card's border and fill, so a picked card can be tinted.
  *
@@ -51,10 +57,12 @@ export const LeadRowCard = ({
   details = null,
   onOpen,
   onDelete = null,
+  glance = false,
   className = "border-slate-200 bg-white",
   testid,
 }) => {
   const parts = idLine.filter(Boolean);
+  const showContact = wa && !glance;
   return (
     // A div, not a button: Call and WhatsApp are themselves interactive, and a button
     // inside a button is invalid markup that browsers resolve by dropping one of them.
@@ -87,18 +95,20 @@ export const LeadRowCard = ({
         </div>
         {badge && (
           <span
-            className="max-w-[76px] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium leading-4 sm:max-w-[140px] sm:text-[11px]"
+            className={glance
+              ? "max-w-[120px] shrink-0 truncate rounded-[4px] border px-2 py-0.5 text-[11px] font-medium leading-4 sm:max-w-[160px]"
+              : "max-w-[76px] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium leading-4 sm:max-w-[140px] sm:text-[11px]"}
             style={badgeColor
-              ? { background: `${badgeColor}1a`, color: badgeColor }
-              : { background: "#f1f5f9", color: "#475569" }}
+              ? { background: `${badgeColor}1a`, color: badgeColor, borderColor: `${badgeColor}40` }
+              : { background: "#f1f5f9", color: "#475569", borderColor: "#e2e8f0" }}
             title={typeof badge === "string" ? badge : undefined}
           >
             {badge}
           </span>
         )}
-        {(wa || onDelete) && (
+        {(showContact || onDelete) && (
           <div className="flex shrink-0 gap-1 sm:gap-1.5">
-            {wa && (<>
+            {showContact && (<>
               <a
                 href={`tel:${wa}`}
                 onClick={(e) => e.stopPropagation()}
@@ -127,14 +137,17 @@ export const LeadRowCard = ({
                 onKeyDown={(e) => e.stopPropagation()}
                 aria-label={`Delete ${name || "patient"}`}
                 title="Delete this patient"
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-500 active:bg-rose-50"
+                className={glance
+                  ? "flex h-8 w-8 items-center justify-center rounded-md text-slate-400 active:bg-slate-100 active:text-rose-500"
+                  : "flex h-8 w-8 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-500 active:bg-rose-50"}
                 data-testid={`${testid}-delete-${id}`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className={glance ? "h-4 w-4" : "h-3.5 w-3.5"} />
               </button>
             )}
           </div>
         )}
+        {glance && <ChevronRight className="-ml-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
       </div>
       {/* Lined up under the name: the avatar's 32px and the 8px gap after it. */}
       {details && (
