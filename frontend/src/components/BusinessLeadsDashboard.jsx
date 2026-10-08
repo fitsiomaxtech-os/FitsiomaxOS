@@ -54,7 +54,7 @@ import { LeadDetailDialog, PreSalesCRM } from "@/components/PreSalesCRM";
 import { BranchManagementBoard } from "@/components/branch/BranchManagementBoard";
 // Super Admin's own six Dashboard tabs -- Marketing, Sales, Revenue, Team, Clients and
 // Analytics -- and the hook that fetches what they read. Mounted on this desk's own
-// Dashboard beside OnBoarding and systematic statistics; see DASH_SUB_TABS below.
+// Dashboard beside Summary; see DASH_SUB_TABS below.
 //
 // Static, unlike the six lazy() boards under it, and for the opposite reason: those are
 // other tabs on the nav above, and this one IS the Dashboard tab -- the tab this board
@@ -159,11 +159,6 @@ const isTabActive = (view, key) => (key === "settings" ? SETTINGS_SUB_VIEWS.incl
 // because its toolbar carries the same one, and the three mounted boards because each
 // carries its own and this one would not touch what they show.
 const REFRESH_WITHHELD_TABS = ["dashboard", "finance", "hr", "packages"];
-
-function formatMoney(v) {
-  const n = Number(v || 0);
-  return `Rs.${n.toLocaleString("en-IN")}`;
-}
 
 /**
  * The toolbar's date range as the two query params both BD endpoints already take.
@@ -856,36 +851,25 @@ function DrillList({ drill, loading, branches, onOpenLead, search = "", sortOrde
 
 /* ─── Dashboard Tab ─── */
 
-// The two rows of cards this desk has always read, as tab definitions rather than as the
-// cards themselves -- the nine figures are built from `summary` inside the component, and
+// The row of cards this desk has always read, as a tab definition rather than as the
+// cards themselves -- the five figures are built from `summary` inside the component, and
 // the strip has to be drawable before that has landed.
 //
-// OnBoarding is the pipeline as it stands today -- what came in and how far along it is,
-// the figures a desk acts on this morning. Systematic statistics is what the desk and the
-// group have built: money, rate, and the estate the leads arrive through. Read as one row
-// of nine they were a wall; stacked as two rows the second still pulled the eye off the
-// first. One row at a time, the desk reads what it asked for and the board answers one
-// question per screen.
-//
-// `cols` because the rows are five and four cards wide: each fills its own row rather than
-// the four holding a gap open to line up with the five.
+// Summary is the pipeline as it stands today -- what came in and how far along it is,
+// the figures a desk acts on this morning. Its key stays "onboarding", the tab's old name,
+// so nothing keyed on it moves. The second row (systematic statistics: revenue, rate,
+// branches, sheets) was dropped from this desk's Dashboard.
 const CARD_GROUPS = [
   {
     key: "onboarding",
-    label: "OnBoarding",
+    label: "Summary",
     icon: UserPlus,
     cols: "lg:grid-cols-5",
   },
-  {
-    key: "statistics",
-    label: "systematic statistics",
-    icon: BarChart3,
-    cols: "lg:grid-cols-4",
-  },
 ];
 
-// The Dashboard's own strip: this desk's two card rows, then Super Admin's own six
-// Dashboard tabs -- Marketing, Sales, Revenue, Team, Clients and Analytics.
+// The Dashboard's own strip: this desk's card row, then Super Admin's own Dashboard
+// tabs -- Revenue, Team, Clients and Analytics.
 //
 // Mounted as peers of the two rather than folded in behind one of them, because they are
 // the same kind of thing: a view of this Dashboard. They are DashboardBoard's own
@@ -901,9 +885,10 @@ const CARD_GROUPS = [
 // They sit after the two card rows, not before: this desk's own nine figures are what it
 // opens for, and these six are the group-wide read behind them.
 //
-// Sales is left off this desk's copy: the BDE board doesn't read it. Super Admin's own
-// Dashboard still draws it.
-const DASH_SUB_TABS = [...CARD_GROUPS, ...DASH_TABS.filter((t) => t.key !== "sales")];
+// Marketing and Sales are left off this desk's copy: the BDE board doesn't read them.
+// Super Admin's own Dashboard still draws both.
+const HIDDEN_DASH_TABS = ["marketing", "sales"];
+const DASH_SUB_TABS = [...CARD_GROUPS, ...DASH_TABS.filter((t) => !HIDDEN_DASH_TABS.includes(t.key))];
 const CARD_GROUP_KEYS = CARD_GROUPS.map((g) => g.key);
 
 // The two tabs this desk reads as a table of rows rather than as Super Admin's row of
@@ -918,8 +903,8 @@ const BREAKDOWN_TABS = { marketing: "source", sales: "stage" };
 // narrowing the screen sits on one line. The popover is now the only copy, and the panels
 // take it as a prop; see DashboardTabPanel's `scope`.
 //
-// OnBoarding and systematic statistics are absent: those two are this desk's own card
-// rows, scoped by the account rather than by a branch.
+// Summary is absent: it is this desk's own card row, scoped by the account rather than
+// by a branch.
 const SCOPED_TABS = ["revenue", "team", "clients", "analytics"];
 
 // What the search box narrows on each tab, and the words printed in it. A tab named here
@@ -960,12 +945,6 @@ const buildCardGroups = (summary) => {
       { key: "followup", metric: "followup", label: "Active Follow-ups", value: followUp, color: ONBOARDING_INK },
       { key: "appointments", metric: "appointments", label: "Appointments", value: summary.total_appointments, color: ONBOARDING_INK },
       { key: "converted", metric: "converted", label: "Converted", value: summary.completed_appointments, color: ONBOARDING_INK },
-    ],
-    statistics: [
-      { key: "revenue", metric: "revenue", label: "Revenue Generated", value: formatMoney(summary.revenue_generated), color: "#16a34a" },
-      { key: "conversion", metric: "conversion", label: "Conversion Rate", value: `${summary.conversion_rate}%`, color: "#ea580c" },
-      { key: "branches", metric: "branches", label: "Branches", value: summary.total_branches, color: "#4f46e5" },
-      { key: "sheets", metric: "sheets", label: "Connected Sheets", value: summary.total_connections, color: "#0284c7" },
     ],
   };
 
