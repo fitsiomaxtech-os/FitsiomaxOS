@@ -1270,28 +1270,33 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
       </ul>
 
       {/* The row sits last in a list a thumb scrolls through, so a stray tap there would end
-          the session; this asks once. Phones only — the menu itself is phones only. */}
+          the session; this asks once. Phones only — the menu itself is phones only.
+          Drawn at 80%: the box's width and corners are cut to 80% here, and everything
+          inside it, padding included, is zoomed to 0.8. The box itself is not zoomed — it is
+          centred with left 50% and a translate, and zoom on a fixed box pulls it off centre. */}
       <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>
-        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm gap-5 rounded-2xl p-5" data-testid="my-profile-logout-confirm">
-          <AlertDialogHeader className="items-center space-y-3 text-center sm:text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
-              <LogOut className="h-6 w-6" />
-            </span>
-            <AlertDialogTitle className="text-base text-slate-800">Log out?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-slate-500">
-              You will need your password to sign back in.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="grid grid-cols-2 gap-3 sm:space-x-0">
-            <AlertDialogCancel className="mt-0 h-11 rounded-xl" data-testid="my-profile-logout-cancel">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={onLogout}
-              className="h-11 rounded-xl bg-rose-600 text-white hover:bg-rose-700"
-              data-testid="my-profile-logout-confirm-button"
-            >
-              Log out
-            </AlertDialogAction>
-          </AlertDialogFooter>
+        <AlertDialogContent className="w-[calc(80%-1.6rem)] max-w-[19.2rem] gap-0 rounded-[13px] p-0" data-testid="my-profile-logout-confirm">
+          <div className="grid gap-5 p-5" style={{ zoom: 0.8 }}>
+            <AlertDialogHeader className="items-center space-y-3 text-center sm:text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                <LogOut className="h-6 w-6" />
+              </span>
+              <AlertDialogTitle className="text-base text-slate-800">Log out?</AlertDialogTitle>
+              <AlertDialogDescription className="text-[13px] text-slate-500">
+                You will need your password to sign back in.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="grid grid-cols-2 gap-3 sm:space-x-0">
+              <AlertDialogCancel className="mt-0 h-11 rounded-xl" data-testid="my-profile-logout-cancel">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={onLogout}
+                className="h-11 rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+                data-testid="my-profile-logout-confirm-button"
+              >
+                Log out
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>
