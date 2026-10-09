@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronRight, Download, RefreshCw, Search, Truck, X } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, Download, Megaphone, RefreshCw, Search, Truck, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -7,7 +7,7 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { VendorPanel } from "@/components/branch/VendorPanel";
-import { getBranchTransferRecords } from "@/lib/api";
+import { getBranchBoard, getBranchTransferRecords } from "@/lib/api";
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
 
@@ -17,11 +17,15 @@ import { dateStampFull, callTimeStamp } from "@/lib/time";
  */
 const RECORD_TABS = [
   { key: "branch_transfers", label: "Branch Transfer Records", icon: ArrowLeftRight },
+  { key: "lead_sources", label: "Leads Source", icon: Megaphone },
   { key: "vendors", label: "Vendor Records", icon: Truck },
 ];
 
 const money = (n) => `Rs.${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 const currentStage = (lead) => lead.consultation_stage || lead.branch_stage || lead.stage || "—";
+// Read as the Branch Leads Source column and its dropdown read it: source_tab, else source_type.
+const NO_SOURCE = "No Source";
+const sourceOf = (lead) => String(lead.source_tab || lead.source_type || "").trim() || NO_SOURCE;
 
 export const RecordsPanel = ({ branchId }) => {
   const [sub, setSub] = useState("branch_transfers");
@@ -47,6 +51,7 @@ export const RecordsPanel = ({ branchId }) => {
         })}
       </div>
       {sub === "branch_transfers" && <BranchTransferRecords branchId={branchId} />}
+      {sub === "lead_sources" && <LeadSourceRecords branchId={branchId} />}
       {/* The branch's one vendor screen. It moved here from Services and Products, so it
           edits: add, change and switch off vendors, and from View, see and add the
           expenses paid to each one. The book itself is still org-wide. */}
@@ -329,6 +334,250 @@ const BranchTransferRecords = ({ branchId }) => {
     </div>
   );
 };
+
+/**
+ * Where the branch's leads came from: one card per source, counted off the same lead list
+ * Branch Leads draws, so a number here and the Source dropdown there never disagree.
+ * Built the way Branch Transfer Records is -- cards, search, both date controls, Excel.
+ */
+const LeadSourceRecords = ({ branchId }) => {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+  const [source, setSource] = useState("all");
+  const [quickDate, setQuickDate] = useState(null);
+  const [dateFilter, setDateFilter] = useState(null);
+  const applyDateFilter = (next) => {
+    setDateFilter(next);
+    if (next) setQuickDate(null);
+  };
+  const effectiveDateFilter = useMemo(() => intersectDateFilters(dateFilter, quickDate), [dateFilter, quickDate]);
+
+  const load = useCallback(async () => {
+    if (!branchId) return;
+    setLoading(true);
+    try {
+      const data = await getBranchBoard(branchId);
+      setLeads(data.leads || []);
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Failed to load lead sources");
+    }
+    setLoading(false);
+  }, [branchId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Date and search first, source last, so the cards count what the date and search leave
+  // and pressing one never changes the numbers on the others. Newest lead first.
+  const dated = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const from = effectiveDateFilter?.from?.getTime();
+    const to = effectiveDateFilter?.to?.getTime();
+    return leads
+      .filter((l) => {
+        const ts = new Date(l.created_at || 0).getTime();
+        if (from && ts < from) return false;
+        if (to && ts > to) return false;
+        if (!q) return true;
+        return [l.name, l.phone, l.patient_number, sourceOf(l)].some((v) => (v || "").toLowerCase().includes(q));
+      })
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }, [leads, search, effectiveDateFilter]);
+
+  // Biggest source first; a lead with none goes last whatever its count.
+  const cards = useMemo(() => {
+    const counts = {};
+    dated.forEach((l) => { const s = sourceOf(l); counts[s] = (counts[s] || 0) + 1; });
+    const named = Object.entries(counts)
+      .sort(([a, x], [b, y]) => (a === NO_SOURCE) - (b === NO_SOURCE) || y - x || a.localeCompare(b));
+    return [["all", dated.length], ...named];
+  }, [dated]);
+
+  const rows = useMemo(
+    () => (source === "all" ? dated : dated.filter((l) => sourceOf(l) === source)),
+    [dated, source],
+  );
+
+  const exportSheet = () => {
+    downloadCsv([
+      ["Patient Number", "Patient Name", "Phone", "Email", "Source", "Current Stage", "Lead Created Date", "Lead Created Time"],
+      ...rows.map((l) => [
+        l.patient_number, l.name, l.phone, l.email, sourceOf(l), currentStage(l),
+        dateStampFull(l.created_at), callTimeStamp(l.created_at),
+      ]),
+    ], `leads-source-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
+
+  const toggleSearch = () => {
+    if (searchOpen) setSearch("");
+    setSearchOpen((v) => !v);
+  };
+
+  if (!branchId) {
+    return <p className="py-10 text-center text-sm text-slate-400">Lead sources are kept per branch.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5">
+        {cards.map(([key, count]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSource(key)}
+            className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
+              source === key ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-200 hover:border-slate-300"
+            }`}
+            title={key === "all" ? "All Sources" : key}
+            data-testid={`lead-source-card-${key}`}
+          >
+            <p className="truncate pr-6 text-[11px] font-medium text-slate-500">{key === "all" ? "All Sources" : key}</p>
+            <p className="text-xl font-bold text-slate-800">{count}</p>
+            <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ))}
+      </div>
+
+      {/* The Branch Transfer Records toolbar, field for field: one line on a phone with
+          the search behind its icon, the wrapping desk row from sm up. */}
+      <div className="flex flex-nowrap items-center gap-1 sm:flex-wrap sm:gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={toggleSearch}
+          className={`h-9 w-9 shrink-0 p-0 sm:hidden ${searchOpen ? "border-sky-500 bg-sky-50 text-sky-700" : ""}`}
+          title={searchOpen ? "Close search" : "Search"}
+          aria-label={searchOpen ? "Close search" : "Search"}
+          aria-expanded={searchOpen}
+          data-testid="lead-source-search-toggle"
+        >
+          {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+        </Button>
+        <div className={`relative min-w-0 flex-1 sm:block sm:min-w-[200px] sm:max-w-xs ${searchOpen ? "" : "hidden"}`}>
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search patient, phone, source..."
+            className="pl-9"
+            data-testid="lead-source-search"
+          />
+        </div>
+        <div className={`min-w-0 flex-1 sm:flex-none sm:block ${searchOpen ? "hidden" : ""}`}>
+          <QuickDateFilterBar value={quickDate} onChange={setQuickDate} testid="lead-source-quick-date" showCustom={false} micro />
+        </div>
+        <span className="shrink-0 [&_button]:h-9 sm:[&_button]:h-10">
+          <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="lead-source-date-filter" centered iconOnly phoneIconOnly />
+        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="h-9 w-9 p-0 border-slate-500 bg-slate-500 text-white hover:bg-slate-600 hover:text-white sm:h-8 sm:w-auto sm:px-3"
+            title="Refresh"
+            aria-label="Refresh"
+            data-testid="lead-source-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            size="sm"
+            onClick={exportSheet}
+            disabled={!rows.length}
+            className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
+            title="Download as an Excel sheet"
+            aria-label="Download as an Excel sheet"
+            data-testid="lead-source-download"
+          >
+            <Download className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Download Excel</span>
+          </Button>
+        </div>
+      </div>
+
+      {!rows.length ? (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
+          {loading ? "Loading..." : leads.length ? "No leads match." : "No leads yet."}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2 sm:hidden">
+            {rows.map((l) => (
+              <div key={l.id} className="w-full rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-800">{l.name}</p>
+                    <p className="truncate text-xs text-slate-500">{currentStage(l)}</p>
+                  </div>
+                  <SourcePill source={sourceOf(l)} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+                  <span>{l.phone}</span>
+                  <span>· {dateStampFull(l.created_at)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Patient</th>
+                    <th className="px-4 py-2.5 font-semibold">Contact</th>
+                    <th className="px-4 py-2.5 font-semibold">Source</th>
+                    <th className="px-4 py-2.5 font-semibold">Stage</th>
+                    <th className="px-4 py-2.5 font-semibold">Lead Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((l) => (
+                    <tr key={l.id} className="hover:bg-slate-50" data-testid={`lead-source-row-${l.id}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-800">{l.name}</p>
+                        <p className="font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {l.phone}
+                        {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
+                      </td>
+                      <td className="px-4 py-3"><SourcePill source={sourceOf(l)} /></td>
+                      <td className="px-4 py-3 text-slate-600">{currentStage(l)}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <span className="whitespace-nowrap">{dateStampFull(l.created_at)}</span>
+                        <span className="block text-[11px] text-slate-400">{callTimeStamp(l.created_at)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const SourcePill = ({ source }) => (
+  <span
+    className={`inline-block max-w-[11rem] shrink-0 truncate whitespace-nowrap align-middle rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${
+      source === NO_SOURCE ? "border-slate-200 bg-slate-50 text-slate-400" : "border-sky-200 bg-sky-50 text-sky-700"
+    }`}
+    title={source}
+  >
+    {source}
+  </span>
+);
 
 const DirectionPill = ({ direction }) => (
   <span
