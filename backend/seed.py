@@ -1260,68 +1260,6 @@ async def migrate_course_prices_to_totals() -> None:
         await v3_col("store_items").update_one({"id": item["id"]}, {"$set": updates})
 
 
-async def normalize_session_item_prices() -> None:
-    """Enforce the fixed per-session rate across every FITSIO STORE Session item
-    (the week-based Treatment Packages, e.g. "01 Week" = 7 sessions, "05 week" = 35
-    sessions) — price_online/price_offline is a FLAT per-session rate, Rs.1200
-    Online and Rs.800 Offline, identical across every package size; only the
-    session count differs between packages, never the rate. (The Store UI and
-    hp_consultation_decision() both multiply this rate by a session count
-    themselves — it must never be pre-multiplied here.) Idempotent/safe to
-    re-run: only writes an item whose price doesn't already match."""
-    session_items = await v3_col("store_items").find(
-        # Course-priced and Home Visit shelves excluded: see the two lists above.
-        {"item_type": "session", "category": {"$nin": list(COURSE_PRICED_CATEGORIES) + list(HOME_VISIT_CATEGORIES)}},
-        {"_id": 0},
-    ).to_list(500)
-    for item in session_items:
-        updates = {}
-        if item.get("sessions_offline") and item.get("price_offline") != SESSION_ITEM_RATE_PER_SESSION_OFFLINE:
-            updates["price_offline"] = SESSION_ITEM_RATE_PER_SESSION_OFFLINE
-        if item.get("sessions_online") and item.get("price_online") != SESSION_ITEM_RATE_PER_SESSION_ONLINE:
-            updates["price_online"] = SESSION_ITEM_RATE_PER_SESSION_ONLINE
-        if updates:
-            updates["updated_at"] = now_iso()
-            await v3_col("store_items").update_one({"id": item["id"]}, {"$set": updates})
-
-
-async def normalize_lead_session_package_prices() -> None:
-    """A lead's session_package_price is copied from the store item's price at the
-    moment the Head Physio's Consultation Decision was saved — leads saved before
-    normalize_session_item_prices() fixed the store item's price are left holding
-    the old, wrong total forever, since that copy is never recomputed live. Refresh
-    every lead's session_package_price to sessions x the correct per-session rate
-    for that lead's own mode (Rs.1200 Online / Rs.800 Offline) wherever it doesn't
-    already match. Only touches leads that haven't paid the Treatment Fee yet — once
-    treatment_fee_paid is on file, that figure is a real financial record and must
-    never be silently rewritten. Idempotent/safe to re-run."""
-    # Same exemption as the store items above, one layer down: a lead holding a Zumba
-    # membership or a Rehab course is holding a real course price, and recomputing it at the
-    # flat rate would rewrite that patient's figure to one nobody quoted them.
-    course_items = await _course_priced_item_ids() | await _home_visit_item_ids()
-    leads = await v3_col("leads").find(
-        # Not a client an OS Data sheet moved to live (past_data_live.care_for): the price on
-        # their package is what the sheet says they were charged.
-        {"session_package_sessions": {"$ne": None}, "treatment_fee_paid": None, PAST_MOVE_FIELD: None},
-        {"_id": 0, "id": 1, "session_package_sessions": 1, "session_package_price": 1, "session_package_mode": 1, "session_package_id": 1,
-         "visit_type": 1, "session_package_manual": 1},
-    ).to_list(2000)
-    for lead in leads:
-        if lead.get("session_package_id") in course_items:
-            continue
-        # A House Visit patient's treatment is charged at a Home Visit > Physiotherapy rate
-        # (or one the branch typed), not the flat branch rate this restores.
-        if lead.get("visit_type") == "home" or lead.get("session_package_manual"):
-            continue
-        rate = SESSION_ITEM_RATE_PER_SESSION_ONLINE if lead.get("session_package_mode") == "online" else SESSION_ITEM_RATE_PER_SESSION_OFFLINE
-        expected_price = round(lead["session_package_sessions"] * rate, 2)
-        if lead.get("session_package_price") != expected_price:
-            await v3_col("leads").update_one(
-                {"id": lead["id"]},
-                {"$set": {"session_package_price": expected_price, "updated_at": now_iso()}},
-            )
-
-
 async def flag_manual_session_packages() -> None:
     """Mark the leads whose Treatment Package is priced by the branch.
 

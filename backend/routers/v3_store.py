@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 import consultation_packages
+import lead_package_pricing
 import store_branch_overrides
 from database import v3_col
 from deps import role_satisfies, v3_require_roles
@@ -245,6 +246,8 @@ async def update_store_item(
         raise HTTPException(status_code=400, detail="Offline sessions count must be at least 1")
     if per_branch:
         await store_branch_overrides.save(item_id, target_branch, payload.model_dump(), user.full_name)
+        # A new rate reaches the patients already holding this package and not yet billed.
+        await lead_package_pricing.reprice_unpaid_leads(item_id)
         doc = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0})
         return _normalize_legacy_prices(await store_branch_overrides.overlay_one(doc, target_branch))
     update = payload.model_dump()
@@ -253,6 +256,7 @@ async def update_store_item(
     res = await v3_col("store_items").update_one({"id": item_id}, {"$set": update})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
+    await lead_package_pricing.reprice_unpaid_leads(item_id)
     doc = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0})
     return doc
 

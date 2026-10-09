@@ -1176,11 +1176,6 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
               className="h-9"
               data-testid={`${testPrefix}-amount`}
             />
-            {hasPrice && (
-              <p className="mt-1 text-[11px] text-slate-400" data-testid={`${testPrefix}-amount-hint`}>
-                Collecting less than Rs.{netPayable} leaves a balance to collect later — it is not a discount.
-              </p>
-            )}
           </>
         )}
       </div>
@@ -11057,13 +11052,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                               {treatmentFeeTotalSessions ? `Rs.${treatmentComputedAmount}` : (selectedLead.session_package_price != null ? `Rs.${selectedLead.session_package_price}` : "—")}
                             </div>
                           </>
-                        )}
-                        {!continuing && selectedLead.session_package_sessions && selectedLead.session_package_price != null && (
-                          <p className="mt-1 text-[11px] text-slate-500" data-testid="cons-treatment-fee-breakdown">
-                            {treatmentIsPartialSessions
-                              ? `Collect Now = ${treatmentSessionsNow} of ${treatmentFeeTotalSessions} sessions × Rs.${Math.round(perSessionRate * 100) / 100}/session = Rs.${treatmentComputedAmount}`
-                              : `Collect Total Session Fee = ${selectedLead.session_package_sessions} sessions × Rs.${Math.round((selectedLead.session_package_price / selectedLead.session_package_sessions) * 100) / 100}/session = Rs.${selectedLead.session_package_price}`}
-                          </p>
                         )}
                       </div>
                     )}
