@@ -4946,6 +4946,13 @@ async def get_branch_cash_entries(
 
     rows = []
     ledger = kind == "cash_in_hand"
+    # Which rows carry a bin (delete_branch_cash_entry's rules, read here so the list only
+    # offers what the server will do): every movement behind Developer Access's Income &
+    # Expense delete switch, except a collection on the branch desk, which follows the To
+    # Verify bin -- its own switch, and only while the payment is still the branch's.
+    branch_desk = is_branch_admin_role(user.role)
+    delete_on = await expense_delete_enabled()
+    unverified_on = branch_desk and await before_verify_delete_enabled()
     if ledger and not branch_id:
         # The roll-up card sums only branches whose opening is set, so its list does too.
         opened = set(await v3_col("cash_adjustments").distinct(
@@ -4966,6 +4973,7 @@ async def get_branch_cash_entries(
                 mode = t.get("payment_mode") or ""
                 if t.get("payment_split"):
                     mode = " + ".join(f"{l.get('mode')} {float(l.get('amount') or 0):g}" for l in t["payment_split"])
+                to_verify = not t.get("approved") and not t.get("income_requested")
                 rows.append({
                     "id": f"col-{t.get('id')}",
                     "date": (t.get("date") or "")[:10],
@@ -4973,8 +4981,9 @@ async def get_branch_cash_entries(
                     "type": "Cash in" if ledger else (t.get("source") or "other").title(),
                     "party": t.get("client_name") or "",
                     "detail": f"{(t.get('source') or '').title()} · {mode}" if ledger else mode,
-                    "status": "Approved" if t.get("approved") else "Awaiting approval",
+                    "status": "Approved" if t.get("approved") else "To Verify" if to_verify else "Awaiting approval",
                     "amount": amount,
+                    "can_delete": (unverified_on and to_verify) if branch_desk else delete_on,
                 })
 
     if kind == "cash_spent" or ledger:
@@ -4995,6 +5004,7 @@ async def get_branch_cash_entries(
                 "detail": (f"{e.get('category') or ''} · " if ledger else "") + (e.get("note") or ""),
                 "status": "Approved" if _expense_approved(e) else "Awaiting approval",
                 "amount": -amount if ledger else amount,
+                "can_delete": delete_on,
             })
 
     if kind in ("handed_over", "in_transit") or ledger:
@@ -5018,6 +5028,7 @@ async def get_branch_cash_entries(
                 ] if x),
                 "status": (h.get("status") or "pending").title(),
                 "amount": -amount if ledger else amount,
+                "can_delete": delete_on,
             })
 
     if kind == "cash_returned" or ledger:
@@ -5035,6 +5046,7 @@ async def get_branch_cash_entries(
                 ] if x),
                 "status": "",
                 "amount": round(float(r.get("amount") or 0), 2),
+                "can_delete": delete_on,
             })
 
     if ledger:
@@ -5048,6 +5060,7 @@ async def get_branch_cash_entries(
                 "detail": a.get("note") or "",
                 "status": "",
                 "amount": round(float(a.get("amount") or 0), 2),
+                "can_delete": delete_on,
             })
 
     rows.sort(key=lambda r: r["date"], reverse=True)
@@ -5056,8 +5069,68 @@ async def get_branch_cash_entries(
         "branch_id": branch_id or None,
         "rows": rows,
         "total": round(sum(r["amount"] for r in rows), 2),
-        "delete_enabled": await expense_delete_enabled(),
+        "delete_enabled": delete_on,
     }
+
+
+@router.delete("/finance/branch-cash/entries/{entry_id}")
+async def delete_branch_cash_entry(
+    entry_id: str,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
+):
+    """The bin on a Branch Cash / Cash In Hand row: whatever the row is, by the id the list
+    gave it (col- / exp- / ho- / ret- / adj-), taken out of the drawer's sums.
+
+    A collection goes the way it already goes elsewhere -- the branch desk through the To
+    Verify bin (its own switch, only a payment still the branch's), the accountant through
+    Approvals' delete -- so a list of the drawer is not a way round either rule. Everything
+    else is behind the Income & Expense delete switch. An expense is deleted as its own bin
+    deletes it. A cash return or a handover is cancelled rather than removed, so the row
+    keeps who did it; a received handover's count difference, written onto the box as a
+    correction, goes with it. An opening count or a correction is removed outright.
+    """
+    prefix, _, rid = entry_id.partition("-")
+    if not rid:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    if prefix == "col":
+        if is_branch_admin_role(user.role):
+            return await delete_unverified_transaction(rid, user=user)
+        return await delete_transaction(rid, user=user)
+    if not await expense_delete_enabled():
+        raise HTTPException(status_code=403, detail="Delete is switched off in Developer Access")
+    if prefix == "exp":
+        return await delete_expense(rid, user=user)
+
+    # A Branch Admin deletes their own branch's rows only; another's reads as not found.
+    scope = {"id": rid}
+    if is_branch_admin_role(user.role):
+        if not user.branch_id:
+            raise HTTPException(status_code=400, detail="Your account is not attached to a branch")
+        scope["branch_id"] = user.branch_id
+    gone = {"status": "cancelled", "cancelled_by": user.full_name, "cancelled_at": _now()}
+
+    if prefix == "ret":
+        res = await v3_col("cash_returns").update_one({**scope, "status": {"$ne": "cancelled"}}, {"$set": gone})
+        if not res.matched_count:
+            raise HTTPException(status_code=404, detail="Cash return not found")
+        return {"message": "Cash return deleted — the drawer drops by it again"}
+
+    if prefix == "ho":
+        res = await v3_col("cash_handovers").update_one(
+            {**scope, "status": {"$in": list(HANDOVER_STATUSES)}}, {"$set": gone}
+        )
+        if not res.matched_count:
+            raise HTTPException(status_code=404, detail="Handover not found")
+        await v3_col("cash_adjustments").delete_many({"handover_id": rid})
+        return {"message": "Handover deleted — the cash counts as back in the drawer"}
+
+    if prefix == "adj":
+        row = await v3_col("cash_adjustments").find_one(scope, {"_id": 0, "reason": 1})
+        if not row or not (await v3_col("cash_adjustments").delete_one(scope)).deleted_count:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        return {"message": "Opening count deleted" if row.get("reason") == "opening" else "Correction deleted"}
+
+    raise HTTPException(status_code=404, detail="Entry not found")
 
 
 @router.post("/finance/branch-cash/adjustment")

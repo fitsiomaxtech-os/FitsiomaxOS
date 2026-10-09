@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, Coins, HandCoins, Layers, ShieldCheck, Trash2, X } from "lucide-react";
+import { Building2, ChevronRight, Coins, HandCoins, Layers, ShieldCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SummaryTile } from "@/components/ui/summary-tile";
 import { toast } from "@/components/ui/sonner";
 import {
-  getBranches, getBranchCash, getBranchCashEntries, setBranchCashAdjustment, receiveCashHandover, deleteFinanceExpense,
+  getBranches, getBranchCash, getBranchCashEntries, setBranchCashAdjustment, receiveCashHandover, deleteBranchCashEntry,
 } from "@/lib/api";
 import { notesLabel } from "@/lib/denominations";
 
@@ -42,6 +42,78 @@ const KIND_LABEL = {
   cash_in_hand: "Cash in hand",
 };
 
+// What a row is, off the prefix the server gave its id: what the bin and the popup call
+// it, and what deleting it does to the drawer -- said in the confirm before it goes.
+const ENTRY_NOUN = { col: "payment", exp: "expense", ret: "cash return", ho: "handover" };
+const ENTRY_EFFECT = {
+  col: "The payment is removed at the source and is owed again.",
+  exp: "Its cash goes back into the drawer.",
+  ret: "The drawer drops by it again.",
+  ho: "The cash counts as back in the drawer, and a count difference written when it was received goes with it.",
+  adj: "Cash in hand moves back by it.",
+};
+const entryPrefix = (r) => String(r.id || "").split("-")[0];
+const entryNoun = (r) => {
+  const p = entryPrefix(r);
+  if (p === "adj") return r.type === "Opening" ? "opening count" : "correction";
+  return ENTRY_NOUN[p] || "entry";
+};
+const capFirst = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+
+/** One row, opened off its arrow (or a tap on the row): every field it has, and its bin
+ *  again as a button while it can be deleted. */
+const EntryDetail = ({ row, partyLabel, onClose, onDelete, deleting }) => {
+  const noun = entryNoun(row);
+  const lines = [
+    ["Date", row.date],
+    ["Branch", row.branch_name],
+    ["Type", row.type],
+    [partyLabel, row.party],
+    ["Detail", row.detail],
+    ["Status", row.status],
+  ].filter(([, v]) => v);
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="branch-cash-entry-detail"
+    >
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-slate-800">{capFirst(noun)}</h3>
+            <p className={`text-lg font-bold tabular-nums ${row.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(row.amount)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <dl className="divide-y divide-slate-100 overflow-auto px-5 py-1 text-sm">
+          {lines.map(([k, v]) => (
+            <div key={k} className="flex gap-3 py-2">
+              <dt className="w-24 shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{k}</dt>
+              <dd className="min-w-0 break-words text-slate-700">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        {row.can_delete && (
+          <div className="flex shrink-0 justify-end border-t border-slate-200 px-5 py-3">
+            <Button
+              variant="outline"
+              onClick={() => onDelete(row)}
+              disabled={deleting}
+              className="h-9 border-rose-200 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              data-testid="branch-cash-entry-detail-delete"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {deleting ? "Deleting…" : `Delete ${noun}`}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /** The rows behind one card, with a Type filter off the rows' own types. Also the Cash In
  *  Hand cards on Accountant Manage's Summary (BranchExpensesPanel), where the cards are the
  *  tabs and there is nothing to close: no onClose, no close button.
@@ -50,14 +122,17 @@ const KIND_LABEL = {
  *  picked card above already says what is open -- and the filter and buttons are one line
  *  over the table rather than three.
  *
- *  A spent row carries a bin while Developer Access has the expense delete switch on (the
- *  list says which). onDeleted: told after one goes, so the figures above are read again. */
+ *  Every row ends in an Action column: an arrow onto the row (EntryDetail), and a bin
+ *  beside it where the server says the row can go (`can_delete` -- Developer Access's
+ *  Income & Expense delete switch; a branch's payment only while still in To Verify, under
+ *  Before Verify Transactions). onDeleted: told after one goes, so the figures above are
+ *  read again. */
 export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onDeleted }) => {
   const [rows, setRows] = useState(null);
   const [type, setType] = useState(ALL);
-  const [deleteEnabled, setDeleteEnabled] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [version, setVersion] = useState(0);
+  const [openRow, setOpenRow] = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -66,7 +141,6 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
       .then((d) => {
         if (!live) return;
         setRows(d?.rows || []);
-        setDeleteEnabled(!!d?.delete_enabled);
       })
       .catch((e) => {
         if (!live) return;
@@ -77,23 +151,25 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
   }, [kind, branchId, version]);
 
   // A new card or branch starts on every type; a reload after a delete keeps the one picked.
-  useEffect(() => { setType(ALL); }, [kind, branchId]);
+  useEffect(() => { setType(ALL); setOpenRow(null); }, [kind, branchId]);
 
-  const removeExpense = async (r) => {
-    if (!window.confirm(`Delete this expense of ${fmt(Math.abs(r.amount))}${r.party ? ` paid to ${r.party}` : ""}?\n\nIt cannot be undone.`)) return;
-    setDeletingId(r.expense_id);
+  const removeEntry = async (r) => {
+    const noun = entryNoun(r);
+    const who = r.party ? ` (${r.party})` : "";
+    if (!window.confirm(`Delete this ${noun} of ${fmt(Math.abs(r.amount))}${who}?\n\n${ENTRY_EFFECT[entryPrefix(r)] || ""} It cannot be undone.`)) return;
+    setDeletingId(r.id);
     try {
-      await deleteFinanceExpense(r.expense_id);
-      toast.success("Expense deleted");
+      const res = await deleteBranchCashEntry(r.id);
+      toast.success((res?.message || `${capFirst(noun)} deleted`).replace(/ -- /g, " — "));
+      setOpenRow(null);
       setVersion((v) => v + 1);
       onDeleted?.();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not delete that expense");
+      toast.error(e?.response?.data?.detail || `Could not delete that ${noun}`);
     } finally {
       setDeletingId(null);
     }
   };
-  const showBin = deleteEnabled && (rows || []).some((r) => r.expense_id);
 
   const types = useMemo(() => {
     const m = new Map();
@@ -148,12 +224,17 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
                 <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Detail</th>
                 <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Status</th>
                 <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Amount</th>
-                {showBin && <th className="w-10 px-3 py-2.5"><span className="sr-only">Delete</span></th>}
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wide">Action</th>
               </tr>
             </thead>
             <tbody>
               {shown.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50">
+                <tr
+                  key={r.id}
+                  onClick={() => setOpenRow(r)}
+                  className="cursor-pointer border-t border-slate-100 transition-colors hover:bg-slate-50"
+                  data-testid={`branch-cash-entry-${r.id}`}
+                >
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-500">{r.date}</td>
                   {showBranch && <td className="px-3 py-2 text-slate-600">{r.branch_name}</td>}
                   <td className="px-3 py-2"><span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{r.type}</span></td>
@@ -161,23 +242,34 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
                   <td className="px-3 py-2 text-slate-500">{r.detail || "—"}</td>
                   <td className="px-3 py-2 text-slate-500">{r.status || "—"}</td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${r.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(r.amount)}</td>
-                  {showBin && (
-                    <td className="px-3 py-2 text-right">
-                      {r.expense_id ? (
+                  <td className="px-3 py-1.5 text-center">
+                    {/* The bin, a bare icon, beside the one arrow -- the To Verify row's shape. */}
+                    <div className="flex items-center justify-center gap-1">
+                      {r.can_delete && (
                         <button
                           type="button"
-                          onClick={() => removeExpense(r)}
-                          disabled={deletingId === r.expense_id}
-                          className="text-slate-300 transition hover:text-rose-600 disabled:opacity-40"
-                          title="Delete this expense"
-                          aria-label="Delete this expense"
-                          data-testid={`branch-cash-entry-delete-${r.expense_id}`}
+                          onClick={(e) => { e.stopPropagation(); removeEntry(r); }}
+                          disabled={deletingId === r.id}
+                          className="inline-flex h-7 w-7 items-center justify-center text-slate-500 transition hover:text-rose-600 disabled:opacity-40"
+                          title={`Delete this ${entryNoun(r)}`}
+                          aria-label={`Delete this ${entryNoun(r)}`}
+                          data-testid={`branch-cash-entry-delete-${r.id}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      ) : null}
-                    </td>
-                  )}
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpenRow(r); }}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700"
+                        title="View details"
+                        aria-label="View details"
+                        data-testid={`branch-cash-entry-open-${r.id}`}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -187,7 +279,17 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
     </div>
   );
 
-  if (!toolbar) return table;
+  const detail = openRow && (
+    <EntryDetail
+      row={openRow}
+      partyLabel={partyLabel}
+      onClose={() => setOpenRow(null)}
+      onDelete={removeEntry}
+      deleting={deletingId === openRow.id}
+    />
+  );
+
+  if (!toolbar) return <>{table}{detail}</>;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -195,6 +297,7 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
         <div className="ml-auto flex flex-wrap gap-2">{toolbar}</div>
       </div>
       {table}
+      {detail}
     </div>
   );
 };
@@ -422,7 +525,7 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
               {...card("cash_in_hand")}
             />
           </div>
-          {kind && kind !== "branches" && <EntriesPanel kind={kind} branchId="" showBranch onClose={() => setKind(restKind)} />}
+          {kind && kind !== "branches" && <EntriesPanel kind={kind} branchId="" showBranch onClose={() => setKind(restKind)} onDeleted={load} />}
           {/* The per-branch roll-up, behind the Branches card rather than always on screen. */}
           {kind === "branches" && (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow" data-testid="branch-cash-branches">
@@ -484,7 +587,7 @@ export const BranchCashBoard = ({ branchId: scopedBranchId, scoped = false }) =>
             <Figure label="In transit" value={fmt(data.in_transit)} tone="amber" testId="branch-cash-transit" {...card("in_transit")} />
             <Figure label="Cash in hand" value={fmt(data.cash_in_hand)} tone="emerald" testId="branch-cash-hand" {...card("cash_in_hand")} />
           </div>
-          {kind && <EntriesPanel kind={kind} branchId={branchId} showBranch={false} onClose={() => setKind(null)} />}
+          {kind && <EntriesPanel kind={kind} branchId={branchId} showBranch={false} onClose={() => setKind(null)} onDeleted={load} />}
           <p className="text-[11px] text-slate-500" data-testid="branch-cash-reconcile">
             Collected in cash {fmt(data.collected_cash)}
             {(data.cash_approved != null) && <span className="text-slate-400"> (approved {fmt(data.cash_approved)} · awaiting {fmt(data.cash_awaiting)})</span>}

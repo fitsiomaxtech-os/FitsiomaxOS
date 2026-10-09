@@ -512,6 +512,8 @@ export const topUpPettyCash = async (payload) => (await api.post("/finance/petty
 // of cash ever taken and the panel prompts for the count instead.
 export const getBranchCash = async (params = {}) => (await api.get("/finance/branch-cash", { params })).data;
 export const getBranchCashEntries = async (params = {}) => (await api.get("/finance/branch-cash/entries", { params })).data;
+// The bin on one of those rows, by the row's own id (col- / exp- / ho- / ret- / adj-).
+export const deleteBranchCashEntry = async (entryId) => (await api.delete(`/finance/branch-cash/entries/${entryId}`)).data;
 export const setBranchCashAdjustment = async (payload) => (await api.post("/finance/branch-cash/adjustment", payload)).data;
 export const createCashHandover = async (payload) => (await api.post("/finance/cash-handover", payload)).data;
 export const listCashHandovers = async (params = {}) => (await api.get("/finance/cash-handovers", { params })).data;
