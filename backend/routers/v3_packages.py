@@ -17,7 +17,6 @@ from schemas.v3 import (
     V3PhysioDiagnosisInput, V3TreatmentSummaryInput,
 )
 from utils import generate_transaction_id
-from routers.v3_lead_documents import has_prescription_on_file
 
 router = APIRouter(prefix="/api/v3", tags=["packages"])
 
@@ -969,21 +968,8 @@ async def collect_package_payment(lead_id: str, payload: V3CollectPackagePayment
 
     if not lead.get("package_id") or lead.get("package_price") is None:
         raise HTTPException(status_code=400, detail="Select the consultation package being collected for")
-    # Paperwork before money, enforced here and not only on the screen that asks for it.
-    # The Consultation Visit panel locks its Collect tab until the prescription is filed,
-    # but that lock is one screen's manners: the Collect button at the end of a row on the
-    # list opened the popup straight off the lead, and any caller holding the URL reaches
-    # this endpoint with no screen involved at all. A rule only the UI knows is a rule
-    # anyone can walk past, so the fee is refused here until the page is actually on file.
-    #
-    # First collection only. Correcting or topping up a fee already taken is not the moment
-    # to withhold a receipt over a page nobody filed at the time — and this endpoint is the
-    # one that does both.
-    if lead.get("package_paid") is None and not await has_prescription_on_file(lead_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Upload the patient's prescription before collecting the Consultation Fee",
-        )
+    # No prescription gate. The fee used to be refused until the prescription was on file;
+    # the desk now collects with or without it, and the page is filed whenever it arrives.
 
     original_price = lead["package_price"]
 

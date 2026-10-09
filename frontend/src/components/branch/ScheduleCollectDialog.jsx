@@ -28,8 +28,8 @@ export const collectWhat = (row) => (row?.next_installment_number ? "instalment"
  * asks for. Both of those stay there. What this does is the plain case, in one step.
  *
  * Taken through the same endpoints the rest of the OS uses, so every rule they hold still
- * holds: a Consultation Fee is refused until the prescription is on file, and collecting it
- * moves the client to Fee Collected exactly as it would from Consultations.
+ * holds: collecting a Consultation Fee moves the client to Fee Collected exactly as it would
+ * from Consultations.
  */
 export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
   const kind = collectWhat(row);
