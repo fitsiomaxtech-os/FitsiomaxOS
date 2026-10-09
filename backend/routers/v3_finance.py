@@ -5057,15 +5057,12 @@ os.makedirs(BANK_QR_UPLOAD_DIR, exist_ok=True)
 BANK_QR_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 BANK_QR_MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
-# The four a card cannot be saved without. IFSC and the bank's own branch name are left
-# out on purpose: an account collects money by UPI whether or not anyone has typed the
-# IFSC, and refusing the save over it would only get a placeholder typed in.
+# The one field a card cannot be saved without: the bank name, which is what the card is
+# called everywhere it shows. Everything else can be filled in later -- refusing the save
+# over a detail nobody has to hand yet would only get a placeholder typed in. An account
+# saved without a UPI ID is simply left out of the Collect picker (list_upi_collect_options).
 BANK_ACCOUNT_REQUIRED = {
     "bank_name": "Bank name",
-    "account_number": "Account number",
-    "upi_id": "UPI ID",
-    "holder_name": "Holder name",
-    "qr_image_url": "QR image",
 }
 
 

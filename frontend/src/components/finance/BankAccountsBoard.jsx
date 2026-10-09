@@ -69,9 +69,9 @@ const EMPTY_FORM = {
   branch_id: "",
 };
 
-// Every field the popup asks for, with the four that Save is refused without starred —
-// the same four the backend checks, said here so the refusal arrives before the request
-// rather than as a toast after it.
+// Every field the popup asks for, with the one Save is refused without starred — the
+// bank name, the same one the backend checks, said here so the refusal arrives before
+// the request rather than as a toast after it.
 const FieldLabel = ({ icon: Icon, children, required }) => (
   <label className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-slate-800">
     <Icon className="h-4 w-4 text-indigo-500" />
@@ -117,15 +117,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
   };
 
   const save = async () => {
-    const required = [
-      [form.bank_name, "Bank name"],
-      [form.account_number, "Account number"],
-      [form.upi_id, "UPI ID"],
-      [form.holder_name, "Holder name"],
-      [form.qr_image_url, "QR image"],
-    ];
-    const missing = required.find(([value]) => !String(value || "").trim());
-    if (missing) { toast.error(`${missing[1]} is required`); return; }
+    if (!String(form.bank_name || "").trim()) { toast.error("Bank name is required"); return; }
     setSaving(true);
     try {
       // The branch comes off the form's own field, never off the pill row: a card
@@ -216,7 +208,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
           </div>
 
           <div>
-            <FieldLabel icon={CreditCard} required>Account Number</FieldLabel>
+            <FieldLabel icon={CreditCard}>Account Number</FieldLabel>
             <Input placeholder="Enter account number" value={form.account_number} onChange={set("account_number")} data-testid="finance-bank-account-number" />
           </div>
 
@@ -227,11 +219,11 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
 
           <div className="space-y-5">
             <div>
-              <FieldLabel icon={Banknote} required>UPI ID</FieldLabel>
+              <FieldLabel icon={Banknote}>UPI ID</FieldLabel>
               <Input placeholder="Enter UPI ID" value={form.upi_id} onChange={set("upi_id")} data-testid="finance-bank-upi-id" />
             </div>
             <div>
-              <FieldLabel icon={User} required>Holder Name</FieldLabel>
+              <FieldLabel icon={User}>Holder Name</FieldLabel>
               <Input placeholder="Enter account holder name" value={form.holder_name} onChange={set("holder_name")} data-testid="finance-bank-holder" />
             </div>
             {/* The same switch the card carries, so an account can be added already
@@ -265,7 +257,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
           </div>
 
           <div>
-            <FieldLabel icon={QrCode} required>QR Image</FieldLabel>
+            <FieldLabel icon={QrCode}>QR Image</FieldLabel>
             <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 text-center">
               <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-lg bg-white p-2">
                 {form.qr_image_url ? (
@@ -414,7 +406,8 @@ const DeleteBankDialog = ({ account, onCancel, onConfirm, busy }) => (
         <div>
           <h3 className="text-lg font-bold text-slate-900">Delete this bank account?</h3>
           <p className="mt-1 text-sm text-slate-600">
-            {account.bank_name} — {account.holder_name}
+            {account.bank_name}
+            {account.holder_name ? ` — ${account.holder_name}` : ""}
             {account.account_number ? ` (A/c ${account.account_number})` : ""}
           </p>
           <p className="mt-2 text-xs text-slate-500">
@@ -562,7 +555,7 @@ const BankListRow = ({ account: acc, onView, onEdit, onDelete, onToggle }) => (
       type="button"
       onClick={onView}
       className="min-w-0 flex-1 text-left"
-      title={`${acc.bank_name} — ${acc.holder_name}`}
+      title={acc.holder_name ? `${acc.bank_name} — ${acc.holder_name}` : acc.bank_name}
       data-testid={`finance-bank-row-open-${acc.id}`}
     >
       <p className={`truncate text-xs font-bold ${acc.is_active ? "text-slate-900" : "text-rose-900"}`}>
