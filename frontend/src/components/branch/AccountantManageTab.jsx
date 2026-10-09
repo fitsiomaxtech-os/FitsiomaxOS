@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2 } from "lucide-react";
+import { Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -254,45 +254,34 @@ const UNPLACED = ["Unassigned", "Former branch"];
 
 const countLabel = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-/** The arrow and Undo on a payment row, which move it between To Verify and Awaiting
- *  Approval. The branch desk's alone: verifying is the branch's step, and the accountant's
- *  and Super Admin's copies of this board read the piles without moving them. Nothing on an
- *  approved row -- taking back a signature is the accountant's (Approvals > Unapprove).
- *
- *  `txs` is every collection the button stands for: one on a payment's own row, all of a
- *  client's on their folded row, which are always in the same pile since the list under
- *  the cards is one pile at a time. */
-const MoveButton = ({ txs, verify, compact = false }) => {
-  if (!verify || !txs.length) return null;
-  const stage = stageOf(txs[0]);
-  if (stage === "approved") return null;
-  const busy = txs.some((t) => verify.busy.has(t.id));
-  const send = stage === "collected";
-  const many = txs.length > 1 ? ` (${countLabel(txs.length, "payment")})` : "";
-  const label = send ? `Verified — send to the accountant for approval${many}` : `Undo — take back from the accountant${many}`;
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); if (!busy) verify.move(txs, !send); }}
-      onKeyDown={(e) => e.stopPropagation()}
-      disabled={busy}
-      title={label}
-      aria-label={label}
-      className={`inline-flex shrink-0 items-center justify-center rounded-md border transition disabled:opacity-50 ${compact ? "h-7 w-7" : "h-8 w-8"} ${
-        send
-          ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-300 hover:bg-indigo-100"
-          : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
-      }`}
-      data-testid={`accountant-move-${send ? "send" : "undo"}-${txs.map((t) => t.id).join("-")}`}
-    >
-      {send ? <ArrowRight className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} /> : <Undo2 className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />}
-    </button>
-  );
-};
+/** Who a popup is about, off a client's folded row or a single collection. */
+const groupHead = (g) => ({ client_name: g.client_name, phone: g.phone, branch: g.branches.join(" · "), lead_id: g.lead_id, old_client: g.old_client });
+const txHead = (tx) => ({ client_name: tx.client_name || "Unknown", phone: tx.phone, branch: tx.branch_name, lead_id: tx.lead_id, old_client: tx.old_client });
 
-/** The same move as a labelled button, for a phone card, where an icon on its own is too
- *  small a thing to find. */
-const MoveChip = ({ txs, verify }) => {
+/** The one control a ledger row carries: the arrow into its payments (PaymentDetails), the
+ *  same chevron Payment Schedule's Action column opens a client with. What can be done to
+ *  the money -- send it for approval, take it back, reissue its receipt -- is in there
+ *  rather than in a row of icons on every line, which the branch found harder to read
+ *  than the list itself. */
+const OpenArrow = ({ onClick, label = "View details", compact = false, testid }) => (
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    className={`inline-flex items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 ${compact ? "h-6 w-6" : "h-7 w-7"}`}
+    title={label}
+    aria-label={label}
+    data-testid={testid}
+  >
+    <ChevronRight className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+  </button>
+);
+
+/** Send for approval, or Undo: moves collections between To Verify and Awaiting Approval.
+ *  The branch desk's alone -- verifying is the branch's step, and the accountant's and
+ *  Super Admin's copies read the piles without moving them. Nothing on an approved payment:
+ *  taking back a signature is the accountant's (Approvals > Unapprove). `txs` is every
+ *  collection the button stands for, all in one pile. */
+const MoveChip = ({ txs, verify, label }) => {
   if (!verify || !txs.length) return null;
   const stage = stageOf(txs[0]);
   if (stage === "approved") return null;
@@ -309,7 +298,7 @@ const MoveChip = ({ txs, verify }) => {
       }`}
       data-testid={`accountant-move-chip-${send ? "send" : "undo"}-${txs.map((t) => t.id).join("-")}`}
     >
-      {send ? <>Send for approval <ArrowRight className="h-3.5 w-3.5" /></> : <><Undo2 className="h-3.5 w-3.5" /> Undo</>}
+      {send ? <>{label || "Send for approval"} <ArrowRight className="h-3.5 w-3.5" /></> : <><Undo2 className="h-3.5 w-3.5" /> {label || "Undo"}</>}
     </button>
   );
 };
@@ -425,8 +414,12 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // always has -- except where only signed-off money counts, which fixes it on Approved
   // and never moves it again.
   const [incomeStage, setIncomeStage] = useState(approvedOnly ? "approved" : canVerify ? "collected" : "requested");
-  // Collections whose arrow or Undo is on its way to the server, so a second press waits.
+  // Collections whose Send or Undo is on its way to the server, so a second press waits.
   const [moving, setMoving] = useState(() => new Set());
+  // The ledger row its arrow opened (PaymentDetails): who it is, and the ids of the
+  // payments behind it. Ids rather than the rows themselves, so a Send or Undo pressed in
+  // there shows the payment's new pile as soon as the list reloads.
+  const [detail, setDetail] = useState(null);
   const [expenseTotals, setExpenseTotals] = useState({ approved_total: 0, approved_count: 0, pending_count: 0, pending_total: 0 });
   // One branch's drawer, or every opened branch's added up where no branch is picked.
   const [cashInHand, setCashInHand] = useState(0);
@@ -582,20 +575,40 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
   // Payment Schedule's Undo: the newest instalment on a client, back to owed. Asked first --
   // it takes money off the day -- and refused by the server once the payment is with the
-  // accountant or its day's book is closed, which the button already says on hover.
+  // accountant or its day's book is closed. True when it went through.
   const undoScheduleRow = async (row) => {
     const u = row.undo_last;
-    if (!u) return;
-    if (!window.confirm(`Undo ${u.label} — ${fmt(u.amount)} collected from ${row.client_name || "this client"}${u.at ? ` on ${u.at.slice(0, 10)}` : ""}?\n\nThe payment is removed and the amount is owed again.`)) return;
+    if (!u) return false;
+    if (!window.confirm(`Undo ${u.label} — ${fmt(u.amount)} collected from ${row.client_name || "this client"}${u.at ? ` on ${u.at.slice(0, 10)}` : ""}?\n\nThe payment is removed and the amount is owed again.`)) return false;
     try {
       const res = await undoLastInstalment(row.old_client ? { old_client_id: row.old_client_id } : { lead_id: row.lead_id });
       toast.success(res?.message || "Payment undone");
       load();
       loadExpenseTotals();
+      return true;
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Could not undo that payment");
+      return false;
     }
   };
+
+  // That Undo as the client's popup draws it -- the client card for a lead, the instalment
+  // form for an old client -- rather than as an icon on the Payment Schedule row. Shown
+  // greyed with its reason once the payment is the accountant's.
+  const scheduleUndo = (row) => {
+    const u = canVerify && row?.undo_last;
+    if (!u) return undefined;
+    return {
+      label: u.label,
+      amount: u.amount,
+      blocked: u.approved
+        ? "Approved by the accountant — only they can undo it"
+        : u.sent ? "This payment is with the accountant — undo it on Summary first, then here" : "",
+      run: () => undoScheduleRow(row),
+    };
+  };
+
+  const openDetail = (payments, head) => setDetail({ ids: payments.map((t) => t.id), head });
 
   const k = data?.kpis || {};
   // `data?.x || []` builds a fresh array on every render, so every memo keyed on one was
@@ -605,6 +618,13 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // The client popup's Collect: the open client's Payment Schedule row, when that row is
   // one its own Collect button would take -- the board's rule, read off the same row.
   const viewingRow = useMemo(() => outstanding.find((r) => r.lead_id === viewingLeadId), [outstanding, viewingLeadId]);
+  // The opened row's payments, read off the whole ledger rather than the filtered list, so
+  // a payment that has just moved pile stays in front of the desk that moved it.
+  const detailPayments = useMemo(() => {
+    if (!detail) return [];
+    const byId = new Map(transactions.map((t) => [t.id, t]));
+    return detail.ids.map((id) => byId.get(id)).filter(Boolean);
+  }, [detail, transactions]);
   const viewingCollectable = Boolean(viewingRow) && !viewingRow.old_client && !viewingRow.past_data && viewingRow.balance > 0 && canCollectRow(viewingRow);
   // A Collect on a Payment Schedule row, from the table or the client popup. An instalment
   // is one fixed figure and is taken on this tab's short popup. A Consultation Fee opens the
@@ -1073,8 +1093,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
           <RevenueDetailTable
             rows={revenueView === "collected" ? filteredTxns : filteredTxns.filter((t) => t.source === revenueView)}
-            onView={setViewingLeadId}
-            onReceipt={(tx) => setReceipt(receiptForTxn(tx))}
+            onOpen={openDetail}
             verify={verify}
           />
           </>
@@ -1088,8 +1107,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           onCollect={collectScheduleRow}
           canCollect={canCollectRow}
           onNewOld={canRecordOld ? () => setOldClientForm({}) : undefined}
-          onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id } }) : undefined}
-          onUndo={canVerify ? undoScheduleRow : undefined}
+          onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id }, row }) : undefined}
           startDate={startDate}
           endDate={endDate}
         />
@@ -1108,7 +1126,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           onPickDay={(on) => pickDates("custom", on, on)}
         />
       ) : (
-        <DiscountAppliedBoard rows={discountedTxns} onView={setViewingLeadId} onReceipt={(tx) => setReceipt(receiptForTxn(tx))} verify={verify} />
+        <DiscountAppliedBoard rows={discountedTxns} onOpen={openDetail} verify={verify} />
       )}
 
       {/* The Custom Range dialog moved into FinanceDateFilter, which opens it from the row
@@ -1120,6 +1138,17 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           onClose={() => setViewingLeadId(null)}
           onChanged={load}
           onCollect={viewingCollectable ? () => collectScheduleRow(viewingRow) : undefined}
+          undo={scheduleUndo(viewingRow)}
+        />
+      )}
+      {detail && (
+        <PaymentDetails
+          head={detail.head}
+          payments={detailPayments}
+          verify={verify}
+          onReceipt={(tx) => setReceipt(receiptForTxn(tx))}
+          onClientHistory={(leadId) => { setDetail(null); setViewingLeadId(leadId); }}
+          onClose={() => setDetail(null)}
         />
       )}
       {oldClientForm && (
@@ -1127,6 +1156,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           branchId={branchId}
           branches={branches}
           startWith={oldClientForm.startWith || null}
+          undo={scheduleUndo(oldClientForm.row)}
           onClose={() => setOldClientForm(null)}
           onSaved={(res) => {
             setOldClientForm(null);
@@ -1196,7 +1226,8 @@ const DISCOUNT_VIEWS = [
  * decision taken at that moment — rolling a client's two visits together would average
  * away the one that was actually negotiated.
  */
-const DiscountAppliedBoard = ({ rows, onView, onReceipt, verify = null }) => {
+/** @param onOpen  Opens a collection's PaymentDetails -- its arrow, and a tap on its phone card. */
+const DiscountAppliedBoard = ({ rows, onOpen, verify = null }) => {
   const [view, setView] = useState("all");
 
   // Falls back to listed = collected + discount when original_amount is missing, which is
@@ -1256,11 +1287,11 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt, verify = null }) => {
             ) : visible.map((tx, i) => (
               <div
                 key={tx.id}
-                role={onView ? "button" : undefined}
-                tabIndex={onView ? 0 : undefined}
-                onClick={() => onView && onView(tx.lead_id)}
-                onKeyDown={(e) => { if (onView && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onView(tx.lead_id); } }}
-                className={`rounded-xl border border-slate-200 bg-white p-3 ${onView ? "cursor-pointer active:bg-slate-50" : ""}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpen([tx], txHead(tx))}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen([tx], txHead(tx)); } }}
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 active:bg-slate-50"
                 data-testid={`discount-detail-card-${tx.id}`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -1281,19 +1312,8 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt, verify = null }) => {
                   <span className="font-semibold text-emerald-600">{fmt(tx.gross)}</span>
                   <span className="capitalize">{tx.source}</span>
                   <span>{(tx.date || "").slice(0, 10)}</span>
-                  {onView && (
-                    <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700">
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </span>
-                  )}
+                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-400" />
                 </div>
-                {/* The same move as Summary's: a discounted collection is one of its rows,
-                    in whichever pile it is in, so it can be verified from here too. */}
-                {verify && stageOf(tx) !== "approved" && (
-                  <div className="mt-2 flex justify-end border-t border-slate-100 pt-2">
-                    <MoveChip txs={[tx]} verify={verify} />
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -1319,7 +1339,7 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt, verify = null }) => {
                 {visible.length === 0 ? (
                   <tr><td colSpan={11} className="px-3 py-8 text-center text-sm text-slate-400">No discounted collections yet.</td></tr>
                 ) : visible.map((tx, i) => (
-                  <tr key={tx.id} data-testid={`discount-detail-row-${tx.id}`}>
+                  <tr key={tx.id} onClick={() => onOpen([tx], txHead(tx))} className="cursor-pointer" data-testid={`discount-detail-row-${tx.id}`}>
                     <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-3 py-2 text-center text-slate-400">{i + 1}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">{tx.client_name || "Unknown"}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{tx.phone || "—"}</td>
@@ -1335,40 +1355,9 @@ const DiscountAppliedBoard = ({ rows, onView, onReceipt, verify = null }) => {
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{(tx.date || "").slice(0, 10)}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{tx.branch_name || "—"}</td>
                     <td className="rounded-r-[5px] border-y border-r border-slate-200 bg-white px-3 py-2 text-center">
-                      {/* Two things a row can be opened for, and they are not the same
-                          thing: the eye opens the client behind the money, the receipt
-                          opens the money itself. This column carried only the first, so
-                          a desk asked for a copy of a bill had to open the client, find
-                          the fee and reissue it from there — or, before the fee cards
-                          could reissue at all, could not produce one. */}
-                      <div className="flex items-center justify-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => onView && onView(tx.lead_id)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
-                          title="Open this client"
-                          aria-label="Open this client"
-                          data-testid={`discount-detail-view-${tx.id}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <MoveButton txs={[tx]} verify={verify} />
-                        {/* Only where the collection has a transaction id. Rows taken
-                            before ids existed are real money and still list, but a
-                            receipt with no number on it proves nothing. */}
-                        {onReceipt && tx.transaction_id && (
-                          <button
-                            type="button"
-                            onClick={() => onReceipt(tx)}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-emerald-600"
-                            title="Receipt — print, send or download it again"
-                            aria-label="Receipt"
-                            data-testid={`discount-detail-receipt-${tx.id}`}
-                          >
-                            <Receipt className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
+                      {/* The arrow into the payment: Send for approval or Undo, and the
+                          receipt, are in there (PaymentDetails). */}
+                      <OpenArrow onClick={() => onOpen([tx], txHead(tx))} testid={`discount-detail-open-${tx.id}`} />
                     </td>
                   </tr>
                 ))}
@@ -1448,11 +1437,12 @@ const OldClientTag = () => (
 const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.length - 2) });
 
 /**
- * @param verify  The branch desk's arrow and Undo (MoveButton), or null where this board is
- *              read rather than worked -- the accountant's and Super Admin's copies. Given
- *              one, the last column is Action rather than View and carries them.
+ * @param onOpen  Opens a row's PaymentDetails: a client's folded row opens all of their
+ *              payments, a payment's own row just that one.
+ * @param verify  Whether this is the branch desk's copy, which heads the arrow's column
+ *              Action rather than View -- Send and Undo are in what it opens.
  */
-const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
+const RevenueDetailTable = ({ rows, onOpen, verify = null }) => {
   const groups = useMemo(() => groupPaymentsByClient(rows), [rows]);
   // Keyed by group, so narrowing the list above leaves stale keys behind harmlessly
   // rather than opening the wrong client.
@@ -1498,13 +1488,13 @@ const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
           ) : groups.map((g, i) => (
             <div
               key={g.key}
-              role={onView ? "button" : undefined}
-              tabIndex={onView ? 0 : undefined}
-              onClick={() => onView && onView(g.lead_id)}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(g.payments, groupHead(g))}
               onKeyDown={(e) => {
-                if (onView && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onView(g.lead_id); }
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(g.payments, groupHead(g)); }
               }}
-              className={`rounded-xl border border-slate-200 bg-white p-3 ${onView ? "cursor-pointer active:bg-slate-50" : ""}`}
+              className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 active:bg-slate-50"
               data-testid={`revenue-detail-card-${g.key}`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -1536,11 +1526,6 @@ const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
                   <p className="truncate pt-0.5 text-[11px] text-slate-400">{g.branches.join(" · ")}</p>
                 )}
               </div>
-              {verify && stageOf(g.payments[0]) !== "approved" && (
-                <div className="mt-2 flex justify-end border-t border-slate-100 pt-2">
-                  <MoveChip txs={g.payments} verify={verify} />
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -1580,8 +1565,10 @@ const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
                 return [
                   <tr
                     key={g.key}
-                    onClick={many ? () => toggle(g.key) : undefined}
-                    className={`border-b border-slate-100 transition-colors hover:bg-slate-50 ${many ? "cursor-pointer" : ""}`}
+                    // A client with several payments folds open on a click; with one, the
+                    // row is that payment and opens it, as its arrow does.
+                    onClick={many ? () => toggle(g.key) : () => onOpen(g.payments, groupHead(g))}
+                    className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50"
                     data-testid={`revenue-detail-row-${g.key}`}
                   >
                     <td className="px-3 py-2.5 text-center text-slate-400">{i + 1}</td>
@@ -1640,39 +1627,9 @@ const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
                       {g.branches.length > 1 && <span className="text-slate-400"> +{g.branches.length - 1}</span>}
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); if (onView) onView(g.lead_id); }}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
-                          title="Open this client"
-                          aria-label="Open this client"
-                          data-testid={`revenue-detail-view-${g.key}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        {/* Every payment the row folds, sent or taken back together; each
-                            sub-row below carries its own for one at a time. */}
-                        <MoveButton txs={g.payments} verify={verify} />
-                        {/* A receipt is one collection's, and this row is a client's. So
-                            it appears here only where the client made exactly one payment
-                            and the two are the same thing; a client with three gets a
-                            receipt button on each of the three rows underneath instead,
-                            because "the receipt" for that row would have to pick one of
-                            them and there is no right answer. */}
-                        {onReceipt && !many && g.payments[0]?.transaction_id && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onReceipt(g.payments[0]); }}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-emerald-600"
-                            title="Receipt — print, send or download it again"
-                            aria-label="Receipt"
-                            data-testid={`revenue-detail-receipt-${g.key}`}
-                          >
-                            <Receipt className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
+                      {/* The one control on the row: into the client's payments, where Send
+                          for approval, Undo and each receipt are (PaymentDetails). */}
+                      <OpenArrow onClick={() => onOpen(g.payments, groupHead(g))} testid={`revenue-detail-open-${g.key}`} />
                     </td>
                   </tr>,
                   // Each collection exactly as it listed before, minus the client identity
@@ -1692,27 +1649,9 @@ const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
                       <td className="px-3 py-1.5 text-center"><PaymentModes tx={p} /></td>
                       <td className="px-3 py-1.5 text-center text-slate-600">{dayOf(p.date)}</td>
                       <td className="px-3 py-1.5 text-center text-slate-600">{p.branch_name || "—"}</td>
-                      {/* The one cell on these sub-rows that is not blank. Each of them
-                          is a collection in its own right, so each has its own receipt —
-                          which is the whole reason the group row above declines to show
-                          one — and its own arrow or Undo. No client button here: the row
-                          above is that client. */}
+                      {/* Each payment is a collection in its own right, so it opens on its own. */}
                       <td className="px-3 py-1.5 text-center">
-                        <div className="flex items-center justify-center gap-0.5">
-                          <MoveButton txs={[p]} verify={verify} compact />
-                          {onReceipt && p.transaction_id && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); onReceipt(p); }}
-                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-emerald-600"
-                              title="Receipt — print, send or download it again"
-                              aria-label="Receipt"
-                              data-testid={`revenue-detail-receipt-${p.id}`}
-                            >
-                              <Receipt className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
+                        <OpenArrow onClick={() => onOpen([p], groupHead(g))} compact testid={`revenue-detail-open-${p.id}`} />
                       </td>
                     </tr>
                   )) : []),
@@ -1723,6 +1662,160 @@ const RevenueDetailTable = ({ rows, onView, onReceipt, verify = null }) => {
         </div>
       </CardContent>
     </Card>
+  );
+};
+
+const STAGE_BADGE = {
+  collected: { label: "To Verify", className: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  requested: { label: "Awaiting Approval", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  approved: { label: "Approved", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+};
+
+/** Where one payment stands, in words: who did the last thing to it. */
+const stageLine = (t) => {
+  const stage = stageOf(t);
+  if (stage === "approved") return `Approved by ${t.approved_by || "the accountant"}`;
+  if (stage === "requested") return `Sent to the accountant${t.income_requested_by ? ` by ${t.income_requested_by}` : ""}`;
+  return `Collected${t.collected_by ? ` by ${t.collected_by}` : ""} · not yet verified`;
+};
+
+/**
+ * A ledger row opened by its arrow: every payment behind it, and what can be done to each.
+ *
+ * Send for approval and Undo (the branch desk's, `verify`), and the receipt, live here
+ * rather than as a row of icons on every line of the table. Each payment says which pile it
+ * is in and who put it there; a client with several in one pile can send or take back all
+ * of them at once. Client history opens the client's own card, for a row that has a client.
+ *
+ * Portalled at the client card's own level (z-50), so the receipt (z-80) opens over it and
+ * the desk comes back to this when the receipt is shut.
+ */
+const PaymentDetails = ({ head, payments, verify, onReceipt, onClientHistory, onClose }) => {
+  const total = payments.reduce((n, t) => n + (Number(t.gross) || 0), 0);
+  const toVerify = payments.filter((t) => stageOf(t) === "collected");
+  const waiting = payments.filter((t) => stageOf(t) === "requested");
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="payment-details-modal"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-details-name"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <h3 id="payment-details-name" className="truncate text-lg font-bold text-slate-900">
+              {head.client_name || "Unknown"}
+              {head.old_client && <OldClientTag />}
+            </h3>
+            <p className="mt-0.5 truncate text-sm text-slate-600">{[head.phone, head.branch].filter(Boolean).join(" · ") || "—"}</p>
+          </div>
+          <div className="flex shrink-0 items-start gap-1">
+            <div className="text-right">
+              <p className="font-mono text-base font-bold tabular-nums text-emerald-600" data-testid="payment-details-total">{fmt(total)}</p>
+              <p className="text-[11px] text-slate-500">{countLabel(payments.length, "payment")}</p>
+            </div>
+            <button
+              type="button" onClick={onClose} title="Close" aria-label="Close"
+              className="-mr-1.5 flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              data-testid="payment-details-close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3">
+          {verify && (toVerify.length > 1 || waiting.length > 1) && (
+            <div className="flex flex-wrap justify-end gap-2" data-testid="payment-details-all">
+              {toVerify.length > 1 && <MoveChip txs={toVerify} verify={verify} label={`Send all ${toVerify.length} for approval`} />}
+              {waiting.length > 1 && <MoveChip txs={waiting} verify={verify} label={`Undo all ${waiting.length}`} />}
+            </div>
+          )}
+          {payments.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-500">These payments are no longer on the list.</p>
+          ) : payments.map((t) => {
+            const stage = stageOf(t);
+            const badge = STAGE_BADGE[stage];
+            const off = Number(t.discount) || 0;
+            const canMove = verify && stage !== "approved";
+            return (
+              <div key={t.id} className="rounded-lg border border-slate-200 bg-white px-3.5 py-3" data-testid={`payment-details-row-${t.id}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">
+                      {RECEIPT_PAID_FOR[t.source] || titleCase(t.source || "")}
+                      {t.instalment_number ? ` · Instalment #${t.instalment_number}` : ""}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
+                      <span>{dayOf(t.date) || "—"}</span>
+                      <PaymentModes tx={t} />
+                      {t.transaction_id && <span className="font-mono text-[11px] text-slate-500">{t.transaction_id}</span>}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-mono text-sm font-bold tabular-nums text-slate-900">{fmt(t.gross)}</p>
+                    <span className={`mt-1 inline-flex rounded-[5px] border px-1.5 py-px text-[10px] font-semibold ${badge.className}`} data-testid={`payment-details-stage-${t.id}`}>
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+                {off > 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-700">
+                    Listed {fmt(Number(t.original_amount) || (Number(t.gross) || 0) + off)} · {fmt(off)} off
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] text-slate-500">{stageLine(t)}</p>
+                {(canMove || t.transaction_id) && (
+                  <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2.5">
+                    {canMove && <MoveChip txs={[t]} verify={verify} />}
+                    {/* Only where the collection has a transaction id. Rows taken before
+                        ids existed are real money and still list, but a receipt with no
+                        number on it proves nothing. */}
+                    {t.transaction_id && (
+                      <button
+                        type="button"
+                        onClick={() => onReceipt(t)}
+                        className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        title="Receipt — print, send or download it again"
+                        data-testid={`payment-details-receipt-${t.id}`}
+                      >
+                        <Receipt className="h-3.5 w-3.5" /> Receipt
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5">
+          {head.lead_id && onClientHistory && (
+            <button
+              type="button"
+              onClick={() => onClientHistory(head.lead_id)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              data-testid="payment-details-client"
+            >
+              Client history <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button" onClick={onClose}
+            className="ml-auto rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            data-testid="payment-details-footer-close"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 };
 

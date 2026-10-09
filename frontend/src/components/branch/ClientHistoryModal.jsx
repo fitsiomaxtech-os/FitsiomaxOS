@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
@@ -300,8 +300,12 @@ const RECENT_PAYMENTS = 3;
  * @param onCollect  Collects a balance this popup has no form for -- a Consultation Fee
  *              assigned and never collected -- the way the board's own row Collect does.
  *              Handed in only where the board can take it; left out, no button.
+ * @param undo  Payment Schedule's Undo of the newest instalment taken on this client,
+ *              { label, amount, blocked, run }: drawn beside Collect rather than on the
+ *              schedule's row. `blocked` is why it cannot be pressed (the payment is with the
+ *              accountant), said on a tap; `run` resolves true when it went through.
  */
-export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect }) => {
+export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
@@ -540,7 +544,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect }) =>
                 <MoneyTile label="Collected" value={fmt(collected)} tone="text-teal-700" />
               </div>
 
-              {((due > 0 && data.next_due_date) || data.last_payment_date || collectKind || feeCollect) && (
+              {((due > 0 && data.next_due_date) || data.last_payment_date || collectKind || feeCollect || undo) && (
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
                     {due > 0 && data.next_due_date && <span>Next due <span className="font-semibold text-slate-800">{fmtDay(data.next_due_date)}</span></span>}
@@ -562,6 +566,25 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect }) =>
                       data-testid="client-history-collect-fee"
                     >
                       <Wallet className="h-4 w-4" /> Collect Consultation Fee
+                    </button>
+                  )}
+                  {undo && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (undo.blocked) { toast.message(undo.blocked); return; }
+                        if (await undo.run()) load();
+                      }}
+                      aria-disabled={Boolean(undo.blocked)}
+                      title={undo.blocked || `Undo ${undo.label} — ${fmt(undo.amount)}`}
+                      className={`flex h-10 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-bold sm:w-auto ${
+                        undo.blocked
+                          ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                          : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      }`}
+                      data-testid="client-history-undo-instalment"
+                    >
+                      <Undo2 className="h-4 w-4" /> Undo {undo.label}
                     </button>
                   )}
                 </div>

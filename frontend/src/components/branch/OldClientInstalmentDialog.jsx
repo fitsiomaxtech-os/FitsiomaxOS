@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { History, X, Search, UserPlus, Info } from "lucide-react";
+import { History, X, Search, UserPlus, Info, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { searchOldClients, recordOldClientPayment } from "@/lib/api";
 import { CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
@@ -53,8 +53,11 @@ const digitsOf = (s) => String(s || "").replace(/\D/g, "");
  *                   reading every branch -- the form then asks for one.
  * @param startWith  { id, phone, branch_id } of an old client to open straight on, as
  *                   Payment Schedule's Collect does.
+ * @param undo       Payment Schedule's Undo of that client's newest instalment,
+ *                   { label, amount, blocked, run } -- shown on the client's card while it is
+ *                   the one opened from the row. The form closes once it goes through.
  */
-export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startWith = null, onClose, onSaved }) => {
+export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startWith = null, undo, onClose, onSaved }) => {
   const today = toIso(new Date());
   const [branch, setBranch] = useState(branchId || startWith?.branch_id || "");
   const [q, setQ] = useState(startWith?.phone || "");
@@ -305,6 +308,26 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                   <button type="button" onClick={backToSearch} className="text-slate-500 hover:underline" data-testid="old-client-change">Change</button>
                 </div>
               </div>
+              {undo && picked.id === startWith?.id && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (undo.blocked) { toast.message(undo.blocked); return; }
+                    if (await undo.run()) onClose();
+                  }}
+                  disabled={saving}
+                  aria-disabled={Boolean(undo.blocked)}
+                  title={undo.blocked || `Undo ${undo.label} — ${fmt(undo.amount)}`}
+                  className={`mt-2 inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold ${
+                    undo.blocked
+                      ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
+                      : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                  }`}
+                  data-testid="old-client-undo-instalment"
+                >
+                  <Undo2 className="h-3.5 w-3.5" /> Undo {undo.label} ({fmt(undo.amount)})
+                </button>
+              )}
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-md bg-white px-2 py-1.5">
                   <p className="text-[10px] font-semibold uppercase text-slate-400">Course fee</p>
