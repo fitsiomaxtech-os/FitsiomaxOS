@@ -111,12 +111,23 @@ const build = async (job) => {
   }
 };
 
-/** Through the OS share sheet as a file. "saved" when the device can't share files. */
-const shareFile = async (blob, filename, title) => {
+/** Copied for pasting beside a PDF that had to be saved rather than shared. Best effort:
+ *  after the PDF's await the browser may no longer count this as the click. */
+const copyText = async (text) => {
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+};
+
+/**
+ * Through the OS share sheet as a file. "saved" when the device can't share files.
+ *
+ * `text` rides along as the message — the appointment's map link, which a link drawn
+ * inside the PDF could not carry: the sheet is an image, so nothing on it can be tapped.
+ */
+const shareFile = async (blob, filename, title, text) => {
   const file = new File([blob], filename, { type: "application/pdf" });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title });
+      await navigator.share(text ? { files: [file], title, text } : { files: [file], title });
       return "shared";
     } catch (err) {
       if (err?.name === "AbortError") return "cancelled";  // closed the share sheet
@@ -133,10 +144,12 @@ export const downloadPdf = async (job, filename) => {
   if (blob) savePdf(blob, filename);
 };
 
-export const sharePdf = async (job, filename, title) => {
+export const sharePdf = async (job, filename, title, text) => {
   const blob = await build(job);
   if (!blob) return;
-  if (await shareFile(blob, filename, title) === "saved") toast.success("PDF saved — attach it to your message");
+  if (await shareFile(blob, filename, title, text) !== "saved") return;
+  if (text && await copyText(text)) toast.success("PDF saved, map link copied — attach the file and paste the link");
+  else toast.success("PDF saved — attach it to your message");
 };
 
 /**
@@ -146,17 +159,19 @@ export const sharePdf = async (job, filename, title) => {
  * carries text only, and the share sheet carries a file but asks who it is for. So a phone
  * gets the share sheet with the PDF (WhatsApp is on it), and a desk — where WhatsApp Web
  * cannot be handed a file at all — gets the PDF downloaded and the patient's chat opened
- * beside it, to drop the file into.
+ * beside it, to drop the file into. `text` is the message on both: the share sheet's
+ * caption on a phone, the chat's typed-in draft on a desk.
  */
-export const whatsappPdf = async (job, filename, title, phone) => {
+export const whatsappPdf = async (job, filename, title, phone, text) => {
   const num = waNumber(phone);
   if (!num) { toast.error("This patient has no phone number on file"); return; }
 
   if (isHandheld()) {
     const blob = await build(job);
     if (!blob) return;
-    if (await shareFile(blob, filename, title) === "saved") {
-      toast.success("PDF saved — open WhatsApp and attach it");
+    if (await shareFile(blob, filename, title, text) === "saved") {
+      if (text && await copyText(text)) toast.success("PDF saved, map link copied — open WhatsApp, attach it and paste the link");
+      else toast.success("PDF saved — open WhatsApp and attach it");
     }
     return;
   }
@@ -169,7 +184,7 @@ export const whatsappPdf = async (job, filename, title, phone) => {
   const blob = await build(job);
   if (!blob) { tab?.close(); return; }
   savePdf(blob, filename);
-  const url = `https://wa.me/${num}`;
+  const url = `https://wa.me/${num}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
   if (tab && !tab.closed) tab.location.href = url;
   else window.open(url, "_blank");
   toast.success("PDF downloaded — attach it in the WhatsApp chat");

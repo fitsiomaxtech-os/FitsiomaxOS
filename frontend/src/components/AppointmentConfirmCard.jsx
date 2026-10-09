@@ -39,6 +39,26 @@ const weekdayDmy = (d) => {
 
 const packageLabel = (a) => (a.packagePrice != null ? `${a.packageName} · ₹${a.packagePrice}` : a.packageName);
 
+/** The branch on Google Maps. The branch form takes a Maps URL or a bare "lat,lng", so the
+ *  bare form is made into a link; a branch with neither is searched by its address. None
+ *  for a house visit or an online room — the patient is not travelling to the branch. */
+export const apptMapUrl = (a) => {
+  if (a.houseVisit || a.meetLink) return "";
+  const loc = (a.mapLocation || "").trim();
+  if (/^https?:\/\//i.test(loc)) return loc;
+  if (loc) return `https://www.google.com/maps?q=${encodeURIComponent(loc)}`;
+  if (!a.branchAddress) return "";
+  const where = [a.branch, a.branchAddress].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where)}`;
+};
+
+/** The message WhatsApp and Share send beside the PDF: the way to the branch, as a link
+ *  the patient can tap — nothing drawn inside the PDF can be. */
+const apptShareText = (a) => {
+  const map = apptMapUrl(a);
+  return map ? `${a.branch || "Branch"} location:\n${map}` : "";
+};
+
 // `compact` drops the date and time the confirmation's own hero already states in bigger
 // type — the on-screen popup shows that hero, so repeating them underneath is noise. The
 // full list keeps them, where the rows have to stand on their own as the record.
@@ -153,6 +173,7 @@ export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-co
   if (!appt) return null;
   const pdfName = `appointment-${appt.refNo || "confirmation"}.pdf`;
   const pdfTitle = `FITSIOMAX Appointment ${appt.refNo || ""}`.trim();
+  const shareText = apptShareText(appt);
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3" data-testid={`${testid}-modal`}>
       {/* 90%, this dialog only. zoom rather than transform: scale — zoom shrinks the
@@ -251,7 +272,7 @@ export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-co
                 patient's own number. */}
             <Button
               className="h-10 w-10 shrink-0 bg-[#25D366] p-0 text-white hover:bg-[#1da851]"
-              onClick={() => whatsappPdf(pdf, pdfName, pdfTitle, appt.phone)}
+              onClick={() => whatsappPdf(pdf, pdfName, pdfTitle, appt.phone, shareText)}
               title="Send on WhatsApp"
               aria-label="Send on WhatsApp"
               data-testid={`${testid}-whatsapp`}
@@ -262,7 +283,7 @@ export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-co
             <Button
               variant="outline"
               className="h-10 w-10 shrink-0 p-0"
-              onClick={() => sharePdf(pdf, pdfName, pdfTitle)}
+              onClick={() => sharePdf(pdf, pdfName, pdfTitle, shareText)}
               title="Share PDF"
               aria-label="Share PDF"
               data-testid={`${testid}-share-card`}
