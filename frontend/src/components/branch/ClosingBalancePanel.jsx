@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Banknote, BookCheck, BookLock, BookOpen, CalendarDays, CreditCard, Smartphone, Save, TrendingDown, TrendingUp, Check, AlertTriangle, Wallet, CalendarClock, Lock, Unlock } from "lucide-react";
+import { Banknote, BookCheck, BookLock, BookOpen, CalendarDays, CreditCard, Smartphone, Save, TrendingDown, TrendingUp, Check, AlertTriangle, Wallet, CalendarClock, Lock, Unlock, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,11 +128,50 @@ const expectedFor = (income = {}, expense = {}) => ({
 const sumModes = (m) => round2((m.cash || 0) + (m.upi || 0) + (m.card || 0));
 const sumAll = (m = {}) => round2(Object.values(m).reduce((a, b) => a + (Number(b) || 0), 0));
 
-/** Who may take a signature back. Not the Branch Admin who gave it: signing a day off is a
- *  statement to somebody else, and one you can withdraw alone is not a statement. Refused
- *  on the server too — this only decides whether the button is worth showing. */
-const canReopenBooks = () => ["super_admin", "accountant"].includes(
+/** Who may take a signature back: the accountant, and now the branch desk for its own day
+ *  -- the Undo on this tab and on Close Books. It used to be the accountant's alone; the
+ *  branch asked to be able to correct a day it closed too early. What keeps that honest is
+ *  that a reason is asked for and kept on the book beside the original signature. Checked
+ *  on the server too (reopen_book) -- this only decides whether the button is worth showing. */
+const REOPEN_ROLES = [
+  "super_admin", "accountant", "business_dev",
+  "branch_admin", "online_physio_admin", "online_fitness_admin",
+  "branch_admin_physio", "branch_admin_fitness", "branch_admin_physio_fitness",
+];
+export const canReopenBooks = () => REOPEN_ROLES.includes(
   String(loadSession()?.user?.role || "").trim().toLowerCase(),
+);
+
+/** Undo a closed day: asks why, reopens it, and hands back the book as it now stands -- or
+ *  null when nothing changed (no reason given, or the server said no, which it says). */
+export const undoCloseBook = async ({ day, branchId }) => {
+  const reason = window.prompt(`Undo the close for ${day}? The book is reopened and the count can be changed again.\n\nWhy is it being undone?`) || "";
+  if (!reason.trim()) return null;
+  try {
+    const res = await reopenBook({ on: day, branch_id: branchId, reason: reason.trim() });
+    toast.success(res?.message === "Book reopened" ? `Close undone — ${day} is open again` : res?.message || "Close undone");
+    return res?.book || null;
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || "Could not undo the close");
+    return null;
+  }
+};
+
+/** The Undo on a closed day, the same face wherever a closed day is listed. */
+export const UndoCloseButton = ({ onClick, busy = false, size = "sm", testid }) => (
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    disabled={busy}
+    title="Undo the close — reopen this day's book"
+    className={`inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-amber-50 font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50 ${
+      size === "sm" ? "h-7 px-2 text-[11px]" : "h-9 px-3 text-xs"
+    }`}
+    data-testid={testid}
+  >
+    <Undo2 className={size === "sm" ? "h-3 w-3" : "h-4 w-4"} />
+    {busy ? "Undoing..." : "Undo"}
+  </button>
 );
 
 const stampedAt = (iso) => {
@@ -308,16 +347,9 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
   };
 
   const reopen = async () => {
-    const reason = window.prompt(`Why is the book for ${day} being reopened?`) || "";
-    if (!reason.trim()) return;
     setClosingBook(true);
-    try {
-      const res = await reopenBook({ on: day, branch_id: branchId, reason: reason.trim() });
-      setBook(res?.book || null);
-      toast.success(res?.message || "Book reopened");
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Could not reopen the book");
-    }
+    const reopened = await undoCloseBook({ day, branchId });
+    if (reopened) setBook(reopened);
     setClosingBook(false);
   };
 
@@ -539,7 +571,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
             record that can be corrected right up until the book on it is closed. */}
         <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
           {locked
-            ? "This day's book is closed, so the count is fixed. An accountant reopens it before it can be counted again."
+            ? "This day's book is closed, so the count is fixed. Undo the close below to count it again."
             : "A count can be corrected by counting again — saving this day a second time replaces it and keeps who first counted it."}
         </p>
       </div>
@@ -566,16 +598,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
           <div className="ml-auto flex items-center gap-2">
             {book?.closed ? (
               canReopenBooks() && (
-                <Button
-                  onClick={reopen}
-                  disabled={closingBook}
-                  variant="outline"
-                  className="h-9 border-slate-300 text-xs text-slate-600 hover:bg-slate-50"
-                  data-testid="closing-balance-book-reopen"
-                >
-                  <Unlock className="mr-1.5 h-4 w-4" />
-                  {closingBook ? "Reopening..." : "Reopen book"}
-                </Button>
+                <UndoCloseButton onClick={reopen} busy={closingBook} size="md" testid="closing-balance-book-reopen" />
               )
             ) : (
               <Button
@@ -620,7 +643,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
                 ? "Count this day first — a book cannot be signed off over a drawer nobody counted."
                 : unsavedCount
                   ? "The count on screen has changed and not been saved. Update it, then close the book on what was recorded."
-                  : "Signing off records what was counted against what the day says it took, with your name and the time on it, and fixes the count until an accountant reopens it."}
+                  : "Signing off records what was counted against what the day says it took, with your name and the time on it, and fixes the count until the close is undone."}
             </p>
             {/* A book is closed on a difference as readily as on a match. A branch that
                 cannot sign off a short evening either stops closing its books or makes the
@@ -658,6 +681,8 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
  */
 const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpenDay }) => {
   const [history, setHistory] = useState(null);
+  // The evening whose close is being undone, while the request is out.
+  const [undoing, setUndoing] = useState(null);
   const [incomeByDay, setIncomeByDay] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -695,6 +720,13 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
   // changing period during a load leaves Refresh spinning on a request nobody is waiting
   // for and the button disabled for the rest of the session.
   useEffect(() => () => onBusy?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const undoClose = async (on) => {
+    setUndoing(on);
+    const reopened = await undoCloseBook({ day: on, branchId });
+    setUndoing(null);
+    if (reopened) load();
+  };
 
   const expenseByDay = useMemo(() => expenseByDayFrom(expenses), [expenses]);
 
@@ -899,7 +931,16 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
                       ) : null}
                     </td>
                     <td className="break-words px-3 py-2.5">
-                      <BookChip book={r.book} testid={`closing-balance-history-book-${r.on}`} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <BookChip book={r.book} testid={`closing-balance-history-book-${r.on}`} />
+                        {r.book?.closed && canReopenBooks() && (
+                          <UndoCloseButton
+                            onClick={() => undoClose(r.on)}
+                            busy={undoing === r.on}
+                            testid={`closing-balance-history-undo-${r.on}`}
+                          />
+                        )}
+                      </div>
                       {r.book ? (
                         <span className="mt-0.5 block text-[10px] text-slate-400">
                           {r.book.closed

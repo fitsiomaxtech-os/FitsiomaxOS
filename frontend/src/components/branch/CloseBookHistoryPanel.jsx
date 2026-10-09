@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Banknote, BookCheck, CalendarDays, ChevronDown, ChevronRight, CreditCard, Smartphone, Unlock, Wallet } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { getClosingBalanceHistory } from "@/lib/api";
+import { canReopenBooks, undoCloseBook, UndoCloseButton } from "@/components/branch/ClosingBalancePanel";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -60,7 +61,7 @@ const Verdict = ({ book, testid }) => {
  * is what they open when the answer is no. Eight days of three-line tables would bury the
  * one day worth looking at.
  */
-const BookRow = ({ book, open, onToggle }) => {
+const BookRow = ({ book, open, onToggle, onUndo, undoing = false }) => {
   const counted = book.counted || {};
   const expected = book.expected || {};
   const Chevron = open ? ChevronDown : ChevronRight;
@@ -72,29 +73,38 @@ const BookRow = ({ book, open, onToggle }) => {
       }`}
       data-testid={`close-book-row-${book.on}`}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 bg-slate-50/70 px-3 py-3 text-left transition-colors hover:bg-slate-100/70"
-        data-testid={`close-book-toggle-${book.on}`}
-      >
-        <Chevron className="h-4 w-4 shrink-0 text-slate-400" />
-        <span className="text-[15px] font-semibold tabular-nums text-slate-900">{book.on}</span>
-        <span className="text-xs text-slate-500">
-          Closed by {book.closed_by || "—"}
-          {book.counted_by && book.counted_by !== book.closed_by ? ` · counted by ${book.counted_by}` : ""}
-        </span>
-        <span className="ml-auto flex items-center gap-4">
-          {/* "Actual" is what was in the building, which is the figure a branch recognises.
-              What it is set against is named "computed" rather than "expected" only in the
-              breakdown, where there is room to say both. */}
+      {/* The Undo sits beside the toggle rather than inside it: a button cannot hold
+          another, and pressing Undo must not also fold the row open. */}
+      <div className="flex items-center bg-slate-50/70">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-3 text-left transition-colors hover:bg-slate-100/70"
+          data-testid={`close-book-toggle-${book.on}`}
+        >
+          <Chevron className="h-4 w-4 shrink-0 text-slate-400" />
+          <span className="text-[15px] font-semibold tabular-nums text-slate-900">{book.on}</span>
           <span className="text-xs text-slate-500">
-            Actual: <span className="font-semibold tabular-nums text-slate-800">{fmt(counted.total)}</span>
+            Closed by {book.closed_by || "—"}
+            {book.counted_by && book.counted_by !== book.closed_by ? ` · counted by ${book.counted_by}` : ""}
           </span>
-          <Verdict book={book} testid={`close-book-verdict-${book.on}`} />
-        </span>
-      </button>
+          <span className="ml-auto flex items-center gap-4">
+            {/* "Actual" is what was in the building, which is the figure a branch recognises.
+                What it is set against is named "computed" rather than "expected" only in the
+                breakdown, where there is room to say both. */}
+            <span className="text-xs text-slate-500">
+              Actual: <span className="font-semibold tabular-nums text-slate-800">{fmt(counted.total)}</span>
+            </span>
+            <Verdict book={book} testid={`close-book-verdict-${book.on}`} />
+          </span>
+        </button>
+        {book.closed && onUndo && (
+          <div className="shrink-0 pr-3">
+            <UndoCloseButton onClick={onUndo} busy={undoing} testid={`close-book-undo-${book.on}`} />
+          </div>
+        )}
+      </div>
 
       {open && (
         <div className="border-t border-slate-100 bg-white px-3 py-3" data-testid={`close-book-detail-${book.on}`}>
@@ -179,6 +189,9 @@ export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshK
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDay, setOpenDay] = useState(null);
+  // The day whose close is being undone, while the request is out.
+  const [undoing, setUndoing] = useState(null);
+  const canUndo = canReopenBooks();
 
   const load = useCallback(async () => {
     if (!branchId) return;
@@ -197,6 +210,13 @@ export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshK
   }, [branchId, start, end, refreshKey]);
 
   useEffect(() => { load(); }, [load]);
+
+  const undoClose = async (on) => {
+    setUndoing(on);
+    const reopened = await undoCloseBook({ day: on, branchId });
+    setUndoing(null);
+    if (reopened) load();
+  };
 
   const summary = useMemo(() => {
     const closed = books.filter((b) => b.closed);
@@ -260,6 +280,8 @@ export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshK
               book={b}
               open={openDay === b.on}
               onToggle={() => setOpenDay((d) => (d === b.on ? null : b.on))}
+              onUndo={canUndo ? () => undoClose(b.on) : undefined}
+              undoing={undoing === b.on}
             />
           ))}
         </div>

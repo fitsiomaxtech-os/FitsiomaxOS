@@ -677,6 +677,10 @@ async def finance_approvals(
     approved: Optional[bool] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    # Also list what the branch has taken and not yet verified. Off for the Approvals tab,
+    # which is the accountant's queue; _branch_cash_figures sets it, because the drawer's
+    # unsigned cash is all of it, sent up or not.
+    include_unsent: bool = False,
     user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "accountant", "business_dev")),
 ):
     """Accountant's Approvals tab. Every kind of collection revenue_overview counts
@@ -770,6 +774,7 @@ async def finance_approvals(
                 "approved": is_approved,
                 "approved_by": act.get("approved_by") or "",
                 "approved_at": act.get("approved_at") or "",
+                "income_requested": bool(act.get("income_requested")),
             })
 
     if category in (None, "", "all", "store"):
@@ -806,6 +811,7 @@ async def finance_approvals(
                 "approved": is_approved,
                 "approved_by": sale.get("approved_by") or "",
                 "approved_at": sale.get("approved_at") or "",
+                "income_requested": bool(sale.get("income_requested")),
             })
 
     # Zumba class fees. Collected onto the registration rather than through the lead
@@ -858,6 +864,7 @@ async def finance_approvals(
                 "approved": is_approved,
                 "approved_by": reg.get("approved_by") or "",
                 "approved_at": reg.get("approved_at") or "",
+                "income_requested": bool(reg.get("income_requested")),
             })
 
     # Gym memberships, on the same footing as the class fees above: v3_fitness.py keeps the
@@ -909,6 +916,7 @@ async def finance_approvals(
                 "approved": is_approved,
                 "approved_by": reg.get("approved_by") or "",
                 "approved_at": reg.get("approved_at") or "",
+                "income_requested": bool(reg.get("income_requested")),
             })
 
     # Old clients' instalments (old_clients.py). Each lands on the revenue line its course
@@ -952,10 +960,18 @@ async def finance_approvals(
                 "approved": bool(pay.get("approved")),
                 "approved_by": pay.get("approved_by") or "",
                 "approved_at": pay.get("approved_at") or "",
+                "income_requested": bool(pay.get("income_requested")),
                 "old_client": True,
                 "instalment_number": pay.get("instalment_number"),
             })
 
+    # Only what the branch has verified and sent up. A collection the desk has taken but
+    # not yet checked is still the branch's to correct -- it sits on Branch Admin's
+    # Accountant Manage under To Verify until the arrow there sends it -- so it is not in
+    # this queue at all, rather than in it as a row the accountant can sign before the
+    # branch has looked. Approved rows stay whatever their flag says: an approval stands.
+    if not include_unsent:
+        rows = [r for r in rows if r["approved"] or r["income_requested"]]
     rows.sort(key=lambda r: r["collected_at"], reverse=True)
     pending = [r for r in rows if not r["approved"]]
     approved_rows = [r for r in rows if r["approved"]]
@@ -1059,6 +1075,39 @@ async def return_self_approved_expenses() -> None:
         },
         {"$set": {"approved": False, "approved_by": None, "approved_at": None}},
     )
+
+
+# Marks the one boot that switched the accountant's queue over to verified collections only.
+INCOME_VERIFY_SETTING_ID = "income_verify_step_v1"
+
+
+async def send_up_unverified_backlog() -> None:
+    """Leave the accountant's queue as it stood the day Branch Admin's Verify step arrived.
+
+    Until then every collection went to the accountant the moment it was taken, so what was
+    waiting there had never been through a branch's hands and never would be. Those rows
+    are stamped as sent, once, so the queue does not empty out from under the accountant;
+    from here on only what the branch verifies reaches it. Once, behind a flag, rather than
+    every boot by date: a branch that later pulls one of these back with Undo has said it is
+    not ready, and the next restart must not send it up again.
+    """
+    if await v3_col("app_settings").find_one({"id": INCOME_VERIFY_SETTING_ID}, {"_id": 0, "id": 1}):
+        return
+    now = _now()
+    stamp = {"$set": {
+        "income_requested": True,
+        "income_requested_by": "Sent automatically (before Verify)",
+        "income_requested_at": now,
+    }}
+    waiting = {"approved": {"$ne": True}, "income_requested": {"$ne": True}}
+    await v3_col("lead_activity").update_many({**waiting, "action": {"$in": REVENUE_ACTIONS}}, stamp)
+    await v3_col("inventory_movements").update_many({**waiting, "kind": "sale"}, stamp)
+    # Only a registration with money on it: one still unpaid is not in any queue, and
+    # stamping it would wave its first fee straight past the branch when it is collected.
+    for name in ("zumba_registrations", "fitness_registrations"):
+        await v3_col(name).update_many({**waiting, "fee_paid": {"$gt": 0}}, stamp)
+    await v3_col("old_client_payments").update_many(waiting, stamp)
+    await v3_col("app_settings").insert_one({"id": INCOME_VERIFY_SETTING_ID, "done_at": now})
 
 
 async def _link_expense_vendors(rows: list) -> None:
@@ -2286,15 +2335,11 @@ async def revenue_overview(
             # in this list is one shape and no reader has to test for the key.
             "payment_split": [],
             "client_balance": 0.0,
-            # Store sales aren't reviewed here — see approve_transaction's docstring —
-            # so this stays permanently false rather than left out, keeping every
-            # transaction dict in this list the same shape.
-            "approved": False,
-            "approved_by": "",
-            "approved_at": "",
-            "income_requested": bool(sale.get("income_requested")),
-            "income_requested_by": sale.get("income_requested_by") or "",
-            "income_requested_at": sale.get("income_requested_at") or "",
+            # Off the sale itself, like every other book here. This was hardcoded False
+            # from before a counter sale could be signed off; /finance/approvals lists and
+            # approves them now, and a sale the accountant had signed kept reading as
+            # Awaiting Approval -- with an Undo on it that could never take it back.
+            **_approval_state(sale),
         })
 
     # Zumba class fees. Like the store sales above, they come from their own collection
@@ -2641,6 +2686,7 @@ async def revenue_overview(
         if s["balance"] <= 0:
             continue
         outstanding_clients.append({
+            "undo_last": _old_client_undo(owing_payments.get(c["id"]) or []),
             "lead_id": "",
             "old_client_id": c["id"],
             "old_client": True,
@@ -2661,6 +2707,15 @@ async def revenue_overview(
             "next_installment_amount": None,
             "next_installment_fee_label": f"{s['category_label']} (old course)",
         })
+    # What Undo on each lead's Payment Schedule row would take back. An Excel balance has
+    # nothing on the OS to undo; an old client's was set as its row was built.
+    last_by_lead = await _last_instalments([
+        lead_by_id[r["lead_id"]] for r in outstanding_clients
+        if r.get("lead_id") and not r.get("past_data") and r["lead_id"] in lead_by_id
+    ])
+    for r in outstanding_clients:
+        if not r.get("old_client"):
+            r["undo_last"] = None if r.get("past_data") else last_by_lead.get(r["lead_id"])
     outstanding_clients.sort(key=lambda r: -r["balance"])
     payment_schedule.sort(key=lambda r: r["due_date"])
 
@@ -3090,7 +3145,12 @@ async def mark_installment_paid(
         # Each installment is its own collection, so each earns its own transaction id --
         # the schedule they belong to has none, since scheduling moves no money.
         transaction_id = await generate_transaction_id(lead.get("branch_id"))
-        installments[idx] = {**installments[idx], "paid": True, "amount": amount, "payment_mode": mode, "transaction_id": transaction_id, **mode_fields}
+        # The figure it was scheduled at, kept only when the desk took a different one, so
+        # Payment Schedule's Undo can put the instalment back as it was planned rather than
+        # as it was paid -- see undo_last_instalment.
+        scheduled = installments[idx].get("amount")
+        keep_scheduled = {"scheduled_amount": scheduled} if scheduled is not None and abs(float(scheduled) - float(amount)) >= 0.005 else {}
+        installments[idx] = {**installments[idx], "paid": True, "amount": amount, "payment_mode": mode, "transaction_id": transaction_id, **keep_scheduled, **mode_fields}
         activity_details = f"Collected {cfg['label']} Installment #{installment_number} for '{lead.get(cfg['package']) or cfg['label']}' · Rs.{amount} via {mode}{detail_suffix} · Txn {transaction_id}"
     else:
         installments[idx]["paid"] = True
@@ -3128,6 +3188,184 @@ async def mark_installment_paid(
 
     updated_details = {**details, "installments": installments}
     return {"message": "Installment marked as paid", "transaction_id": transaction_id, "balance": _lead_outstanding_balance({**lead, cfg["details"]: updated_details})}
+
+
+# ---------------------------------------------------------------------------
+# Payment Schedule > Undo -- the newest instalment on one client, taken back.
+# ---------------------------------------------------------------------------
+
+# What mark_installment_paid writes onto an instalment, and so what Undo takes off it.
+# Everything else on the row (amount, due_date) was there before the money was.
+_INSTALMENT_PAYMENT_KEYS = {
+    "paid", "payment_mode", "transaction_id", "scheduled_amount", "payment_lines", "denominations",
+    "upi_transaction_id", "upi_utr", "upi_id", "card_transaction_id", "bank_name", "cheque_number",
+    "account_last4", "account_holder_name", "ifsc_code", "transfer_reference",
+}
+
+
+async def _last_instalments(leads: list) -> dict:
+    """Lead id -> the newest instalment collected off that lead's Payment Schedule.
+
+    Only an instalment mark_installment_paid took counts: it is the one collection that is
+    both a row on the schedule and a transaction of its own, the two tied by the one
+    transaction id. The first payment of a fee is neither -- its instalment row carries no
+    id -- and taking that back is undoing the fee, which belongs to the fee's own screens.
+
+    `sent` and `approved` say whether Undo is still the branch's to press. The row is
+    handed back either way, so the screen can say why the button is not live.
+    """
+    candidates = {}
+    for lead in leads:
+        for fee in FEE_SCHEDULES:
+            for number, inst in enumerate(_fee_installments(lead, fee), start=1):
+                txn = inst.get("transaction_id")
+                if inst.get("paid") and txn:
+                    candidates[txn] = (lead["id"], fee, number, inst)
+    if not candidates:
+        return {}
+    acts = await v3_col("lead_activity").find(
+        {"transaction_id": {"$in": list(candidates)}, "lead_id": {"$in": list({c[0] for c in candidates.values()})}},
+        {"_id": 0, "id": 1, "transaction_id": 1, "lead_id": 1, "created_at": 1, "approved": 1, "income_requested": 1},
+    ).to_list(len(candidates) * 2)
+    out = {}
+    for act in acts:
+        lead_id, fee, number, inst = candidates.get(act.get("transaction_id")) or (None, None, None, None)
+        if not lead_id or lead_id != act.get("lead_id"):
+            continue
+        at = act.get("created_at") or ""
+        if lead_id in out and out[lead_id]["at"] >= at:
+            continue
+        out[lead_id] = {
+            "activity_id": act.get("id", ""),
+            "transaction_id": act.get("transaction_id", ""),
+            "fee": fee,
+            "label": f"{FEE_SCHEDULES[fee]['label']} instalment #{number}",
+            "amount": float(inst.get("amount") or 0),
+            "at": at,
+            "sent": bool(act.get("income_requested")),
+            "approved": bool(act.get("approved")),
+        }
+    return out
+
+
+def _old_client_undo(payments: list) -> Optional[dict]:
+    """The same for an old client: the newest instalment taken on the OS, oldest-first in."""
+    if not payments:
+        return None
+    last = payments[-1]
+    number = last.get("instalment_number")
+    return {
+        "activity_id": last.get("id", ""),
+        "transaction_id": last.get("transaction_id") or "",
+        "fee": None,
+        "label": f"Instalment #{number}" if number else "Last instalment",
+        "amount": float(last.get("amount") or 0),
+        "at": last.get("created_at") or "",
+        "sent": bool(last.get("income_requested")),
+        "approved": bool(last.get("approved")),
+    }
+
+
+async def _refuse_undo(last: dict, branch_id: Optional[str]) -> None:
+    """Why an Undo cannot go ahead, said before anything is touched."""
+    if last["approved"]:
+        raise HTTPException(status_code=409, detail="The accountant has already approved this payment — only they can undo it")
+    if last["sent"]:
+        raise HTTPException(status_code=409, detail="This payment is with the accountant — undo it on Summary first, then undo it here")
+    day = (last.get("at") or "")[:10]
+    book = await _book_for(branch_id, day) if day else None
+    if book and (book.get("status") or "closed") == "closed":
+        raise HTTPException(status_code=409, detail=f"The books for {day} are closed — reopen that day before undoing a payment in it")
+
+
+class UndoLastInstalmentInput(BaseModel):
+    # One or the other: a lead's schedule, or an old client's.
+    lead_id: Optional[str] = None
+    old_client_id: Optional[str] = None
+
+
+@router.post("/finance/payment-schedule/undo-last")
+async def undo_last_instalment(
+    payload: UndoLastInstalmentInput,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "business_dev")),
+):
+    """Payment Schedule > Undo: take back the newest instalment collected on one client.
+
+    For the desk that took it by mistake -- the wrong client, the wrong amount, money that
+    never arrived. Only while it is still the branch's: once it is sent to the accountant
+    it has to be pulled back on Summary first, and once it is approved it is the
+    accountant's to undo. A day whose book is closed is refused too: the book says what the
+    drawer held, and money taken out of the day under it would make the book wrong without
+    anybody reopening it.
+
+    It undoes exactly what mark_installment_paid did. The instalment reads unpaid again at
+    the amount it was scheduled at, the fee's *_paid comes down where mark-paid put it up,
+    and the collection's activity row goes -- which takes it off revenue, the drawer and
+    every list that read it. A line stays on the timeline saying who undid what, so the
+    patient's history does not simply lose a payment. Same role list as sending a payment
+    up, which this sits beside: the branch's own step, not the accountant's.
+    """
+    if payload.old_client_id:
+        client = await v3_col("old_clients").find_one({"id": payload.old_client_id}, {"_id": 0})
+        if not client or (is_branch_admin_role(user.role) and client.get("branch_id") != user.branch_id):
+            raise HTTPException(status_code=404, detail="Client not found")
+        payments = (await _old_client_payments([client["id"]])).get(client["id"]) or []
+        last = _old_client_undo(payments)
+        if not last:
+            raise HTTPException(status_code=400, detail="No instalment has been taken on the OS for this client")
+        await _refuse_undo(last, payments[-1].get("branch_id"))
+        res = await v3_col("old_client_payments").delete_one(
+            {"id": last["activity_id"], "approved": {"$ne": True}, "income_requested": {"$ne": True}},
+        )
+        if not res.deleted_count:
+            raise HTTPException(status_code=409, detail="That payment has just moved on — refresh and try again")
+        return {"message": f"{last['label']} undone — Rs.{last['amount']:g} is owed again"}
+
+    lead = await v3_col("leads").find_one({"id": payload.lead_id}, {"_id": 0}) if payload.lead_id else None
+    if not lead or (is_branch_admin_role(user.role) and lead.get("branch_id") != user.branch_id):
+        raise HTTPException(status_code=404, detail="Client not found")
+    last = (await _last_instalments([lead])).get(lead["id"])
+    if not last:
+        raise HTTPException(status_code=400, detail="No instalment collected on this client's schedule can be undone")
+    await _refuse_undo(last, _branch_at(lead, last["at"]))
+
+    # The activity row first, and only while it is still unsent: if the arrow on Summary
+    # was pressed a moment ago, nothing here moves.
+    res = await v3_col("lead_activity").delete_one(
+        {"id": last["activity_id"], "approved": {"$ne": True}, "income_requested": {"$ne": True}},
+    )
+    if not res.deleted_count:
+        raise HTTPException(status_code=409, detail="That payment has just moved on — refresh and try again")
+
+    cfg = FEE_SCHEDULES[last["fee"]]
+    installments = list(((lead.get(cfg["details"]) or {}).get("installments")) or [])
+    collected = 0.0
+    for idx, inst in enumerate(installments):
+        if inst.get("transaction_id") == last["transaction_id"]:
+            collected = float(inst.get("amount") or 0)
+            restored = {k: v for k, v in inst.items() if k not in _INSTALMENT_PAYMENT_KEYS}
+            restored["paid"] = False
+            if inst.get("scheduled_amount") is not None:
+                restored["amount"] = inst["scheduled_amount"]
+            installments[idx] = restored
+            break
+    set_fields = {f"{cfg['details']}.installments": installments, "updated_at": _now()}
+    # mark_installment_paid added the money to *_paid only where the fee is not on a
+    # Partial Payment plan, which books the whole price up front; the same rule takes it off.
+    if lead.get(cfg["mode"]) != "partial" and collected:
+        set_fields[cfg["paid"]] = round(max((lead.get(cfg["paid"]) or 0) - collected, 0), 2)
+    await v3_col("leads").update_one({"id": lead["id"]}, {"$set": set_fields})
+
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": lead["id"],
+        "action": "instalment_undone",
+        "details": f"{last['label']} (Rs.{collected:g}, Txn {last['transaction_id']}) undone by {user.full_name} from Payment Schedule -- it is owed again",
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "created_at": _now(),
+    })
+    return {"message": f"{last['label']} undone — Rs.{collected:g} is owed again"}
 
 
 # Which revenue line money against an Excel course lands on, by what the course was for --
@@ -3608,9 +3846,10 @@ def _previous_day(on: str) -> str:
 # and the book stays frozen, and the difference between them is the audit.
 #
 # Closing locks the count for that day -- see save_closing_balance, which refuses once a
-# book is closed. Without that a close is a label rather than a close. Reopening is an
-# accountant's to do, not the branch's, and it keeps the original signature: a book that
-# was closed and reopened is a fact about the day, not something to be tidied away.
+# book is closed. Without that a close is a label rather than a close. Reopening takes a
+# reason and keeps the original signature, whoever does it (the branch for its own day, or
+# the accountant): a book that was closed and reopened is a fact about the day, not
+# something to be tidied away.
 
 
 class CloseBookInput(BaseModel):
@@ -4017,16 +4256,22 @@ async def close_book(
 @router.post("/finance/closing-balance/reopen-book")
 async def reopen_book(
     payload: ReopenBookInput,
-    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "business_dev")),
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "accountant", "branch_admin", "business_dev")),
 ):
     """Open a signed-off day again, with the reason on the record.
 
-    Not open to the Branch Admin who closed it, for the reason approve_expense gives:
-    signing a day off is a statement to somebody else, and a statement you can withdraw
-    unilaterally is not one. The book keeps everything it was closed with -- who signed
-    it, when, and what it said at the time -- so a day that was closed and reopened reads
-    as exactly that rather than as a day that was never closed.
+    The Branch Admin can now take back their own branch's signature too -- the Undo on
+    Closing Balance and Close Books. It used to be the accountant's alone, on the grounds
+    that a statement you can withdraw by yourself is not one; the branch asked to be able to
+    correct a day it closed too early without waiting on head office. What keeps that
+    honest is the record rather than the role list: the book keeps everything it was closed
+    with -- who signed it, when, and what it said -- plus who reopened it and why, so a day
+    that was closed and reopened reads as exactly that rather than as a day never closed.
     """
+    if is_branch_admin_role(user.role):
+        if not user.branch_id:
+            raise HTTPException(status_code=400, detail="Your account is not attached to a branch")
+        payload.branch_id = user.branch_id
     branch_id = payload.branch_id or None
     day = payload.on or datetime.now(timezone.utc).date().isoformat()
     try:
@@ -4376,7 +4621,9 @@ async def _branch_cash_figures(
 
     cash_approved = cash_awaiting = None
     if with_split:
-        appr = await finance_approvals(branch_id=branch_id, payment_mode="cash", user=user)
+        # include_unsent: "awaiting" here is every rupee not yet signed off, the ones the
+        # branch has still to verify included -- it is the drawer's cash either way.
+        appr = await finance_approvals(branch_id=branch_id, payment_mode="cash", include_unsent=True, user=user)
         summ = appr.get("summary") or {}
         cash_approved = round(float(summ.get("approved_total") or 0), 2)
         cash_awaiting = round(float(summ.get("pending_total") or 0), 2)

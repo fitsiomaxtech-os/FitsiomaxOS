@@ -481,8 +481,9 @@ export const getClosingBalanceHistory = async (params = {}) => (await api.get("/
 // counted, what was expected and whether they matched, frozen at the moment somebody put
 // their name to it — and it locks that day's count until an accountant reopens it. The
 // server decides whether the money matched; a caller that sent its own verdict could sign
-// off a short day as balanced. Reopening is not open to the Branch Admin who closed it,
-// and takes the reason, which is kept on the book.
+// off a short day as balanced. Reopening -- the Undo on Closing Balance and Close Books --
+// is open to the branch for its own day as well as to the accountant, and takes the
+// reason, which is kept on the book.
 export const closeBook = async (payload) => (await api.post("/finance/closing-balance/close-book", payload)).data;
 export const reopenBook = async (payload) => (await api.post("/finance/closing-balance/reopen-book", payload)).data;
 
@@ -494,6 +495,9 @@ export const reopenBook = async (payload) => (await api.post("/finance/closing-b
 // single requests is forty chances to send thirty-nine.
 export const requestTransactions = async (activityIds) => (await api.post("/finance/transactions/request", { activity_ids: activityIds })).data;
 export const unrequestTransactions = async (activityIds) => (await api.post("/finance/transactions/unrequest", { activity_ids: activityIds })).data;
+// Payment Schedule's Undo: the newest instalment taken on one client (a lead, or an old
+// client), back to owed -- refused once it is with the accountant or its day is closed.
+export const undoLastInstalment = async (payload) => (await api.post("/finance/payment-schedule/undo-last", payload)).data;
 
 export const getPettyCash = async (params = {}) => (await api.get("/finance/petty-cash", { params })).data;
 export const topUpPettyCash = async (payload) => (await api.post("/finance/petty-cash/topup", payload)).data;

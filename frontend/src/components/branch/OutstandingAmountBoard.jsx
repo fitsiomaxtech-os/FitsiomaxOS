@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet, History, IndianRupee } from "lucide-react";
+import { ChevronRight, ChevronLeft, Printer, FileSpreadsheet, Wallet, History, IndianRupee, Undo2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -223,6 +223,42 @@ const downloadCsv = (rows) => {
 // so it goes by the old client it belongs to.
 const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
 
+/** Why a row's Undo cannot be pressed, or "" when it can. Once the payment is with the
+ *  accountant -- sent up, or signed off -- it is no longer the branch's to take back here. */
+const undoBlocked = (u) => (
+  u.approved ? "Approved by the accountant — only they can undo it"
+    : u.sent ? "With the accountant — undo it on Summary first, then here"
+      : ""
+);
+
+/** Payment Schedule's Undo: the newest instalment taken on this client, back to owed. Shown
+ *  greyed with the reason on hover rather than hidden, so a desk looking for it learns why
+ *  it is not live -- aria-disabled, not disabled, because a disabled button shows no title. */
+const UndoButton = ({ row, onUndo }) => {
+  const u = row.undo_last;
+  if (!u || !onUndo) return null;
+  const blocked = undoBlocked(u);
+  const label = blocked || `Undo ${u.label} — ${fmt(u.amount)} collected${u.at ? ` on ${u.at.slice(0, 10)}` : ""}`;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); if (!blocked) onUndo(row); }}
+      onKeyDown={(e) => e.stopPropagation()}
+      aria-disabled={Boolean(blocked)}
+      title={label}
+      aria-label={label}
+      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition ${
+        blocked
+          ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
+          : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+      }`}
+      data-testid={`outstanding-undo-${rowKey(row)}`}
+    >
+      <Undo2 className="h-3.5 w-3.5" />
+    </button>
+  );
+};
+
 /**
  * @param onCollect     Collects what a client's row has due (ScheduleCollectDialog) -- the
  *              per-row Collect the old Partial Payment tab had. `canCollect(row)` says which
@@ -232,11 +268,14 @@ const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
  *              balance has no client card to open, so this is that row's one action; left
  *              out where the desk may not take the money, and the row offers none.
  * @param onNewOld  Opens the same form empty, for an old client not on this list yet.
+ * @param onUndo    Takes back the newest instalment collected on a row (`undo_last`, off
+ *              revenue-overview). The branch desk's own step, so only Branch Admin's copy
+ *              passes it; left out, no row offers one.
  * @param startDate/endDate  Accountant Manage's date range, both empty on All. A row is in
  *              it by its due date, or where none is set by the day its bill was raised --
  *              the same due date the month strip above goes by.
  */
-export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld, startDate = "", endDate = "" }) => {
+export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld, onUndo, startDate = "", endDate = "" }) => {
   const collectable = (r) => Boolean(onCollect) && !r.old_client && !r.past_data && r.balance > 0 && canCollect(r);
   // What a tap on the row opens, on the phone card and the table row alike: the client
   // popup, or for an old client -- who has no client card -- their instalment form.
@@ -401,8 +440,9 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                 ],
                 // Not for a Past Data balance: that is what an Excel sheet said was owed when it
                 // was saved, shown for reading, and no one on the OS set it.
-                actions: (collectable(r) || (!r.past_data && waNumber(r.phone))) ? (
+                actions: (collectable(r) || (!r.past_data && waNumber(r.phone)) || (onUndo && r.undo_last)) ? (
                   <>
+                    <UndoButton row={r} onUndo={onUndo} />
                     {collectable(r) && (
                       <button
                         type="button"
@@ -432,7 +472,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                     {/* One fact per column, every header and cell on a single line. */}
                     <tr className="whitespace-nowrap">
                       <th className="w-[4%] px-3 py-2.5">S.No</th>
-                      <th className="w-[17%] px-3 py-2.5">Client</th>
+                      <th className="w-[15%] px-3 py-2.5">Client</th>
                       <th className="w-[10%] px-3 py-2.5">Phone</th>
                       <th className="w-[12%] px-3 py-2.5">Branch</th>
                       <th className="w-[9%] px-3 py-2.5">Total Bill</th>
@@ -441,7 +481,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                       <th className="w-[9%] px-3 py-2.5">Due Date</th>
                       <th className="w-[9%] px-3 py-2.5">Status</th>
                       <th className="w-[8%] px-3 py-2.5 text-center">Payment</th>
-                      <th className="w-[5%] px-3 py-2.5 text-center">Action</th>
+                      <th className="w-[7%] px-3 py-2.5 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -512,20 +552,25 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                               WhatsApp reminder live. An old client has no client card, so
                               theirs has nothing here but the Collect beside it. */}
                           <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            {!r.old_client && onView ? (
-                              <button
-                                type="button"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700"
-                                onClick={() => onView(r.lead_id)}
-                                title="View"
-                                aria-label="View"
-                                data-testid={`outstanding-view-${r.lead_id}`}
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                              </button>
-                            ) : (
-                              <span className="text-xs leading-7 text-slate-300">—</span>
-                            )}
+                            {/* Undo first, then the way into the client: the arrow stays at
+                                the row's right edge where it has always been. */}
+                            <div className="flex items-center justify-center gap-1">
+                              <UndoButton row={r} onUndo={onUndo} />
+                              {!r.old_client && onView ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-sky-700"
+                                  onClick={() => onView(r.lead_id)}
+                                  title="View"
+                                  aria-label="View"
+                                  data-testid={`outstanding-view-${r.lead_id}`}
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </button>
+                              ) : !(onUndo && r.undo_last) ? (
+                                <span className="text-xs leading-7 text-slate-300">—</span>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );

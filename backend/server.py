@@ -195,6 +195,9 @@ async def startup_seed_data():
     await v3_inventory.ensure_inventory_indexes()
     await v3_vendors.ensure_vendor_indexes()
     await v3_finance.return_self_approved_expenses()
+    # Once ever: what was already waiting on the accountant stays there when the branch's
+    # Verify step starts gating that queue.
+    await v3_finance.send_up_unverified_backlog()
     # Anything a deleted patient left behind on the other boards goes — see its docstring.
     await lead_purge.sweep_orphaned_trails()
     # Past Data's trial clients that the first Move to live left at Leads go onto the stage
