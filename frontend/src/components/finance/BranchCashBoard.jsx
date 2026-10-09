@@ -177,7 +177,10 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
     return [...m.entries()];
   }, [rows]);
   const shown = (rows || []).filter((r) => type === ALL || r.type === type);
-  const total = shown.reduce((s, r) => s + Number(r.amount || 0), 0);
+  // While any row shown has a bin, a row without one keeps the bin's space empty, so every
+  // arrow stands in one line under Action instead of jumping right on the rows with a bin.
+  const binSlot = shown.some((r) => r.can_delete);
+  const total =shown.reduce((s, r) => s + Number(r.amount || 0), 0);
   const partyLabel = kind === "cash_spent" ? "Paid to" : kind === "handed_over" || kind === "in_transit" ? "Carried by" : "Party";
 
   const typeFilter = types.length > 1 && (
@@ -245,7 +248,7 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
                   <td className="px-3 py-1.5 text-center">
                     {/* The bin, a bare icon, beside the one arrow -- the To Verify row's shape. */}
                     <div className="flex items-center justify-center gap-1">
-                      {r.can_delete && (
+                      {r.can_delete ? (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); removeEntry(r); }}
@@ -257,7 +260,9 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      )}
+                      ) : binSlot ? (
+                        <span className="h-7 w-7" aria-hidden="true" />
+                      ) : null}
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setOpenRow(r); }}
