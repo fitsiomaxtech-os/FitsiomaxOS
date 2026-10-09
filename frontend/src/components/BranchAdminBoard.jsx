@@ -724,12 +724,12 @@ const waNumber = (raw) => {
  *  so the entry header can only ever draw the eight it always has. */
 const BRANCH_LIST_WIDTHS = {
   base: {
-    patient: "w-[19%]", phone: "w-[12%]", city: "w-[11%]", painType: "w-[12%]",
+    patient: "w-[19%]", phone: "w-[12%]", source: "w-[11%]", painType: "w-[12%]",
     painDuration: "w-[11%]", physio: "w-[11%]", appt: "w-[10%]", followUp: "", stage: "w-[8%]",
     action: "w-[6%]",
   },
   withFollowUp: {
-    patient: "w-[17%]", phone: "w-[11%]", city: "w-[10%]", painType: "w-[10%]",
+    patient: "w-[17%]", phone: "w-[11%]", source: "w-[10%]", painType: "w-[10%]",
     painDuration: "w-[10%]", physio: "w-[10%]", appt: "w-[9%]", followUp: "w-[9%]", stage: "w-[8%]",
     action: "w-[6%]",
   },
@@ -2542,7 +2542,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       assigned yet, so that column is dropped there — every other view of a
                       branch keeps it, and an arm never has it at all.
 
-                      City sits with Phone rather than among the ones that follow it:
+                      A branch's two shapes put Source in the third column where City was;
+                      an arm's keeps City. City sits with Phone rather than among the ones that follow it:
                       where the patient is is part of who they are, and the two after it
                       are the intake form's own questions, which is what the branch is
                       actually reading this list to find out. Widths total 100 either way:
@@ -2589,7 +2590,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     <>
                       <th className="w-[20%] px-4 py-3">Patient</th>
                       <th className="w-[13%] px-4 py-3">Phone</th>
-                      <th className="w-[12%] px-4 py-3">City</th>
+                      <th className="w-[12%] px-4 py-3">Source</th>
                       <th className="w-[13%] px-4 py-3">Pain Type</th>
                       <th className="w-[13%] px-4 py-3">Pain Duration</th>
                       <th className="w-[12%] px-4 py-3">Appointment</th>
@@ -2599,7 +2600,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     <>
                       <th className={`${listWidths.patient} px-4 py-3`}>Patient</th>
                       <th className={`${listWidths.phone} px-4 py-3`}>Phone</th>
-                      <th className={`${listWidths.city} px-4 py-3`}>City</th>
+                      <th className={`${listWidths.source} px-4 py-3`}>Source</th>
                       <th className={`${listWidths.painType} px-4 py-3`}>Pain Type</th>
                       <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
                       <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
@@ -2724,13 +2725,22 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           </div>
                         </td>
                         <td className="truncate px-4 py-3 text-slate-600" title={lead.phone}>{lead.phone || "—"}</td>
-                        {/* Read through cityAnswer, so a lead whose sheet mapped the column
+                        {/* Source on a branch's board, read the way the lead popup and Pre
+                            Sales read it (source_tab, else source_type). An arm's board keeps
+                            City, through cityAnswer, so a lead whose sheet mapped the column
                             and one whose sheet did not both show the same thing here. */}
-                        {(() => {
+                        {onArmBoard ? (() => {
                           const city = cityAnswer(lead);
                           return (
                             <td className="truncate px-4 py-3 text-slate-600" title={city || undefined} data-testid={`branch-row-city-${lead.id}`}>
                               {city || <span className="text-slate-400">—</span>}
+                            </td>
+                          );
+                        })() : (() => {
+                          const source = lead.source_tab || lead.source_type;
+                          return (
+                            <td className="truncate px-4 py-3 text-slate-600" title={source || undefined} data-testid={`branch-row-source-${lead.id}`}>
+                              {source || <span className="text-slate-400">—</span>}
                             </td>
                           );
                         })()}
