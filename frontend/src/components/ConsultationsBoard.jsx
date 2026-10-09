@@ -326,8 +326,10 @@ const FEE_LABELS = {
 const DIET_FEE_KINDS = {
   consultation: {
     label: "Diet Consultation Fee",
-    // The product on the shelf this fee is collected against. See dietItemFor.
+    // The product this fee is collected against, and the shelf it is priced on:
+    // Services and Products > Diet Details > Diet Consultation. See pickDietItem.
     product: "Diet Consultation",
+    itemType: "diet",
     receiptPrefix: "DIET",
     paidField: "diet_fee_paid",
     itemField: "diet_package_id",
@@ -342,7 +344,9 @@ const DIET_FEE_KINDS = {
   },
   chart: {
     label: "Diet Chart Fee",
+    // Diet Details > Diet Chart, still item_type "diet_package" on the server.
     product: "Diet Chart",
+    itemType: "diet_package",
     receiptPrefix: "DIETCHART",
     paidField: "diet_chart_fee_paid",
     itemField: "diet_chart_package_id",
@@ -356,36 +360,41 @@ const DIET_FEE_KINDS = {
 };
 
 /**
- * Which product on the Diet shelf a given fee is for.
+ * The products a given diet fee can be collected against: its own shelf, and only that.
  *
- * By name, because nothing else on a store item says. Both products sit under Diet Package,
- * both carry the same category, and item_type cannot tell them apart either — what
- * separates a Diet Consultation from a Diet Chart is only what the branch typed when they
- * priced it.
+ * Each fee has a Diet Details sub-tab of its own — the Diet Consultation Fee is priced under
+ * Diet Consultation (item_type "diet"), the Diet Chart Fee under Diet Chart
+ * ("diet_package"). Both fees used to read one list of both shelves and tell the products
+ * apart by name, so a chart priced under any other name was either quoted as nothing or
+ * offered at the consultation's price; the shelf is what says which fee a price is for.
+ */
+const dietShelfOf = (items, kind) => {
+  const type = DIET_FEE_KINDS[kind]?.itemType;
+  return (items || []).filter((i) => i.item_type === type);
+};
+
+/**
+ * Which product on its own shelf a given fee opens on, and quotes.
  *
- * Exact match first, then a containing one, so "Diet Chart Package" still resolves. The two
+ * The product's own name first (exact, then containing, so "Diet Chart Package" still
+ * resolves), for a shelf holding more than one. Failing that, the first row there that is
+ * not plainly the OTHER product: before Diet Details, both products sat on the Diet Package
+ * shelf, so a branch may still have a "Diet Consultation" row under Diet Chart, and its
+ * price must not be quoted as the Diet Chart Fee for being the only row there. The two
  * names cannot cross-match, since neither contains the other.
  *
- * The last resort is the shelf holding exactly one product — but only where that product is
- * not plainly the OTHER one. A branch that has priced a Diet Chart and nothing else must not
- * have its price quoted as the Diet Consultation Fee just for being the only row there;
- * that is the guess this is meant to avoid, and it would be quoting one product's price
- * under the other's name.
- *
- * Nothing matched returns null, and the card shows "—" rather than a figure it cannot stand
- * behind. This panel is what Branch Admin reads to take money.
+ * Nothing on the shelf returns null, and the card shows "Not collected" rather than a
+ * figure it cannot stand behind. This panel is what Branch Admin reads to take money.
  */
 const pickDietItem = (items, kind) => {
   const want = normDietName(DIET_FEE_KINDS[kind]?.product);
   if (!want) return null;
-  const named = (items || []).map((i) => [normDietName(i.name), i]);
-  const find = (n) => named.find(([name]) => name === n)?.[1] || named.find(([name]) => name.includes(n))?.[1] || null;
-
-  const hit = find(want);
-  if (hit) return hit;
-  if ((items || []).length !== 1) return null;
   const other = normDietName(DIET_FEE_KINDS[kind === "chart" ? "consultation" : "chart"]?.product);
-  return find(other) ? null : items[0];
+  const named = dietShelfOf(items, kind).map((i) => [normDietName(i.name), i]);
+  return named.find(([name]) => name === want)?.[1]
+    || named.find(([name]) => name.includes(want))?.[1]
+    || named.find(([name]) => !name.includes(other))?.[1]
+    || null;
 };
 
 // "Consultation" first always, then whichever add-ons are on — same shape read back from
@@ -5981,36 +5990,36 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   async function openDietFeeDraft(kind = "consultation") {
     const cfg = DIET_FEE_KINDS[kind];
     let items = dietItems;
-    if (!items.length) {
+    // Fetched again whenever this fee's own shelf is empty, not only when both are: the
+    // product may have been priced since the board loaded.
+    if (!dietShelfOf(items, kind).length) {
       try {
-        // Both shelves. A branch may have priced its Diet Consultation and its Diet Chart
-        // under either item type and the server takes an item off either, so asking for one
-        // is how this told a branch to add a package they had already added.
         items = (await listDietStoreItems()) || [];
         setDietItems(items);
       } catch {
         items = [];
       }
     }
-    if (!items.length) {
-      toast.error("No Diet Package priced yet — add one in Services and Products > Diet Package.");
-      return;
-    }
     // Off the list just loaded rather than off `dietItems`, which the setState above has
     // not landed in yet on the first open.
+    const shelf = dietShelfOf(items, kind);
+    if (!shelf.length) {
+      toast.error(`No ${cfg.product} priced yet — add one in Services and Products > Diet Details > ${cfg.product}.`);
+      return;
+    }
     const match = pickDietItem(items, kind);
+    const saved = selectedLead[cfg.itemField];
 
     setDietFeeDraft({
       kind,
       // Re-collecting keeps whatever was chosen last time, so a correction doesn't
       // silently move the patient onto a different package. Read off this kind's own
-      // fields: the chart and the consultation remember different packages.
+      // fields: the chart and the consultation remember different packages. Only while
+      // that product is still on this fee's own shelf, though — a fee taken before Diet
+      // Details may have been collected against the other one.
       //
-      // Otherwise it opens on the product this fee is actually for. It used to open on
-      // whichever item sorted first, for both fees — so collecting a Diet Chart Fee
-      // pre-selected the Diet Consultation, and one confirm without reading the dropdown
-      // put the money against the wrong product.
-      item_id: selectedLead[cfg.itemField] || match?.id || items[0].id,
+      // Otherwise it opens on the product this fee is actually for.
+      item_id: (saved && shelf.some((i) => i.id === saved) ? saved : null) || match?.id || shelf[0].id,
       mode: selectedLead[cfg.packageModeField] || "offline",
       payment_mode: "cash",
       amount: "",
@@ -6047,8 +6056,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
 
   const startCollectDietFee = () => {
     const price = dietListPrice(dietFeeDraft);
-    if (!dietFeeDraft.item_id) { toast.error("Choose a Diet Package"); return; }
-    if (!(price > 0)) { toast.error(`This Diet Package has no ${dietFeeDraft.mode} price set`); return; }
+    if (!dietFeeDraft.item_id) { toast.error(`Choose a ${dietFeeCfg.product}`); return; }
+    if (!(price > 0)) { toast.error(`This ${dietFeeCfg.product} has no ${dietFeeDraft.mode} price set`); return; }
     // Net of any discount already agreed, for the same reason the Rehab Fee's is — except
     // for the two methods that cannot discount, which open on the listed price itself.
     const settlesNow = SETTLED_NOW_MODES.includes(dietFeeDraft.payment_mode);
@@ -6186,7 +6195,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
     }
   };
 
-  // How long one check-in runs. Read from the Diet Package in FITSIO STORE, not from the
+  // How long one check-in runs. Read from Diet Details > Diet Consultation, not from the
   // session package — a check-in is not a treatment session and the two are priced and
   // timed separately.
   useEffect(() => {
@@ -8670,9 +8679,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   <>
                     <div className="rounded-lg border border-slate-200/80 bg-white shadow-sm" data-testid="cons-diet-detail">
                       <dl className="divide-y divide-slate-100">
-                        <DetailRow label="Diet Package" value={selectedLead.diet_package_name || "Not chosen yet"} />
+                        <DetailRow label="Diet Consultation Package" value={selectedLead.diet_package_name || "Not chosen yet"} />
                         <DetailRow
-                          label="Diet Fee"
+                          label="Diet Consultation Fee"
                           value={dietFeePaid
                             ? `Rs.${Number(selectedLead.diet_fee_paid).toLocaleString("en-IN")}${selectedLead.diet_fee_payment_mode ? ` (${selectedLead.diet_fee_payment_mode})` : ""}`
                             : (dietFeeDue != null ? `Rs.${Number(dietFeeDue).toLocaleString("en-IN")} — not collected` : "Not collected")}
@@ -11752,14 +11761,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-[11px] font-medium text-slate-500">Diet Package</label>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500">{dietFeeCfg.product}</label>
+                    {/* This fee's own Diet Details shelf only. Both shelves were offered
+                        here before, for either fee, which is how a chart could be charged
+                        at the consultation's price. */}
                     <select
                       value={dietFeeDraft.item_id}
                       onChange={(e) => setDietFeeDraft({ ...dietFeeDraft, item_id: e.target.value })}
                       className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
                       data-testid="cons-diet-fee-package"
                     >
-                      {dietItems.map((it) => (
+                      {dietShelfOf(dietItems, dietFeeDraft.kind).map((it) => (
                         <option key={it.id} value={it.id}>{it.name}</option>
                       ))}
                     </select>
@@ -11808,7 +11820,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     disabled={collectingDietFee || !dietFeeDraft.item_id || !(dietListPrice(dietFeeDraft) > 0)}
                     data-testid="cons-diet-fee-submit"
                   >
-                    Collect Diet Consultation Fee
+                    {selectedLead[dietFeeCfg.paidField] != null ? `Update ${dietFeeCfg.label}` : `Collect ${dietFeeCfg.label}`}
                   </Button>
                 </div>
               </div>
@@ -11833,7 +11845,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     </div>
 
                     <p className="text-[11px] text-slate-500">
-                      {dietItemById(dietFeeDraft.item_id)?.name || "Diet Package"} · <span className="capitalize">{dietFeeDraft.mode}</span>
+                      {dietItemById(dietFeeDraft.item_id)?.name || dietFeeCfg.product} · <span className="capitalize">{dietFeeDraft.mode}</span>
                     </p>
 
                     {settlesNow && (

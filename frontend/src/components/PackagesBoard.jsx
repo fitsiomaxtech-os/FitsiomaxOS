@@ -28,7 +28,8 @@ export const TABS = [
   { key: "zumba", label: "Zumba Class", icon: Music2 },
   { key: "workshop", label: "Workshop", icon: GraduationCap },
   { key: "home_visit", label: "Home Visit", icon: Home },
-  { key: "diet", label: "Diet Package", icon: Salad },
+  // Both diet products, one sub-tab each — see DIET_SUBTABS.
+  { key: "diet", label: "Diet Details", icon: Salad },
   { key: "tablet", label: "Tablet", icon: Pill },
   { key: "supplementary", label: "Supplementary", icon: FlaskConical },
   { key: "equipment", label: "Equipment", icon: Dumbbell },
@@ -49,11 +50,21 @@ export const TABS = [
 export const CONSULTATIONS_SUBTABS = [
   { key: "physiotherapy", label: "Physiotherapy", icon: Activity },
   { key: "fitness", label: "Fitness", icon: Dumbbell },
-  // item_type "diet" — the bookable Diet Consultation, priced and timed exactly like a
-  // physio consultation (v3_store.py validates it against the same duration rules). Split
-  // from item_type "diet_package" (the top-level Diet Package tab's plain product
-  // catalogue, no duration) once this booking flow moved here.
-  { key: "diet", label: "Diet Consultations", icon: Salad },
+];
+
+// Diet Details — the two diet products, each the price one fee is collected at. The Diet
+// Consultation Fee is quoted off the first shelf and the Diet Chart Fee off the second
+// (DIET_FEE_KINDS in ConsultationsBoard.jsx, and the two collect routes in
+// v3_packages.py), so which sub-tab a product is priced under is what decides which fee
+// it is.
+//
+// item_type "diet" is the bookable Diet Consultation, priced and timed exactly like a
+// physio consultation (v3_store.py validates it against the same duration rules) — it sat
+// under Consultations until both diet products were brought together here. item_type
+// "diet_package" is the Diet Chart: a plain priced product, no booking slot, no duration.
+export const DIET_SUBTABS = [
+  { key: "consultation", label: "Diet Consultation", kind: "diet", icon: Salad },
+  { key: "chart", label: "Diet Chart", kind: "diet_package", icon: ClipboardList },
 ];
 
 // Each of these is a category the session form already writes to, reached from under
@@ -95,7 +106,7 @@ export const DURATION_OPTIONS = [
 // — which picks one of these when the money is taken — read the same list without either
 // importing the other. See that file for how it relates to the server's copy.
 //
-// Only Physiotherapy. Fitness and Diet Consultations name themselves and pick their own
+// Only Physiotherapy. Fitness and the Diet Consultation name themselves and pick their own
 // duration, as they always have.
 const packageByKey = consultationPackageByKey;
 
@@ -371,16 +382,17 @@ const PACKAGE_KINDS = {
     // price_offline off the chosen mode, gets the same number either way.
     singlePrice: true,
   },
-  // The Diet Chart-style product the top-level Diet Package tab now catalogs — a plain
-  // priced item (name, description, image, price), no booking slot. Split out from "diet"
-  // once the actual Diet Consultation booking moved to the Consultations tab; sharing one
-  // item_type between "a diet chart for sale" and "a bookable consultation slot" was the
-  // thing forcing a Duration field onto a product that has no duration.
+  // The Diet Chart, under Diet Details > Diet Chart — a plain priced item (name,
+  // description, image, price), no booking slot. Its price is what the Diet Chart Fee is
+  // collected at. Still item_type "diet_package" on the server, from when this shelf was
+  // the Diet Package tab; sharing one item_type between "a diet chart for sale" and "a
+  // bookable consultation slot" was the thing forcing a Duration field onto a product that
+  // has no duration.
   diet_package: {
     itemType: "diet_package",
-    noun: "Diet Package",
+    noun: "Diet Chart",
     header: "from-emerald-500 to-teal-600",
-    emptyText: "No diet packages yet. Click Create to add one.",
+    emptyText: "No diet charts yet. Click Create to add one.",
     singlePrice: true,
     noDuration: true,
   },
@@ -391,8 +403,8 @@ const PACKAGE_KINDS = {
 // quietly rename it to whichever package happened to sort first.
 const KEEP_EXISTING_NAME = "__existing__";
 
-// Exported for Branch Admin's FITSIO STORE, which opens it to edit a consultation or a
-// diet package.
+// Exported for Branch Admin's FITSIO STORE, which opens it to edit a consultation, a diet
+// consultation or a diet chart.
 // branchId: set when editing from a branch's own store, so with Services and Products per
 // branch switched On the edit is that branch's alone (the server decides; see v3_store.py).
 export const CreateConsultationModal = ({ item, onClose, onSaved, kind = "consultation", category = "physiotherapy", branchId }) => {
@@ -1493,9 +1505,35 @@ const ConsultationsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) =>
 
       {sub === "physiotherapy" && <PhysiotherapyPanel reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
       {sub === "fitness" && <PhysiotherapyPanel category="fitness" reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
-      {/* kind="diet" — the bookable Diet Consultation catalogue, separate from the
-          top-level Diet Package tab's kind="diet_package" (a plain product, no duration). */}
-      {sub === "diet" && <PhysiotherapyPanel kind="diet" reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
+    </div>
+  );
+};
+
+// Diet Details: the Diet Consultation and the Diet Chart, a sub-tab each (DIET_SUBTABS).
+// Keyed by kind so switching does not leave the other shelf's rows on screen while the new
+// ones load.
+const DietDetailsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) => {
+  const [sub, setSub] = useState(DIET_SUBTABS[0].key);
+  const current = DIET_SUBTABS.find((t) => t.key === sub) || DIET_SUBTABS[0];
+  return (
+    <div className="space-y-4" data-testid="packages-panel-diet">
+      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="diet-subtabs">
+        {DIET_SUBTABS.map((t) => {
+          const Icon = t.icon;
+          const active = sub === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setSub(t.key)}
+              data-testid={`diet-subtab-${t.key}`}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${active ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              <Icon className="h-4 w-4" />{t.label}
+            </button>
+          );
+        })}
+      </div>
+      <PhysiotherapyPanel key={current.kind} kind={current.kind} reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />
     </div>
   );
 };
@@ -2023,7 +2061,7 @@ export const PackagesBoard = () => {
         />
       )}
       {view === "catalog" && tab === "home_visit" && <HomeVisitPanel reloadToken={reloadTick} toolbarSlot={createSlot} modeFilter={modeFilter} />}
-      {view === "catalog" && tab === "diet" && <PhysiotherapyPanel kind="diet_package" reloadToken={reloadTick} toolbarSlot={createSlot} />}
+      {view === "catalog" && tab === "diet" && <DietDetailsPanel reloadToken={reloadTick} toolbarSlot={createSlot} modeFilter={modeFilter} />}
       {view === "history" && <HistoryPanel reloadToken={reloadTick} />}
       {view === "catalog" && tab === "treatment" && <TreatmentTypesBoard />}
       {view === "catalog" && tab === "physio_type" && <PhysioTypesBoard />}

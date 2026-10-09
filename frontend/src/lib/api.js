@@ -935,13 +935,13 @@ export const listStoreItems = async (category, itemType, branchId) => {
   if (branchId) params.branch_id = branchId;
   return (await api.get("/store/items", { params })).data;
 };
-/** Every diet product the branch has priced, from both shelves.
+/** Every diet product the branch has priced, from both Diet Details shelves.
  *
- *  Two calls because they are two item types: "diet", the timed bookable item under
- *  Consultations, and "diet_package", the flat-priced one under the Diet Package tab. A
- *  branch may have put its Diet Consultation and its Diet Chart on either, and asking for
- *  only one type is how the Collect Diet Fee button came to tell a branch to add a package
- *  they had already added. Deduplicated by id in case an item is ever returned by both. */
+ *  Two calls because they are two item types: "diet", the Diet Consultation, and
+ *  "diet_package", the Diet Chart. Each fee is collected against its own one of the two
+ *  (dietShelfOf in ConsultationsBoard.jsx); fetching both at once is just one round trip
+ *  for the board instead of one per fee. Deduplicated by id in case an item is ever
+ *  returned by both. */
 export const listDietStoreItems = async () => {
   const lists = await Promise.all([
     listStoreItems(undefined, "diet").catch(() => []),

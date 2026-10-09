@@ -673,19 +673,17 @@ async def settle_standard_payment(
     }
 
 
-# Which shelves a diet fee may be collected against.
+# Which shelf each diet fee is collected against: one each, under Services and Products >
+# Diet Details. The Diet Consultation Fee is priced under Diet Consultation (item_type
+# "diet"), the Diet Chart Fee under Diet Chart ("diet_package").
 #
-# Both, not one. The catalogue has two places a diet product can sit — "diet", the timed
-# bookable item under Consultations, and "diet_package", the flat-priced one under the Diet
-# Package tab — and branches have priced their Diet Consultation and Diet Chart on either.
-# Pinning collection to a single item_type meant the Collect Diet Fee button telling a
-# branch to go and add a package they had already added, on the other shelf.
-#
-# What the money is for is decided by which ENDPOINT takes it, not by which shelf the item
-# came off: collect_diet_fee writes the Diet Consultation Fee fields and
-# collect_diet_chart_fee the Diet Chart ones, whatever the item's type. The shelf is where
-# the branch keeps a price; it was never the thing that said which product was sold.
-DIET_ITEM_TYPES = ("diet", "diet_package")
+# Both routes used to take an item off either shelf, from when the two products had no
+# shelf of their own to be told apart by, and the screen picked between them by name — so
+# a chart named anything else could be charged at the consultation's price. Now that each
+# has its own sub-tab the shelf IS what says which fee a price belongs to, and the server
+# holds a fee to it the same as the collect popup does.
+DIET_CONSULTATION_ITEM_TYPE = "diet"
+DIET_CHART_ITEM_TYPE = "diet_package"
 
 # Aliases for the one standard set, kept only so a reader following a fee to its modes
 # lands somewhere. Diet, Diet Chart and Rehab are collected exactly as the Treatment Fee
@@ -722,14 +720,17 @@ async def collect_diet_fee(lead_id: str, payload: V3CollectDietFeeInput, user: V
         raise HTTPException(status_code=400, detail="Collect the Consultation Fee first")
 
     item = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
-        {"id": payload.item_id, "item_type": {"$in": list(DIET_ITEM_TYPES)}}, {"_id": 0}
+        {"id": payload.item_id, "item_type": DIET_CONSULTATION_ITEM_TYPE}, {"_id": 0}
     ), lead.get("branch_id"))
     if not item:
-        raise HTTPException(status_code=404, detail="Diet Package not found. Add one in FITSIO STORE > Diet Package.")
+        raise HTTPException(
+            status_code=404,
+            detail="Diet Consultation not found. Add one in Services and Products > Diet Details > Diet Consultation.",
+        )
 
     original_price = item.get("price_online") if payload.mode == "online" else item.get("price_offline")
     if original_price is None:
-        raise HTTPException(status_code=400, detail=f"This Diet Package has no {payload.mode} price set")
+        raise HTTPException(status_code=400, detail=f"This Diet Consultation has no {payload.mode} price set")
 
     taken = await settle_standard_payment(
         lead=lead,
@@ -840,14 +841,17 @@ async def collect_diet_chart_fee(lead_id: str, payload: V3CollectDietChartFeeInp
         )
 
     item = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
-        {"id": payload.item_id, "item_type": {"$in": list(DIET_ITEM_TYPES)}}, {"_id": 0}
+        {"id": payload.item_id, "item_type": DIET_CHART_ITEM_TYPE}, {"_id": 0}
     ), lead.get("branch_id"))
     if not item:
-        raise HTTPException(status_code=404, detail="Diet Package not found. Add one in FITSIO STORE > Diet Package.")
+        raise HTTPException(
+            status_code=404,
+            detail="Diet Chart not found. Add one in Services and Products > Diet Details > Diet Chart.",
+        )
 
     original_price = item.get("price_online") if payload.mode == "online" else item.get("price_offline")
     if original_price is None:
-        raise HTTPException(status_code=400, detail=f"This Diet Package has no {payload.mode} price set")
+        raise HTTPException(status_code=400, detail=f"This Diet Chart has no {payload.mode} price set")
 
     taken = await settle_standard_payment(
         lead=lead,

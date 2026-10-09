@@ -79,10 +79,10 @@ def _packaged_duration(payload: "StoreItemIn") -> Optional[int]:
 # consultation, which is why it validates against the same rules rather than getting its
 # own. Sessions are the odd one out: they carry a session count instead of a duration.
 #
-# "diet_package" is the Diet Chart-style product Super Admin's top-level Diet Package tab
-# now catalogs — a flat-priced item with no booking slot, split out from "diet" once the
-# actual Diet Consultation booking moved to the Consultations tab. Not timed, same as
-# "session": no duration to validate.
+# "diet_package" is the Diet Chart — a flat-priced item with no booking slot, split out
+# from "diet" so the chart need not carry a duration. Not timed, same as "session": no
+# duration to validate. The two sit side by side under Services and Products > Diet
+# Details, and each is the price one diet fee is collected at (see v3_packages.py).
 ITEM_TYPES = ("consultation", "session", "diet", "diet_package")
 
 # Shelves whose price is the course, entered and kept exactly as typed with no arithmetic

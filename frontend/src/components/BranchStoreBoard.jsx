@@ -12,6 +12,7 @@ import {
   MODE_TAB_KEYS,
   CONSULTATIONS_SUBTABS,
   SESSIONS_SUBTABS,
+  DIET_SUBTABS,
   HOME_VISIT_SUBTABS,
   PlaceholderPanel,
   itemDurationLabel,
@@ -29,8 +30,8 @@ import {
 const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 
 // Every shelf here is editable with Super Admin's own dialog for it: the session form for
-// Sessions, Rehab, Zumba, Workshop and Home Visit, the consultation form for Consultations,
-// Diet Consultations and Diet Package. Edit only — create and delete stay with Super Admin,
+// Sessions, Rehab, Zumba, Workshop and Home Visit, the consultation form for Consultations
+// and both Diet Details shelves. Edit only — create and delete stay with Super Admin,
 // and the server refuses a branch moving a package to another type or shelf.
 //
 // With Services and Products per branch switched On (Developer Access), what is listed and
@@ -194,21 +195,6 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", bran
         />
       )}
       {sub === "fitness" && <PlaceholderPanel label="Fitness" testid="branch-consultations-subpanel-fitness" />}
-      {/* Real data, not a placeholder like Fitness above — item_type "diet", the bookable
-          Diet Consultation catalogue Super Admin prices under Services and Products >
-          Consultations > Diet Consultations. Separate from item_type "diet_package"
-          (BranchDietPanel below), a plain product with no booking slot. */}
-      {sub === "diet" && (
-        <BranchItemsPanel
-          category="physiotherapy"
-          itemType="diet"
-          durationLabel="Diet Consultation Duration"
-          emptyLabel="No diet consultations available yet."
-          testidPrefix="branch-diet-consultation"
-          reloadToken={reloadToken} branchId={branchId}
-          modeFilter={modeFilter}
-        />
-      )}
     </div>
   );
 };
@@ -277,29 +263,63 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all", branchId 
   );
 };
 
+// What each Diet Details sub-tab lists, by the item_type DIET_SUBTABS names. The testid
+// prefixes are the ones each shelf had before the two were brought together here.
+const DIET_SHELVES = {
+  diet: {
+    durationLabel: "Diet Consultation Duration",
+    empty: "No diet consultations available yet. Super Admin adds them in Services and Products > Diet Details > Diet Consultation.",
+    testidPrefix: "branch-diet-consultation",
+  },
+  diet_package: {
+    empty: "No diet charts available yet. Super Admin adds them in Services and Products > Diet Details > Diet Chart.",
+    testidPrefix: "branch-diet",
+  },
+};
+
 /**
- * Diet Package — what Super Admin has priced, editable here but not added to or deleted.
+ * Diet Details — what Super Admin has priced, editable here but not added to or deleted.
  *
- * No Physiotherapy/Fitness sub-tabs, matching Super Admin's own Diet Package tab: a diet
- * package is not split by department the way a consultation is, so a sub-tab bar with one
- * live entry would be a control that never does anything.
- *
- * item_type "diet_package" — a plain priced product (a diet chart, say), not a booking
- * slot, so it carries no duration. The actual bookable Diet Consultation is item_type
- * "diet", shown separately under Consultations > Diet Consultations above.
+ * The same two sub-tabs as Super Admin's own Diet Details tab (DIET_SUBTABS): the Diet
+ * Consultation (item_type "diet", a timed booking) and the Diet Chart (item_type
+ * "diet_package", a plain product with no duration). Each one's price is what its own fee
+ * is collected at, so a branch reads both fees from this one tab.
  */
-export const BranchDietPanel = ({ reloadToken, modeFilter = "all", branchId }) => (
-  <div className="space-y-4" data-testid="branch-store-panel-diet">
-    <BranchItemsPanel
-      category="physiotherapy"
-      itemType="diet_package"
-      emptyLabel="No diet packages available yet. Super Admin adds them in Services and Products > Diet Package."
-      testidPrefix="branch-diet"
-      reloadToken={reloadToken} branchId={branchId}
-      modeFilter={modeFilter}
-    />
-  </div>
-);
+export const BranchDietPanel = ({ reloadToken, modeFilter = "all", branchId }) => {
+  const [sub, setSub] = useState(DIET_SUBTABS[0].key);
+  const current = DIET_SUBTABS.find((t) => t.key === sub) || DIET_SUBTABS[0];
+  const shelf = DIET_SHELVES[current.kind];
+  return (
+    <div className="space-y-4" data-testid="branch-store-panel-diet">
+      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="branch-diet-subtabs">
+        {DIET_SUBTABS.map((t) => {
+          const Icon = t.icon;
+          const active = sub === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setSub(t.key)}
+              data-testid={`branch-diet-subtab-${t.key}`}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${active ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              <Icon className="h-4 w-4" />{t.label}
+            </button>
+          );
+        })}
+      </div>
+      <BranchItemsPanel
+        key={current.kind}
+        category="physiotherapy"
+        itemType={current.kind}
+        durationLabel={shelf.durationLabel}
+        emptyLabel={shelf.empty}
+        testidPrefix={shelf.testidPrefix}
+        reloadToken={reloadToken} branchId={branchId}
+        modeFilter={modeFilter}
+      />
+    </div>
+  );
+};
 
 /**
  * Rehab, Zumba Class, Workshop and Home Visit — Super Admin's four session-shaped shelves,
