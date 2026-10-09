@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { updateLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
-import { DEPARTMENT_OPTIONS } from "@/components/CreateLeadModal";
+import { DEPARTMENT_OPTIONS, SOURCE_SUGGESTIONS } from "@/components/CreateLeadModal";
 
 const GENDERS = ["Male", "Female", "Other"];
 // The two departments a lead is seen at a branch for. The other two are run online and
@@ -45,12 +45,14 @@ const isEditableAnswer = (v) => ["string", "number", "boolean"].includes(typeof 
  * branch's own toolbar for its Branch Admin -- which carries their fees and sessions with
  * them, and a radio button here would move the person and leave the money behind.
  *
- * Source is deliberately not editable. It records which sheet and mapping filed the lead
- * rather than anything about the patient, and retyping it would not change where they
- * actually came from.
+ * Source opens on what the lead popup shows for it (source_tab, else source_type) and is
+ * only sent when it was actually changed: a save that never touched it must not stamp a
+ * sheet lead's raw source_type into source_tab, which the dashboards group on.
  */
 export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true }) => {
+  const initialSource = lead.source_tab || lead.source_type || "";
   const [form, setForm] = useState({
+    source_tab: initialSource,
     name: lead.name || "",
     phone: lead.phone || "",
     alternative_phone: lead.alternative_phone || "",
@@ -100,7 +102,13 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
     // the reader guess a department -- which decides which board the lead is listed on --
     // in order to fix something else. Clearing one that was set is still refused.
     if (!form.department && lead.department) { toast.error("Department is required"); return; }
+    const source = form.source_tab.trim();
+    // Same rule as Department: one that was set cannot be blanked, since an empty source_tab
+    // is its own silent bucket on every board that groups by channel.
+    if (!source && initialSource) { toast.error("Source is required"); return; }
     const payload = { ...form };
+    if (source === initialSource) delete payload.source_tab;
+    else payload.source_tab = source;
     // The endpoint drops nulls rather than writing them, so a number cleared here stays as
     // it was -- there is no value meaning "no answer" for an int field on the way in.
     payload.months_of_pain = payload.months_of_pain === "" ? null : Number(payload.months_of_pain);
@@ -166,7 +174,15 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
               <Field label="Address" className="sm:col-span-2"><Input value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="lead-edit-address" /></Field>
               <Field label="City"><Input value={form.city} onChange={(e) => set("city", e.target.value)} data-testid="lead-edit-city" /></Field>
               <Field label="State"><Input value={form.state} onChange={(e) => set("state", e.target.value)} data-testid="lead-edit-state" /></Field>
-              <Field label="Location" className="sm:col-span-2"><Input value={form.location} onChange={(e) => set("location", e.target.value)} data-testid="lead-edit-location" /></Field>
+              <Field label="Location"><Input value={form.location} onChange={(e) => set("location", e.target.value)} data-testid="lead-edit-location" /></Field>
+              <Field label="Source">
+                {/* Typed with suggestions, as on the create form: a channel nobody has
+                    named yet can still be written down as what it was. */}
+                <Input list="lead-edit-source-options" value={form.source_tab} onChange={(e) => set("source_tab", e.target.value)} data-testid="lead-edit-source" />
+                <datalist id="lead-edit-source-options">
+                  {SOURCE_SUGGESTIONS.map((o) => <option key={o} value={o} />)}
+                </datalist>
+              </Field>
             </div>
           </Section>
 

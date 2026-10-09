@@ -12,7 +12,8 @@ import { loadSession } from "@/lib/session";
 // rather than as "Other". "CSV Import" and "Google Sheets" are left out on purpose --
 // those are stamped by the importers themselves (see backend/routers/v3_google_sheets.py),
 // and a lead somebody is typing into this form by definition did not arrive off a sheet.
-const SOURCE_SUGGESTIONS = ["Meta", "SEO", "Referral", "Walk-In", "Website", "Instagram", "WhatsApp", "Phone Call", "Other"];
+// Exported for LeadEditModal, so correcting a source offers the same channels as filing one.
+export const SOURCE_SUGGESTIONS =["Meta", "SEO", "Referral", "Walk-In", "Website", "Instagram", "WhatsApp", "Phone Call", "Other"];
 // Exported because a board that reads a lead back has to name its Department the same way
 // the form that set it did -- a raw "offline_physio" on a detail card is the stored value
 // leaking through rather than a label.
