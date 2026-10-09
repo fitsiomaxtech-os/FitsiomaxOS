@@ -1341,16 +1341,57 @@ async def hidden_lead_sources() -> List[str]:
     return list((row or {}).get("hidden") or [])
 
 
+# Whether the tab offers its Show / Hide Sources button at all -- the Danger Zone's switch.
+# Off takes the button away and the two endpoints behind it refuse; the sources already
+# hidden stay hidden, since this governs the control, not what it last set.
+LEAD_SOURCE_BUTTON_ID = "lead_source_visibility_button"
+
+
+async def lead_source_button_enabled() -> bool:
+    """On unless a developer switched it off."""
+    row = await v3_col("app_settings").find_one({"id": LEAD_SOURCE_BUTTON_ID}, {"_id": 0})
+    return True if not row else bool(row.get("enabled", True))
+
+
+async def _require_lead_source_button() -> None:
+    if not await lead_source_button_enabled():
+        raise HTTPException(status_code=409, detail="Show / Hide Sources is switched off in Developer Access")
+
+
 @router.get("/lead-source-visibility")
 async def v3_get_lead_source_visibility(_: V3UserOut = Depends(v3_current_user)):
     """Read by the tab for everyone, so the cards are hidden without anyone holding the password."""
-    return {"hidden": await hidden_lead_sources()}
+    return {"hidden": await hidden_lead_sources(), "button_enabled": await lead_source_button_enabled()}
 
 
 @router.get("/admin/lead-source-visibility")
 async def v3_get_lead_source_visibility_dev(_: V3UserOut = Depends(require_developer_password_at_branch)):
     """The same list, behind the password: what the Show / Hide popup unlocks with."""
+    await _require_lead_source_button()
     return {"hidden": await hidden_lead_sources()}
+
+
+@router.get("/admin/lead-source-visibility-button")
+async def v3_get_lead_source_button(_: V3UserOut = Depends(require_developer_password)):
+    return {"enabled": await lead_source_button_enabled()}
+
+
+@router.put("/admin/lead-source-visibility-button")
+async def v3_set_lead_source_button(
+    payload: LeadDeleteButtonInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    await v3_col("app_settings").update_one(
+        {"id": LEAD_SOURCE_BUTTON_ID},
+        {"$set": {
+            "id": LEAD_SOURCE_BUTTON_ID,
+            "enabled": payload.enabled,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"enabled": payload.enabled}
 
 
 @router.put("/admin/lead-source-visibility")
@@ -1358,6 +1399,7 @@ async def v3_set_lead_source_visibility(
     payload: LeadSourceHiddenInput,
     user: V3UserOut = Depends(require_developer_password_at_branch),
 ):
+    await _require_lead_source_button()
     source = payload.source.strip()
     if not source:
         raise HTTPException(status_code=400, detail="Source is required")

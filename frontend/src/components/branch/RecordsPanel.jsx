@@ -368,6 +368,9 @@ const LeadSourceRecords = ({ branchId }) => {
   // a second visit to the popup in the same sitting does not ask again; leaving the tab
   // forgets it, and the server checks it on every switch regardless.
   const [hidden, setHidden] = useState([]);
+  // Developer Access can take the button away altogether. Off until the server says On, so
+  // a switched-off button never flashes up while the setting is read.
+  const [buttonEnabled, setButtonEnabled] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [devPassword, setDevPassword] = useState(null);
   const applyDateFilter = (next) => {
@@ -380,7 +383,9 @@ const LeadSourceRecords = ({ branchId }) => {
     if (!branchId) return;
     setLoading(true);
     // Apart, so a failed read of the hidden list still draws every card rather than none.
-    getLeadSourceVisibility().then((r) => setHidden(r.hidden || [])).catch(() => {});
+    getLeadSourceVisibility()
+      .then((r) => { setHidden(r.hidden || []); setButtonEnabled(r.button_enabled !== false); })
+      .catch(() => {});
     try {
       const data = await getBranchBoard(branchId);
       setLeads(data.leads || []);
@@ -511,6 +516,7 @@ const LeadSourceRecords = ({ branchId }) => {
           <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="lead-source-date-filter" centered iconOnly phoneIconOnly />
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          {buttonEnabled && (
           <Button
             variant="outline"
             size="sm"
@@ -522,6 +528,7 @@ const LeadSourceRecords = ({ branchId }) => {
           >
             <EyeOff className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Show / Hide Sources</span>
           </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -610,7 +617,7 @@ const LeadSourceRecords = ({ branchId }) => {
         </>
       )}
 
-      {visibilityOpen && (
+      {visibilityOpen && buttonEnabled && (
         <SourceVisibilityDialog
           sources={allSources}
           hidden={hidden}

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton } from "@/lib/api";
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
@@ -224,6 +224,9 @@ export const PipelineStageManagement = ({ leading = null }) => {
   // Whether each branch keeps its own Services and Products. null until the zone is open.
   const [storePerBranch, setStorePerBranch] = useState(null);
   const [savingStorePerBranch, setSavingStorePerBranch] = useState(false);
+  // Whether Records > Leads Source offers its Show / Hide Sources button. null until read.
+  const [leadSourceButton, setLeadSourceButtonState] = useState(null);
+  const [savingLeadSourceButton, setSavingLeadSourceButton] = useState(false);
 
   // The tab being looked at, resolved once: `type` is this table's tab id, and for the
   // Branch pair it is not the same string as the pipeline's API type — both tabs are
@@ -365,13 +368,14 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); return; }
     getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
     getBeforeVerifyDeleteButton(devPassword).then((r) => setBeforeVerifyDelete(!!r.enabled)).catch(() => setBeforeVerifyDelete(null));
     getPhysioDayLock(devPassword).then((r) => setDayLock(!!r.locked)).catch(() => setDayLock(null));
     getLeadDeleteButton(devPassword).then((r) => setDeleteButton(!!r.enabled)).catch(() => setDeleteButton(null));
     getSaConsultBranchesSetting(devPassword).then((r) => setSaBranches(!!r.enabled)).catch(() => setSaBranches(null));
+    getLeadSourceButton(devPassword).then((r) => setLeadSourceButtonState(!!r.enabled)).catch(() => setLeadSourceButtonState(null));
   }, [devPassword]);
 
   // One row, drawn for either half. `muted` is the only difference the half makes to a real
@@ -628,6 +632,23 @@ export const PipelineStageManagement = ({ leading = null }) => {
     setSavingStorePerBranch(false);
   };
 
+  const toggleLeadSourceButton = async () => {
+    const next = !leadSourceButton;
+    const ok = window.confirm(next
+      ? "Turn the Leads Source Show / Hide Sources button ON?\n\nRecords > Leads Source gets the button again. It still asks for the developer password before any source can be shown or hidden."
+      : "Turn the Leads Source Show / Hide Sources button OFF?\n\nThe button disappears from Records > Leads Source, and the server refuses a change even if one is sent. Sources already hidden stay hidden.");
+    if (!ok) return;
+    setSavingLeadSourceButton(true);
+    try {
+      const r = await setLeadSourceButton(devPassword, next);
+      setLeadSourceButtonState(!!r.enabled);
+      toast.success(r.enabled ? "Show / Hide Sources button is ON" : "Show / Hide Sources button is OFF");
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingLeadSourceButton(false);
+  };
+
   const handleResetAllLeads = async () => {
     const step1 = window.confirm(
       "Reset EVERY lead in the whole OS back to a fresh, unassigned New Leads state?\n\n" +
@@ -882,6 +903,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
               { key: "before-verify-delete-button", label: "Before Verify Transactions", value: beforeVerifyDelete, saving: savingBeforeVerifyDelete, onFlip: toggleBeforeVerifyDelete, on: "ON", off: "OFF" },
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
               { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
+              { key: "lead-source-button", label: "Leads Source Show / Hide Sources button", value: leadSourceButton, saving: savingLeadSourceButton, onFlip: toggleLeadSourceButton, on: "ON", off: "OFF" },
             ].map((row) => (
               <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`${row.key}-card`}>
                 <span className="text-sm font-medium text-slate-800">{row.label}</span>
