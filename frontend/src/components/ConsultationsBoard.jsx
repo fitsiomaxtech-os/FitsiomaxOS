@@ -2492,12 +2492,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // cards stacked above it pushed that panel most of a screen down. What the record holds
   // is named on the closed row, so nothing has to be unfolded to know what is inside.
   const [caseRecordOpen, setCaseRecordOpen] = useState(false);
-  // The same record on the narrow popup (see compactDetail): three rows rather than three
-  // columns, and the one pressed open — "diagnosis", "treatment" or "plan". One at a time,
-  // so the record never grows past one written-out answer above the payment panel.
-  const [recordRow, setRecordRow] = useState(null);
+  // The same record on the narrow popup (see compactDetail) is three one-line rows, and the
+  // whole of it opens in a popup of its own — Consultation Record Details — rather than
+  // unrolling in place, so reading it never pushes the payment panel down the card.
+  const [recordDetailsOpen, setRecordDetailsOpen] = useState(false);
   // The popup's size, chosen when a patient is opened and held while they stay open. A
-  // Branch Admin opening someone at Consultation Visit gets a 532 × 615 card: the work
+  // Branch Admin opening someone at Consultation Visit gets a 565 × 660 card: the work
   // there is one payment, and a 1024px sheet around it was mostly white. Held rather than
   // read off the stage live, because collecting that fee moves the patient on to Fee
   // Collected with the popup still up, and a card that doubled in width under the hand
@@ -2861,7 +2861,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   }, [selectedLead?.id, docTick]);
   // Closed whenever a different patient is opened: a Diet card left standing would
   // otherwise read as the new patient's, with the previous one's figures still in it.
-  useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); setRecordRow(null); }, [selectedLead?.id]);
+  useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); setRecordDetailsOpen(false); }, [selectedLead?.id]);
 
   const notePrescriptionCount = (count) => {
     setLeadRxCount(count);
@@ -7003,11 +7003,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
               name at the top of the screen and nothing to press to reach another tab
               without scrolling back up to find the row.
 
-              The narrow card (compactDetail) is a fixed 532 × 615 rather than a cap, so it
+              The narrow card (compactDetail) is a fixed 565 × 660 rather than a cap, so it
               does not jump in size moving between Overview, Documents and Timeline; it
               still gives way to a smaller window, and only its body scrolls. */}
           <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5 ${compactDetail
-            ? "max-w-[532px] sm:h-[615px] sm:max-h-[calc(100dvh-1rem)]"
+            ? "max-w-[565px] sm:h-[660px] sm:max-h-[calc(100dvh-1rem)]"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
             {/* Who this is, then where they stand, side by side. The expert and the fee
                 badge used to hang below the phone number, where stacked under the contact
@@ -7371,7 +7371,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                       key: "treatment",
                       label: "Treatment Summary",
                       value: oneLine(treatment),
-                      full: treatment && <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">{treatment}</p>,
+                      // Numbered, one to a line, the way the Consultant ticked them — the
+                      // row above runs them together with dots to fit one line.
+                      full: treatment && (() => {
+                        const items = treatment.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+                        return items.length > 1 ? (
+                          <ol className="space-y-1">
+                            {items.map((t, i) => (
+                              <li key={i} className="flex gap-2 text-xs leading-5 text-slate-800">
+                                <span className="w-4 shrink-0 text-right font-semibold text-slate-400">{i + 1}.</span>
+                                <span className="min-w-0">{t}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">{treatment}</p>
+                        );
+                      })(),
                       testid: "cons-case-record-treatment",
                     },
                     {
@@ -7388,49 +7404,102 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     },
                   ];
 
-                  // The narrow popup: three rows, one under the other, each pressed open
-                  // to read the whole of it. Three columns a third of 532px wide is a word
-                  // or two each, and a summary that can only show two words is not one.
-                  // No Full record here — opening a row IS the full record of that row.
+                  // The narrow popup: three one-line rows, one under the other. Three
+                  // columns a third of 565px wide is a word or two each, and a summary that
+                  // can only show two words is not one. The whole of it — every line, the
+                  // Pre-Sales note, the plan service by service — is Consultation Record
+                  // Details, a popup of its own that the heading and every row open.
+                  //
+                  // The heading is drawn the way Collect a Payment's is, tile and all, so
+                  // the two sections of this card start on the same line and read as a pair.
+                  // No rule under it: the rows below are the heading's own content, and a
+                  // line between them cut the card in two.
                   if (compactDetail) {
                     return (
                       <>
-                        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
-                          <ClipboardList className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Consultation Record</p>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRecordDetailsOpen(true)}
+                          className="group flex w-full items-center gap-2 px-4 py-2.5 text-left transition hover:bg-slate-50"
+                          data-testid="cons-case-record-open"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                            <ClipboardList className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-slate-600">Consultation Record</span>
+                          <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition group-hover:border-slate-300 group-hover:text-slate-900">
+                            <Eye className="h-3.5 w-3.5" /> View Details
+                          </span>
+                        </button>
                         <div className="divide-y divide-slate-100" data-testid="cons-case-record-rows">
-                          {cells.map((c) => {
-                            const open = recordRow === c.key;
-                            return (
-                              <div key={c.key} data-testid={c.testid}>
+                          {cells.map((c) => (
+                            <button
+                              key={c.key}
+                              type="button"
+                              onClick={() => setRecordDetailsOpen(true)}
+                              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
+                              data-testid={c.testid}
+                            >
+                              <span className="w-32 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</span>
+                              <span
+                                className={`min-w-0 flex-1 truncate text-xs ${c.value ? "font-medium text-slate-800" : "italic text-slate-400"}`}
+                                title={c.value || undefined}
+                              >
+                                {c.value || "Not written yet"}
+                              </span>
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Consultation Record Details. Above the patient's card rather than
+                            in place of it, and closed back onto it — this is reading, and the
+                            payment panel underneath is where the reader goes next. */}
+                        {recordDetailsOpen && (
+                          <div
+                            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+                            onClick={(e) => { if (e.target === e.currentTarget) setRecordDetailsOpen(false); }}
+                            data-testid="cons-case-record-details"
+                          >
+                            <div className="flex max-h-[85dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5">
+                              <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-5 py-3">
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                                  <ClipboardList className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0">
+                                  <h3 className="text-sm font-semibold text-slate-900">Consultation Record Details</h3>
+                                  <p className="truncate text-xs text-slate-500">
+                                    {selectedLead.name || "Lead"}
+                                    {selectedLead.patient_number ? ` · ${selectedLead.patient_number}` : ""}
+                                    {selectedLead.assigned_physio_name ? ` · ${selectedLead.assigned_physio_name}` : ""}
+                                  </p>
+                                </div>
                                 <button
                                   type="button"
-                                  onClick={() => setRecordRow(open ? null : c.key)}
-                                  aria-expanded={open}
-                                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 ${open ? "bg-slate-50/70" : ""}`}
-                                  data-testid={`${c.testid}-toggle`}
+                                  onClick={() => setRecordDetailsOpen(false)}
+                                  className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100"
+                                  aria-label="Close"
+                                  data-testid="cons-case-record-details-close"
                                 >
-                                  <span className="w-32 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</span>
-                                  {/* The first line while shut, nothing while open — the
-                                      whole of it is directly underneath. */}
-                                  <span
-                                    className={`min-w-0 flex-1 truncate text-xs ${c.value ? "font-medium text-slate-800" : "italic text-slate-400"}`}
-                                    title={!open && c.value ? c.value : undefined}
-                                  >
-                                    {open ? null : c.value || "Not written yet"}
-                                  </span>
-                                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+                                  <XCircle className="h-4 w-4" />
                                 </button>
-                                {open && (
-                                  <div className="bg-slate-50/70 px-4 pb-3 pt-0.5" data-testid={`${c.testid}-full`}>
+                              </div>
+                              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+                                {cells.map((c) => (
+                                  <div key={c.key} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3" data-testid={`${c.testid}-full`}>
+                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</p>
                                     {c.full || <p className="text-xs italic text-slate-400">Not written yet</p>}
                                   </div>
-                                )}
+                                ))}
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="flex shrink-0 justify-end border-t border-slate-200 px-5 py-3">
+                                <Button size="sm" variant="outline" className="text-xs" onClick={() => setRecordDetailsOpen(false)}>
+                                  Close
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </>
                     );
                   }
@@ -9435,10 +9504,77 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                  * one: the Diet Fee is the fourth fee whether or not the three before it are
                  * on screen beside it.
                  */
-                const renderFeeSteps = (steps, testid = "cons-fee-steps") => (
-                  // Two across at most on the narrow popup: Tailwind's breakpoints read the
-                  // window, not the card, so xl's three would put three fees in 532px.
-                  <div className={`grid gap-2 sm:grid-cols-2 ${compactDetail ? "" : "xl:grid-cols-3"}`} data-testid={testid}>
+                const renderFeeSteps = (steps, testid = "cons-fee-steps") => compactDetail ? (
+                  // The narrow popup lists the fees one under the other, like the
+                  // Consultation Record above it: a row each, the price and the button in
+                  // their own columns so they line up down the list. As cards two across, a
+                  // fee with no price set had its Collect button a line higher than the one
+                  // beside it, and the third fee sat alone under the first.
+                  <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid={testid}>
+                    {steps.map(({ step: f, n }) => {
+                      const isNext = nextFeeStep && f.key === nextFeeStep.key;
+                      const waiting = f.key !== "consultation" && !consultationPaid;
+                      const receipt = f.paid && REISSUE_FEES[f.key] && selectedLead[REISSUE_FEES[f.key].details]?.transaction_id;
+                      const amount = f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
+                      const amountTone = f.paid ? "text-emerald-700" : "text-slate-800";
+                      return (
+                        <div
+                          key={f.key}
+                          className={`flex items-center gap-3 px-3 py-2.5 ${f.paid ? "bg-emerald-50/60" : ""}`}
+                          data-testid={`cons-fee-step-${f.key}`}
+                        >
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                            f.paid ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"
+                          }`}>
+                            {f.paid ? <CheckCircle2 className="h-3 w-3" /> : n}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-slate-700">{f.label}</p>
+                            {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
+                            {/* Under the name on a phone, where a column of its own would
+                                leave the name a dozen pixels. */}
+                            {amount && <p className={`text-sm font-bold tabular-nums sm:hidden ${amountTone}`}>{amount}</p>}
+                            {f.paid ? (
+                              <p className="text-[11px] font-medium capitalize text-emerald-700">{f.note ? `Paid · ${f.note}` : "Paid"}</p>
+                            ) : f.pending ? (
+                              <p className={`truncate text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</p>
+                            ) : null}
+                          </div>
+                          <p className={`hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums sm:block ${amountTone}`}>{amount}</p>
+                          <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
+                            {f.paid ? (
+                              receipt ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={`w-full border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 ${ACT_BTN}`}
+                                  onClick={() => openFeeReceipt(f.key)}
+                                  title="Open the receipt for this payment — print, send or download it again"
+                                  data-testid={`cons-fee-receipt-${f.key}`}
+                                >
+                                  <Eye className="mr-1 h-3.5 w-3.5" /> Receipt
+                                </Button>
+                              ) : null
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant={isNext ? undefined : "outline"}
+                                disabled={waiting}
+                                title={waiting ? "Collect the consultation fee first" : undefined}
+                                className={`w-full ${isNext ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${ACT_BTN}`}
+                                onClick={f.act}
+                                data-testid={`cons-fee-act-${f.key}`}
+                              >
+                                {f.actLabel}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid={testid}>
                     {steps.map(({ step: f, n }) => (
                       <div
                         key={f.key}
