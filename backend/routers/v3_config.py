@@ -22,7 +22,7 @@ import lead_control
 import lead_purge
 import store_branch_overrides
 from seed import create_default_lead_source, sync_lead_source_branch_name
-from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled
+from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled
 from routers.v3_inventory import _add_to_stock
 from routers.v3_zumba import MASTER_SLOT_FIELD
 from schemas.v3 import (
@@ -1213,6 +1213,33 @@ async def v3_set_expense_delete_button(
         {"id": EXPENSE_DELETE_SETTING_ID},
         {"$set": {
             "id": EXPENSE_DELETE_SETTING_ID,
+            "enabled": payload.enabled,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"enabled": payload.enabled}
+
+
+# Before Verify Transactions: whether Branch Admin's Accountant Manage offers a bin on the
+# payments still in To Verify (delete_unverified_transaction). Its own switch rather than the
+# Approvals one above, because it hands the delete to the branch desk rather than to the
+# accountant. Off hides the icon and the endpoint refuses.
+@router.get("/admin/before-verify-delete-button")
+async def v3_get_before_verify_delete_button(_: V3UserOut = Depends(require_developer_password)):
+    return {"enabled": await before_verify_delete_enabled()}
+
+
+@router.put("/admin/before-verify-delete-button")
+async def v3_set_before_verify_delete_button(
+    payload: ExpenseDeleteButtonInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    await v3_col("app_settings").update_one(
+        {"id": BEFORE_VERIFY_DELETE_SETTING_ID},
+        {"$set": {
+            "id": BEFORE_VERIFY_DELETE_SETTING_ID,
             "enabled": payload.enabled,
             "updated_by": user.full_name,
             "updated_at": now_iso(),

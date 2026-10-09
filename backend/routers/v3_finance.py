@@ -570,7 +570,7 @@ def _payment_fields(row: dict) -> list:
     return _UNSCHEDULED_PAYMENT_FIELDS.get(action, [])
 
 
-async def _reverse_lead_payment(row: dict, user: V3UserOut) -> str:
+async def _reverse_lead_payment(row: dict, user: V3UserOut, where: str = "the Accountant's Approvals") -> str:
     """Take one fee's payment off a patient, so Branch Admin sees it owed again.
 
     A fee is one set of fields on the lead (paid, mode, schedule), however many activity
@@ -607,7 +607,7 @@ async def _reverse_lead_payment(row: dict, user: V3UserOut) -> str:
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
         "action": "payment_deleted",
-        "details": f"{label} payment deleted by {user.full_name} from the Accountant's Approvals -- the fee is owed again",
+        "details": f"{label} payment deleted by {user.full_name} from {where} -- the fee is owed again",
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": _now(),
@@ -634,7 +634,16 @@ async def delete_transaction(
     row = await v3_col("lead_activity").find_one({"id": activity_id, "action": {"$in": REVENUE_ACTIONS}}, {"_id": 0})
     if row:
         return {"message": await _reverse_lead_payment(row, user)}
+    message = await _delete_payment_off_its_book(activity_id)
+    if message:
+        return {"message": message}
+    raise HTTPException(status_code=404, detail="Payment not found")
 
+
+async def _delete_payment_off_its_book(activity_id: str) -> Optional[str]:
+    """A store sale, a class fee, a membership or an old client's instalment, undone at the
+    source -- delete_transaction's rules, shared with the To Verify bin. None when none of
+    those books has it (a lead's payment goes through _reverse_lead_payment instead)."""
     sale = await v3_col("inventory_movements").find_one({"id": activity_id, "kind": "sale"}, {"_id": 0})
     if sale:
         from routers.v3_inventory import _add_to_stock
@@ -643,7 +652,7 @@ async def delete_transaction(
         if item and sale.get("branch_id") and qty > 0:
             await _add_to_stock(sale["item_id"], sale["branch_id"], qty)
         await v3_col("inventory_movements").delete_one({"id": activity_id})
-        return {"message": "Store sale deleted -- the stock is back on the shelf"}
+        return "Store sale deleted -- the stock is back on the shelf"
 
     unset = {
         "approved_by": "", "approved_at": "",
@@ -653,16 +662,100 @@ async def delete_transaction(
     cleared = {"fee_paid": 0.0, "payment_mode": "", "payment_reference": "", "payment_lines": [], "approved": False, "income_requested": False}
     res = await v3_col("zumba_registrations").update_one({"id": activity_id}, {"$set": cleared, "$unset": unset})
     if res.matched_count:
-        return {"message": "Zumba payment deleted -- the fee is owed again"}
+        return "Zumba payment deleted -- the fee is owed again"
     res = await v3_col("fitness_registrations").update_one({"id": activity_id}, {"$set": {**cleared, "payments": []}, "$unset": unset})
     if res.matched_count:
-        return {"message": "Fitness payment deleted -- the fee is owed again"}
+        return "Fitness payment deleted -- the fee is owed again"
     # The old client's balance is worked out from the instalments left, so removing the row
     # is the whole of the undo.
     res = await v3_col("old_client_payments").delete_one({"id": activity_id})
     if res.deleted_count:
-        return {"message": "Old client instalment deleted -- the balance is owed again"}
-    raise HTTPException(status_code=404, detail="Payment not found")
+        return "Old client instalment deleted -- the balance is owed again"
+    return None
+
+
+@router.delete("/finance/transactions/{activity_id}/unverified")
+async def delete_unverified_transaction(
+    activity_id: str,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "business_dev")),
+):
+    """Accountant Manage > Summary > To Verify: the bin on a payment the branch has taken and
+    not yet verified. Behind its own Developer Access switch, Before Verify Transactions.
+
+    The branch's, and only while the payment is still the branch's: once it has been sent
+    to the accountant it has to be brought back with Undo first, and an approved one is the
+    accountant's to delete. A day whose book is closed is refused too, as Undo refuses it.
+
+    Undone at the source, by delete_transaction's rules, with one difference that matters at
+    the desk. A lead's instalment taken off Payment Schedule goes back to owed on its own --
+    the accountant's delete resets the whole fee, which would take the fee's first payment
+    with it. A fee's own payment is still reset whole, but only when none of that fee's
+    payments has gone past the branch: deleting one would otherwise delete money the
+    accountant is holding or has signed.
+    """
+    if not await before_verify_delete_enabled():
+        raise HTTPException(status_code=403, detail="Delete is switched off in Developer Access (Before Verify Transactions)")
+
+    name, row = None, None
+    for book in TRANSACTION_COLLECTIONS:
+        row = await v3_col(book).find_one({"id": activity_id}, {"_id": 0})
+        if row:
+            name = book
+            break
+    if not row or (name == "lead_activity" and row.get("action") not in REVENUE_ACTIONS) \
+            or (name == "inventory_movements" and row.get("kind") != "sale"):
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if row.get("approved") or row.get("income_requested"):
+        raise HTTPException(status_code=409, detail="Only a payment still in To Verify can be deleted — this one is with the accountant")
+
+    lead = None
+    if name == "lead_activity":
+        lead = await v3_col("leads").find_one({"id": row.get("lead_id")}, {"_id": 0}) if row.get("lead_id") else None
+        branch_id = _branch_at(lead, row.get("created_at") or "") if lead else None
+    else:
+        branch_id = row.get("branch_id")
+    if is_branch_admin_role(user.role) and branch_id != user.branch_id:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    day = (row.get("created_at") or "")[:10]
+    book = await _book_for(branch_id, day) if day else None
+    if book and (book.get("status") or "closed") == "closed":
+        raise HTTPException(status_code=409, detail=f"The books for {day} are closed — undo the close before deleting a payment in it")
+
+    if name != "lead_activity":
+        return {"message": await _delete_payment_off_its_book(activity_id) or "Payment deleted"}
+
+    still_unverified = {"id": activity_id, "approved": {"$ne": True}, "income_requested": {"$ne": True}}
+    label = PAYMENT_ACTION_LABELS.get(row.get("action"), "Payment")
+
+    def log(details: str) -> dict:
+        return {
+            "id": str(uuid.uuid4()), "lead_id": row.get("lead_id"), "action": "payment_deleted",
+            "details": details, "created_by": user.full_name, "created_by_role": user.role, "created_at": _now(),
+        }
+
+    # Money against a Past Data balance: the sheet's balance is worked out from the lines
+    # still standing (see collect_past_balance), so the line going is the whole undo.
+    if row.get("past_allocations"):
+        if not (await v3_col("lead_activity").delete_one(still_unverified)).deleted_count:
+            raise HTTPException(status_code=409, detail="That payment has just moved on — refresh and try again")
+        await v3_col("lead_activity").insert_one(log(f"Past Data payment (Rs.{_parse_rs_amount(row.get('details', '')):g}) deleted by {user.full_name} from To Verify -- the balance is owed again"))
+        return {"message": "Payment deleted — the Past Data balance is owed again"}
+
+    fee = _instalment_fee_of(lead, row) if lead else None
+    if fee:
+        if not (await v3_col("lead_activity").delete_one(still_unverified)).deleted_count:
+            raise HTTPException(status_code=409, detail="That payment has just moved on — refresh and try again")
+        collected = await _put_instalment_back(lead, fee, row.get("transaction_id"))
+        await v3_col("lead_activity").insert_one(log(f"{label} instalment (Rs.{collected:g}, Txn {row.get('transaction_id')}) deleted by {user.full_name} from To Verify -- it is owed again"))
+        return {"message": f"{label} instalment deleted — Rs.{collected:g} is owed again"}
+
+    others = await v3_col("lead_activity").find(
+        {"lead_id": row.get("lead_id"), "action": row.get("action"), "id": {"$ne": activity_id}},
+        {"_id": 0, "approved": 1, "income_requested": 1},
+    ).to_list(500)
+    if any(o.get("approved") or o.get("income_requested") for o in others):
+        raise HTTPException(status_code=409, detail=f"Other {label} payments of this client are already with the accountant — deleting this one would remove them too")
+    return {"message": await _reverse_lead_payment(row, user, where="Accountant Manage's To Verify")}
 
 
 @router.get("/finance/approvals")
@@ -1051,6 +1144,16 @@ def _expense_approved(row: dict) -> bool:
 # for clearing demo and testing expenses. The endpoint refuses while it is off, not just
 # the icon hiding. The toggle's own endpoints live in v3_config beside the others.
 EXPENSE_DELETE_SETTING_ID = "expense_delete_button"
+
+
+# Whether Branch Admin's Accountant Manage offers a bin on payments still in To Verify --
+# Developer Access > Before Verify Transactions. Off hides it and the endpoint refuses.
+BEFORE_VERIFY_DELETE_SETTING_ID = "before_verify_delete_button"
+
+
+async def before_verify_delete_enabled() -> bool:
+    row = await v3_col("app_settings").find_one({"id": BEFORE_VERIFY_DELETE_SETTING_ID}, {"_id": 0})
+    return bool(row and row.get("enabled"))
 
 
 async def expense_delete_enabled() -> bool:
@@ -2763,6 +2866,8 @@ async def revenue_overview(
         "outstanding_clients": outstanding_clients,
         "payment_schedule": payment_schedule,
         "pending_leads": pending_leads,
+        # Developer Access > Before Verify Transactions, for the bin on To Verify rows.
+        "before_verify_delete": await before_verify_delete_enabled(),
     }
 
 
@@ -3278,6 +3383,45 @@ async def _refuse_undo(last: dict, branch_id: Optional[str]) -> None:
         raise HTTPException(status_code=409, detail=f"The books for {day} are closed — reopen that day before undoing a payment in it")
 
 
+def _instalment_fee_of(lead: dict, row: dict) -> Optional[str]:
+    """The fee whose Payment Schedule instalment this activity row collected, or None when
+    it is a fee's own payment. Tied by the transaction id mark_installment_paid writes onto
+    both -- see _last_instalments."""
+    txn = row.get("transaction_id")
+    if not txn:
+        return None
+    for fee, cfg in FEE_SCHEDULES.items():
+        if cfg["action"] != row.get("action"):
+            continue
+        if any(i.get("paid") and i.get("transaction_id") == txn for i in _fee_installments(lead, fee)):
+            return fee
+    return None
+
+
+async def _put_instalment_back(lead: dict, fee: str, transaction_id: str) -> float:
+    """Undo what mark_installment_paid wrote onto the lead for one instalment, and say how
+    much it had collected. The instalment reads unpaid at the figure it was scheduled at;
+    the fee's *_paid comes down by the money only where mark-paid put it up -- not on a
+    Partial Payment plan, which books the whole price the moment the schedule is made."""
+    cfg = FEE_SCHEDULES[fee]
+    installments = list(((lead.get(cfg["details"]) or {}).get("installments")) or [])
+    collected = 0.0
+    for idx, inst in enumerate(installments):
+        if inst.get("transaction_id") == transaction_id:
+            collected = float(inst.get("amount") or 0)
+            restored = {k: v for k, v in inst.items() if k not in _INSTALMENT_PAYMENT_KEYS}
+            restored["paid"] = False
+            if inst.get("scheduled_amount") is not None:
+                restored["amount"] = inst["scheduled_amount"]
+            installments[idx] = restored
+            break
+    set_fields = {f"{cfg['details']}.installments": installments, "updated_at": _now()}
+    if lead.get(cfg["mode"]) != "partial" and collected:
+        set_fields[cfg["paid"]] = round(max((lead.get(cfg["paid"]) or 0) - collected, 0), 2)
+    await v3_col("leads").update_one({"id": lead["id"]}, {"$set": set_fields})
+    return collected
+
+
 class UndoLastInstalmentInput(BaseModel):
     # One or the other: a lead's schedule, or an old client's.
     lead_id: Optional[str] = None
@@ -3337,24 +3481,7 @@ async def undo_last_instalment(
     if not res.deleted_count:
         raise HTTPException(status_code=409, detail="That payment has just moved on — refresh and try again")
 
-    cfg = FEE_SCHEDULES[last["fee"]]
-    installments = list(((lead.get(cfg["details"]) or {}).get("installments")) or [])
-    collected = 0.0
-    for idx, inst in enumerate(installments):
-        if inst.get("transaction_id") == last["transaction_id"]:
-            collected = float(inst.get("amount") or 0)
-            restored = {k: v for k, v in inst.items() if k not in _INSTALMENT_PAYMENT_KEYS}
-            restored["paid"] = False
-            if inst.get("scheduled_amount") is not None:
-                restored["amount"] = inst["scheduled_amount"]
-            installments[idx] = restored
-            break
-    set_fields = {f"{cfg['details']}.installments": installments, "updated_at": _now()}
-    # mark_installment_paid added the money to *_paid only where the fee is not on a
-    # Partial Payment plan, which books the whole price up front; the same rule takes it off.
-    if lead.get(cfg["mode"]) != "partial" and collected:
-        set_fields[cfg["paid"]] = round(max((lead.get(cfg["paid"]) or 0) - collected, 0), 2)
-    await v3_col("leads").update_one({"id": lead["id"]}, {"$set": set_fields})
+    collected = await _put_instalment_back(lead, last["fee"], last["transaction_id"])
 
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),

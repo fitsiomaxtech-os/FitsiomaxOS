@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides } from "@/lib/api";
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
@@ -215,6 +215,9 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const [savingDeleteButton, setSavingDeleteButton] = useState(false);
   const [expenseDelete, setExpenseDelete] = useState(null);
   const [savingExpenseDelete, setSavingExpenseDelete] = useState(false);
+  // Before Verify Transactions: the bin on Branch Admin's To Verify payments. null until read.
+  const [beforeVerifyDelete, setBeforeVerifyDelete] = useState(null);
+  const [savingBeforeVerifyDelete, setSavingBeforeVerifyDelete] = useState(false);
   // The Super Admin's branch-wise On/Off on My Consultation. null until the zone is open.
   const [saBranches, setSaBranches] = useState(null);
   const [savingSaBranches, setSavingSaBranches] = useState(false);
@@ -362,9 +365,10 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setSaBranches(null); setStorePerBranch(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); return; }
     getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
+    getBeforeVerifyDeleteButton(devPassword).then((r) => setBeforeVerifyDelete(!!r.enabled)).catch(() => setBeforeVerifyDelete(null));
     getPhysioDayLock(devPassword).then((r) => setDayLock(!!r.locked)).catch(() => setDayLock(null));
     getLeadDeleteButton(devPassword).then((r) => setDeleteButton(!!r.enabled)).catch(() => setDeleteButton(null));
     getSaConsultBranchesSetting(devPassword).then((r) => setSaBranches(!!r.enabled)).catch(() => setSaBranches(null));
@@ -571,6 +575,23 @@ export const PipelineStageManagement = ({ leading = null }) => {
       resetFailed(e);
     }
     setSavingExpenseDelete(false);
+  };
+
+  const toggleBeforeVerifyDelete = async () => {
+    const next = !beforeVerifyDelete;
+    const ok = window.confirm(next
+      ? "Turn Before Verify Transactions ON?\n\nA Branch Admin gets a bin icon on every payment still in To Verify on Accountant Manage > Summary. Deleting a payment takes it off at the source: the fee or instalment is owed again, a store sale's stock goes back on the shelf. Payments already sent to the accountant, approved, or on a closed day cannot be deleted. It cannot be undone."
+      : "Turn Before Verify Transactions OFF?\n\nThe bin disappears from the Branch Admin's To Verify list, and the server refuses the request even if one is sent. Nothing already deleted comes back.");
+    if (!ok) return;
+    setSavingBeforeVerifyDelete(true);
+    try {
+      const r = await setBeforeVerifyDeleteButton(devPassword, next);
+      setBeforeVerifyDelete(!!r.enabled);
+      toast.success(r.enabled ? "Before Verify Transactions delete is ON" : "Before Verify Transactions delete is OFF");
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingBeforeVerifyDelete(false);
   };
 
   const toggleSaBranches = async () => {
@@ -858,6 +879,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
               { key: "physio-day-lock", label: "Physio Treatment Days lock", value: dayLock, saving: savingDayLock, onFlip: toggleDayLock, on: "LOCKED", off: "UNLOCKED" },
               { key: "lead-delete-button", label: "Branch Leads delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
               { key: "expense-delete-button", label: "Accountant Approvals & Branch Accountant Manage delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
+              { key: "before-verify-delete-button", label: "Before Verify Transactions", value: beforeVerifyDelete, saving: savingBeforeVerifyDelete, onFlip: toggleBeforeVerifyDelete, on: "ON", off: "OFF" },
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
               { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
             ].map((row) => (

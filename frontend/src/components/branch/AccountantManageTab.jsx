@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2, X } from "lucide-react";
+import { Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -10,7 +10,7 @@ import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { rangeFor, todayIso } from "@/lib/dateRange";
-import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment } from "@/lib/api";
+import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { receiptFromTransaction } from "@/lib/receipt";
@@ -273,6 +273,22 @@ const OpenArrow = ({ onClick, label = "View details", compact = false, testid })
     data-testid={testid}
   >
     <ChevronRight className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+  </button>
+);
+
+/** The To Verify bin, Developer Access > Before Verify Transactions: a bare icon beside the
+ *  row's arrow, no box round it, so the row still reads as one arrow and a quiet extra. */
+const DeleteBin = ({ onClick, busy = false, compact = false, label, testid }) => (
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    disabled={busy}
+    className={`inline-flex items-center justify-center text-slate-500 transition hover:text-rose-600 disabled:opacity-40 ${compact ? "h-6 w-6" : "h-7 w-7"}`}
+    title={label}
+    aria-label={label}
+    data-testid={testid}
+  >
+    <Trash2 className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
   </button>
 );
 
@@ -609,6 +625,49 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   };
 
   const openDetail = (payments, head) => setDetail({ ids: payments.map((t) => t.id), head });
+
+  /**
+   * The bin on To Verify rows (Developer Access > Before Verify Transactions). Asked first,
+   * since it takes the money off at the source and cannot be undone. A client's row deletes
+   * every one of their payments still in To Verify, newest first -- a later instalment goes
+   * back to owed before the fee it was paid against is reset, the order the server can undo
+   * them in -- and one already gone with an earlier fee's reset is not counted as a failure.
+   */
+  const deleteUnverified = async (payments, head) => {
+    const list = payments
+      .filter((t) => stageOf(t) === "collected")
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    if (!list.length) return;
+    const what = list.length === 1
+      ? `${RECEIPT_PAID_FOR[list[0].source] || titleCase(list[0].source || "")} of ${fmt(list[0].gross)}`
+      : `all ${list.length} payments (${fmt(list.reduce((n, t) => n + (Number(t.gross) || 0), 0))})`;
+    if (!window.confirm(`Delete ${what} from ${head.client_name || "this client"}?\n\nThe payment is removed at the source and is owed again. This cannot be undone.`)) return;
+    const ids = list.map((t) => t.id);
+    setMoving((prev) => new Set([...prev, ...ids]));
+    let done = 0;
+    let message = "";
+    for (const t of list) {
+      try {
+        const res = await deleteUnverifiedTransaction(t.id);
+        done += 1;
+        message = res?.message || "";
+      } catch (err) {
+        if (err?.response?.status === 404 && done > 0) continue;
+        toast.error(err?.response?.data?.detail || "Could not delete that payment");
+        break;
+      }
+    }
+    setMoving((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    if (done) toast.success(done === 1 && message ? message.replace(/ -- /g, " — ") : `${countLabel(done, "payment")} deleted`);
+    load();
+    loadExpenseTotals();
+  };
+  // Drawn only on the branch desk's To Verify list, and only while the switch is on.
+  const canDeleteUnverified = canVerify && incomeStage === "collected" && Boolean(data?.before_verify_delete);
 
   const k = data?.kpis || {};
   // `data?.x || []` builds a fresh array on every render, so every memo keyed on one was
@@ -1094,6 +1153,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           <RevenueDetailTable
             rows={revenueView === "collected" ? filteredTxns : filteredTxns.filter((t) => t.source === revenueView)}
             onOpen={openDetail}
+            onDelete={canDeleteUnverified ? deleteUnverified : undefined}
+            busy={moving}
             verify={verify}
           />
           </>
@@ -1439,10 +1500,12 @@ const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.l
 /**
  * @param onOpen  Opens a row's PaymentDetails: a client's folded row opens all of their
  *              payments, a payment's own row just that one.
+ * @param onDelete  The To Verify bin (deleteUnverified), drawn beside each arrow in the
+ *              table; left out, no bin. `busy` is the ids with a request out.
  * @param verify  Whether this is the branch desk's copy, which heads the arrow's column
  *              Action rather than View -- Send and Undo are in what it opens.
  */
-const RevenueDetailTable = ({ rows, onOpen, verify = null }) => {
+const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => {
   const groups = useMemo(() => groupPaymentsByClient(rows), [rows]);
   // Keyed by group, so narrowing the list above leaves stale keys behind harmlessly
   // rather than opening the wrong client.
@@ -1629,7 +1692,17 @@ const RevenueDetailTable = ({ rows, onOpen, verify = null }) => {
                     <td className="px-3 py-2.5 text-center">
                       {/* The one control on the row: into the client's payments, where Send
                           for approval, Undo and each receipt are (PaymentDetails). */}
-                      <OpenArrow onClick={() => onOpen(g.payments, groupHead(g))} testid={`revenue-detail-open-${g.key}`} />
+                      <div className="flex items-center justify-center gap-1">
+                        {onDelete && (
+                          <DeleteBin
+                            onClick={() => onDelete(g.payments, groupHead(g))}
+                            busy={g.payments.some((t) => busy?.has(t.id))}
+                            label={many ? `Delete all ${g.payments.length} payments` : "Delete this payment"}
+                            testid={`revenue-detail-delete-${g.key}`}
+                          />
+                        )}
+                        <OpenArrow onClick={() => onOpen(g.payments, groupHead(g))} testid={`revenue-detail-open-${g.key}`} />
+                      </div>
                     </td>
                   </tr>,
                   // Each collection exactly as it listed before, minus the client identity
@@ -1651,7 +1724,18 @@ const RevenueDetailTable = ({ rows, onOpen, verify = null }) => {
                       <td className="px-3 py-1.5 text-center text-slate-600">{p.branch_name || "—"}</td>
                       {/* Each payment is a collection in its own right, so it opens on its own. */}
                       <td className="px-3 py-1.5 text-center">
-                        <OpenArrow onClick={() => onOpen([p], groupHead(g))} compact testid={`revenue-detail-open-${p.id}`} />
+                        <div className="flex items-center justify-center gap-1">
+                          {onDelete && (
+                            <DeleteBin
+                              onClick={() => onDelete([p], groupHead(g))}
+                              busy={busy?.has(p.id)}
+                              compact
+                              label="Delete this payment"
+                              testid={`revenue-detail-delete-${p.id}`}
+                            />
+                          )}
+                          <OpenArrow onClick={() => onOpen([p], groupHead(g))} compact testid={`revenue-detail-open-${p.id}`} />
+                        </div>
                       </td>
                     </tr>
                   )) : []),

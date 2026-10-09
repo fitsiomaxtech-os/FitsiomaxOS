@@ -498,6 +498,9 @@ export const unrequestTransactions = async (activityIds) => (await api.post("/fi
 // Payment Schedule's Undo: the newest instalment taken on one client (a lead, or an old
 // client), back to owed -- refused once it is with the accountant or its day is closed.
 export const undoLastInstalment = async (payload) => (await api.post("/finance/payment-schedule/undo-last", payload)).data;
+// The bin on a payment still in To Verify -- behind Developer Access > Before Verify
+// Transactions, and refused once the payment is with the accountant or its day is closed.
+export const deleteUnverifiedTransaction = async (activityId) => (await api.delete(`/finance/transactions/${activityId}/unverified`)).data;
 
 export const getPettyCash = async (params = {}) => (await api.get("/finance/petty-cash", { params })).data;
 export const topUpPettyCash = async (payload) => (await api.post("/finance/petty-cash/topup", payload)).data;
@@ -708,6 +711,9 @@ export const setLeadDeleteButton = async (password, enabled) => (await api.put("
 // `delete_enabled` on /finance/expenses — only the Danger Zone reads and writes it here.
 export const getExpenseDeleteButton = async (password) => (await api.get("/admin/expense-delete-button", { headers: developerHeaders(password) })).data;
 export const setExpenseDeleteButton = async (password, enabled) => (await api.put("/admin/expense-delete-button", { enabled }, { headers: developerHeaders(password) })).data;
+// Before Verify Transactions: the bin on Branch Admin's To Verify payments.
+export const getBeforeVerifyDeleteButton = async (password) => (await api.get("/admin/before-verify-delete-button", { headers: developerHeaders(password) })).data;
+export const setBeforeVerifyDeleteButton = async (password, enabled) => (await api.put("/admin/before-verify-delete-button", { enabled }, { headers: developerHeaders(password) })).data;
 // Whether the Super Admin's My Consultation offers its branch-wise On/Off.
 export const getSaConsultBranchesSetting = async (password) => (await api.get("/admin/super-admin-consult-branches", { headers: developerHeaders(password) })).data;
 export const setSaConsultBranchesSetting = async (password, enabled) => (await api.put("/admin/super-admin-consult-branches", { enabled }, { headers: developerHeaders(password) })).data;
