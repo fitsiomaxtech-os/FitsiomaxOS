@@ -2492,6 +2492,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // cards stacked above it pushed that panel most of a screen down. What the record holds
   // is named on the closed row, so nothing has to be unfolded to know what is inside.
   const [caseRecordOpen, setCaseRecordOpen] = useState(false);
+  // The same record on the narrow popup (see compactDetail): three rows rather than three
+  // columns, and the one pressed open — "diagnosis", "treatment" or "plan". One at a time,
+  // so the record never grows past one written-out answer above the payment panel.
+  const [recordRow, setRecordRow] = useState(null);
+  // The popup's size, chosen when a patient is opened and held while they stay open. A
+  // Branch Admin opening someone at Consultation Visit gets a 532 × 615 card: the work
+  // there is one payment, and a 1024px sheet around it was mostly white. Held rather than
+  // read off the stage live, because collecting that fee moves the patient on to Fee
+  // Collected with the popup still up, and a card that doubled in width under the hand
+  // that just pressed Collect would be the screen moving out from under them.
+  const [detailFrame, setDetailFrame] = useState({ id: null, compact: false });
+  if (detailFrame.id !== (selectedLead?.id ?? null)) {
+    setDetailFrame({
+      id: selectedLead?.id ?? null,
+      compact: !isConsultant && selectedLead?.consultation_stage === "Consultation Visit",
+    });
+  }
+  const compactDetail = detailFrame.compact;
   const [timelineRemarks, setTimelineRemarks] = useState([]);
   const [timelineActivity, setTimelineActivity] = useState([]);
   const [storeItems, setStoreItems] = useState([]);
@@ -2843,7 +2861,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   }, [selectedLead?.id, docTick]);
   // Closed whenever a different patient is opened: a Diet card left standing would
   // otherwise read as the new patient's, with the previous one's figures still in it.
-  useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); }, [selectedLead?.id]);
+  useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); setRecordRow(null); }, [selectedLead?.id]);
 
   const notePrescriptionCount = (count) => {
     setLeadRxCount(count);
@@ -6983,8 +7001,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
               held out of the scroll and only the body under them moves. The whole card
               used to scroll as one, so a Branch Admin three sections into a case had no
               name at the top of the screen and nothing to press to reach another tab
-              without scrolling back up to find the row. */}
-          <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5 sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl">
+              without scrolling back up to find the row.
+
+              The narrow card (compactDetail) is a fixed 532 × 615 rather than a cap, so it
+              does not jump in size moving between Overview, Documents and Timeline; it
+              still gives way to a smaller window, and only its body scrolls. */}
+          <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5 ${compactDetail
+            ? "max-w-[532px] sm:h-[615px] sm:max-h-[calc(100dvh-1rem)]"
+            : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
             {/* Who this is, then where they stand, side by side. The expert and the fee
                 badge used to hang below the phone number, where stacked under the contact
                 line they read as two more of the patient's details rather than as the
@@ -7174,7 +7198,139 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                 || selectedLead.diagnosis
                 || selectedLead.physio_diagnosis_report
                 || selectedLead.treatment_summary
-                || selectedLead.consultation_decision) && (
+                || selectedLead.consultation_decision) && (() => {
+                // What the Consultant decided, service by service — built once here because
+                // two places read it: the Treatment Suggestions card under Full record, and
+                // the Plan row on the narrow popup, which has no Full record to put it under.
+                const plan = !isConsultant && !!selectedLead.consultation_decision ? (() => {
+                  const weeks = weeksFromPackageName(selectedLead.session_package_name);
+                  const total = selectedLead.session_package_sessions || 0;
+                  const perWeek = weeks && total ? Math.round(total / weeks) : 0;
+                  const onTreatment = selectedLead.consultation_decision === "consultation_treatment";
+
+                  // One row per service the patient is going away with, in the shelf's own
+                  // order — built off the same lead fields addonsLabel reads, so the headline
+                  // and the rows under it cannot name different plans.
+                  const rows = [
+                    onTreatment && {
+                      icon: Activity,
+                      label: "Treatment Package",
+                      value: selectedLead.session_package_name || "Not named",
+                      note: perWeek && weeks
+                        ? `${perWeek} weekly × ${weeks} week${weeks === 1 ? "" : "s"} = ${total} sessions`
+                        : total ? `${total} sessions` : null,
+                    },
+                    selectedLead.diet_recommended && {
+                      icon: Salad,
+                      label: "Diet",
+                      value: dietLabels({
+                        diet: true,
+                        dietConsultation: !!selectedLead.diet_consultation,
+                        dietChart: !!selectedLead.diet_chart,
+                      }).join(" + "),
+                      note: null,
+                    },
+                    selectedLead.rehab_referred && {
+                      icon: HeartPulse,
+                      label: "Rehab Package",
+                      value: selectedLead.rehab_package_name || "Referred",
+                      note: selectedLead.rehab_package_sessions ? `${selectedLead.rehab_package_sessions} sessions` : null,
+                    },
+                    rehabAwaitingConsult(selectedLead) && {
+                      icon: HeartPulse,
+                      label: "Rehab",
+                      value: "After Treatment",
+                      note: selectedLead.rehab_consult_date
+                        ? `consultation ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` ${to12h(selectedLead.rehab_consult_time)}` : ""}`
+                        : null,
+                    },
+                    selectedLead.fitness_recommended && {
+                      icon: Dumbbell,
+                      label: "Fitness",
+                      value: "Referred",
+                      note: null,
+                    },
+                    selectedLead.zumba_recommended && {
+                      icon: Music2,
+                      label: "Zumba Plan",
+                      value: selectedLead.zumba_package_name || "Referred",
+                      note: null,
+                    },
+                  ].filter(Boolean);
+
+                  return {
+                    label: addonsLabel({
+                      treatment: onTreatment,
+                      diet: !!selectedLead.diet_recommended,
+                      dietConsultation: !!selectedLead.diet_consultation,
+                      dietChart: !!selectedLead.diet_chart,
+                      rehab: !!selectedLead.rehab_referred,
+                      fitness: !!selectedLead.fitness_recommended,
+                      zumba: !!selectedLead.zumba_recommended,
+                    }),
+                    detail: (
+                      <>
+                        {rows.length > 0 ? (
+                          <div className="mt-2 rounded-md border border-slate-200 bg-white">
+                            <dl className="divide-y divide-slate-100">
+                              {rows.map((r) => {
+                                const Icon = r.icon;
+                                return (
+                                  <div key={r.label} className="flex items-baseline justify-between gap-3 px-2.5 py-1.5">
+                                    <dt className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-500">
+                                      <Icon className="h-3 w-3 text-slate-400" /> {r.label}
+                                    </dt>
+                                    <dd className="min-w-0 truncate text-right text-xs font-semibold text-slate-800" title={r.value}>
+                                      {r.value}
+                                      {r.note && <span className="ml-1 font-medium text-slate-400">· {r.note}</span>}
+                                    </dd>
+                                  </div>
+                                );
+                              })}
+                            </dl>
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-[11px] text-slate-500">A plain consultation — nothing else was recommended.</p>
+                        )}
+
+                        {/* Rehab after Treatment: the branch's part is the re-appointment.
+                            Offered once the course is complete -- before then it says what
+                            it is waiting for, so nobody books Rehab over treatment days. */}
+                        {rehabAwaitingConsult(selectedLead) && (() => {
+                          const done = treatmentCourseDone(selectedLead);
+                          const booked = !!selectedLead.rehab_consult_date;
+                          return (
+                            <div className="mt-2 rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-2" data-testid="cons-rehab-booking">
+                              <p className="text-[11px] leading-relaxed text-cyan-800">
+                                {!done
+                                  ? `Rehab follows the Treatment. Book the Rehab consultation once the course is complete${selectedLead.total_sessions ? ` (${selectedLead.completed_sessions || 0}/${selectedLead.total_sessions} days done)` : ""}.`
+                                  : booked
+                                    ? `Rehab consultation booked with ${selectedLead.rehab_consult_doctor_name || "the Consultant"} on ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` at ${to12h(selectedLead.rehab_consult_time)}` : ""}. The Consultant chooses the package there; collect the Rehab Fee after it.`
+                                    : "Treatment is complete. Book the Rehab consultation with the Consultant."}
+                              </p>
+                              {done && (
+                                <Button
+                                  size="sm"
+                                  className="mt-2 h-8 bg-cyan-600 text-xs text-white hover:bg-cyan-700"
+                                  onClick={() => setRehabBookDraft({
+                                    date: selectedLead.rehab_consult_date || new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+                                    time: selectedLead.rehab_consult_time || "10:00",
+                                    remarks: selectedLead.rehab_consult_remarks || "",
+                                  })}
+                                  data-testid="cons-rehab-book-open"
+                                >
+                                  <HeartPulse className="mr-1 h-3 w-3" />{booked ? "Reschedule Rehab Consultation" : "Book Rehab Consultation"}
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </>
+                    ),
+                  };
+                })() : null;
+
+                return (
               <section
                 className={isConsultant ? "space-y-3" : "order-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"}
                 data-testid="cons-case-record"
@@ -7190,33 +7346,95 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   // onto one line. Three complaints stacked in a third of the popup is the
                   // shape the full record below already has.
                   const oneLine = (t) => String(t || "").split(/\n+/).map((s) => s.trim()).filter(Boolean).join(" · ");
+                  const treatment = (selectedLead.treatment_summary || "").trim();
                   const cells = [
                     {
+                      key: "diagnosis",
                       label: written ? "Diagnosis" : "Diagnosis · Pre-Sales",
                       value: oneLine(written || presales),
+                      // Pre-sales' note goes under the Consultant's rather than in place of
+                      // it, and says whose it is — the row's label names only the first.
+                      full: (written || presales) && (
+                        <div className="space-y-2">
+                          <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">{written || presales}</p>
+                          {written && presales && (
+                            <div className="rounded-md bg-slate-50 px-2.5 py-1.5" data-testid="cons-case-record-diagnosis-presales">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pre-Sales</p>
+                              <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-600">{presales}</p>
+                            </div>
+                          )}
+                        </div>
+                      ),
                       testid: "cons-case-record-diagnosis",
                     },
                     {
+                      key: "treatment",
                       label: "Treatment Summary",
-                      value: oneLine(selectedLead.treatment_summary),
+                      value: oneLine(treatment),
+                      full: treatment && <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">{treatment}</p>,
                       testid: "cons-case-record-treatment",
                     },
                     {
+                      key: "plan",
                       label: "Plan",
-                      value: selectedLead.consultation_decision
-                        ? addonsLabel({
-                            treatment: selectedLead.consultation_decision === "consultation_treatment",
-                            diet: !!selectedLead.diet_recommended,
-                            dietConsultation: !!selectedLead.diet_consultation,
-                            dietChart: !!selectedLead.diet_chart,
-                            rehab: !!selectedLead.rehab_referred,
-                            fitness: !!selectedLead.fitness_recommended,
-                            zumba: !!selectedLead.zumba_recommended,
-                          })
-                        : "",
+                      value: plan?.label || "",
+                      full: plan && (
+                        <>
+                          <p className="text-xs font-semibold text-slate-800">{plan.label}</p>
+                          {plan.detail}
+                        </>
+                      ),
                       testid: "cons-case-record-plan",
                     },
                   ];
+
+                  // The narrow popup: three rows, one under the other, each pressed open
+                  // to read the whole of it. Three columns a third of 532px wide is a word
+                  // or two each, and a summary that can only show two words is not one.
+                  // No Full record here — opening a row IS the full record of that row.
+                  if (compactDetail) {
+                    return (
+                      <>
+                        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+                          <ClipboardList className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Consultation Record</p>
+                        </div>
+                        <div className="divide-y divide-slate-100" data-testid="cons-case-record-rows">
+                          {cells.map((c) => {
+                            const open = recordRow === c.key;
+                            return (
+                              <div key={c.key} data-testid={c.testid}>
+                                <button
+                                  type="button"
+                                  onClick={() => setRecordRow(open ? null : c.key)}
+                                  aria-expanded={open}
+                                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 ${open ? "bg-slate-50/70" : ""}`}
+                                  data-testid={`${c.testid}-toggle`}
+                                >
+                                  <span className="w-32 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</span>
+                                  {/* The first line while shut, nothing while open — the
+                                      whole of it is directly underneath. */}
+                                  <span
+                                    className={`min-w-0 flex-1 truncate text-xs ${c.value ? "font-medium text-slate-800" : "italic text-slate-400"}`}
+                                    title={!open && c.value ? c.value : undefined}
+                                  >
+                                    {open ? null : c.value || "Not written yet"}
+                                  </span>
+                                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+                                </button>
+                                {open && (
+                                  <div className="bg-slate-50/70 px-4 pb-3 pt-0.5" data-testid={`${c.testid}-full`}>
+                                    {c.full || <p className="text-xs italic text-slate-400">Not written yet</p>}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  }
+
                   return (
                     <>
                       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
@@ -7355,149 +7573,30 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                         the plan those fees are FOR named nowhere on the screen. Read-only here
                         — the decision is the Consultant's to change, and Edit stays on their
                         card. */}
-                    {!isConsultant && !!selectedLead.consultation_decision && (() => {
-                      const weeks = weeksFromPackageName(selectedLead.session_package_name);
-                      const total = selectedLead.session_package_sessions || 0;
-                      const perWeek = weeks && total ? Math.round(total / weeks) : 0;
-                      const onTreatment = selectedLead.consultation_decision === "consultation_treatment";
-
-                      // One row per service the patient is going away with, in the shelf's own
-                      // order — built off the same lead fields addonsLabel reads, so the headline
-                      // and the rows under it cannot name different plans.
-                      const rows = [
-                        onTreatment && {
-                          icon: Activity,
-                          label: "Treatment Package",
-                          value: selectedLead.session_package_name || "Not named",
-                          note: perWeek && weeks
-                            ? `${perWeek} weekly × ${weeks} week${weeks === 1 ? "" : "s"} = ${total} sessions`
-                            : total ? `${total} sessions` : null,
-                        },
-                        selectedLead.diet_recommended && {
-                          icon: Salad,
-                          label: "Diet",
-                          value: dietLabels({
-                            diet: true,
-                            dietConsultation: !!selectedLead.diet_consultation,
-                            dietChart: !!selectedLead.diet_chart,
-                          }).join(" + "),
-                          note: null,
-                        },
-                        selectedLead.rehab_referred && {
-                          icon: HeartPulse,
-                          label: "Rehab Package",
-                          value: selectedLead.rehab_package_name || "Referred",
-                          note: selectedLead.rehab_package_sessions ? `${selectedLead.rehab_package_sessions} sessions` : null,
-                        },
-                        rehabAwaitingConsult(selectedLead) && {
-                          icon: HeartPulse,
-                          label: "Rehab",
-                          value: "After Treatment",
-                          note: selectedLead.rehab_consult_date
-                            ? `consultation ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` ${to12h(selectedLead.rehab_consult_time)}` : ""}`
-                            : null,
-                        },
-                        selectedLead.fitness_recommended && {
-                          icon: Dumbbell,
-                          label: "Fitness",
-                          value: "Referred",
-                          note: null,
-                        },
-                        selectedLead.zumba_recommended && {
-                          icon: Music2,
-                          label: "Zumba Plan",
-                          value: selectedLead.zumba_package_name || "Referred",
-                          note: null,
-                        },
-                      ].filter(Boolean);
-
-                      return (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="cons-treatment-suggestions">
-                          <div className="mb-1.5 flex items-center justify-between gap-2">
-                            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                              <ClipboardCheck className="h-3.5 w-3.5" /> Treatment Suggestions
-                            </p>
-                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
-                              From the Consultant
-                            </span>
-                          </div>
-
-                          {/* The plan in one line first, then what each part of it actually is —
-                              the same order the Consultant confirmed it in. */}
-                          <p className="text-sm font-semibold text-slate-800" data-testid="cons-treatment-suggestions-plan">
-                            {addonsLabel({
-                              treatment: onTreatment,
-                              diet: !!selectedLead.diet_recommended,
-                              dietConsultation: !!selectedLead.diet_consultation,
-                              dietChart: !!selectedLead.diet_chart,
-                              rehab: !!selectedLead.rehab_referred,
-                              fitness: !!selectedLead.fitness_recommended,
-                              zumba: !!selectedLead.zumba_recommended,
-                            })}
+                    {plan && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="cons-treatment-suggestions">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            <ClipboardCheck className="h-3.5 w-3.5" /> Treatment Suggestions
                           </p>
-
-                          {rows.length > 0 ? (
-                            <div className="mt-2 rounded-md border border-slate-200 bg-white">
-                              <dl className="divide-y divide-slate-100">
-                                {rows.map((r) => {
-                                  const Icon = r.icon;
-                                  return (
-                                    <div key={r.label} className="flex items-baseline justify-between gap-3 px-2.5 py-1.5">
-                                      <dt className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-500">
-                                        <Icon className="h-3 w-3 text-slate-400" /> {r.label}
-                                      </dt>
-                                      <dd className="min-w-0 truncate text-right text-xs font-semibold text-slate-800" title={r.value}>
-                                        {r.value}
-                                        {r.note && <span className="ml-1 font-medium text-slate-400">· {r.note}</span>}
-                                      </dd>
-                                    </div>
-                                  );
-                                })}
-                              </dl>
-                            </div>
-                          ) : (
-                            <p className="mt-1 text-[11px] text-slate-500">A plain consultation — nothing else was recommended.</p>
-                          )}
-
-                          {/* Rehab after Treatment: the branch's part is the re-appointment.
-                              Offered once the course is complete -- before then it says what
-                              it is waiting for, so nobody books Rehab over treatment days. */}
-                          {rehabAwaitingConsult(selectedLead) && (() => {
-                            const done = treatmentCourseDone(selectedLead);
-                            const booked = !!selectedLead.rehab_consult_date;
-                            return (
-                              <div className="mt-2 rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-2" data-testid="cons-rehab-booking">
-                                <p className="text-[11px] leading-relaxed text-cyan-800">
-                                  {!done
-                                    ? `Rehab follows the Treatment. Book the Rehab consultation once the course is complete${selectedLead.total_sessions ? ` (${selectedLead.completed_sessions || 0}/${selectedLead.total_sessions} days done)` : ""}.`
-                                    : booked
-                                      ? `Rehab consultation booked with ${selectedLead.rehab_consult_doctor_name || "the Consultant"} on ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` at ${to12h(selectedLead.rehab_consult_time)}` : ""}. The Consultant chooses the package there; collect the Rehab Fee after it.`
-                                      : "Treatment is complete. Book the Rehab consultation with the Consultant."}
-                                </p>
-                                {done && (
-                                  <Button
-                                    size="sm"
-                                    className="mt-2 h-8 bg-cyan-600 text-xs text-white hover:bg-cyan-700"
-                                    onClick={() => setRehabBookDraft({
-                                      date: selectedLead.rehab_consult_date || new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-                                      time: selectedLead.rehab_consult_time || "10:00",
-                                      remarks: selectedLead.rehab_consult_remarks || "",
-                                    })}
-                                    data-testid="cons-rehab-book-open"
-                                  >
-                                    <HeartPulse className="mr-1 h-3 w-3" />{booked ? "Reschedule Rehab Consultation" : "Book Rehab Consultation"}
-                                  </Button>
-                                )}
-                              </div>
-                            );
-                          })()}
+                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
+                            From the Consultant
+                          </span>
                         </div>
-                      );
-                    })()}
+
+                        {/* The plan in one line first, then what each part of it actually is —
+                            the same order the Consultant confirmed it in. */}
+                        <p className="text-sm font-semibold text-slate-800" data-testid="cons-treatment-suggestions-plan">
+                          {plan.label}
+                        </p>
+                        {plan.detail}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
-              )}
+                );
+              })()}
 
               {/* Treatment — Head Physio's own "Move to Admin". Requires Diagnosis Report +
                   Treatment Summary to already be written (that's what marks the consultation
@@ -8684,7 +8783,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                    right. */
                 const RehabDetailBody = (
                   <>
-                    <div className="grid grid-cols-1 gap-x-4 gap-y-3 lg:grid-cols-2">
+                    <div className={`grid grid-cols-1 gap-x-4 gap-y-3 ${compactDetail ? "" : "lg:grid-cols-2"}`}>
                       <div className="min-w-0 space-y-2" data-testid="cons-rehab-detail">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Course Details</p>
                         <div className="rounded-lg border border-slate-200/80 bg-white shadow-sm">
@@ -8825,7 +8924,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                    The action goes under the people rather than under the course, because
                    reassigning is something done to the delivery and not to the package. */
                 const PhysioDetailBody = (
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 lg:grid-cols-2">
+                  <div className={`grid grid-cols-1 gap-x-4 gap-y-3 ${compactDetail ? "" : "lg:grid-cols-2"}`}>
                     <div className="min-w-0 space-y-2" data-testid="cons-physio-assign-course">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Session Details</p>
                       <PanelCard testid="cons-physio-assign-summary">
@@ -9337,7 +9436,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                  * on screen beside it.
                  */
                 const renderFeeSteps = (steps, testid = "cons-fee-steps") => (
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid={testid}>
+                  // Two across at most on the narrow popup: Tailwind's breakpoints read the
+                  // window, not the card, so xl's three would put three fees in 532px.
+                  <div className={`grid gap-2 sm:grid-cols-2 ${compactDetail ? "" : "xl:grid-cols-3"}`} data-testid={testid}>
                     {steps.map(({ step: f, n }) => (
                       <div
                         key={f.key}
