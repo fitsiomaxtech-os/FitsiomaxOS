@@ -191,12 +191,13 @@ export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-co
             {/* Day and time on one line — they are read as one fact. Start only: a
                 consultation runs as long as it needs to, so printing an end time
                 promised something the branch cannot hold to. Wrapping is left on so a
-                narrow phone drops the time to its own line rather than shrinking it. */}
+                narrow phone drops the time to its own line rather than shrinking it.
+                No Consultant under it, as on the printed sheet: who takes the session
+                can change between the booking and the day. */}
             <p className="mt-1 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-0.5 text-xl font-extrabold text-teal-700 sm:text-2xl">
               <span>{weekdayDmy(appt.date)}</span>
               <span className="text-lg sm:text-xl">{to12h(appt.time)}</span>
             </p>
-            <p className="mt-1 text-sm font-semibold text-teal-600">with {appt.headPhysio}</p>
           </div>
 
           <dl className="mt-5 space-y-2 text-sm">
