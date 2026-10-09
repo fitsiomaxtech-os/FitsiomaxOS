@@ -420,7 +420,34 @@ const cityAnswer = (lead) => formAnswer(lead, CITY_KEYS, "city", null);
  * the label with an s on it and "All Cities" is not, and a control reading "All Citys" is
  * the sort of thing nobody reports and everybody notices.
  */
-const toolbarFiltersFor = (questions) => [
+const CITY_FILTER = {
+  key: "city",
+  label: "City",
+  allLabel: "All Cities",
+  // Narrower than the intake dropdowns before it, on what it holds rather than on what
+  // is left over. A city is one short word and "All Cities" is shorter than "All Pain
+  // Durations"; at the intake width the box would be mostly empty. w-24 still spells
+  // "All Cities" out in full, which is the floor -- the intake pair cannot come down
+  // with it without reading "All Pain Ty...", so this is where the row gives back the
+  // width the date ranges beside it now take. See the toolbar note further down.
+  width: "w-24 2xl:w-32",
+  answer: cityAnswer,
+};
+
+// The branch board's column in City's place, read as the column and the lead popup read
+// it. A string either way, since the narrowing lowercases whatever this returns.
+const sourceAnswer = (lead) => String(lead.source_tab || lead.source_type || "").trim();
+
+const SOURCE_FILTER = {
+  key: "source",
+  label: "Source",
+  allLabel: "All Sources",
+  // A step wider than City's: "All Sources" is a letter longer and w-24 cuts it.
+  width: "w-28 2xl:w-32",
+  answer: sourceAnswer,
+};
+
+const toolbarFiltersFor = (questions, trailing) => [
   ...questions.map((q) => ({
     key: q.key,
     label: q.label,
@@ -431,26 +458,14 @@ const toolbarFiltersFor = (questions) => [
     width: "w-36 2xl:w-40",
     answer: (lead) => formAnswer(lead, q.question, q.fallback, q.formatFallback),
   })),
-  {
-    key: "city",
-    label: "City",
-    allLabel: "All Cities",
-    // Narrower than the intake dropdowns before it, on what it holds rather than on what
-    // is left over. A city is one short word and "All Cities" is shorter than "All Pain
-    // Durations"; at the intake width the box would be mostly empty. w-24 still spells
-    // "All Cities" out in full, which is the floor -- the intake pair cannot come down
-    // with it without reading "All Pain Ty...", so this is where the row gives back the
-    // width the date ranges beside it now take. See the toolbar note further down.
-    width: "w-24 2xl:w-32",
-    answer: cityAnswer,
-  },
+  trailing,
 ];
 
 // Built once per question set, so the dropdowns change with the columns they sit over.
-// City is in all three: it is a column on all three boards.
-const BRANCH_TOOLBAR_FILTERS = toolbarFiltersFor(BRANCH_INTAKE_QUESTIONS);
-const PHYSIO_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(PHYSIO_ARM_INTAKE_QUESTIONS);
-const FITNESS_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(FITNESS_ARM_INTAKE_QUESTIONS);
+// The last one follows the third column: Source on a branch's board, City on an arm's.
+const BRANCH_TOOLBAR_FILTERS = toolbarFiltersFor(BRANCH_INTAKE_QUESTIONS, SOURCE_FILTER);
+const PHYSIO_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(PHYSIO_ARM_INTAKE_QUESTIONS, CITY_FILTER);
+const FITNESS_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(FITNESS_ARM_INTAKE_QUESTIONS, CITY_FILTER);
 
 /** Whether a branch record is one of the online arms rather than a room somebody walks
  *  into. Every default vertical is named "online_..."/"offline_...", which is the reading
@@ -1028,7 +1043,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // All included.
   const [quickDate, setQuickDate] = useState(() => quickDatePreset("today")); // same shape; null = All
   // The toolbar's dropdowns, keyed as this board's filter list is -- { pain_type,
-  // pain_duration, city } on a branch, { looking_for, start_when, city } on an online
+  // pain_duration, source } on a branch, { looking_for, start_when, city } on an online
   // arm -- each holding the lowercased answer to match on, or "" for
   // the whole list. Lowercased because a sheet is not a controlled vocabulary: the same
   // answer arrives as "Online" from one form and "online" from the next, and matching on
@@ -2725,10 +2740,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           </div>
                         </td>
                         <td className="truncate px-4 py-3 text-slate-600" title={lead.phone}>{lead.phone || "—"}</td>
-                        {/* Source on a branch's board, read the way the lead popup and Pre
-                            Sales read it (source_tab, else source_type). An arm's board keeps
-                            City, through cityAnswer, so a lead whose sheet mapped the column
-                            and one whose sheet did not both show the same thing here. */}
+                        {/* Source on a branch's board, through sourceAnswer -- the same read
+                            as the lead popup, Pre Sales and the Source dropdown. An arm's board
+                            keeps City, through cityAnswer, so a lead whose sheet mapped the
+                            column and one whose sheet did not both show the same thing here. */}
                         {onArmBoard ? (() => {
                           const city = cityAnswer(lead);
                           return (
@@ -2737,7 +2752,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </td>
                           );
                         })() : (() => {
-                          const source = lead.source_tab || lead.source_type;
+                          const source = sourceAnswer(lead);
                           return (
                             <td className="truncate px-4 py-3 text-slate-600" title={source || undefined} data-testid={`branch-row-source-${lead.id}`}>
                               {source || <span className="text-slate-400">—</span>}
