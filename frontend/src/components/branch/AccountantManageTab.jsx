@@ -689,7 +689,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // is one fixed figure and is taken on this tab's short popup. A Consultation Fee opens the
   // Consultation tab's own Collect right here, over this page: a first collection picks the
   // package, agrees any discount and dates any balance before the mode's own Confirm &
-  // Collect -- none of which the short popup asks.
+  // Collect, and waits on the prescription -- none of which the short popup asks.
   const collectScheduleRow = (row) => {
     if (collectWhat(row) === "consultation") {
       setViewingLeadId(null);

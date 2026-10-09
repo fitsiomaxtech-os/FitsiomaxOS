@@ -33,6 +33,7 @@ from schemas.v3 import (
     V3BranchStageInput, V3CollectFeeInput, V3AssignPhysioInput, V3ConsultationStageInput,
     V3PortfolioScheduleInput,
 )
+from routers.v3_lead_documents import leads_with_prescription
 # Whose Head Physio review is still owed. Imported rather than re-derived: the rule for
 # when a course is over lives with the reviews it is waiting on, and a second copy here
 # is how the boards came to disagree about Completed in the first place.
@@ -1637,9 +1638,19 @@ async def v3_consultations_board(
                 lead_list.append(V3LeadOut(**lead_as_read_by(ld, user.role)).model_dump())
             except Exception as e:
                 logging.getLogger(__name__).error(f"consultations-board: skipping unparseable lead {ld.get('id')}: {e}")
+        # Who has their prescription filed, as a list of ids beside the leads rather than a
+        # field on each of them. The Consultation Fee is gated on that page, and the Collect
+        # button at the end of a row has to know before it is pressed — a row that opens a
+        # payment it will not take reads as broken.
+        #
+        # Kept off the lead deliberately. Every collect and every stage move replaces the
+        # row it touched with the lead that endpoint returns, and a flag riding on the lead
+        # would be dropped by every one of them — locking a row whose prescription is on
+        # file. Answered once for the board, held beside it, and untouched by any of that.
+        rx_ids = await leads_with_prescription([ld.get("id") for ld in leads_docs if ld.get("id")])
         # Which consultants on this board are a Super Admin taking consultations, so the
         # Consultant column can say so. Sent as a list of ids beside the leads rather than a
-        # flag on each of them: every collect and every
+        # flag on each of them, for the same reason rx_lead_ids is: every collect and every
         # stage move replaces the row it touched with the lead that endpoint returns, and a
         # flag riding on the lead would be dropped by all of them — the tag would vanish off
         # a row the moment anybody worked on it.
@@ -1650,6 +1661,7 @@ async def v3_consultations_board(
             "leads": lead_list,
             "stage_counts": stage_counts,
             "stages": stage_names,
+            "rx_lead_ids": sorted(rx_ids),
             "super_admin_consultant_ids": sorted(sa_consultant_ids),
         }
     except HTTPException:

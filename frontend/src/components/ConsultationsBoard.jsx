@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Activity, AlertCircle, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1669,7 +1670,9 @@ const owesFeeDesk = (l) => FEE_TABS.some((t) => {
  *
  * A button that says "Collect" and comes back with the server's refusal is a click spent
  * learning what the row already knew, so the row says it instead — and the button still
- * works, going to the screen where the missing step is actually done.
+ * works, going to the screen where the missing step is actually done. Same shape as the
+ * prescription gate on the Consultation Fee button, which is the one gate that was already
+ * here.
  *
  * Each arm is one of the server's own refusals, worded as the thing to do about it rather
  * than as the complaint: collect_rehab_fee and collect_diet_fee both refuse until the
@@ -2472,10 +2475,29 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // Head Physio tracks progress on their own independent pipeline (head_consultation_stage),
   // fully separate from Branch's own consultation_stage pipeline.
   const stageField = isConsultant ? "head_consultation_stage" : "consultation_stage";
-  const [board, setBoard] = useState({ leads: [], stage_counts: {} });
+  const [board, setBoard] = useState({ leads: [], stage_counts: {}, rx_lead_ids: [] });
+  // Everyone whose prescription is on file, as the board answered it. The Consultation Fee
+  // waits on that page, and the Collect button at the end of a row has to know before it is
+  // pressed — the per-patient count below only ever exists for the patient who is open.
+  //
+  // Held beside the leads rather than on them, which is how the board sends it: collecting
+  // a fee or moving a stage replaces the row it touched with the lead that endpoint
+  // returned, and a flag riding on the lead would be dropped by every one of them.
+  //
+  // Uploads are folded in as they happen (see notePrescriptionCount) so a row unlocks the
+  // moment the page is filed, without waiting for a reload.
+  const [rxLeadIds, setRxLeadIds] = useState(() => new Set());
   // Which consultants on this board are a Super Admin taking consultations. Held beside
   // the leads, not on them — see super_admin_consultant_ids on the endpoint.
   const [saConsultantIds, setSaConsultantIds] = useState(() => new Set());
+  const noteRxFiled = useCallback((leadId, filed) => {
+    setRxLeadIds((prev) => {
+      if (prev.has(leadId) === !!filed) return prev;
+      const next = new Set(prev);
+      if (filed) next.add(leadId); else next.delete(leadId);
+      return next;
+    });
+  }, []);
   const [stages, setStages] = useState([]); // dynamic Consultation Stages, from Super Admin > Pipeline Stage Management
   const [stageFilter, setStageFilter] = useState(null);
   const [dateFilter, setDateFilter] = useState(null); // { from, to, label, key } | null — filters by appointment date
@@ -2831,10 +2853,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // "rehab". A tab selects a view outright — pressing the lit one again used to hide it
   // and drop the reader back onto a different panel, which is not what a tab does.
   const [programmeDetail, setProgrammeDetail] = useState("own");
-  // Whether this patient has anything on file at all, for the Documents tab's count.
+  // Whether this patient has anything on file at all. Consultation Visit will not take a
+  // payment until they do — see the panel — so this has to be known before the button is
+  // drawn rather than discovered when it is pressed. Bumped by the uploader so the gate
+  // opens on the upload rather than on a reload.
   const [leadDocCount, setLeadDocCount] = useState(null); // null = not counted yet
-  // The prescription is counted on its own: the panel's tab reads it, and a scheme letter
-  // or an old MRI report is not a prescription.
+  // The prescription is counted on its own, because it is the one the fee is gated on.
+  // Off the general count it could not be: that number goes up for a scheme letter or an
+  // old MRI report, so a patient with paperwork on file and no prescription would have
+  // opened the gate with somebody else's document.
   const [leadRxCount, setLeadRxCount] = useState(null);
   // Bumped by the uploaders whenever anything is filed or removed, which is what makes the
   // two counts above a live figure instead of the one that happened to be true when the
@@ -2844,7 +2871,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   const [docTick, setDocTick] = useState(0);
   const noteDocsChanged = useCallback(() => setDocTick((t) => t + 1), []);
   // Cleared on the way to a different patient, and only there. A refresh must not blank
-  // them, or the tab flashes "not counted yet" straight after an upload.
+  // them: the counts are what the fee gate reads, so a flash of "not counted yet" straight
+  // after an upload relocks the step that upload had just cleared.
   useEffect(() => { setLeadDocCount(null); setLeadRxCount(null); }, [selectedLead?.id]);
   useEffect(() => {
     if (!selectedLead?.id) return;
@@ -2855,19 +2883,88 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
       // anything is there should ask for one, not quietly wave the patient through.
       .catch(() => { if (!cancelled) setLeadDocCount(0); });
     leadDocuments(selectedLead.id, "prescription")
-      .then((r) => { if (!cancelled) setLeadRxCount((r?.documents || []).length); })
+      .then((r) => {
+        if (cancelled) return;
+        const count = (r?.documents || []).length;
+        setLeadRxCount(count);
+        // The row behind this patient reads the board's answer, which was taken when the
+        // list loaded. This one is fresher, so it corrects it — including downwards, for a
+        // prescription that has since been deleted.
+        noteRxFiled(selectedLead.id, count > 0);
+      })
       .catch(() => { if (!cancelled) setLeadRxCount(0); });
     return () => { cancelled = true; };
-  }, [selectedLead?.id, docTick]);
+  }, [selectedLead?.id, docTick, noteRxFiled]);
   // Closed whenever a different patient is opened: a Diet card left standing would
   // otherwise read as the new patient's, with the previous one's figures still in it.
   useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); setRecordDetailsOpen(false); }, [selectedLead?.id]);
 
+  // Whether one lead still owes the prescription the Consultation Fee waits on — the same
+  // question the endpoint asks before it takes the money, asked of a row.
+  //
+  // Any lead, not the open one: the list draws a Collect button on every row, and reads the
+  // board's answer for each of them. The patient who is open is the one case where a fresher
+  // answer exists (the count fetched above), and noteRxFiled folds that back into the set,
+  // so both readers agree without this needing to know which patient is which.
+  //
+  // Only at Consultation Visit, and only while the fee is unpaid: a fee already taken is
+  // corrected from the popup, and holding a correction hostage to a page nobody filed at
+  // the time would strand it. Same two conditions the server gate applies.
+  const rxDue = useCallback(
+    (lead) => (
+      !!lead
+      && lead[stageField] === "Consultation Visit"
+      && lead.package_paid == null
+      && !rxLeadIds.has(lead.id)
+    ),
+    [stageField, rxLeadIds],
+  );
+
+  // Whether the patient on screen is at that point. Computed up here rather than inside the
+  // stage panel because the panel is rendered inside a branch, and both the effect below and
+  // the tab row need the answer.
+  const docsGateOpen = (
+    selectedLead?.[stageField] === "Consultation Visit"
+    && (leadRxCount || 0) === 0
+    && selectedLead?.package_paid == null
+  );
+
+  // Opens on Documents while that gate is shut. The panel used to open on Collect Fees
+  // with the collect button dead in it, which is a screen that asks for something and
+  // refuses it in the same breath; the first thing on screen should be the thing that can
+  // actually be done. Waits for the count to arrive — leadDocCount is null until then, and
+  // jumping tabs on a guess would move somebody off a step they had already finished.
+  useEffect(() => {
+    if (leadRxCount === null) return;
+    if (docsGateOpen) setProgrammeDetail("documents");
+  }, [selectedLead?.id, leadRxCount, docsGateOpen]);
+
+  // And moves on by itself once the page is filed. The tab opened on Documents because
+  // the fee was waiting on the prescription; the moment the prescription is on file that
+  // reason is gone, and leaving the reader on a finished uploader makes them hunt for the
+  // step the panel just unlocked.
+  //
+  // Only on the change from none to one, reported by the uploader itself: a reload that
+  // finds the scan already there, or somebody opening Documents to read it after the
+  // money is in, is left where they are. `lastRxCount` is a ref rather than the state
+  // above because the reporter is a callback the uploader holds — it fires from a fetch,
+  // and the state it closed over can be a render behind.
+  const lastRxCount = useRef(null);
+  useEffect(() => { lastRxCount.current = null; }, [selectedLead?.id]);
   const notePrescriptionCount = (count) => {
+    const had = lastRxCount.current;
+    lastRxCount.current = count;
     setLeadRxCount(count);
+    // And the row on the list behind the popup, so its Collect button unlocks with the
+    // upload rather than on the next reload.
+    if (selectedLead?.id) noteRxFiled(selectedLead.id, count > 0);
     // A prescription is a document like any other, so filing one moves the general count
     // too — the uploader only reports its own kind, and the tab beside it counts them all.
     noteDocsChanged();
+    // Nothing to move on to once the fee is in: the tab is a receipt then, not a step.
+    if (had === 0 && count > 0 && selectedLead?.package_paid == null) {
+      setProgrammeDetail((cur) => (cur === "documents" ? "own" : cur));
+    }
   };
   const [assignTrack, setAssignTrack] = useState("treatment"); // "treatment" | "rehab"
   const [physioOptions, setPhysioOptions] = useState([]);
@@ -2985,6 +3082,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
         const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine);
         if (!cancelled) {
           setBoard(res);
+          setRxLeadIds(new Set(res?.rx_lead_ids || []));
           setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
         }
       } catch (err) {
@@ -3003,6 +3101,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
       setLoading(true);
       const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine);
       setBoard(res);
+      setRxLeadIds(new Set(res?.rx_lead_ids || []));
       setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
     } catch (err) {
       console.error("Consultations board load error:", err);
@@ -3514,7 +3613,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
   // With `autoOpenFee` it opens that fee's Collect on top, as the row's own fee button
   // would -- Accountant Manage's Payment Schedule hands a Consultation Fee here rather than
   // keep a thinner copy of this board's popups. openRowFee holds every gate that button
-  // does.
+  // does: no prescription on file opens the patient on the uploader instead.
   useEffect(() => {
     if (!autoOpenLeadId || !(board.leads || []).length) return;
     const match = board.leads.find((l) => l.id === autoOpenLeadId);
@@ -4962,9 +5061,31 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
    */
   function openRowFee(lead, fee) {
     setDetailTab("overview");
+    // Paperwork before money, on the row as well as in the panel.
+    //
+    // The panel has always held the Consultation Fee behind the prescription — its Collect
+    // tab is locked until the page is filed. This button opened the popup straight off the
+    // lead and went round the whole of that, so a fee the panel would not take was taken
+    // from the list instead. It now does what the panel does: opens the patient on the
+    // uploader, which is the step that can actually be done.
+    //
+    // No popup is parked for afterwards. Filing the page is a job with a person at the desk
+    // in the middle of it, and a payment popup springing open behind the uploader would be
+    // collecting on a decision nobody has come back to.
+    if (fee === "consultation" && rxDue(lead)) {
+      // Said, not warned. The button this came from already reads "Prescription" and the
+      // screen it opens is the uploader, so the only thing left to explain is why the
+      // payment popup did not appear.
+      toast.info("Upload the prescription before collecting the Consultation Fee");
+      pendingRowFeeRef.current = null;
+      if (selectedLead?.id === lead.id) setProgrammeDetail("documents");
+      else setSelectedLead(lead); // the docs gate opens it on Documents by itself
+      return;
+    }
     // Money in order, on the row as well as on the panel: the server refuses every fee
     // after the first until the Consultation Fee is in, and refuses the Rehab Fee until a
-    // course has been chosen to price it against. Say what is missing, and open the patient on the view where it can be dealt with
+    // course has been chosen to price it against. Same handling as the prescription above —
+    // say what is missing, and open the patient on the view where it can be dealt with
     // rather than on a payment popup for a payment that would be refused.
     //
     // `view` rather than `fee` on the parked request: the step in the way has a decision or
@@ -6882,11 +7003,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                       const c = l[stageField] === "Cancel" && fee.kind !== "paid"
                         ? { kind: "none", hint: "Consultation cancelled" }
                         : fee;
-                      // The gates on a fee: the server refuses every fee but the first until the
+                      // The prescription the CONSULTATION fee waits on, still missing. The
+                      // button stays on the row and stays pressable — it is the way to the
+                      // uploader — but it says what it will actually do, in the same amber
+                      // the panel's Documents tab wears while the same page is outstanding.
+                      // A button labelled "Collect" that will not collect is the thing being
+                      // fixed. The other fees have no page to file and are held back by
+                      // gates of their own instead, below.
+                      const rxMissing = stageRowFee === "consultation" && c.kind !== "paid" && rxDue(l);
+                      // Those gates: the server refuses every fee but the first until the
                       // Consultation Fee is in, and the Rehab Fee until a course has been
                       // priced. The same ones the Fee Collected tabs put on the same fees,
                       // and only asked about a fee genuinely still due — see rowFeeGate.
-                      const gate = c.kind === "due" ? rowFeeGate(l, stageRowFee) : null;
+                      const gate = !rxMissing && c.kind === "due" ? rowFeeGate(l, stageRowFee) : null;
                       return (
                         // stopPropagation on the cell, not just the button: the whole row
                         // opens the patient, and a click that lands a pixel beside the
@@ -6919,19 +7048,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                                 // that is blocking it — but drops out of the filled colours
                                 // the collectable ones wear, so a row that cannot take money
                                 // does not look like one that can.
-                                className={`w-full ${gate
+                                className={`w-full ${rxMissing || gate
                                   ? "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
                                   : c.kind === "balance"
                                   ? "bg-amber-500 text-white hover:bg-amber-600"
                                   : stageRowFeeSpec.tone} shadow-sm ${ACT_BTN}`}
-                                title={gate?.hint}
+                                title={rxMissing ? "Upload the prescription before collecting the Consultation Fee" : gate?.hint}
                                 onClick={() => openRowFee(l, stageRowFee)}
                                 data-testid={`cons-row-${stageRowFee}-collect-${l.id}`}
                               >
-                                {gate
+                                {rxMissing
+                                  ? <FileText className="mr-1 h-3.5 w-3.5 shrink-0" />
+                                  : gate
                                   ? <AlertCircle className="mr-1 h-3.5 w-3.5 shrink-0" />
                                   : <IndianRupee className="mr-1 h-3.5 w-3.5 shrink-0" />}
-                                {gate ? gate.label : c.kind === "balance" ? "Collect Balance" : "Collect"}
+                                {rxMissing ? "Prescription" : gate ? gate.label : c.kind === "balance" ? "Collect Balance" : "Collect"}
                               </Button>
                             </>
                           )}
@@ -7009,19 +7140,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
           <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5 ${compactDetail
             ? "max-w-[565px] sm:h-[660px] sm:max-h-[calc(100dvh-1rem)]"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
-            {/* Who this is, then where they stand, side by side. The expert and the fee
-                badge used to hang below the phone number, where stacked under the contact
-                line they read as two more of the patient's details rather than as the
-                state of their consultation.
+            {/* Two lines, each read across to its far end: who this is and the expert
+                seeing them, then how to reach them and when, with the Appointment Card at
+                the end of the line it is about. The expert used to sit in a column of its
+                own behind a rule, which cost the card a third of its width for one name.
 
-                They sit against the identity block rather than out at the right margin: a
-                header is read left to right, and pinning them to the far edge left a hand
-                of white space in the middle and made two related blocks look like two
-                unrelated ones. The rule between them is what marks them as a separate
-                thing — which is the job the distance was failing to do. */}
+                Each line wraps rather than squeezes: on a phone whatever sits at the end
+                drops under the start of its line, still pushed to the right. */}
             <div className="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
-              <div className="min-w-0">
-                <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h3 className="flex min-w-0 flex-auto items-center gap-2 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
                     <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
@@ -7057,7 +7186,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     );
                   })()}
                 </h3>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                {selectedLead.assigned_physio_name && (
+                  <p className="ml-auto flex min-w-0 items-baseline gap-1.5 text-xs" data-testid="cons-detail-expert">
+                    {/* "Expert:" was part of the sentence and the whole of it was green.
+                        Green on a person's name reads as a state — the same green the
+                        board uses for a settled fee — when it is only a field name and
+                        its value. Labelled like a field now, and the name carries the
+                        weight instead of the colour. */}
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Expert</span>
+                    <span className="truncate font-semibold text-slate-800">{selectedLead.assigned_physio_name}</span>
+                    {saConsultantIds.has(selectedLead.assigned_physio_id) && <SuperAdminTag className="ml-0" />}
+                  </p>
+                )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
                   <span className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /> {selectedLead.phone || "—"}</span>
                   {/* The same wording the row this was opened from now uses. The list
                       says "Wed, 9 Sept" and the header it opens said "2026-09-10", so one
@@ -7070,64 +7213,47 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                       {selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}
                     </span>
                   )}
-                  {/* The confirmation the patient was sent, handed back. On the slot
-                      itself rather than out among the tabs, because that is the fact it
-                      is about — a branch looking for "the appointment card" is already
-                      reading this line to check the day.
-
-                      A button rather than a link, and it loads on press: the booking's
-                      reference, room and notes live on the appointment row and not on
-                      the lead, so nothing can be drawn without asking. Fetching for
-                      every patient opened, against a card almost nobody asks for, would
-                      be a request per open to save a click on the rare one. */}
-                  {selectedLead.appointment_date && (
-                    <button
-                      type="button"
-                      onClick={openApptCard}
-                      disabled={loadingApptCard}
-                      className="flex items-center gap-1 rounded-[5px] border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
-                      title="Open the appointment confirmation — print, send or download it again"
-                      data-testid="cons-open-appt-card"
-                    >
-                      <Eye className="h-3 w-3 shrink-0" />
-                      {loadingApptCard ? "Opening..." : "Appointment Card"}
-                    </button>
-                  )}
                 </p>
-              </div>
-              {/* self-stretch runs the rule the full height of the identity block beside
-                  it, so it reads as a division of the header rather than a tick mark
-                  floating next to one line of it. */}
-              {(selectedLead.assigned_physio_name || isConsultant) && (
-                <div className="flex shrink-0 flex-col items-start gap-1 self-stretch border-l border-slate-200 pl-3" data-testid="cons-detail-standing">
-                  {selectedLead.assigned_physio_name && (
-                    <p className="flex min-w-0 items-baseline gap-1.5 text-xs" data-testid="cons-detail-expert">
-                      {/* "Expert:" was part of the sentence and the whole of it was green.
-                          Green on a person's name reads as a state — the same green the
-                          board uses for a settled fee — when it is only a field name and
-                          its value. Labelled like a field now, and the name carries the
-                          weight instead of the colour. */}
-                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Expert</span>
-                      <span className="truncate font-semibold text-slate-800">{selectedLead.assigned_physio_name}</span>
-                      {saConsultantIds.has(selectedLead.assigned_physio_id) && <SuperAdminTag className="ml-0" />}
-                    </p>
-                  )}
-                  {isConsultant && (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[10px] font-semibold ${
-                        selectedLead.consultation_fee ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                      }`}
-                      data-testid="cons-consultation-paid-badge"
-                    >
-                      {selectedLead.consultation_fee ? "Consultation Paid" : "Consultation Pending"}
-                    </span>
-                  )}
+                {(selectedLead.appointment_date || isConsultant) && (
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5" data-testid="cons-detail-standing">
+                    {/* The confirmation the patient was sent, handed back. On the slot's
+                        own line, because that is the fact it is about — a branch looking
+                        for "the appointment card" is already reading this line to check
+                        the day.
+
+                        A button rather than a link, and it loads on press: the booking's
+                        reference, room and notes live on the appointment row and not on
+                        the lead, so nothing can be drawn without asking. Fetching for
+                        every patient opened, against a card almost nobody asks for, would
+                        be a request per open to save a click on the rare one. */}
+                    {selectedLead.appointment_date && (
+                      <button
+                        type="button"
+                        onClick={openApptCard}
+                        disabled={loadingApptCard}
+                        className="flex items-center gap-1 rounded-[5px] border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+                        title="Open the appointment confirmation — print, send or download it again"
+                        data-testid="cons-open-appt-card"
+                      >
+                        <Eye className="h-3 w-3 shrink-0" />
+                        {loadingApptCard ? "Opening..." : "Appointment Card"}
+                      </button>
+                    )}
+                    {isConsultant && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[10px] font-semibold ${
+                          selectedLead.consultation_fee ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                        }`}
+                        data-testid="cons-consultation-paid-badge"
+                      >
+                        {selectedLead.consultation_fee ? "Consultation Paid" : "Consultation Pending"}
+                      </span>
+                    )}
+                  </div>
+                )}
                 </div>
-              )}
-              {/* Still the corner it has always been in, so ml-auto rather than a place in
-                  the row — with nothing between it and the rule, the two blocks stay
-                  together whatever width the header has. */}
-              <button onClick={() => setSelectedLead(null)} className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-detail-close"><XCircle className="h-4 w-4" /></button>
+              </div>
+              <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-detail-close"><XCircle className="h-4 w-4" /></button>
             </div>
 
             {/* Sub tabs. An underline rail rather than six filled pills: the pills read as
@@ -7427,7 +7553,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                             <ClipboardList className="h-4 w-4" />
                           </span>
                           <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-slate-600">Consultation Record</span>
-                          <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition group-hover:border-slate-300 group-hover:text-slate-900">
+                          {/* Tinted, like the Appointment Card in the header. Grey on white it
+                              read as a switch left off rather than as something to press. */}
+                          <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100">
                             <Eye className="h-3.5 w-3.5" /> View Details
                           </span>
                         </button>
@@ -7454,10 +7582,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
 
                         {/* Consultation Record Details. Above the patient's card rather than
                             in place of it, and closed back onto it — this is reading, and the
-                            payment panel underneath is where the reader goes next. */}
-                        {recordDetailsOpen && (
+                            payment panel underneath is where the reader goes next.
+
+                            Drawn on document.body rather than inside the card: from in here it
+                            sat in a scrolling, clipped box, and whatever page the board is
+                            mounted on decides whether a fixed layer down there still reaches
+                            the screen. */}
+                        {recordDetailsOpen && createPortal(
                           <div
-                            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+                            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
                             onClick={(e) => { if (e.target === e.currentTarget) setRecordDetailsOpen(false); }}
                             data-testid="cons-case-record-details"
                           >
@@ -7498,7 +7631,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                                 </Button>
                               </div>
                             </div>
-                          </div>
+                          </div>,
+                          document.body,
                         )}
                       </>
                     );
@@ -9189,9 +9323,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   </div>
                 );
 
-                // The prescription, as a view of the panel rather than a trip to the
-                // Documents tab at the top of the card. Optional: the fee can be collected
-                // with or without it.
+                // Documents, as a view of the panel rather than a trip to the Documents tab
+                // at the top of the card. Consultation Visit needs one before it will take a
+                // payment, and sending someone to another tab to satisfy a rule this panel is
+                // enforcing is how a person ends up not knowing why the button is dead.
+                // Consultation Visit is the one stage that will not proceed without paperwork.
+                // Everywhere else Documents is simply available.
+                const docsRequired = stage === "Consultation Visit";
+                // What the fee waits on. Not "has any document": that count goes up for a
+                // scheme letter or an old MRI report, so a patient with paperwork on file
+                // and no prescription would have opened the gate with somebody else's page.
                 const hasRx = (leadRxCount || 0) > 0;
 
                 // Step one, and only step one. No fees on this screen: somebody filing a
@@ -9200,12 +9341,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                 // something on file to carry them there.
                 const DocumentsBody = (
                   <div className="space-y-4" data-testid="cons-documents-body">
-                    {/* Its own uploader, asked for by name, so a scheme letter is not
-                        filed here by mistake. */}
+                    {docsRequired && !hasRx && (
+                      <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                        <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
+                        <span>Upload the prescription before collecting the fee — the photo or scan is the record of what the Consultant prescribed.</span>
+                      </p>
+                    )}
+                    {/* Its own uploader above the general pile, not a row inside it. This is
+                        the document the fee waits on, so it is asked for by name: a panel
+                        that says "documents" and means one particular document is how a
+                        scheme letter gets filed and the gate stays shut with nothing on
+                        screen explaining why. */}
                     <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-prescription-block">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
                           <FileText className="h-3.5 w-3.5" />Prescription
+                          {docsRequired && <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700">Required to collect the fee</span>}
                         </p>
                         {hasRx && <span className="shrink-0 text-[11px] font-semibold text-emerald-600" data-testid="cons-prescription-done">On file</span>}
                       </div>
@@ -9219,7 +9370,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     </div>
                     {/* Only the prescription lives here. Everything else the patient has on
                         file — reports, scans, scheme letters — is filed and read in the
-                        Documents tab at the top of the card. */}
+                        Documents tab at the top of the card: this panel exists to clear the
+                        one page the fee waits on, and a second uploader beside it invites
+                        the scheme letter that leaves the gate shut with nothing on screen
+                        explaining why. */}
                   </div>
                 );
 
@@ -9486,6 +9640,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                 // that card gets the filled button and the rest stay quiet outlines.
                 const nextFeeStep = feeSteps.find((f) => !f.paid && (f.key === "consultation" || consultationPaid));
 
+                // And the Consultation Fee itself waits on the prescription — the server's
+                // rule too, since collect-package-payment refuses without it.
+                //
+                // The tab above these cards is already locked while the page is missing, but
+                // that lock only closes once the count has arrived: leadRxCount is null until
+                // the fetch lands, the effect that jumps to Documents waits for it, and the
+                // cards render in the meantime with a live Collect button on them. Reading the
+                // null as "no prescription" here is the safe way round — a card that waits a
+                // moment for an answer costs nothing, and one that collects before the answer
+                // arrives is the bug.
+                const consultationRxBlocked = docsRequired && !consultationPaid && !hasRx;
+
                 /**
                  * The fee cards, drawn over whichever of the fees the caller wants shown.
                  *
@@ -9513,7 +9679,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                   <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid={testid}>
                     {steps.map(({ step: f, n }) => {
                       const isNext = nextFeeStep && f.key === nextFeeStep.key;
-                      const waiting = f.key !== "consultation" && !consultationPaid;
+                      // The same two locks the cards below hold: the Consultation Fee waits
+                      // on the prescription, and every other fee waits on that one.
+                      const waiting = f.key === "consultation" ? consultationRxBlocked : !consultationPaid;
                       const receipt = f.paid && REISSUE_FEES[f.key] && selectedLead[REISSUE_FEES[f.key].details]?.transaction_id;
                       const amount = f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const amountTone = f.paid ? "text-emerald-700" : "text-slate-800";
@@ -9560,7 +9728,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                                 size="sm"
                                 variant={isNext ? undefined : "outline"}
                                 disabled={waiting}
-                                title={waiting ? "Collect the consultation fee first" : undefined}
+                                title={waiting ? (f.key === "consultation" ? "Upload the prescription first" : "Collect the consultation fee first") : undefined}
                                 className={`w-full ${isNext ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${ACT_BTN}`}
                                 onClick={f.act}
                                 data-testid={`cons-fee-act-${f.key}`}
@@ -9646,10 +9814,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                             <Button
                               size="sm"
                               variant={nextFeeStep && f.key === nextFeeStep.key ? undefined : "outline"}
-                              /* Everything after the consultation fee waits on it, and says
-                                 so rather than failing when pressed. */
-                              disabled={f.key !== "consultation" && !consultationPaid}
-                              title={f.key !== "consultation" && !consultationPaid ? "Collect the consultation fee first" : undefined}
+                              /* Everything after the consultation fee waits on it, and the
+                                 consultation fee waits on the prescription. Both say so
+                                 rather than failing when pressed. */
+                              disabled={f.key === "consultation" ? consultationRxBlocked : !consultationPaid}
+                              title={f.key === "consultation"
+                                ? (consultationRxBlocked ? "Upload the prescription first" : undefined)
+                                : (!consultationPaid ? "Collect the consultation fee first" : undefined)}
                               className={`w-full ${nextFeeStep && f.key === nextFeeStep.key ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${ACT_BTN}`}
                               onClick={f.act}
                               data-testid={`cons-fee-act-${f.key}`}
@@ -9865,25 +10036,40 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                         )}
                         tabs={
                           <>
-                            {/* The prescription is optional — the fee can be collected with or
-                                without it — so neither tab locks the other. */}
+                            {/* The order is the order it happens in: the paperwork is filed,
+                                then the money is taken against it. Documents leads because it
+                                is the step that gates the other one — a row that opens on a
+                                payment it will not let you take is a row that reads as
+                                broken. */}
                             <Button
                               size="sm"
                               variant="outline"
                               className={`${programmeDetail === "documents"
                                 ? TAB_ON
-                                : "border-slate-200 bg-white/70 text-slate-600 hover:bg-white"} ${ACT_BTN}`}
+                                : hasRx
+                                ? "border-slate-200 bg-white/70 text-slate-600 hover:bg-white"
+                                : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"} ${ACT_BTN}`}
                               onClick={() => openDetail("documents")}
                               data-testid="cons-open-documents"
                             >
                               <FileText className="mr-1 h-3.5 w-3.5" />
-                              <Lbl full={!hasRx ? "Prescription" : leadDocCount == null ? "Documents" : `Documents (${leadDocCount})`} short="Docs" />
+                              {/* Amber until the prescription is in, whatever else is on
+                                  file: the colour is about the step that is outstanding, and
+                                  a scheme letter does not finish this one. */}
+                              <Lbl full={!hasRx ? "Prescription — required" : leadDocCount == null ? "Documents" : `Documents (${leadDocCount})`} short="Docs" />
                             </Button>
+                            {/* Always on screen, and shut until the scan is filed. This panel
+                                is a sequence — paperwork, then money — so a step that
+                                disappears once you reach it takes the shape of the sequence
+                                with it, and one that opens on a payment it will not take asks
+                                for something and refuses it in the same breath. */}
                             <OwnTab
                               label={consultationPaid ? "Payment" : "Collect Fees"}
                               short="Fees"
                               icon={IndianRupee}
                               active={TAB_ON}
+                              locked={docsRequired && !hasRx && !consultationPaid}
+                              lockedTitle="Upload the prescription first"
                             />
                             {DietDetailButton}
                             {RehabDetailButton}
