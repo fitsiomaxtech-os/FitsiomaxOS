@@ -1447,12 +1447,10 @@ const FEE_TABS = [
     // family, two steps.
     tone: "#fb923c",
     empty: "Nobody has reached the Diet Chart step in this stage yet.",
-    // The step after the Diet Consultation, not beside it: a patient reaches this tab once
-    // their Diet Consultation fee is in and a chart has been called for -- collect_diet_
-    // chart_fee refuses on either count. Before that they are on the Diet tab, being sold
-    // the consultation the chart is written at.
-    scope: (l) => l.diet_fee_paid != null
-      && (!!l.diet_chart || !!l.diet_chart_package_id || l.diet_chart_fee_paid != null),
+    // Beside the Diet Consultation, not after it: either diet fee can be taken first, so a
+    // patient is here once a chart has been called for or sold, whatever their Diet
+    // Consultation fee says.
+    scope: (l) => !!l.diet_chart || !!l.diet_chart_package_id || l.diet_chart_fee_paid != null,
     paid: (l) => Number(l.diet_chart_fee_paid) || 0,
     item: (l) => l.diet_chart_package_name || "",
     mode: (l) => l.diet_chart_fee_payment_mode || "",
@@ -1701,12 +1699,8 @@ const rowFeeGate = (l, fee) => {
   if (fee === "rehab" && (!l.rehab_package_id || l.rehab_package_price == null)) {
     return { label: "Open Rehab", note: "No course chosen", hint: "Choose the rehab course before collecting the Rehab Fee", to: "rehab" };
   }
-  // The Diet Chart is the step after the Diet Consultation -- collect_diet_chart_fee
-  // refuses until that fee is in, because the chart is written at the consultation it
-  // buys. Sends the desk to the Diet programme, where the first fee is collected.
-  if (fee === "diet_chart" && l.diet_fee_paid == null) {
-    return { label: "Collect Diet Fee", note: "Diet Consultation fee first", hint: "Collect the Diet Consultation Fee before the Diet Chart Fee", to: "diet" };
-  }
+  // No arm for the Diet Chart: either diet fee can be taken first, so the chart waits on
+  // nothing past the Consultation Fee above.
   return null;
 };
 // Patient carries two lines now — the name, and what the consultation decided under it —
@@ -6042,6 +6036,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
     });
   }
 
+  // The popup's Diet Consultation Fee | Diet Chart Fee switch. Either fee can be taken at
+  // any time, so the popup offers both whichever button opened it. Re-opens the draft as the
+  // other fee, so its product, price, discount and schedule are read off that fee's own
+  // fields rather than carried across from this one. A fee with a balance still owed goes to
+  // its balance popup instead, as the row buttons do (openDietFeeFor / openDietChartFeeFor).
+  const switchDietFeeKind = (kind) => {
+    if (!dietFeeDraft || dietFeeDraft.kind === kind) return;
+    const fee = DIET_FEE_KINDS[kind].fee;
+    const state = feeStateOf(selectedLead, fee);
+    if (state.kind === "balance") {
+      setDietFeeDraft(null);
+      openPartialCollectPopup(state.nextIdx, fee, selectedLead);
+      return;
+    }
+    openDietFeeDraft(kind);
+  };
+
   // Choosing a method for a Diet fee. Cheque and Partial Payment keep the listed price,
   // so picking either drops a discount typed against another mode — the same rule the
   // Consultation and Rehab fees follow.
@@ -8749,18 +8760,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                           data-testid="cons-diet-detail-fee"
                         >
                           <IndianRupee className="mr-1 h-3.5 w-3.5" />
-                          Collect Diet Fee
+                          Collect Diet Consultation Fee
                         </Button>
                       )}
-                      {/* Offered only once the Nutritionist has recommended a chart, and it
-                          goes once collected — the same way the fee button above does, and for
-                          the same reason: collecting is a step in a sequence and it is done.
-
-                          Which puts it, in practice, after the consultation rather than beside
-                          it: the recommendation is made at the appointment the fee above pays
-                          for. It is not gated on that fee here, because the recommendation
-                          cannot exist without it having happened. */}
-                      {chartReferred && !dietChartFeePaid && (
+                      {/* Beside the consultation's button, not after it: either diet fee can
+                          be taken first, with or without the Nutritionist having recommended
+                          a chart. It goes once collected, the same way the fee button above
+                          does. Collecting it is what puts the chart's own rows on this card. */}
+                      {!dietChartFeePaid && (
                         <Button
                           size="sm"
                           className={`bg-orange-500 text-white shadow-sm hover:bg-orange-600 ${ACT_BTN}`}
@@ -9449,7 +9456,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                     paid: selectedLead.diet_chart_fee_paid != null,
                     note: selectedLead.diet_chart_fee_paid != null ? selectedLead.diet_chart_fee_payment_mode : null,
                     show: !!selectedLead.diet_chart,
-                    ...balanceStep("diet_chart", () => openDetail("diet"), "Open"),
+                    // Straight into the collect popup, as the Diet Fee card above does — the
+                    // chart no longer waits on anything that the Diet tab would have to do.
+                    ...balanceStep("diet_chart", () => openDietFeeDraft("chart"), "Collect"),
                     ...(feeBalances.diet_chart ? {} : { paid: selectedLead.diet_chart_fee_paid != null }),
                   },
                 ].filter((f) => f.show);
@@ -11758,6 +11767,29 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
                       {selectedLead[dietFeeCfg.paidField] != null ? `Update ${dietFeeCfg.label}` : `Collect ${dietFeeCfg.label}`}
                     </p>
                     <button onClick={() => setDietFeeDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-diet-fee-close"><X className="h-4 w-4" /></button>
+                  </div>
+
+                  {/* The two diet fees, either one collectable at any time. Each reads its
+                      own price off its own Diet Details shelf — see switchDietFeeKind. */}
+                  <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" data-testid="cons-diet-fee-kind">
+                    {Object.entries(DIET_FEE_KINDS).map(([k, cfg]) => {
+                      const active = dietFeeDraft.kind === k || (!dietFeeDraft.kind && k === "consultation");
+                      const state = feeStateOf(selectedLead, cfg.fee).kind;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => switchDietFeeKind(k)}
+                          className={`rounded-md px-2 py-1.5 text-left transition ${active ? "bg-white shadow-sm" : "hover:bg-white/60"}`}
+                          data-testid={`cons-diet-fee-kind-${k}`}
+                        >
+                          <span className={`block text-xs font-semibold ${active ? "text-orange-700" : "text-slate-600"}`}>{cfg.label}</span>
+                          <span className={`block text-[10px] font-medium ${state === "paid" ? "text-emerald-600" : state === "balance" ? "text-amber-600" : "text-slate-400"}`}>
+                            {state === "paid" ? "Collected" : state === "balance" ? "Balance due" : "Not collected"}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div>
