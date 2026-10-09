@@ -1088,6 +1088,20 @@ async def require_developer_password(
     URI-encoded by the page and decoded here, because a header can only carry Latin-1 and a
     password is allowed to be anything.
     """
+    return _check_developer_password(user, x_developer_password)
+
+
+async def require_developer_password_at_branch(
+    x_developer_password: Optional[str] = Header(None),
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+) -> V3UserOut:
+    """The same password, for a developer switch that sits on a Branch Admin's own screen
+    (Records > Leads Source) rather than on the CI/CD ROOTS one. The role widens to the desk
+    the screen belongs to; the bcrypt hash in .env stays the control, as above."""
+    return _check_developer_password(user, x_developer_password)
+
+
+def _check_developer_password(user: V3UserOut, x_developer_password: Optional[str]) -> V3UserOut:
     stored = (os.environ.get(DANGER_ZONE_PASSWORD_ENV) or "").strip()
     # A bcrypt hash or nothing. verify_password would compare a non-hash as plain text, and a
     # plain password sitting in .env is exactly what this is meant not to need.
@@ -1308,6 +1322,56 @@ async def v3_set_store_branch_overrides(
         upsert=True,
     )
     return {"enabled": payload.enabled}
+
+
+# Records > Leads Source: the sources whose summary card a developer has switched off. Only
+# the card goes -- the leads themselves stay in the list and in All Sources. Kept by source
+# name, the way the tab groups them (source_tab, else source_type), and the same for every
+# branch, so a source hidden at one branch is hidden at all of them.
+LEAD_SOURCE_HIDDEN_ID = "lead_source_hidden"
+
+
+class LeadSourceHiddenInput(BaseModel):
+    source: str
+    hidden: bool
+
+
+async def hidden_lead_sources() -> List[str]:
+    row = await v3_col("app_settings").find_one({"id": LEAD_SOURCE_HIDDEN_ID}, {"_id": 0})
+    return list((row or {}).get("hidden") or [])
+
+
+@router.get("/lead-source-visibility")
+async def v3_get_lead_source_visibility(_: V3UserOut = Depends(v3_current_user)):
+    """Read by the tab for everyone, so the cards are hidden without anyone holding the password."""
+    return {"hidden": await hidden_lead_sources()}
+
+
+@router.get("/admin/lead-source-visibility")
+async def v3_get_lead_source_visibility_dev(_: V3UserOut = Depends(require_developer_password_at_branch)):
+    """The same list, behind the password: what the Show / Hide popup unlocks with."""
+    return {"hidden": await hidden_lead_sources()}
+
+
+@router.put("/admin/lead-source-visibility")
+async def v3_set_lead_source_visibility(
+    payload: LeadSourceHiddenInput,
+    user: V3UserOut = Depends(require_developer_password_at_branch),
+):
+    source = payload.source.strip()
+    if not source:
+        raise HTTPException(status_code=400, detail="Source is required")
+    # One name added or taken out, rather than the whole list written back, so two people
+    # flipping different sources at once cannot undo each other.
+    await v3_col("app_settings").update_one(
+        {"id": LEAD_SOURCE_HIDDEN_ID},
+        {
+            ("$addToSet" if payload.hidden else "$pull"): {"hidden": source},
+            "$set": {"id": LEAD_SOURCE_HIDDEN_ID, "updated_by": user.full_name, "updated_at": now_iso()},
+        },
+        upsert=True,
+    )
+    return {"hidden": await hidden_lead_sources()}
 
 
 # What a consultation's Zumba and Fitness referral leaves on a lead. Cleared with the rest of

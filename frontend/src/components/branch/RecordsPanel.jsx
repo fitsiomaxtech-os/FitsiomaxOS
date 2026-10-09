@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronRight, Download, Megaphone, RefreshCw, Search, Truck, X } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, Download, EyeOff, Lock, Megaphone, RefreshCw, Search, Truck, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { VendorPanel } from "@/components/branch/VendorPanel";
-import { getBranchBoard, getBranchTransferRecords } from "@/lib/api";
+import {
+  getBranchBoard,
+  getBranchTransferRecords,
+  getLeadSourceVisibility,
+  unlockLeadSourceVisibility,
+  setLeadSourceHidden,
+} from "@/lib/api";
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
 
@@ -26,6 +33,13 @@ const currentStage = (lead) => lead.consultation_stage || lead.branch_stage || l
 // Read as the Branch Leads Source column and its dropdown read it: source_tab, else source_type.
 const NO_SOURCE = "No Source";
 const sourceOf = (lead) => String(lead.source_tab || lead.source_type || "").trim() || NO_SOURCE;
+// [source, count] pairs, biggest first; a lead with no source goes last whatever its count.
+const countBySource = (leads) => {
+  const counts = {};
+  leads.forEach((l) => { const s = sourceOf(l); counts[s] = (counts[s] || 0) + 1; });
+  return Object.entries(counts)
+    .sort(([a, x], [b, y]) => (a === NO_SOURCE) - (b === NO_SOURCE) || y - x || a.localeCompare(b));
+};
 
 export const RecordsPanel = ({ branchId }) => {
   const [sub, setSub] = useState("branch_transfers");
@@ -349,6 +363,13 @@ const LeadSourceRecords = ({ branchId }) => {
   const [source, setSource] = useState("all");
   const [quickDate, setQuickDate] = useState(null);
   const [dateFilter, setDateFilter] = useState(null);
+  // The sources a developer has switched off: their card is left out of the strip, their
+  // leads are not. The password the popup was opened with is held here, in memory only, so
+  // a second visit to the popup in the same sitting does not ask again; leaving the tab
+  // forgets it, and the server checks it on every switch regardless.
+  const [hidden, setHidden] = useState([]);
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [devPassword, setDevPassword] = useState(null);
   const applyDateFilter = (next) => {
     setDateFilter(next);
     if (next) setQuickDate(null);
@@ -358,6 +379,8 @@ const LeadSourceRecords = ({ branchId }) => {
   const load = useCallback(async () => {
     if (!branchId) return;
     setLoading(true);
+    // Apart, so a failed read of the hidden list still draws every card rather than none.
+    getLeadSourceVisibility().then((r) => setHidden(r.hidden || [])).catch(() => {});
     try {
       const data = await getBranchBoard(branchId);
       setLeads(data.leads || []);
@@ -366,6 +389,12 @@ const LeadSourceRecords = ({ branchId }) => {
     }
     setLoading(false);
   }, [branchId]);
+
+  const applyHidden = (next) => {
+    setHidden(next);
+    // A card that has just gone cannot stay the one the list is narrowed to.
+    if (next.includes(source)) setSource("all");
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -386,14 +415,19 @@ const LeadSourceRecords = ({ branchId }) => {
       .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [leads, search, effectiveDateFilter]);
 
-  // Biggest source first; a lead with none goes last whatever its count.
-  const cards = useMemo(() => {
-    const counts = {};
-    dated.forEach((l) => { const s = sourceOf(l); counts[s] = (counts[s] || 0) + 1; });
-    const named = Object.entries(counts)
-      .sort(([a, x], [b, y]) => (a === NO_SOURCE) - (b === NO_SOURCE) || y - x || a.localeCompare(b));
-    return [["all", dated.length], ...named];
-  }, [dated]);
+  // All Sources still counts a hidden source's leads: they are still in the list below it.
+  const cards = useMemo(
+    () => [["all", dated.length], ...countBySource(dated).filter(([s]) => !hidden.includes(s))],
+    [dated, hidden],
+  );
+
+  // Every source at this branch, undated, for the popup -- and a hidden one with no lead
+  // here, so it can still be switched back on from this branch.
+  const allSources = useMemo(() => {
+    const here = countBySource(leads);
+    const seen = new Set(here.map(([s]) => s));
+    return [...here, ...hidden.filter((s) => !seen.has(s)).map((s) => [s, 0])];
+  }, [leads, hidden]);
 
   const rows = useMemo(
     () => (source === "all" ? dated : dated.filter((l) => sourceOf(l) === source)),
@@ -477,6 +511,17 @@ const LeadSourceRecords = ({ branchId }) => {
           <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="lead-source-date-filter" centered iconOnly phoneIconOnly />
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibilityOpen(true)}
+            className="h-9 w-9 p-0 sm:h-8 sm:w-auto sm:px-3"
+            title="Show / Hide Sources (Developer Access)"
+            aria-label="Show / Hide Sources"
+            data-testid="lead-source-visibility-btn"
+          >
+            <EyeOff className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Show / Hide Sources</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -564,7 +609,121 @@ const LeadSourceRecords = ({ branchId }) => {
           </div>
         </>
       )}
+
+      {visibilityOpen && (
+        <SourceVisibilityDialog
+          sources={allSources}
+          hidden={hidden}
+          onHiddenChange={applyHidden}
+          password={devPassword}
+          onPassword={setDevPassword}
+          onClose={() => setVisibilityOpen(false)}
+        />
+      )}
     </div>
+  );
+};
+
+/**
+ * Show / Hide Sources, behind the developer password: one line per source, its switch on
+ * the right, the way the Danger Zone's list reads. A switch moves only once the server has
+ * saved it, and a refused password locks the popup again rather than leaving dead switches.
+ */
+const SourceVisibilityDialog = ({ sources, hidden, onHiddenChange, password, onPassword, onClose }) => {
+  const [passwordInput, setPasswordInput] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
+  const [saving, setSaving] = useState(null);
+
+  const unlock = async (e) => {
+    e.preventDefault();
+    if (!passwordInput) return;
+    setUnlocking(true);
+    try {
+      const r = await unlockLeadSourceVisibility(passwordInput);
+      onHiddenChange(r.hidden || []);
+      onPassword(passwordInput);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not unlock");
+    }
+    setPasswordInput("");
+    setUnlocking(false);
+  };
+
+  const flip = async (name, show) => {
+    setSaving(name);
+    try {
+      const r = await setLeadSourceHidden(password, name, !show);
+      onHiddenChange(r.hidden || []);
+      toast.success(show ? `${name} is shown` : `${name} is hidden`);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 403 || status === 429 || status === 503) onPassword(null);
+      toast.error(err?.response?.data?.detail || "Could not save");
+    }
+    setSaving(null);
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto" data-testid="lead-source-visibility-dialog">
+        <DialogHeader>
+          <DialogTitle>Show / Hide Sources</DialogTitle>
+          <DialogDescription>
+            A hidden source loses its summary card only. Its leads stay in the list and in All Sources. Applies to every branch.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!password ? (
+          <form onSubmit={unlock} className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+              <Lock className="h-4 w-4" /> Developer password
+            </div>
+            <Input
+              type="password"
+              autoComplete="off"
+              autoFocus
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              data-testid="lead-source-visibility-password"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={unlocking || !passwordInput} data-testid="lead-source-visibility-unlock">
+                {unlocking ? "Checking..." : "Unlock"}
+              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            </div>
+          </form>
+        ) : !sources.length ? (
+          <p className="py-6 text-center text-sm text-slate-400">No sources yet.</p>
+        ) : (
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+            {sources.map(([name, count]) => {
+              const shown = !hidden.includes(name);
+              return (
+                <label key={name} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`lead-source-visibility-row-${name}`}>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-slate-800" title={name}>{name}</span>
+                    <span className="text-[11px] text-slate-400">{count} lead{count === 1 ? "" : "s"}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className={`text-[10px] font-bold uppercase ${shown ? "text-emerald-600" : "text-slate-400"}`}>
+                      {saving === name ? "Saving" : shown ? "Show" : "Hide"}
+                    </span>
+                    <Switch
+                      checked={shown}
+                      disabled={saving !== null}
+                      onCheckedChange={(v) => flip(name, v)}
+                      className="data-[state=checked]:bg-emerald-600"
+                      data-testid={`lead-source-visibility-toggle-${name}`}
+                    />
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 

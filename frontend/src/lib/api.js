@@ -722,6 +722,11 @@ export const setSaConsultBranchesSetting = async (password, enabled) => (await a
 // On: each branch keeps its own Services and Products values. Off: one catalogue for all.
 export const getStoreBranchOverrides = async (password) => (await api.get("/admin/store-branch-overrides", { headers: developerHeaders(password) })).data;
 export const setStoreBranchOverrides = async (password, enabled) => (await api.put("/admin/store-branch-overrides", { enabled }, { headers: developerHeaders(password) })).data;
+// Records > Leads Source: the sources whose summary card is switched off. Read by the tab
+// for everyone; the password pair is the Show / Hide popup's.
+export const getLeadSourceVisibility = async () => (await api.get("/lead-source-visibility")).data;
+export const unlockLeadSourceVisibility = async (password) => (await api.get("/admin/lead-source-visibility", { headers: developerHeaders(password) })).data;
+export const setLeadSourceHidden = async (password, source, hidden) => (await api.put("/admin/lead-source-visibility", { source, hidden }, { headers: developerHeaders(password) })).data;
 export const resetAllUsers = async (password) => (await api.post("/admin/reset-all-users", null, { params: { confirm: true }, headers: developerHeaders(password) })).data;
 
 // HR
