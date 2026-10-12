@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronRight, Download, EyeOff, Lock, Megaphone, RefreshCw, Search, Truck, X } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, Download, EyeOff, Lock, Megaphone, RefreshCw, Search, Truck, UserCheck, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -24,6 +24,7 @@ import { dateStampFull, callTimeStamp } from "@/lib/time";
  */
 const RECORD_TABS = [
   { key: "branch_transfers", label: "Branch Transfer Records", icon: ArrowLeftRight },
+  { key: "leads_converted", label: "Leads Converted", icon: UserCheck },
   { key: "lead_sources", label: "Leads Source", icon: Megaphone },
   { key: "vendors", label: "Vendor Records", icon: Truck },
 ];
@@ -65,6 +66,12 @@ export const RecordsPanel = ({ branchId }) => {
         })}
       </div>
       {sub === "branch_transfers" && <BranchTransferRecords branchId={branchId} />}
+      {/* Name only for now -- what this record holds is still to be agreed. */}
+      {sub === "leads_converted" && (
+        <div className="rounded-lg border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="records-leads-converted">
+          Leads Converted
+        </div>
+      )}
       {sub === "lead_sources" && <LeadSourceRecords branchId={branchId} />}
       {/* The branch's one vendor screen. It moved here from Services and Products, so it
           edits: add, change and switch off vendors, and from View, see and add the
