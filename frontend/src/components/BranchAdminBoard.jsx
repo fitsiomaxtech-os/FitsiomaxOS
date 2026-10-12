@@ -27,6 +27,7 @@ import {
   Salad,
   UserCog,
   User,
+  UserRound,
   UserX,
   Clock,
   MoreHorizontal,
@@ -98,7 +99,6 @@ import MissedClassPanel from "@/components/branch/MissedClassPanel";
 import { PhysioAbsencePanel } from "@/components/PhysioAbsencePanel";
 import { BranchReviewPanel } from "@/components/branch/BranchReviewPanel";
 import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
-import { ClientReviewsPanel } from "@/components/reviews/ClientReviewsPanel";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { RecordsPanel } from "@/components/branch/RecordsPanel";
@@ -1777,10 +1777,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     { key: "fitness", label: "Fitness", short: "Fitness", icon: Dumbbell },
     { key: "review", label: "Review", short: "Review", icon: ClipboardCheck },
     { key: "consultations", label: "Management", short: "Manage", icon: Stethoscope },
-    { key: "patients", label: "Patients", short: "Patients", icon: User },
-    // What this branch's clients rated their Consultant and Physio in the Client Portal.
-    // The same panel HR Admin shows Super Admin and BDE, held to this one branch.
-    { key: "client_reviews", label: "Client Reviews", short: "Ratings", icon: Star },
+    // One consultant's calendar, opened straight onto them. MANAGEMENT holds every calendar
+    // the branch runs; this is the one the desk keeps going back to, so it is a tab of its own
+    // rather than three taps in (Manage -> Consultant Calendar -> Sumaiya). The panel is the
+    // ordinary Consultant Calendar with that expert preselected, so publishing a day here is
+    // the same action as doing it there.
+    { key: "sumaiya", label: "Sumaiya Consultant", short: "Sumaiya", icon: UserRound },
     { key: "accountant_mgmt", label: "Accountant Manage", short: "Accounts", icon: BadgeIndianRupee },
     // Named as Super Admin names it. This tab is that page's catalogue read from a
     // branch, and calling the same shelves two different things left nobody able to say
@@ -1827,6 +1829,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // physio, or released to Missed Classes for a new date.
     { key: "physio_absence", label: "Physio Absence", icon: CalendarX },
     { key: "manager", label: "Manager", icon: UserCog },
+    // The branch's registered patients, from the Client Portal — moved here from the top tab
+    // strip. It is the same people the calendars above hold appointments for, so it belongs
+    // beside them rather than one level up, and it is the last of the people-desk entries.
+    { key: "patients", label: "Patients", icon: User },
     { key: "calendar", label: "Calendar", icon: Calendar },
     // Sits after CALENDAR because it is the setting the three calendars above obey: the
     // shift an expert is on is the window their day gets opened across. Last in the strip
@@ -1985,6 +1991,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               <BranchDetailPage branchId={branchId} readOnly />
             ) : consultationsSubTab === "calendar" ? (
               <BranchCalendarPanel branchId={branchId} />
+            ) : consultationsSubTab === "patients" ? (
+              <PatientsPortalPanel branchId={branchId} />
             ) : consultationsSubTab === "time" ? (
               <TimeManagementPanel branchId={branchId} />
             ) : (
@@ -2001,10 +2009,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <FitnessPanel branchId={branchId} />
       ) : activeView === "review" ? (
         <BranchReviewPanel branchId={branchId} />
-      ) : activeView === "patients" ? (
-        <PatientsPortalPanel branchId={branchId} />
-      ) : activeView === "client_reviews" ? (
-        <ClientReviewsPanel branchId={branchId} physioOnly tileArrow="desk" />
+      ) : activeView === "sumaiya" ? (
+        // The Consultant Calendar with this branch's Sumaiya preselected — the panel the
+        // Management tab's first card opens, minus the card and the picker. preselectName is
+        // matched against the branch's experts once they arrive, so a rename in HR is all it
+        // takes to keep it pointing at her; if no such expert exists the calendar falls back to
+        // its own empty picker rather than to a blank grid.
+        <HeadPhysioCalendar branchId={branchId} onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} preselectName="Sumaiya" />
       ) : activeView === "store" ? (
         <FitsiomaxStorePanel branchId={branchId} />
       ) : activeView === "records" ? (
