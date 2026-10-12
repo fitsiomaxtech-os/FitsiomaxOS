@@ -2519,16 +2519,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // unrolling in place, so reading it never pushes the payment panel down the card.
   const [recordDetailsOpen, setRecordDetailsOpen] = useState(false);
   // The popup's size, chosen when a patient is opened and held while they stay open. A
-  // Branch Admin opening someone at Consultation Visit gets a 565 × 660 card: the work
-  // there is one payment, and a 1024px sheet around it was mostly white. Held rather than
-  // read off the stage live, because collecting that fee moves the patient on to Fee
-  // Collected with the popup still up, and a card that doubled in width under the hand
-  // that just pressed Collect would be the screen moving out from under them.
+  // Branch Admin opening someone at Consultation Visit or Fee Collected gets a 565 × 660
+  // card: the work there is the payments, and a 1024px sheet around them was mostly white.
+  // Held rather than read off the stage live, so a fee taken or a physio assigned with the
+  // popup still up does not resize the card under the hand that just pressed the button.
   const [detailFrame, setDetailFrame] = useState({ id: null, compact: false });
   if (detailFrame.id !== (selectedLead?.id ?? null)) {
     setDetailFrame({
       id: selectedLead?.id ?? null,
-      compact: !isConsultant && selectedLead?.consultation_stage === "Consultation Visit",
+      compact: !isConsultant && ["Consultation Visit", "Fee Collected"].includes(selectedLead?.consultation_stage),
     });
   }
   const compactDetail = detailFrame.compact;
@@ -7534,18 +7533,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   // columns a third of 565px wide is a word or two each, and a summary that
                   // can only show two words is not one. The whole of it — every line, the
                   // Pre-Sales note, the plan service by service — is Consultation Record
-                  // Details, a popup of its own that the heading and every row open.
+                  // Details, a popup of its own that every row opens.
+                  //
+                  // Closed by default — only the heading — so the payment panel sits near
+                  // the top of the card. View Details unfolds the three rows and becomes
+                  // Close, which folds them away again. Folded again for each patient.
                   //
                   // The heading is drawn the way Collect a Payment's is, tile and all, so
                   // the two sections of this card start on the same line and read as a pair.
-                  // No rule under it: the rows below are the heading's own content, and a
-                  // line between them cut the card in two.
                   if (compactDetail) {
                     return (
                       <>
                         <button
                           type="button"
-                          onClick={() => setRecordDetailsOpen(true)}
+                          onClick={() => setCaseRecordOpen((open) => !open)}
+                          aria-expanded={caseRecordOpen}
                           className="group flex w-full items-center gap-2 px-4 py-2.5 text-left transition hover:bg-slate-50"
                           data-testid="cons-case-record-open"
                         >
@@ -7555,11 +7557,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-slate-600">Consultation Record</span>
                           {/* Tinted, like the Appointment Card in the header. Grey on white it
                               read as a switch left off rather than as something to press. */}
-                          <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100">
-                            <Eye className="h-3.5 w-3.5" /> View Details
-                          </span>
+                          {caseRecordOpen ? (
+                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition group-hover:border-slate-300 group-hover:bg-slate-100" data-testid="cons-case-record-close">
+                              <X className="h-3.5 w-3.5" /> Close
+                            </span>
+                          ) : (
+                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100">
+                              <Eye className="h-3.5 w-3.5" /> View Details
+                            </span>
+                          )}
                         </button>
-                        <div className="divide-y divide-slate-100" data-testid="cons-case-record-rows">
+                        {caseRecordOpen && <div className="divide-y divide-slate-100 border-t border-slate-100" data-testid="cons-case-record-rows">
                           {cells.map((c) => (
                             <button
                               key={c.key}
@@ -7578,7 +7586,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                             </button>
                           ))}
-                        </div>
+                        </div>}
 
                         {/* Consultation Record Details. Above the patient's card rather than
                             in place of it, and closed back onto it — this is reading, and the
