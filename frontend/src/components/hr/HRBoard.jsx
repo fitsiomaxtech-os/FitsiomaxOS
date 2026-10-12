@@ -1217,10 +1217,23 @@ const ViewRow = ({ label, value }) => (
 
 const ViewSection = ({ title, children }) => (
   <div className="rounded-xl border border-slate-200 p-3">
-    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</p>
+    {/* Optional: the tab bar above already names the section when this card sits under
+        one, and repeating it there reads as the same word twice. */}
+    {title && <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</p>}
     {children}
   </div>
 );
+
+// The five stops the read-only record is read in — the same five, in the same order,
+// as the Add/Edit dialog below, so a reader who knows where a field is written finds
+// it again here under the same tab name.
+const VIEW_TABS = [
+  { key: "personal", label: "Personal" },
+  { key: "employment", label: "Employment" },
+  { key: "id_docs", label: "ID & Documents" },
+  { key: "address", label: "Address & Emergency" },
+  { key: "salary", label: "Salary & Bank" },
+];
 
 /**
  * The employee record, read-only, with Edit and Delete on it — the single entry point
@@ -1228,99 +1241,131 @@ const ViewSection = ({ title, children }) => (
  * position is how the wrong person gets removed; here the whole record is on screen
  * first.
  */
-const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => (
-  <div
-    className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-    onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}
-    data-testid="hr-emp-view-modal"
-  >
-    <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-      <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-5 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <EmployeeAvatar employee={e} size={44} />
-          <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-base font-semibold text-slate-900" data-testid="hr-emp-view-name">{e.full_name}</h3>
-            <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span>
+const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
+  // The dialog remounts on every open ({viewing && ...} above), so this always starts
+  // on the first tab rather than the one the last employee viewed was left on.
+  const [tab, setTab] = useState("personal");
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+      onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}
+      data-testid="hr-emp-view-modal"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <EmployeeAvatar employee={e} size={44} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="truncate text-base font-semibold text-slate-900" data-testid="hr-emp-view-name">{e.full_name}</h3>
+                <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {e.employee_code || "No code"}{e.designation ? ` · ${e.designation}` : ""}{e.department ? ` · ${e.department}` : ""}
+              </p>
+            </div>
           </div>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {e.employee_code || "No code"}{e.designation ? ` · ${e.designation}` : ""}{e.department ? ` · ${e.department}` : ""}
-          </p>
-          </div>
+          <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="hr-emp-view-close"><X className="h-4 w-4" /></button>
         </div>
-        <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="hr-emp-view-close"><X className="h-4 w-4" /></button>
-      </div>
 
-      <div className="flex-1 overflow-y-auto p-5">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ViewSection title="Personal">
-            <ViewRow label="Email" value={e.email} />
-            <ViewRow label="Phone" value={e.phone} />
-            <ViewRow label="Date of Birth" value={e.dob} />
-            <ViewRow label="Gender" value={e.gender} />
-            <ViewRow label="Blood Group" value={e.blood_group} />
-            <ViewRow label="Marital Status" value={e.marital_status} />
-            <ViewRow label="Father's Name" value={e.father_name} />
-            <ViewRow label="Mother's Name" value={e.mother_name} />
-          </ViewSection>
+        {/* Same tab-bar shape as the Add/Edit dialog's below, so the read and the write
+            of a record look like one form in two moods. The labels are fixed prose, so
+            they sit in the header band rather than the body that scrolls. */}
+        <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-slate-200 px-5 py-2 text-xs">
+          {VIEW_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`rounded px-3 py-1 ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
+              data-testid={`hr-emp-view-tab-${t.key}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          <ViewSection title="Employment">
-            <ViewRow label="Employee Code" value={e.employee_code} />
-            <ViewRow label="Department" value={e.department} />
-            <ViewRow label="Designation" value={e.designation} />
-            <ViewRow label="Work Type" value={MODE_LABELS[modeValue(e.work_type)]} />
-            <ViewRow label="Service" value={e.service ? (SERVICE_LABELS[e.service] || e.service) : ""} />
-            <ViewRow label="Branch" value={e.branch_name} />
-            <ViewRow label="Joining Date" value={e.joining_date} />
-            <ViewRow label="Reporting To" value={e.reporting_to} />
-            <ViewRow label="Status" value={e.status || "active"} />
-          </ViewSection>
+        <div className="flex-1 overflow-y-auto p-5">
+          {tab === "personal" && (
+            <div className="space-y-3">
+              <ViewSection>
+                <ViewRow label="Email" value={e.email} />
+                <ViewRow label="Phone" value={e.phone} />
+                <ViewRow label="Date of Birth" value={e.dob} />
+                <ViewRow label="Gender" value={e.gender} />
+                <ViewRow label="Blood Group" value={e.blood_group} />
+                <ViewRow label="Marital Status" value={e.marital_status} />
+                <ViewRow label="Father's Name" value={e.father_name} />
+                <ViewRow label="Mother's Name" value={e.mother_name} />
+              </ViewSection>
+              {/* Notes rides with Personal because that is the tab the Edit dialog
+                  writes it on — the read and the write stay on the same stop. */}
+              {e.notes && (
+                <ViewSection title="Notes">
+                  <p className="whitespace-pre-wrap text-xs text-slate-700">{e.notes}</p>
+                </ViewSection>
+              )}
+            </div>
+          )}
 
-          <ViewSection title="ID & Documents">
-            <ViewRow label="PAN" value={e.pan} />
-            <ViewRow label="Aadhar" value={e.aadhar} />
-          </ViewSection>
+          {tab === "employment" && (
+            <ViewSection>
+              <ViewRow label="Employee Code" value={e.employee_code} />
+              <ViewRow label="Department" value={e.department} />
+              <ViewRow label="Designation" value={e.designation} />
+              <ViewRow label="Work Type" value={MODE_LABELS[modeValue(e.work_type)]} />
+              <ViewRow label="Service" value={e.service ? (SERVICE_LABELS[e.service] || e.service) : ""} />
+              <ViewRow label="Branch" value={e.branch_name} />
+              <ViewRow label="Joining Date" value={e.joining_date} />
+              <ViewRow label="Reporting To" value={e.reporting_to} />
+              <ViewRow label="Status" value={e.status || "active"} />
+            </ViewSection>
+          )}
 
-          <ViewSection title="Address & Emergency">
-            <ViewRow label="Address" value={e.address} />
-            <ViewRow label="Emergency Contact" value={e.emergency_contact_name} />
-            <ViewRow label="Emergency Phone" value={e.emergency_contact_phone} />
-          </ViewSection>
+          {tab === "id_docs" && (
+            <ViewSection>
+              <ViewRow label="PAN" value={e.pan} />
+              <ViewRow label="Aadhar" value={e.aadhar} />
+            </ViewSection>
+          )}
 
-          <ViewSection title="Salary & Bank">
-            <ViewRow label="Net Salary" value={money(e.net_salary)} />
-            <ViewRow label="Gross Salary" value={money(e.gross_salary)} />
-            <ViewRow label="Bank Name" value={e.bank_name} />
-            <ViewRow label="Account Number" value={e.bank_account} />
-            <ViewRow label="IFSC" value={e.ifsc} />
-          </ViewSection>
+          {tab === "address" && (
+            <ViewSection>
+              <ViewRow label="Address" value={e.address} />
+              <ViewRow label="Emergency Contact" value={e.emergency_contact_name} />
+              <ViewRow label="Emergency Phone" value={e.emergency_contact_phone} />
+            </ViewSection>
+          )}
 
-          {e.notes && (
-            <ViewSection title="Notes">
-              <p className="whitespace-pre-wrap text-xs text-slate-700">{e.notes}</p>
+          {tab === "salary" && (
+            <ViewSection>
+              <ViewRow label="Net Salary" value={money(e.net_salary)} />
+              <ViewRow label="Gross Salary" value={money(e.gross_salary)} />
+              <ViewRow label="Bank Name" value={e.bank_name} />
+              <ViewRow label="Account Number" value={e.bank_account} />
+              <ViewRow label="IFSC" value={e.ifsc} />
             </ViewSection>
           )}
         </div>
-      </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
-        <button
-          onClick={onDelete}
-          className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-          data-testid="hr-emp-view-delete"
-        >
-          <Trash2 className="h-4 w-4" /> Delete
-        </button>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} data-testid="hr-emp-view-cancel">Close</Button>
-          <Button onClick={onEdit} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-view-edit">
-            <Pencil className="mr-1.5 h-4 w-4" /> Edit
-          </Button>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            data-testid="hr-emp-view-delete"
+          >
+            <Trash2 className="h-4 w-4" /> Delete
+          </button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} data-testid="hr-emp-view-cancel">Close</Button>
+            <Button onClick={onEdit} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-view-edit">
+              <Pencil className="mr-1.5 h-4 w-4" /> Edit
+            </Button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ---------- Manual date entry ----------
 
