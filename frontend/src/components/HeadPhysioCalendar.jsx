@@ -208,25 +208,6 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
 
   useEffect(() => { loadDoctors(); }, [loadDoctors]);
 
-  // `preselectName` opens the calendar on one expert by name, so a board can mount a single
-  // person's day rather than the branch's picker (Branch Admin's Sumaiya Consultant tab).
-  // Runs off the loaded list rather than the prop alone — the experts arrive a request after
-  // this mounts, and matching on arrival is what makes the name resolve.
-  //
-  // Only fills an empty selection: once somebody is open, a reload or the branch's expert list
-  // changing must not yank the reader onto this person and close what they were publishing.
-  // Case- and space-insensitive, then a prefix match, so "Dr. Sumaiya" still resolves for a
-  // tab that says "Sumaiya". Left unselected when nothing matches — the picker then behaves
-  // exactly as it always did, rather than the screen showing a name with nobody behind it.
-  useEffect(() => {
-    if (!preselectName || selectedDoctor || doctors.length === 0) return;
-    const want = preselectName.trim().toLowerCase();
-    const hit = doctors.find((d) => (d.full_name || "").trim().toLowerCase() === want)
-      || doctors.find((d) => (d.full_name || "").trim().toLowerCase().startsWith(want))
-      || doctors.find((d) => (d.full_name || "").trim().toLowerCase().includes(want));
-    if (hit) selectDoctor(hit);
-  }, [preselectName, doctors, selectedDoctor]);
-
   // Only the treatment calendar asks: a consultation and a diet check-in are the service,
   // where a physio's day could be any of several the clinic sells.
   useEffect(() => {
@@ -404,6 +385,26 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     // link — which then reads as this expert's, and saves as theirs on the next click.
     setMeetDraft(doc?.meet_link || "");
   };
+
+  // `preselectName` opens the calendar on one expert by name, so a board can mount a single
+  // person's day rather than the branch's picker.
+  // Runs off the loaded list rather than the prop alone — the experts arrive a request after
+  // this mounts, and matching on arrival is what makes the name resolve. Sits below
+  // selectDoctor because it calls it.
+  //
+  // Only fills an empty selection: once somebody is open, a reload or the branch's expert list
+  // changing must not yank the reader onto this person and close what they were publishing.
+  // Case- and space-insensitive, then a prefix match, so "Dr. Sumaiya" still resolves for a
+  // tab that says "Sumaiya". Left unselected when nothing matches — the picker then behaves
+  // exactly as it always did, rather than the screen showing a name with nobody behind it.
+  useEffect(() => {
+    if (!preselectName || selectedDoctor || doctors.length === 0) return;
+    const want = preselectName.trim().toLowerCase();
+    const hit = doctors.find((d) => (d.full_name || "").trim().toLowerCase() === want)
+      || doctors.find((d) => (d.full_name || "").trim().toLowerCase().startsWith(want))
+      || doctors.find((d) => (d.full_name || "").trim().toLowerCase().includes(want));
+    if (hit) selectDoctor(hit);
+  }, [preselectName, doctors, selectedDoctor]);
 
   const saveMeetLink = async () => {
     if (!selectedDoctor) return;

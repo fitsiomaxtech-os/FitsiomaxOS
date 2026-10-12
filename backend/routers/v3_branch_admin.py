@@ -15,6 +15,7 @@ from deps import (
     online_arm_practice, vertical_in_arm, lead_as_read_by, is_branch_admin_role,
     works_org_wide,
 )
+from physio_scope import head_chief_lead_ids, user_branch_ids
 import lead_control
 import lead_purge
 import store_branch_overrides
@@ -1564,6 +1565,7 @@ async def v3_consultations_board(
     branch_id: str,
     pipeline: Optional[str] = None,
     mine: bool = False,
+    head_chief: bool = False,
     user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
 ):
     """Return leads in the Consultations pipeline for a branch, grouped by the caller's own
@@ -1586,12 +1588,18 @@ async def v3_consultations_board(
     Whose it is comes off `appointments.doctor_id`, not off `leads.assigned_physio_id`. Only
     the appointment records who actually took the consultation — `assigned_physio_id` is the
     treating physio, despite the booking copying a consultant onto it at times. See
-    consultant_thread_target in physio_scope."""
+    consultant_thread_target in physio_scope.
+
+    `head_chief=true` narrows it the same way to the consultations booked to a Super Admin
+    -- Branch Admin's Sumaiya Consultations tab, which is the Super Admin's My Consultation
+    read at one branch. A Branch Admin asking is held to their own branch."""
     try:
+        if head_chief and is_branch_admin_role(user.role) and branch_id not in user_branch_ids(user):
+            raise HTTPException(status_code=403, detail="Not your branch")
         # Off the predicate, not the literal: the desk is `consultant`/`online_consultant`
         # now, and matching the retired slug exactly dropped every consultant onto the
         # Branch Admin's consultation pipeline instead of their own.
-        is_hp = is_head_physio_role(user.role) or (works_org_wide(user.role) and pipeline == "head_consultation")
+        is_hp = is_head_physio_role(user.role) or ((works_org_wide(user.role) or head_chief) and pipeline == "head_consultation")
         field = "head_consultation_stage" if is_hp else "consultation_stage"
         query = {field: {"$ne": None}}
         if branch_id and branch_id != "all":
@@ -1618,6 +1626,8 @@ async def v3_consultations_board(
                 {"doctor_id": {"$in": my_doctor_ids}, "appt_kind": {"$ne": "diet"}},
             ) if my_doctor_ids else []
             query["id"] = {"$in": my_lead_ids}
+        elif head_chief:
+            query["id"] = {"$in": await head_chief_lead_ids()}
         leads_docs = await v3_col("leads").find(query, {"_id": 0}).sort("updated_at", -1).to_list(2000)
         stage_names = await _head_consultation_stage_names() if is_hp else await _consultation_stage_names()
         stage_counts = {}

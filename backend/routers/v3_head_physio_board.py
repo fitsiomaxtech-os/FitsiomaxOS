@@ -11,6 +11,7 @@ from deps import (
     v3_current_user, v3_require_roles, consultants_serving_branch, super_admin_consults_at,
     super_admin_branch_switches_enabled,
 )
+from physio_scope import ensure_head_chief_lead
 from constants import V3_HEAD_CONSULTATION_STAGES
 from stage_utils import get_closing_stage_name, get_stage_name_at
 from schemas.v3 import (
@@ -598,7 +599,7 @@ async def _home_visit_rate_item(lead: dict) -> dict:
 async def hp_consultation_decision(
     lead_id: str,
     payload: V3ConsultationDecisionInput,
-    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev")),
+    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin")),
 ):
     """Head Physio's 'Save & Move' — the single action that closes out the
     consultation: requires Diagnosis Report + Treatment Summary to already be
@@ -606,6 +607,8 @@ async def hp_consultation_decision(
     (and, for the latter, the chosen Treatment/Session package — names only, no
     price shown here), then hands the lead to Branch Admin's 'Consultation Visit'
     column on both pipelines at once."""
+    # Branch Admin's Sumaiya Consultations tab: a Head Chief's patient at their branch only.
+    await ensure_head_chief_lead(user, lead_id)
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -921,7 +924,7 @@ async def hp_book_rehab_consultation(
 async def hp_complete_rehab_consultation(
     lead_id: str,
     payload: V3RehabConsultCompleteInput,
-    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev")),
+    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin")),
 ):
     """The Consultant's side of the Rehab consultation: the package, chosen now.
 
@@ -929,6 +932,8 @@ async def hp_complete_rehab_consultation(
     which is exactly the state Move to Admin leaves a patient referred to Rehab in -- so the
     branch's Rehab pill, the Rehab Fee and assign-rehab all take it from here unchanged.
     """
+    # Branch Admin's Sumaiya Consultations tab: a Head Chief's patient at their branch only.
+    await ensure_head_chief_lead(user, lead_id)
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")

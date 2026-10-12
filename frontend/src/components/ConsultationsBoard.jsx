@@ -2465,7 +2465,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3079,7 +3079,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
     (async () => {
       try {
         setLoading(true);
-        const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine);
+        const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine, headChief);
         if (!cancelled) {
           setBoard(res);
           setRxLeadIds(new Set(res?.rx_lead_ids || []));
@@ -3093,13 +3093,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
       }
     })();
     return () => { cancelled = true; };
-  }, [branchId, mine]);
+  }, [branchId, mine, headChief]);
 
   const load = useCallback(async () => {
     if (!branchId) return;
     try {
       setLoading(true);
-      const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine);
+      const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine, headChief);
       setBoard(res);
       setRxLeadIds(new Set(res?.rx_lead_ids || []));
       setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
@@ -3109,7 +3109,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, externalS
     } finally {
       setLoading(false);
     }
-  }, [branchId, mine]);
+  }, [branchId, mine, headChief]);
 
   const toggleSelectMode = () => {
     setSelectMode((v) => !v);

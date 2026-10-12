@@ -23,10 +23,13 @@ import uuid
 
 from database import v3_col
 from utils import now_iso, active_doctor_query
-from deps import v3_require_roles, works_org_wide
+from deps import is_branch_admin_role, v3_require_roles, works_org_wide
 from schemas.v3 import V3UserOut
 
-from physio_scope import physio_lead_ids, resolve_physio_doctor, covering_lead_ids, review_cover_holders
+from physio_scope import (
+    physio_lead_ids, resolve_physio_doctor, covering_lead_ids, review_cover_holders,
+    ensure_head_chief_lead, head_chief_doctor_ids, user_branch_ids,
+)
 
 router = APIRouter(prefix="/api/v3")
 
@@ -784,7 +787,8 @@ async def hp_reviews(
         description="Supervisor view: every Consultant's dispatched reviews on this branch. "
                     "The org-wide desks only; a Consultant always gets their own.",
     ),
-    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev")),
+    head_chief: bool = False,
+    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin")),
 ):
     """Reviews dispatched to this Head Physio, split into what's due and what's done.
 
@@ -802,14 +806,24 @@ async def hp_reviews(
     Undispatched reviews are deliberately left out: `head_physio_id` is what makes a review
     somebody's to write, and the ones still waiting on a Branch Admin belong to Branch
     Admin > Review > Send to Review, not to a Consultant's queue.
+
+    `head_chief=true` with a `branch_id` is the reviews dispatched to a Super Admin at that
+    branch -- Branch Admin's Sumaiya Consultations tab. It is the only way a Branch Admin
+    reads this list, and only for their own branch.
     """
+    if is_branch_admin_role(user.role) and not (head_chief and branch_id and branch_id in user_branch_ids(user)):
+        raise HTTPException(status_code=403, detail="Not allowed")
     docs = await v3_col("doctors").find(
         {"user_id": user.id, "profile_type": "head_physio"}, {"_id": 0, "id": 1}
     ).to_list(50)
     my_ids = [d["id"] for d in docs]
 
     supervising = bool(branch_id) and works_org_wide(user.role)
-    if supervising:
+    if head_chief and branch_id:
+        query = {"head_physio_id": {"$in": await head_chief_doctor_ids()}}
+        if branch_id != "all":
+            query["branch_id"] = branch_id
+    elif supervising:
         query: dict = {"head_physio_id": {"$nin": ["", None]}}
         # "all" is the My Consultation picker's every-branch answer, passed straight
         # through; as a branch_id it would match nothing.
@@ -855,13 +869,14 @@ async def hp_reviews(
 @router.get("/head-physio/reviews/lead/{lead_id}/weeks")
 async def hp_lead_week_reviews(
     lead_id: str,
-    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev")),
+    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin")),
 ):
     """Every week's review on one patient, for the Consultant's review popup: the
     clinical review for each week (whoever wrote it) and the client's weekly review form
     (stars and Treatment Feedback). The popup only carried the review it was opened on, so
     the weeks before it -- and what the client had said about each -- were on no screen
     the person writing the next one could reach."""
+    await ensure_head_chief_lead(user, lead_id)
     revs = await v3_col("reviews").find({"lead_id": lead_id}, {"_id": 0}).to_list(500)
     numbers = review_numbers_for_lead(revs)
     reviews = sorted(
@@ -881,9 +896,10 @@ async def hp_lead_week_reviews(
 async def hp_complete_review(
     review_id: str,
     payload: ReviewCompleteInput,
-    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev")),
+    user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin")),
 ):
     rev = await _review_or_404(review_id)
+    await ensure_head_chief_lead(user, rev.get("lead_id") or "")
     if rev.get("status") == COMPLETED:
         raise HTTPException(status_code=400, detail="This review is already completed")
     if not payload.head_physio_notes.strip():

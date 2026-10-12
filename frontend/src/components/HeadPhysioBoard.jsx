@@ -146,7 +146,12 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  *  - `oneLineRows` — that table's rows on one line: the name alone, no plan under it, and
  *    the appointment as "Sat, 12 Sept - 3:15 PM" rather than stacked.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false }) => {
+/**
+ * `headChief` — the board read as Branch Admin's Sumaiya Consultations tab: the consultations
+ * and reviews booked to the Super Admin at `branchId`, rather than the reader's own (`mine`)
+ * or the branch's whole queue.
+ */
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   const withProfile = roleLabel !== undefined;
   const profileOpen = withProfile && workTab === "profile";
@@ -671,6 +676,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               // branch in Operations asks for the branch's. One flag, opposite answers, and
               // the board has no way to tell which it is being mounted for on its own.
               mine={mine}
+              headChief={headChief}
               externalDateFilter={dateRange}
               hideDateFilter
               externalSearch={search}
@@ -694,7 +700,8 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
 
           <div className={workTab === "review" ? "" : "hidden"} data-testid="hp-work-review">
             <HeadPhysioReviewTab
-              branchId={supervising ? effectiveBranchId : null}
+              branchId={supervising || headChief ? effectiveBranchId : null}
+              headChief={headChief}
               selectedDate={null}
               dateRange={dateRange}
               onCountChange={setReviewCount}
@@ -739,6 +746,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               branchId={effectiveBranchId}
               viewerRole="head_physio"
               mine={mine}
+              headChief={headChief}
               externalDateFilter={dateRange}
               hideDateFilter
               externalSearch={search}
@@ -758,7 +766,8 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
 
           <div className={workTab === "house_visit" && hvSub === "review" ? "" : "hidden"} data-testid="hp-house-visit-review">
             <HeadPhysioReviewTab
-              branchId={supervising ? effectiveBranchId : null}
+              branchId={supervising || headChief ? effectiveBranchId : null}
+              headChief={headChief}
               selectedDate={null}
               dateRange={dateRange}
               onCountChange={setHvReviewCount}

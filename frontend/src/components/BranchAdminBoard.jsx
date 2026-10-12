@@ -102,6 +102,7 @@ import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { RecordsPanel } from "@/components/branch/RecordsPanel";
+import { SumaiyaConsultationsPanel } from "@/components/branch/SumaiyaConsultationsPanel";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { CreateLeadModal, DEPARTMENT_OPTIONS, LEAD_DATA_FIELDS } from "@/components/CreateLeadModal";
 import { LeadEditModal } from "@/components/LeadEditModal";
@@ -1777,12 +1778,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     { key: "fitness", label: "Fitness", short: "Fitness", icon: Dumbbell },
     { key: "review", label: "Review", short: "Review", icon: ClipboardCheck },
     { key: "consultations", label: "Management", short: "Manage", icon: Stethoscope },
-    // One consultant's calendar, opened straight onto them. MANAGEMENT holds every calendar
-    // the branch runs; this is the one the desk keeps going back to, so it is a tab of its own
-    // rather than three taps in (Manage -> Consultant Calendar -> Sumaiya). The panel is the
-    // ordinary Consultant Calendar with that expert preselected, so publishing a day here is
-    // the same action as doing it there.
-    { key: "sumaiya", label: "Sumaiya Consultant", short: "Sumaiya", icon: UserRound },
+    // The Super Admin's My Consultation board, held to this branch: the Head Chief's
+    // patients here, with the same cards, table and actions. Her calendar is still published
+    // from Management -> Consultant Calendar.
+    { key: "sumaiya", label: "Sumaiya Consultations", short: "Sumaiya", icon: UserRound },
     { key: "accountant_mgmt", label: "Accountant Manage", short: "Accounts", icon: BadgeIndianRupee },
     // Named as Super Admin names it. This tab is that page's catalogue read from a
     // branch, and calling the same shelves two different things left nobody able to say
@@ -2010,12 +2009,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       ) : activeView === "review" ? (
         <BranchReviewPanel branchId={branchId} />
       ) : activeView === "sumaiya" ? (
-        // The Consultant Calendar with this branch's Sumaiya preselected — the panel the
-        // Management tab's first card opens, minus the card and the picker. preselectName is
-        // matched against the branch's experts once they arrive, so a rename in HR is all it
-        // takes to keep it pointing at her; if no such expert exists the calendar falls back to
-        // its own empty picker rather than to a blank grid.
-        <HeadPhysioCalendar branchId={branchId} onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} preselectName="Sumaiya" />
+        <SumaiyaConsultationsPanel branchId={branchId} />
       ) : activeView === "store" ? (
         <FitsiomaxStorePanel branchId={branchId} />
       ) : activeView === "records" ? (

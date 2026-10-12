@@ -145,7 +145,7 @@ const StageBadge = ({ stage }) => (
  * an overdue review that fell out of Today would sit in a list nobody opens, which is
  * exactly how a patient's week-one review gets missed.
  */
-export const HeadPhysioReviewTab = ({ branchId = null, selectedDate, dateRange = null, onCountChange, onRowsChange, autoOpenReviewId, onAutoOpened, reloadToken, homeVisitScope = null }) => {
+export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, selectedDate, dateRange = null, onCountChange, onRowsChange, autoOpenReviewId, onAutoOpened, reloadToken, homeVisitScope = null }) => {
   const [data, setData] = useState({ today: [], upcoming: [], overdue: [], completed: [], today_date: "" });
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState(null); // { review, head_physio_notes, head_physio_suggestions }
@@ -173,10 +173,10 @@ export const HeadPhysioReviewTab = ({ branchId = null, selectedDate, dateRange =
   // still sees only what was sent to them.
   const load = useCallback(async () => {
     setLoading(true);
-    try { setData(await hpReviews(branchId)); }
+    try { setData(await hpReviews(branchId, headChief)); }
     catch { setData({ today: [], upcoming: [], overdue: [], completed: [], today_date: "" }); }
     setLoading(false);
-  }, [branchId]);
+  }, [branchId, headChief]);
 
   useEffect(() => { load(); }, [load]);
 

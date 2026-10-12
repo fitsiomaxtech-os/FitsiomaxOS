@@ -5,8 +5,10 @@ physio half lived here and the consultant half lived in its own board.
 """
 from typing import Optional
 
+from fastapi import HTTPException
+
 from database import v3_col
-from deps import collapse_duplicate_experts, works_org_wide
+from deps import collapse_duplicate_experts, is_branch_admin_role, works_org_wide
 from utils import clinic_today
 
 
@@ -329,3 +331,50 @@ async def consultant_of_lead(lead: dict) -> dict:
         ) or {}
         name = str(doctor.get("full_name") or "").strip()
     return {"id": doctor_id, "name": name}
+
+
+# ---------------------------------------------------------------------------------------
+# Head Chief: the consultations a Super Admin takes, as Branch Admin's Sumaiya
+# Consultations tab reads them -- the Super Admin's own My Consultation board, held to the
+# Branch Admin's branch.
+# ---------------------------------------------------------------------------------------
+
+async def head_chief_doctor_ids() -> list:
+    """The consultant records a Super Admin takes consultations on (ensure_super_admin_consultant)."""
+    return await v3_col("doctors").distinct("id", {"profile_type": "head_physio", "is_super_admin": True})
+
+
+async def head_chief_lead_ids() -> list:
+    """Every lead booked to a Head Chief. Off `appointments.doctor_id`, the same way the
+    board's `mine` narrowing reads whose consultation it is -- and not diet check-ins."""
+    ids = await head_chief_doctor_ids()
+    if not ids:
+        return []
+    return await v3_col("appointments").distinct(
+        "lead_id", {"doctor_id": {"$in": ids}, "appt_kind": {"$ne": "diet"}},
+    )
+
+
+def user_branch_ids(user) -> list:
+    """The branches a login is posted to: the primary one and any others."""
+    return [b for b in [getattr(user, "branch_id", None), *(getattr(user, "branch_ids", None) or [])] if b]
+
+
+async def ensure_head_chief_lead(user, lead_id: str) -> None:
+    """A Branch Admin works a Head Chief's consultation only at their own branch.
+
+    Their role was let onto the Consultant's actions for the Sumaiya Consultations tab, and
+    that tab is all it was let on for: the patient must be booked to a Head Chief and sit at
+    the Branch Admin's branch. Every other role passes through untouched -- this narrows the
+    one role it was added for and nobody else."""
+    if not is_branch_admin_role(getattr(user, "role", "")):
+        return
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "branch_id": 1})
+    if not lead or lead.get("branch_id") not in user_branch_ids(user):
+        raise HTTPException(status_code=403, detail="This patient is not at your branch")
+    ids = await head_chief_doctor_ids()
+    booked = ids and await v3_col("appointments").find_one(
+        {"lead_id": lead_id, "doctor_id": {"$in": ids}, "appt_kind": {"$ne": "diet"}}, {"_id": 0, "id": 1},
+    )
+    if not booked:
+        raise HTTPException(status_code=403, detail="Only the Head Chief's consultations can be worked from here")

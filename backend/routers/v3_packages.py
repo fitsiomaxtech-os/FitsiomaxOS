@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 import store_branch_overrides
 from database import v3_col
 from deps import v3_require_roles
+from physio_scope import ensure_head_chief_lead
 from schemas.v3 import (
     V3UserOut, V3LeadOut, V3DiagnosisInput, V3SellStoreItemInput,
     V3CollectPackagePaymentInput, V3CollectTreatmentFeeInput, V3CollectDietFeeInput,
@@ -1330,9 +1331,11 @@ async def mark_consultation_completed(lead_id: str, user: V3UserOut = Depends(v3
 
 
 @router.post("/leads/{lead_id}/physio-diagnosis", response_model=V3LeadOut)
-async def save_physio_diagnosis(lead_id: str, payload: V3PhysioDiagnosisInput, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev"))):
+async def save_physio_diagnosis(lead_id: str, payload: V3PhysioDiagnosisInput, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin"))):
     """Head Physio's own diagnosis report — separate from Pre-Sales' basic
     `diagnosis` field, which stays read-only reference material here."""
+    # Branch Admin's Sumaiya Consultations tab: a Head Chief's patient at their branch only.
+    await ensure_head_chief_lead(user, lead_id)
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -1357,7 +1360,9 @@ async def save_physio_diagnosis(lead_id: str, payload: V3PhysioDiagnosisInput, u
 
 
 @router.put("/leads/{lead_id}/physio-diagnosis/unlock", response_model=V3LeadOut)
-async def unlock_physio_diagnosis(lead_id: str, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev"))):
+async def unlock_physio_diagnosis(lead_id: str, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin"))):
+    # Branch Admin's Sumaiya Consultations tab: a Head Chief's patient at their branch only.
+    await ensure_head_chief_lead(user, lead_id)
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {"physio_diagnosis_locked": False, "updated_at": _now()}})
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not updated:
@@ -1366,8 +1371,10 @@ async def unlock_physio_diagnosis(lead_id: str, user: V3UserOut = Depends(v3_req
 
 
 @router.post("/leads/{lead_id}/treatment-summary", response_model=V3LeadOut)
-async def save_treatment_summary(lead_id: str, payload: V3TreatmentSummaryInput, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev"))):
+async def save_treatment_summary(lead_id: str, payload: V3TreatmentSummaryInput, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin"))):
     """Head Physio's treatment plan summary — what treatment to give the patient."""
+    # Branch Admin's Sumaiya Consultations tab: a Head Chief's patient at their branch only.
+    await ensure_head_chief_lead(user, lead_id)
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -1403,7 +1410,9 @@ async def save_treatment_summary(lead_id: str, payload: V3TreatmentSummaryInput,
 
 
 @router.put("/leads/{lead_id}/treatment-summary/unlock", response_model=V3LeadOut)
-async def unlock_treatment_summary(lead_id: str, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev"))):
+async def unlock_treatment_summary(lead_id: str, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin"))):
+    # Branch Admin's Sumaiya Consultations tab: a Head Chief's patient at their branch only.
+    await ensure_head_chief_lead(user, lead_id)
     # The unlock is the way back into the box, so it shuts for the same reason the save
     # above does — see the note there. Refused at the door rather than by letting the
     # unlock succeed and the next save fail: a box that opens and then will not keep what

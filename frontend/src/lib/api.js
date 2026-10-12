@@ -266,7 +266,9 @@ export const publicAppointmentUrl = (token) => `${BACKEND_URL}/api/v3/public/app
 export const getLeadAppointmentCard = async (leadId) => (await api.get(`/leads/${leadId}/appointment-card`)).data;
 // `mine` narrows the board to the consultations booked to the caller — what My
 // Consultation needs and what Operations, reading a whole branch, must not send.
-export const getConsultationsBoard = async (branchId, pipeline, mine) => (await api.get(`/branch-admin/consultations/${branchId}/board`, { params: { ...(pipeline ? { pipeline } : {}), ...(mine ? { mine: true } : {}) } })).data;
+// `headChief` narrows it to the consultations booked to a Super Admin instead — Branch
+// Admin's Sumaiya Consultations tab.
+export const getConsultationsBoard = async (branchId, pipeline, mine, headChief) => (await api.get(`/branch-admin/consultations/${branchId}/board`, { params: { ...(pipeline ? { pipeline } : {}), ...(mine ? { mine: true } : {}), ...(headChief ? { head_chief: true } : {}) } })).data;
 // Consultation Appointment Scheduling (Branch Admin > Calendar > Schedule)
 export const listConsultAppointments = async (branchId) => (await api.get(`/branch-admin/${branchId}/consult-appointments`)).data;
 export const getConsultAvailability = async (branchId, date, doctorId) => (await api.get(`/branch-admin/${branchId}/consult-availability`, { params: { date, doctor_id: doctorId } })).data;
@@ -294,7 +296,7 @@ export const branchSendReview = async (reviewId, payload) => (await api.post(`/b
 // branchId only from a supervisor board (Operations > Consultant, Branch Control) — it
 // asks for that branch's whole Consultant queue. A Consultant's own board sends none
 // and gets the reviews dispatched to them.
-export const hpReviews = async (branchId) => (await api.get("/head-physio/reviews", { params: branchId ? { branch_id: branchId } : {} })).data;
+export const hpReviews = async (branchId, headChief) => (await api.get("/head-physio/reviews", { params: { ...(branchId ? { branch_id: branchId } : {}), ...(headChief ? { head_chief: true } : {}) } })).data;
 export const hpLeadWeekReviews = async (leadId) => (await api.get(`/head-physio/reviews/lead/${leadId}/weeks`)).data;
 export const hpCompleteReview =async (reviewId, payload) => (await api.post(`/head-physio/reviews/${reviewId}/complete`, payload)).data;
 export const getCalendarAvailability = async (branchId, month) => (await api.get(`/branch-admin/calendar-availability/${branchId}`, { params: { month } })).data;
