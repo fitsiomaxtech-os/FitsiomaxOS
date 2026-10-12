@@ -117,12 +117,15 @@ const BoardFallback = () => (
 // the same reason Marketing View and Sales View are not: a figure means here what it means
 // on the board that owns it, which is the only reason a desk reading both can trust either.
 //
-// They sit between Sales View and Branch Control because that is the order the day runs
-// in: what the two lead desks did, then the money, the people and the catalogue behind it,
-// then the branches those land in. Branch Control stays last of the boards because it is
-// the one that acts on a branch rather than reads across all of them.
+// They sit after Sales View because that is the order the day runs in: what the two lead
+// desks did, then the money, the people and the catalogue behind it.
+//
+// Branch Control is labelled "Management" on this strip and sits right after Dashboard:
+// the desk reads the day, then goes straight to the branches it manages. The key stays
+// "branch_control" so CRMPage's phone footer and anything holding the tab still match.
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { key: "branch_control", label: "Management", icon: LayoutDashboard },
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
   { key: "sales_view", label: "Sales View", icon: Headphones },
   { key: "finance", label: "Finance", icon: BadgeIndianRupee },
@@ -130,7 +133,6 @@ const TABS = [
   // Treatments and Physiotherapy Treatment are sub-tabs inside it, not peers of it --
   // the same shape Super Admin's own copy has.
   { key: "packages", label: "Services and Products", icon: Store },
-  { key: "branch_control", label: "Branch Control", icon: LayoutDashboard },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -470,7 +472,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
         )}
       </Suspense>
 
-      {/* Branch Control — the Branch Manager panel in full, as a tab rather than the
+      {/* Management (key branch_control) — the Branch Manager panel in full, as a tab rather than the
           dialog Operations opens it in. No `lockTab`, which is the whole point of it being
           here: that flag drops the sub-tab row, and Overview, Analytics and Branch Control
           are exactly what this desk did not have before.
