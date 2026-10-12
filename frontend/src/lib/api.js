@@ -116,7 +116,8 @@ export const getVerticals = async () => (await api.get("/verticals")).data;
 export const createVertical = async (payload) => (await api.post("/verticals", payload)).data;
 export const deleteVertical = async (id) => (await api.delete(`/verticals/${id}`)).data;
 
-// Treatment catalogue — Super Admin > Treatment.
+// Treatment catalogue — Super Admin > Services and Products > Treatments. The create
+// also takes branch_admin, so a Branch Admin adds one from their own store board.
 export const getTreatmentTypes = async () => (await api.get("/treatment-types")).data;
 export const createTreatmentType = async (payload) => (await api.post("/treatment-types", payload)).data;
 export const updateTreatmentType = async (id, payload) => (await api.patch(`/treatment-types/${id}`, payload)).data;

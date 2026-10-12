@@ -97,8 +97,15 @@ async def v3_get_treatment_types(_: V3UserOut = Depends(v3_current_user)):
     return [V3TreatmentTypeOut(**row) for row in rows]
 
 
+# branch_admin joins the create so a Branch Admin can add a treatment from their own
+# store board (Services and Products > Treatments), which mounts this same list. The
+# catalogue is one shared vocabulary for the whole OS, so a branch adding a name adds it
+# for every branch — which is what the Treatment Summary checklist wants: the same
+# handful of words wherever a day is tagged. Rename and delete below stay with
+# super_admin and business_dev: correcting or removing a shared word is catalogue
+# maintenance, not a branch closing a gap it ran into.
 @router.post("/treatment-types", response_model=V3TreatmentTypeOut)
-async def v3_add_treatment_type(payload: V3TreatmentTypeCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def v3_add_treatment_type(payload: V3TreatmentTypeCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     name = (payload.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Treatment name is required")

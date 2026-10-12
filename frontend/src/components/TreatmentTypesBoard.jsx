@@ -23,14 +23,18 @@ import { getTreatmentTypes, createTreatmentType, updateTreatmentType, deleteTrea
  * catalogue is not licence to edit what a Head Physio recorded on the day.
  */
 /**
- * `canEdit` off is the branch's copy of this list.
+ * Two switches, because the endpoints behind them no longer agree on who may.
  *
- * The catalogue is Super Admin's to keep -- the create, rename and delete endpoints are
- * all super_admin-only -- so a branch shown the buttons would get a form that 403s on
- * submit. It reads the same list from the same place and nothing else, which is the whole
- * of what a branch needs from it: to see what the OS offers, not to change it.
+ * `canEdit` is rename and delete — catalogue maintenance, still super_admin and
+ * business_dev only. `canCreate` is the add button, and the POST now takes branch_admin
+ * as well: a Branch Admin adds a treatment the branch actually offers, from their own
+ * store board. That board passes canEdit={false} canCreate, so it gets the one button
+ * whose endpoint takes it rather than three that would 403 on submit.
+ *
+ * canCreate defaults to canEdit, so every board that could edit before sees exactly
+ * what it saw before without having to say so again.
  */
-export const TreatmentTypesBoard = ({ canEdit = true }) => {
+export const TreatmentTypesBoard = ({ canEdit = true, canCreate = canEdit }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -111,7 +115,7 @@ export const TreatmentTypesBoard = ({ canEdit = true }) => {
         </Button>
         {/* Icon-only on a phone, full label from sm up — the words would take half the row
             on the narrowest screen for a button used occasionally. */}
-        {canEdit && (
+        {canCreate && (
         <Button
           onClick={() => setShowCreate(true)}
           className="h-10 w-10 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700 sm:w-auto sm:px-4"
@@ -140,10 +144,10 @@ export const TreatmentTypesBoard = ({ canEdit = true }) => {
             <p className="text-sm text-slate-500">
               {rows.length === 0 ? "No treatments yet." : `Nothing matches "${search}".`}
             </p>
-            {rows.length === 0 && canEdit && (
+            {rows.length === 0 && canCreate && (
               <p className="text-xs text-slate-400">Click <span className="font-semibold">Create Treatment</span> to add the first one.</p>
             )}
-            {rows.length === 0 && !canEdit && (
+            {rows.length === 0 && !canCreate && (
               <p className="text-xs text-slate-400">Super Admin adds them in Services and Products &gt; Treatments.</p>
             )}
           </div>
@@ -181,7 +185,7 @@ export const TreatmentTypesBoard = ({ canEdit = true }) => {
         )}
       </div>
 
-      {canEdit && showCreate && (
+      {canCreate && showCreate && (
         <CreateTreatmentDialog
           existing={rows}
           onClose={() => setShowCreate(false)}
