@@ -319,7 +319,7 @@ const SUPER_ADMIN_TABS = [
   { key: "settings", label: "Settings", icon: Settings },
   // Last, because it is the only tab here that is about the signed-in person rather than
   // about the organisation — everything to its left is a view over somebody else's work.
-  { key: "my_consultation", label: "Sumaiya Consultations", icon: Stethoscope },
+  { key: "my_consultation", label: "My Consultation", icon: Stethoscope },
 ];
 
 // Marketing Source and CI/CD ROOTS still resolve through the same superAdminView values
@@ -1468,7 +1468,12 @@ export const CRMPage = ({ auth, onLogout }) => {
         )}
 
         {showSuperAdminBoard && superAdminView === "my_consultation" && (
-          <MyConsultationBoard branches={branches} />
+          <MyConsultationBoard
+            user={auth?.user}
+            branches={branches}
+            search={hpSearch}
+            onSearchChange={setHpSearch}
+          />
         )}
 
         {showSuperAdminBoard && SETTINGS_SUB_VIEWS.includes(superAdminView) && (
