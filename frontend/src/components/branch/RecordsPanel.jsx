@@ -377,12 +377,13 @@ const SEEN_STAGES = new Set(["Consultation Visit", "Fee Collected", "Physio Assi
 // which is what makes each number at most the one before.
 const FUNNEL = [
   { key: "leads", label: "Leads", proof: () => true },
-  { key: "appointment", label: "Appointment Date & Time", proof: (l) => !!l.appointment_date },
+  // Consultation Booked was its own step after this one and always read the same number:
+  // fixing the appointment is what books the consultation. One step, either proof.
   {
-    key: "consultation_booked",
-    label: "Consultation Booked",
-    proof: (l) => (l.consultation_follow_ups || []).length > 0 || !!l.head_consultation_stage
-      || (!!l.consultation_stage && l.consultation_stage !== "Cancel"),
+    key: "appointment",
+    label: "Appointment Date & Time",
+    proof: (l) => !!l.appointment_date || (l.consultation_follow_ups || []).length > 0
+      || !!l.head_consultation_stage || (!!l.consultation_stage && l.consultation_stage !== "Cancel"),
   },
   {
     key: "consultation_visit",
@@ -538,7 +539,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
         {heading("Funnel")}
         {/* Each step's share is of the step before it -- where the branch loses people.
             Converted also carries its share of every lead, the figure the tab is for. */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
           {FUNNEL.map((s, i) => {
             const prev = i ? counts[FUNNEL[i - 1].key] : 0;
             const sub = !i
