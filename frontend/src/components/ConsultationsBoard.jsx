@@ -7145,7 +7145,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 own behind a rule, which cost the card a third of its width for one name.
 
                 Each line wraps rather than squeezes: on a phone whatever sits at the end
-                drops under the start of its line, still pushed to the right. */}
+                drops under the start of its line and lines up on the left with it, rather
+                than hanging off the right edge on a row of its own. */}
             <div className="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -7186,7 +7187,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   })()}
                 </h3>
                 {selectedLead.assigned_physio_name && (
-                  <p className="ml-auto flex min-w-0 items-baseline gap-1.5 text-xs" data-testid="cons-detail-expert">
+                  <p className="flex min-w-0 items-baseline gap-1.5 text-xs sm:ml-auto" data-testid="cons-detail-expert">
                     {/* "Expert:" was part of the sentence and the whole of it was green.
                         Green on a person's name reads as a state — the same green the
                         board uses for a settled fee — when it is only a field name and
@@ -7214,7 +7215,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   )}
                 </p>
                 {(selectedLead.appointment_date || isConsultant) && (
-                  <div className="ml-auto flex shrink-0 items-center gap-1.5" data-testid="cons-detail-standing">
+                  <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto" data-testid="cons-detail-standing">
                     {/* The confirmation the patient was sent, handed back. On the slot's
                         own line, because that is the fact it is about — a branch looking
                         for "the appointment card" is already reading this line to check
@@ -7258,8 +7259,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* Sub tabs. An underline rail rather than six filled pills: the pills read as
                 six buttons to press, which is not what the top of a card whose first job is
                 to be read should say, and they spent a band of colour and half again the
-                height saying it. */}
-            <div className="flex shrink-0 flex-wrap items-center gap-x-4 border-b border-slate-200 px-4 sm:px-5" data-testid="cons-detail-tabs">
+                height saying it.
+
+                One line on a phone, scrolled sideways, rather than wrapped onto a second
+                row whose underline floats in the middle of the band. */}
+            <div className="flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden" data-testid="cons-detail-tabs">
               {[
                 { key: "overview", label: "Overview" },
                 // Not for the Consultant, for the same reason the Timeline is not: chasing
@@ -7284,7 +7288,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 <button
                   key={t.key}
                   onClick={() => setDetailTab(t.key)}
-                  className={`-mb-px border-b-2 py-2.5 text-xs font-semibold transition-colors ${detailTab === t.key ? "border-sky-600 text-sky-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 py-2.5 text-xs font-semibold transition-colors ${detailTab === t.key ? "border-sky-600 text-sky-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                   data-testid={`cons-detail-tab-${t.key}`}
                 >
                   {t.label}
@@ -9998,10 +10002,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <p className="mb-2 text-xs text-slate-600">
                           {bookedFor ? `Booked for ${bookedFor} — waiting on the CONSULTANT.` : "Waiting on the CONSULTANT."}
                         </p>
-                        <div className="flex items-center gap-1.5 [justify-content:safe_center] [&>*]:shrink-0">
+                        {/* Equal halves of the panel on a phone, so the pair spans the same
+                            width as the line above instead of floating in the middle of it. */}
+                        <div className="flex items-center gap-1.5 [justify-content:safe_center] [&>*]:flex-1 sm:[&>*]:flex-none sm:[&>*]:shrink-0">
                           <Button
                             size="sm"
-                            className="bg-amber-500 text-xs text-white hover:bg-amber-600"
+                            className={`bg-amber-500 text-white hover:bg-amber-600 ${ACT_BTN}`}
                             // Reschedule always opens the reschedule popup now, with or
                             // without a follow-up entry behind it. It used to fall through to
                             // "Schedule Follow-Up" for the commonest case -- a patient booked
