@@ -120,18 +120,18 @@ const BoardFallback = () => (
 // They sit after Sales View because that is the order the day runs in: what the two lead
 // desks did, then the money, the people and the catalogue behind it.
 //
-// Branch Control and Management sit right after Dashboard: the desk reads the day, then
-// goes straight to the branches it manages. Branch Control is the panel's own Branch
-// Control sub-tab lifted out to the strip; Management is the rest of that panel
-// (Overview, Analytics, MANAGER). CRMPage's phone footer mirrors these keys.
+// Branch Control sits right after Dashboard: the desk reads the day, then goes straight
+// to the branches it works. It is the panel's own Branch Control sub-tab lifted out to
+// the strip; Management, between HR Admin and Services and Products, is the rest of that
+// panel (Overview, Analytics, MANAGER). CRMPage's phone footer mirrors these keys.
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   { key: "branch_control", label: "Branch Control", icon: LayoutDashboard },
-  { key: "management", label: "Management", icon: Building2 },
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
   { key: "sales_view", label: "Sales View", icon: Headphones },
   { key: "finance", label: "Finance", icon: BadgeIndianRupee },
   { key: "hr", label: "HR Admin", icon: Users },
+  { key: "management", label: "Management", icon: Building2 },
   // Treatments and Physiotherapy Treatment are sub-tabs inside it, not peers of it --
   // the same shape Super Admin's own copy has.
   { key: "packages", label: "Services and Products", icon: Store },
