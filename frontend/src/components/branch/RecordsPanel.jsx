@@ -144,14 +144,16 @@ const BranchTransferRecords = ({ branchId }) => {
     downloadCsv([
       ["Patient Number", "Patient Name", "Phone", "Email", "Direction", "From Branch", "To Branch",
         "Transfer Date", "Transfer Time", "Stage at Transfer", "Current Stage", "Current Branch",
-        "Sessions Released", "Collected Before Transfer", "Reason", "Transferred By", "Role"],
+        "Sessions Released", "Collected by From Branch", "Collected by To Branch", "Balance to Collect",
+        "Reason", "Transferred By", "Role"],
       ...rows.map((r) => [
         r.lead.patient_number, r.lead.name, r.lead.phone, r.lead.email,
         r.direction === "outgoing" ? "Outgoing" : "Incoming",
         r.from_branch_name, r.to_branch_name,
         dateStampFull(r.at), callTimeStamp(r.at),
         r.consultation_stage || "", currentStage(r.lead), r.lead.current_branch_name,
-        r.sessions_released || 0, r.collected_before_transfer || 0,
+        r.sessions_released || 0, r.from_branch_collected || 0, r.to_branch_collected || 0,
+        r.lead.balance_to_collect || 0,
         r.reason || "", r.transferred_by || "", r.transferred_by_role || "",
       ]),
     ], `branch-transfer-records-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -289,13 +291,15 @@ const BranchTransferRecords = ({ branchId }) => {
                   <span>{r.lead.phone}</span>
                   <span>· {dateStampFull(r.at)}</span>
                 </div>
+                <CollectedSplit record={r} compact />
+                {r.reason ? <p className="mt-1 truncate text-[11px] text-slate-500">Reason: {r.reason}</p> : null}
               </button>
             ))}
           </div>
 
           <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[1180px] text-sm">
                 <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
                   <tr>
                     <th className="px-4 py-2.5 font-semibold">Patient</th>
@@ -304,6 +308,8 @@ const BranchTransferRecords = ({ branchId }) => {
                     <th className="px-4 py-2.5 font-semibold">To</th>
                     <th className="px-4 py-2.5 font-semibold">Transferred On</th>
                     <th className="px-4 py-2.5 font-semibold">Stage</th>
+                    <th className="px-4 py-2.5 font-semibold">Collected</th>
+                    <th className="px-4 py-2.5 font-semibold">Reason</th>
                     <th className="px-4 py-2.5 font-semibold">By</th>
                     <th className="px-4 py-2.5 font-semibold">Direction</th>
                     <th className="px-4 py-2.5" />
@@ -332,6 +338,10 @@ const BranchTransferRecords = ({ branchId }) => {
                         <span className="block text-[11px] text-slate-400">{callTimeStamp(r.at)}</span>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{r.consultation_stage || "—"}</td>
+                      <td className="px-4 py-3"><CollectedSplit record={r} /></td>
+                      <td className="max-w-[14rem] px-4 py-3 text-slate-600">
+                        <span className="line-clamp-2" title={r.reason || ""}>{r.reason || "—"}</span>
+                      </td>
                       <td className="px-4 py-3 text-slate-600">
                         {r.transferred_by || "—"}
                         {r.transferred_by_role ? <span className="block text-[11px] capitalize text-slate-400">{r.transferred_by_role.replace(/_/g, " ")}</span> : null}
@@ -1124,6 +1134,68 @@ const Field = ({ label, children }) => (
   </div>
 );
 
+/**
+ * The money on one transfer, both sides of it: what the branch left had collected, and
+ * what the branch the patient went to has collected since. Each branch reads its own
+ * figure in the same place on the same row, so the two lists never tell different stories.
+ */
+const CollectedSplit = ({ record, compact = false }) => (
+  <div className={`${compact ? "mt-1.5 flex flex-wrap gap-x-3" : "space-y-0.5"} text-[11px]`}>
+    <p className="whitespace-nowrap text-slate-600">
+      <span className="text-slate-400">{record.from_branch_name || "From"}:</span>{" "}
+      <b className={record.direction === "outgoing" ? "text-amber-700" : "text-slate-700"}>
+        {money(record.from_branch_collected ?? record.collected_before_transfer)}
+      </b>
+    </p>
+    <p className="whitespace-nowrap text-slate-600">
+      <span className="text-slate-400">{record.to_branch_name || "To"}:</span>{" "}
+      <b className={record.direction === "incoming" ? "text-emerald-700" : "text-slate-700"}>
+        {money(record.to_branch_collected)}
+      </b>
+    </p>
+  </div>
+);
+
+const PAY_MODES = { cash: "Cash", upi: "UPI", card: "Card", cheque: "Cheque", account_transfer: "Bank transfer" };
+
+const PaymentsColumn = ({ title, subtitle, ours, rows, total }) => {
+  const list = rows || [];
+  return (
+    <div className={`rounded-lg border p-3 ${ours ? "border-sky-300 bg-sky-50/50" : "border-slate-200"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-800">
+            {title}
+            {ours ? <span className="ml-1.5 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">Your branch</span> : null}
+          </p>
+          <p className="text-[11px] text-slate-400">{subtitle}</p>
+        </div>
+        <p className="shrink-0 text-base font-bold text-slate-800">{money(total)}</p>
+      </div>
+      {list.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-400">Nothing collected.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-slate-100">
+          {list.map((p) => (
+            <li key={p.id || `${p.collected_at}-${p.label}`} className="flex items-start justify-between gap-2 py-1.5">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-slate-700">
+                  {p.label}
+                  {PAY_MODES[p.payment_mode] ? <span className="ml-1 font-normal text-slate-400">via {PAY_MODES[p.payment_mode]}</span> : null}
+                </p>
+                <p className="truncate text-[11px] text-slate-400">
+                  {dateStampFull(p.collected_at)}{p.collected_by ? ` · ${p.collected_by}` : ""}{p.transaction_id ? ` · ${p.transaction_id}` : ""}
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-slate-700">{money(p.amount)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 const TransferRecordDialog = ({ record, onClose }) => {
   if (!record) return null;
   const { lead } = record;
@@ -1145,11 +1217,37 @@ const TransferRecordDialog = ({ record, onClose }) => {
             <Field label="Date & Time">{`${dateStampFull(record.at)} ${callTimeStamp(record.at)}`}</Field>
             <Field label="Stage at Transfer">{record.consultation_stage}</Field>
             <Field label="Sessions Released">{String(record.sessions_released || 0)}</Field>
-            <Field label="Collected Before Transfer">{money(record.collected_before_transfer)}</Field>
+            <Field label="Completed Sessions">{record.sessions_completed == null ? "—" : String(record.sessions_completed)}</Field>
+            {record.consultation_released ? <Field label="Booked Consultation">Released</Field> : null}
+            {record.physio_released ? <Field label="Physio Released">{record.physio_released}</Field> : null}
             <Field label="Transferred By">
               {record.transferred_by}{record.transferred_by_role ? ` (${record.transferred_by_role.replace(/_/g, " ")})` : ""}
             </Field>
             <div className="col-span-2 sm:col-span-3"><Field label="Reason">{record.reason}</Field></div>
+          </div>
+        </section>
+
+        <section className="space-y-3" data-testid="transfer-record-payments">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Payments — Who Collected What</h4>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <PaymentsColumn
+              title={`Collected by ${record.from_branch_name || "From Branch"}`}
+              subtitle="Before the transfer · stays in this branch's book"
+              ours={record.direction === "outgoing"}
+              rows={record.from_branch_payments}
+              total={record.from_branch_collected ?? record.collected_before_transfer}
+            />
+            <PaymentsColumn
+              title={`Collected by ${record.to_branch_name || "To Branch"}`}
+              subtitle="After the transfer · belongs to this branch"
+              ours={record.direction === "incoming"}
+              rows={record.to_branch_payments}
+              total={record.to_branch_collected}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+            <span className="text-slate-600">Balance still to collect{lead.current_branch_name ? ` (by ${lead.current_branch_name})` : ""}</span>
+            <span className="font-bold text-slate-800">{money(lead.balance_to_collect)}</span>
           </div>
         </section>
 
@@ -1164,6 +1262,7 @@ const TransferRecordDialog = ({ record, onClose }) => {
             <Field label="Current Stage">{currentStage(lead)}</Field>
             <Field label="Physio">{lead.assigned_physio_name}</Field>
             <Field label="Package">{lead.package_name}</Field>
+            <Field label="Treatment Package">{lead.session_package_name}</Field>
             <Field label="Consultation Fee">{money(lead.consultation_fee)}</Field>
             <Field label="Package Paid">{money(lead.package_paid)}</Field>
             <Field label="Treatment Fee Paid">{money(lead.treatment_fee_paid)}</Field>

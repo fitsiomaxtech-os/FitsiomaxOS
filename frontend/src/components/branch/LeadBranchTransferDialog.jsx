@@ -3,6 +3,7 @@ import { ArrowLeftRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { getBranches, getLeadTransferEligibility, transferLeadBranch } from "@/lib/api";
+import { PaymentHistory, TransferImpact, TransferReason } from "@/components/branch/BranchTransferDialog";
 
 /**
  * Branch Transfer for the one lead whose popup it was opened from.
@@ -12,14 +13,16 @@ import { getBranches, getLeadTransferEligibility, transferLeadBranch } from "@/l
  * reader is looking at — the name of the branch they are going to should be read once,
  * in a sentence, before it happens.
  *
- * Eligibility is asked for up front so a lead the backend would refuse (a consultation
- * already booked, a Treatment Fee part-collected) says so instead of offering a dropdown
- * that can only fail.
+ * Any stage. Eligibility is still asked for up front: it carries what the move does — the
+ * money that stays here, the balance the new branch collects, anything booked here that is
+ * released — and the confirm screen says all of it before the button is pressed. The reason
+ * is required, because the receiving branch reads it on its Branch Transfer Record.
  */
 export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransferred }) => {
   const [branches, setBranches] = useState(null);
   const [eligibility, setEligibility] = useState(null);
   const [toBranchId, setToBranchId] = useState("");
+  const [reason, setReason] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [transferring, setTransferring] = useState(false);
 
@@ -43,7 +46,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
   const submit = async () => {
     setTransferring(true);
     try {
-      const res = await transferLeadBranch(lead.id, { to_branch_id: toBranchId, reason: "" });
+      const res = await transferLeadBranch(lead.id, { to_branch_id: toBranchId, reason: reason.trim() });
       toast.success(res?.message || `${lead.name} transferred to ${toBranch?.branch_name}`);
       onTransferred?.(res);
     } catch (err) {
@@ -60,7 +63,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
       onClick={(e) => { if (e.target === e.currentTarget && !transferring) onClose(); }}
       data-testid="lead-branch-transfer-dialog"
     >
-      <div className="w-full max-w-md rounded-xl bg-white shadow-2xl ring-1 ring-slate-200">
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-white shadow-2xl ring-1 ring-slate-200">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <h3 className="inline-flex items-center gap-2 text-base font-semibold text-slate-800">
             <ArrowLeftRight className="h-4 w-4 text-indigo-600" /> Branch Transfer
@@ -70,7 +73,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="overflow-y-auto p-5">
           <p className="text-sm font-semibold text-slate-800">{lead.name || "—"}</p>
           <p className="text-xs text-slate-500">
             {lead.patient_number || lead.phone || "—"}
@@ -103,11 +106,12 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
                   <option key={b.id} value={b.id}>{b.branch_name}</option>
                 ))}
               </select>
+              <TransferReason value={reason} onChange={setReason} testid="lead-branch-transfer-reason" />
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
                 <Button
                   className="bg-indigo-600 text-white hover:bg-indigo-700"
-                  disabled={!toBranchId}
+                  disabled={!toBranchId || !reason.trim()}
                   onClick={() => setConfirming(true)}
                   data-testid="lead-branch-transfer-next"
                 >
@@ -117,22 +121,12 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
             </>
           ) : (
             <>
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="lead-branch-transfer-confirm">
-                <p className="text-sm text-amber-900">
-                  Transfer <b>{lead.name}</b> from <b>{fromBranch?.branch_name || "this branch"}</b> to <b>{toBranch?.branch_name}</b>?
-                </p>
-                <ul className="mt-2 space-y-1 text-xs text-amber-800">
-                  {eligibility.sessions_to_release > 0 && (
-                    <li>
-                      {eligibility.sessions_to_release} booked treatment day{eligibility.sessions_to_release === 1 ? "" : "s"} will be released.
-                    </li>
-                  )}
-                  {Number(eligibility.revenue_staying_behind) > 0 && (
-                    <li>Rs.{eligibility.revenue_staying_behind} already collected stays in {fromBranch?.branch_name || "this branch"}'s book.</li>
-                  )}
-                  <li>The lead leaves this branch's board.</li>
-                </ul>
-              </div>
+              <p className="mt-4 text-sm text-slate-800" data-testid="lead-branch-transfer-confirm">
+                Transfer <b>{lead.name}</b> from <b>{fromBranch?.branch_name || "this branch"}</b> to <b>{toBranch?.branch_name}</b>?
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Reason: {reason.trim()}</p>
+              <TransferImpact eligibility={eligibility} fromBranchName={fromBranch?.branch_name} testid="lead-branch-transfer-impact" />
+              <PaymentHistory rows={eligibility.payment_history} currentBranchName={fromBranch?.branch_name} />
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="outline" disabled={transferring} onClick={() => setConfirming(false)} data-testid="lead-branch-transfer-back">
                   Back

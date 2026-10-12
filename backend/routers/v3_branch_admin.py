@@ -43,7 +43,7 @@ from routers.v3_reviews import leads_awaiting_review, review_bookings, consultan
 # for the same reason as the two above: parsing an amount out of an activity row and
 # deciding which branch owns it are finance's rules, and a second copy here is how the
 # transfer dialog and the finance board would come to disagree about what a patient paid.
-from routers.v3_finance import lead_payment_history
+from routers.v3_finance import lead_payment_history, payment_history_for_leads, _lead_outstanding_balance
 
 router = APIRouter(prefix="/api/v3")
 
@@ -2272,54 +2272,53 @@ async def v3_expert_calendar(
 
 # ---------------------------------------------------------------- Branch Transfer
 #
-# Moving a patient from one branch to another, which is a different act at each end of
-# their time with us and impossible in the middle of it.
+# Moving a patient from one branch to another, at any stage.
 #
-# Two windows, and the gap between them is deliberate. Before a consultation is booked the
-# lead is just a name and a phone number: nothing is on anyone's calendar, no money has
-# been taken, and the move costs nothing but the stage they stand on. Once treatment is
-# under way — Physio Assign — the move is real work but it is work with a shape: the days
-# already delivered are finished, and the days still to come have to be released and
-# rebooked wherever the patient is going.
+# It used to be allowed only before a consultation was booked or once treatment had started
+# at Physio Assign. Branches asked to move patients whenever the patient asks — after a
+# Consultation Fee and a first week of Treatment Fee, say, because another branch is
+# nearer home — so the stage no longer decides. What decides is that nothing at the old
+# branch is left half-held and no money changes hands on paper:
 #
-# What is refused is everything between those two. A consultation booked but not yet held
-# sits on a named Head Physio's calendar at this branch; a Treatment Fee part-collected
-# sits on an installment plan that would end up split across two branches' books. Neither
-# is impossible to move — both are things nobody has decided the rules for, and guessing
-# at them in code is how a branch ends up with half a patient.
+#   - Money already collected stays with the branch that collected it. Every receipt is
+#     attributed by the date it was taken (see _branch_at in v3_finance), so a Treatment
+#     Fee installment collected before the move is the old branch's and every one after it
+#     is the new branch's — the installment plan itself carries on unchanged.
+#   - Whatever the old branch's staff were holding is released: a consultation still
+#     booked on its Head Physio calendar, treatment days not yet delivered, the physio.
+#   - A reason is required, because the record is read by two branches who were not both
+#     in the room when the decision was made.
 TRANSFERABLE_AT_PHYSIO_ASSIGN = "Physio Assign"
+
+# Stages that mean only that a consultation is on the calendar, not that one has happened.
+# Releasing the booking leaves nothing behind them, so the patient arrives at the new
+# branch as a lead to book again rather than at a stage with no appointment under it.
+TRANSFER_REBOOK_STAGES = ("Consultation Booked",)
 
 
 def _transfer_block_reason(lead: dict) -> Optional[str]:
     """Why this patient cannot be transferred right now, or None if they can.
 
-    Phrased as the reason rather than a boolean because the answer is the useful half: a
-    Super Admin told "no" wants to know whether to wait for the consultation to happen or
-    to finish collecting the fee.
+    No longer about the stage — see the section comment above. What is left is the one
+    case where the patient is not really this branch's to send anywhere.
     """
     # A Past Data trial client is a copy on the Past Data branch, kept out of every org-wide
     # figure (see past_data_live.py). Sent to a working branch it would be a patient there
     # that no dashboard counts.
     if lead.get(PAST_MOVE_FIELD):
         return "This client was moved from Past Data to try it out on the Past Data branch. It stays there until the trial is done."
-    stage = lead.get("consultation_stage")
-    # No consultation pipeline at all means no consultation has ever been booked — the
-    # lead is still purely in the branch's own sales pipeline, which is the first window.
-    if stage is None:
-        return None
-    if stage == TRANSFERABLE_AT_PHYSIO_ASSIGN:
-        return None
-    if stage in (BRANCH_CANCELLED_STAGE, "Cancel"):
-        return "This consultation was cancelled — there is nothing to transfer."
-    if stage == "Consultation Completed":
-        return "This patient's consultation is closed. Transferring a finished record would move its revenue without moving any work."
-    return (
-        f"A patient at '{stage}' cannot be transferred. "
-        "A booked consultation is held on this branch's Head Physio calendar and a "
-        "part-collected Treatment Fee would leave its installments split across two "
-        "branches. Transfer before the consultation is booked, or once treatment has "
-        "started at Physio Assign."
-    )
+    return None
+
+
+def _collected_at_branch(payments: list, branch_id: str) -> float:
+    """What this branch has taken from this patient, every fee included, off their receipts.
+
+    Read off the payment history rather than the fee fields on the lead, which only carry
+    the Consultation Fee and the package — a Treatment Fee installment collected before the
+    move is as much the old branch's money as either, and leaving it out understated what
+    stays behind in exactly the case transfers are now for.
+    """
+    return round(sum(p.get("amount") or 0 for p in payments if p.get("branch_id") == branch_id), 2)
 
 
 @router.get("/leads/{lead_id}/appointment-card")
@@ -2440,6 +2439,11 @@ async def v3_transfer_eligibility(
     reason = _transfer_block_reason(lead)
     completed = await v3_col("sessions").count_documents({"lead_id": lead_id, "status": "completed"})
     booked = await v3_col("sessions").count_documents({"lead_id": lead_id, "status": {"$ne": "completed"}})
+    consultation_booking = await v3_col("appointments").find_one(
+        {"lead_id": lead_id, "appt_kind": "consultation", "status": "new_appointment"},
+        {"_id": 0, "appointment_date": 1, "appointment_time": 1, "doctor_name": 1},
+    )
+    payments = await lead_payment_history(lead)
     return {
         "lead_id": lead_id,
         "can_transfer": reason is None,
@@ -2451,15 +2455,17 @@ async def v3_transfer_eligibility(
         "sessions_completed": completed,
         "sessions_to_release": booked,
         "current_physio_name": lead.get("assigned_physio_name") or "",
-        "revenue_staying_behind": round(
-            (lead.get("consultation_fee") or 0) + (lead.get("package_paid") or 0), 2
-        ),
+        # A consultation still on this branch's Head Physio calendar, released by the move.
+        "consultation_booking": consultation_booking,
+        "revenue_staying_behind": _collected_at_branch(payments, lead.get("branch_id")),
+        # What the patient still owes on every fee — the receiving branch's to collect.
+        "balance_to_collect": _lead_outstanding_balance(lead),
         "transfers_so_far": len(lead.get("branch_transfer_history") or []),
         # Every receipt this patient holds, newest first, each against the branch that took
         # it. The figure above is a total and a total is what gets argued about after the
         # move — this is the itemised answer to "which of these are ours", readable before
         # it. A patient transferred before has rows here belonging to their old branch.
-        "payment_history": await lead_payment_history(lead),
+        "payment_history": payments,
         # Where they have been, so the reader can see that a row attributed to another
         # branch is a previous transfer rather than an error.
         "transfer_history": lead.get("branch_transfer_history") or [],
@@ -2491,23 +2497,34 @@ async def v3_branch_transfer_records(
         async for b in v3_col("branches").find({"id": {"$in": list(current_ids)}}, {"_id": 0, "id": 1, "branch_name": 1})
     }
 
+    payments_by_lead = await payment_history_for_leads(leads)
+
     records = []
     for lead in leads:
         history = lead.get("branch_transfer_history") or []
-        splits = lead.get("revenue_branch_splits") or []
+        payments = payments_by_lead.get(lead.get("id")) or []
         for index, move in enumerate(history):
             if branch_id not in (move.get("from_branch_id"), move.get("to_branch_id")):
                 continue
-            # The money pinned to the old branch is written in the same update as the move,
-            # with the same timestamp, so that is how the two are paired back up.
-            split = next((s for s in splits if s.get("until") == move.get("at")), {}) or {}
+            # Both sides of the move, itemised, so the two branches read the same money the
+            # same way: what the branch left had collected by the day the patient left, and
+            # what the branch they went to has collected since. Each receipt already carries
+            # the branch it was taken at (_branch_at), so this is a split by date and branch.
+            at = move.get("at") or ""
+            from_payments = [p for p in payments
+                             if p.get("branch_id") == move.get("from_branch_id") and (p.get("collected_at") or "") < at]
+            to_payments = [p for p in payments
+                           if p.get("branch_id") == move.get("to_branch_id") and (p.get("collected_at") or "") >= at]
+            from_total = round(sum(p.get("amount") or 0 for p in from_payments), 2)
             records.append({
                 "id": f"{lead.get('id')}:{index}",
                 "direction": "outgoing" if move.get("from_branch_id") == branch_id else "incoming",
                 **move,
-                "collected_before_transfer": round(
-                    (split.get("consultation_fee") or 0) + (split.get("package_paid") or 0), 2
-                ),
+                "collected_before_transfer": from_total,
+                "from_branch_payments": from_payments,
+                "from_branch_collected": from_total,
+                "to_branch_payments": to_payments,
+                "to_branch_collected": round(sum(p.get("amount") or 0 for p in to_payments), 2),
                 "lead": {
                     "id": lead.get("id"),
                     "patient_number": lead.get("patient_number") or "",
@@ -2526,6 +2543,9 @@ async def v3_branch_transfer_records(
                     "package_name": lead.get("package_name") or "",
                     "package_paid": lead.get("package_paid") or 0,
                     "treatment_fee_paid": lead.get("treatment_fee_paid") or 0,
+                    "session_package_name": lead.get("session_package_name") or "",
+                    # Still owed on every fee, today — the current branch's to collect.
+                    "balance_to_collect": _lead_outstanding_balance(lead),
                     "notes": lead.get("notes") or "",
                     "created_at": lead.get("created_at") or "",
                     "transfer_history": history,
@@ -2557,15 +2577,20 @@ async def v3_transfer_branch(
        books and put it in another's — including months already reported on. The split
        recorded here is what keeps a closed month closed; see _branch_revenue_rows.
 
-    2. Treatment days still to come are released. The physio delivering them works at the
-       branch being left, so those days cannot survive the move. Days already completed
-       stay exactly where they are, under the physio who ran them, and still count toward
-       the course — the patient arrives at the new branch part-way through, at Physio
-       Assign, with the rest of their course to book there.
+    2. Whatever the old branch's staff were holding is released. Treatment days still to
+       come, because the physio delivering them works at the branch being left; days
+       already completed stay exactly where they are, under the physio who ran them, and
+       still count toward the course. A consultation still booked on the old branch's Head
+       Physio calendar is cancelled, so the slot goes back to that branch. The physio is
+       cleared, since a name left here would be a physio on another branch's floor.
 
-    3. The lead lands on a stage that exists at the destination. A branch running its own
-       leads opens at a different stage from one fed by Pre-Sales, so a lead moved without
-       this can arrive at a stage its new board does not draw and vanish from both.
+    3. The lead lands on a stage that exists at the destination. A lead with no
+       consultation yet, or one only booked and now released, arrives at the destination's
+       opening stage to be booked there. Anyone further on — seen, fee collected, in
+       treatment — keeps their consultation stage and arrives where they left off.
+
+    The reason is required: the record is read by both branches, and the one receiving the
+    patient was not in the room when the decision was made.
 
     The Patient Number does not change. It carries a branch code, so it stops describing
     where the patient is — but it is printed on every receipt already issued and is how
@@ -2579,6 +2604,10 @@ async def v3_transfer_branch(
     out_of_scope = _transfer_scope_error(lead, user)
     if out_of_scope:
         raise HTTPException(status_code=403, detail=out_of_scope)
+
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Give a reason for the transfer. Both branches read it on the record.")
 
     from_branch_id = lead.get("branch_id")
     if not from_branch_id:
@@ -2596,7 +2625,11 @@ async def v3_transfer_branch(
         raise HTTPException(status_code=400, detail=blocked)
 
     now = now_iso()
-    at_treatment = lead.get("consultation_stage") == TRANSFERABLE_AT_PHYSIO_ASSIGN
+    stage = lead.get("consultation_stage")
+    at_treatment = stage == TRANSFERABLE_AT_PHYSIO_ASSIGN
+    # A finished or called-off record has nothing live to release, and its physio is the
+    # name on work that already happened — kept, so the record still says who did it.
+    closed = stage in ("Consultation Completed", BRANCH_CANCELLED_STAGE, "Cancel")
 
     # 1. Pin what this branch has already taken. Recorded even when it is zero: "nothing was
     #    collected here" is a fact the finance split needs as much as a number, and a lead
@@ -2608,25 +2641,44 @@ async def v3_transfer_branch(
         "package_paid": round(lead.get("package_paid") or 0, 2),
         "until": now,
     }
+    # Every fee, off the receipts — the split above is only the two fields finance's
+    # Summary reads, and the record should say what really stayed behind.
+    collected_here = _collected_at_branch(await lead_payment_history(lead), from_branch_id)
+    sessions_completed = await v3_col("sessions").count_documents({"lead_id": lead_id, "status": "completed"})
 
-    # 2. Release what has not been delivered. Completed days are untouched — they happened,
-    #    at the old branch, under the physio who ran them, and the course counts them still.
-    released = 0
+    # 2. Release what the old branch was holding. Completed days are untouched — they
+    #    happened, at the old branch, under the physio who ran them, and the course counts
+    #    them still.
+    released = (await v3_col("sessions").delete_many(
+        {"lead_id": lead_id, "status": {"$ne": "completed"}},
+    )).deleted_count
+    # A consultation still on the old branch's Head Physio calendar. Cancelled rather than
+    # deleted, so the calendar's history still shows the slot was booked and why it emptied.
+    consultation_released = (await v3_col("appointments").update_many(
+        {"lead_id": lead_id, "appt_kind": "consultation", "status": "new_appointment"},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_by_branch_transfer": True,
+            "cancel_reason": f"Transferred to {destination.get('branch_name') or 'another branch'}: {reason}",
+            "updated_at": now,
+        }},
+    )).modified_count
+
     physio_updates: dict = {}
     handover: dict = {}
-    if at_treatment:
-        released = (await v3_col("sessions").delete_many(
-            {"lead_id": lead_id, "status": {"$ne": "completed"}},
-        )).deleted_count
+    released_physio = ""
+    if lead.get("assigned_physio_id") and not closed:
+        released_physio = lead.get("assigned_physio_name") or ""
         # The outgoing physio's spell closes here for the same reason a reassignment closes
         # one: their completed days stay on the record and the Physio Assign card at the new
         # branch has to be able to show where they left off. Written directly rather than
         # through _physio_handover, which lives on the other router and answers a slightly
-        # different question — there is no incoming physio to name yet.
-        if lead.get("assigned_physio_id"):
+        # different question — there is no incoming physio to name yet. Only a treatment
+        # physio has a spell; before Physio Assign the name is the consulting Head Physio.
+        if at_treatment:
             handover = {"physio_assignment_history": {
                 "physio_id": lead["assigned_physio_id"],
-                "physio_name": lead.get("assigned_physio_name") or "",
+                "physio_name": released_physio,
                 "assigned_at": lead.get("physio_assigned_at"),
                 "ended_at": now,
                 "replaced_by_id": "",
@@ -2648,10 +2700,17 @@ async def v3_transfer_branch(
         "updated_at": now,
         **physio_updates,
     }
-    if not at_treatment:
+    if stage is None or stage in TRANSFER_REBOOK_STAGES:
+        # Nothing has happened yet that the new branch has to carry on from — the booking,
+        # if there was one, was released above — so they book the patient themselves.
         updates["branch_stage"] = await first_branch_stage_for_branch(
             payload.to_branch_id, "New Appointment",
         )
+        if stage is not None:
+            updates["consultation_stage"] = None
+            # The Head Physio pipeline was seeded by the booking; the next booking at the
+            # new branch seeds it again (see v3_schedule_consultation_follow_up).
+            updates["head_consultation_stage"] = None
 
     await v3_col("leads").update_one({"id": lead_id}, {
         "$set": updates,
@@ -2663,9 +2722,14 @@ async def v3_transfer_branch(
                 "to_branch_id": payload.to_branch_id,
                 "to_branch_name": destination.get("branch_name") or "",
                 "at": now,
-                "consultation_stage": lead.get("consultation_stage"),
+                "consultation_stage": stage,
+                "branch_stage": lead.get("branch_stage"),
                 "sessions_released": released,
-                "reason": (payload.reason or "").strip(),
+                "sessions_completed": sessions_completed,
+                "consultation_released": bool(consultation_released),
+                "physio_released": released_physio,
+                "collected_before_transfer": collected_here,
+                "reason": reason,
                 "transferred_by": user.full_name,
                 "transferred_by_role": user.role,
             },
@@ -2676,10 +2740,12 @@ async def v3_transfer_branch(
     detail = f"Transferred from {origin.get('branch_name') or 'branch'} to {destination.get('branch_name') or 'branch'}"
     if released:
         detail += f" · {released} booked treatment day{'s' if released != 1 else ''} released"
-    if at_treatment and lead.get("assigned_physio_name"):
-        detail += f" · left {lead['assigned_physio_name']}'s care"
-    if (payload.reason or "").strip():
-        detail += f" · {payload.reason.strip()}"
+    if consultation_released:
+        detail += " · booked consultation released"
+    if released_physio:
+        detail += f" · left {released_physio}'s care"
+    detail += f" · Rs.{collected_here:g} stays with {origin.get('branch_name') or 'the old branch'}"
+    detail += f" · {reason}"
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
@@ -2695,6 +2761,8 @@ async def v3_transfer_branch(
         "message": f"Transferred to {destination.get('branch_name') or 'the destination branch'}",
         "lead": V3LeadOut(**updated).model_dump(),
         "sessions_released": released,
-        "sessions_kept": await v3_col("sessions").count_documents({"lead_id": lead_id, "status": "completed"}),
-        "revenue_left_behind": round(split["consultation_fee"] + split["package_paid"], 2),
+        "sessions_kept": sessions_completed,
+        "consultation_released": bool(consultation_released),
+        "revenue_left_behind": collected_here,
+        "balance_to_collect": _lead_outstanding_balance(updated),
     }

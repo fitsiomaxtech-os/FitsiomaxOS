@@ -1926,25 +1926,37 @@ async def lead_payment_history(lead: dict) -> list:
     the transfer history by _branch_at, never the branch they sit at now: a patient moved
     twice has receipts belonging to three different books.
     """
-    rows = await v3_col("lead_activity").find(
-        {"lead_id": lead.get("id"), "action": {"$in": list(PAYMENT_ACTION_LABELS)}},
-        {"_id": 0},
-    ).sort("created_at", -1).to_list(500)
+    return (await payment_history_for_leads([lead])).get(lead.get("id"), [])
 
-    branch_ids = {_branch_at(lead, r.get("created_at", "")) for r in rows}
+
+async def payment_history_for_leads(leads: list) -> dict:
+    """lead_payment_history for many patients at once, keyed by lead id.
+
+    One query for the lot rather than one per patient: Branch Transfer Records lists every
+    patient a branch has ever sent or received, and asking per row is a query per transfer.
+    """
+    by_id = {l.get("id"): l for l in leads if l.get("id")}
+    if not by_id:
+        return {}
+    rows = await v3_col("lead_activity").find(
+        {"lead_id": {"$in": list(by_id)}, "action": {"$in": list(PAYMENT_ACTION_LABELS)}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(20000)
+
+    branch_ids = {_branch_at(by_id[r["lead_id"]], r.get("created_at", "")) for r in rows}
     branch_ids.discard("")
     branch_names = {
         b["id"]: b.get("branch_name", "")
         for b in await v3_col("branches").find(
             {"id": {"$in": list(branch_ids)}}, {"_id": 0, "id": 1, "branch_name": 1}
-        ).to_list(200)
+        ).to_list(500)
     }
 
-    history = []
+    history = {lead_id: [] for lead_id in by_id}
     for row in rows:
         collected_at = row.get("created_at", "")
-        branch_id = _branch_at(lead, collected_at)
-        history.append({
+        branch_id = _branch_at(by_id[row["lead_id"]], collected_at)
+        history[row["lead_id"]].append({
             "id": row.get("id", ""),
             # Blank on collections taken before receipts carried one, same as the Summary
             # tab's rows — every reader of either list has to tolerate it.

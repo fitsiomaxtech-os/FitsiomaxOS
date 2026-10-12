@@ -38,7 +38,7 @@ const MODE_LABELS = {
  * A row attributed to some other branch is not an error: it is a payment taken before an
  * earlier transfer, and it stays with whoever collected it.
  */
-const PaymentHistory = ({ rows, currentBranchName }) => {
+export const PaymentHistory = ({ rows, currentBranchName }) => {
   const [open, setOpen] = useState(false);
   const list = rows || [];
   const total = list.reduce((sum, r) => sum + Number(r.amount || 0), 0);
@@ -108,6 +108,65 @@ const PaymentHistory = ({ rows, currentBranchName }) => {
     </div>
   );
 };
+
+/**
+ * What the move does, read before it is made rather than in the toast after. Shared by
+ * both transfer dialogs so the Branch Admin's popup and Super Admin's desk warn about the
+ * same things in the same words.
+ */
+export const TransferImpact = ({ eligibility, fromBranchName, testid = "branch-transfer-impact" }) => {
+  const e = eligibility || {};
+  const booking = e.consultation_booking;
+  return (
+    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid={testid}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">What this move does</p>
+      <ul className="mt-1.5 space-y-1 text-xs text-amber-800">
+        <li>
+          <b>{money(e.revenue_staying_behind)}</b> already collected stays in {fromBranchName || "this branch"}'s book.
+          Anything collected from here on belongs to the new branch.
+        </li>
+        {Number(e.balance_to_collect) > 0 && (
+          <li><b>{money(e.balance_to_collect)}</b> still to be paid. The new branch collects it.</li>
+        )}
+        {booking && (
+          <li>
+            The consultation booked for <b>{booking.appointment_date} {booking.appointment_time}</b>
+            {booking.doctor_name ? ` with ${booking.doctor_name}` : ""} is released. The new branch books it again.
+          </li>
+        )}
+        {e.sessions_to_release > 0 && (
+          <li>
+            <b>{e.sessions_to_release}</b> booked treatment day{e.sessions_to_release === 1 ? "" : "s"}
+            {e.current_physio_name ? ` with ${e.current_physio_name}` : ""} will be released. The new branch books them again there.
+          </li>
+        )}
+        {e.sessions_completed > 0 && (
+          <li><b>{e.sessions_completed}</b> completed day{e.sessions_completed === 1 ? "" : "s"} stay on the record and still count toward the course.</li>
+        )}
+        <li>The Patient Number stays <b>{e.patient_number || "—"}</b>, so receipts already issued still find them.</li>
+      </ul>
+    </div>
+  );
+};
+
+/** The reason, required — both branches read it on the Branch Transfer Record. */
+export const TransferReason = ({ value, onChange, testid = "branch-transfer-reason" }) => (
+  <>
+    <label className="mt-3 block text-xs font-semibold text-slate-600" htmlFor={testid}>
+      Reason <span className="text-rose-500">*</span>
+      <span className="ml-1 font-normal text-slate-400">(shown to both branches)</span>
+    </label>
+    <textarea
+      id={testid}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={2}
+      placeholder="e.g. Patient lives near T Nagar and finds Anna Nagar too far"
+      className="mt-1 w-full resize-none rounded-lg border border-[#EFEAE0] bg-white/60 px-2 py-1.5 text-sm outline-none focus:border-indigo-400"
+      data-testid={testid}
+    />
+  </>
+);
 
 // Same helper OperationsBoard.jsx, BranchManagementBoard.jsx and PreSalesCRM.jsx each
 // already carry their own copy of.
@@ -208,11 +267,9 @@ const BranchChoice = ({ branches, value, onChange, testid = "branch-choice" }) =
 /**
  * Branch Transfer — moving one patient from the branch on screen to another.
  *
- * Two windows and a gap between them, which the backend enforces and this only reports:
- * a lead nobody has booked a consultation for yet, and a patient already in treatment at
- * Physio Assign. Everything between the two is refused, because a booked consultation sits
- * on a named Head Physio's calendar here and a part-collected Treatment Fee would leave its
- * installments split across two branches' books.
+ * Any stage. Money already collected stays with this branch, whatever the old branch's
+ * staff were holding (a booked consultation, treatment days, the physio) is released, and a
+ * reason is required because both branches read it on the record.
  *
  * The dialog is deliberately slow at the last step. A transfer releases booked treatment
  * days and moves a patient off the board their branch admin is working, so the eligible
@@ -255,13 +312,8 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
     return () => { cancelled = true; };
   }, [fromBranchId]);
 
-  // The same two windows the backend gates on, so the list offers only what it would
-  // accept. Read off consultation_stage alone: null is a lead nobody has booked yet, and
-  // Physio Assign is one already in treatment.
-  const transferable = (leads || []).filter((l) => {
-    const stage = l.consultation_stage;
-    return stage == null || stage === "Physio Assign";
-  });
+  // Every patient at the branch: a transfer is allowed at any stage.
+  const transferable = leads || [];
   const q = search.trim().toLowerCase();
   const shown = q
     ? transferable.filter((l) => `${l.name || ""} ${l.phone || ""} ${l.patient_number || ""}`.toLowerCase().includes(q))
@@ -277,9 +329,10 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
 
   const submit = async () => {
     if (!toBranchId) { toast.error("Pick the branch to transfer to"); return; }
+    if (!reason.trim()) { toast.error("Give a reason for the transfer"); return; }
     setTransferring(true);
     try {
-      const res = await transferLeadBranch(picked.id, { to_branch_id: toBranchId, reason });
+      const res = await transferLeadBranch(picked.id, { to_branch_id: toBranchId, reason: reason.trim() });
       setDone({ ...res, name: picked.name });
       toast.success(res.message);
       // The list this came from is now one patient shorter. Refetched rather than spliced
@@ -321,7 +374,11 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
                 {done.sessions_kept > 0 && (
                   <li>{done.sessions_kept} completed day{done.sessions_kept === 1 ? "" : "s"} stay on the record, with the physio who ran them.</li>
                 )}
-                <li>Rs.{done.revenue_left_behind} stays in {fromBranch?.branch_name || "this branch"}'s book.</li>
+                {done.consultation_released && <li>The booked consultation was released — the new branch books it again.</li>}
+                <li>{money(done.revenue_left_behind)} stays in {fromBranch?.branch_name || "this branch"}'s book.</li>
+                {Number(done.balance_to_collect) > 0 && (
+                  <li>{money(done.balance_to_collect)} still to be paid — the new branch collects it.</li>
+                )}
               </ul>
               <div className="mt-3 flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => { setDone(null); setPicked(null); setEligibility(null); }} data-testid="ops-branch-transfer-again">
@@ -333,9 +390,8 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
           ) : !picked ? (
             <>
               <p className="text-xs leading-relaxed text-slate-500">
-                A patient can be transferred before their consultation is booked, or once treatment
-                has started at Physio Assign. In between — a consultation booked on this branch's
-                Head Physio calendar, or a Treatment Fee part-collected — they stay put.
+                A patient can be transferred at any stage. What they have already paid stays with
+                this branch; anything booked here is released for the new branch to book again.
               </p>
               <div className="relative mt-3">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -371,10 +427,10 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
                           {l.consultation_stage === "Physio Assign" && l.assigned_physio_name ? ` · with ${l.assigned_physio_name}` : ""}
                         </p>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      <span className={`max-w-[10rem] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         l.consultation_stage === "Physio Assign" ? "bg-violet-100 text-violet-700" : "bg-[#F3EFE6] text-slate-600"
                       }`}>
-                        {l.consultation_stage === "Physio Assign" ? "In treatment" : "Lead"}
+                        {l.consultation_stage === "Physio Assign" ? "In treatment" : (l.consultation_stage || l.branch_stage || "Lead")}
                       </span>
                     </button>
                   ))}
@@ -407,28 +463,7 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
                 </>
               ) : (
                 <>
-                  {/* What the move costs, before it is made rather than in the toast after. */}
-                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="ops-branch-transfer-impact">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">What this move does</p>
-                    <ul className="mt-1.5 space-y-1 text-xs text-amber-800">
-                      {eligibility.sessions_to_release > 0 ? (
-                        <li>
-                          <b>{eligibility.sessions_to_release}</b> booked treatment day{eligibility.sessions_to_release === 1 ? "" : "s"}
-                          {eligibility.current_physio_name ? ` with ${eligibility.current_physio_name}` : ""} will be released. The new branch books them again there.
-                        </li>
-                      ) : (
-                        <li>No treatment days are booked, so nothing is released.</li>
-                      )}
-                      {eligibility.sessions_completed > 0 && (
-                        <li><b>{eligibility.sessions_completed}</b> completed day{eligibility.sessions_completed === 1 ? "" : "s"} stay on the record and still count toward the course.</li>
-                      )}
-                      <li>
-                        <b>Rs.{eligibility.revenue_staying_behind}</b> already collected stays in {fromBranch?.branch_name || "this branch"}'s book.
-                        Anything collected from here on belongs to the new branch.
-                      </li>
-                      <li>The Patient Number stays <b>{eligibility.patient_number || "—"}</b>, so receipts already issued still find them.</li>
-                    </ul>
-                  </div>
+                  <TransferImpact eligibility={eligibility} fromBranchName={fromBranch?.branch_name} testid="ops-branch-transfer-impact" />
 
                   {/* The figure above, itemised. Collapsed by default: most transfers are of
                       a lead who has paid nothing, and the count in the header already says
@@ -451,20 +486,13 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
                     />
                   </div>
 
-                  <label className="mt-3 block text-xs font-semibold text-slate-600">Reason <span className="font-normal text-slate-400">(optional, kept on the record)</span></label>
-                  <input
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="e.g. patient moved house"
-                    className="mt-1 h-9 w-full rounded-lg border border-[#EFEAE0] bg-white/60 px-2 text-sm outline-none focus:border-indigo-400"
-                    data-testid="ops-branch-transfer-reason"
-                  />
+                  <TransferReason value={reason} onChange={setReason} testid="ops-branch-transfer-reason" />
 
                   <div className="mt-4 flex justify-end gap-2">
                     <Button variant="outline" onClick={onClose} data-testid="ops-branch-transfer-cancel">Cancel</Button>
                     <Button
                       className="bg-indigo-600 text-white hover:bg-indigo-700"
-                      disabled={!toBranchId || transferring}
+                      disabled={!toBranchId || !reason.trim() || transferring}
                       onClick={submit}
                       data-testid="ops-branch-transfer-submit"
                     >
