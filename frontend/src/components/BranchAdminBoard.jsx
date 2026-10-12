@@ -183,6 +183,31 @@ const consultationStageIcon = (name) => {
 // stage badge falls back to.
 const notifyHex = (color) => (/^#[0-9a-f]{6}$/i.test(color || "") ? color : "#64748b");
 
+// The Branch Leads phone cards are the Consultation stack drawn without a colour of their
+// own: one grey for the icon wash, the figure, the chevron and the badge, so the list
+// reads by name and number alone. Slate is the same fallback notifyHex falls back to for
+// a stage with no colour set, so this is the palette's own idle rather than a colour
+// taken away.
+const LEADS_PHONE_CARD_HEX = "#64748b";
+
+// Which glyph each Branch stage wears on those cards. Matched on words inside the stage's
+// own name the way the consultation map below is, so a renamed stage still finds its
+// icon; nothing on the desk depends on any of this, since the strip these cards stand in
+// for is text only.
+const LEAD_STAGE_ICONS = [
+  ["rnr", PhoneOff],
+  ["follow", Bell],
+  ["appointment", CalendarCheck],
+  ["portfolio", ClipboardList],
+  ["cancel", CalendarX],
+  ["prospect", UserX],
+  ["lead", UserPlus],
+];
+const leadStageIcon = (name) => {
+  const n = String(name || "").toLowerCase();
+  return LEAD_STAGE_ICONS.find(([word]) => n.includes(word))?.[1] || LayoutDashboard;
+};
+
 // Does this stage row carry `role`? Trusts the stamp where there is one, so a stage renamed
 // to something that happens to match another role's old name is still itself.
 const stageHasRole = (stage, role) => (
@@ -1377,6 +1402,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // above it. Nine stages as full-width rows fill the screen, so the list goes on a screen
   // of its own rather than under them. House Visit and every width from sm keep the strip.
   //
+  // Branch Leads now wears the same stack below sm, drawn without colour (see
+  // LEADS_PHONE_CARD_HEX): its summary cards were already cards, only too small in a row
+  // to read or to hit, and a list of them is the same answer Consultation settled on. A
+  // tap opens that stage's list the same way, and from sm up the strip is still there.
+  //
   // Holds the tab the list is open on rather than a bare flag, so that leaving the tab
   // closes it -- coming back to Consultation lands on the cards again -- while a lead popup
   // handing a patient over to a stage (onOpenConsultationStage) can set the tab and the
@@ -1385,8 +1415,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   useEffect(() => {
     setPhoneStageList((on) => (on === activeView ? on : null));
   }, [activeView]);
+  // Both card tabs share the back bar. The cards themselves stay told apart: the
+  // consultation board's own hiding is keyed to phoneStageCards, and it must not be told
+  // the leads stack is up over it.
+  const onPhoneCardTab = activeView === "branch_consultation" || activeView === "pipeline";
   const phoneStageCards = activeView === "branch_consultation" && phoneStageList !== activeView;
-  const phoneStageListOpen = activeView === "branch_consultation" && phoneStageList === activeView;
+  const phoneLeadStageCards = activeView === "pipeline" && phoneStageList !== activeView;
+  const phoneStageListOpen = onPhoneCardTab && phoneStageList === activeView;
 
   // What the cards above the list do when one of them is clicked.
   //
@@ -1933,26 +1968,38 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // under the header. House Visit keeps its cards.
             phoneFlush={!onHomeVisitTab}
             // The Consultation tab's phone wears its stages as cards instead (see
-            // phoneStageCards), so the strip is desk-only there.
-            className={activeView === "branch_consultation" ? "max-sm:hidden" : ""}
+            // phoneStageCards) and Branch Leads its colourless stack (phoneLeadStageCards),
+            // so the strip is desk-only on both. House Visit, which keeps neither, still
+            // shows it on a phone.
+            className={onPhoneCardTab ? "max-sm:hidden" : ""}
             testid="branch-metric"
             plain
           />
 
           {/* Phone, with one stage's list open: where the strip sat, flush under the header,
               the stage being read and its count, and the way back to the cards. Coloured as
-              its card was, so the list says which card it came from. */}
+              its card was, so the list says which card it came from — on Branch Leads the
+              card carries no colour, so the bar is the same grey its rows are drawn in, and
+              it may have been opened on All Stages, which is a card there rather than a
+              stage. */}
           {phoneStageListOpen && (() => {
-            const hex = notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
-            const Icon = consultationStageIcon(stageFilter);
+            const onLeadsList = activeView === "pipeline";
+            const hex = onLeadsList
+              ? LEADS_PHONE_CARD_HEX
+              : notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
+            const Icon = onLeadsList ? leadStageIcon(stageFilter) : consultationStageIcon(stageFilter);
+            const count = onLeadsList
+              ? (stageFilter ? salesCounts[stageFilter] || 0 : totalLeads)
+              : (consultationCounts[stageFilter] || 0);
+            const label = stageFilter || "All Stages";
             return (
-              <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-consult-phone-back">
+              <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid={onLeadsList ? "branch-leads-phone-back" : "branch-consult-phone-back"}>
                 <button
                   type="button"
                   onClick={() => setPhoneStageList(null)}
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
                   aria-label="Back to the stage cards"
-                  data-testid="branch-consult-phone-back-btn"
+                  data-testid={onLeadsList ? "branch-leads-phone-back-btn" : "branch-consult-phone-back-btn"}
                 >
                   {/* Nudges left every 1.5s (tailwind.config's nudge-left), so the way back
                       to the cards is seen. motion-safe: a phone set to reduce motion gets
@@ -1961,10 +2008,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${hex}1F` }}>
                     <Icon aria-hidden className="h-4 w-4" style={{ color: hex }} />
                   </span>
-                  <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{stageFilter}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{label}</span>
                 </button>
                 <span className="mr-1 inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold text-white" style={{ background: hex }}>
-                  {consultationCounts[stageFilter] || 0}
+                  {count}
                 </span>
               </div>
             );
@@ -2358,6 +2405,46 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </div>
           )}
 
+          {/* Phone, Branch Leads tab: the summary strip as the same stack, drawn without
+              colour — one grey for every row, so the list reads by name and number alone.
+              A tap opens that stage's list on its own screen (see phoneStageList), exactly
+              as Consultation's cards do. All Stages is a card of its own up front because
+              there it is a real answer — the whole branch — and the strip it replaces had
+              one too. */}
+          {phoneLeadStageCards && (
+            <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-leads-phone-cards">
+              <NotifyCard
+                icon={LayoutDashboard}
+                label="All Stages"
+                value={totalLeads}
+                color={LEADS_PHONE_CARD_HEX}
+                active={stageFilter === null}
+                onClick={() => {
+                  setStageFilter(null);
+                  setPhoneStageList(activeView);
+                  window.scrollTo({ top: 0 });
+                }}
+                testid="branch-leads-phone-card-all-stages"
+              />
+              {leadPillStages.map((s) => (
+                <NotifyCard
+                  key={s.id}
+                  icon={leadStageIcon(s.name)}
+                  label={s.name}
+                  value={salesCounts[s.name] || 0}
+                  color={LEADS_PHONE_CARD_HEX}
+                  active={stageFilter === s.name}
+                  onClick={() => {
+                    setStageFilter(s.name);
+                    setPhoneStageList(activeView);
+                    window.scrollTo({ top: 0 });
+                  }}
+                  testid={`branch-leads-phone-card-${s.name}`}
+                />
+              ))}
+            </div>
+          )}
+
           {onConsultationTab ? (
             // Still mounted under the phone cards, only hidden: this board is what counts
             // them (onCountChange), so unmounting it would leave every card at 0.
@@ -2423,7 +2510,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           {/* Phone list — six columns can't be read at 430px whichever way they're sized,
               so below md the same rows are stacked as cards instead of being pushed off
               the side of a horizontally-scrolling table. */}
-          <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-list-mobile">
+          {/* max-sm:hidden joins while the colourless stage stack is up (cards mode): the
+              stack is the screen then, and this list is what a card opens — the same
+              give-and-take Consultation's board has with its own cards above it. */}
+          <div className={`${LEAD_ROW_LIST} md:hidden ${phoneLeadStageCards ? "max-sm:hidden" : ""}`} data-testid="branch-list-mobile">
             {(() => {
               const visible = (stageFilter ? filteredLeads.filter((l) => matchesBranchStage(l, stages.find((s) => s.name === stageFilter), isConsultationOnlyStage, consultationOpeningStage)) : filteredLeads);
               if (visible.length === 0) {
