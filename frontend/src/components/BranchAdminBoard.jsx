@@ -1424,6 +1424,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const phoneStageCards = activeView === "branch_consultation" && phoneStageList !== activeView;
   const phoneLeadStageCards = activeView === "pipeline" && phoneStageList !== activeView;
   const phoneStageListOpen = onPhoneCardTab && phoneStageList === activeView;
+  // The Management tab answers the same way on a phone: its nine sub-tabs as the same
+  // stack, one tap opening the chosen panel on a screen of its own with the way back
+  // above it — Consultant Calendar alone reads as its Select Consultant, not as a card
+  // list with the panel underneath. Its own flags rather than a seat on onPhoneCardTab,
+  // because its back bar lives in its own branch of the render, beside the cards it
+  // belongs to, and nothing in the stage branch renders for this tab.
+  const phoneMgmtCards = activeView === "consultations" && phoneStageList !== activeView;
+  const phoneMgmtListOpen = activeView === "consultations" && phoneStageList === activeView;
 
   // What the cards above the list do when one of them is clicked.
   //
@@ -1875,26 +1883,66 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {/* Hidden, not unmounted, while My Profile is open: `contents` keeps every view a
           flex child of the root as before, and the lists keep their state for the way back. */}
       <div className={profileOpen ? "hidden" : "contents"}>
+      {/* flex+gap rather than space-y-4 inside the Management block: its children now show
+          and hide by width and by which screen of the stack is open (cards, back bar,
+          panel), and space-y counts a hidden first child — leaving the next one a stray
+          16px below the top. A flex gap only spaces what is actually laid out. */}
       {activeView === "consultations" ? (
-        <div className="space-y-4" data-testid="branch-consultations-headphysio">
-          {/* Phone: the sub-tabs as the same list rows the stage stacks now wear, one to a
-              row — three-across tiles squeezed nine labels into stubs, and every other card
-              on a phone's Branch Admin is this shape. Same shared grey, and no corner
-              badge: nothing here counts. From sm up the pill row underneath is unchanged. */}
-          <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-consultations-subtab-cards">
-            {MANAGEMENT_SUB_TABS.map((t) => (
-              <NotifyCard
-                key={t.key}
-                icon={t.icon}
-                label={t.label}
-                color={PHONE_CARD_HEX}
-                showCount={false}
-                active={consultationsSubTab === t.key}
-                onClick={() => setConsultationsSubTab(t.key)}
-                testid={`branch-consultations-subtab-card-${t.key}`}
-              />
-            ))}
-          </div>
+        <div className="flex flex-col gap-4" data-testid="branch-consultations-headphysio">
+          {/* Phone, one sub-tab open: where the card list sat, the tab being read, and the
+              way back to the cards — the same bar the stage stacks show, minus the count
+              pill: nothing here counts. */}
+          {phoneMgmtListOpen && (() => {
+            const t = MANAGEMENT_SUB_TABS.find((x) => x.key === consultationsSubTab);
+            const Icon = t?.icon || Calendar;
+            return (
+              <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-mgmt-phone-back">
+                <button
+                  type="button"
+                  onClick={() => setPhoneStageList(null)}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+                  aria-label="Back to the tab cards"
+                  data-testid="branch-mgmt-phone-back-btn"
+                >
+                  {/* Nudges left every 1.5s (tailwind.config's nudge-left), so the way back
+                      to the cards is seen. motion-safe: a phone set to reduce motion gets
+                      it still. */}
+                  <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${PHONE_CARD_HEX}1F` }}>
+                    <Icon aria-hidden className="h-4 w-4" style={{ color: PHONE_CARD_HEX }} />
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t?.label}</span>
+                </button>
+              </div>
+            );
+          })}
+
+          {/* Phone: the sub-tabs as the same list rows the stage stacks wear, one to a row —
+              three-across tiles squeezed nine labels into stubs, and every other card on a
+              phone's Branch Admin is this shape. Same shared grey, no corner badge (nothing
+              here counts), and a tap opens the chosen panel on its own screen (see
+              phoneStageList) with the bar above as the way back. From sm up the pill row
+              underneath is unchanged. */}
+          {phoneMgmtCards && (
+            <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-consultations-subtab-cards">
+              {MANAGEMENT_SUB_TABS.map((t) => (
+                <NotifyCard
+                  key={t.key}
+                  icon={t.icon}
+                  label={t.label}
+                  color={PHONE_CARD_HEX}
+                  showCount={false}
+                  active={consultationsSubTab === t.key}
+                  onClick={() => {
+                    setConsultationsSubTab(t.key);
+                    setPhoneStageList(activeView);
+                    window.scrollTo({ top: 0 });
+                  }}
+                  testid={`branch-consultations-subtab-card-${t.key}`}
+                />
+              ))}
+            </div>
+          )}
           {/* From sm up: the boxed pill row, exactly as it was before the cards existed —
               `hidden` below sm, where the stack above takes over. */}
           <div className="hidden rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-nowrap sm:gap-1 sm:overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="branch-consultations-subtabs">
@@ -1913,32 +1961,39 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               );
             })}
           </div>
-          {/* onlineArm rides along to each of them: an arm with no room in it meets its
-              patients over video whichever desk they are seeing, so the Google Meet field
-              is offered on all of these. Rehab declines it on its own — a programme day is
-              worked on the floor with the equipment in the room. See HeadPhysioCalendar. */}
-          {consultationsSubTab === "physio" ? (
-            <HeadPhysioCalendar branchId={branchId} profileType="physio" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
-          ) : consultationsSubTab === "zumba" ? (
-            <ZumbaMastersPanel branchId={branchId} />
-          ) : consultationsSubTab === "diet" ? (
-            <HeadPhysioCalendar branchId={branchId} profileType="nutrition_coach" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
-          ) : consultationsSubTab === "missed" ? (
-            <MissedClassPanel />
-          ) : consultationsSubTab === "physio_absence" ? (
-            <PhysioAbsencePanel mode="branch" branchId={branchId} />
-          ) : consultationsSubTab === "manager" ? (
-            <BranchDetailPage branchId={branchId} readOnly />
-          ) : consultationsSubTab === "calendar" ? (
-            <BranchCalendarPanel branchId={branchId} />
-          ) : consultationsSubTab === "time" ? (
-            <TimeManagementPanel branchId={branchId} />
-          ) : (
-            // The Google Meet field rides on this: only an online arm's own admin is asked
-            // for a video room, because only their consultations are held in one. The three
-            // calendars above are room desks and never carry it — see HeadPhysioCalendar.
-            <HeadPhysioCalendar branchId={branchId} onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
-          )}
+          {/* The panel under the cards: hidden on a phone while the card list is up — the
+              list IS the screen then — and the only thing on screen once a card is tapped,
+              so Consultant Calendar opens on its Select Consultant alone. The same
+              give-and-take as the stage stacks. It stays mounted either way, so an open
+              panel keeps what was picked in it; from sm up it never hides. */}
+          <div className={phoneMgmtCards ? "max-sm:hidden" : ""}>
+            {/* onlineArm rides along to each of them: an arm with no room in it meets its
+                patients over video whichever desk they are seeing, so the Google Meet field
+                is offered on all of these. Rehab declines it on its own — a programme day is
+                worked on the floor with the equipment in the room. See HeadPhysioCalendar. */}
+            {consultationsSubTab === "physio" ? (
+              <HeadPhysioCalendar branchId={branchId} profileType="physio" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
+            ) : consultationsSubTab === "zumba" ? (
+              <ZumbaMastersPanel branchId={branchId} />
+            ) : consultationsSubTab === "diet" ? (
+              <HeadPhysioCalendar branchId={branchId} profileType="nutrition_coach" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
+            ) : consultationsSubTab === "missed" ? (
+              <MissedClassPanel />
+            ) : consultationsSubTab === "physio_absence" ? (
+              <PhysioAbsencePanel mode="branch" branchId={branchId} />
+            ) : consultationsSubTab === "manager" ? (
+              <BranchDetailPage branchId={branchId} readOnly />
+            ) : consultationsSubTab === "calendar" ? (
+              <BranchCalendarPanel branchId={branchId} />
+            ) : consultationsSubTab === "time" ? (
+              <TimeManagementPanel branchId={branchId} />
+            ) : (
+              // The Google Meet field rides on this: only an online arm's own admin is asked
+              // for a video room, because only their consultations are held in one. The three
+              // calendars above are room desks and never carry it — see HeadPhysioCalendar.
+              <HeadPhysioCalendar branchId={branchId} onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
+            )}
+          </div>
         </div>
       ) : activeView === "zumba" ? (
         <ZumbaPanel branchId={branchId} />
