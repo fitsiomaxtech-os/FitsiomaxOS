@@ -7534,8 +7534,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   // columns a third of 565px wide is a word or two each, and a summary that
                   // can only show two words is not one. The whole of it — every line, the
                   // Pre-Sales note, the plan service by service — is Consultation Record
-                  // Details, a popup of its own that every row opens. The rows themselves
-                  // stay folded under the heading until View Details is pressed.
+                  // Details, a popup of its own that the heading and every row open.
                   //
                   // The heading is drawn the way Collect a Payment's is, tile and all, so
                   // the two sections of this card start on the same line and read as a pair.
@@ -7544,12 +7543,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   if (compactDetail) {
                     return (
                       <>
-                        {/* Closed by default — just the heading. View Details unfolds the
-                            three rows under it; each row then opens the full record. */}
                         <button
                           type="button"
-                          onClick={() => setCaseRecordOpen((open) => !open)}
-                          aria-expanded={caseRecordOpen}
+                          onClick={() => setRecordDetailsOpen(true)}
                           className="group flex w-full items-center gap-2 px-4 py-2.5 text-left transition hover:bg-slate-50"
                           data-testid="cons-case-record-open"
                         >
@@ -7560,11 +7556,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           {/* Tinted, like the Appointment Card in the header. Grey on white it
                               read as a switch left off rather than as something to press. */}
                           <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100">
-                            <Eye className="h-3.5 w-3.5" /> {caseRecordOpen ? "Hide Details" : "View Details"}
-                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${caseRecordOpen ? "rotate-180" : ""}`} />
+                            <Eye className="h-3.5 w-3.5" /> View Details
                           </span>
                         </button>
-                        {caseRecordOpen && <div className="divide-y divide-slate-100 border-t border-slate-100" data-testid="cons-case-record-rows">
+                        <div className="divide-y divide-slate-100" data-testid="cons-case-record-rows">
                           {cells.map((c) => (
                             <button
                               key={c.key}
@@ -7583,7 +7578,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                             </button>
                           ))}
-                        </div>}
+                        </div>
 
                         {/* Consultation Record Details. Above the patient's card rather than
                             in place of it, and closed back onto it — this is reading, and the
