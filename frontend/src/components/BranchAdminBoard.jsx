@@ -1915,7 +1915,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 </button>
               </div>
             );
-          })}
+          })()}
 
           {/* Phone: the sub-tabs as the same list rows the stage stacks wear, one to a row —
               three-across tiles squeezed nine labels into stubs, and every other card on a
