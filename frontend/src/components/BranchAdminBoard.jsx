@@ -183,12 +183,13 @@ const consultationStageIcon = (name) => {
 // stage badge falls back to.
 const notifyHex = (color) => (/^#[0-9a-f]{6}$/i.test(color || "") ? color : "#64748b");
 
-// The Branch Leads phone cards are the Consultation stack drawn without a colour of their
-// own: one grey for the icon wash, the figure, the chevron and the badge, so the list
-// reads by name and number alone. Slate is the same fallback notifyHex falls back to for
-// a stage with no colour set, so this is the palette's own idle rather than a colour
-// taken away.
-const LEADS_PHONE_CARD_HEX = "#64748b";
+// The one grey every phone stage card is drawn in — Branch Leads', Consultation's and the
+// Management sub-tabs' below. Icon wash, figure, chevron and border all take it, so a card
+// reads by name and number alone; the only colour on the card is the corner notification
+// badge, which each stack passes as its own (badgeColor on ui/notify-card). Slate is the
+// same fallback notifyHex takes for a stage with no colour set, so this is the palette's
+// own idle rather than a colour taken away.
+const PHONE_CARD_HEX = "#64748b";
 
 // Which glyph each Branch stage wears on those cards. Matched on words inside the stage's
 // own name the way the consultation map below is, so a renamed stage still finds its
@@ -1402,10 +1403,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // above it. Nine stages as full-width rows fill the screen, so the list goes on a screen
   // of its own rather than under them. House Visit and every width from sm keep the strip.
   //
-  // Branch Leads now wears the same stack below sm, drawn without colour (see
-  // LEADS_PHONE_CARD_HEX): its summary cards were already cards, only too small in a row
-  // to read or to hit, and a list of them is the same answer Consultation settled on. A
-  // tap opens that stage's list the same way, and from sm up the strip is still there.
+  // Branch Leads now wears the same stack below sm, drawn in the shared card grey with
+  // only its corner badge coloured (see PHONE_CARD_HEX): its summary cards were already
+  // cards, only too small in a row to read or to hit, and a list of them is the same
+  // answer Consultation settled on. A tap opens that stage's list the same way, and from
+  // sm up the strip is still there.
   //
   // Holds the tab the list is open on rather than a bare flag, so that leaving the tab
   // closes it -- coming back to Consultation lands on the cards again -- while a lead popup
@@ -1875,13 +1877,27 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       <div className={profileOpen ? "hidden" : "contents"}>
       {activeView === "consultations" ? (
         <div className="space-y-4" data-testid="branch-consultations-headphysio">
-          {/* Three across on a phone, so they land as even rows in the order they are
-              declared. Left to wrap on their own they came out ragged — four rows, one of
-              them holding HEAD PHYSIO CALENDAR alone — because each label is a different
-              width. A grid ignores the widths and the icon moves above the label so a
-              third of the screen is enough to read it. From sm up nothing changes: one
-              flex row of full-size pills. */}
-          <div className="grid auto-rows-fr grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-nowrap sm:gap-1 sm:overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="branch-consultations-subtabs">
+          {/* Phone: the sub-tabs as the same list rows the stage stacks now wear, one to a
+              row — three-across tiles squeezed nine labels into stubs, and every other card
+              on a phone's Branch Admin is this shape. Same shared grey, and no corner
+              badge: nothing here counts. From sm up the pill row underneath is unchanged. */}
+          <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-consultations-subtab-cards">
+            {MANAGEMENT_SUB_TABS.map((t) => (
+              <NotifyCard
+                key={t.key}
+                icon={t.icon}
+                label={t.label}
+                color={PHONE_CARD_HEX}
+                showCount={false}
+                active={consultationsSubTab === t.key}
+                onClick={() => setConsultationsSubTab(t.key)}
+                testid={`branch-consultations-subtab-card-${t.key}`}
+              />
+            ))}
+          </div>
+          {/* From sm up: the boxed pill row, exactly as it was before the cards existed —
+              `hidden` below sm, where the stack above takes over. */}
+          <div className="hidden rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-nowrap sm:gap-1 sm:overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="branch-consultations-subtabs">
             {MANAGEMENT_SUB_TABS.map((t) => {
               const Icon = t.icon;
               return (
@@ -1977,15 +1993,18 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           />
 
           {/* Phone, with one stage's list open: where the strip sat, flush under the header,
-              the stage being read and its count, and the way back to the cards. Coloured as
-              its card was, so the list says which card it came from — on Branch Leads the
-              card carries no colour, so the bar is the same grey its rows are drawn in, and
-              it may have been opened on All Stages, which is a card there rather than a
-              stage. */}
+              the stage being read and its count, and the way back to the cards. The wash is
+              the cards' grey now; the count pill alone keeps the stage's colour, so the bar
+              still says which card it came from without re-colouring the row — and on
+              Branch Leads it may have been opened on All Stages, which is a card there
+              rather than a stage. */}
           {phoneStageListOpen && (() => {
             const onLeadsList = activeView === "pipeline";
-            const hex = onLeadsList
-              ? LEADS_PHONE_CARD_HEX
+            // Same rule as the cards: grey wash, colour only in the count pill — the strip's
+            // own blue where the stage is All Stages.
+            const wash = PHONE_CARD_HEX;
+            const stageHex = onLeadsList
+              ? (stageFilter ? notifyHex(leadPillStages.find((s) => s.name === stageFilter)?.color) : "#0ea5e9")
               : notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
             const Icon = onLeadsList ? leadStageIcon(stageFilter) : consultationStageIcon(stageFilter);
             const count = onLeadsList
@@ -2005,12 +2024,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       to the cards is seen. motion-safe: a phone set to reduce motion gets
                       it still. */}
                   <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${hex}1F` }}>
-                    <Icon aria-hidden className="h-4 w-4" style={{ color: hex }} />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${wash}1F` }}>
+                    <Icon aria-hidden className="h-4 w-4" style={{ color: wash }} />
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{label}</span>
                 </button>
-                <span className="mr-1 inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold text-white" style={{ background: hex }}>
+                <span className="mr-1 inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold text-white" style={{ background: stageHex }}>
                   {count}
                 </span>
               </div>
@@ -2383,7 +2402,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
           {/* Phone, Consultation tab: the stages as the Review tab's cards, one to a row,
               under the toolbar and ranges, which still narrow every count here. A tap opens
-              that stage's list on its own screen (see phoneStageList), at the top of it. */}
+              that stage's list on its own screen (see phoneStageList), at the top of it.
+              The card itself is the shared grey — only the corner notification badge keeps
+              the stage's colour, the same rule Branch Leads' stack follows. */}
           {phoneStageCards && (
             <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-consult-phone-cards">
               {consultationOnlyStages.map((s) => (
@@ -2392,7 +2413,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   icon={consultationStageIcon(s.name)}
                   label={s.name}
                   value={consultationCounts[s.name] || 0}
-                  color={notifyHex(s.color)}
+                  color={PHONE_CARD_HEX}
+                  badgeColor={notifyHex(s.color)}
                   active={stageFilter === s.name}
                   onClick={() => {
                     setStageFilter(s.name);
@@ -2405,19 +2427,21 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </div>
           )}
 
-          {/* Phone, Branch Leads tab: the summary strip as the same stack, drawn without
-              colour — one grey for every row, so the list reads by name and number alone.
-              A tap opens that stage's list on its own screen (see phoneStageList), exactly
-              as Consultation's cards do. All Stages is a card of its own up front because
-              there it is a real answer — the whole branch — and the strip it replaces had
-              one too. */}
+          {/* Phone, Branch Leads tab: the summary strip as the same stack — one grey for
+              every row, with colour only in the corner notification badge, which carries
+              the stage's own hue. A tap opens that stage's list on its own screen (see
+              phoneStageList), exactly as Consultation's cards do. All Stages is a card of
+              its own up front because there it is a real answer — the whole branch — and
+              the strip it replaces had one too. */}
           {phoneLeadStageCards && (
             <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-leads-phone-cards">
               <NotifyCard
                 icon={LayoutDashboard}
                 label="All Stages"
                 value={totalLeads}
-                color={LEADS_PHONE_CARD_HEX}
+                color={PHONE_CARD_HEX}
+                // The strip's own blue — the one colour on this card.
+                badgeColor="#0ea5e9"
                 active={stageFilter === null}
                 onClick={() => {
                   setStageFilter(null);
@@ -2432,7 +2456,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   icon={leadStageIcon(s.name)}
                   label={s.name}
                   value={salesCounts[s.name] || 0}
-                  color={LEADS_PHONE_CARD_HEX}
+                  color={PHONE_CARD_HEX}
+                  badgeColor={notifyHex(s.color)}
                   active={stageFilter === s.name}
                   onClick={() => {
                     setStageFilter(s.name);

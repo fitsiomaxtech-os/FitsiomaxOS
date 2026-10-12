@@ -19,10 +19,19 @@ import { ChevronRight } from "lucide-react";
  *
  * The picked card is outlined and washed in its own colour, as in the reference the
  * user sent; the others stay white.
+ *
+ * `badgeColor` paints only the corner badge, leaving the card on `color` — how a
+ * colourless card still says somebody is waiting in it (Branch Leads and Consultation on
+ * a phone). Falls back to `color`, so a caller passing one hex keeps drawing badge and
+ * body in the same colour as before.
+ *
+ * `showCount` drops the badge entirely, for a row with nothing to count: the Management
+ * sub-tab cards are this shape without a number in the corner.
  */
-export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", active = false, onClick, testid }) => {
+export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true }) => {
   const count = Number(value) || 0;
   const live = count > 0;
+  const badge = badgeColor || color;
   return (
     <button
       type="button"
@@ -47,15 +56,17 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", active
         <ChevronRight aria-hidden className="h-4 w-4" style={{ color }} />
       </span>
 
-      <span aria-hidden className="absolute -right-1.5 -top-1.5 flex" data-testid={testid ? `${testid}-badge` : undefined}>
-        {live && <span className="absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping" style={{ background: color }} />}
-        <span
-          className="relative inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
-          style={{ background: live ? color : "#cbd5e1" }}
-        >
-          {count > 99 ? "99+" : count}
+      {showCount && (
+        <span aria-hidden className="absolute -right-1.5 -top-1.5 flex" data-testid={testid ? `${testid}-badge` : undefined}>
+          {live && <span className="absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping" style={{ background: badge }} />}
+          <span
+            className="relative inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+            style={{ background: live ? badge : "#cbd5e1" }}
+          >
+            {count > 99 ? "99+" : count}
+          </span>
         </span>
-      </span>
+      )}
     </button>
   );
 };
