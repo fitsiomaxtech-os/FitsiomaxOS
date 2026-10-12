@@ -217,7 +217,7 @@ async def staff_performance(
             branches = [b for b in [account.get("branch_id"), *(account.get("branch_ids") or []), e.get("branch_id")] if b]
             leads = await v3_col("leads").find(
                 without_past_moves({"branch_id": {"$in": branches}, "created_at": {"$gte": start, "$lte": f"{end}T23:59:59.999999"}}),
-                {"_id": 0, "treatment_fee_paid": 1, "session_package_id": 1, "diet_fee_paid": 1, "diet_chart_fee_paid": 1},
+                {"_id": 0, "treatment_fee_paid": 1, "session_package_id": 1, "rehab_fee_paid": 1, "diet_fee_paid": 1, "diet_chart_fee_paid": 1},
             ).to_list(20000) if branches else []
             work = sum(1 for lead in leads if _is_converted(lead))
             work_sub = f"of {len(leads)} leads"

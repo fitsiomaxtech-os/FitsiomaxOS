@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
+import { isCourseComplete } from "@/lib/leadStage";
 
 /**
  * The branch's Records tab. Branch Transfer Records is the first record kept here; the
@@ -66,12 +67,7 @@ export const RecordsPanel = ({ branchId }) => {
         })}
       </div>
       {sub === "branch_transfers" && <BranchTransferRecords branchId={branchId} />}
-      {/* Name only for now -- what this record holds is still to be agreed. */}
-      {sub === "leads_converted" && (
-        <div className="rounded-lg border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="records-leads-converted">
-          Leads Converted
-        </div>
-      )}
+      {sub === "leads_converted" && <LeadsConvertedRecords branchId={branchId} />}
       {sub === "lead_sources" && <LeadSourceRecords branchId={branchId} />}
       {/* The branch's one vendor screen. It moved here from Services and Products, so it
           edits: add, change and switch off vendors, and from View, see and add the
@@ -355,6 +351,362 @@ const BranchTransferRecords = ({ branchId }) => {
     </div>
   );
 };
+
+const has = (v) => v !== null && v !== undefined;
+
+// The four services sold after the consultation. Buying any one of them is what converts a
+// lead -- the Dashboard's Number Of Converted rule (_is_converted in v3_dashboard.py), so
+// the two figures never disagree. Change one, change both.
+const SERVICES = [
+  { key: "physio_assign", label: "Physio Assign", match: (l) => has(l.treatment_fee_paid) || !!l.session_package_id },
+  { key: "rehab", label: "Rehab", match: (l) => has(l.rehab_fee_paid) },
+  { key: "diet_consultation", label: "Diet Consultation", match: (l) => has(l.diet_fee_paid) },
+  { key: "diet_chart", label: "Diet Chart", match: (l) => has(l.diet_chart_fee_paid) },
+];
+const isConvertedLead = (l) => SERVICES.some((s) => s.match(l));
+const servicesOf = (l) => SERVICES.filter((s) => s.match(l)).map((s) => s.label);
+
+// Consultation stages a lead only stands on once it has been seen.
+const SEEN_STAGES = new Set(["Consultation Visit", "Fee Collected", "Physio Assign", "Consultation Completed"]);
+
+// The main line, in order. Each step counts the leads that REACHED it, not the ones standing
+// on it now: a lead is on one stage at a time, so "on Appointment now" drops everybody who
+// has since moved on and the line would rise and fall at random. `proof` is something the
+// lead keeps after moving on -- a date, a booking, a payment -- and is this step's own
+// evidence only. furthestStep adds the rest: reaching a step proves every step before it,
+// which is what makes each number at most the one before.
+const FUNNEL = [
+  { key: "leads", label: "Leads", proof: () => true },
+  { key: "appointment", label: "Appointment Date & Time", proof: (l) => !!l.appointment_date },
+  {
+    key: "consultation_booked",
+    label: "Consultation Booked",
+    proof: (l) => (l.consultation_follow_ups || []).length > 0 || !!l.head_consultation_stage
+      || (!!l.consultation_stage && l.consultation_stage !== "Cancel"),
+  },
+  {
+    key: "consultation_visit",
+    label: "Consultation Visit",
+    proof: (l) => !!l.consultation_decision || has(l.consultation_fee) || SEEN_STAGES.has(l.consultation_stage),
+  },
+  { key: "fee_collected", label: "Fee Collected", proof: (l) => has(l.package_paid) },
+  { key: "converted", label: "Converted", proof: isConvertedLead },
+];
+const furthestStep = (l) => {
+  for (let i = FUNNEL.length - 1; i > 0; i -= 1) if (FUNNEL[i].proof(l)) return i;
+  return 0;
+};
+
+const isCancelled = (l) => l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel";
+
+// Off the main line. RNR and Follow Up are detours a lead comes back from, so they count
+// anyone who was ever there; Not a Prospect and Cancel are where a lead stops; Completed
+// is read off the patient the way both Branch boards read it, since nothing writes it.
+const SIDE_STAGES = [
+  { key: "rnr", label: "RNR", match: (l) => (l.rnr_attempts || 0) > 0 || l.branch_stage === "RNR" },
+  { key: "follow_up", label: "Follow Up", match: (l) => (l.follow_ups || []).length > 0 || l.branch_stage === "Follow Up" },
+  { key: "not_a_prospect", label: "Not a Prospect", match: (l) => !!l.not_prospect_at || l.branch_stage === "Not a prospect" },
+  { key: "cancel", label: "Cancel", match: isCancelled },
+  { key: "completed", label: "Completed", match: (l) => !isCancelled(l) && (isCourseComplete(l) || l.branch_stage === "Completed") },
+];
+
+const PICKS = {
+  ...Object.fromEntries(FUNNEL.map((s, i) => [s.key, { label: s.label, match: (l) => furthestStep(l) >= i }])),
+  ...Object.fromEntries(SERVICES.map((s) => [s.key, s])),
+  ...Object.fromEntries(SIDE_STAGES.map((s) => [s.key, s])),
+};
+
+const pct = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : "—");
+
+/**
+ * Leads Converted: the branch's leads as a funnel, down to the ones who bought a service,
+ * with what they bought and where the rest went beside it. Counted off the same lead list
+ * Branch Leads draws, the way Leads Source is, and built the way the other two are -- cards,
+ * search, both date controls, Excel. A card narrows the list below it; Converted is the one
+ * the tab opens on, being the one it is named for.
+ *
+ * Dated by when the lead came in, as the Dashboard's funnel is: the cards then describe one
+ * set of people from enquiry to sale, rather than this month's sales over this month's
+ * enquiries, which are mostly different people. A lead moved to another branch is counted
+ * where it is now, as on every other Branch Leads screen.
+ */
+const LeadsConvertedRecords = ({ branchId }) => {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+  const [pick, setPick] = useState("converted");
+  const [quickDate, setQuickDate] = useState(null);
+  const [dateFilter, setDateFilter] = useState(null);
+  const applyDateFilter = (next) => {
+    setDateFilter(next);
+    if (next) setQuickDate(null);
+  };
+  const effectiveDateFilter = useMemo(() => intersectDateFilters(dateFilter, quickDate), [dateFilter, quickDate]);
+
+  const load = useCallback(async () => {
+    if (!branchId) return;
+    setLoading(true);
+    try {
+      const data = await getBranchBoard(branchId);
+      setLeads(data.leads || []);
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Failed to load converted leads");
+    }
+    setLoading(false);
+  }, [branchId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Date and search first, the card last, so the cards count what the date and search
+  // leave and pressing one never changes the numbers on the others. Newest lead first.
+  const dated = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const from = effectiveDateFilter?.from?.getTime();
+    const to = effectiveDateFilter?.to?.getTime();
+    return leads
+      .filter((l) => {
+        const ts = new Date(l.created_at || 0).getTime();
+        if (from && ts < from) return false;
+        if (to && ts > to) return false;
+        if (!q) return true;
+        return [l.name, l.phone, l.patient_number].some((v) => (v || "").toLowerCase().includes(q));
+      })
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }, [leads, search, effectiveDateFilter]);
+
+  const counts = useMemo(() => {
+    const out = Object.fromEntries(Object.keys(PICKS).map((k) => [k, 0]));
+    dated.forEach((l) => {
+      const reached = furthestStep(l);
+      FUNNEL.forEach((s, i) => { if (reached >= i) out[s.key] += 1; });
+      [...SERVICES, ...SIDE_STAGES].forEach((s) => { if (s.match(l)) out[s.key] += 1; });
+    });
+    return out;
+  }, [dated]);
+
+  const rows = useMemo(() => dated.filter(PICKS[pick].match), [dated, pick]);
+
+  const exportSheet = () => {
+    downloadCsv([
+      ["Patient Number", "Patient Name", "Phone", "Email", "Reached", "Converted", "Services Bought",
+        "Current Stage", "Lead Created Date", "Lead Created Time"],
+      ...rows.map((l) => [
+        l.patient_number, l.name, l.phone, l.email, FUNNEL[furthestStep(l)].label,
+        isConvertedLead(l) ? "Yes" : "No", servicesOf(l).join(", "), currentStage(l),
+        dateStampFull(l.created_at), callTimeStamp(l.created_at),
+      ]),
+    ], `leads-converted-${PICKS[pick].label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
+
+  const toggleSearch = () => {
+    if (searchOpen) setSearch("");
+    setSearchOpen((v) => !v);
+  };
+
+  if (!branchId) {
+    return <p className="py-10 text-center text-sm text-slate-400">Converted leads are kept per branch.</p>;
+  }
+
+  const card = (key, label, sub, accent = false) => (
+    <button
+      key={key}
+      type="button"
+      onClick={() => setPick(key)}
+      className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
+        pick === key ? "border-sky-400 ring-1 ring-sky-300" : accent ? "border-emerald-300 hover:border-emerald-400" : "border-slate-200 hover:border-slate-300"
+      }`}
+      title={label}
+      data-testid={`leads-converted-card-${key}`}
+    >
+      <p className="truncate pr-6 text-[11px] font-medium text-slate-500">{label}</p>
+      <p className={`text-xl font-bold ${accent ? "text-emerald-700" : "text-slate-800"}`}>{counts[key]}</p>
+      {sub ? <p className="truncate text-[10px] text-slate-400">{sub}</p> : null}
+      <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+    </button>
+  );
+  const heading = (text) => <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{text}</p>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        {heading("Funnel")}
+        {/* Each step's share is of the step before it -- where the branch loses people.
+            Converted also carries its share of every lead, the figure the tab is for. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
+          {FUNNEL.map((s, i) => {
+            const prev = i ? counts[FUNNEL[i - 1].key] : 0;
+            const sub = !i
+              ? "Every lead"
+              : s.key === "converted"
+                ? `${pct(counts[s.key], prev)} of ${FUNNEL[i - 1].label} · ${pct(counts[s.key], counts.leads)} of Leads`
+                : `${pct(counts[s.key], prev)} of ${FUNNEL[i - 1].label}`;
+            return card(s.key, s.label, sub, s.key === "converted");
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {heading("Services bought")}
+        {/* One patient can buy more than one, so these add up to more than Converted. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {SERVICES.map((s) => card(s.key, s.label, `${pct(counts[s.key], counts.converted)} of Converted`))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {heading("Other stages")}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
+          {SIDE_STAGES.map((s) => card(s.key, s.label, `${pct(counts[s.key], counts.leads)} of Leads`))}
+        </div>
+      </div>
+
+      {/* The Branch Transfer Records toolbar, field for field: one line on a phone with
+          the search behind its icon, the wrapping desk row from sm up. */}
+      <div className="flex flex-nowrap items-center gap-1 sm:flex-wrap sm:gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={toggleSearch}
+          className={`h-9 w-9 shrink-0 p-0 sm:hidden ${searchOpen ? "border-sky-500 bg-sky-50 text-sky-700" : ""}`}
+          title={searchOpen ? "Close search" : "Search"}
+          aria-label={searchOpen ? "Close search" : "Search"}
+          aria-expanded={searchOpen}
+          data-testid="leads-converted-search-toggle"
+        >
+          {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+        </Button>
+        <div className={`relative min-w-0 flex-1 sm:block sm:min-w-[200px] sm:max-w-xs ${searchOpen ? "" : "hidden"}`}>
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search patient, phone..."
+            className="pl-9"
+            data-testid="leads-converted-search"
+          />
+        </div>
+        <div className={`min-w-0 flex-1 sm:flex-none sm:block ${searchOpen ? "hidden" : ""}`}>
+          <QuickDateFilterBar value={quickDate} onChange={setQuickDate} testid="leads-converted-quick-date" showCustom={false} micro />
+        </div>
+        <span className="shrink-0 [&_button]:h-9 sm:[&_button]:h-10">
+          <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="leads-converted-date-filter" centered iconOnly phoneIconOnly />
+        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="h-9 w-9 p-0 border-slate-500 bg-slate-500 text-white hover:bg-slate-600 hover:text-white sm:h-8 sm:w-auto sm:px-3"
+            title="Refresh"
+            aria-label="Refresh"
+            data-testid="leads-converted-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            size="sm"
+            onClick={exportSheet}
+            disabled={!rows.length}
+            className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
+            title="Download as an Excel sheet"
+            aria-label="Download as an Excel sheet"
+            data-testid="leads-converted-download"
+          >
+            <Download className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Download Excel</span>
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-500" data-testid="leads-converted-showing">
+        Showing <span className="font-semibold text-slate-700">{PICKS[pick].label}</span> · {rows.length}
+      </p>
+
+      {!rows.length ? (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
+          {loading ? "Loading..." : leads.length ? "No leads match." : "No leads yet."}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2 sm:hidden">
+            {rows.map((l) => (
+              <div key={l.id} className="w-full rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-800">{l.name}</p>
+                    <p className="truncate text-xs text-slate-500">{currentStage(l)}</p>
+                  </div>
+                  <ServicePills services={servicesOf(l)} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+                  <span>{l.phone}</span>
+                  <span>· {dateStampFull(l.created_at)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-sm">
+                <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Patient</th>
+                    <th className="px-4 py-2.5 font-semibold">Contact</th>
+                    <th className="px-4 py-2.5 font-semibold">Reached</th>
+                    <th className="px-4 py-2.5 font-semibold">Services Bought</th>
+                    <th className="px-4 py-2.5 font-semibold">Stage</th>
+                    <th className="px-4 py-2.5 font-semibold">Lead Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((l) => (
+                    <tr key={l.id} className="hover:bg-slate-50" data-testid={`leads-converted-row-${l.id}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-800">{l.name}</p>
+                        <p className="font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {l.phone}
+                        {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{FUNNEL[furthestStep(l)].label}</td>
+                      <td className="px-4 py-3"><ServicePills services={servicesOf(l)} /></td>
+                      <td className="px-4 py-3 text-slate-600">{currentStage(l)}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <span className="whitespace-nowrap">{dateStampFull(l.created_at)}</span>
+                        <span className="block text-[11px] text-slate-400">{callTimeStamp(l.created_at)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const ServicePills = ({ services }) => (
+  services.length ? (
+    <span className="flex flex-wrap justify-end gap-1 sm:justify-start">
+      {services.map((s) => (
+        <span key={s} className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+          {s}
+        </span>
+      ))}
+    </span>
+  ) : <span className="text-[11px] text-slate-400">—</span>
+);
 
 /**
  * Where the branch's leads came from: one card per source, counted off the same lead list

@@ -1422,14 +1422,19 @@ async def v3_dashboard_branch_breakdown(
 #   Consultation the Consultation Fee was collected — the consultation HAPPENED. Booked is
 #                already counted by Slot Fixed, so counting booked here would print the
 #                same number twice and hide every no-show.
-#   Converted    they bought something beyond the consultation: a treatment package, or a
-#                diet plan. That is the moment a lead becomes a customer of a service.
+#   Converted    they bought something beyond the consultation: a treatment package, rehab,
+#                a diet plan or a diet chart. That is the moment a lead becomes a customer
+#                of a service. Branch Admin > Records > Leads Converted counts the same four
+#                (see isConvertedLead in RecordsPanel.jsx) -- change one, change both.
 
 
 def _is_converted(lead: dict) -> bool:
     return (
         lead.get("treatment_fee_paid") is not None
         or bool(lead.get("session_package_id"))
+        # Rehab is sold on its own fee, alongside or after treatment. Left out, a patient
+        # whose only purchase was Rehab read as a lead that never converted, having paid.
+        or lead.get("rehab_fee_paid") is not None
         or lead.get("diet_fee_paid") is not None
         # A chart bought and taken home is a service sold, the same as a plan booked. Left
         # out, a patient whose only purchase was a Diet Chart would sit in the funnel as an
@@ -1485,7 +1490,7 @@ METRIC_DEFS = {
         "ranged": True, "match": lambda l, today: l.get("package_paid") is not None,
     },
     "converted": {
-        "label": "Number Of Converted", "sub": "Took treatment or a diet plan",
+        "label": "Number Of Converted", "sub": "Took treatment, rehab or a diet plan",
         "ranged": True, "match": lambda l, today: _is_converted(l),
     },
     "assigned_follow_up": {
