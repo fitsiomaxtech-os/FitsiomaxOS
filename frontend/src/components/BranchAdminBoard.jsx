@@ -1782,7 +1782,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // rather than three taps in (Manage -> Consultant Calendar -> Sumaiya). The panel is the
     // ordinary Consultant Calendar with that expert preselected, so publishing a day here is
     // the same action as doing it there.
-    { key: "sumaiya", label: "Sumaiya Consultant", short: "Sumaiya", icon: UserRound },
+    { key: "sumaiya", label: "Sumaiya Consultations", short: "Sumaiya", icon: UserRound },
     { key: "accountant_mgmt", label: "Accountant Manage", short: "Accounts", icon: BadgeIndianRupee },
     // Named as Super Admin names it. This tab is that page's catalogue read from a
     // branch, and calling the same shelves two different things left nobody able to say
