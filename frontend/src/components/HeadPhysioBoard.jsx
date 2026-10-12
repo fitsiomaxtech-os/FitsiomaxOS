@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatTile } from "@/components/ui/stat-tile";
 import { LedgerCard } from "@/components/ui/ledger-card";
+import { NotifyCard } from "@/components/ui/notify-card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { ConsultationsBoard, leadPlanParts, PlanLine } from "@/components/ConsultationsBoard";
@@ -120,6 +121,11 @@ const HOUSE_VISIT_SUBTABS = [
   { key: "all", label: "All" },
 ];
 
+// The grey Branch Admin draws every phone card in (its PHONE_CARD_HEX): name and number
+// in slate, the tab's own colour only on the corner badge. Kept in step by hand — the two
+// boards share the look, not a module.
+const PHONE_CARD_HEX = "#64748b";
+
 const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || "")));
 
 /**
@@ -151,8 +157,18 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * and reviews booked to the Super Admin at `branchId`, rather than the reader's own (`mine`)
  * or the branch's whole queue.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false }) => {
+/**
+ * `phoneStack` — mounted inside a board that owns the phone's bottom bar (Branch Admin's
+ * Sumaiya Consultations). This board's own bar is left off, since two fixed bars on one spot
+ * put this one over the host's and left no way out of the tab. Below sm the work tabs show
+ * as the host's grey list cards instead, and a tap opens that list on its own screen with a
+ * back bar above it, like the host's stage stacks.
+ */
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false, phoneStack = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
+  // phoneStack only: a work tab's list is open on the phone, rather than the card list.
+  const [phoneListOpen, setPhoneListOpen] = useState(false);
+  const phoneCards = phoneStack && !phoneListOpen;
   const withProfile = roleLabel !== undefined;
   const profileOpen = withProfile && workTab === "profile";
   const bottomTabs = withProfile ? [...VISIBLE_WORK_TABS, PROFILE_TAB] : VISIBLE_WORK_TABS;
@@ -491,10 +507,68 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
     </div>
   );
 
+  // A work tab's figure and the caption under it, for the desk's cards and the phone's alike.
+  const tabFigure = (t) => {
+    const n = t.key === "client_reviews" ? "★"
+      : t.key === "consultations" ? (consultStages[firstStage] || 0)
+      : t.key === "review" ? reviewCount
+      // What is waiting on the house-visit side: new consultations and reviews
+      // still to write, the two figures the cards beside it give for the rest.
+      : t.key === "house_visit" ? (hvConsultStages[firstStage] || 0) + hvReviewCount
+      // All is the two of them together, every stage, nothing narrowed.
+      : consultCount + reviewCount;
+    // The caption names the scope the figure was counted over, so it has to
+    // move with it — a count of every review ever raised sitting under the words
+    // "on this day" is the card reporting a day it did not count.
+    // A day off the strip names itself: "today" and "yesterday" read as they
+    // are, a date needs the preposition or the card says "everything Sep 10".
+    const when = allTime ? "all time"
+      : !isDayKey(dateRange.key) ? "in this range"
+      : /^(Today|Yesterday|Tomorrow)$/.test(dateRange.label) ? dateRange.label.toLowerCase()
+      : `on ${dateRange.label}`;
+    const sub = t.key === "client_reviews" ? "stars & feedback"
+      : t.key === "consultations" ? (firstStage ? `in ${firstStage}` : when)
+      : t.key === "review" ? when
+      : t.key === "house_visit" ? `to do ${when}`
+      : `everything ${when}`;
+    return { n, sub };
+  };
+
   return (
     // Bottom padding on phones clears the fixed bottom bar, so the last row of any list
-    // is still reachable instead of sitting underneath it.
-    <div className="space-y-4 pb-20 sm:pb-0" data-testid="head-physio-board-root">
+    // is still reachable instead of sitting underneath it. Under phoneStack the host's bar
+    // is the one on screen and the host pads for it.
+    //
+    // flex+gap under phoneStack rather than space-y: the back bar below is the first child
+    // and display:none from sm up, and space-y would still count it and push the toolbar
+    // down 16px on a desk.
+    <div className={phoneStack ? "flex flex-col gap-4 [&>*]:min-w-0" : "space-y-4 pb-20 sm:pb-0"} data-testid="head-physio-board-root">
+      {/* phoneStack, one tab's list open: the tab being read, its count, and the way back
+          to the cards. The host's back bar, so it sits flush under the phone header. */}
+      {phoneStack && phoneListOpen && (() => {
+        const t = VISIBLE_WORK_TABS.find((x) => x.key === workTab) || VISIBLE_WORK_TABS[0];
+        const Icon = t.icon;
+        return (
+          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="hp-phone-back">
+            <button
+              type="button"
+              onClick={() => setPhoneListOpen(false)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+              aria-label="Back to the tab cards"
+              data-testid="hp-phone-back-btn"
+            >
+              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${PHONE_CARD_HEX}1F` }}>
+                <Icon aria-hidden className="h-4 w-4" style={{ color: PHONE_CARD_HEX }} />
+              </span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t.label}</span>
+            </button>
+            <span className="mr-1 inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold text-white" style={{ background: t.color }}>
+              {tabFigure(t).n}
+            </span>
+          </div>
+        );
+      })()}
       {/* Three regions, and the day strip is the middle one — centred in the toolbar
           rather than pushed against the search or the buttons.
 
@@ -604,7 +678,34 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
         </div>
       </div>
 
-      <div className={`space-y-4 ${profileOpen ? "hidden sm:block" : ""}`} data-testid="hp-work-view">
+      {/* phoneStack, below sm: the work tabs as the host's grey list cards, the count on a
+          corner badge in the tab's colour. A tap opens that tab's list on its own screen.
+          The tool bar above stays, since its dates set what these count. */}
+      {phoneCards && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="hp-phone-cards">
+          {VISIBLE_WORK_TABS.map((t) => (
+            <NotifyCard
+              key={t.key}
+              icon={t.icon}
+              label={t.label}
+              value={tabFigure(t).n}
+              color={PHONE_CARD_HEX}
+              badgeColor={t.color}
+              active={workTab === t.key}
+              onClick={() => {
+                setWorkTab(t.key);
+                setPhoneListOpen(true);
+                window.scrollTo({ top: 0 });
+              }}
+              testid={`hp-phone-card-${t.key}`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Hidden on a phone while the cards are the screen; still mounted, so the lists
+          behind them go on reporting the counts the cards show. */}
+      <div className={`space-y-4 ${profileOpen ? "hidden sm:block" : ""} ${phoneCards ? "max-sm:hidden" : ""}`} data-testid="hp-work-view">
           {/* The board's navigation and its stage filter in one. Each card carries the
               count behind it, so the day's workload reads without opening anything.
               From tablet up only: on a phone the bottom bar is the navigation, and a
@@ -613,28 +714,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               text and the row has to answer to the tallest rather than each card to itself. */}
           <div className={`hidden items-stretch gap-3 sm:grid ${TAB_GRID_COLS[VISIBLE_WORK_TABS.length] || "sm:grid-cols-4"}`} data-testid="hp-work-tabs">
             {VISIBLE_WORK_TABS.map((t) => {
-              const n = t.key === "client_reviews" ? "★"
-                : t.key === "consultations" ? (consultStages[firstStage] || 0)
-                : t.key === "review" ? reviewCount
-                // What is waiting on the house-visit side: new consultations and reviews
-                // still to write, the two figures the cards beside it give for the rest.
-                : t.key === "house_visit" ? (hvConsultStages[firstStage] || 0) + hvReviewCount
-                // All is the two of them together, every stage, nothing narrowed.
-                : consultCount + reviewCount;
-              // The caption names the scope the figure was counted over, so it has to
-              // move with it — a count of every review ever raised sitting under the words
-              // "on this day" is the card reporting a day it did not count.
-              // A day off the strip names itself: "today" and "yesterday" read as they
-              // are, a date needs the preposition or the card says "everything Sep 10".
-              const when = allTime ? "all time"
-                : !isDayKey(dateRange.key) ? "in this range"
-                : /^(Today|Yesterday|Tomorrow)$/.test(dateRange.label) ? dateRange.label.toLowerCase()
-                : `on ${dateRange.label}`;
-              const sub = t.key === "client_reviews" ? "stars & feedback"
-                : t.key === "consultations" ? (firstStage ? `in ${firstStage}` : when)
-                : t.key === "review" ? when
-                : t.key === "house_visit" ? `to do ${when}`
-                : `everything ${when}`;
+              const { n, sub } = tabFigure(t);
               return (
                 <div key={t.key} className="h-full">
                   {ledgerCards ? (
@@ -1021,6 +1101,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
           patients, and this is the board's only tab row there: the summary cards are
           drawn from tablet up. Same tabs, thumb-high. */}
       {/* Same slot as the Physio board's bar: glyph in a chip, its name small beneath. */}
+      {!phoneStack && (
       <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.06)] sm:hidden" data-testid="hp-bottom-nav">
         {bottomTabs.map((t) => {
           const Icon = t.icon;
@@ -1036,6 +1117,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
           );
         })}
       </nav>
+      )}
     </div>
   );
 };

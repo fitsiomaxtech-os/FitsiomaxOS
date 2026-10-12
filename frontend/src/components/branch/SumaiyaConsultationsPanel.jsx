@@ -22,6 +22,9 @@ export const SumaiyaConsultationsPanel = ({ branchId }) => {
         ledgerCards
         rowArrow
         oneLineRows
+        // Branch Admin's bottom bar is the phone's navigation here; the board's tabs
+        // become the list cards the other Branch Admin tabs show on a phone.
+        phoneStack
       />
     </div>
   );
