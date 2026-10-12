@@ -23,16 +23,11 @@ import { getTreatmentTypes, createTreatmentType, updateTreatmentType, deleteTrea
  * catalogue is not licence to edit what a Head Physio recorded on the day.
  */
 /**
- * Two switches, because the endpoints behind them no longer agree on who may.
+ * Two switches: `canEdit` is rename and delete, `canCreate` is the add button. Super
+ * Admin, Business Dev and Branch Admin may do all three, so both boards that mount this
+ * use the defaults; the switches stay for a board that should only read.
  *
- * `canEdit` is rename and delete — catalogue maintenance, still super_admin and
- * business_dev only. `canCreate` is the add button, and the POST now takes branch_admin
- * as well: a Branch Admin adds a treatment the branch actually offers, from their own
- * store board. That board passes canEdit={false} canCreate, so it gets the one button
- * whose endpoint takes it rather than three that would 403 on submit.
- *
- * canCreate defaults to canEdit, so every board that could edit before sees exactly
- * what it saw before without having to say so again.
+ * canCreate defaults to canEdit, so a board that can edit can add without saying so.
  */
 export const TreatmentTypesBoard = ({ canEdit = true, canCreate = canEdit }) => {
   const [rows, setRows] = useState([]);

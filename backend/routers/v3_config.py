@@ -101,9 +101,8 @@ async def v3_get_treatment_types(_: V3UserOut = Depends(v3_current_user)):
 # store board (Services and Products > Treatments), which mounts this same list. The
 # catalogue is one shared vocabulary for the whole OS, so a branch adding a name adds it
 # for every branch — which is what the Treatment Summary checklist wants: the same
-# handful of words wherever a day is tagged. Rename and delete below stay with
-# super_admin and business_dev: correcting or removing a shared word is catalogue
-# maintenance, not a branch closing a gap it ran into.
+# handful of words wherever a day is tagged. Rename and delete below take branch_admin
+# too, so a branch can correct or remove a word from the same board it adds them on.
 @router.post("/treatment-types", response_model=V3TreatmentTypeOut)
 async def v3_add_treatment_type(payload: V3TreatmentTypeCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     name = (payload.name or "").strip()
@@ -125,7 +124,7 @@ async def v3_add_treatment_type(payload: V3TreatmentTypeCreate, _: V3UserOut = D
 async def v3_update_treatment_type(
     treatment_type_id: str,
     payload: V3TreatmentTypeUpdate,
-    _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev")),
+    _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
 ):
     """Rename a treatment.
 
@@ -160,7 +159,7 @@ async def v3_update_treatment_type(
 
 
 @router.delete("/treatment-types/{treatment_type_id}")
-async def v3_delete_treatment_type(treatment_type_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def v3_delete_treatment_type(treatment_type_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     """Remove a treatment from the catalogue.
 
     No in-use check, unlike service types: nothing in the OS references a treatment type

@@ -486,14 +486,11 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
         />
       )}
       {INVENTORY_TABS.has(tab) && <StoreInventoryPanel key={tab} category={tab} reloadToken={reloadTick} />}
-      {/* The same board Super Admin keeps this catalogue on, minus the maintenance. The
-          tab has been in this row since it was built and had no panel behind it, so a
-          branch clicking Treatments got "setup coming soon" for a list that has been
-          populated all along. Create is the branch's own — a Branch Admin adds what the
-          branch offers, and the POST takes them now. Rename and delete stay Super Admin's
-          (and Business Dev's), so those buttons are simply not shown rather than shown to
-          a 403. */}
-      {tab === "treatment" && <TreatmentTypesBoard canEdit={false} canCreate />}
+      {/* The same board Super Admin keeps this catalogue on. The tab has been in this row
+          since it was built and had no panel behind it, so a branch clicking Treatments got
+          "setup coming soon" for a list that has been populated all along. Create, rename
+          and delete are all the branch's now — the endpoints take branch_admin. */}
+      {tab === "treatment" && <TreatmentTypesBoard />}
       {!PANELS_BUILT.has(tab) && branchStoreTabs.map((t) => tab === t.key && (
         <PlaceholderPanel key={t.key} label={t.label} testid={`branch-store-panel-${t.key}`} />
       ))}
