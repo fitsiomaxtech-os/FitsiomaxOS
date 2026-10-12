@@ -45,8 +45,12 @@ const TABS = [
  *                        neither of which that role's token is allowed to call. Without
  *                        this the controls would be drawn and then 403 on press. Super
  *                        Admin's own mounts leave it off and keep the full page.
+ * @param hideTabs        sub-tab keys left off the row. The Business Development
+ *                        Executive's board mounts Branch Control as its own top-level tab,
+ *                        so its Management tab hides the copy here.
  */
-export const BranchManagementBoard = ({ actingUser, onNavigateToOperations, initialTab = "overview", lockTab = false, detailReadOnly = false } = {}) => {
+export const BranchManagementBoard = ({ actingUser, onNavigateToOperations, initialTab = "overview", lockTab = false, detailReadOnly = false, hideTabs = [] } = {}) => {
+  const tabs = TABS.filter((t) => !hideTabs.includes(t.key));
   const [tab, setTab] = useState(initialTab);
   const [drilledBranchId, setDrilledBranchId] = useState(null);
   // A callback ref, not useRef: the portal has to re-render once the node exists, and a
@@ -79,9 +83,9 @@ export const BranchManagementBoard = ({ actingUser, onNavigateToOperations, init
             className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 md:hidden"
             data-testid="bm-subtab-select"
           >
-            {TABS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            {tabs.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
             return (
@@ -359,7 +363,7 @@ const BranchSelectDropdown = ({ value, branches, onChange }) => {
   );
 };
 
-const BranchControlTab = ({ actingUser }) => {
+export const BranchControlTab = ({ actingUser }) => {
   const [branches, setBranches] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [viewAs, setViewAs] = useState("branch_admin"); // "branch_admin" | "head_physio" | "physio"

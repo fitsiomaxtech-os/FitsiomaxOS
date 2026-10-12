@@ -52,7 +52,7 @@ import { BranchTransferDialog } from "@/components/branch/BranchTransferDialog";
 // LeadDetailDialog is Sales View's own lead popup, opened here from a row in a card's list
 // so a lead reads and moves the same way from either place.
 import { LeadDetailDialog, PreSalesCRM } from "@/components/PreSalesCRM";
-import { BranchManagementBoard } from "@/components/branch/BranchManagementBoard";
+import { BranchControlTab, BranchManagementBoard } from "@/components/branch/BranchManagementBoard";
 // Super Admin's own six Dashboard tabs -- Marketing, Sales, Revenue, Team, Clients and
 // Analytics -- and the hook that fetches what they read. Mounted on this desk's own
 // Dashboard beside Summary; see DASH_SUB_TABS below.
@@ -120,12 +120,14 @@ const BoardFallback = () => (
 // They sit after Sales View because that is the order the day runs in: what the two lead
 // desks did, then the money, the people and the catalogue behind it.
 //
-// Branch Control is labelled "Management" on this strip and sits right after Dashboard:
-// the desk reads the day, then goes straight to the branches it manages. The key stays
-// "branch_control" so CRMPage's phone footer and anything holding the tab still match.
+// Branch Control and Management sit right after Dashboard: the desk reads the day, then
+// goes straight to the branches it manages. Branch Control is the panel's own Branch
+// Control sub-tab lifted out to the strip; Management is the rest of that panel
+// (Overview, Analytics, MANAGER). CRMPage's phone footer mirrors these keys.
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { key: "branch_control", label: "Management", icon: LayoutDashboard },
+  { key: "branch_control", label: "Branch Control", icon: LayoutDashboard },
+  { key: "management", label: "Management", icon: Building2 },
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
   { key: "sales_view", label: "Sales View", icon: Headphones },
   { key: "finance", label: "Finance", icon: BadgeIndianRupee },
@@ -472,10 +474,17 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
         )}
       </Suspense>
 
-      {/* Management (key branch_control) — the Branch Manager panel in full, as a tab rather than the
-          dialog Operations opens it in. No `lockTab`, which is the whole point of it being
-          here: that flag drops the sub-tab row, and Overview, Analytics and Branch Control
-          are exactly what this desk did not have before.
+      {/* Branch Control — the Branch Manager panel's own Branch Control sub-tab, on the
+          strip as a tab of its own. Acts as the signed-in executive, the same as it did
+          inside the panel. */}
+      {activeTab === "branch_control" && (
+        <BranchControlTab actingUser={currentUser} />
+      )}
+
+      {/* Management — the Branch Manager panel, as a tab rather than the dialog Operations
+          opens it in, less the Branch Control sub-tab that has its own tab above. No
+          `lockTab`, which is the whole point of it being here: that flag drops the sub-tab
+          row, and Overview and Analytics are exactly what this desk did not have before.
 
           It opens on MANAGER, the tab that lists the branches and creates them -- the
           thing the old Branches tab did, so the board opens where it used to.
@@ -484,8 +493,8 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           account actions (activate, deactivate, permanently delete a user) and the
           payment/UPI settings, and neither is branch control -- see the note on the
           widened guards in backend/routers/v3_branch_mgmt.py. */}
-      {activeTab === "branch_control" && (
-        <BranchManagementBoard actingUser={currentUser} initialTab="creation" detailReadOnly />
+      {activeTab === "management" && (
+        <BranchManagementBoard actingUser={currentUser} initialTab="creation" detailReadOnly hideTabs={["branch_control"]} />
       )}
 
       {/* Settings — Super Admin's own Marketing Source and CI/CD ROOTS, as one sub-tab
