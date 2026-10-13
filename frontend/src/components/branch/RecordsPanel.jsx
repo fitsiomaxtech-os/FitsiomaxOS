@@ -1071,13 +1071,8 @@ const LeadsConvertedRecords = ({ branchId }) => {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-slate-500" data-testid="leads-converted-showing">
-        <p className="min-w-0 truncate">
-          Showing <span className="font-semibold text-slate-700">{pick === "leads" ? "All Leads" : CARD_BY_KEY[pick].label}</span>
-          {source !== ALL_SOURCES ? <> · <span className="font-semibold text-slate-700">{source}</span></> : null}
-          {" "}· {rows.length}
-        </p>
-        {filtered ? (
+      {filtered ? (
+        <div className="flex items-center">
           <button
             type="button"
             onClick={clearFilters}
@@ -1086,8 +1081,8 @@ const LeadsConvertedRecords = ({ branchId }) => {
           >
             <X className="h-3 w-3" /> Clear
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {!rows.length ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
