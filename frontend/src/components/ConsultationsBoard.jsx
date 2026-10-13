@@ -924,7 +924,7 @@ const UpiCollectFields = ({ draft, onChange, testPrefix, required = false }) => 
           <SelectContent className="z-[200] max-h-72 border-slate-200">
             {(options || []).map((o) => (
               <SelectItem key={o.id} value={o.upi_id} className="text-xs text-slate-700 focus:bg-sky-50 focus:text-sky-700">
-                {`${o.upi_id} — ${o.bank_name}${o.branch_name ? ` (${o.branch_name})` : ""}`}
+                {`${o.bank_name}${o.branch_name ? ` (${o.branch_name})` : ""}`}
               </SelectItem>
             ))}
             {!(options || []).length && (
