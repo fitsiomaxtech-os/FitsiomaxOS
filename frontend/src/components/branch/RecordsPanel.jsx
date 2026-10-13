@@ -62,30 +62,62 @@ const countBySource = (leads) => {
     .sort(([a, x], [b, y]) => (a === NO_SOURCE) - (b === NO_SOURCE) || y - x || a.localeCompare(b));
 };
 
+// Branch Transfer Records' two views, switched from the right end of the sub-tab strip.
+const TRANSFER_VIEWS = [
+  { key: "transfers", label: "Transfers", icon: List },
+  { key: "summary", label: "Summary", icon: LayoutDashboard },
+];
+
 export const RecordsPanel = ({ branchId }) => {
   const [sub, setSub] = useState("branch_transfers");
+  const [transferView, setTransferView] = useState("transfers");
 
   return (
     <div className="flex flex-col gap-4" data-testid="branch-records-panel">
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200">
-        {RECORD_TABS.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setSub(t.key)}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium sm:text-sm ${
-                sub === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
-              }`}
-              data-testid={`records-sub-tab-${t.key}`}
-            >
-              <Icon className="h-4 w-4" /> {t.label}
-            </button>
-          );
-        })}
+      <div className="flex items-center gap-2 border-b border-slate-200">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {RECORD_TABS.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setSub(t.key)}
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium sm:text-sm ${
+                  sub === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
+                }`}
+                data-testid={`records-sub-tab-${t.key}`}
+              >
+                <Icon className="h-4 w-4" /> {t.label}
+              </button>
+            );
+          })}
+        </div>
+        {sub === "branch_transfers" && (
+          <div className="mb-1 inline-flex shrink-0 rounded-[5px] border border-slate-200 bg-white p-0.5" role="tablist">
+            {TRANSFER_VIEWS.map((v) => {
+              const Icon = v.icon;
+              return (
+                <button
+                  key={v.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={transferView === v.key}
+                  onClick={() => setTransferView(v.key)}
+                  className={`flex items-center gap-1.5 rounded-[4px] px-2.5 py-1 text-xs font-medium sm:px-3 sm:py-1.5 ${
+                    transferView === v.key ? "bg-sky-600 text-white" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                  title={v.label}
+                  data-testid={`transfer-records-view-${v.key}`}
+                >
+                  <Icon className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{v.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
-      {sub === "branch_transfers" && <BranchTransferRecords branchId={branchId} />}
+      {sub === "branch_transfers" && <BranchTransferRecords branchId={branchId} view={transferView} />}
       {sub === "leads_converted" && <LeadsConvertedRecords branchId={branchId} />}
       {sub === "lead_sources" && <LeadSourceRecords branchId={branchId} />}
       {/* The branch's one vendor screen. It moved here from Services and Products, so it
@@ -147,12 +179,7 @@ const buildTransferSummary = (records, handover) => {
       || a.name.localeCompare(b.name));
 };
 
-const TRANSFER_VIEWS = [
-  { key: "transfers", label: "Transfers", icon: List },
-  { key: "summary", label: "Summary", icon: LayoutDashboard },
-];
-
-const BranchTransferRecords = ({ branchId }) => {
+const BranchTransferRecords = ({ branchId, view }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -213,7 +240,6 @@ const BranchTransferRecords = ({ branchId }) => {
     incoming: dated.filter((r) => r.direction === "incoming").length,
   }), [dated]);
 
-  const [view, setView] = useState("transfers");
   const handover = useMemo(() => attributeHandover(records), [records]);
   // The Summary reads what the date and search leave, as the cards do -- direction is the
   // Transfers list's own filter, and the settlement needs both directions to net.
@@ -287,26 +313,6 @@ const BranchTransferRecords = ({ branchId }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="inline-flex w-fit rounded-[5px] border border-slate-200 bg-white p-0.5" role="tablist">
-        {TRANSFER_VIEWS.map((v) => {
-          const Icon = v.icon;
-          return (
-            <button
-              key={v.key}
-              type="button"
-              role="tab"
-              aria-selected={view === v.key}
-              onClick={() => setView(v.key)}
-              className={`flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-medium ${
-                view === v.key ? "bg-sky-600 text-white" : "text-slate-500 hover:text-slate-700"
-              }`}
-              data-testid={`transfer-records-view-${v.key}`}
-            >
-              <Icon className="h-3.5 w-3.5" /> {v.label}
-            </button>
-          );
-        })}
-      </div>
 
       {view === "transfers" && (
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
