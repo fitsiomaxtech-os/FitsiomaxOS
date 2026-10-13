@@ -10346,8 +10346,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <>
                                 {/* The act itself lives in the view, not in the tab that opens
                                     the view. A tab that also fired the picker could not be
-                                    pressed to come back to what it was showing. */}
-                                <div className="mt-3">
+                                    pressed to come back to what it was showing.
+
+                                    Its own inset, because the panel body is flush: without
+                                    it the button sat jammed in the panel's corner. */}
+                                <div className="p-3">
                                   <Button
                                     size="sm"
                                     className={`bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 hover:shadow ${ACT_BTN}`}
