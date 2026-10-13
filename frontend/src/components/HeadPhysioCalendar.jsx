@@ -1198,7 +1198,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     replaces the button says what is about to open and nothing reaches the
                     calendar until its Confirm. */}
                 {monthConfirm ? (
-                  <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/70 p-3" data-testid="month-confirm-bar">
+                  <div className="mt-3 shrink-0 rounded-lg border border-violet-200 bg-violet-50/70 p-3" data-testid="month-confirm-bar">
                     <p className="text-xs font-semibold text-violet-800">
                       Open {monthConfirmDays.length} day{monthConfirmDays.length === 1 ? "" : "s"} of {monthConfirm.label}
                       {!isConsultant && ` · ${monthConfirmSlots} slot${monthConfirmSlots === 1 ? "" : "s"}`}
@@ -1239,7 +1239,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     variant="outline"
                     onClick={selectWholeMonth}
                     disabled={!monthReady || !monthHasFuture || saving}
-                    className="mt-3 w-full border-violet-200 text-xs text-violet-700 hover:bg-violet-50"
+                    className="mt-3 h-9 w-full shrink-0 border-violet-200 text-xs text-violet-700 hover:bg-violet-50"
                     title={monthHasFuture ? "Pick every working day left in this month — branch leave days are skipped" : "This month has gone by"}
                     data-testid="select-whole-month-btn"
                   >
@@ -1257,7 +1257,10 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   </p>
                 )}
 
-                {selectedDate && (
+                {/* Not on the physio's calendar: the day's shift and what it opens are
+                    already said on the right, beside the date, so this was the same thing
+                    twice under the month. */}
+                {selectedDate && !isPhysio && (
                   <p className="mt-4 hidden border-t border-slate-100 pt-3 text-[11px] text-slate-400 sm:block" data-testid="calendar-day-hint">
                     {isConsultant ? (
                       dayShiftLabel
