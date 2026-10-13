@@ -890,8 +890,8 @@ const CashDenominations = ({ amount, notes, onChange, testPrefix }) => {
  *
  * Fetched once per page load and shared by all five fees below (a Consultation Fee and a
  * Rehab Fee opened one after the other are the same list), and never blocks the popup:
- * the transaction id is what the payment cannot be saved without, so a slow or refused
- * lookup leaves the ID box alone and simply says the list is unavailable.
+ * a slow or refused lookup leaves the transaction id box alone and simply says the list
+ * is unavailable. Both fields are optional.
  */
 let upiOptionsPromise = null;
 const loadUpiOptions = () => {
@@ -899,7 +899,7 @@ const loadUpiOptions = () => {
   return upiOptionsPromise;
 };
 
-const UpiCollectFields = ({ draft, onChange, testPrefix, required = false }) => {
+const UpiCollectFields = ({ draft, onChange, testPrefix }) => {
   const [options, setOptions] = useState(null);
 
   useEffect(() => {
@@ -937,7 +937,7 @@ const UpiCollectFields = ({ draft, onChange, testPrefix, required = false }) => 
       </div>
       <div>
         <label className="mb-1 block text-[11px] font-medium text-slate-500">
-          UPI Transaction ID {required && <span className="text-rose-500">*</span>}
+          UPI Transaction ID
         </label>
         <Input
           value={draft.upi_transaction_id}
@@ -4617,12 +4617,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     if (mode === "cash") {
       payload.denominations = countedNotes(packageConfirmDraft.cash_notes);
     } else if (mode === "upi") {
-      // The reference is the only thing that ties this money to the bank statement, so a
-      // blank one is refused rather than saved as a collection nobody can trace back.
-      if (!packageConfirmDraft.upi_transaction_id.trim()) {
-        toast.error("UPI Transaction ID is required");
-        return;
-      }
+      // The transaction id is optional: sent when the desk has one, blank otherwise.
       payload.upi_transaction_id = packageConfirmDraft.upi_transaction_id.trim();
       // Which company UPI ID it was taken into, when the desk picked one. Sent only
       // when it was: an empty pick means nobody said, not that it went nowhere.
@@ -5966,11 +5961,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // server checks these too and answers with the same words, so the desk gets told
     // before the request goes out rather than after it comes back.
     if (mode === "upi") {
-      if (!(rehabFeeDraft.upi_transaction_id || "").trim()) {
-        toast.error("UPI Transaction ID is required");
-        return;
-      }
-      payload.upi_transaction_id = rehabFeeDraft.upi_transaction_id.trim();
+      payload.upi_transaction_id = (rehabFeeDraft.upi_transaction_id || "").trim();
       if ((rehabFeeDraft.upi_id || "").trim()) payload.upi_id = rehabFeeDraft.upi_id.trim();
     } else if (mode === "card") {
       if (!attachCardDetails(payload, rehabFeeDraft)) return;
@@ -6175,10 +6166,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         }
         payload.denominations = countedNotes(dietFeeConfirmDraft.cash_notes);
       } else if (mode === "upi") {
-        if (!dietFeeConfirmDraft.upi_transaction_id.trim()) {
-          toast.error("UPI Transaction ID is required");
-          return;
-        }
         payload.upi_transaction_id = dietFeeConfirmDraft.upi_transaction_id.trim();
         if ((dietFeeConfirmDraft.upi_id || "").trim()) payload.upi_id = dietFeeConfirmDraft.upi_id.trim();
       } else if (mode === "card") {
@@ -10948,7 +10935,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         draft={packageConfirmDraft}
                         onChange={(patch) => setPackageConfirmDraft({ ...packageConfirmDraft, ...patch })}
                         testPrefix="cons-collect-fee"
-                        required
                       />
                     )}
 
@@ -11101,7 +11087,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                packageConfirmDraft.payment_lines.some((l) => l.mode === "cash" && !notesSettled(l.notes, l.amount)) ||
                                Math.abs(packageConfirmDraft.payment_lines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0) - parseFloat(collectFeeDraft.amount)) > 0.01)
                             : ((mode === "cash" && !notesSettled(packageConfirmDraft.cash_notes, collectFeeDraft.amount)) ||
-                               (mode === "upi" && !packageConfirmDraft.upi_transaction_id.trim()) ||
                                (mode === "card" && !packageConfirmDraft.card_transaction_id.trim()) ||
                                (BANK_DETAIL_MODES.includes(mode) && (!packageConfirmDraft.account_number.trim() || !packageConfirmDraft.account_holder_name.trim() || !packageConfirmDraft.bank_name.trim() || !packageConfirmDraft.ifsc_code.trim())) ||
                                (mode === "account_transfer" && !packageConfirmDraft.transfer_reference.trim())))))

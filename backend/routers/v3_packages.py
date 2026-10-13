@@ -384,19 +384,21 @@ def build_payment_details(payload) -> tuple:
         # Transaction id alone: none of the Collect popups ask for a UTR any more, and a
         # field the form cannot supply would reject every UPI collection. A caller that
         # still sends one has it recorded.
-        if not (payload.upi_transaction_id or "").strip():
-            raise HTTPException(status_code=400, detail="UPI Transaction ID is required")
-        txn = payload.upi_transaction_id.strip()
+        #
+        # Optional, by request (2026-10-13): the desk is not stopped from saving a UPI
+        # payment for want of the transaction id. Recorded when given, named in the log
+        # only then, so a blank one does not leave "UPI txn " with nothing after it.
+        txn = (payload.upi_transaction_id or "").strip()
         utr = (payload.upi_utr or "").strip()
         # Which company UPI ID took the money, when the desk picked one off the list of
         # them. Recorded rather than required: a payment is a payment whether or not
         # anyone said where it landed, and every UPI collection taken before the picker
         # existed has no answer to give.
         details = {"upi_transaction_id": txn}
-        suffix = f" · UPI txn {txn}"
+        suffix = f" · UPI txn {txn}" if txn else " · UPI"
         if utr:
             details["upi_utr"] = utr
-            suffix += f", UTR {utr}"
+            suffix += f", UTR {utr}" if txn else f" UTR {utr}"
         bank_upi = (getattr(payload, "upi_id", "") or "").strip()
         if bank_upi:
             details["upi_id"] = bank_upi
