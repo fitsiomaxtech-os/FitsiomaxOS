@@ -10254,13 +10254,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       );
                     }
                     // Money is taken on the cards below, each fee on its own. What is left
-                    // for the tab row is the schedule behind a part-paid Treatment Fee —
-                    // a view of what was agreed, not another way to collect it.
+                    // is the schedule behind a part-paid Treatment Fee — a view of what was
+                    // agreed, not another way to collect it — so it sits in the header band
+                    // beside the Part-paid tag it explains.
                     const FeeActions = partialPlan ? (
                       <Button
                         size="sm"
                         variant="outline"
-                        className={`border-slate-200 bg-white/70 text-slate-600 hover:bg-white ${ACT_BTN}`}
+                        className={`h-7 border-slate-200 bg-white/70 text-slate-600 hover:bg-white ${ACT_BTN}`}
                         onClick={openPartialScheduleDraft}
                         data-testid="cons-open-partial-schedule-sidebar"
                       >
@@ -10284,15 +10285,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         chip={detailView ? (
                           <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick}>{detailView.chip.label}</PanelChip>
                         ) : partialPlan ? (
-                          <PanelChip tone={partialPlan.overdue ? "rose" : "amber"}>{partialPlan.overdue ? "Balance Overdue" : "Part-paid"}</PanelChip>
+                          <PanelChip tone={partialPlan.overdue ? "rose" : "amber"} square>{partialPlan.overdue ? "Balance Overdue" : "Part-paid"}</PanelChip>
                         ) : treatmentFeePaid ? (
                           <PanelChip tone="emerald" tick>Both Fees Collected</PanelChip>
                         ) : (
                           <PanelChip>Treatment Fee Due</PanelChip>
                         )}
+                        actions={FeeActions}
                         tabs={
                           <>
-                            {FeeActions}
                             {/* Only ever the way back. On the panel's own view this tab was
                                 the words "Assign Physio" sitting directly above the button of
                                 the same name that does the work, and pressing it went nowhere.
