@@ -27,9 +27,12 @@ import { ChevronRight } from "lucide-react";
  *
  * `showCount` drops the badge entirely, for a row with nothing to count: the Management
  * sub-tab cards are this shape without a number in the corner.
+ *
+ * `count` puts its own number in the badge where the figure is not one -- Accountant
+ * Manage's Summary cards show an amount, and how many payments make it up in the corner.
  */
-export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true }) => {
-  const count = Number(value) || 0;
+export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount }) => {
+  const count = Number(badgeCount ?? value) || 0;
   const live = count > 0;
   const badge = badgeColor || color;
   return (

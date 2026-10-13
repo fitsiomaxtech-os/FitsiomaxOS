@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ChevronLeft, ArrowRight, Undo2, X, Trash2, Eye, LayoutDashboard, CalendarClock, BadgePercent, BookCheck } from "lucide-react";
+import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ChevronLeft, ArrowRight, Undo2, X, Trash2, Eye, LayoutDashboard, CalendarClock, BadgePercent, BookCheck, ClipboardCheck, Hourglass, BadgeCheck, Banknote, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -125,12 +125,12 @@ const TabBadge = ({ badge }) => {
 // card that read the piles at once was taken off at the branch's request; its Old Client
 // Instalment button lives on Payment Schedule now.
 const SUMMARY_CARDS = [
-  { key: "collected", label: "To Verify", color: "#4f46e5", hint: "Taken at the desk, waiting for the branch to check it and send it to the accountant" },
-  { key: "requested", label: "Awaiting Approval", color: "#d97706", hint: "Verified and sent, waiting for the accountant to sign it off" },
-  { key: "approved", label: "Income Approved", color: "#059669", hint: "Signed off by the accountant" },
+  { key: "collected", label: "To Verify", color: "#4f46e5", icon: ClipboardCheck, hint: "Taken at the desk, waiting for the branch to check it and send it to the accountant" },
+  { key: "requested", label: "Awaiting Approval", color: "#d97706", icon: Hourglass, hint: "Verified and sent, waiting for the accountant to sign it off" },
+  { key: "approved", label: "Income Approved", color: "#059669", icon: BadgeCheck, hint: "Signed off by the accountant" },
   // The drawer between money in and money out: what the branch should be holding now.
-  { key: "cash", label: "Cash In Hand", color: "#0284c7" },
-  { key: "expenses", label: "Expenses", color: "#e11d48" },
+  { key: "cash", label: "Cash In Hand", color: "#0284c7", icon: Banknote },
+  { key: "expenses", label: "Expenses", color: "#e11d48", icon: Receipt },
 ];
 
 /** Which of the three one collection is in -- read off the record, where the arrow and its
@@ -441,6 +441,15 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // Phone only (phoneCards): whether a tab is open on its own screen, or the cards are up.
   const [phoneOpen, setPhoneOpen] = useState(false);
   const phoneCardsUp = phoneCards && !phoneOpen;
+  // Summary's own drill on a phone, Branch Leads' stack again at each step: 0 its five
+  // cards, 1 the one picked (an income pile's eight revenue cards, or the drawer / expense
+  // panel), 2 one revenue card's list. The back bar climbs it a step at a time.
+  const [summaryStep, setSummaryStep] = useState(0);
+  // Which Summary step a phone is on, or null where the drill is not in force (no
+  // phoneCards, or another tab). Everything it hides is max-sm:hidden, so from sm up the
+  // Summary reads exactly as it always has.
+  const sumStep = phoneCards && tab === "summary" ? summaryStep : null;
+  const phoneHide = (show) => (sumStep !== null && !show ? "max-sm:hidden" : "");
   const [ledger, setLedger] = useState("income");
   const role = useMemo(sessionRole, []);
   // The branch desk verifies what it took and sends it up (MoveButton), and undoes its own
@@ -896,21 +905,33 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           the header -- the bar Branch Leads' stage lists and Management's sub-tabs show. */}
       {phoneCards && phoneOpen && (() => {
         const t = MAIN_TABS.find((x) => x.key === tab) || MAIN_TABS[0];
-        const Icon = t.icon;
+        // Inside Summary the bar names the step it is on: the card picked, then the
+        // revenue card under it -- "To Verify · Consultation".
+        const inSummary = tab === "summary" && summaryStep > 0;
+        const pickedCard = SUMMARY_CARDS.find((c) => c.key === (ledger === "income" ? incomeStage : ledger));
+        const pickedView = REVENUE_VIEWS.find((v) => v.key === revenueView);
+        const Icon = inSummary ? (summaryStep === 2 ? pickedView?.icon : pickedCard?.icon) || t.icon : t.icon;
+        const label = inSummary
+          ? (summaryStep === 2 ? `${pickedCard?.label} · ${pickedView?.short}` : pickedCard?.label)
+          : t.label;
         return (
           <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="accountant-manage-phone-back">
             <button
               type="button"
-              onClick={() => { setPhoneOpen(false); window.scrollTo({ top: 0 }); }}
+              onClick={() => {
+                if (inSummary) setSummaryStep((n) => n - 1);
+                else setPhoneOpen(false);
+                window.scrollTo({ top: 0 });
+              }}
               className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
-              aria-label="Back to the tab cards"
+              aria-label="Back"
               data-testid="accountant-manage-phone-back-btn"
             >
               <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${PHONE_CARD_HEX}1F` }}>
                 <Icon aria-hidden className="h-4 w-4" style={{ color: PHONE_CARD_HEX }} />
               </span>
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t.label}</span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{label}</span>
             </button>
           </div>
         );
@@ -1069,6 +1090,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 onClick={() => {
                   setTab(t.key);
                   setPhoneOpen(true);
+                  setSummaryStep(0);
                   window.scrollTo({ top: 0 });
                 }}
                 testid={`accountant-manage-phone-card-${t.key}`}
@@ -1084,7 +1106,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       {loading && !data ? (
         <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
       ) : tab === "summary" ? (
-        <div className="space-y-4" data-testid="accountant-manage-summary">
+        // flex+gap rather than space-y, for the phone stacks above the desk cards: space-y
+        // spaces a hidden sibling, and would leave the desk a stray 16px under the bar.
+        <div className="flex flex-col gap-4" data-testid="accountant-manage-summary">
           {/* The four cards, each the view under it (Zumba's summary cards, ui/ledger-card):
               the two income piles, the drawer, and the money that went out. The picked one is
               filled in its colour. Where only signed-off money counts there is no pile to move
@@ -1094,7 +1118,42 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               gone: the branch asked for these cards and nothing else. */}
           {/* Five to a line from lg; on a phone two to a line with the fifth, Expenses,
               across both columns rather than half a line on its own. */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1" data-testid="accountant-manage-ledger-filter">
+          {/* Phone, step 0: the five as Branch Leads' stack, one to a row in the shared grey,
+              the amount as the figure and how many payments make it up in the corner badge. */}
+          {sumStep === 0 && (
+            <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="accountant-manage-phone-summary-cards">
+              {SUMMARY_CARDS.map((c) => {
+                const pile = c.key === "approved" || c.key === "requested" || c.key === "collected";
+                const value = pile ? stagePiles[c.key].total : c.key === "cash" ? cashInHand : expenseTotals.approved_total;
+                const count = pile ? stagePiles[c.key].count : Number(expenseTotals.approved_count) || 0;
+                return (
+                  <NotifyCard
+                    key={c.key}
+                    icon={c.icon}
+                    label={c.label}
+                    value={fmt(value)}
+                    count={count}
+                    showCount={c.key !== "cash"}
+                    color={PHONE_CARD_HEX}
+                    badgeColor={c.color}
+                    active={pile ? ledger === "income" && incomeStage === c.key : ledger === c.key}
+                    onClick={() => {
+                      if (pile) {
+                        setLedger("income");
+                        setIncomeStage(c.key);
+                      } else {
+                        setLedger(c.key);
+                      }
+                      setSummaryStep(1);
+                      window.scrollTo({ top: 0 });
+                    }}
+                    testid={`accountant-manage-phone-summary-card-${c.key}`}
+                  />
+                );
+              })}
+            </div>
+          )}
+          <div className={`grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1 ${phoneHide(false)}`} data-testid="accountant-manage-ledger-filter">
             {SUMMARY_CARDS.map((c) => {
               // The income-side cards, each opening the income ledger at its own pile.
               const pile = c.key === "approved" || c.key === "requested" || c.key === "collected";
@@ -1148,11 +1207,35 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               the revenue tiles, the source table, the payment-mode row — describes money
               going out, so the whole of the income side steps aside for it rather than
               being reused with different numbers in it. */}
-          {ledger === "cash" && <BranchExpensesPanel section="cash" onChanged={loadExpenseTotals} branchId={branchId} />}
-          {ledger === "expenses" && <BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} startDate={startDate} endDate={endDate} />}
+          {ledger === "cash" && <div className={phoneHide(sumStep > 0)}><BranchExpensesPanel section="cash" onChanged={loadExpenseTotals} branchId={branchId} /></div>}
+          {ledger === "expenses" && <div className={phoneHide(sumStep > 0)}><BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} startDate={startDate} endDate={endDate} /></div>}
 
           {ledger === "income" && (
           <>
+          {/* Phone, step 1 on an income pile: its eight revenue cards as the same stack. A
+              tap opens that card's list (step 2). */}
+          {sumStep === 1 && (
+            <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="accountant-manage-phone-revenue-cards">
+              {REVENUE_VIEWS.map((v) => (
+                <NotifyCard
+                  key={v.key}
+                  icon={v.icon}
+                  label={v.short}
+                  value={fmt(sums.totals[v.key])}
+                  count={sums.counts[v.key]}
+                  color={PHONE_CARD_HEX}
+                  badgeColor={v.color}
+                  active={revenueView === v.key}
+                  onClick={() => {
+                    setRevenueView(v.key);
+                    setSummaryStep(2);
+                    window.scrollTo({ top: 0 });
+                  }}
+                  testid={`accountant-manage-phone-revenue-card-${v.key}`}
+                />
+              ))}
+            </div>
+          )}
           {/* All eight on one line where there is room for eight, stepping down to four
               and then two rather than squeezing: at lg an eighth of the width is narrower
               than the card's own text column.
@@ -1164,7 +1247,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
 
               The same card as the five above (ui/ledger-card), so the two rows read as one
               set: white at rest, the picked one filled solid in its own colour. */}
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8">
+          <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${phoneHide(false)}`}>
             {REVENUE_VIEWS.map((v) => (
               <LedgerCard
                 key={v.key}
@@ -1181,7 +1264,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           </div>
 
           {!branchId && branchRows.length > 1 && (
-            <div className="rounded-md border border-slate-200 bg-white" data-testid="accountant-manage-by-branch">
+            <div className={`rounded-md border border-slate-200 bg-white ${phoneHide(sumStep === 2)}`} data-testid="accountant-manage-by-branch">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5">
                 <h3 className="text-sm font-semibold text-slate-700">Revenue by branch</h3>
                 {unplacedTotal > 0 && (
@@ -1234,6 +1317,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             </div>
           )}
 
+          <div className={phoneHide(sumStep === 2)}>
           <RevenueDetailTable
             rows={revenueView === "collected" ? filteredTxns : filteredTxns.filter((t) => t.source === revenueView)}
             onOpen={openDetail}
@@ -1241,6 +1325,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             busy={moving}
             verify={verify}
           />
+          </div>
           </>
           )}
         </div>
