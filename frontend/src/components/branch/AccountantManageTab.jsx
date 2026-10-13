@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Receipt, Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2, X, Trash2 } from "lucide-react";
+import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2, X, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -317,6 +317,16 @@ const MoveChip = ({ txs, verify, label }) => {
       {send ? <>{label || "Send for approval"} <ArrowRight className="h-3.5 w-3.5" /></> : <><Undo2 className="h-3.5 w-3.5" /> {label || "Undo"}</>}
     </button>
   );
+};
+
+/** The To Verify column's button: sends whatever of a row is still unverified, or, once it
+ *  has all gone, takes back what is awaiting approval. A dash when nothing can move. */
+const RowMoveChip = ({ txs, verify }) => {
+  const toVerify = txs.filter((t) => stageOf(t) === "collected");
+  const waiting = txs.filter((t) => stageOf(t) === "requested");
+  const pile = toVerify.length ? toVerify : waiting;
+  if (!pile.length) return <span className="text-slate-300">—</span>;
+  return <MoveChip txs={pile} verify={verify} />;
 };
 
 const PAYMENT_MODE_STYLES = {
@@ -1604,21 +1614,24 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
             <thead className="bg-slate-500 text-[11px] font-semibold uppercase tracking-wide text-white">
               <tr>
                 <th className="w-[4%] px-3 py-2.5 text-center">S.No</th>
-                <th className="w-[14%] px-3 py-2.5 text-left">Client</th>
-                <th className="w-[13%] px-3 py-2.5 text-center">Transaction ID</th>
-                <th className="w-[12%] px-3 py-2.5 text-center">Consultation/Session</th>
-                <th className="w-[11%] px-3 py-2.5 text-center">Phone</th>
-                <th className="w-[10%] px-3 py-2.5 text-center">Paid Amount</th>
-                <th className="w-[10%] px-3 py-2.5 text-center">Payment Mode</th>
-                <th className="w-[10%] px-3 py-2.5 text-center">Date</th>
+                <th className={`${verify ? "w-[12%]" : "w-[14%]"} px-3 py-2.5 text-left`}>Client</th>
+                <th className={`${verify ? "w-[11%]" : "w-[13%]"} px-3 py-2.5 text-center`}>Transaction ID</th>
+                <th className={`${verify ? "w-[11%]" : "w-[12%]"} px-3 py-2.5 text-center`}>Consultation/Session</th>
+                <th className={`${verify ? "w-[9%]" : "w-[11%]"} px-3 py-2.5 text-center`}>Phone</th>
+                <th className={`${verify ? "w-[8%]" : "w-[10%]"} px-3 py-2.5 text-center`}>Paid Amount</th>
+                <th className={`${verify ? "w-[8%]" : "w-[10%]"} px-3 py-2.5 text-center`}>Payment Mode</th>
+                <th className={`${verify ? "w-[8%]" : "w-[10%]"} px-3 py-2.5 text-center`}>Date</th>
                 <th className="w-[9%] px-3 py-2.5 text-center">Branch</th>
+                {/* The branch desk sends a row's unverified collections straight from the
+                    list, without opening it first. */}
+                {verify && <th className="w-[13%] px-3 py-2.5 text-center">To Verify</th>}
                 {/* Action where the desk can move the row, View where it can only open it. */}
                 <th className="w-[7%] px-3 py-2.5 text-center">{verify ? "Action" : "View"}</th>
               </tr>
             </thead>
             <tbody>
               {groups.length === 0 ? (
-                <tr><td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-400">No transactions yet.</td></tr>
+                <tr><td colSpan={verify ? 11 : 10} className="px-3 py-8 text-center text-sm text-slate-400">No transactions yet.</td></tr>
               ) : groups.map((g, i) => {
                 const many = g.payments.length > 1;
                 const isOpen = open.has(g.key);
@@ -1628,9 +1641,9 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
                 return [
                   <tr
                     key={g.key}
-                    // A client with several payments folds open on a click; with one, the
-                    // row is that payment and opens it, as its arrow does.
-                    onClick={many ? () => toggle(g.key) : () => onOpen(g.payments, groupHead(g))}
+                    // The whole row opens the client's payments, as its arrow does; the
+                    // payments chip in Transaction ID is what folds a client open.
+                    onClick={() => onOpen(g.payments, groupHead(g))}
                     className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50"
                     data-testid={`revenue-detail-row-${g.key}`}
                   >
@@ -1689,6 +1702,11 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
                       {g.branches[0] || "—"}
                       {g.branches.length > 1 && <span className="text-slate-400"> +{g.branches.length - 1}</span>}
                     </td>
+                    {verify && (
+                      <td className="px-3 py-2.5 text-center">
+                        <RowMoveChip txs={g.payments} verify={verify} />
+                      </td>
+                    )}
                     <td className="px-3 py-2.5 text-center">
                       {/* The one control on the row: into the client's payments, where Send
                           for approval, Undo and each receipt are (PaymentDetails). */}
@@ -1708,7 +1726,11 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
                   // Each collection exactly as it listed before, minus the client identity
                   // the row above already carries.
                   ...(many && isOpen ? g.payments.map((p) => (
-                    <tr key={`${g.key}-${p.id}`} className="border-b border-slate-100 bg-slate-50" data-testid={`revenue-detail-payment-${p.id}`}>
+                    <tr
+                      key={`${g.key}-${p.id}`}
+                      onClick={() => onOpen([p], groupHead(g))}
+                      className="cursor-pointer border-b border-slate-100 bg-slate-50 transition-colors hover:bg-slate-100"
+                      data-testid={`revenue-detail-payment-${p.id}`}>
                       <td className="border-l-2 border-l-sky-300 px-3 py-1.5" />
                       <td className="px-3 py-1.5" />
                       <td className="px-3 py-1.5 text-center">
@@ -1722,6 +1744,11 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
                       <td className="px-3 py-1.5 text-center"><PaymentModes tx={p} /></td>
                       <td className="px-3 py-1.5 text-center text-slate-600">{dayOf(p.date)}</td>
                       <td className="px-3 py-1.5 text-center text-slate-600">{p.branch_name || "—"}</td>
+                      {verify && (
+                        <td className="px-3 py-1.5 text-center">
+                          <RowMoveChip txs={[p]} verify={verify} />
+                        </td>
+                      )}
                       {/* Each payment is a collection in its own right, so it opens on its own. */}
                       <td className="px-3 py-1.5 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -1868,7 +1895,7 @@ const PaymentDetails = ({ head, payments, verify, onReceipt, onClientHistory, on
                         title="Receipt — print, send or download it again"
                         data-testid={`payment-details-receipt-${t.id}`}
                       >
-                        <Receipt className="h-3.5 w-3.5" /> Receipt
+                        <Eye className="h-3.5 w-3.5" /> Receipt
                       </button>
                     )}
                   </div>
