@@ -3,6 +3,7 @@ import { Banknote, BookCheck, BookLock, BookOpen, CalendarDays, CreditCard, Smar
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RecordCards } from "@/components/branch/RecordCards";
 import { isoToManual } from "@/components/DateFilterPopover";
 import { getClosingBalance, getClosingBalanceHistory, saveClosingBalance, closeBook, reopenBook, getRevenueOverview, getFinanceExpenses } from "@/lib/api";
 import { loadSession } from "@/lib/session";
@@ -845,7 +846,50 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {/* Phone: one card per evening rather than nine columns behind a sideways swipe. The
+          card opens that evening's count sheet, as the date on the table row does. */}
+      <RecordCards
+        rows={rows}
+        empty="No days in this range yet."
+        testid="closing-balance-history-cards"
+        card={(r) => ({
+          key: r.on,
+          testid: `closing-balance-history-card-${r.on}`,
+          title: dayLabel(r.on),
+          subtitle: r.record
+            ? `Counted by ${r.record.counted_by || "—"}${r.record.note ? ` · ${r.record.note}` : ""}`
+            : `Not counted${r.dayIncome === 0 && r.dayExpense === 0 ? " · nothing taken or paid out" : ""}`,
+          amount: (
+            <>
+              <span className="block text-sm font-bold tabular-nums text-slate-800">{r.record ? fmt(r.counted) : "—"}</span>
+              <span className="block text-[11px] tabular-nums text-slate-400">
+                Expected {fmt(r.totalExpected)}{r.drifted ? ` · now ${fmt(r.liveExpected)}` : ""}
+              </span>
+            </>
+          ),
+          meta: r.record
+            ? [
+              `Cash ${fmt(r.record.cash_total)} · UPI ${fmt(r.record.upi_amount)} · Card ${fmt(r.record.card_amount)}`,
+              <Variance counted={r.counted} expected={r.totalExpected} />,
+              <BookChip book={r.book} />,
+            ]
+            : [],
+          actions: r.record ? (
+            r.book?.closed && canReopenBooks() ? (
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                <UndoCloseButton onClick={() => undoClose(r.on)} busy={undoing === r.on} testid={`closing-balance-history-card-undo-${r.on}`} />
+              </span>
+            ) : null
+          ) : (
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+              <Save className="h-3.5 w-3.5" /> Count this evening
+            </span>
+          ),
+          onOpen: () => onOpenDay(r.on),
+        })}
+      />
+
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
         {/* Fixed proportions rather than auto widths, the same reason the expenses table
             pins its own: left to itself the browser hands a wide screen's slack to
             whichever row holds the longest note, and the dates stop lining up. */}

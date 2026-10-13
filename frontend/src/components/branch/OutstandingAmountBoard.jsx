@@ -127,7 +127,7 @@ const MonthFilterBar = ({ month, setMonth }) => {
       <button
         type="button"
         onClick={() => setMonth("all")}
-        className={`h-12 shrink-0 rounded-md border px-5 text-sm font-semibold transition ${allActive ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+        className={`h-10 shrink-0 rounded-md border px-3 text-sm font-semibold transition sm:h-12 sm:px-5 ${allActive ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
         data-testid="outstanding-month-all"
       >
         All
@@ -143,7 +143,9 @@ const MonthFilterBar = ({ month, setMonth }) => {
         <ChevronLeft className="h-4 w-4" />
       </button>
 
-      <div className="flex flex-1 gap-2 overflow-x-auto">
+      {/* min-w-0 so the five months scroll inside the bar on a phone, rather than pushing
+          it, and the page with it, past the right edge. */}
+      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {visible.map((label, i) => {
           const idx = windowStart + i;
           const active = String(month) === String(idx);
@@ -153,7 +155,7 @@ const MonthFilterBar = ({ month, setMonth }) => {
               key={label}
               type="button"
               onClick={() => setMonth(idx)}
-              className="h-12 flex-1 min-w-[100px] rounded-md border text-sm font-semibold transition"
+              className="h-10 min-w-[84px] flex-1 rounded-md border text-sm font-semibold transition sm:h-12 sm:min-w-[100px]"
               style={active
                 ? { backgroundColor: color, borderColor: color, color: "#fff" }
                 : { backgroundColor: `${color}14`, borderColor: `${color}55`, color }}
@@ -311,14 +313,16 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
           {/* One toolbar, then the table, as on the Zumba tab: status and amount on the
               left, search and the buttons at the right. On a window too narrow for all
               three groups they wrap onto their own lines rather than interleaving. */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-1.5" data-testid="outstanding-status-filter">
+          {/* On a phone each group is a line of its own, the bar's full width: the four
+              statuses four across, then Min/Max halves, then search over the buttons. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-3 py-2.5 sm:px-4">
+            <div className="grid w-full grid-cols-4 gap-1.5 sm:flex sm:w-auto sm:flex-wrap sm:items-center" data-testid="outstanding-status-filter">
               {STATUS_FILTERS.map(([key, label, on]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setStatus(key)}
-                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
+                  className={`h-9 min-w-0 rounded-md border px-1 text-[11px] font-semibold leading-tight transition sm:h-8 sm:px-3 sm:text-xs ${
                     status === key
                       ? `${on} text-white shadow-sm`
                       : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
@@ -330,24 +334,24 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
               ))}
             </div>
             <span className="hidden h-6 w-px bg-slate-200 xl:block" aria-hidden="true" />
-            <div className="flex items-center gap-1.5">
+            <div className="flex w-full items-center gap-1.5 sm:w-auto">
               <Input
                 type="number" value={minAmount} onChange={(e) => setMinAmount(e.target.value)}
-                placeholder="Min amount" className="h-8 w-28 text-xs"
+                placeholder="Min amount" className="h-9 min-w-0 flex-1 text-xs sm:h-8 sm:w-28 sm:flex-none"
                 data-testid="outstanding-min-amount"
               />
               <Input
                 type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)}
-                placeholder="Max amount" className="h-8 w-28 text-xs"
+                placeholder="Max amount" className="h-9 min-w-0 flex-1 text-xs sm:h-8 sm:w-28 sm:flex-none"
                 data-testid="outstanding-max-amount"
               />
             </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search name or phone"
-                className="h-8 w-44 text-xs"
+                className="h-9 w-full text-xs sm:h-8 sm:w-44"
                 data-testid="outstanding-search"
               />
               <button

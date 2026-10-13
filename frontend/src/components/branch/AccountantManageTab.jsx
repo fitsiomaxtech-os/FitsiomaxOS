@@ -1,10 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ArrowRight, Undo2, X, Trash2, Eye } from "lucide-react";
+import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ChevronLeft, ArrowRight, Undo2, X, Trash2, Eye, LayoutDashboard, CalendarClock, BadgePercent, BookCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
 import { LedgerCard } from "@/components/ui/ledger-card";
+import { NotifyCard } from "@/components/ui/notify-card";
 import { toast } from "@/components/ui/sonner";
 import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
@@ -34,20 +35,24 @@ const ConsultationsBoard = lazy(() => import("@/components/ConsultationsBoard"))
 // superseded here by Outstanding Amount under the same name — the balance a client still
 // owes, not the schedule that produced it.
 const MAIN_TABS = [
-  { key: "summary", label: "Summary" },
-  { key: "schedule", label: "Payment Schedule" },
-  { key: "discount", label: "Discount Applied", tone: "discount" },
+  { key: "summary", label: "Summary", icon: LayoutDashboard },
+  { key: "schedule", label: "Payment Schedule", icon: CalendarClock },
+  { key: "discount", label: "Discount Applied", tone: "discount", icon: BadgePercent },
   // The day-end count. Last of the four because it is the one thing here that is not a
   // reading of what the system already knows -- it is the desk telling the system what it
   // actually holds, which is only worth asking once the day it closes has been read.
-  { key: "closing", label: "Closing Balance", tone: "closing" },
+  { key: "closing", label: "Closing Balance", tone: "closing", icon: Wallet },
   // Directly after it, because it is the same thing read back: Closing Balance counts an
   // evening and signs it off, this is the month of evenings already signed. Separated
   // rather than folded into that panel's own Weekly/Monthly view, which answers a
   // different question -- that one lists every evening including the ones nobody counted,
   // and this one lists only the days somebody put their name to.
-  { key: "closebooks", label: "Close Books", tone: "closing" },
+  { key: "closebooks", label: "Close Books", tone: "closing", icon: BookCheck },
 ];
+
+// Branch Admin's phone cards wear the shared grey its Branch Leads and Management stacks do
+// (BranchAdminBoard's PHONE_CARD_HEX); colour is left to the corner badge.
+const PHONE_CARD_HEX = "#64748b";
 
 /**
  * The windows this toolbar offers, out of the seven lib/dateRange names.
@@ -414,13 +419,16 @@ const PaymentModes = ({ tx }) => {
  * @param toolbarTarget  An element in the page's own top bar (the finance workspace's tab
  *              row). Given one, the date range and Refresh are drawn there, so the whole
  *              dashboard reads off one top bar and this board keeps a single row of its own.
+ * @param phoneCards  Below sm, the five tabs as Branch Leads' stage stack (NotifyCard, one to
+ *              a row) instead of the tab buttons; a tap opens that tab on its own screen with
+ *              a back bar above it. Branch Admin's own tab asks for it, under its bottom nav.
  * @param scoped  The branch is picked somewhere above this board and moves while it
  *              stays mounted -- Super Admin > Finance's branch-pill row. The select here
  *              is dropped (those pills already are it) and the branch is read straight
  *              off the prop on every render, so an empty one means All Branches rather
  *              than "pick your own", which is what a bare branchId would mean.
  */
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null }) => {
+export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -430,6 +438,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // exactly as it did.
   const setBranchId = setOwnBranchId;
   const [tab, setTab] = useState("summary");
+  // Phone only (phoneCards): whether a tab is open on its own screen, or the cards are up.
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const phoneCardsUp = phoneCards && !phoneOpen;
   const [ledger, setLedger] = useState("income");
   const role = useMemo(sessionRole, []);
   // The branch desk verifies what it took and sends it up (MoveButton), and undoes its own
@@ -877,8 +888,33 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   );
 
   return (
-    <div className="space-y-4" data-testid="accountant-manage-tab">
+    // flex+gap rather than space-y: the phone back bar and card stack are sm:hidden, and
+    // space-y counts a hidden first child, leaving the desk bar a stray 16px down.
+    <div className="flex flex-col gap-4" data-testid="accountant-manage-tab">
       {toolbarTarget && dateControls && createPortal(dateControls, toolbarTarget)}
+      {/* Phone, one tab open: the tab being read and the way back to the cards, flush under
+          the header -- the bar Branch Leads' stage lists and Management's sub-tabs show. */}
+      {phoneCards && phoneOpen && (() => {
+        const t = MAIN_TABS.find((x) => x.key === tab) || MAIN_TABS[0];
+        const Icon = t.icon;
+        return (
+          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="accountant-manage-phone-back">
+            <button
+              type="button"
+              onClick={() => { setPhoneOpen(false); window.scrollTo({ top: 0 }); }}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+              aria-label="Back to the tab cards"
+              data-testid="accountant-manage-phone-back-btn"
+            >
+              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${PHONE_CARD_HEX}1F` }}>
+                <Icon aria-hidden className="h-4 w-4" style={{ color: PHONE_CARD_HEX }} />
+              </span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t.label}</span>
+            </button>
+          </div>
+        );
+      })()}
       {/* No title, no standfirst, no scope chip. This board is only ever reached by opening
           the tab named after it, so a heading repeating that name, a sentence explaining
           what a ledger is, and a chip reading back the two controls directly under it cost
@@ -933,7 +969,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             its line -- so the last two split theirs in half rather than leaving a hole. A
             name too long for a third of a phone breaks onto a second line inside a 44px tab
             instead of being cut off at the edge. */}
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap min-[1900px]:gap-2.5">
+        {/* Off a phone that wears the tabs as cards (phoneCards): the stack above is them. */}
+        <div className={`flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap min-[1900px]:gap-2.5 ${phoneCards ? "max-sm:hidden" : ""}`}>
           {MAIN_TABS.map((t) => {
             const badge = tabBadges[t.key];
             return (
@@ -976,17 +1013,20 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             )}
             {/* Six buttons are wider than a phone, so there they are one dropdown, sharing a
                 line with the date dropdown -- see dateControls. */}
-            <FilterSelect
-              value={paymentModeFilter}
-              onChange={setPaymentModeFilter}
-              active={paymentModeFilter !== "all"}
-              accent="indigo"
-              label="Payment mode"
-              className="flex-1 sm:hidden"
-              testid="accountant-manage-payment-mode-select"
-            >
-              {PAYMENT_MODES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </FilterSelect>
+            {/* Not over the phone cards, where no tab is open yet for it to narrow. */}
+            {!phoneCardsUp && (
+              <FilterSelect
+                value={paymentModeFilter}
+                onChange={setPaymentModeFilter}
+                active={paymentModeFilter !== "all"}
+                accent="indigo"
+                label="Payment mode"
+                className="flex-1 sm:hidden"
+                testid="accountant-manage-payment-mode-select"
+              >
+                {PAYMENT_MODES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </FilterSelect>
+            )}
             <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2 sm:flex" data-testid="accountant-manage-payment-mode-filter">
               {PAYMENT_MODES.map(([key, label]) => (
                 <button
@@ -1007,6 +1047,40 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         {!toolbarTarget && dateControls}
       </div>
 
+      {/* Phone, no tab open: under the date range, the five tabs as Branch Leads' stage
+          stack, one to a row, in the shared grey with colour only in the corner badge --
+          what that tab has waiting, the same count its desk tab carries. Closing Balance and
+          Close Books count nothing. */}
+      {phoneCardsUp && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="accountant-manage-phone-cards">
+          {MAIN_TABS.map((t) => {
+            const counted = t.key !== "closing" && t.key !== "closebooks";
+            const count = t.key === "discount" ? discountedTxns.length : tabBadges[t.key]?.count || 0;
+            return (
+              <NotifyCard
+                key={t.key}
+                icon={t.icon}
+                label={t.label}
+                value={counted ? count : undefined}
+                color={PHONE_CARD_HEX}
+                badgeColor={t.key === "discount" ? "#d97706" : "#e11d48"}
+                showCount={counted}
+                active={tab === t.key}
+                onClick={() => {
+                  setTab(t.key);
+                  setPhoneOpen(true);
+                  window.scrollTo({ top: 0 });
+                }}
+                testid={`accountant-manage-phone-card-${t.key}`}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Hidden on a phone while the tab cards are up -- the cards are the screen then, and
+          this is what one of them opens. Still mounted, so an open tab keeps its state. */}
+      <div className={phoneCardsUp ? "max-sm:hidden" : "contents"}>
       {loading && !data ? (
         <p className="py-10 text-center text-sm text-slate-400">Loading...</p>
       ) : tab === "summary" ? (
@@ -1199,6 +1273,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       ) : (
         <DiscountAppliedBoard rows={discountedTxns} onOpen={openDetail} verify={verify} />
       )}
+      </div>
 
       {/* The Custom Range dialog moved into FinanceDateFilter, which opens it from the row
           above — one dialog for the four finance pages instead of a copy per page. */}
