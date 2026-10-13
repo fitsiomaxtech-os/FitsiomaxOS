@@ -4228,7 +4228,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 </div>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5">
               {/* Super Admin only — the backend refuses anyone else, and the branch losing
                   the patient should not be the one deciding it. */}
               {canTransferBranch && (
@@ -4236,25 +4236,24 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   onClick={() => setTransferring(true)}
                   title="Branch Transfer"
                   aria-label="Branch Transfer"
-                  className="inline-flex items-center rounded-[5px] border border-indigo-200 bg-white p-1.5 text-indigo-600 transition hover:bg-indigo-50"
+                  className="inline-flex items-center rounded-[5px] border border-indigo-200 bg-white p-2 text-indigo-600 transition hover:bg-indigo-50"
                   data-testid="branch-lead-transfer"
                 >
-                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  <ArrowLeftRight className="h-5 w-5" />
                 </button>
               )}
-              {/* Icon only on a phone, the same square as Branch Transfer beside it; the
-                  word comes back from sm up, where the header has room for it. */}
+              {/* Icon only, the same square as Branch Transfer beside it. */}
               <button
                 onClick={() => setEditing(true)}
                 title="Edit"
                 aria-label="Edit"
-                className="inline-flex items-center gap-1.5 rounded-[5px] border border-slate-200 bg-white p-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 sm:px-2.5 sm:py-1"
+                className="inline-flex items-center rounded-[5px] border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
                 data-testid="branch-lead-edit"
               >
-                <Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit</span>
+                <Pencil className="h-5 w-5" />
               </button>
-              <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="branch-lead-close">
-                <X className="h-4 w-4" />
+              <button onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="branch-lead-close">
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -4515,9 +4514,6 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
 
               {/* Stage Pipeline */}
               <div className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm" data-testid="branch-lead-pipeline">
-                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><ChevronRight className="h-4 w-4" /></span>
-                </div>
                 {/* Three equal columns on a phone, so the six pills sit in two even rows
                     instead of wrapping wherever their widths happen to break. From sm up
                     they go back to a wrapping row of natural widths. */}
