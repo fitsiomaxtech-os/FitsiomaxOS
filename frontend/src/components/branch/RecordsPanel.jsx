@@ -1,15 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronRight, Download, EyeOff, Lock, Megaphone, RefreshCw, Search, Truck, UserCheck, X } from "lucide-react";
+import {
+  ArrowLeftRight, ChevronDown, ChevronRight, Download, EyeOff, FileSpreadsheet, FileText, Filter, Lock, Megaphone,
+  RefreshCw, Search, Truck, UserCheck, X,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup,
+  DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { VendorPanel } from "@/components/branch/VendorPanel";
+import { downloadLeadsReportPdf, downloadLeadsReportXlsx } from "@/components/branch/leadsReport";
 import {
   getBranchBoard,
+  getBranches,
   getBranchTransferRecords,
   getLeadSourceVisibility,
   unlockLeadSourceVisibility,
@@ -17,7 +26,6 @@ import {
 } from "@/lib/api";
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
-import { isCourseComplete } from "@/lib/leadStage";
 
 /**
  * The branch's Records tab. Branch Transfer Records is the first record kept here; the
@@ -379,19 +387,18 @@ const servicesOf = (l) => SERVICES.filter((s) => s.match(l)).map((s) => s.label)
 // Consultation stages a lead only stands on once it has been seen.
 const SEEN_STAGES = new Set(["Consultation Visit", "Fee Collected", "Physio Assign", "Consultation Completed"]);
 
-// The main line, in order. Each step counts the leads that REACHED it, not the ones standing
-// on it now: a lead is on one stage at a time, so "on Appointment now" drops everybody who
-// has since moved on and the line would rise and fall at random. `proof` is something the
-// lead keeps after moving on -- a date, a booking, a payment -- and is this step's own
-// evidence only. furthestStep adds the rest: reaching a step proves every step before it,
-// which is what makes each number at most the one before.
+// The main line, in order -- what the Reached column reads. Each step counts the leads that
+// REACHED it, not the ones standing on it now: a lead is on one stage at a time, so "on
+// Appointment now" drops everybody who has since moved on and the count would rise and fall
+// at random. `proof` is something the lead keeps after moving on -- a date, a booking, a
+// payment -- and is this step's own evidence only. furthestStep adds the rest: reaching a
+// step proves every step before it.
 const FUNNEL = [
-  { key: "leads", label: "Leads", proof: () => true },
-  // Consultation Booked was its own step after this one and always read the same number:
-  // fixing the appointment is what books the consultation. One step, either proof.
+  { key: "leads", label: "Lead", proof: () => true },
+  // Fixing the appointment is what books the consultation: one step, either proof.
   {
     key: "appointment",
-    label: "Appointment Date & Time",
+    label: "Appointment",
     proof: (l) => !!l.appointment_date || (l.consultation_follow_ups || []).length > 0
       || !!l.head_consultation_stage || (!!l.consultation_stage && l.consultation_stage !== "Cancel"),
   },
@@ -407,47 +414,78 @@ const furthestStep = (l) => {
   for (let i = FUNNEL.length - 1; i > 0; i -= 1) if (FUNNEL[i].proof(l)) return i;
   return 0;
 };
+const reachedAtLeast = (key) => {
+  const i = FUNNEL.findIndex((s) => s.key === key);
+  return (l) => furthestStep(l) >= i;
+};
 
 const isCancelled = (l) => l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel";
 
-// Off the main line. RNR and Follow Up are detours a lead comes back from, so they count
-// anyone who was ever there; Not a Prospect and Cancel are where a lead stops; Completed
-// is read off the patient the way both Branch boards read it, since nothing writes it.
-const SIDE_STAGES = [
+/**
+ * The tab's six cards, one row. RNR and Follow Up are detours a lead comes back from, so
+ * they count anyone who was ever there; Appointment and Consultation Visit count the leads
+ * that reached them (see FUNNEL); Lost is every way a lead stops short -- Not a Prospect,
+ * Cancel at the branch or at the consultation, and Pre-Sales' own Lost -- the reading the
+ * Marketing Head's Lost card takes in PreSalesCRM.
+ */
+const LEAD_CARDS = [
+  { key: "leads", label: "Leads", match: () => true },
   { key: "rnr", label: "RNR", match: (l) => (l.rnr_attempts || 0) > 0 || l.branch_stage === "RNR" },
   { key: "follow_up", label: "Follow Up", match: (l) => (l.follow_ups || []).length > 0 || l.branch_stage === "Follow Up" },
-  { key: "not_a_prospect", label: "Not a Prospect", match: (l) => !!l.not_prospect_at || l.branch_stage === "Not a prospect" },
-  { key: "cancel", label: "Cancel", match: isCancelled },
-  { key: "completed", label: "Completed", match: (l) => !isCancelled(l) && (isCourseComplete(l) || l.branch_stage === "Completed") },
+  { key: "appointment", label: "Appointment", match: reachedAtLeast("appointment") },
+  { key: "consultation_visit", label: "Consultation Visit", match: reachedAtLeast("consultation_visit") },
+  {
+    key: "lost",
+    label: "Lost",
+    match: (l) => l.stage === "Lost" || !!l.not_prospect_at || l.branch_stage === "Not a prospect" || isCancelled(l),
+  },
 ];
-
-const PICKS = {
-  ...Object.fromEntries(FUNNEL.map((s, i) => [s.key, { label: s.label, match: (l) => furthestStep(l) >= i }])),
-  ...Object.fromEntries(SERVICES.map((s) => [s.key, s])),
-  ...Object.fromEntries(SIDE_STAGES.map((s) => [s.key, s])),
+const CARD_BY_KEY = Object.fromEntries(LEAD_CARDS.map((c) => [c.key, c]));
+const countCards = (leads) => {
+  const out = Object.fromEntries(LEAD_CARDS.map((c) => [c.key, 0]));
+  leads.forEach((l) => LEAD_CARDS.forEach((c) => { if (c.match(l)) out[c.key] += 1; }));
+  return out;
 };
 
 const pct = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : "—");
+const ALL_SOURCES = "all";
+
+// "01 Oct 2026 – 31 Oct 2026", the period a report covers, read off whichever of the two
+// date controls is narrowing the list.
+const periodLabel = (filter) => {
+  if (!filter?.from && !filter?.to) return "All dates";
+  if (!filter.to) return `From ${dateStampFull(filter.from)}`;
+  if (!filter.from) return `Up to ${dateStampFull(filter.to)}`;
+  const a = dateStampFull(filter.from);
+  const b = dateStampFull(filter.to);
+  return a === b ? a : `${a} – ${b}`;
+};
+const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 /**
- * Leads Converted: the branch's leads as a funnel, down to the ones who bought a service,
- * with what they bought and where the rest went beside it. Counted off the same lead list
- * Branch Leads draws, the way Leads Source is, and built the way the other two are -- cards,
- * search, both date controls, Excel. A card narrows the list below it; Converted is the one
- * the tab opens on, being the one it is named for.
+ * Leads Converted: the branch's leads as six cards -- Lead, RNR, Follow Up, Appointment,
+ * Consultation Visit, Lost -- counted off the same lead list Branch Leads draws, the way
+ * Leads Source is. A card narrows the list below it.
+ *
+ * The toolbar carries Branch Leads' Source filter, and Download offers the month-end report
+ * as a PDF or an Excel workbook: the six counts, the same six split by source, and the
+ * leads behind them. Pick This Month (or the calendar) and a source, then download.
  *
  * Dated by when the lead came in, as the Dashboard's funnel is: the cards then describe one
- * set of people from enquiry to sale, rather than this month's sales over this month's
- * enquiries, which are mostly different people. A lead moved to another branch is counted
- * where it is now, as on every other Branch Leads screen.
+ * set of people from enquiry onward, rather than this month's appointments over this
+ * month's enquiries, which are mostly different people. A lead moved to another branch is
+ * counted where it is now, as on every other Branch Leads screen.
  */
 const LeadsConvertedRecords = ({ branchId }) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [branchName, setBranchName] = useState("");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
-  const [pick, setPick] = useState("converted");
+  const [pick, setPick] = useState("leads");
+  const [source, setSource] = useState(ALL_SOURCES);
+  const [exporting, setExporting] = useState(false);
   const [quickDate, setQuickDate] = useState(null);
   const [dateFilter, setDateFilter] = useState(null);
   const applyDateFilter = (next) => {
@@ -463,15 +501,26 @@ const LeadsConvertedRecords = ({ branchId }) => {
       const data = await getBranchBoard(branchId);
       setLeads(data.leads || []);
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Failed to load converted leads");
+      toast.error(error?.response?.data?.detail || "Failed to load leads");
     }
     setLoading(false);
   }, [branchId]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Date and search first, the card last, so the cards count what the date and search
-  // leave and pressing one never changes the numbers on the others. Newest lead first.
+  // For the report's letterhead only, so a failure costs the branch line and nothing else.
+  useEffect(() => {
+    if (!branchId) return undefined;
+    let cancelled = false;
+    getBranches()
+      .then((rows) => { if (!cancelled) setBranchName((rows || []).find((b) => b.id === branchId)?.branch_name || ""); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [branchId]);
+
+  // Date and search first, then source, the card last: the cards count what the date,
+  // search and source leave, and pressing one never changes the numbers on the others.
+  // Newest lead first.
   const dated = useMemo(() => {
     const q = search.trim().toLowerCase();
     const from = effectiveDateFilter?.from?.getTime();
@@ -487,28 +536,84 @@ const LeadsConvertedRecords = ({ branchId }) => {
       .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [leads, search, effectiveDateFilter]);
 
-  const counts = useMemo(() => {
-    const out = Object.fromEntries(Object.keys(PICKS).map((k) => [k, 0]));
-    dated.forEach((l) => {
-      const reached = furthestStep(l);
-      FUNNEL.forEach((s, i) => { if (reached >= i) out[s.key] += 1; });
-      [...SERVICES, ...SIDE_STAGES].forEach((s) => { if (s.match(l)) out[s.key] += 1; });
+  // Every source the branch has ever had, so the menu does not reshuffle as the dates
+  // move; the count beside each is for the dates picked.
+  const sourceOptions = useMemo(() => {
+    const inRange = Object.fromEntries(countBySource(dated));
+    return countBySource(leads).map(([name]) => [name, inRange[name] || 0]);
+  }, [leads, dated]);
+
+  const scoped = useMemo(
+    () => (source === ALL_SOURCES ? dated : dated.filter((l) => sourceOf(l) === source)),
+    [dated, source],
+  );
+  const counts = useMemo(() => countCards(scoped), [scoped]);
+  const rows = useMemo(() => scoped.filter(CARD_BY_KEY[pick].match), [scoped, pick]);
+
+  const sourceLabel = source === ALL_SOURCES ? "All Sources" : source;
+  const filtered = pick !== "leads" || source !== ALL_SOURCES || !!effectiveDateFilter || !!search.trim();
+  const clearFilters = () => {
+    setPick("leads");
+    setSource(ALL_SOURCES);
+    setQuickDate(null);
+    setDateFilter(null);
+    setSearch("");
+    setSearchOpen(false);
+  };
+
+  // One object behind both files, so the PDF and the sheet always say the same thing.
+  const buildReport = () => {
+    const bySource = countBySource(scoped).map(([name]) => {
+      const c = countCards(scoped.filter((l) => sourceOf(l) === name));
+      return [name, ...LEAD_CARDS.map((card) => c[card.key])];
     });
-    return out;
-  }, [dated]);
+    const now = new Date();
+    return {
+      branch: branchName,
+      period: periodLabel(effectiveDateFilter),
+      source: sourceLabel,
+      showing: pick === "leads" ? "All Leads" : CARD_BY_KEY[pick].label,
+      generated: `${dateStampFull(now)}, ${callTimeStamp(now)}`,
+      summary: LEAD_CARDS.map((c) => ({
+        key: c.key,
+        label: c.label,
+        count: counts[c.key],
+        share: c.key === "leads" ? "Every lead" : `${pct(counts[c.key], counts.leads)} of Leads`,
+      })),
+      bySource: { rows: bySource, total: LEAD_CARDS.map((c) => counts[c.key]) },
+      leads: rows.map((l) => ({
+        patientNumber: l.patient_number,
+        name: l.name,
+        phone: l.phone,
+        email: l.email,
+        source: sourceOf(l),
+        reached: FUNNEL[furthestStep(l)].label,
+        stage: currentStage(l),
+        services: servicesOf(l).join(", "),
+        date: dateStampFull(l.created_at),
+        time: callTimeStamp(l.created_at),
+      })),
+    };
+  };
 
-  const rows = useMemo(() => dated.filter(PICKS[pick].match), [dated, pick]);
+  const reportFilename = (ext) => [
+    "leads-report",
+    fileSlug(branchName),
+    source === ALL_SOURCES ? "all-sources" : fileSlug(source),
+    effectiveDateFilter ? fileSlug(periodLabel(effectiveDateFilter)) : new Date().toISOString().slice(0, 10),
+  ].filter(Boolean).join("-") + `.${ext}`;
 
-  const exportSheet = () => {
-    downloadCsv([
-      ["Patient Number", "Patient Name", "Phone", "Email", "Reached", "Converted", "Services Bought",
-        "Current Stage", "Lead Created Date", "Lead Created Time"],
-      ...rows.map((l) => [
-        l.patient_number, l.name, l.phone, l.email, FUNNEL[furthestStep(l)].label,
-        isConvertedLead(l) ? "Yes" : "No", servicesOf(l).join(", "), currentStage(l),
-        dateStampFull(l.created_at), callTimeStamp(l.created_at),
-      ]),
-    ], `leads-converted-${PICKS[pick].label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`);
+  const exportReport = async (kind) => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const report = buildReport();
+      if (kind === "pdf") await downloadLeadsReportPdf(report, reportFilename("pdf"));
+      else downloadLeadsReportXlsx(report, reportFilename("xlsx"));
+    } catch {
+      toast.error("Couldn't build the report");
+    }
+    setExporting(false);
   };
 
   useEffect(() => {
@@ -521,64 +626,37 @@ const LeadsConvertedRecords = ({ branchId }) => {
   };
 
   if (!branchId) {
-    return <p className="py-10 text-center text-sm text-slate-400">Converted leads are kept per branch.</p>;
+    return <p className="py-10 text-center text-sm text-slate-400">Leads are kept per branch.</p>;
   }
-
-  const card = (key, label, sub, accent = false) => (
-    <button
-      key={key}
-      type="button"
-      onClick={() => setPick(key)}
-      className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
-        pick === key ? "border-sky-400 ring-1 ring-sky-300" : accent ? "border-emerald-300 hover:border-emerald-400" : "border-slate-200 hover:border-slate-300"
-      }`}
-      title={label}
-      data-testid={`leads-converted-card-${key}`}
-    >
-      <p className="truncate pr-6 text-[11px] font-medium text-slate-500">{label}</p>
-      <p className={`text-xl font-bold ${accent ? "text-emerald-700" : "text-slate-800"}`}>{counts[key]}</p>
-      {sub ? <p className="truncate text-[10px] text-slate-400">{sub}</p> : null}
-      <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-    </button>
-  );
-  const heading = (text) => <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{text}</p>;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        {heading("Funnel")}
-        {/* Each step's share is of the step before it -- where the branch loses people.
-            Converted also carries its share of every lead, the figure the tab is for. */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
-          {FUNNEL.map((s, i) => {
-            const prev = i ? counts[FUNNEL[i - 1].key] : 0;
-            const sub = !i
-              ? "Every lead"
-              : s.key === "converted"
-                ? `${pct(counts[s.key], prev)} of ${FUNNEL[i - 1].label} · ${pct(counts[s.key], counts.leads)} of Leads`
-                : `${pct(counts[s.key], prev)} of ${FUNNEL[i - 1].label}`;
-            return card(s.key, s.label, sub, s.key === "converted");
-          })}
-        </div>
+      {/* One row of six from lg; three a row below that, where six would not read. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
+        {LEAD_CARDS.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => setPick(c.key)}
+            className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
+              pick === c.key ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-200 hover:border-slate-300"
+            }`}
+            title={c.label}
+            data-testid={`leads-converted-card-${c.key}`}
+          >
+            <p className="truncate pr-6 text-[11px] font-medium text-slate-500">{c.label}</p>
+            <p className={`text-xl font-bold ${c.key === "lost" ? "text-rose-600" : "text-slate-800"}`}>{counts[c.key]}</p>
+            <p className="truncate text-[10px] text-slate-400">
+              {c.key === "leads" ? "Every lead" : `${pct(counts[c.key], counts.leads)} of Leads`}
+            </p>
+            <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ))}
       </div>
 
-      <div className="flex flex-col gap-2">
-        {heading("Services bought")}
-        {/* One patient can buy more than one, so these add up to more than Converted. */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          {SERVICES.map((s) => card(s.key, s.label, `${pct(counts[s.key], counts.converted)} of Converted`))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {heading("Other stages")}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
-          {SIDE_STAGES.map((s) => card(s.key, s.label, `${pct(counts[s.key], counts.leads)} of Leads`))}
-        </div>
-      </div>
-
-      {/* The Branch Transfer Records toolbar, field for field: one line on a phone with
-          the search behind its icon, the wrapping desk row from sm up. */}
+      {/* The Branch Transfer Records toolbar, field for field, with Branch Leads' Source
+          filter after the dates and Download opening onto its two formats. One line on a
+          phone: the search, the source and the download are glyphs there. */}
       <div className="flex flex-nowrap items-center gap-1 sm:flex-wrap sm:gap-2">
         <Button
           type="button"
@@ -609,6 +687,40 @@ const LeadsConvertedRecords = ({ branchId }) => {
         <span className="shrink-0 [&_button]:h-9 sm:[&_button]:h-10">
           <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="leads-converted-date-filter" centered iconOnly phoneIconOnly />
         </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className={`h-9 w-9 shrink-0 p-0 text-xs font-medium sm:h-10 sm:w-auto sm:max-w-[13rem] sm:px-3 ${
+                source !== ALL_SOURCES ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800" : "text-slate-600"
+              }`}
+              title={`Source: ${sourceLabel}`}
+              aria-label={`Source: ${sourceLabel}`}
+              data-testid="leads-converted-source-filter"
+            >
+              <Filter className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden truncate sm:inline">{sourceLabel}</span>
+              <ChevronDown className="ml-1 hidden h-3.5 w-3.5 opacity-60 sm:inline" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto" data-testid="leads-converted-source-menu">
+            <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-400">Source</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={source} onValueChange={setSource}>
+              <DropdownMenuRadioItem value={ALL_SOURCES} className="text-xs font-medium text-slate-600">
+                <span className="flex-1">All Sources</span>
+                <span className="ml-3 text-[11px] text-slate-400">{dated.length}</span>
+              </DropdownMenuRadioItem>
+              <DropdownMenuSeparator />
+              {sourceOptions.map(([name, n]) => (
+                <DropdownMenuRadioItem key={name} value={name} className="text-xs text-slate-700" data-testid={`leads-converted-source-${name}`}>
+                  <span className="flex-1 truncate">{name}</span>
+                  <span className="ml-3 text-[11px] text-slate-400">{n}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           <Button
             variant="outline"
@@ -622,23 +734,62 @@ const LeadsConvertedRecords = ({ branchId }) => {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button
-            size="sm"
-            onClick={exportSheet}
-            disabled={!rows.length}
-            className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
-            title="Download as an Excel sheet"
-            aria-label="Download as an Excel sheet"
-            data-testid="leads-converted-download"
-          >
-            <Download className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Download Excel</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                disabled={!scoped.length || exporting}
+                className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
+                title="Download the report"
+                aria-label="Download the report"
+                data-testid="leads-converted-download"
+              >
+                {exporting ? <RefreshCw className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Download className="h-4 w-4 sm:mr-1.5" />}
+                <span className="hidden sm:inline">Download</span>
+                <ChevronDown className="ml-1 hidden h-3.5 w-3.5 opacity-80 sm:inline" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60" data-testid="leads-converted-download-menu">
+              <DropdownMenuLabel className="text-[11px] font-normal text-slate-500">
+                {sourceLabel} · {periodLabel(effectiveDateFilter)}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => exportReport("pdf")} className="gap-2.5 py-2" data-testid="leads-converted-download-pdf">
+                <FileText className="h-4 w-4 text-rose-600" />
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium text-slate-800">PDF Report</span>
+                  <span className="text-[11px] text-slate-400">Summary, by source, lead list</span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportReport("xlsx")} className="gap-2.5 py-2" data-testid="leads-converted-download-excel">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium text-slate-800">Excel Sheet</span>
+                  <span className="text-[11px] text-slate-400">Summary and Leads sheets</span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <p className="text-xs text-slate-500" data-testid="leads-converted-showing">
-        Showing <span className="font-semibold text-slate-700">{PICKS[pick].label}</span> · {rows.length}
-      </p>
+      <div className="flex items-center gap-2 text-xs text-slate-500" data-testid="leads-converted-showing">
+        <p className="min-w-0 truncate">
+          Showing <span className="font-semibold text-slate-700">{pick === "leads" ? "All Leads" : CARD_BY_KEY[pick].label}</span>
+          {source !== ALL_SOURCES ? <> · <span className="font-semibold text-slate-700">{source}</span></> : null}
+          {" "}· {rows.length}
+        </p>
+        {filtered ? (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
+            data-testid="leads-converted-clear"
+          >
+            <X className="h-3 w-3" /> Clear
+          </button>
+        ) : null}
+      </div>
 
       {!rows.length ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
@@ -654,7 +805,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
                     <p className="truncate text-sm font-bold text-slate-800">{l.name}</p>
                     <p className="truncate text-xs text-slate-500">{currentStage(l)}</p>
                   </div>
-                  <ServicePills services={servicesOf(l)} />
+                  <SourcePill source={sourceOf(l)} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
                   <span>{l.phone}</span>
@@ -666,11 +817,12 @@ const LeadsConvertedRecords = ({ branchId }) => {
 
           <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[960px] text-sm">
                 <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
                   <tr>
                     <th className="px-4 py-2.5 font-semibold">Patient</th>
                     <th className="px-4 py-2.5 font-semibold">Contact</th>
+                    <th className="px-4 py-2.5 font-semibold">Source</th>
                     <th className="px-4 py-2.5 font-semibold">Reached</th>
                     <th className="px-4 py-2.5 font-semibold">Services Bought</th>
                     <th className="px-4 py-2.5 font-semibold">Stage</th>
@@ -688,6 +840,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
                         {l.phone}
                         {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
+                      <td className="px-4 py-3"><SourcePill source={sourceOf(l)} /></td>
                       <td className="px-4 py-3 text-slate-600">{FUNNEL[furthestStep(l)].label}</td>
                       <td className="px-4 py-3"><ServicePills services={servicesOf(l)} /></td>
                       <td className="px-4 py-3 text-slate-600">{currentStage(l)}</td>
