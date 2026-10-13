@@ -21,6 +21,7 @@ import { AttendanceTab, PayrollTab, ApprovalsTab, QuotesTab } from "@/components
 import { ClientReviewsPanel } from "@/components/reviews/ClientReviewsPanel";
 import { EodReportsPanel } from "@/components/eod/EodReportsPanel";
 import { PerformancePanel } from "@/components/hr/PerformancePanel";
+import { displayPhone } from "@/lib/phone";
 
 // Matches ALL_BRANCHES in backend/routers/v3_hr.py, which resolves it to a name on the way
 // out. Held in branch_id where a real branch id would go, so everything that already reads
@@ -402,7 +403,7 @@ const DASH_COLUMNS = {
   employees: [
     { h: "Employee", cell: (e) => <TwoLine top={e.full_name} sub={e.employee_code} /> },
     { h: "Designation", cell: (e) => <TwoLine top={e.designation} sub={e.department} />, text: (e) => e.designation },
-    { h: "Contact", cell: (e) => <TwoLine top={e.phone} sub={e.email} />, text: (e) => e.phone },
+    { h: "Contact", cell: (e) => <TwoLine top={displayPhone(e.phone)} sub={e.email} />, text: (e) => displayPhone(e.phone) },
     { h: "Branch", cell: (e) => e.branch_name || "—", text: (e) => e.branch_name },
     { h: "Joined", cell: (e) => dashDate(e.joining_date) },
     { h: "Status", cell: (e) => <DashPill>{slugLabel(e.status) || "—"}</DashPill> },
@@ -410,7 +411,7 @@ const DASH_COLUMNS = {
   users: [
     { h: "User", cell: (u) => <TwoLine top={u.full_name} sub={u.linked_employee?.employee_code} /> },
     { h: "Role", cell: (u) => <TwoLine top={roleLabel(u.role)} sub={u.linked_employee?.designation} />, text: (u) => roleLabel(u.role) },
-    { h: "Contact", cell: (u) => <TwoLine top={u.email} sub={u.phone} />, text: (u) => u.email },
+    { h: "Contact", cell: (u) => <TwoLine top={u.email} sub={displayPhone(u.phone)} />, text: (u) => u.email },
     { h: "Department", cell: (u) => u.linked_employee?.department || "—", text: (u) => u.linked_employee?.department },
     { h: "Status", cell: (u) => <DashPill>{u.is_active === false ? "Inactive" : "Active"}</DashPill> },
   ],
@@ -1005,7 +1006,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
               <WorkTypeCell e={e} />
             </div>
           )}
-          <div className="mt-1 text-xs text-slate-500">{e.email}{e.phone ? ` · ${e.phone}` : ""}</div>
+          <div className="mt-1 text-xs text-slate-500">{e.email}{displayPhone(e.phone) ? ` · ${displayPhone(e.phone)}` : ""}</div>
           <div className="mt-2 flex items-center gap-3 border-t border-slate-100 pt-2">
             <button onClick={() => onView(e)} className="flex items-center gap-1 text-xs font-medium text-sky-600" data-testid={`hr-emp-card-view-${e.id}`}><Eye className="h-3.5 w-3.5" />View</button>
           </div>
@@ -1038,7 +1039,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
                   <td className="px-3 py-2 text-slate-600">{e.department || "—"}</td>
                   <td className="px-3 py-2 text-slate-600">{e.designation || "—"}</td>
                   <td className="px-3 py-2"><WorkTypeCell e={e} /></td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{e.email}<br />{e.phone}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{e.email}<br />{displayPhone(e.phone)}</td>
                   <td className="px-3 py-2 text-slate-500">{e.joining_date || "—"}</td>
                   <td className="px-3 py-2 font-semibold text-emerald-600" title={salaryBasis(e)}>₹{monthlySalary(e).toLocaleString("en-IN")}</td>
                   <td className="px-3 py-2"><span className={`rounded px-2 py-0.5 text-xs ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span></td>
@@ -1289,7 +1290,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
             <div className="space-y-3">
               <ViewSection>
                 <ViewRow label="Email" value={e.email} />
-                <ViewRow label="Phone" value={e.phone} />
+                <ViewRow label="Phone" value={displayPhone(e.phone)} />
                 <ViewRow label="Date of Birth" value={e.dob} />
                 <ViewRow label="Gender" value={e.gender} />
                 <ViewRow label="Blood Group" value={e.blood_group} />
@@ -3489,7 +3490,7 @@ const DesignationEmployeesModal = ({ designation, employees, departmentNames, on
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-slate-800">{e.full_name}</p>
-                <p className="truncate text-xs text-slate-500">{e.employee_code}{e.email ? ` · ${e.email}` : ""}{e.phone ? ` · ${e.phone}` : ""}</p>
+                <p className="truncate text-xs text-slate-500">{e.employee_code}{e.email ? ` · ${e.email}` : ""}{displayPhone(e.phone) ? ` · ${displayPhone(e.phone)}` : ""}</p>
               </div>
               <select
                 value={e.department || ""}

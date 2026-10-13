@@ -55,6 +55,7 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 // it would only add a round trip to the one control that is always there.
 import { ClockWidget } from "@/components/ClockWidget";
 import { SessionPaymentBell } from "@/components/SessionPaymentBell";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * The boards, each in its own chunk.
@@ -612,7 +613,7 @@ export const CRMPage = ({ auth, onLogout }) => {
     }
     setLeadEditForm({
       name: selected.name || "",
-      phone: selected.phone || "",
+      phone: displayPhone(selected.phone),
       email: selected.email || "",
       notes: selected.notes || "",
       extra_fields: selected.extra_fields || {},

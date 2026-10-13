@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { StatTile } from "@/components/ui/stat-tile";
 import { toast } from "@/components/ui/sonner";
 import { getBranches, getClientReviews } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 const prettyDate = (iso) => {
   if (!iso) return "";
@@ -131,7 +132,7 @@ const ReviewDetail = ({ review: r, meta, onClose }) => (
               {prettyDate(r.created_at) || "—"}
               {r.updated_at && <span className="block text-xs font-normal text-sky-600">Edited {prettyDate(r.updated_at)}</span>}
             </DetailField>
-            {r.patient_phone && <DetailField label="Phone" wide>{r.patient_phone}</DetailField>}
+            {displayPhone(r.patient_phone) && <DetailField label="Phone" wide>{displayPhone(r.patient_phone)}</DetailField>}
           </dl>
 
           <div>

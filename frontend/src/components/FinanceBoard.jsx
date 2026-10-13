@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { getBranchFinance } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { PAYMENT_MODE_LABELS, PAYMENT_MODE_COLORS, orderedPaymentModeEntries } from "@/lib/paymentModes";
+import { displayPhone } from "@/lib/phone";
 
 const FEE_FILTERS = [
   { key: "all", label: "All" },
@@ -285,7 +286,7 @@ export const FinanceBoard = ({ branchId, mode } = {}) => {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-slate-800">{tx.patient_name}</p>
-                          <p className="text-[10px] text-slate-400">{tx.patient_phone}</p>
+                          <p className="text-[10px] text-slate-400">{displayPhone(tx.patient_phone)}</p>
                         </div>
                       </div>
                     </td>

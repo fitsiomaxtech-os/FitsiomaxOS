@@ -17,6 +17,7 @@ import { TeamCard } from "@/components/marketing/TeamCard";
 import { StaffRoster } from "@/components/StaffRoster";
 import { setCustomRoleClasses } from "@/lib/roles";
 import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
+import { displayPhone } from "@/lib/phone";
 
 // Five sub-tabs, each scoped by the same date range and the same All/Offline/Online +
 // branch filter (see ModeBranchFilter below) — the split the rest of the OS already
@@ -881,7 +882,7 @@ const ClientsTab = ({ branches = [], scope }) => {
                         {r.branch_name ? <p className="max-w-full truncate text-[11px] leading-4 text-slate-400">{r.branch_name}</p> : null}
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                     <td className="px-3 py-3 text-xs leading-5 text-slate-600">
                       <span className="block max-w-full truncate" title={r.email || ""}>{r.email || "—"}</span>
                     </td>

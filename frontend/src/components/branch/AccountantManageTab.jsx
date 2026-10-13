@@ -21,6 +21,7 @@ import { CloseBookHistoryPanel } from "@/components/branch/CloseBookHistoryPanel
 import { OldClientInstalmentDialog } from "@/components/branch/OldClientInstalmentDialog";
 import { ScheduleCollectDialog, collectWhat } from "@/components/branch/ScheduleCollectDialog";
 import { loadSession } from "@/lib/session";
+import { displayPhone } from "@/lib/phone";
 
 // The Consultations board, for its patient and Collect popups only (`popupOnly`). Loaded
 // when a Consultation Fee is first collected from Payment Schedule, not with this tab:
@@ -1530,7 +1531,7 @@ const DiscountAppliedBoard = ({ rows, onOpen, verify = null }) => {
                       <span className="mr-1.5 font-normal text-slate-400">{i + 1}.</span>
                       {tx.client_name || "Unknown"}
                     </p>
-                    <p className="truncate text-xs text-slate-500">{tx.phone || "—"}</p>
+                    <p className="truncate text-xs text-slate-500">{displayPhone(tx.phone) || "—"}</p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-bold text-amber-600">−{fmt(tx.discount)}</p>
@@ -1572,7 +1573,7 @@ const DiscountAppliedBoard = ({ rows, onOpen, verify = null }) => {
                   <tr key={tx.id} onClick={() => onOpen([tx], txHead(tx))} className="cursor-pointer" data-testid={`discount-detail-row-${tx.id}`}>
                     <td className="rounded-l-[5px] border-y border-l border-slate-200 bg-white px-3 py-2 text-center text-slate-400">{i + 1}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">{tx.client_name || "Unknown"}</td>
-                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{tx.phone || "—"}</td>
+                    <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-600">{displayPhone(tx.phone) || "—"}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center capitalize text-slate-600">{tx.source}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center text-slate-500 line-through">{fmt(listedOf(tx))}</td>
                     <td className="border-y border-slate-200 bg-white px-3 py-2 text-center font-semibold text-emerald-600">{fmt(tx.gross)}</td>
@@ -1736,7 +1737,7 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
                     {g.client_name}
                     {g.old_client && <OldClientTag />}
                   </p>
-                  <p className="truncate text-xs text-slate-500">{g.phone || "—"}</p>
+                  <p className="truncate text-xs text-slate-500">{displayPhone(g.phone) || "—"}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-bold text-emerald-600">{fmt(g.total)}</p>
@@ -1840,7 +1841,7 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
                       {sources.shown.map(titleCase).join(" · ") || "—"}
                       {sources.extra > 0 && <span className="text-slate-400"> +{sources.extra}</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-center text-slate-600">{g.phone || "—"}</td>
+                    <td className="px-3 py-2.5 text-center text-slate-600">{displayPhone(g.phone) || "—"}</td>
                     <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{fmt(g.total)}</td>
                     <td className="px-3 py-2.5 text-center">
                       <div className="flex flex-wrap items-center justify-center gap-1">
@@ -1982,7 +1983,7 @@ const PaymentDetails = ({ head, payments, verify, onReceipt, onClose }) => {
               {head.client_name || "Unknown"}
               {head.old_client && <OldClientTag />}
             </h3>
-            <p className="mt-0.5 truncate text-sm text-slate-600">{[head.phone, head.branch].filter(Boolean).join(" · ") || "—"}</p>
+            <p className="mt-0.5 truncate text-sm text-slate-600">{[displayPhone(head.phone), head.branch].filter(Boolean).join(" · ") || "—"}</p>
           </div>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close"

@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { unscheduledSessions, scheduleSession, getDoctorCalendar, listStoreItems } from "@/lib/api";
 import { endTime12h, to12h } from "@/lib/time";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * Treatment days an absence left without a date.
@@ -530,7 +531,7 @@ export default function MissedClassPanel() {
                   <td className="px-3 py-3 text-xs text-slate-400">{i + 1}</td>
                   <td className="px-3 py-3">
                     <p className="truncate text-sm font-semibold text-slate-800">{s.lead_name || "Unknown"}</p>
-                    <p className="truncate text-[11px] text-slate-400">{s.patient_number || s.phone || "—"}</p>
+                    <p className="truncate text-[11px] text-slate-400">{s.patient_number || displayPhone(s.phone) || "—"}</p>
                   </td>
                   {/* Which course the day fell out of, not only its number. Rehab and
                       treatment are separate runs of days for the same patient, and both

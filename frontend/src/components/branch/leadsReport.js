@@ -8,6 +8,7 @@ import { LOGO_URL } from "@/lib/printable";
 import { savePdf } from "@/lib/pdf";
 import { downloadXlsx, xlsxColName } from "@/lib/xlsx";
 import { toast } from "@/components/ui/sonner";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * report = {
@@ -317,7 +318,7 @@ const LEAD_COLS = [
   { header: "#", width: 10, align: "right", muted: true, get: (l, n) => String(n) },
   { header: "Patient No.", width: 30, get: (l) => l.patientNumber },
   { header: "Patient Name", width: 42, get: (l) => l.name },
-  { header: "Phone", width: 27, get: (l) => l.phone },
+  { header: "Phone", width: 27, get: (l) => displayPhone(l.phone) },
   { header: "Source", width: 36, get: (l) => l.source },
   { header: "Reached", width: 28, get: (l) => l.reached },
   { header: "Current Stage", width: 33, get: (l) => l.stage },
@@ -427,7 +428,7 @@ export const downloadLeadsReportXlsx = (r, filename) => {
     { cells: [{ v: `Generated: ${r.generated}`, s: "subtitle" }] },
     { cells: leadHeads, style: "header", height: 20 },
     ...r.leads.map((l, i) => ({
-      cells: [i + 1, l.patientNumber || "", l.name || "", l.phone || "", l.email || "", l.source, l.reached,
+      cells: [i + 1, l.patientNumber || "", l.name || "", displayPhone(l.phone), l.email || "", l.source, l.reached,
         l.stage, l.services || "", l.date, l.time],
       style: "cell",
     })),

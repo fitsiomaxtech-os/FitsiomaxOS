@@ -17,6 +17,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { downloadPdf, sharePdf, usePdf, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml, openPrintable } from "@/lib/printable";
 import { to12h } from "@/lib/time";
+import { displayPhone } from "@/lib/phone";
 
 /** "2026-08-05" -> "05 - 08 - 2026" */
 const dmyLabel = (d) => {
@@ -66,7 +67,7 @@ export const apptRows = (a, { compact = false } = {}) => [
   ["Reference No.", a.refNo],
   ["Patient", a.patient],
   ["Patient No.", a.patientNo],
-  ["Phone", a.phone],
+  ["Phone", displayPhone(a.phone)],
   compact ? null : ["Date", dmyLabel(a.date)],
   // Start only, and no length or Consultant beside it — see apptHtml. The time a patient
   // is told to come is the whole of what is promised.
@@ -127,7 +128,7 @@ export const apptHtml = (a) => {
       <div class="panel">
         <p class="label">Patient</p>
         <div class="name">${escapeHtml(a.patient)}</div>
-        ${rowsHtml([["Patient No.", a.patientNo], ["Phone", a.phone]])}
+        ${rowsHtml([["Patient No.", a.patientNo], ["Phone", displayPhone(a.phone)]])}
       </div>
       <div class="panel">
         <p class="label">Booking</p>

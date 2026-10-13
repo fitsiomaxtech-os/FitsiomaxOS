@@ -44,6 +44,7 @@ import {
   recruitmentAddNote,
   recruitmentDeleteCandidate,
 } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 // The Human Resource Master View: one board for the whole recruitment process, from a CV
 // landing to someone joining.
@@ -485,7 +486,7 @@ const CandidateList = ({ rows, onOpen, loading }) => {
               <StagePill candidate={c} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-              <span>{c.phone}</span>
+              <span>{displayPhone(c.phone)}</span>
               {c.experience_years ? <span>· {c.experience_years} yrs</span> : null}
               {c.expected_ctc ? <span>· exp {money(c.expected_ctc)}</span> : null}
               {(c.interview || {}).interview_date ? (
@@ -533,7 +534,7 @@ const CandidateList = ({ rows, onOpen, loading }) => {
                       {c.department ? <span className="block text-[11px] text-slate-400">{c.department}</span> : null}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {c.phone}
+                      {displayPhone(c.phone)}
                       {c.email ? <span className="block truncate text-[11px] text-slate-400">{c.email}</span> : null}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{c.experience_years ? `${c.experience_years} yrs` : "—"}</td>
@@ -954,7 +955,7 @@ const CandidateModal = ({ candidate, stages, modes, onClose, onChanged }) => {
                 </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Detail icon={Phone} label="Phone" value={candidate.phone} />
+                <Detail icon={Phone} label="Phone" value={displayPhone(candidate.phone)} />
                 <Detail icon={Mail} label="Email" value={candidate.email} />
                 <Detail icon={Briefcase} label="Position" value={candidate.position} />
                 <Detail icon={Users} label="Department" value={candidate.department} />

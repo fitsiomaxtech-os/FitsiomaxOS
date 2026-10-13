@@ -2,12 +2,14 @@
 // (Generate / Reset) and the popup that follows booking a treatment course, so both send
 // the same words and a change to the message is made once.
 
+import { displayPhone } from "@/lib/phone";
+
 export const portalUrl = () => `${window.location.origin}/portal`;
 
 /** The ways in, as [label, value] rows. Phone first because every patient has one; email
     only when the login carries one. */
 export const credentialLines = (c) => [
-  ...(c.phone ? [["Login (phone)", c.phone]] : []),
+  ...(c.phone ? [["Login (phone)", displayPhone(c.phone)]] : []),
   ...(c.email ? [[c.phone ? "Or email" : "Login (email)", c.email]] : []),
   ["Password", c.password],
 ];

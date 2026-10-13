@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import {
   deleteFeedbackChat, devDeleteFeedback, devResetFeedbackToNew, getFeedbackChatDelete, listBranchFeedback, setFeedbackChatDelete, moveBranchFeedback, replyBranchFeedback, unlockDangerZone,
 } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 // What can have happened to a ticket, in the order it is worked through. A ticket arrives
 // New, somebody picks it up, somebody asks whether it is settled, the patient closes it.
@@ -247,7 +248,7 @@ const TicketPane = ({ client, ticket, onPickTicket, onMove, onSend, moving, send
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-800">{client.name || "A patient"}</p>
           <p className="truncate text-[11px] text-slate-400">
-            {[client.phone, showBranch ? client.branch_name : ""].filter(Boolean).join(" · ")}
+            {[displayPhone(client.phone), showBranch ? client.branch_name : ""].filter(Boolean).join(" · ")}
           </p>
         </div>
         <Stars rating={ticket.rating} />

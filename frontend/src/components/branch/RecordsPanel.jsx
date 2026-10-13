@@ -26,7 +26,7 @@ import {
 } from "@/lib/api";
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
-import { telNumber } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
 
 /**
  * The branch's Records tab. Branch Transfer Records is the first record kept here; the
@@ -437,7 +437,7 @@ const BranchTransferRecords = ({ branchId, view }) => {
                   <DirectionPill direction={r.direction} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
-                  <span>{r.lead.phone}</span>
+                  <span>{displayPhone(r.lead.phone)}</span>
                   <span>· {dateStampFull(r.at)}</span>
                 </div>
                 <CollectedSplit record={r} compact />
@@ -477,7 +477,7 @@ const BranchTransferRecords = ({ branchId, view }) => {
                         <p className="font-mono text-[11px] text-slate-400">{r.lead.patient_number || "—"}</p>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {r.lead.phone}
+                        {displayPhone(r.lead.phone)}
                         {r.lead.email ? <span className="block truncate text-[11px] text-slate-400">{r.lead.email}</span> : null}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{r.from_branch_name || "—"}</td>
@@ -1101,7 +1101,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
                   <SourcePill source={sourceOf(l)} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
-                  <span>{l.phone}</span>
+                  <span>{displayPhone(l.phone)}</span>
                   <span>· {dateStampFull(l.created_at)}</span>
                 </div>
               </div>
@@ -1130,7 +1130,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
                         <p className="font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</p>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {l.phone}
+                        {displayPhone(l.phone)}
                         {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
                       <td className="px-4 py-3"><SourcePill source={sourceOf(l)} /></td>
@@ -1389,7 +1389,7 @@ const LeadSourceRecords = ({ branchId }) => {
                   <SourcePill source={sourceOf(l)} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
-                  <span>{l.phone}</span>
+                  <span>{displayPhone(l.phone)}</span>
                   <span>· {dateStampFull(l.created_at)}</span>
                 </div>
               </div>
@@ -1416,7 +1416,7 @@ const LeadSourceRecords = ({ branchId }) => {
                         <p className="font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</p>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {l.phone}
+                        {displayPhone(l.phone)}
                         {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
                       <td className="px-4 py-3"><SourcePill source={sourceOf(l)} /></td>
@@ -1701,7 +1701,7 @@ const TransferRecordDialog = ({ record, onClose }) => {
         <section className="space-y-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Lead Details</h4>
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-3">
-            <Field label="Phone">{lead.phone}</Field>
+            <Field label="Phone">{displayPhone(lead.phone)}</Field>
             <Field label="Email">{lead.email}</Field>
             <Field label="Vertical">{lead.vertical}</Field>
             <Field label="Source">{lead.source_type}</Field>

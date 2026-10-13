@@ -12,6 +12,7 @@
 import {
   PRINTABLE_STYLES, docHeadHtml, escapeHtml, rupees, openPrintable,
 } from "@/lib/printable";
+import { displayPhone } from "@/lib/phone";
 
 // "split" is here and not on the collect popups' own lists on purpose: it is never a mode
 // anyone picks, it is what the record says afterwards when a collection came in over more
@@ -40,7 +41,7 @@ export const receiptRows = (r) => [
   ["Date", r.dateLabel],
   ["Patient", r.patient],
   ["Patient No.", r.patientNo],
-  ["Phone", r.phone],
+  ["Phone", displayPhone(r.phone)],
   r.branch ? ["Branch", r.branch] : null,
   [isSchedule(r) ? "Scheduled For" : "Paid For", r.paidFor],
   r.packageName ? ["Package", r.packageName] : null,
@@ -79,7 +80,7 @@ export const receiptPopupRows = (r) => [
   [isSchedule(r) ? "Reference No." : "Transaction ID", r.receiptNo],
   ["Date and Time", r.dateLabel],
   ["Patient Name", r.patient],
-  ["Phone Number", r.phone],
+  ["Phone Number", displayPhone(r.phone)],
   [isSchedule(r) ? "Scheduled For" : "Paid For", r.paidFor],
 ].filter(([, v]) => v);
 
@@ -111,7 +112,7 @@ export const receiptHtml = (r) => {
       <div class="panel">
         <p class="label">${sch ? "Prepared For" : "Received From"}</p>
         <div class="name">${escapeHtml(r.patient)}</div>
-        ${kv([["Patient No.", r.patientNo], ["Phone", r.phone]])}
+        ${kv([["Patient No.", r.patientNo], ["Phone", displayPhone(r.phone)]])}
       </div>
       <div class="amount">
         ${sch ? "" : `<div class="stamp">PAID</div>`}

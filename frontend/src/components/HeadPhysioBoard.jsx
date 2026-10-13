@@ -42,6 +42,7 @@ import {
   physioSessions,
 } from "@/lib/api";
 import { to12h, slotTo12h } from "@/lib/time";
+import { displayPhone } from "@/lib/phone";
 
 // The summary cards ARE the navigation now. Consultations are what Branch Admin books in;
 // Reviews are what Branch Admin sends over once a Physio flags a patient at seven days of
@@ -925,7 +926,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                           )}
                         </p>
                         <PlanLine parts={g.plan} testId={`hp-all-card-plan-${g.key}`} />
-                        <p className="truncate text-xs text-slate-500">{g.phone || "—"}</p>
+                        <p className="truncate text-xs text-slate-500">{displayPhone(g.phone) || "—"}</p>
                       </div>
                       <span className={`shrink-0 whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${STAGE_TONES[st.tone]}`}>
                         {st.label}
@@ -983,7 +984,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                           <PlanLine parts={g.plan} testId={`hp-all-plan-${g.key}`} />
                         </td>
                         <td className="px-4 py-3 text-center font-mono text-[11px] text-slate-400">{g.patientNo || "—"}</td>
-                        <td className="px-4 py-3 text-center text-slate-600">{g.phone || "—"}</td>
+                        <td className="px-4 py-3 text-center text-slate-600">{displayPhone(g.phone) || "—"}</td>
                         <td className="px-4 py-3 text-center">
                           {/* The latest week's stars among this patient's reviews here. */}
                           {(() => {
@@ -1042,7 +1043,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                 {/* The identifying fields sit here, once, instead of down every row of
                     the list this replaced. */}
                 <p className="mt-0.5 truncate text-[11px] text-slate-300">
-                  {[entriesFor.patientNo, entriesFor.phone].filter(Boolean).join(" · ") || "No patient number on file"}
+                  {[entriesFor.patientNo, displayPhone(entriesFor.phone)].filter(Boolean).join(" · ") || "No patient number on file"}
                 </p>
               </div>
               <button

@@ -21,7 +21,7 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp } from "@/lib/time";
-import { telNumber } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -1361,7 +1361,7 @@ export const PreSalesCRM = ({
                           nothing or launched the wrong thing. They stay on the phone
                           cards, where they work. */}
                       <td className="px-4 py-3 text-slate-600">
-                        {l.phone || "—"}
+                        {displayPhone(l.phone) || "—"}
                         {l.email ? <span className="block max-w-[220px] truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
                       <td className="px-4 py-3">
@@ -2177,7 +2177,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
           {tab === "overview" && (
             <div className="space-y-3">
               <ColorSection title="Contact Information" tone="sky" icon={<Phone className="h-4 w-4" />} collapsible defaultOpen={false}>
-                <ColorRow k="Phone" v={currentLead.phone} />
+                <ColorRow k="Phone" v={displayPhone(currentLead.phone)} />
                 <ColorRow k="Email" v={currentLead.email || "—"} />
                 <ColorRow k="Location" v={currentLead.location || "—"} />
               </ColorSection>
@@ -2680,7 +2680,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   <div className="rounded-lg border border-slate-200 p-3">
                     <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Lead Summary</p>
                     <p className="text-sm font-semibold text-slate-800">{currentLead.name || "Unknown"}</p>
-                    <p className="text-xs text-slate-500">{currentLead.phone}</p>
+                    <p className="text-xs text-slate-500">{displayPhone(currentLead.phone)}</p>
                   </div>
                   {appointmentResult.remarks && (
                     <div className="rounded-lg border border-slate-200 p-3">

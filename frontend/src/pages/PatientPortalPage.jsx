@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { ZoomableImage, ZoomablePdf } from "@/components/ui/zoomable-view";
 import { slotTo12h } from "@/lib/time";
-import { telNumber } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
 import {
   loadPortalSession, savePortalSession, clearPortalSession,
   patientPortalLogin, patientPortalLogout, patientPortalMe, patientPortalGoogleLogin,
@@ -1552,7 +1552,7 @@ function ProfileTab({ data }) {
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Your Details</p>
         <div className="grid grid-cols-2 gap-3">
           <Row label="Patient Number" value={data.patient_number} />
-          <Row label="Phone" value={data.phone} />
+          <Row label="Phone" value={displayPhone(data.phone)} />
           <Row label="Email" value={data.email} />
           <Row label="Age" value={data.age} />
           <Row label="Gender" value={data.gender} />

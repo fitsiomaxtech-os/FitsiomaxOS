@@ -25,6 +25,7 @@ import { AddExpenseDialog } from "@/components/branch/BranchExpensesPanel";
 // Imported rather than copied: the two boards sit on the same tab row and a vendor form
 // with its own geometry would read as a different product.
 import { Modal, Field, inputCls, fmt, when, errText } from "@/components/branch/StoreInventoryPanel";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * The three stock shelves a vendor can turn out to supply — the same keys the inventory
@@ -868,7 +869,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
                         <p className="truncate text-sm font-bold text-slate-800">
                           <span className="mr-1.5 font-semibold text-slate-300">{i + 1}.</span>{v.name}
                         </p>
-                        <p className="truncate text-xs text-slate-500">{v.contact_person || "No contact person"}{v.phone ? ` · ${v.phone}` : ""}</p>
+                        <p className="truncate text-xs text-slate-500">{v.contact_person || "No contact person"}{displayPhone(v.phone) ? ` · ${displayPhone(v.phone)}` : ""}</p>
                       </div>
                       {v.active === false && (
                         <span className="shrink-0 rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-500">Off</span>
@@ -918,7 +919,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
                         </td>
                         <td className="px-4 py-3 text-slate-600">
                           <p>{v.contact_person || "—"}</p>
-                          <p className="text-[11px] text-slate-400">{v.phone || v.email || "No number"}</p>
+                          <p className="text-[11px] text-slate-400">{displayPhone(v.phone) || v.email || "No number"}</p>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
@@ -976,7 +977,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-800">{v.name}</p>
                       <p className="truncate text-[11px] text-slate-500">
-                        {[v.city, v.contact_person, v.phone].filter(Boolean).join(" · ") || "No contact details"}
+                        {[v.city, v.contact_person, displayPhone(v.phone)].filter(Boolean).join(" · ") || "No contact details"}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -1203,7 +1204,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
         return (
           <Modal
             title={v.name}
-            subtitle={[v.contact_person, v.phone, v.city].filter(Boolean).join(" · ") || "Vendor details"}
+            subtitle={[v.contact_person, displayPhone(v.phone), v.city].filter(Boolean).join(" · ") || "Vendor details"}
             accent="bg-sky-600"
             width="max-w-2xl"
             onClose={() => setLedger(null)}

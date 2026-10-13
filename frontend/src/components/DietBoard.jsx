@@ -23,6 +23,7 @@ import { to12h } from "@/lib/time";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * Diet Master View — the Nutrition Coach's own board.
@@ -756,7 +757,7 @@ const ConsultationList = ({ rows, onOpen }) => (
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-800">{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /></p>
-              <p className="truncate text-xs text-slate-500">{p.phone || "—"}</p>
+              <p className="truncate text-xs text-slate-500">{displayPhone(p.phone) || "—"}</p>
             </div>
             {p.booked
               ? <StatusPill label="BOOKED" color={TILE_COLORS.booked} />
@@ -815,7 +816,7 @@ const ConsultationList = ({ rows, onOpen }) => (
                   <p className="font-medium text-slate-800">{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /></p>
                   {p.patient_number && <p className="font-mono text-[11px] text-slate-400">{p.patient_number}</p>}
                 </td>
-                <td className="px-4 py-3 text-slate-600">{p.phone || "—"}</td>
+                <td className="px-4 py-3 text-slate-600">{displayPhone(p.phone) || "—"}</td>
                 {/* Whether this patient is also on a physio course — it changes how a diet
                     plan should be pitched, and the coach sees it nowhere else. */}
                 <td className="px-4 py-3">
@@ -947,7 +948,7 @@ const PatientList = ({ rows, onOpen }) => {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-slate-800">{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /></p>
-                <p className="truncate text-xs text-slate-500">{p.phone || "—"}</p>
+                <p className="truncate text-xs text-slate-500">{displayPhone(p.phone) || "—"}</p>
               </div>
               <span className="shrink-0 text-sm font-bold text-emerald-600">{p.completed_days}/{p.total_days}</span>
             </div>
@@ -983,7 +984,7 @@ const PatientList = ({ rows, onOpen }) => {
                     <p className="font-medium text-slate-800">{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /></p>
                     {p.diet_stage && <p className="text-[11px] text-slate-400">{p.diet_stage}</p>}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{p.phone || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600">{displayPhone(p.phone) || "—"}</td>
                   <td className="px-4 py-3 text-slate-600">
                     {p.next_day?.slot_time
                       ? <span className="whitespace-nowrap">{fmtDate((p.next_day.slot_time || "").slice(0, 10))} at {to12h((p.next_day.slot_time || "").slice(11, 16))}</span>

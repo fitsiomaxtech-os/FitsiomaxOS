@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { Pie, PieChart, Cell, ResponsiveContainer } from "recharts";
 import { getMasterControl, getBranches, getDoctors, getLeads, getVerticals, updateLead, moveLeadStage, mkPerformance } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 const REFRESH_MS = 30000;
 
@@ -561,7 +562,7 @@ const QuickActionDialog = ({ actionKey, onClose, branches, doctors }) => {
                   data-testid={`quick-action-result-${l.id}`}
                 >
                   <p className="font-medium text-slate-800">{l.name || "—"}</p>
-                  <p className="text-xs text-slate-500">{l.phone || "—"} · {l.stage || "—"}</p>
+                  <p className="text-xs text-slate-500">{displayPhone(l.phone) || "—"} · {l.stage || "—"}</p>
                 </li>
               ))}
             </ul>
@@ -569,7 +570,7 @@ const QuickActionDialog = ({ actionKey, onClose, branches, doctors }) => {
           {picked && (
             <div className="rounded-md bg-blue-50 p-3 text-sm" data-testid="quick-action-picked">
               <p className="font-semibold text-blue-800">{picked.name}</p>
-              <p className="text-xs text-blue-600">{picked.phone} · current stage: {picked.stage}</p>
+              <p className="text-xs text-blue-600">{displayPhone(picked.phone)} · current stage: {picked.stage}</p>
               <button onClick={() => setPicked(null)} className="mt-1 text-xs text-blue-600 hover:underline">Change</button>
             </div>
           )}

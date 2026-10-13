@@ -17,7 +17,7 @@ import { PortalControlsCard } from "@/components/branch/PortalControlsCard";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 // Was a local copy of waNumber, identical to the three still inlined elsewhere. Now that
 // lib/phone.js exists this one points at it — the others can follow as they're touched.
-import { telNumber, waNumber } from "@/lib/phone";
+import { displayPhone, telNumber, waNumber } from "@/lib/phone";
 
 import { credentialLines, portalCopyText, portalUrl, portalWhatsAppText } from "@/lib/portalCredentials";
 
@@ -427,7 +427,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
                         </span>
                         <span className="shrink-0"><PaidBadge paid={r.paid} /></span>
                       </div>
-                      <p className="truncate text-xs text-slate-600">{r.phone || "—"}</p>
+                      <p className="truncate text-xs text-slate-600">{displayPhone(r.phone) || "—"}</p>
                       <p className="mt-0.5 text-[11px] text-slate-500">
                         Rs.{r.paid} paid
                         {r.lead && <span className="text-slate-400"> · {feeParts(r.lead)}</span>}
@@ -497,7 +497,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
                         <span className="font-medium text-slate-800">{r.name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{r.phone || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                     <td className="px-4 py-3"><ServiceChips services={r.services} /></td>
                     {/* The lead's own fees are named; a gym or class membership has no
                         breakdown to name, so that row shows the figure alone rather than
@@ -537,7 +537,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
 
 function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
   const [name, setName] = useState(lead.name || "");
-  const [phone, setPhone] = useState(lead.phone || "");
+  const [phone, setPhone] = useState(displayPhone(lead.phone));
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [account, setAccount] = useState(null); // { exists, email? } | null while loading
@@ -704,7 +704,7 @@ function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
               size="sm"
               className="bg-sky-600 text-xs hover:bg-sky-700"
               onClick={saveProfile}
-              disabled={savingProfile || (name.trim() === lead.name && phone.trim() === lead.phone)}
+              disabled={savingProfile || (name.trim() === lead.name && phone.trim() === displayPhone(lead.phone))}
               data-testid="branch-patient-save"
             >
               {savingProfile ? "Saving..." : "Save Changes"}
@@ -753,7 +753,7 @@ function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
               <>
                 {account.exists && (
                   <div className="space-y-0.5 text-xs text-slate-600" data-testid="branch-patient-portal-login">
-                    {account.phone && <p>Login phone: <span className="font-semibold text-slate-800">{account.phone}</span></p>}
+                    {displayPhone(account.phone) && <p>Login phone: <span className="font-semibold text-slate-800">{displayPhone(account.phone)}</span></p>}
                     {account.email && <p>Login email: <span className="font-semibold text-slate-800">{account.email}</span></p>}
                     {/* The password as it stands, shown without asking — staff are the ones
                         who read it out to the patient, and hiding it behind a reset locked
@@ -853,7 +853,7 @@ function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
                     <p className="text-[11px] text-slate-500">
                       Login phone:{" "}
                       {savedPhoneOk
-                        ? <span className="font-semibold text-slate-700">{lead.phone}</span>
+                        ? <span className="font-semibold text-slate-700">{displayPhone(lead.phone)}</span>
                         : <span className="font-semibold text-amber-700">none saved — add a 10-digit number above, or use email</span>}
                     </p>
                     <div>

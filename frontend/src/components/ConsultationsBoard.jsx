@@ -35,7 +35,7 @@ import {
 } from "@/lib/api";
 import { FitnessMemberDialog, CollectPaymentDialog as FitnessCollectDialog } from "@/components/branch/FitnessPanel";
 import { BalanceDiscount } from "@/components/branch/CollectTender";
-import { telNumber, waNumber } from "@/lib/phone";
+import { displayPhone, telNumber, waNumber } from "@/lib/phone";
 import { pdfJob, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/printable";
 import { loadSession } from "@/lib/session";
@@ -6740,7 +6740,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   badge={l[stageField] || "—"}
                   badgeColor={hex}
                   // No number beside Call and WhatsApp (see Branch Leads' card).
-                  idLine={[l.patient_number, wa ? null : l.phone]}
+                  idLine={[l.patient_number, wa ? null : displayPhone(l.phone)]}
                   wa={wa}
                   onOpen={openCard}
                   className={picked ? "bg-rose-50" : "bg-white"}
@@ -6791,7 +6791,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       )}
                       {l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" />
                     </p>
-                    <p className="truncate text-xs text-slate-500">{l.phone || "—"}</p>
+                    <p className="truncate text-xs text-slate-500">{displayPhone(l.phone) || "—"}</p>
                   </div>
                   <span
                     className="shrink-0 rounded-[5px] px-2 py-0.5 text-[10px] font-bold"
@@ -6999,7 +6999,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {rowStage || "—"}
                       </span>
                     </td>
-                    <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={l.phone}>{l.phone || "—"}</td>
+                    <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={displayPhone(l.phone)}>{displayPhone(l.phone) || "—"}</td>
                     <td className={`truncate px-4 py-3 align-middle font-mono text-xs leading-5 text-slate-500 ${tdAlign}`} title={l.patient_number}>{l.patient_number || "—"}</td>
                     {showDiscountColumn && (
                       // The amount this row contributes to the tab's total, with what it
@@ -7302,7 +7302,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <p className="flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                  <span className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /> {selectedLead.phone || "—"}</span>
+                  <span className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /> {displayPhone(selectedLead.phone) || "—"}</span>
                   {/* The same wording the row this was opened from now uses. The list
                       says "Wed, 9 Sept" and the header it opens said "2026-09-10", so one
                       appointment read two ways depending on which half of the screen
@@ -10629,8 +10629,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Contact</p>
                     <div className="space-y-1.5 text-xs text-slate-700">
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Phone</span><span className="font-medium">{selectedLead.phone || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Alternative Phone</span><span className="font-medium">{selectedLead.alternative_phone || "—"}</span></div>
+                      <div className="flex items-center justify-between"><span className="text-slate-500">Phone</span><span className="font-medium">{displayPhone(selectedLead.phone) || "—"}</span></div>
+                      <div className="flex items-center justify-between"><span className="text-slate-500">Alternative Phone</span><span className="font-medium">{displayPhone(selectedLead.alternative_phone) || "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><span className="font-medium">{selectedLead.email || "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">Address</span><span className="font-medium">{selectedLead.address || "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">City / State</span><span className="font-medium">{[selectedLead.city, selectedLead.state].filter(Boolean).join(", ") || "—"}</span></div>

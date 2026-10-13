@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecordCards } from "@/components/branch/RecordCards";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
-import { waNumber } from "@/lib/phone";
+import { displayPhone, waNumber } from "@/lib/phone";
 import { isHandheld } from "@/lib/receipt";
 // The local date, not toISOString()'s UTC one, which in IST reads yesterday until 5:30am --
 // and Accountant Manage's Payment Schedule badge counts Due Today off this same helper.
@@ -205,7 +205,7 @@ const CARD_EMPTY = {
 const toCsv = (rows) => {
   const header = ["S.No", "Client", "Phone", "Branch", "Total Bill", "Paid Amount", "Outstanding Balance", "Due Date", "Status"];
   const lines = rows.map((r, i) => [
-    i + 1, r.client_name, r.phone || "", r.branch_name || "", r.total_bill, r.paid_amount, r.balance,
+    i + 1, r.client_name, displayPhone(r.phone), r.branch_name || "", r.total_bill, r.paid_amount, r.balance,
     r.due_date || "", (STATUS_META[r.status] || STATUS_META.partial).label,
   ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
   return [header.join(","), ...lines].join("\n");
@@ -392,7 +392,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                 key: rowKey(r),
                 testid: `accountant-manage-outstanding-card-${rowKey(r)}`,
                 title: r.old_client ? `${r.client_name} · Old client` : r.client_name,
-                subtitle: r.phone || r.branch_name || "—",
+                subtitle: displayPhone(r.phone) || r.branch_name || "—",
                 amount: (
                   <>
                     <span className="block text-sm font-bold text-amber-600">{fmt(r.balance)}</span>
@@ -469,7 +469,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                               )}
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                          <td className="px-3 py-3 text-xs leading-5 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                           <td className="px-3 py-3">
                             {r.branch_name
                               ? <p className="max-w-[10rem] truncate text-xs leading-5 text-slate-600" title={r.branch_name}>{r.branch_name}</p>

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
 import { listZumba } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 // The three evenings the class runs, in the numbering Date.getDay() uses (0 = Sunday).
 // The same three the membership is sold on — see ZUMBA_CLASS_DAYS in PackagesBoard.jsx
@@ -317,7 +318,7 @@ export const ZumbaMasterBoard = () => {
                               whole it is the only place the hour is said at all. */}
                           {r.time_slot ? <p className="text-[11px] text-slate-400">{r.time_slot}</p> : null}
                         </td>
-                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                         <td className="px-3 py-3">
                           {r.package_name
                             ? <p className="max-w-[9rem] truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>

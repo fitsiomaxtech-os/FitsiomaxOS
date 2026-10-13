@@ -6,6 +6,7 @@ import { hpReviews, hpCompleteReview, hpLeadWeekReviews, physioSessions } from "
 import { to12h } from "@/lib/time";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { PhysioTreatmentChips } from "@/components/ui/physio-treatment-chips";
+import { displayPhone } from "@/lib/phone";
 
 // Treatment days per review — calendar days the patient attended on, which is what the
 // treatment_days a review carries counts. Mirrors REVIEW_AFTER_DAYS in
@@ -429,7 +430,7 @@ export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, select
                       {r.client_rating ? <StarRating value={r.client_rating} /> : null}
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      {r.phone || "—"} · Review {dmy(r.review_date)}{r.review_time ? ` · ${to12h(r.review_time)}` : ""} · raised by {r.physio_name || "—"}
+                      {displayPhone(r.phone) || "—"} · Review {dmy(r.review_date)}{r.review_time ? ` · ${to12h(r.review_time)}` : ""} · raised by {r.physio_name || "—"}
                     </p>
                     {/* Only on a supervisor board, where the list runs across every
                         Consultant on the branch and a row is otherwise silent about whose
@@ -482,7 +483,7 @@ export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, select
                             {r.patient_number || "—"} · {r.treatment_days} treatment days
                           </p>
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{r.phone || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                         <td className="px-4 py-3">
                           <StageBadge stage={st} />
                         </td>

@@ -19,6 +19,7 @@ import {
   reassignConsultant, setMyConsultBranch,
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
+import { displayPhone } from "@/lib/phone";
 
 const ALL = "all";
 
@@ -549,7 +550,7 @@ const ConsultantSlotsModal = ({ branchId, consultant, canAssignToMe = false, onA
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       {bk.patient_number && <span className="font-mono">{bk.patient_number}</span>}
-                      {bk.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{bk.phone}</span>}
+                      {displayPhone(bk.phone) && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{displayPhone(bk.phone)}</span>}
                     </div>
                   </div>
                   {/* The tag, and under it the one thing to do about it. Only a consultation

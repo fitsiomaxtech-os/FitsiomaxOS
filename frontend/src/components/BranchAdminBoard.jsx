@@ -108,6 +108,7 @@ import { CreateLeadModal, DEPARTMENT_OPTIONS, LEAD_DATA_FIELDS } from "@/compone
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { isCourseComplete } from "@/lib/leadStage";
+import { displayPhone } from "@/lib/phone";
 
 // The Branch (sales) stages this file has to recognise, addressed by the role the backend
 // stamps on the stage row rather than by what the stage is called.
@@ -992,7 +993,7 @@ function BulkDeleteLeadsModal({ leads, onClose, onDeleted, purge = false }) {
             {leads.map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
                 <span className="truncate font-medium text-slate-700">{l.name || "Unnamed"}</span>
-                <span className="shrink-0 font-mono text-[10px] text-slate-400">{l.patient_number || l.phone || "—"}</span>
+                <span className="shrink-0 font-mono text-[10px] text-slate-400">{l.patient_number || displayPhone(l.phone) || "—"}</span>
               </li>
             ))}
           </ul>
@@ -2648,7 +2649,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     // Where Call and WhatsApp sit on the card the number itself is left
                     // off — the buttons are how it gets used. Everywhere else, and for a
                     // phone too malformed to ring, the number stays.
-                    idLine={allStages ? [lead.phone || "—"] : [lead.patient_number, rowWa ? null : lead.phone, cityAnswer(lead)]}
+                    idLine={allStages ? [displayPhone(lead.phone) || "—"] : [lead.patient_number, rowWa ? null : displayPhone(lead.phone), cityAnswer(lead)]}
                     wa={rowWa}
                     onOpen={() => setSelectedLead(lead)}
                     // The desk row's bin, on the phone: same rule for who sees it, same
@@ -2922,7 +2923,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </div>
                           </div>
                         </td>
-                        <td className="truncate px-4 py-3 text-slate-600" title={lead.phone}>{lead.phone || "—"}</td>
+                        <td className="truncate px-4 py-3 text-slate-600" title={displayPhone(lead.phone)}>{displayPhone(lead.phone) || "—"}</td>
                         {/* Source on a branch's board, through sourceAnswer -- the same read
                             as the lead popup, Pre Sales and the Source dropdown. An arm's board
                             keeps City, through cityAnswer, so a lead whose sheet mapped the
@@ -4137,7 +4138,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const leadDetailRows = [
     ["Source", lead.source_tab || lead.source_type],
     ["Department", departmentLabel(lead.department)],
-    ["Alternative Phone", lead.alternative_phone],
+    ["Alternative Phone", displayPhone(lead.alternative_phone)],
     ["Age", lead.age],
     ["Gender", lead.gender],
     ["Occupation", lead.occupation],
@@ -4293,7 +4294,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   <p className="text-xs font-bold uppercase tracking-wider text-sky-700">Contact</p>
                 </div>
                 <div className="space-y-2 px-4 py-3">
-                  <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Phone</span><span className="font-medium text-slate-800">{lead.phone || "—"}</span></div>
+                  <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Phone</span><span className="font-medium text-slate-800">{displayPhone(lead.phone) || "—"}</span></div>
                   <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Email</span><span className="font-medium text-slate-800">{lead.email || "—"}</span></div>
                 </div>
               </div>
@@ -5898,7 +5899,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
           <div className="w-full max-w-md rounded-xl bg-white shadow-2xl" data-testid="branch-cancel-confirm">
             <div className="border-b p-5">
               <h3 className="text-base font-semibold text-slate-800">Cancel this appointment?</h3>
-              <p className="text-[10px] text-slate-400">{lead.name}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+              <p className="text-[10px] text-slate-400">{lead.name}{displayPhone(lead.phone) ? ` · ${displayPhone(lead.phone)}` : ""}</p>
             </div>
             <div className="space-y-3 p-5">
               <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[11px] text-rose-800">
@@ -6025,7 +6026,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 <Bell className="h-5 w-5 text-slate-500" />
                 <div>
                   <p className="text-base font-semibold">{notProspectDraft.stage || notProspectStageName} — Reminder Call</p>
-                  <p className="text-[11px] text-slate-400">{lead.name}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+                  <p className="text-[11px] text-slate-400">{lead.name}{displayPhone(lead.phone) ? ` · ${displayPhone(lead.phone)}` : ""}</p>
                 </div>
               </div>
               <button onClick={() => setNotProspectDraft(null)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid="branch-not-prospect-close">

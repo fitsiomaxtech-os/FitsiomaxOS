@@ -9,6 +9,7 @@ import {
 // that file precisely so a control standing beside a calendar wears the same clothes
 // instead of a second copy of them drifting away from it.
 import { CenteredPicker } from "@/components/ui/milk-calendar";
+import { displayPhone } from "@/lib/phone";
 
 // Rs.1200 rather than Rs.1200.00 when the paise are zero, which they are for almost every
 // collection — the history is a column of amounts and two dead digits on each of them is
@@ -423,7 +424,7 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-800">{l.name || "—"}</p>
                         <p className="truncate text-[11px] text-slate-500">
-                          {l.patient_number || l.phone || "—"}
+                          {l.patient_number || displayPhone(l.phone) || "—"}
                           {l.consultation_stage === "Physio Assign" && l.assigned_physio_name ? ` · with ${l.assigned_physio_name}` : ""}
                         </p>
                       </div>
@@ -447,7 +448,7 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
                 ← Back to the list
               </button>
               <p className="mt-2 text-base font-semibold text-slate-800">{picked.name || "—"}</p>
-              <p className="text-xs text-slate-500">{picked.patient_number || picked.phone || "—"}</p>
+              <p className="text-xs text-slate-500">{picked.patient_number || displayPhone(picked.phone) || "—"}</p>
 
               {!eligibility ? (
                 <p className="py-6 text-center text-sm text-slate-400">Checking what this move would cost…</p>

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { getBranches, getLeadTransferEligibility, transferLeadBranch } from "@/lib/api";
 import { PaymentHistory, TransferImpact, TransferReason } from "@/components/branch/BranchTransferDialog";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * Branch Transfer for the one lead whose popup it was opened from.
@@ -76,7 +77,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
         <div className="overflow-y-auto p-5">
           <p className="text-sm font-semibold text-slate-800">{lead.name || "—"}</p>
           <p className="text-xs text-slate-500">
-            {lead.patient_number || lead.phone || "—"}
+            {lead.patient_number || displayPhone(lead.phone) || "—"}
             {fromBranch ? ` · ${fromBranch.branch_name}` : ""}
           </p>
 

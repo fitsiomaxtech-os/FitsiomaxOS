@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { displayPhone } from "@/lib/phone";
 
-export const MaskedContact = ({ phone = "", email = "", locked = false }) => {
+export const MaskedContact = ({ phone: rawPhone = "", email = "", locked = false }) => {
+  const phone = displayPhone(rawPhone);
   const [reveal, setReveal] = useState(false);
   const show = reveal && !locked;
   const maskedPhone = phone ? `xxxxxxxx${phone.slice(-2)}` : "";

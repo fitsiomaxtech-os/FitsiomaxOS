@@ -77,6 +77,7 @@ import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 // The same formatters the header clock and HR's register read a day with, so an hour and
 // a half is not "1h 30m" here and "90m" three screens away.
 import { duration, hours, prettyTime } from "@/lib/clock";
+import { displayPhone } from "@/lib/phone";
 
 // A fourth tab means four across a phone, which is about 46px of text a tab — under what
 // "Attendance" and "My Profile" need, so both would arrive as an ellipsis. `short` is the
@@ -961,7 +962,7 @@ const ProfileTab = ({ roleLabel }) => {
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Field label="Email" value={data.email} testid="my-profile-email" />
-            <Field label="Phone" value={data.phone} testid="my-profile-phone" />
+            <Field label="Phone" value={displayPhone(data.phone)} testid="my-profile-phone" />
             <Field label="Date of birth" value={prettyDate(data.dob)} />
             <Field label="Gender" value={titleCase(data.gender)} />
             <Field label="Blood group" value={data.blood_group} />

@@ -7,6 +7,7 @@ import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { rangeFor, rangeIncomplete } from "@/lib/dateRange";
 import { getFinanceApprovals, getBranches, approveTransaction, unapproveTransaction, bulkApproveTransactions, deleteTransaction } from "@/lib/api";
 import { ExpenseApprovalsPanel } from "@/components/finance/ExpenseApprovalsPanel";
+import { displayPhone } from "@/lib/phone";
 
 // The two things this desk signs off. Money coming in was all it ever held, because money
 // going out had no approval to give — a branch could not raise an expense, so the only
@@ -262,7 +263,7 @@ const PaymentDetails = ({ tx }) => {
   const cols = referenceColumns(tx);
   const [routeLabel, accountLabel, txnLabel] = refLabels(tx.payment_mode);
   const split = Array.isArray(ref.split) ? ref.split : [];
-  const phone = [tx.patient_phone, ref.payer_upi_id ? `UPI ${ref.payer_upi_id}` : ""].filter(Boolean).join(" · ");
+  const phone = [displayPhone(tx.patient_phone), ref.payer_upi_id ? `UPI ${ref.payer_upi_id}` : ""].filter(Boolean).join(" · ");
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4" data-testid="finance-approve-details">
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
@@ -516,7 +517,7 @@ const PendingTable = ({ rows, selected, onToggle, onApprove, onDelete, busyId })
               </td>
               <td className="px-3 py-3">
                 <p className="font-medium text-slate-800">{tx.patient_name}</p>
-                {tx.patient_phone && <p className="text-[11px] text-slate-400">{tx.patient_phone}</p>}
+                {displayPhone(tx.patient_phone) && <p className="text-[11px] text-slate-400">{displayPhone(tx.patient_phone)}</p>}
                 {(tx.payment_ref || {}).payer_upi_id && (
                   <p className="truncate text-[11px] text-slate-400" title={tx.payment_ref.payer_upi_id}>
                     UPI {tx.payment_ref.payer_upi_id}

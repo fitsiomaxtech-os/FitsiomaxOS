@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Users, Target, Building2, ChevronRight, Filter, Inbox, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { mkTeamMemberLeads } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * One tier of the sales chain — its people, and how each is doing.
@@ -283,7 +284,7 @@ const MemberLeadsModal = ({ member, tier, onClose }) => {
                             <p className="truncate font-medium text-slate-800">{l.name}</p>
                             {l.branch_name && <p className="truncate text-[11px] text-slate-400">{l.branch_name}</p>}
                           </td>
-                          <td className="px-3 py-3 text-slate-600">{l.phone || "—"}</td>
+                          <td className="px-3 py-3 text-slate-600">{displayPhone(l.phone) || "—"}</td>
                           <td className="px-3 py-3">
                             <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{l.source}</span>
                           </td>

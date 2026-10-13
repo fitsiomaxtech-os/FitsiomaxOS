@@ -12,6 +12,7 @@ import { BranchManagementBoard } from "@/components/branch/BranchManagementBoard
 // The pill row's replacement on the compact layout (Super Admin's page) — see `compact`
 // on OperationsBoard below.
 import { BranchFilterPopover } from "@/components/BranchFilterPopover";
+import { displayPhone } from "@/lib/phone";
 
 // Same helper BranchManagementBoard.jsx, PreSalesCRM.jsx, MarketingBoard.jsx and
 // BranchStoreBoard.jsx each already carry their own copy of.
@@ -380,7 +381,7 @@ const SearchableClientSelect = ({ clients, selectedId, onSelect, testid }) => {
   useEffect(() => { if (!open) setQuery(""); }, [open]);
 
   const selected = clients.find((c) => c.id === selectedId);
-  const currentLabel = selected ? `${selected.name}${selected.phone ? ` — ${selected.phone}` : ""}` : "— Select a client —";
+  const currentLabel = selected ? `${selected.name}${displayPhone(selected.phone) ? ` — ${displayPhone(selected.phone)}` : ""}` : "— Select a client —";
 
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -420,7 +421,7 @@ const SearchableClientSelect = ({ clients, selectedId, onSelect, testid }) => {
                 className={`block w-full rounded-md px-3 py-1.5 text-left text-xs font-medium ${selectedId === c.id ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"}`}
                 data-testid={`${testid}-option-${c.id}`}
               >
-                {c.name}{c.phone ? ` — ${c.phone}` : ""}
+                {c.name}{displayPhone(c.phone) ? ` — ${displayPhone(c.phone)}` : ""}
               </button>
             ))}
             {filtered.length === 0 && (

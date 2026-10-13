@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
-import { telNumber } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
 import { BalanceDiscount, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 
@@ -265,7 +265,7 @@ const MoneyTile = ({ label, value, aside, tone = "text-slate-900", className = "
 const downloadInvoice = (client, data) => {
   const lines = [
     `Invoice — ${client.name}`,
-    client.phone ? `Phone: ${client.phone}` : "",
+    displayPhone(client.phone) ? `Phone: ${displayPhone(client.phone)}` : "",
     client.email ? `Email: ${client.email}` : "",
     client.branch_name ? `Branch: ${client.branch_name}` : "",
     "",
@@ -497,7 +497,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
             {client && (
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-600" data-testid="client-history-meta">
                 {[
-                  client.phone,
+                  displayPhone(client.phone),
                   client.branch_name,
                   client.patient_number && <span key="pn" className="font-mono">{client.patient_number}</span>,
                 ].filter(Boolean).map((part, i, arr) => (

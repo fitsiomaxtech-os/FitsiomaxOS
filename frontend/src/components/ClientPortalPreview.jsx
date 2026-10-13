@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Calendar, ClipboardList, IndianRupee, PhoneCall, UserRound } from "lucide-react";
 import { getClientPortalPreview } from "@/lib/api";
 import { LeadDocuments } from "@/components/LeadDocuments";
-import { telNumber } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
 import { SessionsTab, TreatmentTab, PaymentTab } from "@/pages/PatientPortalPage";
 
 // Operations' Client tab: the same four tabs the patient sees on their own /portal
@@ -34,7 +34,7 @@ const OverviewTab = ({ data, leadId }) => (
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Your Details</p>
       <div className="grid grid-cols-2 gap-3">
         <Row label="Patient Number" value={data.patient_number} />
-        <Row label="Phone" value={data.phone} />
+        <Row label="Phone" value={displayPhone(data.phone)} />
         <Row label="Email" value={data.email} />
         <Row label="Age" value={data.age} />
         <Row label="Gender" value={data.gender} />

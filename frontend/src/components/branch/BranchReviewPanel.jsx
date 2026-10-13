@@ -8,7 +8,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
-import { waNumber } from "@/lib/phone";
+import { displayPhone, waNumber } from "@/lib/phone";
 
 // Three views onto one pipeline: waiting to be sent, sent and still outstanding, done.
 // Each row already names the Head Physio it went to, so the branch can see who has what
@@ -677,7 +677,7 @@ export const BranchReviewPanel = ({ branchId }) => {
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-4">
               <div className="min-w-0">
                 <p className="truncate text-lg font-bold text-slate-800">{viewing.lead_name}</p>
-                <p className="text-xs text-slate-500">{viewing.patient_number || "—"} · {viewing.phone || "—"}</p>
+                <p className="text-xs text-slate-500">{viewing.patient_number || "—"} · {displayPhone(viewing.phone) || "—"}</p>
               </div>
               <button onClick={() => setViewing(null)} className="shrink-0 rounded-lg border-2 border-orange-200 bg-orange-100 p-2 text-orange-600 hover:bg-orange-200" data-testid="branch-review-view-close">
                 <X className="h-4 w-4" />

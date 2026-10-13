@@ -68,6 +68,7 @@ import { DASH_TABS, DashboardTabPanel, ModeBranchScope, useDashboardData } from 
 // > Marketing is untouched and still gets the tiles. See the note at the render below, and
 // the file's own header for why the desk wants a table rather than tiles.
 import { BREAKDOWN_MODES, BdMarketingSources } from "@/components/BdMarketingSources";
+import { displayPhone } from "@/lib/phone";
 // Finance, HR Admin, Services and Products, and the two Settings screens -- the same five
 // boards Super Admin reaches, mounted here as this desk's own tabs.
 //
@@ -637,7 +638,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
 // the two can never list different facts about the same row.
 const DRILL_COLUMNS = {
   lead: [
-    { key: "name", label: "Lead", primary: true, value: (r) => r.name || "—", sub: (r) => r.phone || r.email || "" },
+    { key: "name", label: "Lead", primary: true, value: (r) => r.name || "—", sub: (r) => displayPhone(r.phone) || r.email || "" },
     { key: "source", label: "Source", value: (r) => r.source_tab || r.source_type || "—" },
     { key: "stage", label: "Stage", value: (r) => r.stage || "—" },
     { key: "branch", label: "Branch", value: (r, ctx) => ctx.branchName(r.branch_id) },
@@ -675,7 +676,7 @@ const DRILL_COLUMNS = {
 const METRIC_COLUMNS = {
   today: [
     { key: "name", label: "Lead", primary: true, value: (r) => r.name || "—" },
-    { key: "phone", label: "Phone", value: (r) => r.phone || "—" },
+    { key: "phone", label: "Phone", value: (r) => displayPhone(r.phone) || "—" },
     { key: "branch", label: "Branch", value: (r, ctx) => ctx.branchName(r.branch_id) },
     { key: "source", label: "Source", value: (r) => r.source_tab || r.source_type || "—" },
     { key: "created", label: "Date & Time", value: (r) => dateTimeStamp(r.created_at) || "—" },

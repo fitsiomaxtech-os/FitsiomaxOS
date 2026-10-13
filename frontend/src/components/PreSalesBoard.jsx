@@ -40,6 +40,7 @@ import {
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
+import { displayPhone } from "@/lib/phone";
 
 const PIPELINE_STAGES = [
   "New Lead",
@@ -262,7 +263,7 @@ export const PreSalesBoard = () => {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-slate-800">{lead.name}</p>
-                          <p className="truncate text-xs text-slate-500">{lead.phone}</p>
+                          <p className="truncate text-xs text-slate-500">{displayPhone(lead.phone)}</p>
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
@@ -319,7 +320,7 @@ export const PreSalesBoard = () => {
                         <span className="font-medium text-slate-800">{lead.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-slate-600">{lead.phone}</td>
+                    <td className="px-3 py-2 text-slate-600">{displayPhone(lead.phone)}</td>
                     <td className="px-3 py-2 text-slate-600">{lead.source_tab || lead.source_type}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-block rounded-full border px-2 py-0.5 text-xs ${STAGE_COLORS[lead.stage]?.light || "bg-slate-50 text-slate-600 border-slate-200"}`}>
@@ -424,7 +425,7 @@ function LeadDetailModal({ lead, branches, onClose, onStageMove, onRefresh }) {
   useEffect(() => {
     setEditForm({
       name: lead.name || "",
-      phone: lead.phone || "",
+      phone: displayPhone(lead.phone),
       email: lead.email || "",
       notes: lead.notes || "",
       extra_fields: lead.extra_fields || {},
@@ -638,7 +639,7 @@ function LeadDetailModal({ lead, branches, onClose, onStageMove, onRefresh }) {
                 ) : (
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2 text-sm text-slate-700">
-                      <Phone className="h-4 w-4 text-slate-400" /> {lead.phone || "—"}
+                      <Phone className="h-4 w-4 text-slate-400" /> {displayPhone(lead.phone) || "—"}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <Mail className="h-4 w-4 text-slate-400" /> {lead.email || "—"}

@@ -7,6 +7,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 // How a registration arrived, as the branch would say it. A referral is recorded against
 // the master who made it rather than against a single "Masters" bucket, so these six are
@@ -1061,7 +1062,7 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
                         <td className="px-4 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
                         <td className="px-4 py-3">
                           <p className="max-w-full truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
-                          <p className="text-[10px] leading-4 text-slate-400">{r.phone || "No phone"}</p>
+                          <p className="text-[10px] leading-4 text-slate-400">{displayPhone(r.phone) || "No phone"}</p>
                         </td>
                         <td className="px-4 py-3">
                           {r.package_name ? (
@@ -1190,7 +1191,7 @@ const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, 
             {/* The three that identify somebody at a glance, on one line — the same three
                 the gym's dialog leads with, and the reason neither needs a photo. */}
             <p className="mt-0.5 text-[11px] text-slate-500">
-              {row.phone || "No phone"}{row.age ? ` · ${row.age}` : ""}{row.gender ? ` · ${row.gender}` : ""}
+              {displayPhone(row.phone) || "No phone"}{row.age ? ` · ${row.age}` : ""}{row.gender ? ` · ${row.gender}` : ""}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close" data-testid="zumba-view-close">
@@ -1279,7 +1280,7 @@ const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, 
           <div className="grid items-start gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 p-4">
               <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Customer</p>
-              <DetailRow label="Phone" value={row.phone} />
+              <DetailRow label="Phone" value={displayPhone(row.phone)} />
               <DetailRow label="Age" value={row.age} />
               <DetailRow label="Gender" value={(GENDERS.find((g) => g.key === row.gender) || {}).label} />
               <DetailRow label="Email" value={row.email} />
@@ -1959,7 +1960,7 @@ export const ZumbaPanel = ({ branchId }) => {
                             ? <p className="max-w-[10rem] truncate text-xs leading-5 text-slate-600" title={master}>{master}</p>
                             : <span className="text-xs leading-5 text-slate-300">—</span>}
                         </td>
-                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                         <td className="px-3 py-3">
                           {r.package_name
                             ? <p className="max-w-[9rem] truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>

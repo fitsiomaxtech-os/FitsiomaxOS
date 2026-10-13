@@ -36,3 +36,20 @@ export const telNumber = (raw) => {
   if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
   return `+${digits}`;
 };
+
+/**
+ * A stored phone as a person should read it on screen: the plain 10 digits of an Indian
+ * number, with no "p:" off a Meta export, no +91, no spaces. telNumber's rule, but kept
+ * to the numbers it can actually read -- a cell holding two numbers, or anything else
+ * that isn't one Indian number, is shown as written (less the "p:") rather than mashed
+ * into one long run of digits. Returns "" for nothing, so `displayPhone(x) || "—"` works.
+ */
+export const displayPhone = (raw) => {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  const digits = text.replace(/\D/g, "");
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(1);
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  return text.replace(/^p:\s*/i, "");
+};

@@ -8,6 +8,7 @@ import {
   approvePortalPending, dismissPortalPending,
 } from "@/lib/api";
 import { PortalLoginCreatedDialog } from "@/components/branch/PortalLoginCreatedDialog";
+import { displayPhone } from "@/lib/phone";
 
 const MODE_LABEL = {
   immediate: "Send immediately",
@@ -244,7 +245,7 @@ export function PortalControlsCard({ branchId }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-slate-800">{p.patient_name || "Patient"}</span>
                       <span className="block truncate text-[11px] text-slate-500">
-                        {[p.phone, p.email].filter(Boolean).join(" · ") || "no phone or email"}
+                        {[displayPhone(p.phone), p.email].filter(Boolean).join(" · ") || "no phone or email"}
                         {p.raised_at && <span className="text-slate-400"> · booked {when(p.raised_at)}</span>}
                       </span>
                     </span>

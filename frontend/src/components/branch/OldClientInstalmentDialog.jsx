@@ -4,6 +4,7 @@ import { History, X, Search, UserPlus, Info, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { searchOldClients, recordOldClientPayment } from "@/lib/api";
 import { CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
+import { displayPhone } from "@/lib/phone";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -242,7 +243,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold text-slate-800">{c.name || "Old client"}</span>
                           <span className="block truncate text-[11px] text-slate-500">
-                            {[c.phone, c.old_patient_id && `ID ${c.old_patient_id}`, c.category_label, c.package].filter(Boolean).join(" · ")}
+                            {[displayPhone(c.phone), c.old_patient_id && `ID ${c.old_patient_id}`, c.category_label, c.package].filter(Boolean).join(" · ")}
                           </span>
                         </span>
                         {c.balance > 0 ? (
@@ -274,7 +275,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                   </p>
                   <ul className="mt-1.5 space-y-0.5 text-[11px] text-amber-900">
                     {found.os_clients.map((c) => (
-                      <li key={c.id}>{[c.name, c.phone, c.patient_number].filter(Boolean).join(" · ")}</li>
+                      <li key={c.id}>{[c.name, displayPhone(c.phone), c.patient_number].filter(Boolean).join(" · ")}</li>
                     ))}
                   </ul>
                 </div>
@@ -297,7 +298,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-slate-800">{client.name || "Old client"}</p>
                   <p className="truncate text-[11px] text-slate-500">
-                    {[client.phone, client.old_patient_id && `ID ${client.old_patient_id}`].filter(Boolean).join(" · ")}
+                    {[displayPhone(client.phone), client.old_patient_id && `ID ${client.old_patient_id}`].filter(Boolean).join(" · ")}
                   </p>
                   <p className="truncate text-[11px] text-slate-500">
                     {[CATEGORIES.find(([k]) => k === client.category)?.[1], client.package].filter(Boolean).join(" · ")}

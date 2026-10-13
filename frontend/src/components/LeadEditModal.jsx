@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import { updateLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { DEPARTMENT_OPTIONS, SOURCE_SUGGESTIONS } from "@/components/CreateLeadModal";
+import { displayPhone } from "@/lib/phone";
 
 const GENDERS = ["Male", "Female", "Other"];
 // The two departments a lead is seen at a branch for. The other two are run online and
@@ -56,8 +57,8 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
   const [form, setForm] = useState({
     source_tab: initialSource,
     name: lead.name || "",
-    phone: lead.phone || "",
-    alternative_phone: lead.alternative_phone || "",
+    phone: displayPhone(lead.phone),
+    alternative_phone: displayPhone(lead.alternative_phone),
     email: lead.email || "",
     address: lead.address || "",
     city: lead.city || "",

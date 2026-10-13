@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { getConsultationsBoard, listBranchConsultants, reassignConsultant } from "@/lib/api";
 import { to12h } from "@/lib/time";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * Pick patients at a branch and hand their consultations to somebody — the Super Admin
@@ -200,7 +201,7 @@ export const ConsultationReassignModal = ({ branches = [], defaultBranchId, onCl
                         </td>
                         <td className="px-3 py-2.5">
                           <p className="font-semibold text-slate-800">{l.name}</p>
-                          <p className="font-mono text-[11px] text-slate-400">{l.patient_number || l.phone || "—"}</p>
+                          <p className="font-mono text-[11px] text-slate-400">{l.patient_number || displayPhone(l.phone) || "—"}</p>
                         </td>
                         <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-600">
                           {l.appointment_date || "—"}{l.appointment_time ? ` · ${to12h(l.appointment_time)}` : ""}

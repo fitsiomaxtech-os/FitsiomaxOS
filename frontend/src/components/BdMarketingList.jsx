@@ -20,7 +20,7 @@ import {
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { toast } from "@/components/ui/sonner";
 import { getBdSummaryRows } from "@/lib/api";
-import { telNumber } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
 // The avatar the rest of the OS already gives a lead: same two letters, same hue per
 // first letter, so one person is the same colour on this list and on Sales View.
 import { avatarColor, initials } from "@/components/PreSalesCRM";
@@ -232,7 +232,7 @@ export const BdMarketingList = ({
                     </div>
                     <div className="mt-2 space-y-1 pl-12">
                       {r.email && <p className="flex items-center gap-1.5 truncate text-xs text-slate-600"><Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />{r.email}</p>}
-                      {r.phone && <p className="flex items-center gap-1.5 truncate text-xs text-slate-600"><Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />{r.phone}</p>}
+                      {displayPhone(r.phone) && <p className="flex items-center gap-1.5 truncate text-xs text-slate-600"><Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />{displayPhone(r.phone)}</p>}
                       <p className="flex items-center gap-1.5 truncate text-xs text-slate-600"><MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />{place(r)}</p>
                     </div>
                   </div>
@@ -282,7 +282,7 @@ export const BdMarketingList = ({
                           </p>
                           <p className="mt-0.5 flex items-center gap-1.5 text-slate-600">
                             <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                            <span className="truncate">{r.phone || "—"}</span>
+                            <span className="truncate">{displayPhone(r.phone) || "—"}</span>
                           </p>
                         </td>
                         <td className="px-4 py-3">
@@ -323,7 +323,7 @@ export const BdMarketingList = ({
                               <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuItem onSelect={() => onOpenLead?.(r)}>Open lead</DropdownMenuItem>
                                 {r.phone && <DropdownMenuItem onSelect={() => { window.location.href = `tel:${telNumber(r.phone)}`; }}>Call</DropdownMenuItem>}
-                                {r.phone && <DropdownMenuItem onSelect={() => copy(r.phone, "Phone")}>Copy phone</DropdownMenuItem>}
+                                {displayPhone(r.phone) && <DropdownMenuItem onSelect={() => copy(displayPhone(r.phone), "Phone")}>Copy phone</DropdownMenuItem>}
                                 {r.email && <DropdownMenuItem onSelect={() => copy(r.email, "Email")}>Copy email</DropdownMenuItem>}
                               </DropdownMenuContent>
                             </DropdownMenu>

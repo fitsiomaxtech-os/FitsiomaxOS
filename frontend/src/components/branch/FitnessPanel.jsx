@@ -7,6 +7,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { listFitness, addFitness, updateFitness, setFitnessStatus, deleteFitness, collectFitnessPayment, renewFitness, acceptFitnessReferral, listStoreItems } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 
 /**
  * Branch Admin > Fitness — the gym's membership roll.
@@ -471,7 +472,7 @@ export const FitnessPanel = ({ branchId }) => {
                         <td className="px-3 py-3">
                           <p className="max-w-[12rem] truncate text-sm font-semibold leading-5 text-slate-800" title={r.name}>{r.name || "—"}</p>
                         </td>
-                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{r.phone || "—"}</td>
+                        <td className="px-3 py-3 text-xs leading-5 text-slate-600">{displayPhone(r.phone) || "—"}</td>
                         <td className="px-3 py-3">
                           {r.package_name
                             ? <p className="max-w-[9rem] truncate text-xs leading-5 text-slate-600" title={r.package_name}>{r.package_name}</p>
@@ -1394,7 +1395,7 @@ const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onA
               <span className={`inline-flex rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${meta.classes}`}>{meta.label}</span>
             </h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              {member.phone || "No phone"}{member.age ? ` · ${member.age}` : ""}{member.gender ? ` · ${member.gender}` : ""}
+              {displayPhone(member.phone) || "No phone"}{member.age ? ` · ${member.age}` : ""}{member.gender ? ` · ${member.gender}` : ""}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="fitness-detail-close"><X className="h-4 w-4" /></button>
@@ -1481,7 +1482,7 @@ const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onA
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Customer</p>
-              <DetailLine label="Phone">{member.phone}</DetailLine>
+              <DetailLine label="Phone">{displayPhone(member.phone)}</DetailLine>
               <DetailLine label="Age">{member.age}</DetailLine>
               <DetailLine label="Gender">{member.gender}</DetailLine>
               <DetailLine label="Email">{member.email}</DetailLine>
