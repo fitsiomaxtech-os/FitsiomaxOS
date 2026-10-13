@@ -1200,7 +1200,9 @@ export const ViewItemModal = ({ item, kind, onClose, onEdit, canEdit = true }) =
 
 // Backs both Sessions sub-tabs; see PhysiotherapyPanel for why this is one component
 // with a category rather than two copies.
-const SessionsPhysiotherapyPanel = ({ category = "physiotherapy", reloadToken, toolbarSlot, modeFilter = "all", noun = "session package" }) => {
+// `stripSlot`, when given, is where the desktop Create button goes instead of a row of its
+// own above the cards -- the right end of the sub-tab strip it was chosen from.
+const SessionsPhysiotherapyPanel = ({ category = "physiotherapy", reloadToken, toolbarSlot, stripSlot, modeFilter = "all", noun = "session package" }) => {
   const [items, setItems] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -1242,11 +1244,18 @@ const SessionsPhysiotherapyPanel = ({ category = "physiotherapy", reloadToken, t
         </Button>,
         toolbarSlot,
       )}
-      <div className="hidden items-center justify-end sm:flex">
+      {stripSlot ? createPortal(
         <Button size="sm" onClick={() => setShowCreate(true)} data-testid={`sessions-${category}-create-btn`}>
           <Plus className="mr-1 h-4 w-4" />Create
-        </Button>
-      </div>
+        </Button>,
+        stripSlot,
+      ) : (
+        <div className="hidden items-center justify-end sm:flex">
+          <Button size="sm" onClick={() => setShowCreate(true)} data-testid={`sessions-${category}-create-btn`}>
+            <Plus className="mr-1 h-4 w-4" />Create
+          </Button>
+        </div>
+      )}
 
       {loadError ? (
         <Card>
@@ -1325,9 +1334,11 @@ const SessionsPhysiotherapyPanel = ({ category = "physiotherapy", reloadToken, t
 
 const SessionsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) => {
   const [sub, setSub] = useState("physiotherapy");
+  // The right end of the strip, where the open sub-tab's Create button is portalled.
+  const [stripSlot, setStripSlot] = useState(null);
   return (
     <div className="space-y-4" data-testid="packages-panel-sessions">
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="sessions-subtabs">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="sessions-subtabs">
         {SESSIONS_SUBTABS.map((t) => {
           const Icon = t.icon;
           const active = sub === t.key;
@@ -1342,10 +1353,12 @@ const SessionsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) => {
             </button>
           );
         })}
+        {/* Desktop only: on a phone Create already sits in the page toolbar (toolbarSlot). */}
+        <div ref={setStripSlot} className="ml-auto hidden items-center pr-1 sm:flex" data-testid="sessions-subtabs-actions" />
       </div>
 
-      {sub === "physiotherapy" && <SessionsPhysiotherapyPanel reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
-      {sub === "fitness" && <SessionsPhysiotherapyPanel category="fitness" reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
+      {sub === "physiotherapy" && <SessionsPhysiotherapyPanel reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
+      {sub === "fitness" && <SessionsPhysiotherapyPanel category="fitness" reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
       {/* Keyed, like the top-level shelves are: without it React keeps the panel instance
           across a sub-tab switch and the previous category's rows sit there until the new
           ones land. `noun` matches the Rehab tab's, so Create and the empty state say the
@@ -1357,6 +1370,7 @@ const SessionsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) => {
           noun="rehab package"
           reloadToken={reloadToken}
           toolbarSlot={toolbarSlot}
+          stripSlot={stripSlot}
           modeFilter={modeFilter}
         />
       )}
