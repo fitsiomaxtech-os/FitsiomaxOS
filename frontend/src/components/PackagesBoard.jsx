@@ -1958,7 +1958,10 @@ const SuperAdminInventoryPanel = ({ category, reloadToken }) => {
   );
 };
 
-export const PackagesBoard = () => {
+// `navSlot`: where the page wants the All/Offline/Online/History row on a desktop -- Super
+// Admin puts it at the right end of its nav strip. Phones, which have no such strip, and
+// any page that passes nothing keep the row at the top of the board.
+export const PackagesBoard = ({ navSlot } = {}) => {
   // All / Offline / Online — which of the catalogue tabs sit next to Consultations and
   // Sessions (MODE_TAB_KEYS), and, within Consultations/Sessions themselves, which of a
   // package's two prices its cards show. History sits outside this split entirely — a
@@ -1988,35 +1991,46 @@ export const PackagesBoard = () => {
   // white while idle, solid blue when it is the one selected. Written once here because
   // History sits in this row as a peer of the three modes, and two copies of the styling
   // is how the row ends up with three buttons of one shape and a fourth of another.
-  const scopeBtn = (on) => `h-10 shrink-0 rounded-md px-3 text-sm font-medium transition ${
+  // In the nav strip the row takes the nav tabs' height, so the line does not grow for it.
+  const scopeBtn = (on, inNav) => `${inNav ? "h-9" : "h-10"} shrink-0 rounded-md px-3 text-sm font-medium transition ${
     on ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
   }`;
 
+  // Rendered twice when the page gives a nav slot -- once there (desktop) and once here
+  // (phone, md:hidden) -- and CSS picks, as with the Create buttons below.
+  const modeRow = (inNav) => (
+    <div className={`flex flex-wrap items-center gap-2 ${navSlot && !inNav ? "md:hidden" : ""}`} data-testid={inNav ? "packages-mode-filter-nav" : "packages-mode-filter"}>
+      {MODE_FILTERS.map((m) => (
+        <button
+          key={m.key}
+          type="button"
+          onClick={() => selectMode(m.key)}
+          className={scopeBtn(view === "catalog" && modeFilter === m.key, inNav)}
+          data-testid={`packages-mode-filter-${m.key}${inNav ? "-nav" : ""}`}
+        >
+          {m.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => setView("history")}
+        className={scopeBtn(view === "history", inNav)}
+        data-testid={`packages-view-history${inNav ? "-nav" : ""}`}
+      >
+        History
+      </button>
+    </div>
+  );
+
   return (
-    <div className="space-y-4" data-testid="packages-board">
+    // A flex column with gap rather than space-y: gap skips the rows CSS hides, so on a
+    // desktop with the mode row up in the nav, the tab bar starts at the top of the board
+    // instead of under the margin of a row that is not there.
+    <div className="flex flex-col gap-4" data-testid="packages-board">
       {/* No heading. The nav tab above already reads Services and Products, and the line
           under it only listed the tabs that follow it. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="packages-mode-filter">
-        {MODE_FILTERS.map((m) => (
-          <button
-            key={m.key}
-            type="button"
-            onClick={() => selectMode(m.key)}
-            className={scopeBtn(view === "catalog" && modeFilter === m.key)}
-            data-testid={`packages-mode-filter-${m.key}`}
-          >
-            {m.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setView("history")}
-          className={scopeBtn(view === "history")}
-          data-testid="packages-view-history"
-        >
-          History
-        </button>
-      </div>
+      {navSlot && createPortal(modeRow(true), navSlot)}
+      {modeRow(false)}
 
       {/* A dropdown on a phone, the same control the Branch Admin store uses. Eight tabs
           wrapped to three rows there, which pushed the shelf being edited below the fold

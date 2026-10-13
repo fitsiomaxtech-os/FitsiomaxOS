@@ -562,6 +562,10 @@ export const CRMPage = ({ auth, onLogout }) => {
     }
     return readStoredSuperAdminView() || "dashboard";
   });
+  // The right end of the desktop nav strip, for the open board's own controls (Services and
+  // Products' All/Offline/Online/History). A callback ref so the portal re-renders once the
+  // node exists.
+  const [navSlot, setNavSlot] = useState(null);
 
   // Written on every change rather than on unload, so a refresh, a crash and a closed tab
   // all reopen on the page that was actually last on screen.
@@ -1267,7 +1271,7 @@ export const CRMPage = ({ auth, onLogout }) => {
         <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : "space-y-4"} px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
 
         {showSuperAdminBoard && (
-          <div className="hidden flex-wrap gap-2 border-b border-slate-200 pb-2 md:flex" data-testid="super-admin-nav">
+          <div className="hidden flex-wrap items-center gap-2 border-b border-slate-200 pb-2 md:flex" data-testid="super-admin-nav">
             {SUPER_ADMIN_TABS.map((t) => (
               <button
                 key={t.key}
@@ -1278,6 +1282,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 {t.label}
               </button>
             ))}
+            <div ref={setNavSlot} className="ml-auto flex items-center" data-testid="super-admin-nav-slot" />
           </div>
         )}
 
@@ -1466,7 +1471,7 @@ export const CRMPage = ({ auth, onLogout }) => {
         )}
 
         {showSuperAdminBoard && superAdminView === "packages" && (
-          <PackagesBoard />
+          <PackagesBoard navSlot={navSlot} />
         )}
 
         {showSuperAdminBoard && superAdminView === "my_consultation" && (
