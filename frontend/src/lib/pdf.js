@@ -71,52 +71,6 @@ export const htmlToPdf = async (html) => {
 };
 
 /**
- * A document already laid out as A4 pages -> PDF Blob, one `.page` element per sheet.
- *
- * htmlToPdf draws the whole document as one canvas and slices it, which is right for a
- * receipt and wrong for a report: a slice falls wherever the page height lands, through
- * the middle of a table row, and a list of a few hundred leads makes a canvas taller than
- * a browser will draw at all. Here each page is its own canvas, so the caller decides
- * where a page ends -- between rows -- and the length of the list costs pages, not memory.
- *
- * Each `.page` is expected to be RENDER_W wide and A4 tall (1123px); it is drawn edge to
- * edge, so the page's own padding is the margin.
- */
-export const htmlPagesToPdf = async (html) => {
-  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas")]);
-  const frame = document.createElement("iframe");
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;height:1123px;border:0`;
-  document.body.appendChild(frame);
-  try {
-    const doc = frame.contentDocument;
-    doc.open();
-    doc.write(html);
-    doc.close();
-    await new Promise((resolve) => {
-      if (doc.readyState === "complete") resolve();
-      else frame.addEventListener("load", resolve, { once: true });
-      setTimeout(resolve, 4000);
-    });
-    try { await doc.fonts?.ready; } catch { /* fonts API missing — draw with what loaded */ }
-
-    const pages = [...doc.querySelectorAll(".page")];
-    const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
-    for (let i = 0; i < pages.length; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- one page at a time keeps one canvas alive
-      const canvas = await html2canvas(pages[i], {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: RENDER_W, logging: false,
-      });
-      if (i > 0) pdf.addPage();
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, A4_W, Math.min(A4_H, (canvas.height / canvas.width) * A4_W));
-    }
-    return pdf.output("blob");
-  } finally {
-    frame.remove();
-  }
-};
-
-/**
  * A PDF built at most once, on demand. A failed build is forgotten so the next click
  * tries again instead of replaying the same error forever.
  */

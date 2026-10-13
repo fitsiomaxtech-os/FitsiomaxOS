@@ -1321,19 +1321,21 @@ const consultationDiscount = (l) => {
 // from a template.
 //
 // Fee Collected reads every row on one line, the appointment as "Thu, 15 Oct - 10:30 AM"
-// rather than stacked, so Appointment is the widest column after Patient on both sets.
+// rather than stacked. The short, fixed-size cells -- Stage, Phone, Discount, Total, Paid --
+// get only what they hold, and the rest goes to Patient and Consultant, the two that
+// truncate: centred in wide columns those short cells were islands with a gap either side.
 const COLS_WITH_DISCOUNT = {
-  sno: "w-[3%]", patient: "w-[17%]", appt: "w-[13%]", expert: "w-[10%]", stage: "w-[10%]",
-  phone: "w-[9%]", pno: "w-[10%]", collected: "w-[10%]", discount: "w-[9%]", total: "w-[9%]",
+  sno: "w-[3%]", patient: "w-[21%]", appt: "w-[13%]", expert: "w-[13%]", stage: "w-[9%]",
+  phone: "w-[9%]", pno: "w-[10%]", collected: "w-[9%]", discount: "w-[7%]", total: "w-[6%]",
 };
 
 // Fee Collected ends its rows with a fee action on every tab, so it needs a set of its own
 // — every other column gives up a point or two to pay for it. The table widens by the same
 // amount at its min-width, so nothing is squeezed on a laptop.
 const COLS_WITH_ACTION = {
-  sno: "w-[3%]", patient: "w-[15%]", appt: "w-[12%]", expert: "w-[9%]", stage: "w-[9%]",
-  phone: "w-[9%]", pno: "w-[9%]", collected: "w-[9%]", discount: "w-[8%]", total: "w-[8%]",
-  action: "w-[9%]",
+  sno: "w-[3%]", patient: "w-[19%]", appt: "w-[11%]", expert: "w-[12%]", stage: "w-[8%]",
+  phone: "w-[8%]", pno: "w-[9%]", collected: "w-[9%]", discount: "w-[7%]", total: "w-[7%]",
+  action: "w-[7%]",
 };
 
 /**
@@ -6907,7 +6909,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <tr
                     key={l.id}
                     onClick={() => { if (selectMode) toggleSelectOne(l.id); else { setSelectedLead(l); setDetailTab("overview"); } }}
-                    className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${selectMode && selectedIds.has(l.id) ? "bg-rose-50" : ""}`}
+                    className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${feeTable ? "[&>td]:px-2" : ""} ${selectMode && selectedIds.has(l.id) ? "bg-rose-50" : ""}`}
                     data-testid={`cons-row-${l.id}`}
                   >
                     <td className={`px-3 py-3 align-middle leading-5 text-slate-400 ${tdAlign}`}>
@@ -6939,10 +6941,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         column happens to run out — so the dates stack in a straight
                         edge down the column instead of breaking at a different word
                         on every row. */}
-                    <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
+                    <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs ${tdAlign}`}>
                       {l.appointment_date ? (
                         <span
-                          className={`flex w-full items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLineRows || feeTable ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
+                          className={`${feeTable ? "inline-flex max-w-full" : "flex w-full"} items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLineRows || feeTable ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
                           data-testid={`cons-appt-${l.id}`}
                         >
                           {/* Stacked, because this column is a narrow slice of a
