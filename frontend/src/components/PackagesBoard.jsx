@@ -1386,7 +1386,9 @@ const SessionsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) => {
  * rather than copied — two hundred lines duplicated would drift the first time either
  * was edited, and the ask was explicitly for the same create option, not a new one.
  */
-const PhysiotherapyPanel = ({ kind = "consultation", category = "physiotherapy", reloadToken, toolbarSlot, modeFilter = "all" }) => {
+// `stripSlot`: as on SessionsPhysiotherapyPanel, the right end of the sub-tab strip, where
+// desktop's Create button goes when the panel is reached from one.
+const PhysiotherapyPanel = ({ kind = "consultation", category = "physiotherapy", reloadToken, toolbarSlot, stripSlot, modeFilter = "all" }) => {
   const cfg = PACKAGE_KINDS[kind] || PACKAGE_KINDS.consultation;
   const [items, setItems] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -1428,11 +1430,18 @@ const PhysiotherapyPanel = ({ kind = "consultation", category = "physiotherapy",
         </Button>,
         toolbarSlot,
       )}
-      <div className="hidden items-center justify-end sm:flex">
+      {stripSlot ? createPortal(
         <Button size="sm" onClick={() => setShowCreate(true)} data-testid={`${category}-create-btn`}>
           <Plus className="mr-1 h-4 w-4" />Create
-        </Button>
-      </div>
+        </Button>,
+        stripSlot,
+      ) : (
+        <div className="hidden items-center justify-end sm:flex">
+          <Button size="sm" onClick={() => setShowCreate(true)} data-testid={`${category}-create-btn`}>
+            <Plus className="mr-1 h-4 w-4" />Create
+          </Button>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <Card>
@@ -1504,9 +1513,11 @@ const PhysiotherapyPanel = ({ kind = "consultation", category = "physiotherapy",
 
 const ConsultationsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) => {
   const [sub, setSub] = useState("physiotherapy");
+  // The right end of the strip, where the open sub-tab's Create button is portalled.
+  const [stripSlot, setStripSlot] = useState(null);
   return (
     <div className="space-y-4" data-testid="packages-panel-consultations">
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="consultations-subtabs">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="consultations-subtabs">
         {CONSULTATIONS_SUBTABS.map((t) => {
           const Icon = t.icon;
           const active = sub === t.key;
@@ -1521,10 +1532,12 @@ const ConsultationsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) =>
             </button>
           );
         })}
+        {/* Desktop only: on a phone Create already sits in the page toolbar (toolbarSlot). */}
+        <div ref={setStripSlot} className="ml-auto hidden items-center pr-1 sm:flex" data-testid="consultations-subtabs-actions" />
       </div>
 
-      {sub === "physiotherapy" && <PhysiotherapyPanel reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
-      {sub === "fitness" && <PhysiotherapyPanel category="fitness" reloadToken={reloadToken} toolbarSlot={toolbarSlot} modeFilter={modeFilter} />}
+      {sub === "physiotherapy" && <PhysiotherapyPanel reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
+      {sub === "fitness" && <PhysiotherapyPanel category="fitness" reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
     </div>
   );
 };
