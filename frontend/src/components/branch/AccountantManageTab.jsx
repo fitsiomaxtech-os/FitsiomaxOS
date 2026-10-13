@@ -1218,7 +1218,6 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           payments={detailPayments}
           verify={verify}
           onReceipt={(tx) => setReceipt(receiptForTxn(tx))}
-          onClientHistory={(leadId) => { setDetail(null); setViewingLeadId(leadId); }}
           onClose={() => setDetail(null)}
         />
       )}
@@ -1796,12 +1795,12 @@ const stageLine = (t) => {
  * Send for approval and Undo (the branch desk's, `verify`), and the receipt, live here
  * rather than as a row of icons on every line of the table. Each payment says which pile it
  * is in and who put it there; a client with several in one pile can send or take back all
- * of them at once. Client history opens the client's own card, for a row that has a client.
+ * of them at once.
  *
  * Portalled at the client card's own level (z-50), so the receipt (z-80) opens over it and
  * the desk comes back to this when the receipt is shut.
  */
-const PaymentDetails = ({ head, payments, verify, onReceipt, onClientHistory, onClose }) => {
+const PaymentDetails = ({ head, payments, verify, onReceipt, onClose }) => {
   const total = payments.reduce((n, t) => n + (Number(t.gross) || 0), 0);
   const toVerify = payments.filter((t) => stageOf(t) === "collected");
   const waiting = payments.filter((t) => stageOf(t) === "requested");
@@ -1825,28 +1824,32 @@ const PaymentDetails = ({ head, payments, verify, onReceipt, onClientHistory, on
             </h3>
             <p className="mt-0.5 truncate text-sm text-slate-600">{[head.phone, head.branch].filter(Boolean).join(" · ") || "—"}</p>
           </div>
-          <div className="flex shrink-0 items-start gap-1">
-            <div className="text-right">
-              <p className="font-mono text-base font-bold tabular-nums text-emerald-600" data-testid="payment-details-total">{fmt(total)}</p>
-              <p className="text-[11px] text-slate-500">{countLabel(payments.length, "payment")}</p>
-            </div>
-            <button
-              type="button" onClick={onClose} title="Close" aria-label="Close"
-              className="-mr-1.5 flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-              data-testid="payment-details-close"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            type="button" onClick={onClose} title="Close" aria-label="Close"
+            className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            data-testid="payment-details-close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-
-        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3">
+        {/* The total and its count on one line with Send all / Undo all, so the whole
+            client can be moved without scrolling past the payments first. */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <p className="font-mono text-base font-bold tabular-nums text-emerald-600" data-testid="payment-details-total">{fmt(total)}</p>
+            <span className="inline-flex rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold text-slate-600">
+              {countLabel(payments.length, "payment")}
+            </span>
+          </div>
           {verify && (toVerify.length > 1 || waiting.length > 1) && (
             <div className="flex flex-wrap justify-end gap-2" data-testid="payment-details-all">
               {toVerify.length > 1 && <MoveChip txs={toVerify} verify={verify} label={`Send all ${toVerify.length} for approval`} />}
               {waiting.length > 1 && <MoveChip txs={waiting} verify={verify} label={`Undo all ${waiting.length}`} />}
             </div>
           )}
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3">
           {payments.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">These payments are no longer on the list.</p>
           ) : payments.map((t) => {
@@ -1903,26 +1906,6 @@ const PaymentDetails = ({ head, payments, verify, onReceipt, onClientHistory, on
               </div>
             );
           })}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5">
-          {head.lead_id && onClientHistory && (
-            <button
-              type="button"
-              onClick={() => onClientHistory(head.lead_id)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-              data-testid="payment-details-client"
-            >
-              Client history <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            type="button" onClick={onClose}
-            className="ml-auto rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            data-testid="payment-details-footer-close"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>,
