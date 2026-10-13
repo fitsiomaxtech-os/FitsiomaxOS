@@ -1325,16 +1325,16 @@ const consultationDiscount = (l) => {
 // get only what they hold, and the rest goes to Patient and Consultant, the two that
 // truncate: centred in wide columns those short cells were islands with a gap either side.
 const COLS_WITH_DISCOUNT = {
-  sno: "w-[3%]", patient: "w-[21%]", appt: "w-[13%]", expert: "w-[13%]", stage: "w-[9%]",
-  phone: "w-[9%]", pno: "w-[10%]", collected: "w-[9%]", discount: "w-[7%]", total: "w-[6%]",
+  sno: "w-[3%]", patient: "w-[24%]", appt: "w-[13%]", expert: "w-[14%]", stage: "w-[8%]",
+  phone: "w-[8%]", pno: "w-[9%]", collected: "w-[8%]", discount: "w-[7%]", total: "w-[6%]",
 };
 
 // Fee Collected ends its rows with a fee action on every tab, so it needs a set of its own
 // — every other column gives up a point or two to pay for it. The table widens by the same
 // amount at its min-width, so nothing is squeezed on a laptop.
 const COLS_WITH_ACTION = {
-  sno: "w-[3%]", patient: "w-[19%]", appt: "w-[11%]", expert: "w-[12%]", stage: "w-[8%]",
-  phone: "w-[8%]", pno: "w-[9%]", collected: "w-[9%]", discount: "w-[7%]", total: "w-[7%]",
+  sno: "w-[3%]", patient: "w-[22%]", appt: "w-[11%]", expert: "w-[13%]", stage: "w-[8%]",
+  phone: "w-[7%]", pno: "w-[8%]", collected: "w-[8%]", discount: "w-[7%]", total: "w-[6%]",
   action: "w-[7%]",
 };
 
@@ -6854,7 +6854,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               earlier stage there is no payment yet and they would be a row of dashes. */}
           <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
             <thead className={`sticky top-0 z-10 bg-slate-500 uppercase text-white ${feeTable ? "text-[11px] tracking-wide" : "text-xs"}`}>
-              <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-2" : ""}>
+              <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-1.5" : ""}>
                 <th className={`${cols.sno} px-3 py-2 ${thAlign} align-middle`}>S.No</th>
                 <th className={`${cols.patient} px-4 py-2 text-left align-middle`}>Patient Name</th>
                 <th className={`${cols.appt} px-3 py-2 ${thAlign} align-middle`}>Appointment</th>
@@ -6909,7 +6909,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <tr
                     key={l.id}
                     onClick={() => { if (selectMode) toggleSelectOne(l.id); else { setSelectedLead(l); setDetailTab("overview"); } }}
-                    className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${feeTable ? "[&>td]:px-2" : ""} ${selectMode && selectedIds.has(l.id) ? "bg-rose-50" : ""}`}
+                    className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${feeTable ? "[&>td]:px-1.5" : ""} ${selectMode && selectedIds.has(l.id) ? "bg-rose-50" : ""}`}
                     data-testid={`cons-row-${l.id}`}
                   >
                     <td className={`px-3 py-3 align-middle leading-5 text-slate-400 ${tdAlign}`}>
