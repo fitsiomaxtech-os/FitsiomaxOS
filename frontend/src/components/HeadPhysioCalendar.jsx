@@ -614,6 +614,11 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   const focusedDates = selectedDates.length > 0 ? selectedDates : selectedDate ? [selectedDate] : [];
   const focusedOpenCount = focusedDates.filter(dayIsOpen).length;
   const focusedBookings = focusedDates.flatMap(bookingsOnDay);
+  // The physio's day is said as a count, not drawn as a grid of tiles — what is staged to
+  // open, what is already open, and who is booked on it.
+  const dayAddingCount = selectedDate ? pendingSlots.filter((x) => !x._remove && x.slot_time.startsWith(`${selectedDate}T`)).length : 0;
+  const dayOpenCount = selectedDate ? (calendarData?.slots || []).filter((x) => x.startsWith(`${selectedDate}T`)).length : 0;
+  const dayBookings = selectedDate ? bookingsOnDay(selectedDate) : [];
   // Nothing left to add, so Mark available has nothing to do. Distinct from "it failed":
   // every day on screen is already open.
   const nothingToOpen = pendingSlots.filter((x) => !x._remove).length === 0;
@@ -1314,7 +1319,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                           </Button>
                         </div>
                       )}
-                      {!isConsultant && (
+                      {!isConsultant && !isPhysio && (
                         <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-400">
                           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400 inline-block" /> Available</span>
                           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400 inline-block" /> Adding</span>
@@ -1521,7 +1526,40 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                         </p>
                       </div>
                     )}
-                    {!isConsultant && (
+                    {/* No tile per slot on the physio's day: the day is opened or closed whole,
+                        so one line says what it holds, and the bookings are named because a
+                        booked slot is the one thing on it that Unsave will not touch. */}
+                    {isPhysio && dayTimes.length > 0 && (
+                      <div className="space-y-3" data-testid="physio-day-summary">
+                        <div className={`rounded-lg border px-3 py-2.5 ${dayAddingCount > 0 ? "border-violet-200 bg-violet-50" : dayOpenCount > 0 ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
+                          <p className={`text-xs font-semibold ${dayAddingCount > 0 ? "text-violet-800" : dayOpenCount > 0 ? "text-emerald-800" : "text-slate-500"}`}>
+                            {dayAddingCount > 0
+                              ? `${dayAddingCount} slot${dayAddingCount === 1 ? "" : "s"} will open — press Save Changes`
+                              : dayOpenCount > 0
+                              ? `Open · ${dayOpenCount} slot${dayOpenCount === 1 ? "" : "s"}`
+                              : "Not open on this day"}
+                          </p>
+                          {dayAddingCount > 0 && dayOpenCount > 0 && (
+                            <p className="mt-0.5 text-[11px] text-violet-600">{dayOpenCount} already open</p>
+                          )}
+                        </div>
+                        {dayBookings.length > 0 && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2" data-testid="physio-day-bookings">
+                            <p className="text-[11px] font-semibold text-amber-800">
+                              {dayBookings.length} booked — kept whatever is set here
+                            </p>
+                            <ul className="mt-1 space-y-0.5">
+                              {dayBookings.map(([slot, b]) => (
+                                <li key={slot} className="text-[11px] text-amber-700">
+                                  {to12h(slot.slice(11, 16))}{b?.lead_name ? ` — ${b.lead_name}` : ""}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!isConsultant && !isPhysio && (
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="time-slots-grid">
                       {dayTimes.map((time) => {
                         const state = getSlotState(time);
