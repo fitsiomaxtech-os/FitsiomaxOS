@@ -1781,8 +1781,9 @@ const PanelChip = ({ tone = "amber", tick = false, square = false, children }) =
 );
 
 // `actions` sit in the header band after the chip, for a control that belongs to the
-// panel's state rather than to the row of views under it.
-function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, children, testid }) {
+// panel's state rather than to the row of views under it. `flush` drops the body's padding
+// so its cards run to the panel's edges; a tab row, if drawn, keeps its own.
+function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, children, testid, flush = false }) {
   const t = PANEL_TONES[tone] || PANEL_TONES.indigo;
   return (
     <div className={`overflow-hidden rounded-xl border shadow-sm ring-1 ring-inset ring-white/60 ${t.shell}`} data-testid={testid}>
@@ -1802,13 +1803,13 @@ function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, c
           </div>
         ) : chip}
       </div>
-      <div className="p-4">
+      <div className={flush ? "p-0" : "p-4"}>
         {/* The controls sit above a hairline and do not move when the body under them
             changes, so the control that opened a view is the control that leaves it.
             A tab row whose every control is off for this lead draws nothing, hairline
             included. */}
         {tabs && (
-          <div className="peer flex flex-wrap items-center gap-2 border-b border-slate-200/70 pb-3 empty:hidden [&>*]:shrink-0" data-testid={`${testid}-tabs`}>
+          <div className={`peer flex flex-wrap items-center gap-2 border-b border-slate-200/70 pb-3 empty:hidden [&>*]:shrink-0 ${flush ? "px-4 pt-4" : ""}`} data-testid={`${testid}-tabs`}>
             {tabs}
           </div>
         )}
@@ -7230,11 +7231,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               name at the top of the screen and nothing to press to reach another tab
               without scrolling back up to find the row.
 
-              The narrow card (compactDetail) is a fixed 565 × 660 rather than a cap, so it
-              does not jump in size moving between Overview, Documents and Timeline; it
-              still gives way to a smaller window, and only its body scrolls. */}
+              The narrow card (compactDetail) is 565 wide and at most 660 tall. It ends where
+              its content does rather than holding a fixed 660, which left an empty band
+              under a short tab that read as a footer with nothing in it; it still gives way
+              to a smaller window, and only its body scrolls. */}
           <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5 ${compactDetail
-            ? "max-w-[565px] sm:h-[660px] sm:max-h-[calc(100dvh-1rem)]"
+            ? "max-w-[565px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
             {/* Two lines, each read across to its far end: who this is and the expert
                 seeing them, then how to reach them and when, with the Appointment Card at
@@ -10161,6 +10163,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         icon={detailView ? detailView.icon : IndianRupee}
                         title={detailView ? detailView.title : "Collect a Payment"}
                         testid="cons-stage-panel-consultation-visit"
+                        flush={!detailBody}
                         chip={detailView ? (
                           <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick}>{detailView.chip.label}</PanelChip>
                         ) : consultationPaid ? (
@@ -10282,6 +10285,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         icon={detailView ? detailView.icon : nextFeeStep ? IndianRupee : ClipboardCheck}
                         title={detailView ? detailView.title : nextFeeStep ? "Collect a Payment" : "Fee Collected"}
                         testid="cons-stage-panel-fee-collected"
+                        // The fee cards run to the panel's edges; a detail view opened from
+                        // the tab row keeps the panel's padding.
+                        flush={!detailBody}
                         chip={detailView ? (
                           <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick}>{detailView.chip.label}</PanelChip>
                         ) : partialPlan ? (
