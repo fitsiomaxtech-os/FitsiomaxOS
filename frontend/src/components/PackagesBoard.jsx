@@ -703,6 +703,10 @@ export const HOME_VISIT_SUBTABS = [
 ];
 const HOME_VISIT_CATEGORIES = new Set(HOME_VISIT_SUBTABS.map((t) => t.category));
 const COURSE_TOTAL_DEFAULTS = { rehab: { online: 14000, offline: 18000 } };
+// The per-session rate a new package opens on, for a shelf whose rate is not the general
+// default. Treatment's matches TREATMENT_SESSION_PRICE_* in backend/seed.py, which moved the
+// packages already on it to the same figures.
+const SESSION_PRICE_DEFAULTS = { physiotherapy: { online: 1900, offline: 1200 } };
 
 // Only a whole number of months is a plan. Anything else is a Zumba row saved before this
 // existed, and calling it "1 Month" would contradict the class count printed beside it.
@@ -751,12 +755,12 @@ export const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "
   // On a course-priced shelf these hold the course total, recovered from the stored rate
   // when editing so the box shows the figure that was typed rather than the rate behind it.
   const [priceOnline, setPriceOnline] = useState(() => {
-    if (!isCourseTotal) return item?.price_online ?? DEFAULT_PRICE_ONLINE;
+    if (!isCourseTotal) return item?.price_online ?? SESSION_PRICE_DEFAULTS[category]?.online ?? DEFAULT_PRICE_ONLINE;
     if (item) return packageTotal(item, "online");
     return COURSE_TOTAL_DEFAULTS[category]?.online ?? DEFAULT_PRICE_ONLINE;
   });
   const [priceOffline, setPriceOffline] = useState(() => {
-    if (!isCourseTotal) return item?.price_offline ?? DEFAULT_PRICE_OFFLINE;
+    if (!isCourseTotal) return item?.price_offline ?? SESSION_PRICE_DEFAULTS[category]?.offline ?? DEFAULT_PRICE_OFFLINE;
     if (item) return packageTotal(item, "offline");
     return COURSE_TOTAL_DEFAULTS[category]?.offline ?? DEFAULT_PRICE_OFFLINE;
   });

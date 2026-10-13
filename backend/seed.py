@@ -1226,6 +1226,46 @@ async def repair_flattened_fitness_prices() -> None:
             await v3_col("store_items").update_one({"id": item["id"]}, {"$set": updates})
 
 
+# Sessions > Treatment (category "physiotherapy"): the per-session rate every package on the
+# shelf was moved to on 2026-10-13. Kept in step with SESSION_PRICE_DEFAULTS in
+# PackagesBoard.jsx, which is what a new package on the shelf opens on.
+TREATMENT_SESSION_PRICE_ONLINE = 1900.0
+TREATMENT_SESSION_PRICE_OFFLINE = 1200.0
+_TREATMENT_PRICES_MIGRATION = "treatment_session_prices_1900_1200"
+
+
+async def set_treatment_session_prices() -> None:
+    """Put every Sessions > Treatment package on Rs.1,900 online and Rs.1,200 offline a session.
+
+    Every branch's own version of those packages too, where the branch switch has given it
+    one: the change was asked for across all of them, not as a new default a branch's edit
+    still sits on top of.
+
+    A one-shot, by its marker in `migrations`. Run on every boot it would turn the rate into
+    something the shelf forces back, and a price the Super Admin types later would last only
+    until the next restart -- the same "I changed it and it went back" the flat-rate pass
+    caused. Before reprice_unpaid_leads in server.py, so the leads still waiting to pay
+    on these packages are brought up to the new rate in the same boot."""
+    if await v3_col("migrations").find_one({"name": _TREATMENT_PRICES_MIGRATION}):
+        return
+    now = now_iso()
+    prices = {"price_online": TREATMENT_SESSION_PRICE_ONLINE, "price_offline": TREATMENT_SESSION_PRICE_OFFLINE}
+    rows = await v3_col("store_items").find(
+        {"item_type": "session", "category": "physiotherapy"}, {"_id": 0, "id": 1}
+    ).to_list(500)
+    ids = [r["id"] for r in rows]
+    if ids:
+        await v3_col("store_items").update_many(
+            {"id": {"$in": ids}}, {"$set": {**prices, "updated_at": now}}
+        )
+        await v3_col("store_item_branch_overrides").update_many(
+            {"item_id": {"$in": ids}}, {"$set": {**prices, "updated_at": now}}
+        )
+    await v3_col("migrations").insert_one(
+        {"name": _TREATMENT_PRICES_MIGRATION, "items": len(ids), "ran_at": now}
+    )
+
+
 async def migrate_course_prices_to_totals() -> None:
     """Move course-priced packages from a per-session rate to the total they were typed as.
 
