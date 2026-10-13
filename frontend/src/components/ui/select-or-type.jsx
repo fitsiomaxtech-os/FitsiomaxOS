@@ -9,8 +9,8 @@ const MANUAL = "__manual_entry__";
 
 /**
  * The themed dropdown with a way out: the usual options one click away in the app's own
- * list (a native <datalist> opens the browser's grey menu instead), and a last "Type
- * manually…" row that swaps the dropdown for a text box, for the value nobody listed.
+ * list (a native <datalist> opens the browser's grey menu instead), and a "Type
+ * manually…" row at the top that swaps the dropdown for a text box, for the value nobody listed.
  * The box carries a button back to the list.
  *
  * Opens straight into the text box when the saved value is not one of the options, so an
@@ -100,18 +100,19 @@ export const SelectOrType = ({
         // The trigger is gone once "Type manually…" is picked; focus goes to the box instead.
         onCloseAutoFocus={(e) => focusInput.current && e.preventDefault()}
       >
-        {options.map((o) => (
-          <SelectItem key={o} value={o} className={THEMED_ITEM}>
-            {o}
-          </SelectItem>
-        ))}
-        <SelectSeparator className="bg-slate-100" />
+        {/* First, so it is in view without scrolling past every option to reach it. */}
         <SelectItem value={MANUAL} className="text-sm font-medium text-sky-700 focus:bg-sky-50 focus:text-sky-700" data-testid={testid && `${testid}-manual`}>
           <span className="flex items-center gap-2">
             <PenLine className="h-3.5 w-3.5" />
             {manualLabel}
           </span>
         </SelectItem>
+        <SelectSeparator className="bg-slate-100" />
+        {options.map((o) => (
+          <SelectItem key={o} value={o} className={THEMED_ITEM}>
+            {o}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
