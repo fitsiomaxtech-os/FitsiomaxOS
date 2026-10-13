@@ -4276,7 +4276,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50/30 p-4 sm:p-5" data-testid="branch-lead-content">
+        <div className={`flex-1 overflow-y-auto bg-slate-50/30 ${activeTab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
           {activeTab === "overview" && (
             <div className="space-y-3">
               <div className="overflow-hidden rounded-xl border border-sky-100 bg-white shadow-sm">
@@ -4517,7 +4517,6 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               <div className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm" data-testid="branch-lead-pipeline">
                 <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><ChevronRight className="h-4 w-4" /></span>
-                  <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Pipeline Stage</p>
                 </div>
                 {/* Three equal columns on a phone, so the six pills sit in two even rows
                     instead of wrapping wherever their widths happen to break. From sm up
@@ -4621,7 +4620,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         disabled={isActive || notYetReached || isMirror || blockedFromAppointment}
                         onClick={handleClick}
                         title={blockedFromAppointment ? `${stage} is not reachable from Appointment — the consultation moves the patient on from here` : undefined}
-                        className={`rounded-lg px-1 py-1.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:px-3 sm:text-xs ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
+                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:px-3.5 sm:text-xs ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid={`branch-stage-btn-${stage}`}
                       >
@@ -4647,7 +4646,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         disabled={isActive}
                         onClick={() => setCancelDraft(true)}
                         title="Moves this lead to Cancel in Branch Consultation"
-                        className="rounded-lg px-1 py-1.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:px-3 sm:text-xs"
+                        className="rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:px-3.5 sm:text-xs"
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid="branch-stage-btn-consultation-cancel"
                       >
