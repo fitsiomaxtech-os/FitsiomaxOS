@@ -2549,6 +2549,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               onlineArm={armScoped}
               externalStageFilter={stageFilter}
               showOwnStageBar={false}
+              // 90%, one line a row, on every Consultation stage. Not on House Visit,
+              // which shares this board.
+              compactTable={!onHomeVisitTab}
               // The numbers on the cards above. Reported from this board rather than
               // computed up here, so a pill counts exactly the rows its own click shows --
               // see consultationCounts.
@@ -2720,8 +2723,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
           {/* List View (table) — its own scroll region so the sticky header can use top-0
               instead of guessing the page header's pixel height, which was colliding with
-              the stat cards row as it scrolled past. */}
-          <div className="hidden w-full max-h-[65vh] overflow-auto rounded-lg border border-slate-200 bg-white md:block" data-testid="branch-list">
+              the stat cards row as it scrolled past.
+
+              Drawn at 90%, every stage, one line a row: what used to sit on a second line
+              under a cell -- the patient number, Pre-Sales request, Overdue, the remarks --
+              is beside it or on its hover instead. zoom scales vh with everything else, so
+              72vh here is the same 65vh of screen it was. */}
+          <div className="hidden w-full max-h-[72vh] overflow-auto rounded-lg border border-slate-200 bg-white md:block" style={{ zoom: 0.9 }} data-testid="branch-list">
             {/* Wider floor where the board asks more than two questions: fitness draws
                 eight columns, and eight inside 760px is 95px each with the scroll region
                 around it going unused. */}
@@ -2849,7 +2857,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
                               {lead.name?.charAt(0)?.toUpperCase() || "?"}
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0" title={[lead.name, lead.patient_number].filter(Boolean).join("\n") || undefined}>
                               {/* The row's headline, so it carries the heaviest and darkest
                                   text in the row. As font-medium/slate-800 it sat half a step
                                   from the phone beside it and no heavier than the appointment
@@ -2857,14 +2865,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                   scanned for competing with the columns either side of it.
                                   The mobile card above already gave the name its own weight. */}
                               <span className="flex min-w-0 items-center gap-1">
-                                <span className="truncate font-semibold text-slate-900" title={lead.name}>{lead.name}</span>
+                                <span className="truncate font-semibold text-slate-900">{lead.name}</span>
                                 {/* Outside the truncation, not inside it. A name long
                                     enough to be cut is exactly the row where the mark
                                     would be the part that got cut. */}
                                 <TransferredTag lead={lead} />
+                                <RescheduledTag lead={lead} className="shrink-0" />
                               </span>
-                              {lead.patient_number && <span className="block truncate font-mono text-[10px] text-slate-400" title={lead.patient_number}>{lead.patient_number}</span>}
-                              <RescheduledTag lead={lead} className="mt-0.5" />
                             </div>
                             {/* The two marks, after the name so they read as something said
                                 about this patient rather than as part of their identity.
@@ -2955,18 +2962,15 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           const np = notProspectLabel(lead);
                           return (
                             <>
-                              <td className="px-4 py-3 text-xs text-slate-600">
+                              <td className="truncate whitespace-nowrap px-4 py-3 text-xs text-slate-600" title={lead.not_prospect_remarks || undefined}>
                                 {np.markedOn || <span className="text-slate-400">—</span>}
-                                {lead.not_prospect_remarks && (
-                                  <span className="block truncate text-[10px] text-slate-400" title={lead.not_prospect_remarks}>{lead.not_prospect_remarks}</span>
-                                )}
                               </td>
-                              <td className="px-4 py-3" data-testid={`branch-row-reminder-${lead.id}`}>
+                              <td className="truncate whitespace-nowrap px-4 py-3" title={np.reminder ? (np.due ? "Call due" : np.after) || undefined : undefined} data-testid={`branch-row-reminder-${lead.id}`}>
                                 {np.reminder ? (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className={`whitespace-nowrap text-xs font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
-                                    <span className={`text-[10px] font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
-                                  </div>
+                                  <>
+                                    <span className={`text-xs font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
+                                    {np.due && <span className="ml-1.5 rounded-[4px] bg-rose-50 px-1 py-px text-[10px] font-semibold text-rose-600">Due</span>}
+                                  </>
                                 ) : <span className="text-slate-400">—</span>}
                               </td>
                             </>
@@ -2977,14 +2981,19 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             const slot = apptSlotLabel(lead);
                             if (!slot) return <span className="text-slate-400">—</span>;
                             return (
-                              <div className="flex flex-col gap-0.5" data-testid={`branch-row-appt-${lead.id}`}>
-                                <span className="whitespace-nowrap text-xs font-semibold text-slate-700">
+                              <div
+                                className="truncate whitespace-nowrap"
+                                title={!lead.assigned_physio_name ? "Pre-Sales request" : undefined}
+                                data-testid={`branch-row-appt-${lead.id}`}
+                              >
+                                <span className="text-xs font-semibold text-slate-700">
                                   {[slot.date, slot.time].filter(Boolean).join(" · ")}
                                 </span>
                                 {/* Until an expert is assigned, this is the slot Pre-Sales asked
-                                    for rather than one the branch has committed to. */}
+                                    for rather than one the branch has committed to. Beside the
+                                    slot, so the row stays one line; the whole phrase on hover. */}
                                 {!lead.assigned_physio_name && (
-                                  <span className="text-[10px] font-medium text-amber-600">Pre-Sales request</span>
+                                  <span className="ml-1.5 rounded-[4px] bg-amber-50 px-1 py-px text-[10px] font-semibold text-amber-600">Pre-Sales</span>
                                 )}
                               </div>
                             );
@@ -3003,11 +3012,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                               const fu = followUpSlotLabel(lead);
                               if (!fu) return <span className="text-slate-400">—</span>;
                               return (
-                                <div className="flex flex-col gap-0.5" data-testid={`branch-row-followup-${lead.id}`}>
-                                  <span className={`whitespace-nowrap text-xs font-semibold ${fu.overdue ? "text-rose-600" : "text-slate-700"}`}>
+                                <div className="truncate whitespace-nowrap" title={fu.overdue ? "Overdue" : undefined} data-testid={`branch-row-followup-${lead.id}`}>
+                                  <span className={`text-xs font-semibold ${fu.overdue ? "text-rose-600" : "text-slate-700"}`}>
                                     {[fu.date, fu.time].filter(Boolean).join(" · ")}
                                   </span>
-                                  {fu.overdue && <span className="text-[10px] font-medium text-rose-500">Overdue</span>}
                                 </div>
                               );
                             })()}

@@ -1732,7 +1732,7 @@ const rowFeeGate = (l, fee) => {
 // Patient No. was widened here the same way and for the same reason as in the two sets
 // above — see the note over COLS_WITH_DISCOUNT.
 const COLS_PLAIN = {
-  sno: "w-[4%]", patient: "w-[24%]", appt: "w-[13%]", expert: "w-[15%]", stage: "w-[16%]",
+  sno: "w-[4%]", patient: "w-[22%]", appt: "w-[15%]", expert: "w-[15%]", stage: "w-[16%]",
   phone: "w-[14%]", pno: "w-[14%]",
 };
 
@@ -1741,7 +1741,7 @@ const COLS_PLAIN = {
 // pay for it, and the table widens at its min-width so nothing is squeezed on a laptop.
 // Must total 100, same as the other three.
 const COLS_PLAIN_WITH_ACTION = {
-  sno: "w-[4%]", patient: "w-[21%]", appt: "w-[12%]", expert: "w-[13%]", stage: "w-[14%]",
+  sno: "w-[4%]", patient: "w-[19%]", appt: "w-[14%]", expert: "w-[13%]", stage: "w-[14%]",
   phone: "w-[12%]", pno: "w-[12%]", action: "w-[12%]",
 };
 
@@ -2505,7 +2505,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, compactTable = false }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3470,6 +3470,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // over their columns, every cell on one line. Patient Name stays left-aligned -- a name
   // is read from its start. `feeTable` gates all of it so the other stages are unchanged.
   const feeTable = showDiscountColumn;
+  // Branch Admin's Consultation tab asks the same of every stage: drawn at 90%, one line a
+  // row -- the plan under the name moves to its hover, the appointment reads on one line.
+  // Headings and alignment stay as each stage has them; only Fee Collected centres.
+  const zoomedTable = feeTable || compactTable;
+  const oneLine = oneLineRows || zoomedTable;
   const thAlign = feeTable ? "text-center" : "text-left";
   const tdAlign = feeTable ? "text-center" : "";
 
@@ -6840,13 +6845,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
       {/* Table */}
       {showDeskTable && (
-      <Card className={`overflow-hidden border-slate-200 ${mobileCards ? "hidden sm:block" : ""}`} style={feeTable ? { zoom: 0.9 } : undefined}>
+      <Card className={`overflow-hidden border-slate-200 ${mobileCards ? "hidden sm:block" : ""}`} style={zoomedTable ? { zoom: 0.9 } : undefined}>
         {/* The rows scroll, the header does not. Capping the height here is what makes
             that possible: a sticky header sticks to its nearest scrolling ancestor, and
             with the old overflow-x-auto alone that ancestor grew with the table, so there
             was no vertical scroll of its own to stick against and the header rode up the
             page with the rows. Same shape as the Branch Leads list. */}
-        <CardContent className="max-h-[65vh] overflow-auto p-0">
+        <CardContent className={`${zoomedTable ? "max-h-[72vh]" : "max-h-[65vh]"} overflow-auto p-0`}>
           {/* These percentages must add up to 100 — table-fixed scales every column down
               by any overage, so no column ends up the width it declared. The min-width is
               what lets the wrapper scroll on a narrow screen instead of crushing them. */}
@@ -6875,7 +6880,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     column of the same name is three lists that look identical. */}
                 {showDiscountColumn && <th className={`${cols.collected} px-3 py-2 ${thAlign} align-middle`} title={`${activeFee.label} Fee`}>{activeFee.label} Fee</th>}
                 {showDiscountColumn && <th className={`${cols.discount} px-3 py-2 ${thAlign} align-middle`}>Discount</th>}
-                {showDiscountColumn && <th className={`${cols.total} px-3 py-2 ${thAlign} align-middle`}>Total Amount</th>}
+                {showDiscountColumn && <th className={`${cols.total} px-3 py-2 ${thAlign} align-middle`} title="Total Amount">Total</th>}
                 {/* The one column on this table that does something rather than reports
                     something, so it sits at the end where a row is finished being read. */}
                 {/* A verb, not a fee name. The button under it now always collects the
@@ -6920,7 +6925,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         i + 1
                       )}
                     </td>
-                    <td className="truncate px-4 py-3 align-middle font-medium text-slate-800" title={l.name}>
+                    <td
+                      className="truncate px-4 py-3 align-middle font-medium text-slate-800"
+                      title={zoomedTable && leadPlanParts(l).length ? `${l.name}\n${leadPlanParts(l).join(" | ")}` : l.name}
+                    >
                       <span className="block truncate">{l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /></span>
                       {/* What they are going away with, under the name. Reading it meant
                           opening every row: the Stage column says where the paperwork has
@@ -6929,8 +6937,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           of the table, and a plan can run to four services. */}
                       {/* My Consultation reads the name alone, one line per row: there every
                           row is a consultation, so the plan under it said "Consultation" on
-                          every one of them. */}
-                      {!oneLineRows && <PlanLine parts={leadPlanParts(l)} testId={`cons-plan-${l.id}`} />}
+                          every one of them. Fee Collected and Branch Admin's Consultation tab
+                          read one line per row too, the plan moved onto the cell's hover. */}
+                      {!oneLine && <PlanLine parts={leadPlanParts(l)} testId={`cons-plan-${l.id}`} />}
                     </td>
                     {/* Every cell sits on the row's middle, not its top. The patient
                         column runs to two lines — the name and what was decided under
@@ -6945,7 +6954,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs ${tdAlign}`}>
                       {l.appointment_date ? (
                         <span
-                          className={`${feeTable ? "inline-flex max-w-full" : "flex w-full"} items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLineRows || feeTable ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
+                          className={`${feeTable ? "inline-flex max-w-full" : "flex w-full"} items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLine ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
                           data-testid={`cons-appt-${l.id}`}
                         >
                           {/* Stacked, because this column is a narrow slice of a
@@ -6966,10 +6975,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             <Calendar className="h-3 w-3 shrink-0" />
                             {apptDayLabel(l.appointment_date)}
                           </span>
-                          {/* One line on My Consultation and Fee Collected: "Sat, 12 Sept - 3:15 PM". */}
+                          {/* One line on My Consultation, Fee Collected and Branch Admin's Consultation tab: "Sat, 12 Sept - 3:15 PM". */}
                           {l.appointment_time && (
                             <span className="whitespace-nowrap text-[11px] font-bold opacity-90">
-                              {(oneLineRows || feeTable) && "- "}{to12h(l.appointment_time)}
+                              {oneLine && "- "}{to12h(l.appointment_time)}
                             </span>
                           )}
                         </span>
