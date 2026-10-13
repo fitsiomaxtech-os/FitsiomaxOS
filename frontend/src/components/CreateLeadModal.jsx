@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectOrType } from "@/components/ui/select-or-type";
 import { toast } from "@/components/ui/sonner";
 import { createManualLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -219,18 +220,17 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
             <Field label="Alternative Phone"><Input className={PHONE_CONTROL} value={form.alternative_phone} onChange={(e) => set("alternative_phone", e.target.value)} data-testid="lead-create-altphone" /></Field>
             <Field label="Email" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="lead-create-email" /></Field>
             <Field label="Source" className={PHONE_WIDE}>
-              {/* A plain input with a suggestion list rather than a dropdown: the common
-                  channels stay one click away, and anything else can just be typed. */}
-              <Input
+              {/* The common channels in the themed list, and "Type manually…" for anything
+                  else, so a channel nobody has named yet is still filed as what it was. */}
+              <SelectOrType
                 className={PHONE_CONTROL}
-                list="lead-create-source-options"
+                options={SOURCE_SUGGESTIONS}
                 value={form.source_tab}
-                onChange={(e) => set("source_tab", e.target.value)}
-                data-testid="lead-create-source"
+                onChange={(v) => set("source_tab", v)}
+                placeholder="Select source"
+                manualPlaceholder="Type the source"
+                testid="lead-create-source"
               />
-              <datalist id="lead-create-source-options">
-                {SOURCE_SUGGESTIONS.map((o) => <option key={o} value={o} />)}
-              </datalist>
             </Field>
             <Field label="Address" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="lead-create-address" /></Field>
             <Field label="City"><Input className={PHONE_CONTROL} value={form.city} onChange={(e) => set("city", e.target.value)} data-testid="lead-create-city" /></Field>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectOrType } from "@/components/ui/select-or-type";
 import { toast } from "@/components/ui/sonner";
 import { updateLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -176,12 +177,16 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
               <Field label="State"><Input value={form.state} onChange={(e) => set("state", e.target.value)} data-testid="lead-edit-state" /></Field>
               <Field label="Location"><Input value={form.location} onChange={(e) => set("location", e.target.value)} data-testid="lead-edit-location" /></Field>
               <Field label="Source">
-                {/* Typed with suggestions, as on the create form: a channel nobody has
-                    named yet can still be written down as what it was. */}
-                <Input list="lead-edit-source-options" value={form.source_tab} onChange={(e) => set("source_tab", e.target.value)} data-testid="lead-edit-source" />
-                <datalist id="lead-edit-source-options">
-                  {SOURCE_SUGGESTIONS.map((o) => <option key={o} value={o} />)}
-                </datalist>
+                {/* Same as the create form: the themed list, or typed by hand, so a channel
+                    nobody has named yet can still be written down as what it was. */}
+                <SelectOrType
+                  options={SOURCE_SUGGESTIONS}
+                  value={form.source_tab}
+                  onChange={(v) => set("source_tab", v)}
+                  placeholder="Select source"
+                  manualPlaceholder="Type the source"
+                  testid="lead-edit-source"
+                />
               </Field>
             </div>
           </Section>
