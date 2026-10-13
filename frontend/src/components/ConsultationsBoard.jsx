@@ -30,7 +30,9 @@ import {
   getTreatmentTypes, bulkHardDeleteLeads,
   listUpiCollectOptions,
   rescheduleCalendarBooking, declineCalendarBooking,
+  listFitness, acceptFitnessReferral,
 } from "@/lib/api";
+import { FitnessMemberDialog, CollectPaymentDialog as FitnessCollectDialog } from "@/components/branch/FitnessPanel";
 import { waNumber } from "@/lib/phone";
 import { pdfJob, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/printable";
@@ -4298,6 +4300,63 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     };
   }, [feeBalances]);
 
+  // The gym membership behind a Fitness referral, for the Long Term rows of Collect a
+  // Payment. A Fitness fee does not live on the lead -- it is a fitness_registrations row
+  // the branch sells off the Fitness shelf (see v3_fitness.py) -- so the card reads it from
+  // the gym's roll, the same rows Branch Admin > Fitness lists.
+  //
+  // `undefined` while unread or unreadable (a role the gym's roll refuses), `null` for a
+  // referral nobody has taken onto the roll yet, otherwise the membership itself.
+  const [fitnessMember, setFitnessMember] = useState(undefined);
+  const [fitnessPackages, setFitnessPackages] = useState([]);
+  const [fitnessEditing, setFitnessEditing] = useState(null);
+  const [fitnessCollecting, setFitnessCollecting] = useState(null);
+  const [fitnessBusy, setFitnessBusy] = useState(false);
+  const fitnessLeadId = selectedLead?.fitness_recommended ? selectedLead.id : null;
+  const fitnessBranchId = selectedLead?.branch_id || branchId || null;
+  const loadFitnessMember = useCallback(async () => {
+    if (!fitnessLeadId) { setFitnessMember(undefined); return undefined; }
+    try {
+      const res = await listFitness(fitnessBranchId);
+      const row = (res?.registrations || []).find((r) => r.lead_id === fitnessLeadId);
+      const member = row && row.origin !== "consultation" ? row : null;
+      setFitnessMember(member);
+      return member;
+    } catch {
+      setFitnessMember(undefined);
+      return undefined;
+    }
+  }, [fitnessLeadId, fitnessBranchId]);
+  // Cleared first, so a patient opened after another never shows the last one's membership
+  // for the moment the roll takes to answer.
+  useEffect(() => { setFitnessMember(undefined); loadFitnessMember(); }, [loadFitnessMember]);
+
+  // One press from the payment card, whatever state the membership is in: take the
+  // referral onto the roll if nobody has, price it off the shelf if it has no fee, and
+  // otherwise collect what is outstanding.
+  const openFitnessCollect = async () => {
+    if (fitnessBusy || !fitnessLeadId) return;
+    setFitnessBusy(true);
+    try {
+      let member = fitnessMember;
+      if (!member) member = await acceptFitnessReferral(fitnessLeadId);
+      const due = Math.max(0, Number(member?.fee_amount || 0) - Number(member?.fee_paid || 0));
+      if (!(Number(member?.fee_amount) > 0)) {
+        if (!fitnessPackages.length) {
+          try { setFitnessPackages((await listStoreItems("fitness", "session")) || []); } catch { /* the form still takes a typed fee */ }
+        }
+        setFitnessEditing(member);
+      } else if (due > 0) {
+        setFitnessCollecting(member);
+      }
+      setFitnessMember(member);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not open the Fitness membership");
+    } finally {
+      setFitnessBusy(false);
+    }
+  };
+
   const savedInstallments = selectedLead?.treatment_fee_payment_details?.installments || [];
   // Keyed off the schedule itself, not the mode that was recorded against it — the same
   // rule the server reads it by. A Treatment Fee collected short in cash leaves an
@@ -7163,36 +7222,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {selectedLead.patient_number && (
                     <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
-                  {/* Long Term, against the name, and only here.
-
-                      It belongs to the patient rather than to a row: the board's list says
-                      where somebody stands in the pipeline today, and how long their plan
-                      runs is not that -- a mark there would be a fifth badge competing with
-                      the stage everybody is actually reading the list for. Whoever opens
-                      this patient sees it at the top of them, beside the number that
-                      identifies them, before reading a word of the case.
-
-                      What was written is on the badge itself, so the mark is never just an
-                      assertion somebody has to go hunting through the form to explain. */}
-                  {(() => {
-                    const marked = longTermServices(selectedLead);
-                    if (!marked.length) return null;
-                    return (
-                      <span
-                        className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200"
-                        title={marked
-                          .map((k) => {
-                            const label = CONSULTATION_ADDONS.find((a) => a.key === k)?.label || k;
-                            const note = String(selectedLead.long_term_notes[k] || "").trim();
-                            return note ? `${label}: ${note}` : label;
-                          })
-                          .join("\n")}
-                        data-testid="cons-detail-long-term"
-                      >
-                        Long Term
-                      </span>
-                    );
-                  })()}
                 </h3>
                 {selectedLead.assigned_physio_name && (
                   <p className="flex min-w-0 items-baseline gap-1.5 text-xs sm:ml-auto" data-testid="cons-detail-expert">
@@ -9567,6 +9596,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   };
                 };
 
+                // Which of the Long Term services this patient is marked for, and what was
+                // written about each. A key being present is the mark; its value may be "".
+                const longTermNotes = Object.fromEntries(
+                  longTermServices(selectedLead).map((k) => [k, String(selectedLead.long_term_notes[k] || "").trim()]),
+                );
+
                 // Each fee is gated on the patient actually being on that programme —
                 // quoting diet or rehab to everyone would overstate what is owed.
                 const feeSteps = [
@@ -9604,20 +9639,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     actLabel: partialPlan ? `Collect ${installmentLabelFor(partialPlan.nextIdx)}` : "Collect",
                   },
                   {
-                    key: "rehab",
-                    label: "Rehab Fee",
-                    sub: selectedLead.rehab_package_name,
-                    amount: selectedLead.rehab_fee_paid != null ? selectedLead.rehab_fee_paid : selectedLead.rehab_package_price,
-                    paid: selectedLead.rehab_fee_paid != null,
-                    note: selectedLead.rehab_fee_paid != null ? selectedLead.rehab_fee_payment_mode : null,
-                    show: !!selectedLead.rehab_referred,
-                    // Collected on the Rehab tab, which carries the course as well as the
-                    // figure — this card is the pointer to it. A balance is different: it
-                    // is one figure to take, so the card takes it.
-                    ...balanceStep("rehab", () => openDetail("rehab"), "Open"),
-                    ...(feeBalances.rehab ? {} : { paid: selectedLead.rehab_fee_paid != null }),
-                  },
-                  {
                     key: "diet",
                     label: "Diet Fee",
                     sub: selectedLead.diet_package_name,
@@ -9652,6 +9673,54 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // chart no longer waits on anything that the Diet tab would have to do.
                     ...balanceStep("diet_chart", () => openDietFeeDraft("chart"), "Collect"),
                     ...(feeBalances.diet_chart ? {} : { paid: selectedLead.diet_chart_fee_paid != null }),
+                  },
+                  // The Long Term services -- Rehab and Fitness -- close the list, under the
+                  // Long Term tag that used to sit against the patient's name in the header.
+                  // That tag said a plan would run long and offered nothing to do about it;
+                  // here it sits on the fees the plan is paid by, each with its own Collect.
+                  {
+                    key: "rehab",
+                    label: "Rehab Fee",
+                    sub: selectedLead.rehab_package_name,
+                    amount: selectedLead.rehab_fee_paid != null ? selectedLead.rehab_fee_paid : selectedLead.rehab_package_price,
+                    paid: selectedLead.rehab_fee_paid != null,
+                    note: selectedLead.rehab_fee_paid != null ? selectedLead.rehab_fee_payment_mode : null,
+                    show: !!selectedLead.rehab_referred,
+                    longTerm: true,
+                    longTermNote: longTermNotes.rehab,
+                    // Collected straight from the card once the Consultant has chosen a
+                    // course -- the price is that course's. Without one there is nothing to
+                    // collect against yet, so the card still points at the Rehab tab, where
+                    // the course is chosen.
+                    ...balanceStep(
+                      "rehab",
+                      selectedLead.rehab_package_id ? openRehabFeeDraft : () => openDetail("rehab"),
+                      selectedLead.rehab_package_id ? "Collect" : "Open",
+                    ),
+                    ...(feeBalances.rehab ? {} : { paid: selectedLead.rehab_fee_paid != null }),
+                  },
+                  {
+                    // A gym membership, read off the Fitness roll (see fitnessMember). The
+                    // first Collect takes the referral onto the roll and prices it off the
+                    // Fitness shelf; after that it collects whatever is outstanding.
+                    key: "fitness",
+                    label: "Fitness Fee",
+                    sub: fitnessMember?.package_name || null,
+                    amount: Number(fitnessMember?.fee_amount) > 0 ? fitnessMember.fee_amount : null,
+                    paid: Number(fitnessMember?.fee_amount) > 0 && Number(fitnessMember?.fee_paid || 0) >= Number(fitnessMember.fee_amount),
+                    note: fitnessMember?.payment_mode ? String(fitnessMember.payment_mode).replace(/_/g, " ") : null,
+                    pending: Number(fitnessMember?.fee_paid) > 0 && Number(fitnessMember?.fee_paid) < Number(fitnessMember?.fee_amount)
+                      ? `Rs.${Number(fitnessMember.fee_paid).toLocaleString("en-IN")} in · balance Rs.${Math.max(0, Number(fitnessMember.fee_amount) - Number(fitnessMember.fee_paid)).toLocaleString("en-IN")}`
+                      : null,
+                    pendingTone: "text-amber-600",
+                    // Only where the gym's roll could be read: a role it refuses has no
+                    // membership to collect against, and a button that fails on press is
+                    // worse than no card.
+                    show: !!selectedLead.fitness_recommended && fitnessMember !== undefined,
+                    longTerm: true,
+                    longTermNote: longTermNotes.fitness,
+                    act: openFitnessCollect,
+                    actLabel: fitnessBusy ? "Opening..." : Number(fitnessMember?.fee_paid) > 0 ? "Collect Balance" : "Collect",
                   },
                 ].filter((f) => f.show);
 
@@ -9690,6 +9759,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                  * one: the Diet Fee is the fourth fee whether or not the three before it are
                  * on screen beside it.
                  */
+                // The Long Term mark, on the fee it is paid by. Shown on Rehab and Fitness
+                // only where the Consultant marked that service long term, with whatever was
+                // written about it on hover -- the same text the header tag used to carry.
+                const longTermTag = (f) => (f.longTerm && f.longTermNote !== undefined ? (
+                  <span
+                    className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 ring-1 ring-indigo-200"
+                    title={f.longTermNote || "Marked Long Term"}
+                    data-testid={`cons-fee-long-term-${f.key}`}
+                  >
+                    Long Term
+                  </span>
+                ) : null);
+
                 const renderFeeSteps = (steps, testid = "cons-fee-steps") => compactDetail ? (
                   // The narrow popup lists the fees one under the other, like the
                   // Consultation Record above it: a row each, the price and the button in
@@ -9717,7 +9799,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {f.paid ? <CheckCircle2 className="h-3 w-3" /> : n}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-slate-700">{f.label}</p>
+                            <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
                             {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                             {/* Under the name on a phone, where a column of its own would
                                 leave the name a dozen pixels. */}
@@ -9778,7 +9860,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {f.paid ? <CheckCircle2 className="h-3 w-3" /> : n}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-slate-700">{f.label}</p>
+                            <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
                             {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                           </div>
                         </div>
@@ -11542,6 +11624,30 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               );
             })()}
 
+
+            {/* The Fitness Fee on the Long Term rows of Collect a Payment, collected with
+                the gym desk's own dialogs so a membership sold here reads exactly like one
+                sold at Branch Admin > Fitness. Pricing it opens straight onto collecting. */}
+            {fitnessEditing && (
+              <FitnessMemberDialog
+                member={fitnessEditing}
+                packages={fitnessPackages}
+                branchId={fitnessBranchId}
+                onClose={() => { setFitnessEditing(null); loadFitnessMember(); }}
+                onSaved={async () => {
+                  setFitnessEditing(null);
+                  const member = await loadFitnessMember();
+                  if (member && Number(member.fee_amount) > Number(member.fee_paid || 0)) setFitnessCollecting(member);
+                }}
+              />
+            )}
+            {fitnessCollecting && (
+              <FitnessCollectDialog
+                member={fitnessCollecting}
+                onClose={() => setFitnessCollecting(null)}
+                onCollected={() => { setFitnessCollecting(null); loadFitnessMember(); }}
+              />
+            )}
 
             {/* Balance Amount — the fork. Raised by submitTreatmentModePopup when the
                 money on the Collect popup is short of what today's sessions cost, and

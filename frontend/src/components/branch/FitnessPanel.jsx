@@ -642,7 +642,7 @@ export const FitnessPanel = ({ branchId }) => {
  * figure stays editable afterwards — a branch discounts, and a price it cannot type is a
  * price it will record somewhere else.
  */
-const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSaved }) => {
+export const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSaved }) => {
   const isEdit = !!member;
   const [form, setForm] = useState(() => ({
     name: member?.name || "",
@@ -1152,7 +1152,7 @@ const RenewMembershipDialog = ({ member, packages, onClose, onRenewed }) => {
   );
 };
 
-const CollectPaymentDialog = ({ member, onClose, onCollected }) => {
+export const CollectPaymentDialog = ({ member, onClose, onCollected }) => {
   const outstanding = Math.max(0, Number(member.fee_amount || 0) - Number(member.fee_paid || 0));
   // Starts on one cash line, because most payments are one payment. A second mode is one
   // click away rather than a form everybody fills in twice.
