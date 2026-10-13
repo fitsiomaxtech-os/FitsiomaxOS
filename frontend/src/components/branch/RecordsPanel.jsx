@@ -26,6 +26,7 @@ import {
 } from "@/lib/api";
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
+import { telNumber } from "@/lib/phone";
 
 /**
  * The branch's Records tab. Branch Transfer Records is the first record kept here; the
@@ -584,7 +585,8 @@ const LeadsConvertedRecords = ({ branchId }) => {
       leads: rows.map((l) => ({
         patientNumber: l.patient_number,
         name: l.name,
-        phone: l.phone,
+        // Plain digits, as the Call button dials it: some records carry "p:+91..." from the sheet.
+        phone: telNumber(l.phone) || l.phone,
         email: l.email,
         source: sourceOf(l),
         reached: FUNNEL[furthestStep(l)].label,
