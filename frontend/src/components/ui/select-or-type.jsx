@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { List, PenLine } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { THEMED_CONTENT, THEMED_ITEM, THEMED_TRIGGER } from "@/components/ui/themed-select";
 
 // Radix keeps "" for "nothing picked", so the manual row needs a value no option can have.
 const MANUAL = "__manual_entry__";
@@ -14,8 +15,6 @@ const MANUAL = "__manual_entry__";
  *
  * Opens straight into the text box when the saved value is not one of the options, so an
  * existing typed-in value reads as itself rather than as a blank dropdown.
- *
- * z-[200] lifts the list above the modals (z-[60]) it opens inside.
  */
 export const SelectOrType = ({
   value,
@@ -91,18 +90,18 @@ export const SelectOrType = ({
   return (
     <Select value={isListed(value) ? value : ""} onValueChange={pick} open={open} onOpenChange={setOpen}>
       <SelectTrigger
-        className={`border-slate-200 bg-white text-slate-800 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200 data-[placeholder]:text-slate-400 ${className}`}
+        className={`${THEMED_TRIGGER} ${className}`}
         data-testid={testid}
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent
-        className="z-[200] max-h-72 border-slate-200"
+        className={THEMED_CONTENT}
         // The trigger is gone once "Type manually…" is picked; focus goes to the box instead.
         onCloseAutoFocus={(e) => focusInput.current && e.preventDefault()}
       >
         {options.map((o) => (
-          <SelectItem key={o} value={o} className="text-sm text-slate-700 focus:bg-sky-50 focus:text-sky-700">
+          <SelectItem key={o} value={o} className={THEMED_ITEM}>
             {o}
           </SelectItem>
         ))}

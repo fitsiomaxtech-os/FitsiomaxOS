@@ -3,6 +3,7 @@ import { X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectOrType } from "@/components/ui/select-or-type";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { toast } from "@/components/ui/sonner";
 import { updateLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -194,19 +195,19 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
           <Section title="Patient Details">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={lead.department ? "Department *" : "Department"}>
-                <select className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm" value={form.department} onChange={(e) => set("department", e.target.value)} data-testid="lead-edit-department">
-                  <option value="">Select department</option>
-                  {DEPARTMENT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select>
+                <ThemedSelect
+                  value={form.department}
+                  onChange={(v) => set("department", v)}
+                  placeholder="Select department"
+                  options={[{ value: "", label: "Select department" }, ...DEPARTMENT_OPTIONS]}
+                  testid="lead-edit-department"
+                />
               </Field>
               <Field label="Condition / Pain Area"><Input value={form.condition} onChange={(e) => set("condition", e.target.value)} data-testid="lead-edit-condition" /></Field>
               <Field label="Months of Pain"><Input type="number" min="0" value={form.months_of_pain} onChange={(e) => set("months_of_pain", e.target.value)} data-testid="lead-edit-months-pain" /></Field>
               <Field label="Age"><Input type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-edit-age" /></Field>
               <Field label="Gender">
-                <select className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm" value={form.gender} onChange={(e) => set("gender", e.target.value)} data-testid="lead-edit-gender">
-                  <option value="">Select</option>
-                  {GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
+                <ThemedSelect value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDERS]} testid="lead-edit-gender" />
               </Field>
               <Field label="Occupation"><Input value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-edit-occupation" /></Field>
               <Field label="Expected Consultation Date" className="sm:col-span-2"><MilkDateInput centered confirm title="Expected Consultation Date" value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-edit-consultdate" /></Field>
@@ -241,10 +242,12 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
                 {answerKeys.map((k) => (
                   <Field key={k} label={humanKey(k)}>
                     {typeof (lead.extra_fields || {})[k] === "boolean" ? (
-                      <select className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm" value={answers[k]} onChange={(e) => setAnswer(k, e.target.value)} data-testid={`lead-edit-answer-${k}`}>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
+                      <ThemedSelect
+                        value={answers[k]}
+                        onChange={(v) => setAnswer(k, v)}
+                        options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
+                        testid={`lead-edit-answer-${k}`}
+                      />
                     ) : (
                       <Input value={answers[k]} onChange={(e) => setAnswer(k, e.target.value)} data-testid={`lead-edit-answer-${k}`} />
                     )}

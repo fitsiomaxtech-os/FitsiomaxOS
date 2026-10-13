@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectOrType } from "@/components/ui/select-or-type";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { toast } from "@/components/ui/sonner";
 import { createManualLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -244,36 +245,34 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                 {/* Shown rather than hidden where it is fixed: the department decides which
                     board the lead lands on, and that is worth saying out loud on the form
                     that decides it. Disabled, not removed, so the answer is still read. */}
-                <select
-                  className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL} ${lockedDepartment ? "bg-slate-100 text-slate-500" : ""}`}
+                <ThemedSelect
+                  className={PHONE_CONTROL}
                   value={form.department}
                   disabled={!!lockedDepartment}
                   title={lockedDepartment ? "Set by the board you are creating this lead from" : undefined}
-                  onChange={(e) => set("department", e.target.value)}
-                  data-testid="lead-create-department"
-                >
-                  <option value="">Select Department</option>
-                  {DEPARTMENT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select>
+                  onChange={(v) => set("department", v)}
+                  placeholder="Select Department"
+                  options={[{ value: "", label: "Select Department" }, ...DEPARTMENT_OPTIONS]}
+                  testid="lead-create-department"
+                />
               </Field>
               <Field label="Condition / Pain Area" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.condition} onChange={(e) => set("condition", e.target.value)} data-testid="lead-create-condition" /></Field>
               <Field label="Months of Pain"><Input className={PHONE_CONTROL} type="number" min="0" value={form.months_of_pain} onChange={(e) => set("months_of_pain", e.target.value)} data-testid="lead-create-months" /></Field>
               <Field label="Age"><Input className={PHONE_CONTROL} type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-create-age" /></Field>
-              <Field label="Gender"><Select value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDER_OPTIONS]} testid="lead-create-gender" /></Field>
+              <Field label="Gender"><ThemedSelect className={PHONE_CONTROL} value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDER_OPTIONS]} testid="lead-create-gender" /></Field>
               <Field label="Occupation"><Input className={PHONE_CONTROL} value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-create-occupation" /></Field>
               <Field label="Expected Consultation Date" className={`${PHONE_WIDE} ${showPicker ? "" : "sm:col-span-2"}`}><MilkDateInput centered confirm title="Expected Consultation Date" className={PHONE_CONTROL} value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
               {showPicker && (
                 <Field label="Assign Branch" className={PHONE_WIDE}>
                   {/* Left blank, the lead lands Unassigned, as it always has. */}
-                  <select
-                    className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL}`}
+                  <ThemedSelect
+                    className={PHONE_CONTROL}
                     value={form.branch_id}
-                    onChange={(e) => set("branch_id", e.target.value)}
-                    data-testid="lead-create-branch-select"
-                  >
-                    <option value="">Select Branch</option>
-                    {pickerBranches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-                  </select>
+                    onChange={(v) => set("branch_id", v)}
+                    placeholder="Select Branch"
+                    options={[{ value: "", label: "Select Branch" }, ...pickerBranches.map((b) => ({ value: b.id, label: b.branch_name }))]}
+                    testid="lead-create-branch-select"
+                  />
                 </Field>
               )}
             </div>
@@ -329,14 +328,14 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                   // are long digit strings that would not show at half width.
                   <Field key={f.key} label={f.label} className={f.type === "select" ? "" : PHONE_WIDE}>
                     {f.type === "select" ? (
-                      <select
-                        className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL}`}
+                      <ThemedSelect
+                        className={PHONE_CONTROL}
                         value={leadData[f.key]}
-                        onChange={(e) => setLD(f.key, e.target.value)}
-                        data-testid={`lead-data-${f.key}`}
-                      >
-                        {f.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                      </select>
+                        onChange={(v) => setLD(f.key, v)}
+                        placeholder="—"
+                        options={f.options.map(([value, label]) => ({ value, label }))}
+                        testid={`lead-data-${f.key}`}
+                      />
                     ) : (
                       <Input
                         className={PHONE_CONTROL}
@@ -367,12 +366,6 @@ const Field = ({ label, children, className = "" }) => (
     <label className="text-xs font-medium text-slate-700">{label}</label>
     {children}
   </div>
-);
-
-const Select = ({ value, onChange, options, testid }) => (
-  <select className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm ${PHONE_CONTROL}`} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testid}>
-    {options.map((o) => <option key={o} value={o}>{o || "Select"}</option>)}
-  </select>
 );
 
 export default CreateLeadModal;
