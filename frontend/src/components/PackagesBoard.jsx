@@ -72,7 +72,9 @@ export const DIET_SUBTABS = [
 // both places, deliberately: one catalogue read from wherever it is looked for, rather
 // than a second one beside it holding different rows.
 export const SESSIONS_SUBTABS = [
-  { key: "physiotherapy", label: "Physiotherapy", icon: Activity },
+  // Labelled Treatment; the key stays "physiotherapy" because it is the category the
+  // stored session packages carry.
+  { key: "physiotherapy", label: "Treatment", icon: Activity },
   { key: "fitness", label: "Fitness", icon: Dumbbell },
   { key: "rehab", label: "Rehab", icon: HeartPulse },
 ];
