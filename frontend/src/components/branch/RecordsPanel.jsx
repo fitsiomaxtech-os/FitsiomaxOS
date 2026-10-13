@@ -464,6 +464,116 @@ const periodLabel = (filter) => {
 const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 /**
+ * The report object behind both files (see leadsReport.js), shared by Leads Converted and
+ * Leads Source so a download from either tab reads the same. `scoped` is what the cards
+ * count -- date, search and source applied; `list` is the leads printed one per row.
+ */
+const buildLeadsReport = ({ branchName, scoped, list, filter, sourceLabel, showing }) => {
+  const counts = countCards(scoped);
+  const bySource = countBySource(scoped).map(([name]) => {
+    const c = countCards(scoped.filter((l) => sourceOf(l) === name));
+    return [name, ...LEAD_CARDS.map((card) => c[card.key])];
+  });
+  const now = new Date();
+  return {
+    branch: branchName,
+    period: periodLabel(filter),
+    source: sourceLabel,
+    showing,
+    generated: `${dateStampFull(now)}, ${callTimeStamp(now)}`,
+    summary: LEAD_CARDS.map((c) => ({
+      key: c.key,
+      label: c.label,
+      count: counts[c.key],
+      share: c.key === "leads" ? "Every lead" : `${pct(counts[c.key], counts.leads)} of Leads`,
+    })),
+    bySource: { rows: bySource, total: LEAD_CARDS.map((c) => counts[c.key]) },
+    leads: list.map((l) => ({
+      patientNumber: l.patient_number,
+      name: l.name,
+      // Plain digits, as the Call button dials it: some records carry "p:+91..." from the sheet.
+      phone: telNumber(l.phone) || l.phone,
+      email: l.email,
+      source: sourceOf(l),
+      reached: FUNNEL[furthestStep(l)].label,
+      stage: currentStage(l),
+      services: servicesOf(l).join(", "),
+      date: dateStampFull(l.created_at),
+      time: callTimeStamp(l.created_at),
+    })),
+  };
+};
+
+const leadsReportFilename = ({ prefix, branchName, source, filter }, ext) => [
+  prefix,
+  fileSlug(branchName),
+  source === ALL_SOURCES ? "all-sources" : fileSlug(source),
+  filter ? fileSlug(periodLabel(filter)) : new Date().toISOString().slice(0, 10),
+].filter(Boolean).join("-") + `.${ext}`;
+
+// Saves the report as kind: "pdf" or "xlsx".
+const saveLeadsReport = async (kind, report, filename) => {
+  try {
+    if (kind === "pdf") await downloadLeadsReportPdf(report, filename);
+    else downloadLeadsReportXlsx(report, filename);
+  } catch {
+    toast.error("Couldn't build the report");
+  }
+};
+
+// The Download button and its two formats, as both lead tabs carry it.
+const LeadsReportMenu = ({ disabled, exporting, caption, onPick, testid }) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button
+        size="sm"
+        disabled={disabled || exporting}
+        className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
+        title="Download the report"
+        aria-label="Download the report"
+        data-testid={testid}
+      >
+        {exporting ? <RefreshCw className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Download className="h-4 w-4 sm:mr-1.5" />}
+        <span className="hidden sm:inline">Download</span>
+        <ChevronDown className="ml-1 hidden h-3.5 w-3.5 opacity-80 sm:inline" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-60" data-testid={`${testid}-menu`}>
+      <DropdownMenuLabel className="text-[11px] font-normal text-slate-500">{caption}</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onSelect={() => onPick("pdf")} className="gap-2.5 py-2" data-testid={`${testid}-pdf`}>
+        <FileText className="h-4 w-4 text-rose-600" />
+        <span className="flex flex-col">
+          <span className="text-sm font-medium text-slate-800">PDF Report</span>
+          <span className="text-[11px] text-slate-400">Summary, by source, lead list</span>
+        </span>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => onPick("xlsx")} className="gap-2.5 py-2" data-testid={`${testid}-excel`}>
+        <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+        <span className="flex flex-col">
+          <span className="text-sm font-medium text-slate-800">Excel Sheet</span>
+          <span className="text-[11px] text-slate-400">Summary and Leads sheets</span>
+        </span>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
+
+// The branch's name, for the report's letterhead only, so a failure costs that line alone.
+const useBranchName = (branchId) => {
+  const [branchName, setBranchName] = useState("");
+  useEffect(() => {
+    if (!branchId) return undefined;
+    let cancelled = false;
+    getBranches()
+      .then((rows) => { if (!cancelled) setBranchName((rows || []).find((b) => b.id === branchId)?.branch_name || ""); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [branchId]);
+  return branchName;
+};
+
+/**
  * Leads Converted: the branch's leads as six cards -- Lead, RNR, Follow Up, Appointment,
  * Consultation Visit, Lost -- counted off the same lead list Branch Leads draws, the way
  * Leads Source is. A card narrows the list below it.
@@ -480,7 +590,7 @@ const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").repl
 const LeadsConvertedRecords = ({ branchId }) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [branchName, setBranchName] = useState("");
+  const branchName = useBranchName(branchId);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
@@ -508,16 +618,6 @@ const LeadsConvertedRecords = ({ branchId }) => {
   }, [branchId]);
 
   useEffect(() => { load(); }, [load]);
-
-  // For the report's letterhead only, so a failure costs the branch line and nothing else.
-  useEffect(() => {
-    if (!branchId) return undefined;
-    let cancelled = false;
-    getBranches()
-      .then((rows) => { if (!cancelled) setBranchName((rows || []).find((b) => b.id === branchId)?.branch_name || ""); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [branchId]);
 
   // Date and search first, then source, the card last: the cards count what the date,
   // search and source leave, and pressing one never changes the numbers on the others.
@@ -562,59 +662,18 @@ const LeadsConvertedRecords = ({ branchId }) => {
     setSearchOpen(false);
   };
 
-  // One object behind both files, so the PDF and the sheet always say the same thing.
-  const buildReport = () => {
-    const bySource = countBySource(scoped).map(([name]) => {
-      const c = countCards(scoped.filter((l) => sourceOf(l) === name));
-      return [name, ...LEAD_CARDS.map((card) => c[card.key])];
-    });
-    const now = new Date();
-    return {
-      branch: branchName,
-      period: periodLabel(effectiveDateFilter),
-      source: sourceLabel,
-      showing: pick === "leads" ? "All Leads" : CARD_BY_KEY[pick].label,
-      generated: `${dateStampFull(now)}, ${callTimeStamp(now)}`,
-      summary: LEAD_CARDS.map((c) => ({
-        key: c.key,
-        label: c.label,
-        count: counts[c.key],
-        share: c.key === "leads" ? "Every lead" : `${pct(counts[c.key], counts.leads)} of Leads`,
-      })),
-      bySource: { rows: bySource, total: LEAD_CARDS.map((c) => counts[c.key]) },
-      leads: rows.map((l) => ({
-        patientNumber: l.patient_number,
-        name: l.name,
-        // Plain digits, as the Call button dials it: some records carry "p:+91..." from the sheet.
-        phone: telNumber(l.phone) || l.phone,
-        email: l.email,
-        source: sourceOf(l),
-        reached: FUNNEL[furthestStep(l)].label,
-        stage: currentStage(l),
-        services: servicesOf(l).join(", "),
-        date: dateStampFull(l.created_at),
-        time: callTimeStamp(l.created_at),
-      })),
-    };
-  };
-
-  const reportFilename = (ext) => [
-    "leads-report",
-    fileSlug(branchName),
-    source === ALL_SOURCES ? "all-sources" : fileSlug(source),
-    effectiveDateFilter ? fileSlug(periodLabel(effectiveDateFilter)) : new Date().toISOString().slice(0, 10),
-  ].filter(Boolean).join("-") + `.${ext}`;
-
   const exportReport = async (kind) => {
     if (exporting) return;
     setExporting(true);
-    try {
-      const report = buildReport();
-      if (kind === "pdf") await downloadLeadsReportPdf(report, reportFilename("pdf"));
-      else downloadLeadsReportXlsx(report, reportFilename("xlsx"));
-    } catch {
-      toast.error("Couldn't build the report");
-    }
+    const report = buildLeadsReport({
+      branchName,
+      scoped,
+      list: rows,
+      filter: effectiveDateFilter,
+      sourceLabel,
+      showing: pick === "leads" ? "All Leads" : CARD_BY_KEY[pick].label,
+    });
+    await saveLeadsReport(kind, report, leadsReportFilename({ prefix: "leads-report", branchName, source, filter: effectiveDateFilter }, kind));
     setExporting(false);
   };
 
@@ -736,42 +795,13 @@ const LeadsConvertedRecords = ({ branchId }) => {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                disabled={!scoped.length || exporting}
-                className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
-                title="Download the report"
-                aria-label="Download the report"
-                data-testid="leads-converted-download"
-              >
-                {exporting ? <RefreshCw className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Download className="h-4 w-4 sm:mr-1.5" />}
-                <span className="hidden sm:inline">Download</span>
-                <ChevronDown className="ml-1 hidden h-3.5 w-3.5 opacity-80 sm:inline" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60" data-testid="leads-converted-download-menu">
-              <DropdownMenuLabel className="text-[11px] font-normal text-slate-500">
-                {sourceLabel} · {periodLabel(effectiveDateFilter)}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => exportReport("pdf")} className="gap-2.5 py-2" data-testid="leads-converted-download-pdf">
-                <FileText className="h-4 w-4 text-rose-600" />
-                <span className="flex flex-col">
-                  <span className="text-sm font-medium text-slate-800">PDF Report</span>
-                  <span className="text-[11px] text-slate-400">Summary, by source, lead list</span>
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => exportReport("xlsx")} className="gap-2.5 py-2" data-testid="leads-converted-download-excel">
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                <span className="flex flex-col">
-                  <span className="text-sm font-medium text-slate-800">Excel Sheet</span>
-                  <span className="text-[11px] text-slate-400">Summary and Leads sheets</span>
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <LeadsReportMenu
+            disabled={!scoped.length}
+            exporting={exporting}
+            caption={`${sourceLabel} · ${periodLabel(effectiveDateFilter)}`}
+            onPick={exportReport}
+            testid="leads-converted-download"
+          />
         </div>
       </div>
 
@@ -877,7 +907,9 @@ const ServicePills = ({ services }) => (
 /**
  * Where the branch's leads came from: one card per source, counted off the same lead list
  * Branch Leads draws, so a number here and the Source dropdown there never disagree.
- * Built the way Branch Transfer Records is -- cards, search, both date controls, Excel.
+ * Built the way Branch Transfer Records is -- cards, search, both date controls -- and
+ * Download is Leads Converted's: the same PDF report and Excel workbook, for the source card
+ * picked and the dates set.
  */
 const LeadSourceRecords = ({ branchId }) => {
   const [leads, setLeads] = useState([]);
@@ -886,6 +918,8 @@ const LeadSourceRecords = ({ branchId }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
   const [source, setSource] = useState("all");
+  const [exporting, setExporting] = useState(false);
+  const branchName = useBranchName(branchId);
   const [quickDate, setQuickDate] = useState(null);
   const [dateFilter, setDateFilter] = useState(null);
   // The sources a developer has switched off: their card is left out of the strip, their
@@ -964,14 +998,15 @@ const LeadSourceRecords = ({ branchId }) => {
     [dated, source],
   );
 
-  const exportSheet = () => {
-    downloadCsv([
-      ["Patient Number", "Patient Name", "Phone", "Email", "Source", "Current Stage", "Lead Created Date", "Lead Created Time"],
-      ...rows.map((l) => [
-        l.patient_number, l.name, l.phone, l.email, sourceOf(l), currentStage(l),
-        dateStampFull(l.created_at), callTimeStamp(l.created_at),
-      ]),
-    ], `leads-source-${new Date().toISOString().slice(0, 10)}.csv`);
+  const sourceLabel = source === "all" ? "All Sources" : source;
+  const exportReport = async (kind) => {
+    if (exporting) return;
+    setExporting(true);
+    const report = buildLeadsReport({
+      branchName, scoped: rows, list: rows, filter: effectiveDateFilter, sourceLabel, showing: "All Leads",
+    });
+    await saveLeadsReport(kind, report, leadsReportFilename({ prefix: "leads-source-report", branchName, source, filter: effectiveDateFilter }, kind));
+    setExporting(false);
   };
 
   useEffect(() => {
@@ -1066,17 +1101,13 @@ const LeadSourceRecords = ({ branchId }) => {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button
-            size="sm"
-            onClick={exportSheet}
+          <LeadsReportMenu
             disabled={!rows.length}
-            className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
-            title="Download as an Excel sheet"
-            aria-label="Download as an Excel sheet"
-            data-testid="lead-source-download"
-          >
-            <Download className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Download Excel</span>
-          </Button>
+            exporting={exporting}
+            caption={`${sourceLabel} · ${periodLabel(effectiveDateFilter)}`}
+            onPick={exportReport}
+            testid="lead-source-download"
+          />
         </div>
       </div>
 
