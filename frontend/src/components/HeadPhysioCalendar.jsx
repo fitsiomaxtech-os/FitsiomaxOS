@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Calendar as CalendarIcon,
+  CalendarCheck,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -145,6 +146,11 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   const [slotDuration, setSlotDuration] = useState(FALLBACK_SLOT_MINUTES);
   const slotType = SLOT_TYPES[0].value;
   const [pendingSlots, setPendingSlots] = useState([]);
+  // Select whole month: every day from today to the month's end is staged at once, leave
+  // days and days already fully open left out, and nothing is saved until Confirm. Holds
+  // the month it was made for and what it skipped; the days and slots it is about to open
+  // are read live off the selection, so a date clicked off before confirming is not counted.
+  const [monthConfirm, setMonthConfirm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [unsaving, setUnsaving] = useState(false);
 
@@ -380,6 +386,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     setSelectedDate(null);
     setSelectedDates([]);
     setPendingSlots([]);
+    setMonthConfirm(null);
     // Their own room, not the last one that was typed. The field below is one input reused
     // by everybody in the list, so without this it would open on the previous expert's
     // link — which then reads as this expert's, and saves as theirs on the next click.
@@ -439,26 +446,33 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     setSelectedDate(null);
     setSelectedDates([]);
     setPendingSlots([]);
+    setMonthConfirm(null);
   }, [slotDuration]);
 
 
   // The branch's leave days for the month on screen (CALENDAR → MONTHLY CALENDAR). A leave
   // day cannot be opened here — the server refuses it too — so it is drawn as closed.
   const [leaveDays, setLeaveDays] = useState({});
+  // Which month `leaveDays` actually describes. Select whole month waits on it: picking a
+  // month before its leave days have arrived would pick the leave days too.
+  const [leaveMonth, setLeaveMonth] = useState("");  const monthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
   useEffect(() => {
     if (!branchId) return undefined;
     let cancelled = false;
-    const month = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
-    getBranchMonthCalendar(branchId, month)
+    getBranchMonthCalendar(branchId, monthKey)
       .then((res) => {
         if (cancelled) return;
         const map = {};
         (res?.days || []).forEach((day) => { if (day.status === "leave") map[day.date] = day; });
         setLeaveDays(map);
+        setLeaveMonth(monthKey);
       })
-      .catch(() => { if (!cancelled) setLeaveDays({}); });
+      // Still marked as this month's on a failure, so the button does not spin forever:
+      // the server refuses a leave day on save and names it, which is the guard behind this one.
+      .catch(() => { if (!cancelled) { setLeaveDays({}); setLeaveMonth(monthKey); } });
     return () => { cancelled = true; };
-  }, [branchId, currentYear, currentMonth]);
+  }, [branchId, monthKey]);
+
 
   // Picking a date IS the availability confirmation — the whole working day fills in
   // straight away rather than making the Branch Admin click every slot by hand. Clicking
@@ -482,10 +496,12 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   };
 
   const prevMonth = () => {
+    setMonthConfirm(null);
     if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
     else setCurrentMonth(currentMonth - 1);
   };
   const nextMonth = () => {
+    setMonthConfirm(null);
     if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
     else setCurrentMonth(currentMonth + 1);
   };
@@ -686,6 +702,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
       setPendingSlots([]);
       setSelectedDates([]);
       setSelectedDate(null);
+      setMonthConfirm(null);
       await loadCalendar();
       await loadDoctors();
     } catch (err) {
@@ -694,9 +711,11 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     setUnsaving(false);
   };
 
+  // True when everything staged reached the calendar, so Confirm knows to close.
   const saveChanges = async () => {
-    if (!selectedDoctor || pendingSlots.length === 0) return;
+    if (!selectedDoctor || pendingSlots.length === 0) return false;
     setSaving(true);
+    let ok = false;
     try {
       const toAdd = pendingSlots.filter((s) => !s._remove);
       const toRemove = pendingSlots.filter((s) => s._remove);
@@ -715,12 +734,14 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
           : `Saved ${toAdd.length} added, ${toRemove.length} removed`,
       );
       setPendingSlots([]);
+      ok = true;
       await loadCalendar();
       await loadDoctors();
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Save failed");
     }
     setSaving(false);
+    return ok;
   };
 
   const countSlotsForDay = (day) => {
@@ -730,6 +751,63 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
 
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  // Every day of the month on screen that can still be opened: not gone by, not a branch
+  // leave day, not already open across its whole shift. Staged exactly as clicking each
+  // date would stage it — the same window, the same skips — so the grid on the right can
+  // still fine-tune any one of them before Confirm.
+  const monthReady = leaveMonth === monthKey;
+  const monthHasFuture = dateStr(daysInMonth) >= todayStr;
+  const selectWholeMonth = () => {
+    if (!selectedDoctor || !monthReady) return;
+    const picked = [];
+    const staged = [];
+    let leave = 0;
+    let alreadyOpen = 0;
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const d = dateStr(day);
+      if (d < todayStr) continue;
+      if (leaveDays[d]) { leave += 1; continue; }
+      const slots = stagedSlotsForDay(d);
+      if (slots.length === 0) { alreadyOpen += 1; continue; }
+      picked.push(d);
+      staged.push(...slots);
+    }
+    if (picked.length === 0) {
+      toast.info(`Nothing left to open in ${monthNames[currentMonth]}${alreadyOpen > 0 ? " — every working day is already open" : ""}`);
+      return;
+    }
+    const inMonth = (x) => x.startsWith(`${monthKey}-`);
+    setSelectedDates((prev) => [...prev.filter((d) => !inMonth(d)), ...picked]);
+    setSelectedDate(picked[0]);
+    setPendingSlots((prev) => [...prev.filter((s) => !inMonth(s.slot_time)), ...staged]);
+    setMonthConfirm({ month: monthKey, label: `${monthNames[currentMonth]} ${currentYear}`, leave, alreadyOpen });
+  };
+
+  const monthConfirmDays = monthConfirm ? selectedDates.filter((d) => d.startsWith(`${monthConfirm.month}-`)) : [];
+  const monthConfirmSlots = monthConfirm
+    ? pendingSlots.filter((s) => !s._remove && s.slot_time.startsWith(`${monthConfirm.month}-`)).length
+    : 0;
+
+  const confirmWholeMonth = async () => {
+    if (await saveChanges()) {
+      setMonthConfirm(null);
+      setSelectedDates([]);
+      setSelectedDate(null);
+    }
+  };
+
+  // Puts the month back as it was before Select whole month: its days unpicked, nothing of
+  // theirs staged. Days picked in other months are left alone.
+  const cancelWholeMonth = () => {
+    if (!monthConfirm) return;
+    const inMonth = (x) => x.startsWith(`${monthConfirm.month}-`);
+    const rest = selectedDates.filter((d) => !inMonth(d));
+    setSelectedDates(rest);
+    setSelectedDate(rest.slice(-1)[0] || null);
+    setPendingSlots((prev) => prev.filter((s) => !inMonth(s.slot_time)));
+    setMonthConfirm(null);
+  };
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4 lg:h-[calc(100vh-220px)] lg:flex-row" data-testid="head-physio-calendar-root">
@@ -1012,7 +1090,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   <span className="text-xs text-amber-600 font-medium">{pendingSlots.length} unsaved</span>
                 )}
                 {!isConsultant && pendingSlots.length > 0 && (
-                  <Button size="sm" variant="outline" onClick={() => setPendingSlots([])} className="text-xs" data-testid="discard-changes-btn">Discard</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setPendingSlots([]); setMonthConfirm(null); }} className="text-xs" data-testid="discard-changes-btn">Discard</Button>
                 )}
                 {!isConsultant && selectedDates.length > 0 && (
                   <Button
@@ -1111,6 +1189,60 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     );
                   })}
                 </div>
+                {/* The month in one go, leave days left out. Staging only — the bar that
+                    replaces the button says what is about to open and nothing reaches the
+                    calendar until its Confirm. */}
+                {monthConfirm ? (
+                  <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/70 p-3" data-testid="month-confirm-bar">
+                    <p className="text-xs font-semibold text-violet-800">
+                      Open {monthConfirmDays.length} day{monthConfirmDays.length === 1 ? "" : "s"} of {monthConfirm.label}
+                      {!isConsultant && ` · ${monthConfirmSlots} slot${monthConfirmSlots === 1 ? "" : "s"}`}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-violet-600">
+                      {[
+                        monthConfirm.leave > 0 && `${monthConfirm.leave} leave day${monthConfirm.leave === 1 ? "" : "s"} skipped`,
+                        monthConfirm.alreadyOpen > 0 && `${monthConfirm.alreadyOpen} already open`,
+                        "past days left out",
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                    <div className="mt-2 flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelWholeMonth}
+                        disabled={saving}
+                        className="h-8 text-xs"
+                        data-testid="month-confirm-cancel"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={confirmWholeMonth}
+                        disabled={saving || monthConfirmDays.length === 0}
+                        className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700"
+                        data-testid="month-confirm-ok"
+                      >
+                        {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
+                        Confirm
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={selectWholeMonth}
+                    disabled={!monthReady || !monthHasFuture || saving}
+                    className="mt-3 w-full border-violet-200 text-xs text-violet-700 hover:bg-violet-50"
+                    title={monthHasFuture ? "Pick every working day left in this month — branch leave days are skipped" : "This month has gone by"}
+                    data-testid="select-whole-month-btn"
+                  >
+                    {monthReady ? <CalendarCheck className="mr-1.5 h-3.5 w-3.5" /> : <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                    Select whole month
+                  </Button>
+                )}
+
                 {/* Desk only, like the day hint below: on a phone both were guide text
                     under a calendar that already shows a leave day struck through. */}
                 {Object.keys(leaveDays).length > 0 && (
