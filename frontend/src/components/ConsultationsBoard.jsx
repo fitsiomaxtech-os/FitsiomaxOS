@@ -7366,7 +7366,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* The only part of the card that scrolls. Its own padding, because the
                 head band above it is flush to the card edge and has to stay that way
                 for its border to run the full width. */}
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5" data-testid="cons-detail-body">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-[10px]" data-testid="cons-detail-body">
               {/* A column with an order to it rather than a fragment. For everyone but the
                   Consultant it is the summary of the consultation, then the panel that
                   does the work: what was found is read before it is acted on, and now that
