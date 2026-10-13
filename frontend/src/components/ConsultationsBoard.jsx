@@ -33,6 +33,7 @@ import {
   listFitness, acceptFitnessReferral,
 } from "@/lib/api";
 import { FitnessMemberDialog, CollectPaymentDialog as FitnessCollectDialog } from "@/components/branch/FitnessPanel";
+import { BalanceDiscount } from "@/components/branch/CollectTender";
 import { waNumber } from "@/lib/phone";
 import { pdfJob, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/printable";
@@ -1768,8 +1769,8 @@ const PANEL_TONES = {
 };
 
 /** The state at the end of a panel's header band — "Both Fees Collected", "Diet Fee Due". */
-const PanelChip = ({ tone = "amber", tick = false, children }) => (
-  <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+const PanelChip = ({ tone = "amber", tick = false, square = false, children }) => (
+  <span className={`flex shrink-0 items-center gap-1 ${square ? "rounded-[1px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${
     tone === "emerald" ? "bg-emerald-100 text-emerald-700"
       : tone === "rose" ? "bg-rose-100 text-rose-700"
       : tone === "slate" ? "bg-slate-100 text-slate-600"
@@ -1779,7 +1780,9 @@ const PanelChip = ({ tone = "amber", tick = false, children }) => (
   </span>
 );
 
-function StagePanel({ tone = "indigo", icon: Icon, title, chip, tabs, children, testid }) {
+// `actions` sit in the header band after the chip, for a control that belongs to the
+// panel's state rather than to the row of views under it.
+function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, children, testid }) {
   const t = PANEL_TONES[tone] || PANEL_TONES.indigo;
   return (
     <div className={`overflow-hidden rounded-xl border shadow-sm ring-1 ring-inset ring-white/60 ${t.shell}`} data-testid={testid}>
@@ -1792,17 +1795,24 @@ function StagePanel({ tone = "indigo", icon: Icon, title, chip, tabs, children, 
           )}
           <span className={`truncate text-xs font-semibold uppercase tracking-wider ${t.heading}`}>{title}</span>
         </div>
-        {chip}
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {chip}
+            {actions}
+          </div>
+        ) : chip}
       </div>
       <div className="p-4">
         {/* The controls sit above a hairline and do not move when the body under them
-            changes, so the control that opened a view is the control that leaves it. */}
+            changes, so the control that opened a view is the control that leaves it.
+            A tab row whose every control is off for this lead draws nothing, hairline
+            included. */}
         {tabs && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 pb-3 [&>*]:shrink-0" data-testid={`${testid}-tabs`}>
+          <div className="peer flex flex-wrap items-center gap-2 border-b border-slate-200/70 pb-3 empty:hidden [&>*]:shrink-0" data-testid={`${testid}-tabs`}>
             {tabs}
           </div>
         )}
-        <div className={tabs ? "mt-3" : ""}>{children}</div>
+        <div className={tabs ? "mt-3 peer-empty:mt-0" : ""}>{children}</div>
       </div>
     </div>
   );
@@ -5046,6 +5056,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       idx,
       fee,
       amount: amount > 0 ? String(amount) : "",
+      // What this installment is due at, which a discount comes off. The amount box can
+      // still be typed short of the net for a part payment, as it always could.
+      due: amount > 0 ? amount : 0,
+      discount: "",
       payment_mode: "cash",
       upi_id: "",
       upi_transaction_id: "",
@@ -5216,6 +5230,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     }
     const mode = draft.payment_mode;
     const payload = { payment_mode: mode, amount };
+    const discount = round2(Math.max(0, parseFloat(draft.discount) || 0));
+    if (discount > 0) {
+      if (draft.due > 0 && discount >= draft.due) {
+        toast.error("The discount has to be less than the balance being collected");
+        return;
+      }
+      if (draft.due > 0 && amount + discount > draft.due + 0.01) {
+        toast.error(`Rs.${amount} plus a Rs.${discount} discount is more than the Rs.${draft.due} due`);
+        return;
+      }
+      payload.discount_amount = discount;
+    }
     // Same as the fee itself: a split brings its own modes, so the single-mode blocks
     // below are not its to fill in.
     if (draft.payment_lines) {
@@ -5264,9 +5290,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       payload.fee = fee;
       const paidRes = await markInstallmentPaid(lead.id, draft.idx + 1, payload);
       const installments = (lead[detailsField]?.installments || []).map((inst, i) =>
-        i === draft.idx ? { ...inst, paid: true, amount, payment_mode: draft.payment_lines ? "split" : mode, transaction_id: paidRes?.transaction_id } : inst
+        i === draft.idx ? { ...inst, paid: true, amount, payment_mode: draft.payment_lines ? "split" : mode, transaction_id: paidRes?.transaction_id, ...(discount > 0 ? { discount_amount: discount } : {}) } : inst
       );
-      const updatedLead = { ...lead, [detailsField]: { ...lead[detailsField], installments } };
+      const agreedDiscount = round2((Number(lead[detailsField]?.discount_amount) || 0) + discount);
+      const updatedLead = { ...lead, [detailsField]: { ...lead[detailsField], installments, ...(discount > 0 ? { discount_amount: agreedDiscount } : {}) } };
       toast.success(`${FEE_LABELS[fee]} · Rs.${amount.toLocaleString("en-IN")} collected`);
       setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => (l.id === updatedLead.id ? updatedLead : l)) }));
       setPartialCollectDraft(null);
@@ -5282,6 +5309,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           : "",
         sessionsCovered: thisInst.sessions ? `${thisInst.sessions} sessions` : "",
         balanceDue: balanceDueLabel(installments),
+        // Printed against the balance it came off, so the receipt reads Rs.X less a
+        // discount rather than a smaller balance with no reason given.
+        ...(discount > 0 ? { assignedPrice: draft.due, discount } : {}),
         transactionId: paidRes?.transaction_id,
       }));
       // The receipt above is the confirmation and closes on its own button, so the
@@ -11743,6 +11773,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       <button onClick={() => setPartialCollectDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-partial-collect-close"><X className="h-4 w-4" /></button>
                     </div>
 
+                    {/* A discount on the balance, the same Discount % / ₹ pair the fee's own
+                        Collect popup asks. The amount below follows it while it is still on
+                        the net payable. */}
+                    <BalanceDiscount
+                      due={partialCollectDraft.due}
+                      discount={partialCollectDraft.discount}
+                      amount={partialCollectDraft.amount}
+                      onChange={(patch) => setPartialCollectDraft((d) => ({ ...d, ...patch }))}
+                      testid="cons-partial-collect"
+                      compact
+                    />
+
                     <div>
                       <label className="mb-1 block text-[11px] font-medium text-slate-500">Amount (₹) *</label>
                       <Input
@@ -11936,6 +11978,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       disabled={
                         collectingTreatmentFee ||
                         !(parseFloat(partialCollectDraft.amount) > 0) ||
+                        (partialCollectDraft.due > 0 && (parseFloat(partialCollectDraft.discount) || 0) >= partialCollectDraft.due) ||
                         (partialCollectDraft.payment_lines
                           ? (partialCollectDraft.payment_lines.some((l) => !(parseFloat(l.amount) > 0)) ||
                              partialCollectDraft.payment_lines.some((l) => l.mode === "cash" && !notesSettled(l.notes, l.amount)) ||

@@ -892,6 +892,10 @@ class V3MarkInstallmentPaidInput(BaseModel):
     ifsc_code: Optional[str] = None
     cheque_number: Optional[str] = None
     transfer_reference: Optional[str] = None
+    # Taken off this installment at the desk. The installment is settled by the money plus
+    # the discount: what was scheduled, less what was let go, is what has to arrive.
+    discount_amount: Optional[float] = None
+    discount_reason: Optional[str] = None
 
 
 class V3PortalAccountInput(BaseModel):

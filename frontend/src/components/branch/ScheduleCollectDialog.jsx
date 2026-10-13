@@ -4,7 +4,7 @@ import { Wallet, X } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { markInstallmentPaid, collectPackagePayment } from "@/lib/api";
 import { loadSession } from "@/lib/session";
-import { TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
+import { BalanceDiscount, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -23,9 +23,10 @@ export const collectWhat = (row) => (row?.next_installment_number ? "instalment"
  *
  * The amount is what is due, and not typed. An instalment collected for less than itself
  * is marked paid all the same (mark_installment_paid writes the amount over it), so the
- * difference would leave the books without anybody deciding it should; and a Consultation
- * Fee taken at a discount or in part needs the reason and the plan the Consultations board
- * asks for. Both of those stay there. What this does is the plain case, in one step.
+ * difference would leave the books without anybody deciding it should. What can come off
+ * it is a discount, said as one: the amount collected is what is due less the discount,
+ * and the discount is recorded beside it rather than vanishing into a smaller figure. A
+ * part payment still belongs on the Consultations board, which plans the rest.
  *
  * Taken through the same endpoints the rest of the OS uses, so every rule they hold still
  * holds: a Consultation Fee is refused until the prescription is on file, and collecting it
@@ -35,11 +36,15 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
   const kind = collectWhat(row);
   const isInstalment = kind === "instalment";
   const fee = row.next_installment_fee || "treatment";
-  const amount = Number(isInstalment ? row.next_installment_amount : row.balance) || 0;
+  const due = Number(isInstalment ? row.next_installment_amount : row.balance) || 0;
   const title = isInstalment
     ? `${row.next_installment_fee_label || "Fee"} · Instalment #${row.next_installment_number}`
     : "Consultation Fee";
   const [draft, setDraft] = useState({ ...emptyTender });
+  const [discount, setDiscount] = useState("");
+  const off = Math.round(Math.max(0, parseFloat(discount) || 0) * 100) / 100;
+  // What is actually handed over: the amount due, less any discount agreed.
+  const amount = Math.round((due - off) * 100) / 100;
   const [saving, setSaving] = useState(false);
   const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
@@ -57,16 +62,17 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
   }, [saving, onClose]);
 
   const submit = async () => {
-    if (!(amount > 0)) { toast.error("Nothing is due to collect"); return; }
+    if (!(due > 0)) { toast.error("Nothing is due to collect"); return; }
+    if (off > 0 && !(amount > 0)) { toast.error("The discount has to be less than the amount due"); return; }
     const tender = tenderPayload(draft);
     if (tender.error) { toast.error(tender.error); return; }
     setSaving(true);
     try {
       const res = isInstalment
-        ? await markInstallmentPaid(row.lead_id, row.next_installment_number, { ...tender.payload, amount, fee })
+        ? await markInstallmentPaid(row.lead_id, row.next_installment_number, { ...tender.payload, amount, fee, ...(off > 0 ? { discount_amount: off } : {}) })
         // `confirmed`: this popup is that confirmation -- what is being collected and for
         // how much, read before Confirm & Collect is pressed.
-        : await collectPackagePayment(row.lead_id, { ...tender.payload, amount, confirmed: true });
+        : await collectPackagePayment(row.lead_id, { ...tender.payload, amount, confirmed: true, ...(off > 0 ? { discount_amount: off } : {}) });
       onCollected && onCollected({
         // In the ledger's own shape, so the receipt is built the way a reissued one is.
         transaction_id: res.transaction_id || "",
@@ -79,7 +85,9 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
         payment_mode: tender.payload.payment_mode,
         collected_by: loadSession()?.user?.full_name || "",
         instalment_number: isInstalment ? row.next_installment_number : null,
-        balance_after: Math.max(Math.round(((Number(row.balance) || 0) - amount) * 100) / 100, 0),
+        discount: off,
+        original_amount: off > 0 ? due : null,
+        balance_after: Math.max(Math.round(((Number(row.balance) || 0) - amount - off) * 100) / 100, 0),
       });
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not collect the payment");
@@ -111,12 +119,20 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
             <p className="mt-0.5 text-xs text-emerald-900/80">
               {row.client_name}
               {row.due_date ? ` · due ${row.due_date}` : ""}
-              {Number(row.balance) > amount ? ` · ${fmt(Number(row.balance) - amount)} still owed after this` : ""}
+              {off > 0 ? ` · ${fmt(due)} less ${fmt(off)} discount` : ""}
+              {Number(row.balance) > due ? ` · ${fmt(Number(row.balance) - due)} still owed after this` : ""}
             </p>
           </div>
+          <BalanceDiscount
+            due={due}
+            discount={discount}
+            amount={String(amount)}
+            onChange={(patch) => setDiscount(patch.discount)}
+            testid="schedule-collect"
+          />
           {!isInstalment && (
             <p className="text-[11px] text-slate-500">
-              Collected in full. For a discount or a part payment, collect it from the client&apos;s card in Consultations.
+              Collected in full, less any discount above. For a part payment, collect it from the client&apos;s card in Consultations.
             </p>
           )}
           <div className="space-y-3">
@@ -133,7 +149,7 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
             Cancel
           </button>
           <button
-            type="button" onClick={submit} disabled={saving}
+            type="button" onClick={submit} disabled={saving || (off > 0 && !(amount > 0))}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
             data-testid="schedule-collect-confirm"
           >

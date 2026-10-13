@@ -4,7 +4,7 @@ import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRigh
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
-import { CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
+import { BalanceDiscount, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const fmtDate = (d) => (d ? (d.length > 10 ? d.slice(0, 16).replace("T", " ") : d) : "—");
@@ -404,7 +404,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
    *  hands off a single unguarded click is how a client gets charged twice. */
   const openCollect = () => {
     if (collectKind === "installment") {
-      setCollectDraft({ ...emptyCollectDraft, kind: "installment", amount: nextInstallment?.amount ? String(nextInstallment.amount) : "" });
+      setCollectDraft({ ...emptyCollectDraft, kind: "installment", amount: nextInstallment?.amount ? String(nextInstallment.amount) : "", discount: "" });
     } else if (collectKind === "past") {
       setCollectDraft({ ...emptyCollectDraft, kind: "past", amount: String(pastOwed[0].amount) });
     }
@@ -438,6 +438,8 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
         // Which fee's balance this is. Omitted, the server would take it as the Treatment
         // Fee's — the only schedule that existed when that default was written.
         payload.fee = pd.next_installment_fee || "treatment";
+        const off = Math.round(Math.max(0, parseFloat(draft.discount) || 0) * 100) / 100;
+        if (off > 0) payload.discount_amount = off;
         await markInstallmentPaid(leadId, pd.next_installment_number, payload);
       }
       toast.success(`${fmt(amount)} collected from ${client.name}`);
@@ -812,6 +814,16 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
               )}
 
               <div className="mt-4 space-y-3">
+                {/* A discount on the installment, the amount below following it. */}
+                {collectDraft.kind === "installment" && (
+                  <BalanceDiscount
+                    due={nextInstallment?.amount}
+                    discount={collectDraft.discount}
+                    amount={collectDraft.amount}
+                    onChange={setDraft}
+                    testid="client-collect"
+                  />
+                )}
                 <div>
                   <CollectField
                     label="Amount Collected"

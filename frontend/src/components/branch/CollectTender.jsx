@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 // How one collection was paid, as the Collect popups ask it: the mode, and the reference
 // each mode is traced by. Lifted out of ClientHistoryModal when the Old Client Instalment
 // form needed the same five buttons and the same fields -- a second copy is a second set of
@@ -71,6 +73,83 @@ export const tenderPayload = (draft) => {
     payload.cheque_number = draft.cheque_number.trim();
   }
   return { payload };
+};
+
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+/**
+ * A discount on a balance being collected -- the next installment of a part-paid fee, or
+ * anything else that is owed. Rupees or a percentage of what is due, either way round, and
+ * the net that is left to collect spelled out under it.
+ *
+ * `onChange` is handed `{ discount, amount }`: the amount follows the discount while it is
+ * still sitting on the net payable, the rule the fee popups on the Consultations board use
+ * -- an amount already typed short is a part payment somebody chose, and agreeing a
+ * discount is no reason to quietly collect the rest of it.
+ */
+export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "balance", compact = false }) => {
+  const owed = Number(due) || 0;
+  const off = Math.max(0, parseFloat(discount) || 0);
+  const net = r2(owed - off);
+  const tooBig = owed > 0 && off >= owed;
+  // Typed by whoever is at the desk while they type it, and re-derived from the rupees
+  // whenever those are what changed.
+  const [pctText, setPctText] = useState(() => (owed > 0 && off > 0 ? String(r2((off / owed) * 100)) : ""));
+
+  const apply = (raw) => {
+    const next = Math.max(0, parseFloat(raw) || 0);
+    const amt = parseFloat(amount);
+    const onNet = !Number.isFinite(amt) || Math.abs(amt - net) < 0.01;
+    onChange({ discount: raw, ...(onNet ? { amount: String(r2(owed - next)) } : {}) });
+  };
+  if (!(owed > 0)) return null;
+  const box = `${compact ? "h-9" : "h-10"} w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400`;
+
+  return (
+    <div className="space-y-2" data-testid={`${testid}-discount`}>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-700">Discount %</span>
+          <input
+            type="number" min="0" max="100" inputMode="decimal" placeholder="0"
+            value={pctText}
+            onChange={(e) => {
+              setPctText(e.target.value);
+              const p = parseFloat(e.target.value);
+              apply(Number.isFinite(p) && p > 0 ? String(r2((owed * p) / 100)) : "");
+            }}
+            className={box}
+            data-testid={`${testid}-discount-pct`}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-700">Discount (₹)</span>
+          <input
+            type="number" min="0" inputMode="decimal" placeholder="0"
+            value={discount ?? ""}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setPctText(Number.isFinite(v) && v > 0 ? String(r2((v / owed) * 100)) : "");
+              apply(e.target.value);
+            }}
+            className={box}
+            data-testid={`${testid}-discount-rs`}
+          />
+        </label>
+      </div>
+      {off > 0 && !tooBig && (
+        <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800" data-testid={`${testid}-net-payable`}>
+          <span>Net Payable <span className="opacity-70">(Rs.{owed.toLocaleString("en-IN")} less Rs.{off.toLocaleString("en-IN")})</span></span>
+          <span className="font-semibold">Rs.{net.toLocaleString("en-IN")}</span>
+        </div>
+      )}
+      {tooBig && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-800" data-testid={`${testid}-discount-too-big`}>
+          The discount has to be less than the Rs.{owed.toLocaleString("en-IN")} due.
+        </div>
+      )}
+    </div>
+  );
 };
 
 /** The five mode buttons and, under them, the fields the picked one is traced by. */

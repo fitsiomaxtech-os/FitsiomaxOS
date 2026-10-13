@@ -3255,9 +3255,22 @@ async def mark_installment_paid(
 
     activity_details = None
     transaction_id = None
+    # A discount agreed on this installment. It settles part of what was scheduled without
+    # any money behind it, so it is held to the installment: never more than is owed, and
+    # never the whole of it -- an installment let go entirely is not a collection.
+    scheduled = installments[idx].get("amount")
+    discount = round(max(0.0, float(payload.discount_amount or 0)), 2)
+    if discount > 0:
+        if scheduled is None or discount >= float(scheduled) - 0.005:
+            raise HTTPException(status_code=400, detail="The discount has to be less than the balance being collected")
     if payload.payment_mode:
-        default = payload.amount if payload.amount is not None else installments[idx].get("amount", 0)
+        default = payload.amount if payload.amount is not None else round(float(installments[idx].get("amount", 0) or 0) - discount, 2)
         mode, amount, mode_fields, detail_suffix = _tender(payload, default)
+        if discount > 0 and amount + discount > float(scheduled) + 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Rs.{amount:g} plus a Rs.{discount:g} discount is more than the Rs.{float(scheduled):g} due",
+            )
 
         # Each installment is its own collection, so each earns its own transaction id --
         # the schedule they belong to has none, since scheduling moves no money.
@@ -3265,10 +3278,11 @@ async def mark_installment_paid(
         # The figure it was scheduled at, kept only when the desk took a different one, so
         # Payment Schedule's Undo can put the instalment back as it was planned rather than
         # as it was paid -- see undo_last_instalment.
-        scheduled = installments[idx].get("amount")
         keep_scheduled = {"scheduled_amount": scheduled} if scheduled is not None and abs(float(scheduled) - float(amount)) >= 0.005 else {}
-        installments[idx] = {**installments[idx], "paid": True, "amount": amount, "payment_mode": mode, "transaction_id": transaction_id, **keep_scheduled, **mode_fields}
-        activity_details = f"Collected {cfg['label']} Installment #{installment_number} for '{lead.get(cfg['package']) or cfg['label']}' · Rs.{amount} via {mode}{detail_suffix} · Txn {transaction_id}"
+        keep_discount = {"discount_amount": discount} if discount > 0 else {}
+        installments[idx] = {**installments[idx], "paid": True, "amount": amount, "payment_mode": mode, "transaction_id": transaction_id, **keep_scheduled, **keep_discount, **mode_fields}
+        discount_suffix = f" · Discount Rs.{discount:g} off Rs.{float(scheduled):g}" if discount > 0 else ""
+        activity_details = f"Collected {cfg['label']} Installment #{installment_number} for '{lead.get(cfg['package']) or cfg['label']}' · Rs.{amount} via {mode}{discount_suffix}{detail_suffix} · Txn {transaction_id}"
     else:
         installments[idx]["paid"] = True
 
@@ -3288,6 +3302,16 @@ async def mark_installment_paid(
     if lead.get(cfg["mode"]) != "partial":
         collected = installments[idx].get("amount") or 0
         set_fields[cfg["paid"]] = round((lead.get(cfg["paid"]) or 0) + collected, 2)
+    elif discount > 0:
+        # A Partial Payment plan booked the whole price up front. The discount is money
+        # that will now never arrive, so it comes off what the plan booked.
+        set_fields[cfg["paid"]] = round(max((lead.get(cfg["paid"]) or 0) - discount, 0), 2)
+    if discount > 0:
+        # The fee's own running discount, so every screen that reads what was agreed off
+        # this fee reads this one too.
+        details_discount = round(float(details.get("discount_amount") or 0) + discount, 2)
+        set_fields[f"{cfg['details']}.discount_amount"] = details_discount
+        details = {**details, "discount_amount": details_discount}
 
     await v3_col("leads").update_one({"id": lead_id}, {"$set": set_fields})
 
@@ -3301,6 +3325,12 @@ async def mark_installment_paid(
             "created_by": user.full_name,
             "created_by_role": user.role,
             "created_at": _now(),
+            # Read by revenue-overview and the ledger the same way a fee's own discount is.
+            **({
+                "original_amount": float(scheduled),
+                "discount_amount": discount,
+                "discount_reason": (payload.discount_reason or "").strip() or None,
+            } if discount > 0 else {}),
         })
 
     updated_details = {**details, "installments": installments}
@@ -3316,7 +3346,7 @@ async def mark_installment_paid(
 _INSTALMENT_PAYMENT_KEYS = {
     "paid", "payment_mode", "transaction_id", "scheduled_amount", "payment_lines", "denominations",
     "upi_transaction_id", "upi_utr", "upi_id", "card_transaction_id", "bank_name", "cheque_number",
-    "account_last4", "account_holder_name", "ifsc_code", "transfer_reference",
+    "account_last4", "account_holder_name", "ifsc_code", "transfer_reference", "discount_amount",
 }
 
 
@@ -3418,9 +3448,11 @@ async def _put_instalment_back(lead: dict, fee: str, transaction_id: str) -> flo
     cfg = FEE_SCHEDULES[fee]
     installments = list(((lead.get(cfg["details"]) or {}).get("installments")) or [])
     collected = 0.0
+    discount = 0.0
     for idx, inst in enumerate(installments):
         if inst.get("transaction_id") == transaction_id:
             collected = float(inst.get("amount") or 0)
+            discount = float(inst.get("discount_amount") or 0)
             restored = {k: v for k, v in inst.items() if k not in _INSTALMENT_PAYMENT_KEYS}
             restored["paid"] = False
             if inst.get("scheduled_amount") is not None:
@@ -3430,6 +3462,13 @@ async def _put_instalment_back(lead: dict, fee: str, transaction_id: str) -> flo
     set_fields = {f"{cfg['details']}.installments": installments, "updated_at": _now()}
     if lead.get(cfg["mode"]) != "partial" and collected:
         set_fields[cfg["paid"]] = round(max((lead.get(cfg["paid"]) or 0) - collected, 0), 2)
+    if discount:
+        # Taken back with the money: the fee's running discount comes down by it, and a
+        # Partial Payment plan books again what the discount had taken off it.
+        agreed = float(((lead.get(cfg["details"]) or {}).get("discount_amount")) or 0)
+        set_fields[f"{cfg['details']}.discount_amount"] = round(max(agreed - discount, 0), 2)
+        if lead.get(cfg["mode"]) == "partial":
+            set_fields[cfg["paid"]] = round((lead.get(cfg["paid"]) or 0) + discount, 2)
     await v3_col("leads").update_one({"id": lead["id"]}, {"$set": set_fields})
     return collected
 
