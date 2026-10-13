@@ -1,5 +1,6 @@
 import { ChevronRight, Phone, Trash2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
+import { telNumber } from "@/lib/phone";
 
 /**
  * The phone card Branch Admin's patient lists share — Branch Leads, Consultation, House
@@ -138,7 +139,7 @@ export const LeadRowCard = ({
           <div className="flex shrink-0 sm:gap-1.5">
             {showContact && (<>
               <a
-                href={`tel:${wa}`}
+                href={`tel:${telNumber(wa)}`}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 aria-label="Call"

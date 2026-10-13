@@ -17,7 +17,7 @@ import { PortalControlsCard } from "@/components/branch/PortalControlsCard";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 // Was a local copy of waNumber, identical to the three still inlined elsewhere. Now that
 // lib/phone.js exists this one points at it — the others can follow as they're touched.
-import { waNumber } from "@/lib/phone";
+import { telNumber, waNumber } from "@/lib/phone";
 
 import { credentialLines, portalCopyText, portalUrl, portalWhatsAppText } from "@/lib/portalCredentials";
 
@@ -438,7 +438,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
                   {wa && (
                     <div className="mt-2.5 flex gap-2 border-t border-slate-100 pt-2.5">
                       <a
-                        href={`tel:${wa}`}
+                        href={`tel:${telNumber(wa)}`}
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 active:bg-slate-100"
@@ -939,7 +939,7 @@ function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
                       <Button size="sm" variant="outline" className="text-xs" onClick={copyCredentials} data-testid="branch-patient-portal-copy">
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="sm" variant="outline" className="text-xs" onClick={() => { if (phone) window.location.href = `tel:${phone.replace(/[^0-9+]/g, "")}`; }} data-testid="branch-patient-portal-call">
+                      <Button size="sm" variant="outline" className="text-xs" onClick={() => { if (phone) window.location.href = `tel:${telNumber(phone)}`; }} data-testid="branch-patient-portal-call">
                         <PhoneCall className="h-3.5 w-3.5" />
                       </Button>
                     </div>

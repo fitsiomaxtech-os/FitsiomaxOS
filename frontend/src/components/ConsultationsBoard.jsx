@@ -34,7 +34,7 @@ import {
 } from "@/lib/api";
 import { FitnessMemberDialog, CollectPaymentDialog as FitnessCollectDialog } from "@/components/branch/FitnessPanel";
 import { BalanceDiscount } from "@/components/branch/CollectTender";
-import { waNumber } from "@/lib/phone";
+import { telNumber, waNumber } from "@/lib/phone";
 import { pdfJob, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/printable";
 import { loadSession } from "@/lib/session";
@@ -6799,7 +6799,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 {wa && (
                   <div className="mt-2.5 flex gap-2 border-t border-slate-100 pt-2.5">
                     <a
-                      href={`tel:${wa}`}
+                      href={`tel:${telNumber(wa)}`}
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 active:bg-slate-100"

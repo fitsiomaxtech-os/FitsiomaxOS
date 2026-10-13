@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { ZoomableImage, ZoomablePdf } from "@/components/ui/zoomable-view";
 import { slotTo12h } from "@/lib/time";
+import { telNumber } from "@/lib/phone";
 import {
   loadPortalSession, savePortalSession, clearPortalSession,
   patientPortalLogin, patientPortalLogout, patientPortalMe, patientPortalGoogleLogin,
@@ -1589,7 +1590,7 @@ function ProfileTab({ data }) {
             <Button
               size="sm"
               className="mt-2 bg-sky-600 text-xs text-white hover:bg-sky-700"
-              onClick={() => { window.location.href = `tel:${data.branch_phone.replace(/[^0-9+]/g, "")}`; }}
+              onClick={() => { window.location.href = `tel:${telNumber(data.branch_phone)}`; }}
               data-testid="patient-portal-call-branch"
             >
               <PhoneCall className="mr-1.5 h-3.5 w-3.5" /> Call Branch

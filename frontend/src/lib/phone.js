@@ -19,3 +19,20 @@ export const waNumber = (raw) => {
   if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
   return digits;
 };
+
+/**
+ * A stored phone as the dialer should get it from tel:. Not waNumber's output: the dialer
+ * reads "918825587322" (91 with no +) as a 12-digit local number and rings the wrong one.
+ *
+ * An Indian number — bare 10 digits, 0-prefixed, or carrying 91 / +91 — comes back as its
+ * plain 10 digits, which is what the person would type. Anything else keeps its country
+ * code behind a +. Returns "" when there's nothing dialable.
+ */
+export const telNumber = (raw) => {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(1);
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  return `+${digits}`;
+};

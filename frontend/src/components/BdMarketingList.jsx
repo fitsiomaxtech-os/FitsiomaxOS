@@ -20,6 +20,7 @@ import {
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { toast } from "@/components/ui/sonner";
 import { getBdSummaryRows } from "@/lib/api";
+import { telNumber } from "@/lib/phone";
 // The avatar the rest of the OS already gives a lead: same two letters, same hue per
 // first letter, so one person is the same colour on this list and on Sales View.
 import { avatarColor, initials } from "@/components/PreSalesCRM";
@@ -321,7 +322,7 @@ export const BdMarketingList = ({
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuItem onSelect={() => onOpenLead?.(r)}>Open lead</DropdownMenuItem>
-                                {r.phone && <DropdownMenuItem onSelect={() => { window.location.href = `tel:${r.phone}`; }}>Call</DropdownMenuItem>}
+                                {r.phone && <DropdownMenuItem onSelect={() => { window.location.href = `tel:${telNumber(r.phone)}`; }}>Call</DropdownMenuItem>}
                                 {r.phone && <DropdownMenuItem onSelect={() => copy(r.phone, "Phone")}>Copy phone</DropdownMenuItem>}
                                 {r.email && <DropdownMenuItem onSelect={() => copy(r.email, "Email")}>Copy email</DropdownMenuItem>}
                               </DropdownMenuContent>

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
+import { telNumber } from "@/lib/phone";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
 import { BalanceDiscount, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 
@@ -382,7 +383,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
 
   const callClient = () => {
     if (!client?.phone) return;
-    window.location.href = `tel:${client.phone.replace(/[^0-9+]/g, "")}`;
+    window.location.href = `tel:${telNumber(client.phone)}`;
   };
 
   // Numbering restarts per fee, so a row is identified by both — matching on the number

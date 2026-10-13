@@ -21,6 +21,7 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp } from "@/lib/time";
+import { telNumber } from "@/lib/phone";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -207,7 +208,7 @@ const testimonialsUrl = () => `${window.location.origin}/testimonials`;
 const LeadContactIcons = ({ lead }) => {
   if (!lead.phone) return null;
   const num = waNumber(lead.phone);
-  const handleCall = (e) => { e.stopPropagation(); window.location.href = `tel:${lead.phone}`; };
+  const handleCall = (e) => { e.stopPropagation(); window.location.href = `tel:${telNumber(lead.phone)}`; };
   const handleWhatsApp = (e) => {
     e.stopPropagation();
     const text = [

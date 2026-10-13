@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Calendar, ClipboardList, IndianRupee, PhoneCall, UserRound } from "lucide-react";
 import { getClientPortalPreview } from "@/lib/api";
 import { LeadDocuments } from "@/components/LeadDocuments";
+import { telNumber } from "@/lib/phone";
 import { SessionsTab, TreatmentTab, PaymentTab } from "@/pages/PatientPortalPage";
 
 // Operations' Client tab: the same four tabs the patient sees on their own /portal
@@ -66,7 +67,7 @@ const OverviewTab = ({ data, leadId }) => (
         {data.branch_address && <p className="mt-0.5 text-xs text-slate-600">{data.branch_address}</p>}
         {data.branch_phone && (
           <a
-            href={`tel:${data.branch_phone.replace(/[^0-9+]/g, "")}`}
+            href={`tel:${telNumber(data.branch_phone)}`}
             className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700"
             data-testid="client-portal-preview-call-branch"
           >
