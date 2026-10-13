@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeftRight, ChevronDown, ChevronRight, Download, EyeOff, FileSpreadsheet, FileText, Filter, Lock, Megaphone,
-  RefreshCw, Search, Truck, UserCheck, X,
+  ArrowLeftRight, ChevronDown, ChevronRight, Download, EyeOff, FileSpreadsheet, FileText, Filter, LayoutDashboard,
+  List, Lock, Megaphone, RefreshCw, Search, Truck, UserCheck, X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,16 @@ const RECORD_TABS = [
 ];
 
 const money = (n) => `Rs.${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
+// "01 Oct 2026 – 31 Oct 2026", the period a report covers, read off whichever of the two
+// date controls is narrowing the list.
+const periodLabel = (filter) => {
+  if (!filter?.from && !filter?.to) return "All dates";
+  if (!filter.to) return `From ${dateStampFull(filter.from)}`;
+  if (!filter.from) return `Up to ${dateStampFull(filter.to)}`;
+  const a = dateStampFull(filter.from);
+  const b = dateStampFull(filter.to);
+  return a === b ? a : `${a} – ${b}`;
+};
 const currentStage = (lead) => lead.consultation_stage || lead.branch_stage || lead.stage || "—";
 // Read as the Branch Leads Source column and its dropdown read it: source_tab, else source_type.
 const NO_SOURCE = "No Source";
@@ -85,6 +95,62 @@ export const RecordsPanel = ({ branchId }) => {
     </div>
   );
 };
+
+/**
+ * What each transfer hands over: the money the sending branch took on this patient that no
+ * earlier transfer has already handed over. from_branch_payments is everything that branch
+ * collected before the move, so a patient sent A -> B -> A -> C carries A's first receipts
+ * on both of A's moves; walking the moves oldest first and letting each receipt go with
+ * the first one gives it to B alone, and C only what A took after the patient came back.
+ * Run over every record, before any filter, so a date range never moves a receipt.
+ */
+const attributeHandover = (records) => {
+  const claimed = new Set();
+  const handover = {};
+  [...records]
+    .sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")))
+    .forEach((r) => {
+      const fresh = (r.from_branch_payments || []).filter((p) => {
+        const key = `${r.lead.id}|${p.id || `${p.collected_at}|${p.label}|${p.amount}`}`;
+        if (claimed.has(key)) return false;
+        claimed.add(key);
+        return true;
+      });
+      handover[r.id] = {
+        payments: fresh,
+        amount: Math.round(fresh.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100,
+      };
+    });
+  return handover;
+};
+
+/**
+ * The Summary tab's settlement, one entry per branch this one has traded patients with.
+ * Sent: patients this branch transferred there, and what this branch had collected on them
+ * -- the balance this branch owes that one, since that branch now delivers the care.
+ * Received: the same the other way. Net is the one transfer that settles both.
+ */
+const buildTransferSummary = (records, handover) => {
+  const byBranch = new Map();
+  records.forEach((r) => {
+    const out = r.direction === "outgoing";
+    const name = (out ? r.to_branch_name : r.from_branch_name) || "Unknown Branch";
+    const key = (out ? r.to_branch_id : r.from_branch_id) || name;
+    if (!byBranch.has(key)) byBranch.set(key, { key, name, sent: [], received: [], payable: 0, receivable: 0 });
+    const b = byBranch.get(key);
+    const amount = handover[r.id]?.amount || 0;
+    if (out) { b.sent.push(r); b.payable += amount; } else { b.received.push(r); b.receivable += amount; }
+  });
+  return [...byBranch.values()]
+    .map((b) => ({ ...b, net: b.payable - b.receivable }))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || (b.sent.length + b.received.length) - (a.sent.length + a.received.length)
+      || a.name.localeCompare(b.name));
+};
+
+const TRANSFER_VIEWS = [
+  { key: "transfers", label: "Transfers", icon: List },
+  { key: "summary", label: "Summary", icon: LayoutDashboard },
+];
 
 const BranchTransferRecords = ({ branchId }) => {
   const [records, setRecords] = useState([]);
@@ -147,6 +213,42 @@ const BranchTransferRecords = ({ branchId }) => {
     incoming: dated.filter((r) => r.direction === "incoming").length,
   }), [dated]);
 
+  const [view, setView] = useState("transfers");
+  const handover = useMemo(() => attributeHandover(records), [records]);
+  // The Summary reads what the date and search leave, as the cards do -- direction is the
+  // Transfers list's own filter, and the settlement needs both directions to net.
+  const summary = useMemo(() => buildTransferSummary(dated, handover), [dated, handover]);
+  // This branch's own name, off any record it appears on.
+  const ownName = useMemo(() => {
+    const r = records.find((x) => (x.direction === "outgoing" ? x.from_branch_name : x.to_branch_name));
+    if (!r) return "This branch";
+    return r.direction === "outgoing" ? r.from_branch_name : r.to_branch_name;
+  }, [records]);
+
+  const exportSummary = () => {
+    const netText = (n, other) => (Math.round(n) > 0 ? `${ownName} to transfer to ${other}`
+      : Math.round(n) < 0 ? `${other} to transfer to ${ownName}` : "Settled");
+    downloadCsv([
+      [`Branch Transfer Summary — ${ownName}`],
+      [`Period: ${periodLabel(effectiveDateFilter)}`],
+      [],
+      ["Branch", "Leads Sent", `Collected by ${ownName} (Balance to Transfer)`, "Leads Received",
+        "Collected by Other Branch (Balance to Receive)", "Net Amount", "Net Direction"],
+      ...summary.map((b) => [
+        b.name, b.sent.length, b.payable, b.received.length, b.receivable, Math.abs(b.net), netText(b.net, b.name),
+      ]),
+      [],
+      ["Patient Number", "Patient Name", "Phone", "Direction", "From Branch", "To Branch", "Transfer Date",
+        "Collected Before Transfer", "Owed By", "Owed To"],
+      ...summary.flatMap((b) => [...b.sent, ...b.received].map((r) => [
+        r.lead.patient_number, r.lead.name, r.lead.phone,
+        r.direction === "outgoing" ? "Outgoing" : "Incoming",
+        r.from_branch_name, r.to_branch_name, dateStampFull(r.at),
+        handover[r.id]?.amount || 0, r.from_branch_name, r.to_branch_name,
+      ])),
+    ], `branch-transfer-summary-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
   // CSV with a BOM, which Excel opens straight into columns. Exports what the filters
   // leave, so a search narrows the sheet the same way it narrows the list.
   const exportSheet = () => {
@@ -185,6 +287,28 @@ const BranchTransferRecords = ({ branchId }) => {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="inline-flex w-fit rounded-[5px] border border-slate-200 bg-white p-0.5" role="tablist">
+        {TRANSFER_VIEWS.map((v) => {
+          const Icon = v.icon;
+          return (
+            <button
+              key={v.key}
+              type="button"
+              role="tab"
+              aria-selected={view === v.key}
+              onClick={() => setView(v.key)}
+              className={`flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-medium ${
+                view === v.key ? "bg-sky-600 text-white" : "text-slate-500 hover:text-slate-700"
+              }`}
+              data-testid={`transfer-records-view-${v.key}`}
+            >
+              <Icon className="h-3.5 w-3.5" /> {v.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {view === "transfers" && (
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           { key: "all", label: "All Transfers" },
@@ -208,6 +332,7 @@ const BranchTransferRecords = ({ branchId }) => {
           </button>
         ))}
       </div>
+      )}
 
       {/* One line on a phone, three before this: the field had a line, the dates had a
           line, and the two buttons had a third. Nothing here is new -- the same search,
@@ -263,8 +388,8 @@ const BranchTransferRecords = ({ branchId }) => {
           </Button>
           <Button
             size="sm"
-            onClick={exportSheet}
-            disabled={!rows.length}
+            onClick={view === "summary" ? exportSummary : exportSheet}
+            disabled={view === "summary" ? !summary.length : !rows.length}
             className="h-9 w-9 p-0 bg-emerald-600 text-white hover:bg-emerald-700 sm:h-8 sm:w-auto sm:px-3"
             title="Download as an Excel sheet"
             aria-label="Download as an Excel sheet"
@@ -275,7 +400,16 @@ const BranchTransferRecords = ({ branchId }) => {
         </div>
       </div>
 
-      {!rows.length ? (
+      {view === "summary" ? (
+        <TransferSummary
+          summary={summary}
+          handover={handover}
+          ownName={ownName}
+          loading={loading}
+          hasRecords={records.length > 0}
+          onOpen={setOpen}
+        />
+      ) : !rows.length ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
           {loading ? "Loading..." : records.length ? "No transfers match." : "No branch transfers yet."}
         </div>
@@ -371,6 +505,142 @@ const BranchTransferRecords = ({ branchId }) => {
   );
 };
 
+/**
+ * Branch Transfer Records' Summary: who owes whom for the patients moved. Anna Nagar sends
+ * a patient to Parrys after collecting their fee; Parrys now delivers the care, so what
+ * Anna Nagar collected is Parrys' to receive. Each card nets that against what Parrys
+ * collected on patients it sent to Anna Nagar, leaving one balance and one direction.
+ */
+const TransferSummary = ({ summary, handover, ownName, loading, hasRecords, onOpen }) => {
+  const [expanded, setExpanded] = useState(null);
+  const totals = useMemo(() => summary.reduce(
+    (t, b) => ({ payable: t.payable + b.payable, receivable: t.receivable + b.receivable }),
+    { payable: 0, receivable: 0 },
+  ), [summary]);
+  const net = totals.payable - totals.receivable;
+
+  if (!summary.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
+        {loading ? "Loading..." : hasRecords ? "No transfers match." : "No branch transfers yet."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4" data-testid="transfer-summary">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+        <div className="rounded-[5px] border border-amber-200 bg-amber-50/60 px-3 py-2.5" data-testid="transfer-summary-payable">
+          <p className="text-[11px] font-medium text-amber-800">Balance to Transfer Out</p>
+          <p className="text-xl font-bold text-amber-700">{money(totals.payable)}</p>
+          <p className="truncate text-[10px] text-amber-700/80">Collected by {ownName} on leads sent to other branches</p>
+        </div>
+        <div className="rounded-[5px] border border-emerald-200 bg-emerald-50/60 px-3 py-2.5" data-testid="transfer-summary-receivable">
+          <p className="text-[11px] font-medium text-emerald-800">Balance to Receive</p>
+          <p className="text-xl font-bold text-emerald-700">{money(totals.receivable)}</p>
+          <p className="truncate text-[10px] text-emerald-700/80">Collected by other branches on leads sent to {ownName}</p>
+        </div>
+        <div className="rounded-[5px] border border-slate-200 bg-white px-3 py-2.5" data-testid="transfer-summary-net">
+          <p className="text-[11px] font-medium text-slate-500">Net Balance</p>
+          <p className={`text-xl font-bold ${Math.round(net) > 0 ? "text-amber-700" : Math.round(net) < 0 ? "text-emerald-700" : "text-slate-800"}`}>
+            {money(Math.abs(net))}
+          </p>
+          <p className="truncate text-[10px] text-slate-400">
+            {Math.round(net) > 0 ? `${ownName} pays out overall` : Math.round(net) < 0 ? `${ownName} receives overall` : "Settled across all branches"}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {summary.map((b) => {
+          const n = Math.round(b.net);
+          const isOpen = expanded === b.key;
+          const list = [...b.sent, ...b.received].sort((x, y) => String(y.at || "").localeCompare(String(x.at || "")));
+          return (
+            <div key={b.key} className="flex flex-col rounded-xl border border-slate-200 bg-white" data-testid={`transfer-summary-branch-${b.key}`}>
+              <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-800">{b.name}</p>
+                  <p className="text-[11px] text-slate-400">{b.sent.length + b.received.length} transfer{b.sent.length + b.received.length === 1 ? "" : "s"}</p>
+                </div>
+                <span className={`shrink-0 rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${
+                  n > 0 ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : n < 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                }`}>
+                  {n > 0 ? "To Pay" : n < 0 ? "To Receive" : "Settled"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 divide-x divide-slate-100">
+                <div className="px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sent to {b.name}</p>
+                  <p className="text-xs text-slate-500">{b.sent.length} lead{b.sent.length === 1 ? "" : "s"}</p>
+                  <p className="mt-1.5 text-[11px] text-slate-500">Collected by {ownName}</p>
+                  <p className="text-base font-bold text-amber-700">{money(b.payable)}</p>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Received from {b.name}</p>
+                  <p className="text-xs text-slate-500">{b.received.length} lead{b.received.length === 1 ? "" : "s"}</p>
+                  <p className="mt-1.5 text-[11px] text-slate-500">Collected by {b.name}</p>
+                  <p className="text-base font-bold text-emerald-700">{money(b.receivable)}</p>
+                </div>
+              </div>
+
+              <div className={`mx-3 mb-3 rounded-lg px-3 py-2 ${
+                n > 0 ? "bg-amber-50" : n < 0 ? "bg-emerald-50" : "bg-slate-50"
+              }`}>
+                <p className="text-[11px] text-slate-600">
+                  {n > 0 ? `Balance amount to transfer to ${b.name}`
+                    : n < 0 ? `Balance amount to receive from ${b.name}`
+                      : "Balance amount"}
+                </p>
+                <p className={`text-lg font-bold ${n > 0 ? "text-amber-700" : n < 0 ? "text-emerald-700" : "text-slate-700"}`}>
+                  {money(Math.abs(b.net))}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setExpanded(isOpen ? null : b.key)}
+                className="mt-auto flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs font-medium text-sky-700 hover:bg-slate-50"
+                aria-expanded={isOpen}
+                data-testid={`transfer-summary-toggle-${b.key}`}
+              >
+                {isOpen ? "Hide leads" : "View leads"}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              </button>
+              {isOpen ? (
+                <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto border-t border-slate-100">
+                  {list.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpen(r)}
+                        className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left hover:bg-slate-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-medium text-slate-800">{r.lead.name}</span>
+                          <span className="block truncate text-[11px] text-slate-400">
+                            {r.direction === "outgoing" ? `Sent to ${b.name}` : `Received from ${b.name}`} · {dateStampFull(r.at)}
+                          </span>
+                        </span>
+                        <span className={`shrink-0 text-xs font-semibold ${r.direction === "outgoing" ? "text-amber-700" : "text-emerald-700"}`}>
+                          {money(handover[r.id]?.amount)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const has = (v) => v !== null && v !== undefined;
 
 // The four services sold after the consultation. Buying any one of them is what converts a
@@ -451,16 +721,6 @@ const countCards = (leads) => {
 const pct = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : "—");
 const ALL_SOURCES = "all";
 
-// "01 Oct 2026 – 31 Oct 2026", the period a report covers, read off whichever of the two
-// date controls is narrowing the list.
-const periodLabel = (filter) => {
-  if (!filter?.from && !filter?.to) return "All dates";
-  if (!filter.to) return `From ${dateStampFull(filter.from)}`;
-  if (!filter.from) return `Up to ${dateStampFull(filter.to)}`;
-  const a = dateStampFull(filter.from);
-  const b = dateStampFull(filter.to);
-  return a === b ? a : `${a} – ${b}`;
-};
 const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 /**
