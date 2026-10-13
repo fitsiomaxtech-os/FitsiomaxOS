@@ -39,6 +39,7 @@ from routers.v3_lead_documents import leads_with_prescription
 # when a course is over lives with the reviews it is waiting on, and a second copy here
 # is how the boards came to disagree about Completed in the first place.
 from routers.v3_reviews import leads_awaiting_review, review_bookings, consultant_slot_clash
+from consult_duration_rule import duration_rule_enabled
 # What this patient has actually paid, and to which branch. Imported rather than re-derived
 # for the same reason as the two above: parsing an amount out of an activity row and
 # deciding which branch owns it are finance's rules, and a second copy here is how the
@@ -1299,7 +1300,10 @@ def _clock_text(minutes: int) -> str:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
-def _consultant_day(expert: dict, date_str: str, bookings: list, slot_minutes: Optional[int], own: Optional[dict] = None) -> dict:
+def _consultant_day(
+    expert: dict, date_str: str, bookings: list, slot_minutes: Optional[int],
+    own: Optional[dict] = None, blocking: bool = True,
+) -> dict:
     """One Consultant's bookable day, cut at the store's Consultation Duration.
 
     What the Consultant published is when they are available, not a fixed grid: their
@@ -1311,6 +1315,9 @@ def _consultant_day(expert: dict, date_str: str, bookings: list, slot_minutes: O
     `bookings` are this expert's live appointments on the date, other leads only; each
     blocks every slot it overlaps, so a 60-minute booking at 5:00 takes both 5:00 and
     5:30 off a 30-minute day. `own` is this lead's own appointment, kept selectable.
+
+    `blocking` False is the Consultation Duration rule switched off in Developer Access:
+    the bookings are still listed, but none of them takes a slot off the day.
     """
     details = {x.get("slot_time"): x for x in (expert.get("slot_details") or [])}
     windows = []
@@ -1351,7 +1358,7 @@ def _consultant_day(expert: dict, date_str: str, bookings: list, slot_minutes: O
         taken.append((start, start + int(b.get("duration") or slot_minutes or 30), b))
 
     def overlaps(start: int, length: int) -> bool:
-        return any(start < t_end and t_start < start + length for t_start, t_end, _ in taken)
+        return blocking and any(start < t_end and t_start < start + length for t_start, t_end, _ in taken)
 
     free = [(t, length) for t, length in offered if not overlaps(t, length)]
     if own:
@@ -1450,6 +1457,9 @@ async def v3_available_experts(
 
     # Slot length is this branch's Consultation Duration, fetched fresh on every open.
     slot_minutes = await consultation_slot_minutes(branch_id)
+    # Off in Developer Access, a booked time blocks nobody: every consultant stays on offer
+    # at every time, and the popup lists the bookings without refusing a clash.
+    duration_rule = await duration_rule_enabled()
 
     # Faces for the picker's Consultant column, resolved once for the whole branch list
     # rather than per row. See _expert_photos.
@@ -1459,8 +1469,9 @@ async def v3_available_experts(
     for d in branch_experts:
         day = _consultant_day(
             d, date, bookings_by_doc.get(d.get("id"), []), slot_minutes, own_by_doc.get(d.get("id")),
+            blocking=duration_rule,
         )
-        if time:
+        if time and duration_rule:
             # Caller asked about one exact time — only offer experts free right then.
             start = _clock_minutes(time)
             length = slot_minutes or 30
@@ -1487,6 +1498,7 @@ async def v3_available_experts(
         "date": date,
         "time": time,
         "slot_minutes": slot_minutes,
+        "duration_rule": duration_rule,
         "branch_id": branch_id,
         "total_branch_experts": len(branch_experts),
         "available_count": len(available),
@@ -1541,6 +1553,7 @@ async def v3_available_dates(
     # Counted off the same cut as available-experts, so a day's number here is the number
     # of tiles its slot grid will draw.
     slot_minutes = await consultation_slot_minutes(branch_id)
+    duration_rule = await duration_rule_enabled()
     dates: Dict[str, int] = {}
     for d in branch_experts:
         days = {
@@ -1549,7 +1562,9 @@ async def v3_available_dates(
             if isinstance(s, str) and s.startswith(f"{month}-") and "T" in s
         }
         for day in days:
-            free = len(_consultant_day(d, day, bookings.get((d["id"], day), []), slot_minutes)["free_slots"])
+            free = len(_consultant_day(
+                d, day, bookings.get((d["id"], day), []), slot_minutes, blocking=duration_rule,
+            )["free_slots"])
             if free:
                 dates[day] = dates.get(day, 0) + free
     # A day this branch is on leave (Monthly Calendar) is not offered, even where a

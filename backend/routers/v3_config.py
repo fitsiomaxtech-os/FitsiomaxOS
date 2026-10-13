@@ -20,6 +20,7 @@ from stage_utils import get_first_stage_name, realign_branch_stage_leads
 from shift_utils import attach_shifts
 import lead_control
 import lead_purge
+import consult_duration_rule
 import store_branch_overrides
 from seed import create_default_lead_source, sync_lead_source_branch_name
 from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled
@@ -1203,6 +1204,35 @@ async def v3_set_lead_delete_button(
         {"id": lead_purge.DELETE_BUTTON_SETTING_ID},
         {"$set": {
             "id": lead_purge.DELETE_BUTTON_SETTING_ID,
+            "enabled": payload.enabled,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"enabled": payload.enabled}
+
+
+# Whether a Consultant's booked time holds anyone else out of it, for every branch at
+# once. On, a booking runs for the Consultation Duration and a second one that runs into
+# it is refused. Off, the branch can book several patients at the same time with the same
+# Consultant -- see consult_duration_rule.
+
+
+@router.get("/admin/consultation-duration-rule")
+async def v3_get_consultation_duration_rule(_: V3UserOut = Depends(require_developer_password)):
+    return {"enabled": await consult_duration_rule.duration_rule_enabled()}
+
+
+@router.put("/admin/consultation-duration-rule")
+async def v3_set_consultation_duration_rule(
+    payload: LeadDeleteButtonInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    await v3_col("app_settings").update_one(
+        {"id": consult_duration_rule.SETTING_ID},
+        {"$set": {
+            "id": consult_duration_rule.SETTING_ID,
             "enabled": payload.enabled,
             "updated_by": user.full_name,
             "updated_at": now_iso(),

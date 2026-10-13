@@ -19,6 +19,7 @@ from database import v3_col
 from utils import now_iso, normalize_slot_time, active_doctor_query
 from deps import v3_require_roles
 from branch_calendar import day_status
+from consult_duration_rule import duration_rule_enabled
 from schemas.v3 import V3UserOut
 
 router = APIRouter(prefix="/api/v3")
@@ -90,6 +91,9 @@ async def _validate_slot(branch: dict, date_str: str, time_str: str, doctor_id: 
     if not (open_t <= time_str < close_t):
         raise HTTPException(status_code=400, detail=f"Time must be within the branch working hours ({open_t}–{close_t})")
     slot = normalize_slot_time(f"{date_str}T{time_str}")
+    # Switched off in Developer Access, the Consultant can hold several patients at one time.
+    if not await duration_rule_enabled():
+        return slot
     q = {"doctor_id": doctor_id, "slot_time": slot, "status": "new_appointment"}
     if exclude_id:
         q["id"] = {"$ne": exclude_id}
@@ -129,11 +133,12 @@ async def consult_availability(branch_id: str, date: str, doctor_id: str, _: V3U
         {"_id": 0, "slot_time": 1},
     ).to_list(500)
     booked = {r["slot_time"].split("T")[1] for r in booked_rows if "T" in (r.get("slot_time") or "")}
+    blocking = await duration_rule_enabled()
     return {
         "open": True,
         "open_time": open_t,
         "close_time": close_t,
-        "slots": [s for s in _slots_between(open_t, close_t) if s not in booked],
+        "slots": [s for s in _slots_between(open_t, close_t) if not (blocking and s in booked)],
         "booked": sorted(booked),
     }
 
@@ -166,6 +171,7 @@ async def consult_day(branch_id: str, date: str, _: V3UserOut = Depends(v3_requi
             if "T" in st:
                 booked_by_doc.setdefault(r["doctor_id"], set()).add(st.split("T")[1])
 
+    blocking = await duration_rule_enabled()
     head_physios = []
     for d in hps:
         booked = booked_by_doc.get(d["id"], set())
@@ -180,7 +186,7 @@ async def consult_day(branch_id: str, date: str, _: V3UserOut = Depends(v3_requi
             "id": d["id"],
             "full_name": d["full_name"],
             "specialization": d.get("specialization", ""),
-            "available_slots": [t for t in day_times if t not in booked],
+            "available_slots": [t for t in day_times if not (blocking and t in booked)],
             "booked_slots": sorted(booked),
         })
     return {"open": True, "reason": None, "open_time": open_t, "close_time": close_t, "head_physios": head_physios}

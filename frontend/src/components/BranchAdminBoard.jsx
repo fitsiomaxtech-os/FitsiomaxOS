@@ -3536,6 +3536,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
         // take a length off, so the booking is the store's length from whatever minute
         // was entered.
         slot_minutes: res.slot_minutes || null,
+        // Developer Access > Consultation Duration. Off, a booked time blocks nobody and
+        // the same time can be given to as many patients as the desk needs.
+        duration_rule: res.duration_rule !== false,
         loading: false,
       });
       setApptDraft((curr) => {
@@ -3544,7 +3547,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
         return stillAvail ? curr : { ...curr, physio_id: "" };
       });
     } catch {
-      setApptExperts({ experts: [], available_count: 0, busy_count: 0, slot_minutes: null, loading: false });
+      setApptExperts({ experts: [], available_count: 0, busy_count: 0, slot_minutes: null, duration_rule: true, loading: false });
     }
   }, []);
 
@@ -3583,6 +3586,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // How long the appointment runs. The store's Consultation Duration, because a typed
   // start is not a tile and has no length of its own to read off.
   const apptSlotMinutes = apptExperts.slot_minutes || 30;
+  const apptDurationRule = apptExperts.duration_rule !== false;
   // Whether this consultant is working the picked day at all. Read off what they
   // published rather than off what is still free: the day is the thing the Consultant
   // Calendar sets, and one with every published hour spoken for is a day they are on —
@@ -3638,15 +3642,17 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // match, because a typed 10:20 collides with a 45-minute 10:00 without sharing its
   // start — which is the one thing a free-typed field makes easy to do by accident. The
   // endpoint refuses it too; this is so the refusal is read before Confirm, not after.
+  // Nothing clashes while the Consultation Duration is switched off: several patients at
+  // one time with one consultant is then exactly what the branch asked for.
   const apptClash = useMemo(() => {
     const start = apptMinutesOf(apptDraft?.appointment_time);
-    if (start === null) return null;
+    if (start === null || !apptDurationRule) return null;
     return apptSlotsForExpert.find((x) => {
       if (!x.booked) return false;
       const t = apptMinutesOf(x.time);
       return t !== null && start < t + (Number(x.duration) || 30) && t < start + apptSlotMinutes;
     }) || null;
-  }, [apptDraft?.appointment_time, apptSlotsForExpert, apptSlotMinutes]);
+  }, [apptDraft?.appointment_time, apptSlotsForExpert, apptSlotMinutes, apptDurationRule]);
 
   /** The three fields read as one 24-hour "HH:MM", or "" while any of them is unreadable. */
   const apptClockOf = ({ h, m, ap }) => {
@@ -5741,9 +5747,13 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         </div>
                       </div>
                       <p className="mt-1.5 text-[11px] text-slate-400">
-                        {apptDraft.appointment_time
-                          ? <>Booking <b className="font-semibold text-slate-600">{to12h(apptDraft.appointment_time)}</b> for {apptSlotMinutes} minutes.</>
-                          : <>{apptSlotMinutes}-minute consultation.</>}
+                        {!apptDurationRule
+                          ? (apptDraft.appointment_time
+                            ? <>Booking <b className="font-semibold text-slate-600">{to12h(apptDraft.appointment_time)}</b>. Others can be booked at the same time.</>
+                            : <>Several patients can be booked at the same time.</>)
+                          : apptDraft.appointment_time
+                            ? <>Booking <b className="font-semibold text-slate-600">{to12h(apptDraft.appointment_time)}</b> for {apptSlotMinutes} minutes.</>
+                            : <>{apptSlotMinutes}-minute consultation.</>}
                       </p>
                     </div>
 
@@ -5782,18 +5792,25 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     {apptSlotsForExpert.some((x) => x.booked) && (
                       <div className="mt-4" data-testid="branch-appt-booked-list">
                         <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Already booked this day</p>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          {apptSlotsForExpert.filter((x) => x.booked).map((x) => (
-                            <div
-                              key={x.slot_time}
-                              className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2"
-                              data-testid={`branch-appt-slot-${x.time}`}
+                        {/* One numbered row per patient, not one per time: with the
+                            Consultation Duration off, four patients can share 10:25, and
+                            each still needs its own pencil. Keyed on the patient for the
+                            same reason — a key on the time alone folds them together. */}
+                        <ol className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                          {apptSlotsForExpert.filter((x) => x.booked).map((x, i) => (
+                            <li
+                              key={`${x.slot_time}-${x.review_id || x.lead_id || i}`}
+                              className="flex items-center gap-2 px-3 py-2"
+                              data-testid={`branch-appt-booked-row-${i + 1}`}
                             >
-                              <span className="min-w-0">
-                                <span className="block text-sm font-bold text-slate-500">{to12h(x.time)} – {endTime12h(x.time, Number(x.duration) || apptSlotMinutes)}</span>
-                                <span className="block truncate text-[11px] font-semibold text-slate-400">
-                                  {x.review_id ? "Review" : "Booked"}{x.lead_name ? ` · ${x.lead_name}` : ""}
-                                </span>
+                              <span className="w-5 shrink-0 text-xs font-bold text-slate-400">{i + 1}.</span>
+                              <span className="shrink-0 text-sm font-bold text-slate-600">
+                                {to12h(x.time)}
+                                {apptDurationRule ? ` – ${endTime12h(x.time, Number(x.duration) || apptSlotMinutes)}` : ""}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700" title={(x.lead_name || "").trim()}>
+                                {(x.lead_name || "").trim() || "Booked"}
+                                {x.review_id && <span className="ml-1 text-[11px] font-semibold text-slate-400">· Review</span>}
                               </span>
                               {/* A review is moved from Review > Reassign, not from here:
                                   the pencil reschedules a consultation, and this patient
@@ -5803,15 +5820,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                                   type="button"
                                   onClick={() => openSlotEdit(x)}
                                   className="shrink-0 rounded-md border border-slate-300 bg-white p-1.5 text-slate-500 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-600"
-                                  title={`Reschedule the ${to12h(x.time)} booking${x.lead_name ? ` — ${x.lead_name}` : ""}`}
-                                  data-testid={`branch-appt-slot-edit-${x.time}`}
+                                  title={`Reschedule the ${to12h(x.time)} booking${x.lead_name ? ` — ${x.lead_name.trim()}` : ""}`}
+                                  data-testid={`branch-appt-booked-edit-${i + 1}`}
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
                               )}
-                            </div>
+                            </li>
                           ))}
-                        </div>
+                        </ol>
                       </div>
                     )}
                   </>

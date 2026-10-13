@@ -25,6 +25,7 @@ from database import v3_col
 from utils import now_iso, active_doctor_query
 from deps import is_branch_admin_role, v3_require_roles, works_org_wide
 from schemas.v3 import V3UserOut
+from consult_duration_rule import duration_rule_enabled
 
 from physio_scope import (
     physio_lead_ids, resolve_physio_doctor, covering_lead_ids, review_cover_holders,
@@ -648,7 +649,12 @@ async def consultant_slot_clash(
     """Whatever already holds this Consultant across `slot_time` — a consultation or a
     review — or None. Overlap rather than an exact start, so a 45-minute review at 10:15
     also blocks a booking at 10:30. `reviews_only` is for the consultation bookings, which
-    already check appointments against each other their own way."""
+    already check appointments against each other their own way.
+
+    Always None while the Consultation Duration rule is switched off in Developer Access:
+    then a Consultant's time holds nobody else out of it (see consult_duration_rule)."""
+    if not await duration_rule_enabled():
+        return None
     day, _, hhmm = (slot_time or "").partition("T")
     start = _clock(hhmm)
     if not day or start is None:

@@ -731,7 +731,9 @@ export const getLeadSourceVisibility = async () => (await api.get("/lead-source-
 export const unlockLeadSourceVisibility = async (password) => (await api.get("/admin/lead-source-visibility", { headers: developerHeaders(password) })).data;
 export const setLeadSourceHidden = async (password, source, hidden) => (await api.put("/admin/lead-source-visibility", { source, hidden }, { headers: developerHeaders(password) })).data;
 // The Danger Zone's switch for whether that tab offers the Show / Hide Sources button at all.
-export const getLeadSourceButton = async (password) => (await api.get("/admin/lead-source-visibility-button", { headers: developerHeaders(password) })).data;
+export const getConsultationDurationRule = async (password) => (await api.get("/admin/consultation-duration-rule", { headers: developerHeaders(password) })).data;
+export const setConsultationDurationRule = async (password, enabled) => (await api.put("/admin/consultation-duration-rule", { enabled }, { headers: developerHeaders(password) })).data;
+export const getLeadSourceButton =async (password) => (await api.get("/admin/lead-source-visibility-button", { headers: developerHeaders(password) })).data;
 export const setLeadSourceButton = async (password, enabled) => (await api.put("/admin/lead-source-visibility-button", { enabled }, { headers: developerHeaders(password) })).data;
 export const resetAllUsers = async (password) => (await api.post("/admin/reset-all-users", null, { params: { confirm: true }, headers: developerHeaders(password) })).data;
 

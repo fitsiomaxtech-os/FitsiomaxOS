@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule } from "@/lib/api";
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
@@ -227,6 +227,8 @@ export const PipelineStageManagement = ({ leading = null }) => {
   // Whether Records > Leads Source offers its Show / Hide Sources button. null until read.
   const [leadSourceButton, setLeadSourceButtonState] = useState(null);
   const [savingLeadSourceButton, setSavingLeadSourceButton] = useState(false);
+  const [durationRule, setDurationRule] = useState(null);
+  const [savingDurationRule, setSavingDurationRule] = useState(false);
 
   // The tab being looked at, resolved once: `type` is this table's tab id, and for the
   // Branch pair it is not the same string as the pipeline's API type — both tabs are
@@ -368,7 +370,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); return; }
     getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
     getBeforeVerifyDeleteButton(devPassword).then((r) => setBeforeVerifyDelete(!!r.enabled)).catch(() => setBeforeVerifyDelete(null));
@@ -376,6 +378,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
     getLeadDeleteButton(devPassword).then((r) => setDeleteButton(!!r.enabled)).catch(() => setDeleteButton(null));
     getSaConsultBranchesSetting(devPassword).then((r) => setSaBranches(!!r.enabled)).catch(() => setSaBranches(null));
     getLeadSourceButton(devPassword).then((r) => setLeadSourceButtonState(!!r.enabled)).catch(() => setLeadSourceButtonState(null));
+    getConsultationDurationRule(devPassword).then((r) => setDurationRule(!!r.enabled)).catch(() => setDurationRule(null));
   }, [devPassword]);
 
   // One row, drawn for either half. `muted` is the only difference the half makes to a real
@@ -649,6 +652,23 @@ export const PipelineStageManagement = ({ leading = null }) => {
     setSavingLeadSourceButton(false);
   };
 
+  const toggleDurationRule = async () => {
+    const next = !durationRule;
+    const ok = window.confirm(next
+      ? "Turn the Consultation Duration ON?\n\nEvery branch: each appointment holds its Consultation Duration, and a time that runs into another booking with the same CONSULTANT is refused."
+      : "Turn the Consultation Duration OFF?\n\nEvery branch: several patients can be booked at the same date and time with the same CONSULTANT. Already Booked This Day still lists them all.");
+    if (!ok) return;
+    setSavingDurationRule(true);
+    try {
+      const r = await setConsultationDurationRule(devPassword, next);
+      setDurationRule(!!r.enabled);
+      toast.success(r.enabled ? "Consultation Duration is ON" : "Consultation Duration is OFF — same-time bookings allowed");
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingDurationRule(false);
+  };
+
   const handleResetAllLeads = async () => {
     const step1 = window.confirm(
       "Reset EVERY lead in the whole OS back to a fresh, unassigned New Leads state?\n\n" +
@@ -904,6 +924,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
               { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
               { key: "lead-source-button", label: "Leads Source Show / Hide Sources button", value: leadSourceButton, saving: savingLeadSourceButton, onFlip: toggleLeadSourceButton, on: "ON", off: "OFF" },
+              { key: "consultation-duration-rule", label: "Consultation Duration (OFF: book many patients at the same time)", value: durationRule, saving: savingDurationRule, onFlip: toggleDurationRule, on: "ON", off: "OFF" },
             ].map((row) => (
               <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`${row.key}-card`}>
                 <span className="text-sm font-medium text-slate-800">{row.label}</span>
