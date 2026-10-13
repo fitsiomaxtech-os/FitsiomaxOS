@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
@@ -10908,10 +10909,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         decision, and this is the desk that makes it. */}
                     <div data-testid="cons-collect-fee-package-block">
                       <label className="mb-1 block text-[11px] font-medium text-slate-500">Consultation Package</label>
-                      <select
+                      <ThemedSelect
                         value={collectFeeDraft.consultation_item_id || ""}
-                        onChange={(e) => {
-                          const id = e.target.value;
+                        placeholder="Select a package…"
+                        onChange={(id) => {
                           const price = consultationPriceForId(id);
                           setCollectFeeDraft({
                             ...collectFeeDraft,
@@ -10933,29 +10934,28 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             discount: "",
                           });
                         }}
-                        className="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
-                        data-testid="cons-collect-fee-package"
-                      >
-                        <option value="">Select a package…</option>
-                        {consultationPackageItems.map((i) => {
-                          const price = consultationOptionPrice(i);
-                          return (
-                            <option key={i.id} value={i.id}>
-                              {i.name}{price != null ? ` — Rs.${price}` : i.manual_price ? " — amount set at booking" : " — no price set"}
-                            </option>
-                          );
-                        })}
-                        {/* A package already collected for whose catalogue row has since
-                            been changed or removed. Offered so a correction can be saved
-                            without re-picking something the patient never bought. */}
-                        {collectFeeDraft.consultation_item_id
-                          && !consultationPackageItems.some((i) => i.id === collectFeeDraft.consultation_item_id) && (
-                          <option value={collectFeeDraft.consultation_item_id}>
-                            {selectedLead.package_name || "Package already on this patient"}
-                            {selectedLead.package_price != null ? ` — Rs.${selectedLead.package_price}` : ""}
-                          </option>
-                        )}
-                      </select>
+                        className="h-9 w-full text-sm"
+                        testid="cons-collect-fee-package"
+                        options={[
+                          ...consultationPackageItems.map((i) => {
+                            const price = consultationOptionPrice(i);
+                            return {
+                              value: i.id,
+                              label: `${i.name}${price != null ? ` — Rs.${price}` : i.manual_price ? " — amount set at booking" : " — no price set"}`,
+                            };
+                          }),
+                          // A package already collected for whose catalogue row has since
+                          // been changed or removed. Offered so a correction can be saved
+                          // without re-picking something the patient never bought.
+                          ...(collectFeeDraft.consultation_item_id
+                            && !consultationPackageItems.some((i) => i.id === collectFeeDraft.consultation_item_id)
+                            ? [{
+                              value: collectFeeDraft.consultation_item_id,
+                              label: `${selectedLead.package_name || "Package already on this patient"}${selectedLead.package_price != null ? ` — Rs.${selectedLead.package_price}` : ""}`,
+                            }]
+                            : []),
+                        ]}
+                      />
                       {!packageChosen && (
                         <p className="mt-1 text-[11px] text-amber-700" data-testid="cons-collect-fee-package-hint">
                           Pick the package the patient agreed to. The fee follows from it.
