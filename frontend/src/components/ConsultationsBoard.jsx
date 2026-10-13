@@ -1319,18 +1319,21 @@ const consultationDiscount = (l) => {
 // The percentages below must total 100 under table-fixed. All three sets are written out
 // literally because Tailwind reads the source for class names and would compile nothing
 // from a template.
+//
+// Fee Collected reads every row on one line, the appointment as "Thu, 15 Oct - 10:30 AM"
+// rather than stacked, so Appointment is the widest column after Patient on both sets.
 const COLS_WITH_DISCOUNT = {
-  sno: "w-[3%]", patient: "w-[18%]", appt: "w-[9%]", expert: "w-[10%]", stage: "w-[11%]",
-  phone: "w-[9%]", pno: "w-[10%]", collected: "w-[11%]", discount: "w-[9%]", total: "w-[10%]",
+  sno: "w-[3%]", patient: "w-[17%]", appt: "w-[13%]", expert: "w-[10%]", stage: "w-[10%]",
+  phone: "w-[9%]", pno: "w-[10%]", collected: "w-[10%]", discount: "w-[9%]", total: "w-[9%]",
 };
 
 // Fee Collected ends its rows with a fee action on every tab, so it needs a set of its own
 // — every other column gives up a point or two to pay for it. The table widens by the same
 // amount at its min-width, so nothing is squeezed on a laptop.
 const COLS_WITH_ACTION = {
-  sno: "w-[3%]", patient: "w-[16%]", appt: "w-[8%]", expert: "w-[9%]", stage: "w-[10%]",
-  phone: "w-[8%]", pno: "w-[9%]", collected: "w-[10%]", discount: "w-[8%]", total: "w-[9%]",
-  action: "w-[10%]",
+  sno: "w-[3%]", patient: "w-[15%]", appt: "w-[12%]", expert: "w-[9%]", stage: "w-[9%]",
+  phone: "w-[9%]", pno: "w-[9%]", collected: "w-[9%]", discount: "w-[8%]", total: "w-[8%]",
+  action: "w-[9%]",
 };
 
 /**
@@ -3459,6 +3462,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         : showRowArrow
           ? COLS_PLAIN_WITH_ARROW
           : COLS_PLAIN;
+  // Fee Collected's table carries three more columns than any other stage, so it is drawn
+  // at 90% and read the way the Accountant Manage list is: headings and figures centred
+  // over their columns, every cell on one line. Patient Name stays left-aligned -- a name
+  // is read from its start. `feeTable` gates all of it so the other stages are unchanged.
+  const feeTable = showDiscountColumn;
+  const thAlign = feeTable ? "text-center" : "text-left";
+  const tdAlign = feeTable ? "text-center" : "";
 
   // How many patients are behind each fee, counted off the stage's own rows. Carried on the
   // tab itself as a badge, so that Rehab holds eight and Diet five is readable from the row
@@ -6827,7 +6837,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
       {/* Table */}
       {showDeskTable && (
-      <Card className={`overflow-hidden border-slate-200 ${mobileCards ? "hidden sm:block" : ""}`}>
+      <Card className={`overflow-hidden border-slate-200 ${mobileCards ? "hidden sm:block" : ""}`} style={feeTable ? { zoom: 0.9 } : undefined}>
         {/* The rows scroll, the header does not. Capping the height here is what makes
             that possible: a sticky header sticks to its nearest scrolling ancestor, and
             with the old overflow-x-auto alone that ancestor grew with the table, so there
@@ -6840,36 +6850,36 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1160px]" : showDiscountColumn ? "min-w-[1060px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
-            <thead className="sticky top-0 z-10 bg-slate-500 text-xs uppercase text-white">
-              <tr>
-                <th className={`${cols.sno} px-3 py-2 text-left align-middle`}>S.No</th>
+          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
+            <thead className={`sticky top-0 z-10 bg-slate-500 uppercase text-white ${feeTable ? "text-[11px] tracking-wide" : "text-xs"}`}>
+              <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-2" : ""}>
+                <th className={`${cols.sno} px-3 py-2 ${thAlign} align-middle`}>S.No</th>
                 <th className={`${cols.patient} px-4 py-2 text-left align-middle`}>Patient Name</th>
-                <th className={`${cols.appt} px-3 py-2 text-left align-middle`}>Appointment</th>
-                <th className={`${cols.expert} px-4 py-2 text-left align-middle`}>
+                <th className={`${cols.appt} px-3 py-2 ${thAlign} align-middle`}>Appointment</th>
+                <th className={`${cols.expert} px-4 py-2 ${thAlign} align-middle`}>
                   {showDiscountColumn ? "Consultant" : "Consultant Name"}
                 </th>
                 {/* Shortened on Fee Collected alone: that list carries three more columns than any
                     other stage, and the words the headings lose there — Consultation, Expert,
                     Applied — are the ones the column below already makes obvious. Every other
                     stage has the room and keeps the full wording. */}
-                <th className={`${cols.stage} px-4 py-2 text-left align-middle`}>
+                <th className={`${cols.stage} px-4 py-2 ${thAlign} align-middle`}>
                   {isConsultant ? "Live Stage" : showDiscountColumn ? "Stage" : "Consultation Stage"}
                 </th>
-                <th className={`${cols.phone} px-4 py-2 text-left align-middle`}>Phone</th>
-                <th className={`${cols.pno} px-4 py-2 text-left align-middle`}>Patient No.</th>
+                <th className={`${cols.phone} px-4 py-2 ${thAlign} align-middle`}>Phone</th>
+                <th className={`${cols.pno} px-4 py-2 ${thAlign} align-middle`}>Patient No.</th>
                 {/* Named for the tab rather than a bare "Collected": three tabs showing a
                     column of the same name is three lists that look identical. */}
-                {showDiscountColumn && <th className={`${cols.collected} px-3 py-2 text-left align-middle`}>{activeFee.label} Fee</th>}
-                {showDiscountColumn && <th className={`${cols.discount} px-3 py-2 text-left align-middle`}>Discount</th>}
-                {showDiscountColumn && <th className={`${cols.total} px-3 py-2 text-left align-middle`}>Total Amount</th>}
+                {showDiscountColumn && <th className={`${cols.collected} px-3 py-2 ${thAlign} align-middle`} title={`${activeFee.label} Fee`}>{activeFee.label} Fee</th>}
+                {showDiscountColumn && <th className={`${cols.discount} px-3 py-2 ${thAlign} align-middle`}>Discount</th>}
+                {showDiscountColumn && <th className={`${cols.total} px-3 py-2 ${thAlign} align-middle`}>Total Amount</th>}
                 {/* The one column on this table that does something rather than reports
                     something, so it sits at the end where a row is finished being read. */}
                 {/* A verb, not a fee name. The button under it now always collects the
                     tab's own fee — see FEE_TABS' `action` — and the column two to the left
                     is already named for that fee, so naming this one after it too put
                     "Treatment Fee" over two columns of the same table. */}
-                {showFeeAction && <th className={`${cols.action} px-3 py-2 text-left align-middle`}>Collect</th>}
+                {showFeeAction && <th className={`${cols.action} px-3 py-2 ${thAlign} align-middle`}>Collect</th>}
                 {/* Named for the fee under it. On Rehab and the two diet pills that is
                     that desk's own fee, and the heading has to move with it: "Consultation
                     Fee" over a column of Rehab Fee buttons is the column reporting one fee
@@ -6900,7 +6910,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${selectMode && selectedIds.has(l.id) ? "bg-rose-50" : ""}`}
                     data-testid={`cons-row-${l.id}`}
                   >
-                    <td className="px-3 py-3 align-middle leading-5 text-slate-400">
+                    <td className={`px-3 py-3 align-middle leading-5 text-slate-400 ${tdAlign}`}>
                       {selectMode ? (
                         <input type="checkbox" checked={selectedIds.has(l.id)} readOnly data-testid={`cons-row-select-${l.id}`} />
                       ) : (
@@ -6932,7 +6942,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
                       {l.appointment_date ? (
                         <span
-                          className={`flex w-full items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLineRows ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
+                          className={`flex w-full items-center rounded-md border px-2 py-1 align-middle font-semibold ${oneLineRows || feeTable ? "justify-center gap-1" : "flex-col"} ${appointmentTone(l.appointment_date)}`}
                           data-testid={`cons-appt-${l.id}`}
                         >
                           {/* Stacked, because this column is a narrow slice of a
@@ -6953,22 +6963,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             <Calendar className="h-3 w-3 shrink-0" />
                             {apptDayLabel(l.appointment_date)}
                           </span>
-                          {/* One line on My Consultation: "Sat, 12 Sept - 3:15 PM". */}
+                          {/* One line on My Consultation and Fee Collected: "Sat, 12 Sept - 3:15 PM". */}
                           {l.appointment_time && (
                             <span className="whitespace-nowrap text-[11px] font-bold opacity-90">
-                              {oneLineRows && "- "}{to12h(l.appointment_time)}
+                              {(oneLineRows || feeTable) && "- "}{to12h(l.appointment_time)}
                             </span>
                           )}
                         </span>
                       ) : <span className="block text-center text-slate-400">—</span>}
                     </td>
                     <td className="px-4 py-3 align-middle leading-5 text-slate-600" title={l.assigned_physio_name}>
-                      <span className="flex min-w-0 items-center">
+                      <span className={`flex min-w-0 items-center ${feeTable ? "justify-center" : ""}`}>
                         <span className="truncate">{l.assigned_physio_name || "—"}</span>
                         {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td className={`px-4 py-3 align-middle ${tdAlign}`}>
                       <span
                         className="inline-flex max-w-full items-center gap-1 truncate rounded-[5px] px-2 py-0.5 align-middle text-xs font-semibold"
                         style={{ background: `${hex}14`, color: hex, border: `1px solid ${hex}33` }}
@@ -6977,13 +6987,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {rowStage || "—"}
                       </span>
                     </td>
-                    <td className="truncate px-4 py-3 align-middle leading-5 text-slate-600" title={l.phone}>{l.phone || "—"}</td>
-                    <td className="truncate px-4 py-3 align-middle font-mono text-xs leading-5 text-slate-500" title={l.patient_number}>{l.patient_number || "—"}</td>
+                    <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={l.phone}>{l.phone || "—"}</td>
+                    <td className={`truncate px-4 py-3 align-middle font-mono text-xs leading-5 text-slate-500 ${tdAlign}`} title={l.patient_number}>{l.patient_number || "—"}</td>
                     {showDiscountColumn && (
                       // The amount this row contributes to the tab's total, with what it
                       // bought under it — a column of figures with no idea what was sold
                       // is a number nobody can check.
-                      <td className="whitespace-nowrap px-3 py-3 align-middle text-xs" data-testid={`cons-fee-${activeFee.key}-${l.id}`}>
+                      //
+                      // One line: the figure, then how it was paid as a small tag, the
+                      // way Accountant Manage shows its Payment Mode. What it bought
+                      // ("Only Consultation") is on hover over the cell rather than a
+                      // second line under it.
+                      <td
+                        className="truncate whitespace-nowrap px-3 py-3 text-center align-middle text-xs"
+                        title={activeFee.item(l) || undefined}
+                        data-testid={`cons-fee-${activeFee.key}-${l.id}`}
+                      >
                         {activeFee.paid(l) > 0 ? (
                           // A tick before the figure, because on the All list the two states
                           // of this column are a number and a phrase — and a column of mixed
@@ -7005,20 +7024,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             Not collected
                           </span>
                         )}
-                        {activeFee.item(l) && (
-                          <span className="block max-w-full truncate text-[10px] text-slate-400" title={activeFee.item(l)}>
-                            {activeFee.item(l)}
+                        {activeFee.paid(l) > 0 && activeFee.mode(l) && (
+                          <span className="ml-1.5 inline-flex items-center rounded-[4px] border border-sky-200 bg-sky-50 px-1.5 py-px align-middle text-[10px] font-semibold uppercase text-sky-700">
+                            {activeFee.mode(l)}
                           </span>
-                        )}
-                        {activeFee.mode(l) && (
-                          <span className="block text-[10px] uppercase tracking-wide text-slate-300">{activeFee.mode(l)}</span>
                         )}
                       </td>
                     )}
                     {showDiscountColumn && (() => {
                       const d = consultationDiscount(l);
                       return (
-                        <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
+                        <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs ${tdAlign}`}>
                           {d ? (
                             <span
                               className="inline-flex items-center rounded-[5px] border border-amber-200 bg-amber-50 px-2 py-0.5 align-middle font-semibold text-amber-700"
@@ -7033,7 +7049,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       );
                     })()}
                     {showDiscountColumn && (
-                      <td className="whitespace-nowrap px-3 py-3 align-middle text-xs font-semibold leading-5 text-slate-700" data-testid={`cons-total-${l.id}`}>
+                      <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs font-semibold leading-5 text-slate-700 ${tdAlign}`} data-testid={`cons-total-${l.id}`}>
                         {rupees(totalPaid(l))}
                       </td>
                     )}
@@ -7047,7 +7063,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         // button would otherwise open the popup this button is a shortcut
                         // past. Nothing in here wants the row's own click.
                         <td
-                          className="whitespace-nowrap px-3 py-3 align-middle text-xs"
+                          className="whitespace-nowrap px-3 py-3 text-center align-middle text-xs"
                           onClick={(e) => e.stopPropagation()}
                           data-testid={`cons-row-${rowFee}-${l.id}`}
                         >
@@ -7062,8 +7078,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             // the amount and what it bought — printing UPI twice across one
                             // row is two columns answering the same question, and it left
                             // this cell two lines tall for no second fact.
-                            <span className={`flex h-8 w-full items-center justify-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 font-semibold text-emerald-700 ${ACT_BTN}`}>
-                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Paid
+                            //
+                            // A small tag rather than a button-sized block: it is a state,
+                            // not a control, and at full width it was the heaviest thing on
+                            // a row whose job is done.
+                            <span className="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 align-middle text-[11px] font-semibold text-emerald-700">
+                              <CheckCircle2 className="h-3 w-3 shrink-0" /> Paid
                             </span>
                           ) : (
                             <>
