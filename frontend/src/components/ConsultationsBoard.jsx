@@ -4,6 +4,7 @@ import { Activity, AlertCircle, FileText, Calendar, CheckCircle2, ChevronDown, C
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
@@ -911,21 +912,28 @@ const UpiCollectFields = ({ draft, onChange, testPrefix, required = false }) => 
     <>
       <div>
         <label className="mb-1 block text-[11px] font-medium text-slate-500">UPI ID (paid into)</label>
-        <select
-          value={draft.upi_id || ""}
-          onChange={(e) => onChange({ upi_id: e.target.value })}
-          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs"
-          data-testid={`${testPrefix}-upi-id`}
-        >
-          <option value="">
-            {options === null ? "Loading UPI IDs..." : options.length ? "Select the UPI ID" : "No UPI IDs saved in Finance > UPI"}
-          </option>
-          {(options || []).map((o) => (
-            <option key={o.id} value={o.upi_id}>
-              {`${o.upi_id} — ${o.bank_name}${o.branch_name ? ` (${o.branch_name})` : ""}`}
-            </option>
-          ))}
-        </select>
+        {/* Themed list, not the browser's: a native <select> opens the OS's own blue menu.
+            z-[200] lifts the list above the Collect popups (z-[60]..z-[90]) it opens inside. */}
+        <Select value={draft.upi_id || ""} onValueChange={(v) => onChange({ upi_id: v })}>
+          <SelectTrigger
+            className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-800 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200 data-[placeholder]:text-slate-400"
+            data-testid={`${testPrefix}-upi-id`}
+          >
+            <SelectValue placeholder={options === null ? "Loading UPI IDs..." : options.length ? "Select the UPI ID" : "No UPI IDs saved in Finance > UPI"} />
+          </SelectTrigger>
+          <SelectContent className="z-[200] max-h-72 border-slate-200">
+            {(options || []).map((o) => (
+              <SelectItem key={o.id} value={o.upi_id} className="text-xs text-slate-700 focus:bg-sky-50 focus:text-sky-700">
+                {`${o.upi_id} — ${o.bank_name}${o.branch_name ? ` (${o.branch_name})` : ""}`}
+              </SelectItem>
+            ))}
+            {!(options || []).length && (
+              <p className="px-2 py-3 text-center text-xs text-slate-400">
+                {options === null ? "Loading UPI IDs..." : "No UPI IDs saved in Finance > UPI"}
+              </p>
+            )}
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <label className="mb-1 block text-[11px] font-medium text-slate-500">
