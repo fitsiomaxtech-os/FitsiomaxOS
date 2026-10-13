@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Stethoscope, CalendarRange, Pill, Dumbbell, ShoppingCart, Activity, Plus, X, FlaskConical, Pencil, Trash2, ImagePlus, Wifi, MapPin, Clock, Eye, History, Salad, ChevronDown, RefreshCw, ClipboardList, HeartPulse, Music2, GraduationCap, Home, Truck } from "lucide-react";
+import { Stethoscope, CalendarRange, Pill, Dumbbell, Activity, Plus, X, FlaskConical, Pencil, Trash2, ImagePlus, Wifi, MapPin, Clock, Eye, History, Salad, ChevronDown, RefreshCw, ClipboardList, HeartPulse, Music2, GraduationCap, Home, Truck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,6 @@ export const TABS = [
   { key: "tablet", label: "Tablet", icon: Pill },
   { key: "supplementary", label: "Supplementary", icon: FlaskConical },
   { key: "equipment", label: "Equipment", icon: Dumbbell },
-  { key: "vending_machine", label: "Vending Machine", icon: ShoppingCart },
   // Beside the three stock shelves because it is read with them: a vendor is who the
   // tablets, supplements and equipment came from, and their supply list is built out of
   // the deliveries booked against them on those shelves.
@@ -1788,7 +1787,7 @@ const HistoryPanel = ({ reloadToken }) => {
 const INVENTORY_TABS = new Set(["tablet", "supplementary", "equipment"]);
 
 // Which tabs have a panel. Everything else falls through to the placeholder; Vending
-// Machine is the only one left, and it has no backend at all yet.
+// Machine was the last one left, and was taken off the tab bar on 2026-10-13.
 /**
  * The tabs that are a session package under another name: Rehab, Zumba Class, Fitness,
  * Workshop and Home Visit.
@@ -1818,11 +1817,10 @@ const BUILT_TABS = new Set(["consultations", "sessions", "rehab", "zumba", "work
 // for its own layout too, and reshaping it here would reshape that board's as well.
 //
 // Which catalogue tabs sit next to Consultations/Sessions depends on the mode picked
-// below — the online/offline split of what a branch actually stocks. All is
-// unrestricted (the full catalogue, Vending Machine included, since it isn't yet sorted
-// into either mode); Offline drops Vending Machine; Online drops everything that only
-// makes sense at a physical location (Tablet, Supplementary, Equipment, Vending Machine,
-// and Vendor with them — there is nothing to buy in for a branch that holds no stock).
+// below — the online/offline split of what a branch actually stocks. All and Offline are
+// the full catalogue; Online drops everything that only makes sense at a physical
+// location (Tablet, Supplementary, Equipment, and Vendor with them — there is nothing to
+// buy in for a branch that holds no stock).
 // Catalogue tabs only Super Admin maintains. They ride in MODE_TAB_KEYS because that is
 // what decides which tabs a mode shows, but a branch has no business in them: the write
 // endpoints are super_admin-only, so a branch would get a list it cannot add to and a
@@ -1834,7 +1832,7 @@ const BUILT_TABS = new Set(["consultations", "sessions", "rehab", "zumba", "work
 export const SUPER_ADMIN_CATALOGUE_TABS = new Set(["physio_type"]);
 
 export const MODE_TAB_KEYS = {
-  all: new Set(["consultations", "sessions", "rehab", "zumba", "workshop", "home_visit", "diet", "tablet", "supplementary", "equipment", "vending_machine", "vendor", "treatment", "physio_type"]),
+  all: new Set(["consultations", "sessions", "rehab", "zumba", "workshop", "home_visit", "diet", "tablet", "supplementary", "equipment", "vendor", "treatment", "physio_type"]),
   offline: new Set(["consultations", "sessions", "rehab", "zumba", "workshop", "home_visit", "diet", "tablet", "supplementary", "equipment", "vendor", "treatment", "physio_type"]),
   online: new Set(["consultations", "sessions", "rehab", "workshop", "diet", "treatment", "physio_type"]),
 };
