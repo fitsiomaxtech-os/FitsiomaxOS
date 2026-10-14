@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { ClipboardCheck, Dumbbell, Music, Settings } from "lucide-react";
+import { ClipboardCheck, Dumbbell, Music, Settings, User, UserCog } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { BranchReviewPanel } from "@/components/branch/BranchReviewPanel";
 import { ZumbaMastersPanel } from "@/components/branch/ZumbaMastersPanel";
+import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
+import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
- * of their own, as sub-tabs under one.
+ * of their own, and Patients and Manager, which used to be Management's, as sub-tabs under one.
  */
 const SUB_TABS = [
   // The other list of people the branch is signing up — but its own list, not a stage of
@@ -18,6 +20,10 @@ const SUB_TABS = [
   // rather than treatment a patient is referred for.
   { key: "fitness", label: "Fitness", icon: Dumbbell },
   { key: "review", label: "Review", icon: ClipboardCheck },
+  // The branch's registered patients, from the Client Portal.
+  { key: "patients", label: "Patients", icon: User },
+  // The branch's details and its manager, read-only.
+  { key: "manager", label: "Manager", icon: UserCog },
 ];
 
 // The two desks that only exist in a room. Zumba is a class taught in the branch's studio
@@ -80,6 +86,10 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         <ZumbaPanel branchId={branchId} />
       ) : active === "fitness" ? (
         <FitnessPanel branchId={branchId} />
+      ) : active === "patients" ? (
+        <PatientsPortalPanel branchId={branchId} />
+      ) : active === "manager" ? (
+        <BranchDetailPage branchId={branchId} readOnly />
       ) : (
         <BranchReviewPanel branchId={branchId} />
       )}

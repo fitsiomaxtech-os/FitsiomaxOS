@@ -26,7 +26,6 @@ import {
   BadgeIndianRupee,
   Salad,
   UserCog,
-  User,
   UserRound,
   UserX,
   Clock,
@@ -91,11 +90,9 @@ import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
-import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import MissedClassPanel from "@/components/branch/MissedClassPanel";
 import { PhysioAbsencePanel } from "@/components/PhysioAbsencePanel";
-import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { RecordsPanel } from "@/components/branch/RecordsPanel";
 import { SumaiyaConsultationsPanel } from "@/components/branch/SumaiyaConsultationsPanel";
 import { ActivityCarePanel } from "@/components/branch/ActivityCarePanel";
@@ -1806,11 +1803,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // A physio who is off: the patients booked with them that day are handed to another
     // physio, or released to Missed Classes for a new date.
     { key: "physio_absence", label: "Physio Absence", icon: CalendarX },
-    { key: "manager", label: "Manager", icon: UserCog },
-    // The branch's registered patients, from the Client Portal — moved here from the top tab
-    // strip. It is the same people the calendars above hold appointments for, so it belongs
-    // beside them rather than one level up, and it is the last of the people-desk entries.
-    { key: "patients", label: "Patients", icon: User },
+    // Manager and Patients moved on to Activity Care's sub-tabs.
     { key: "calendar", label: "Calendar", icon: Calendar },
     // Sits after CALENDAR because it is the setting the three calendars above obey: the
     // shift an expert is on is the window their day gets opened across. Last in the strip
@@ -1963,12 +1956,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               <MissedClassPanel />
             ) : consultationsSubTab === "physio_absence" ? (
               <PhysioAbsencePanel mode="branch" branchId={branchId} />
-            ) : consultationsSubTab === "manager" ? (
-              <BranchDetailPage branchId={branchId} readOnly />
             ) : consultationsSubTab === "calendar" ? (
               <BranchCalendarPanel branchId={branchId} />
-            ) : consultationsSubTab === "patients" ? (
-              <PatientsPortalPanel branchId={branchId} />
             ) : consultationsSubTab === "time" ? (
               <TimeManagementPanel branchId={branchId} />
             ) : (
