@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from datetime import date
 import uuid
 
+import session_mode_swap
 import store_branch_overrides
 from database import v3_col
 from utils import now_iso, physio_slot_load, slot_capacity_of, active_doctor_query, live_branch_query
@@ -740,12 +741,22 @@ async def hp_consultation_decision(
             price = lead.get("session_package_price") if same else None
         if rate_item is not item:
             detail += f" · House Visit rate: {rate_item.get('name')}"
+        mode = payload.mode
+        # A course the Branch Admin has swapped between Offline and Online is priced by its
+        # plan, not by one mode. Re-saving the same package keeps that price and the mode it
+        # is running in now; choosing a different one is a new sale, and the plan goes.
+        if lead.get("session_mode_plan"):
+            if item["id"] == lead.get("session_package_id") and sessions == lead.get("session_package_sessions"):
+                price = lead.get("session_package_price")
+                mode = lead.get("session_package_mode") or mode
+            else:
+                updates["session_mode_plan"] = None
         updates.update({
             "session_package_id": item["id"],
             "session_package_name": item["name"],
             "session_package_price": price,
             "session_package_sessions": sessions,
-            "session_package_mode": payload.mode,
+            "session_package_mode": mode,
             "session_package_manual": manual,
         })
         detail += f" · Package: {item['name']} ({sessions} sessions)"
@@ -1058,6 +1069,128 @@ async def hp_assign_consultation_physio(
     return {"message": "Physio assigned", "lead": V3LeadOut(**updated).model_dump()}
 
 
+def _schedule_sums(installments: list) -> tuple:
+    """(paid, still owed) on a Treatment Fee schedule."""
+    paid = round(sum(float(i.get("amount") or 0) for i in installments if i.get("paid")), 2)
+    owed = round(sum(float(i.get("amount") or 0) for i in installments if not i.get("paid")), 2)
+    return paid, owed
+
+
+async def _mode_swap_quote(lead: dict, to_mode: str, due_date: Optional[str] = None) -> dict:
+    """What swapping this Treatment course to `to_mode` from today would do — the days, the
+    price, and the Payment Schedule — without writing anything.
+
+    One reading for the Swap popup and for the booking that carries it out, so the figures
+    the Branch Admin agreed to on screen are the figures that get saved.
+    """
+    if to_mode not in session_mode_swap.MODES:
+        raise HTTPException(status_code=400, detail="Swap to Online or Offline")
+    if lead.get("consultation_decision") != "consultation_treatment" or not lead.get("session_package_id"):
+        raise HTTPException(status_code=400, detail="This patient has no Treatment Package to swap")
+    total = int(lead.get("session_package_sessions") or 0)
+    if total <= 0:
+        raise HTTPException(status_code=400, detail="This Treatment Package has no days to swap")
+    if lead.get("treatment_fee_paid") is None:
+        raise HTTPException(status_code=400, detail="Collect the Treatment Fee first")
+    from_mode = session_mode_swap.current_mode(lead)
+    if to_mode == from_mode:
+        raise HTTPException(status_code=400, detail=f"This course is already {to_mode.title()}")
+    # Priced by the day in both modes, or not swappable: a House Visit's rate was agreed at
+    # the door, a branch-typed package has no catalogue rate, and a course-priced shelf is
+    # one figure for the whole course.
+    if lead.get("visit_type") == "home" or lead.get("session_package_manual"):
+        raise HTTPException(status_code=400, detail="A House Visit or branch-priced package can't be swapped")
+    item = await store_branch_overrides.overlay_one(
+        await v3_col("store_items").find_one({"id": lead["session_package_id"]}, {"_id": 0}), lead.get("branch_id")
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Treatment package not found")
+    if item.get("price_is_total") or item.get("manual_price"):
+        raise HTTPException(status_code=400, detail="This package is priced as a whole course, not by the day, so it can't be swapped")
+    rate = item.get("price_online") if to_mode == "online" else item.get("price_offline")
+    if rate is None:
+        raise HTTPException(status_code=400, detail=f"This package has no {to_mode.title()} price in Services and Products")
+
+    done = await v3_col("sessions").count_documents({"lead_id": lead["id"], "status": "completed"})
+    if done >= total:
+        raise HTTPException(status_code=400, detail=f"All {total} treatment days are already completed — there is nothing left to swap")
+
+    before = session_mode_swap.plan_of(lead)
+    after = session_mode_swap.swapped_plan(before, done, to_mode, float(rate))
+    old_total = session_mode_swap.plan_total(before)
+    new_total = session_mode_swap.plan_total(after)
+    delta = round(new_total - old_total, 2)
+
+    details = lead.get("treatment_fee_payment_details") or {}
+    installments = details.get("installments") or []
+    paid_before, due_before = _schedule_sums(installments)
+    if not installments:
+        paid_before = round(float(lead.get("treatment_fee_paid") or 0), 2)
+
+    # A fee taken in one go has no schedule, so a dearer course opens one with that
+    # collection as its first, paid row — dated the day it was taken.
+    opening = None
+    if not installments:
+        taken = await v3_col("lead_activity").find(
+            {"lead_id": lead["id"], "action": "treatment_fee_collected"}, {"_id": 0, "created_at": 1},
+        ).sort("created_at", 1).limit(1).to_list(1)
+        opening = {
+            "amount": paid_before,
+            "due_date": (taken[0]["created_at"][:10] if taken else now_iso()[:10]),
+            "paid": True,
+        }
+    excess_before = round(float(lead.get("treatment_fee_excess") or 0), 2)
+    res = session_mode_swap.reschedule(installments, delta, excess_before, due_date, opening)
+    # The figures the popup shows before a date is picked — the same sums with a stand-in
+    # date, so "Due after" is known while the date is still being asked for.
+    shown = res if not res["needs_due_date"] else session_mode_swap.reschedule(installments, delta, excess_before, "-", opening)
+    _, due_after = _schedule_sums(shown["installments"])
+
+    return {
+        "from_mode": from_mode,
+        "to_mode": to_mode,
+        "total_days": total,
+        "done_days": done,
+        "remaining_days": total - done,
+        "rate": float(rate),
+        "plan_before": session_mode_swap.with_day_ranges(before),
+        "plan_after": session_mode_swap.with_day_ranges(after),
+        "old_total": old_total,
+        "new_total": new_total,
+        "delta": delta,
+        "paid": paid_before,
+        "due_before": due_before,
+        "due_after": due_after,
+        "excess_before": excess_before,
+        "excess_after": shown["excess"],
+        "needs_due_date": res["needs_due_date"],
+        # For the booking only, never sent to the screen.
+        "_installments": res["installments"],
+        "_booked": res["booked"],
+        "_plan": after,
+    }
+
+
+def _public_quote(quote: dict) -> dict:
+    return {k: v for k, v in quote.items() if not k.startswith("_")}
+
+
+@router.get("/leads/{lead_id}/session-mode-swap")
+async def hp_session_mode_swap_preview(
+    lead_id: str,
+    mode: str,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """The Swap popup's figures: Offline <-> Online for the days still to come, priced at
+    the new mode's rate, and what that does to the Payment Schedule. Nothing is saved here
+    — the swap is carried out by assign-physio-sessions with `swap_mode`, once the physio
+    and the new days are picked."""
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return _public_quote(await _mode_swap_quote(lead, mode))
+
+
 @router.post("/leads/{lead_id}/assign-physio-sessions")
 async def hp_assign_physio_with_sessions(
     lead_id: str,
@@ -1107,6 +1240,22 @@ async def hp_assign_physio_with_sessions(
     physio = await v3_col("doctors").find_one({"id": payload.physio_id, "profile_type": "physio"}, {"_id": 0})
     if not physio:
         raise HTTPException(status_code=404, detail="Physio not found")
+
+    # The Branch Admin's Offline <-> Online swap rides on this booking, so the new mode and
+    # its price are saved only with the physio and the days that deliver them — and every
+    # refusal below leaves the course exactly as it was.
+    swap = None
+    if payload.swap_mode:
+        swap = await _mode_swap_quote(lead, payload.swap_mode, payload.swap_due_date)
+        if swap["needs_due_date"]:
+            raise HTTPException(status_code=400, detail="Pick a due date for the new balance")
+        from routers.v3_config import physio_is_online
+        if await physio_is_online(physio) != (payload.swap_mode == "online"):
+            raise HTTPException(
+                status_code=400,
+                detail="Pick an Online Physio for Online days" if payload.swap_mode == "online"
+                else "Pick a branch physio for Offline days",
+            )
 
     # A physio runs a floor — two or three patients share a slot — so a slot is only
     # unavailable once it is FULL. This used to reject on a single existing booking, which
@@ -1189,6 +1338,23 @@ async def hp_assign_physio_with_sessions(
     await v3_col("sessions").insert_many([d.copy() for d in session_docs])
 
     handover = _physio_handover(lead, physio["id"], user, now)
+    swap_fields = {}
+    if swap:
+        swap_fields = {
+            "session_mode_plan": swap["_plan"],
+            "session_package_mode": swap["to_mode"],
+            "session_package_price": swap["new_total"],
+            "treatment_fee_payment_details": {
+                **(lead.get("treatment_fee_payment_details") or {}),
+                "installments": swap["_installments"],
+            },
+            "treatment_fee_excess": swap["excess_after"] or None,
+        }
+        # A Partial Payment plan booked its whole price up front, so it follows the part
+        # of the change now on its schedule. Every other mode's paid figure is the money
+        # that has actually come in, which a swap does not move.
+        if lead.get("treatment_fee_payment_mode") == "partial":
+            swap_fields["treatment_fee_paid"] = round(float(lead.get("treatment_fee_paid") or 0) + swap["_booked"], 2)
     await v3_col("leads").update_one({"id": lead_id}, {
         "$set": {
             "assigned_physio_id": physio["id"],
@@ -1196,9 +1362,28 @@ async def hp_assign_physio_with_sessions(
             "physio_assigned_at": now,
             "consultation_stage": "Physio Assign",
             "updated_at": now,
+            **swap_fields,
         },
         **handover,
     })
+    if swap:
+        change = swap["delta"]
+        await v3_col("lead_activity").insert_one({
+            "id": str(uuid.uuid4()),
+            "lead_id": lead_id,
+            "action": "session_mode_swapped",
+            "details": (
+                f"Swapped {swap['from_mode'].title()} to {swap['to_mode'].title()} from Day {swap['done_days'] + 1} · "
+                f"{swap['remaining_days']} days × Rs.{swap['rate']:g} · "
+                f"Treatment Fee Rs.{swap['old_total']:g} → Rs.{swap['new_total']:g} "
+                f"({'+' if change >= 0 else '-'}Rs.{abs(change):g}) · "
+                f"Due Rs.{swap['due_before']:g} → Rs.{swap['due_after']:g}"
+                + (f" · Paid over the new fee Rs.{swap['excess_after']:g}" if swap["excess_after"] else "")
+            ),
+            "created_by": user.full_name,
+            "created_by_role": user.role,
+            "created_at": now,
+        })
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,

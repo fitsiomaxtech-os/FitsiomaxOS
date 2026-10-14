@@ -388,6 +388,14 @@ class V3LeadOut(BaseModel):
     # package): session_package_price stays empty until the Branch Admin types it on the
     # Treatment Fee card.
     session_package_manual: Optional[bool] = None
+    # The course cut into runs of one mode each, once the Branch Admin has swapped it
+    # between Offline and Online — see backend/session_mode_swap.py. Absent on a course
+    # that was never swapped, which reads as one run at session_package_mode.
+    session_mode_plan: Optional[List[Dict[str, Any]]] = None
+    # Money paid over the Treatment Fee after a swap made the course cheaper than what had
+    # already come in — for the branch to refund or carry. Used first if a later swap makes
+    # it dearer again.
+    treatment_fee_excess: Optional[float] = None
     # The Rehab course (FITSIO STORE > Rehab) chosen alongside the Rehab referral, kept
     # apart from session_package_* because a patient can be sent away with treatment and
     # rehab both, and one set of fields could only hold one of them. This model ignores
@@ -1001,6 +1009,13 @@ class V3AssignPhysioSessionsInput(BaseModel):
     # already-configured calendar (Consultations > Physio Calendar) — booking all of the
     # patient's paid sessions in the same step the physio is assigned.
     slot_times: List[str]
+    # Set when this booking is the Branch Admin's Offline <-> Online swap: the days still
+    # to come run in this mode, at its rate, with the physio picked here. Left out, the
+    # booking is the plain assign/reassign it always was.
+    swap_mode: Optional[Literal["online", "offline"]] = None
+    # When the swap makes the course dearer and nothing is still owed, the new balance
+    # needs a due date for the Payment Schedule.
+    swap_due_date: Optional[str] = None
 
 
 class V3AssignBranchInput(BaseModel):

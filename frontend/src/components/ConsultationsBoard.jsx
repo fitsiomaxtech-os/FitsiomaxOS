@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, AlertCircle, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
   saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
-  assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress,
+  assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote,
   rehabSessionsForLead,
   listNutritionCoaches, bookDietAppointment, collectDietFee, collectDietChartFee,
   listDietStoreItems,
@@ -1844,6 +1844,32 @@ const PanelCard = ({ children, testid, footer }) => (
   </div>
 );
 
+/**
+ * A Treatment course the Branch Admin has swapped between Offline and Online, one line per
+ * run: which days, which mode, and what they cost. Each day is charged at its own mode's
+ * rate, so the fee card shows the parts that make up its total. See session_mode_swap.py.
+ */
+const ModeSplitLines = ({ plan, excess }) => {
+  let day = 1;
+  return (
+    <div className="mt-1 space-y-0.5 text-[11px] text-slate-500" data-testid="cons-fee-mode-split">
+      {plan.map((run, i) => {
+        const from = day;
+        day += run.days;
+        return (
+          <p key={i} className="tabular-nums">
+            Day {from}{run.days > 1 ? `–${from + run.days - 1}` : ""} · <span className={run.mode === "online" ? "font-semibold text-sky-700" : "font-semibold text-slate-600"}>{run.mode === "online" ? "Online" : "Offline"}</span>
+            {" "}· {run.days} × Rs.{Number(run.rate).toLocaleString("en-IN")} = Rs.{Number(run.amount).toLocaleString("en-IN")}
+          </p>
+        );
+      })}
+      {excess > 0 && (
+        <p className="font-medium text-rose-600">Paid over the total Rs.{Number(excess).toLocaleString("en-IN")} · refund / adjust</p>
+      )}
+    </div>
+  );
+};
+
 /** The two courses a spell can belong to, in the colour each of their panels is drawn in. */
 const SPELL_TONE = {
   violet: { card: "border-violet-200 bg-violet-50/70", name: "text-violet-800", chip: "bg-violet-600 text-white", bar: "bg-violet-500" },
@@ -3010,6 +3036,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     }
   };
   const [assignTrack, setAssignTrack] = useState("treatment"); // "treatment" | "rehab"
+  // Offline <-> Online swap (Branch Admin). swapDraft is the popup: the mode being swapped
+  // to, the server's figures for it, and the due date a new balance needs. swapMode is set
+  // while the physio picker books the swapped days, and goes out with that booking.
+  const [swapDraft, setSwapDraft] = useState(null); // { mode, quote, loading, dueDate }
+  const [swapMode, setSwapMode] = useState(null); // "online" | "offline" | null
   const [physioOptions, setPhysioOptions] = useState([]);
   // A House Visit patient can be treated by a physio from any branch: the branch is
   // picked first, and the physio list is that branch's. "" until one is picked.
@@ -5375,8 +5406,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // (its own sessions, paid by the Treatment Fee) or the rehab course (its own days, paid
   // by the Rehab Fee). They share a physio and a published calendar and nothing else — see
   // backend/v3_rehab for why they are separate records.
-  const openPhysioModal = async (track = "treatment") => {
+  const openPhysioModal = async (track = "treatment", swapTo = null) => {
     setAssignTrack(track);
+    // Set for the Offline <-> Online swap, cleared for a plain assign or reassign.
+    setSwapMode(track === "treatment" ? swapTo : null);
     setShowPhysioModal(true);
     setShowSlotPicker(false);
     setPhysioPick("");
@@ -5392,8 +5425,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       return;
     }
     let physios = [];
+    // Which physios can run these days. A swap lists the new mode's physios — every Online
+    // Physio, or the branch's own — and so does a reassignment on a course that has been
+    // swapped before, so a patient now Online is not handed back to the floor by accident.
+    // A course never swapped lists exactly what it always has.
+    const physioMode = track === "treatment"
+      ? (swapTo || (selectedLead?.session_mode_plan?.length ? (selectedLead.session_package_mode || "offline") : null))
+      : null;
     try {
-      const rows = await getDoctors({ branch_id: branchId });
+      const rows = await getDoctors(physioMode ? { branch_id: branchId, physio_mode: physioMode } : { branch_id: branchId });
       physios = (rows || []).filter((d) => d.profile_type === "physio");
     } catch {
       physios = [];
@@ -5406,6 +5446,32 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // Only carry it forward when it is actually one of this branch's physios.
     const current = selectedLead.assigned_physio_id;
     setPhysioPick(current && physios.some((p) => p.id === current) ? current : "");
+  };
+
+  // ---- Offline <-> Online swap (Branch Admin) ----
+  // Step one is the money: the popup shows what the days left cost in the other mode and
+  // what that does to the Payment Schedule, read off the server so the figures on screen
+  // are the ones the booking will save. Nothing is saved until the physio and days are
+  // confirmed in the picker that "Next" opens.
+  const openSwapDraft = async (mode) => {
+    if (!selectedLead) return;
+    setSwapDraft({ mode, quote: null, loading: true, dueDate: "" });
+    try {
+      const quote = await getSessionModeSwapQuote(selectedLead.id, mode);
+      setSwapDraft((d) => (d && d.mode === mode ? { ...d, quote, loading: false } : d));
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Couldn't work out the swap");
+      setSwapDraft(null);
+    }
+  };
+
+  const continueSwap = () => {
+    if (!swapDraft?.quote) return;
+    if (swapDraft.quote.needs_due_date && !swapDraft.dueDate) {
+      toast.error("Pick a due date for the new balance");
+      return;
+    }
+    openPhysioModal("treatment", swapDraft.mode);
   };
 
   // Load the picked physio's own calendar (same one managed at MANAGEMENT > PHYSIO
@@ -5469,7 +5535,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // and a false alarm besides. The Rehab tab is only reachable once the Rehab Fee is in,
   // so the one figure this popup showed was the one figure with nothing to do with the
   // days being booked, sitting under a heading that named the other course.
-  const assignTitle = isRehabAssign ? "Assign Rehab Physio" : "Assign Physio";
+  const assignTitle = isRehabAssign ? "Assign Rehab Physio"
+    : swapMode ? `Swap to ${swapMode === "online" ? "Online" : "Offline"} · Choose Physio`
+    : "Assign Physio";
   const assignFeeLabel = isRehabAssign ? "Rehab Fee" : "Treatment Fee";
   const assignFeePaid = isRehabAssign ? selectedLead?.rehab_fee_paid : selectedLead?.treatment_fee_paid;
   const assignFeeMode = isRehabAssign ? selectedLead?.rehab_fee_payment_mode : selectedLead?.treatment_fee_payment_mode;
@@ -5733,13 +5801,31 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // Each installment covers a number of sessions — recorded outright when the collection
     // was made per-session, otherwise taken from its share of the package price.
     const sessionsIn = (i) => (i.sessions != null ? i.sessions : rate ? i.amount / rate : 0);
-    const paid = Math.min(total, Math.round(installments.filter((i) => i.paid).reduce((n, i) => n + sessionsIn(i), 0)));
+    const paidAmount = installments.filter((i) => i.paid).reduce((n, i) => n + (i.amount || 0), 0);
+    // A course swapped between Offline and Online costs a different amount per day in each
+    // run, so the money in is walked down the runs, in day order, rather than divided by
+    // one average rate.
+    const plan = selectedLead?.session_mode_plan;
+    const daysCovered = (amount) => {
+      let left = amount + 0.01;
+      let days = 0;
+      for (const run of plan) {
+        const n = run.rate > 0 ? Math.min(run.days, Math.floor(left / run.rate)) : run.days;
+        days += n;
+        left -= n * (run.rate || 0);
+        if (n < run.days) break;
+      }
+      return days;
+    };
+    const paid = Math.min(total, plan?.length
+      ? daysCovered(paidAmount)
+      : Math.round(installments.filter((i) => i.paid).reduce((n, i) => n + sessionsIn(i), 0)));
     const outstanding = installments.filter((i) => !i.paid);
     return {
       total,
       paid,
       unpaid: total - paid,
-      paidAmount: installments.filter((i) => i.paid).reduce((n, i) => n + (i.amount || 0), 0),
+      paidAmount,
       price,
       dueAmount: outstanding.reduce((n, i) => n + (i.amount || 0), 0),
       dueDate: outstanding.map((i) => i.due_date).filter(Boolean).sort()[0] || null,
@@ -5835,10 +5921,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // treatment rows, and a rehab day landing there puts both out.
       const res = isRehabAssign
         ? await assignRehab({ lead_id: selectedLead.id, physio_id: physioPick, slot_times: sortedPickedSlots })
-        : await assignPhysioWithSessions(selectedLead.id, { physio_id: physioPick, slot_times: sortedPickedSlots });
+        : await assignPhysioWithSessions(selectedLead.id, {
+          physio_id: physioPick,
+          slot_times: sortedPickedSlots,
+          // The Offline <-> Online swap rides on this booking — see openSwapDraft.
+          ...(swapMode ? { swap_mode: swapMode, swap_due_date: swapDraft?.dueDate || null } : {}),
+        });
       toast.success(isRehabAssign
         ? `Rehab assigned to ${res.physio_name} — ${res.days_booked} days booked`
-        : `Physio assigned — ${res.sessions_booked} sessions booked`);
+        : swapMode
+          ? `Swapped to ${swapMode === "online" ? "Online" : "Offline"} — ${res.sessions_booked} days booked`
+          : `Physio assigned — ${res.sessions_booked} sessions booked`);
+      if (swapMode) { setSwapMode(null); setSwapDraft(null); }
       // Booking treatment makes the patient's Client Portal login on the server. The popup
       // opens only when there is something to hand over (a new login, or a family login
       // they joined); one they already had, or a skip, says nothing.
@@ -8905,6 +8999,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   ? Math.min(100, Math.round((courseCompleted / totalCourseSessions) * 100))
                   : 0;
                 const courseDone = totalCourseSessions > 0 && courseRemaining === 0;
+                // Which mode the days still to come run in, and whether the branch can swap
+                // it: a per-day package with its fee in and days left. A House Visit or a
+                // branch-priced package has no per-day catalogue rate to swap to.
+                const courseMode = selectedLead.session_package_mode === "online" ? "online" : "offline";
+                const canSwapMode = treatmentFeePaid && !courseDone
+                  && selectedLead.consultation_decision === "consultation_treatment"
+                  && !!selectedLead.session_package_id
+                  && selectedLead.visit_type !== "home"
+                  && !selectedLead.session_package_manual;
                 // Whether there is a delivery to report at all. Read once: the column it
                 // fills, that column's heading and the spells inside it are three places that
                 // would otherwise each decide for themselves.
@@ -9357,11 +9460,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           for what it asks for while there is not: before a physio is picked
                           there is no delivery to report and the only thing in it is the step
                           to take. */}
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        {hasPhysioJourney && physioProgress.reassigned
-                          ? `Physio History · ${physioProgress.previous.length + (physioProgress.current ? 1 : 0)} physios`
-                          : treatmentAssigned ? "Delivered By" : "Next Step"}
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          {hasPhysioJourney && physioProgress.reassigned
+                            ? `Physio History · ${physioProgress.previous.length + (physioProgress.current ? 1 : 0)} physios`
+                            : treatmentAssigned ? "Delivered By" : "Next Step"}
+                        </p>
+                        {/* The mode the days still to come run in — what the Swap below
+                            changes. Shown wherever there is a package to run in one. */}
+                        {selectedLead.session_package_id && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              courseMode === "online" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"
+                            }`}
+                            data-testid="cons-physio-mode-badge"
+                          >
+                            {courseMode === "online" ? "Online" : "Offline"}
+                          </span>
+                        )}
+                      </div>
 
                       {/* Who delivered it, in the order the patient had them: every physio
                           before this one, then this one. A reassignment leaves the previous
@@ -9410,7 +9527,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           Reassigning keeps the {courseCompleted} session{courseCompleted === 1 ? "" : "s"} already delivered with the physio who ran them — only the remaining {courseRemaining} get new dates.
                         </p>
                       )}
-                      <div className="pt-0.5">
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
                         <Button
                           size="sm"
                           disabled={(treatmentAssigned && courseDone) || !treatmentFeePaid}
@@ -9434,6 +9551,20 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <Users className="mr-1 h-3.5 w-3.5" />
                           {treatmentAssigned ? "Reassign Physio" : "Assign Physio & Book Sessions"}
                         </Button>
+                        {/* Offline <-> Online for the days still to come, at the new mode's
+                            price. The Branch Admin's call, any time in the course — the
+                            Consultant only chose the package. */}
+                        {canSwapMode && (
+                          <Button
+                            size="sm"
+                            className={`bg-white text-sky-700 shadow-sm ring-1 ring-sky-200 hover:bg-sky-50 ${ACT_BTN}`}
+                            onClick={() => openSwapDraft(courseMode === "online" ? "offline" : "online")}
+                            data-testid="cons-swap-mode"
+                          >
+                            <ArrowLeftRight className="mr-1 h-3.5 w-3.5" />
+                            Swap to {courseMode === "online" ? "Offline" : "Online"}
+                          </Button>
+                        )}
                       </div>
                       {!treatmentFeePaid && (
                         <GateNote testId="cons-physio-detail-gate">
@@ -9698,6 +9829,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       ? `${selectedLead.session_package_name}${selectedLead.session_package_sessions ? ` · ${selectedLead.session_package_sessions} sessions` : ""}`
                       : null,
                     amount: selectedLead.session_package_price,
+                    // A swapped course is priced day by day in two modes; its card lists them.
+                    modeSplit: selectedLead.session_mode_plan?.length ? selectedLead.session_mode_plan : null,
+                    excess: selectedLead.treatment_fee_excess || 0,
                     // A part-paid plan has money in and a balance still owed, so it is
                     // neither collected nor untouched: the card keeps its button and names
                     // the installment that is due instead of ticking itself green.
@@ -9874,6 +10008,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
                             {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
+                            {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
                             {/* Under the name on a phone, where a column of its own would
                                 leave the name a dozen pixels. */}
                             {amount && <p className={`text-sm font-bold tabular-nums sm:hidden ${amountTone}`}>{amount}</p>}
@@ -9935,6 +10070,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
                             {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
+                            {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
                           </div>
                         </div>
                         {/* No amount, no line. A fee with nothing set against it used to
@@ -12869,6 +13005,99 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             )}
 
             {/* Physio Assign popup (Branch Admin) — after fees are collected */}
+            {/* Offline <-> Online swap, step one: the money. Hidden while its own
+                physio picker is open, and back on Cancel there, so the branch can step
+                back to the figures without starting again. */}
+            {swapDraft && !showPhysioModal && (() => {
+              const q = swapDraft.quote;
+              const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN")}`;
+              const toLabel = swapDraft.mode === "online" ? "Online" : "Offline";
+              const label = (m) => (m === "online" ? "Online" : "Offline");
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-swap-modal">
+                  <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                        <ArrowLeftRight className="h-4 w-4 text-sky-600" />
+                        Swap to {toLabel}
+                      </p>
+                      <button onClick={() => setSwapDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-swap-close"><X className="h-4 w-4" /></button>
+                    </div>
+                    {!q ? (
+                      <p className="py-6 text-center text-xs text-slate-500">Working out the new price…</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-600">
+                          Day {q.done_days + 1}–{q.total_days} ({q.remaining_days} day{q.remaining_days === 1 ? "" : "s"}) move to {toLabel} at {rs(q.rate)} a day.
+                          {q.done_days > 0 ? ` The ${q.done_days} day${q.done_days === 1 ? "" : "s"} already done keep their price.` : ""}
+                        </p>
+                        <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-swap-plan">
+                          {q.plan_after.map((run) => {
+                            const isNew = run.from_day > q.done_days;
+                            return (
+                              <div key={run.from_day} className={`flex items-center justify-between gap-2 px-3 py-2 ${isNew ? "bg-sky-50" : ""}`}>
+                                <span className="text-slate-600">
+                                  <span className="font-semibold text-slate-700">Day {run.from_day}{run.to_day > run.from_day ? `–${run.to_day}` : ""}</span>
+                                  {" · "}{label(run.mode)} · {run.days} × {rs(run.rate)}
+                                  <span className={`ml-1.5 text-[10px] font-semibold uppercase ${isNew ? "text-sky-700" : "text-slate-400"}`}>{isNew ? "new" : "done"}</span>
+                                </span>
+                                <span className="font-semibold tabular-nums text-slate-800">{rs(run.amount)}</span>
+                              </div>
+                            );
+                          })}
+                          <div className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="font-semibold text-slate-700">New Total</span>
+                            <span className="text-right">
+                              <span className="font-bold tabular-nums text-slate-900">{rs(q.new_total)}</span>
+                              <span className="ml-1.5 text-[10px] text-slate-400">was {rs(q.old_total)}</span>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="cons-swap-money">
+                          <div className="flex justify-between gap-2"><span className="text-slate-600">Already Paid</span><span className="font-semibold tabular-nums text-emerald-700">{rs(q.paid)}</span></div>
+                          <div className="flex justify-between gap-2">
+                            <span className="text-slate-600">Due (Payment Schedule)</span>
+                            <span className="font-semibold tabular-nums text-amber-700">{rs(q.due_before)} → {rs(q.due_after)}</span>
+                          </div>
+                          {q.excess_after > 0 && (
+                            <div className="flex justify-between gap-2">
+                              <span className="text-slate-600">Paid over the new total</span>
+                              <span className="text-right font-semibold tabular-nums text-rose-600">{rs(q.excess_after)} · refund / adjust</span>
+                            </div>
+                          )}
+                        </div>
+                        {q.needs_due_date && (
+                          <label className="block text-xs">
+                            <span className="mb-1 block font-semibold text-slate-600">Due date for the new balance</span>
+                            <Input
+                              type="date"
+                              value={swapDraft.dueDate}
+                              onChange={(e) => setSwapDraft((d) => ({ ...d, dueDate: e.target.value }))}
+                              className="h-8 text-xs"
+                              data-testid="cons-swap-due-date"
+                            />
+                          </label>
+                        )}
+                        <p className="text-[11px] text-slate-500">Nothing is saved yet — the swap is saved when the {toLabel} physio's days are confirmed.</p>
+                      </>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setSwapDraft(null)} data-testid="cons-swap-cancel">Cancel</Button>
+                      <Button
+                        size="sm"
+                        disabled={!q}
+                        className={`bg-sky-600 text-white hover:bg-sky-700 ${ACT_BTN}`}
+                        onClick={continueSwap}
+                        data-testid="cons-swap-next"
+                      >
+                        Next: Choose Physio
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {showPhysioModal && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-physio-modal">
                 <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-4 shadow-2xl">
@@ -12885,6 +13114,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600" data-testid="cons-physio-package-context">
                     <p className="font-semibold text-slate-700">{courseName}{totalSessionsNeeded ? ` · ${totalSessionsNeeded} ${dayNoun}s` : ""}</p>
+                    {swapMode && swapDraft?.quote && (
+                      <p className="mt-0.5 font-medium text-sky-700" data-testid="cons-physio-swap-note">
+                        Swapping to {swapMode === "online" ? "Online" : "Offline"} from Day {swapDraft.quote.done_days + 1} · New total Rs.{Number(swapDraft.quote.new_total).toLocaleString("en-IN")}
+                      </p>
+                    )}
                     {resumingCourse && (
                       <p className="mt-0.5 font-medium text-violet-700" data-testid="cons-physio-resume-note">
                         {sessionsAlreadyDone} of {packageSessions} already delivered
@@ -12926,7 +13160,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <p className="text-[11px] text-slate-500">
                     {selectedLead?.visit_type === "home"
                       ? `2. Choose the physio${physioBranchId ? ` from ${branchNames[physioBranchId] || "this branch"}` : ""} — then their ${isRehabAssign ? "rehab days" : "treatment dates"}`
-                      : `Available physios in this branch — pick one to choose their ${isRehabAssign ? "rehab days" : "treatment dates"}`}
+                      : swapMode === "online"
+                        ? "Online Physios — pick one to choose the online days"
+                        : `Available physios in this branch — pick one to choose their ${isRehabAssign ? "rehab days" : "treatment dates"}`}
                   </p>
 
                   {selectedLead?.visit_type === "home" && !physioBranchId ? (

@@ -625,7 +625,7 @@ def _names_the_online_arm(text) -> bool:
     return names_the_online_arm(text)
 
 
-async def _consultants_for_vertical(rows: list, online: bool) -> list:
+async def _consultants_for_vertical(rows: list, online: bool, profile: str = "head_physio") -> list:
     """Keep the consultants who belong to an online branch, or the ones who do not.
 
     A consultation over video and one in the room are the same desk, so every consultant
@@ -651,8 +651,12 @@ async def _consultants_for_vertical(rows: list, online: bool) -> list:
 
     Only consultants are touched. Every other desk belongs to a branch already and is
     filtered by it above.
+
+    `profile` asks the same question of another desk. The Offline <-> Online swap uses it
+    on "physio": an Online Physio is a physio record like any other, told apart by the same
+    login role or job title.
     """
-    consultants = [r for r in rows if r.get("profile_type") == "head_physio"]
+    consultants = [r for r in rows if r.get("profile_type") == profile]
     if not consultants:
         return list(rows)
 
@@ -707,7 +711,7 @@ async def _consultants_for_vertical(rows: list, online: bool) -> list:
 
     kept = []
     for r in rows:
-        if r.get("profile_type") != "head_physio":
+        if r.get("profile_type") != profile:
             kept.append(r)
             continue
         is_online = _names_the_online_arm(role_by_user.get(r.get("user_id"))) or _names_the_online_arm(title_for(r))
@@ -909,6 +913,34 @@ async def v3_calendar_experts(
     return out
 
 
+async def physio_is_online(physio: dict) -> bool:
+    """Whether a physio record is an Online Physio — the same reading the picker lists by."""
+    return bool(await _consultants_for_vertical([physio], True, profile="physio"))
+
+
+async def _physios_for_mode(mode: str, branch_id: Optional[str], user: V3UserOut) -> list:
+    """The physios who can take a Treatment course's days in `mode` — see v3_get_doctors."""
+    query: Dict[str, object] = {"profile_type": "physio"}
+    if mode == "offline":
+        scope_branch = user.branch_id if is_branch_admin_role(user.role) and user.branch_id else branch_id
+        if not scope_branch:
+            return []
+        query["branch_id"] = scope_branch
+    elif not (is_branch_admin_role(user.role) or user.role in ("super_admin", "business_dev")):
+        raise HTTPException(status_code=403, detail="Only the branch can list Online Physios for a swap")
+    rows = await v3_col("doctors").find(active_doctor_query(query), {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = await _consultants_for_vertical(rows, mode == "online", profile="physio")
+    rows = await collapse_duplicate_experts(rows)
+    rows = await attach_shifts(rows)
+    out = []
+    for row in rows:
+        try:
+            out.append(V3DoctorOut(**row))
+        except Exception:
+            continue
+    return out
+
+
 @router.get("/doctors", response_model=List[V3DoctorOut])
 async def v3_get_doctors(
     branch_id: Optional[str] = None,
@@ -920,8 +952,16 @@ async def v3_get_doctors(
     # Assign Physio asks for another branch's physios by name. Honoured for the branch
     # admins only; every other desk stays held to its own branch.
     cross_branch: bool = False,
+    # "online" | "offline" — the physios who can run a Treatment course's days in that
+    # mode, for the Branch Admin's Offline <-> Online swap. Online lists every Online Physio
+    # whatever branch their record sits on, since the patient is not coming to one;
+    # offline lists the branch's own physios and leaves the online ones out. Unset, the
+    # list is what it always was.
+    physio_mode: Optional[str] = None,
     user: V3UserOut = Depends(v3_current_user),
 ):
+    if physio_mode in ("online", "offline"):
+        return await _physios_for_mode(physio_mode, branch_id, user)
     query: Dict[str, object] = {}
     scope_branch = None
     # Off the predicates, not the literals. Two things were wrong with the list: the
@@ -1573,6 +1613,8 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
         "session_package_manual": None,
         "session_package_sessions": None,
         "session_package_mode": None,
+        "session_mode_plan": None,
+        "treatment_fee_excess": None,
         "diagnosis": None,
         "physio_diagnosis_report": None,
         "physio_diagnosis_locked": False,
