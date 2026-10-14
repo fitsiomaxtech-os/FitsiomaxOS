@@ -41,9 +41,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
 
   return (
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
-      {/* The same boxed pill row as Management's sub-tabs, with Zumba's gear at its end. */}
-      <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
-        <div className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="activity-care-subtabs">
+      {/* The same underlined strip as Records' sub-tabs, with Zumba's gear at its end. */}
+      <div className="flex items-center gap-2 border-b border-slate-200">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" data-testid="activity-care-subtabs">
           {tabs.map((t) => {
             const Icon = t.icon;
             return (
@@ -51,10 +51,12 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
                 key={t.key}
                 type="button"
                 onClick={() => setActive(t.key)}
-                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium transition 2xl:gap-2 2xl:px-3 ${active === t.key ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium sm:text-sm ${
+                  active === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
+                }`}
                 data-testid={`activity-care-subtab-${t.key}`}
               >
-                <Icon className="h-4 w-4 shrink-0" />{t.label}
+                <Icon className="h-4 w-4" /> {t.label}
               </button>
             );
           })}
@@ -63,7 +65,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
           <button
             type="button"
             onClick={() => setMastersOpen(true)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
+            className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
             title="Zumba Masters"
             aria-label="Zumba Masters"
             data-testid="activity-care-zumba-settings"
