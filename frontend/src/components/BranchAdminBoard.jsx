@@ -3319,11 +3319,13 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   //
   // On RNR the branch's own opening ("Branch Assign") goes as well. The lead has already
   // been taken on and rung; sending it back to the intake stage is not a move the desk
-  // makes from here.
+  // makes from here. The same holds on Follow Up: the lead has been reached and given a
+  // call-back, so the intake stage is behind it.
   const onRnrStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_RNR);
+  const onFollowUpStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP);
   const pipelineStages = entryStages.filter((s) => (
     !stageHasRole(s, STAGE_ROLE_CANCELLED)
-    && !(onRnrStage && s.name === realEntryStageName)
+    && !((onRnrStage || onFollowUpStage) && s.name === realEntryStageName)
   ));
   // A lead whose appointment is booked and not yet consulted. From here the branch has
   // four things it can do, and none of them is moving the patient forward: forward is the
