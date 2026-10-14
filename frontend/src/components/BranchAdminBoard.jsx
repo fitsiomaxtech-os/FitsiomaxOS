@@ -3316,7 +3316,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // seeds consultation_stage server-side -- and the Consultant still drives it from their
   // own board. This is which stages this card offers to move a lead to, not which stages
   // exist.
-  const pipelineStages = entryStages.filter((s) => !stageHasRole(s, STAGE_ROLE_CANCELLED));
+  //
+  // On RNR the branch's own opening ("Branch Assign") goes as well. The lead has already
+  // been taken on and rung; sending it back to the intake stage is not a move the desk
+  // makes from here.
+  const onRnrStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_RNR);
+  const pipelineStages = entryStages.filter((s) => (
+    !stageHasRole(s, STAGE_ROLE_CANCELLED)
+    && !(onRnrStage && s.name === realEntryStageName)
+  ));
   // A lead whose appointment is booked and not yet consulted. From here the branch has
   // four things it can do, and none of them is moving the patient forward: forward is the
   // consultation happening, which the Consultant drives from their own board.
