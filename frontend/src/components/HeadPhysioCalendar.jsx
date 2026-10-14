@@ -1357,7 +1357,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                               type="button"
                               onClick={onOpenTimeManagement}
                               className="ml-auto rounded-md px-2 py-0.5 text-[10px] font-semibold text-violet-600 hover:bg-violet-50"
-                              title="Add shifts, delete them, or change who is on which — MANAGEMENT → TIME MANAGEMENT"
+                              title="Add shifts, delete them, or change who is on which — opens Time Management"
                               data-testid="day-shift-open-time-management"
                             >
                               Time Management →

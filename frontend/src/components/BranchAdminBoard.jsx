@@ -29,6 +29,7 @@ import {
   UserRound,
   UserX,
   Clock,
+  Settings,
   MoreHorizontal,
   Star,
   AlertCircle,
@@ -46,6 +47,7 @@ import {
   HeartHandshake,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -1048,6 +1050,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [consultationsSubTab, setConsultationsSubTab] = useState("head_physio");
+  // Time Management's popup: the calendar profile it opens on, or null while shut.
+  const [timeMgmtFor, setTimeMgmtFor] = useState(null);
+  // Bumped as that popup shuts, so the calendar under it re-reads the shifts just changed.
+  const [calendarEpoch, setCalendarEpoch] = useState(0);
   const [stageFilter, setStageFilter] = useState(null); // null = show all stages
   const [dateFilter, setDateFilter] = useState(null); // { from, to, label, key } | null
   // The board's own horizontal range row — All / Today / This Week / This Month / Last
@@ -1805,12 +1811,27 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     { key: "physio_absence", label: "Physio Absence", icon: CalendarX },
     // Manager and Patients moved on to Activity Care's sub-tabs.
     { key: "calendar", label: "Calendar", icon: Calendar },
-    // Sits after CALENDAR because it is the setting the three calendars above obey: the
-    // shift an expert is on is the window their day gets opened across. Last in the strip
-    // rather than first for the same reason — it is configured once and then left alone,
-    // while the calendars are worked in daily.
-    { key: "time", label: "Time Management", icon: Clock },
+    // Time Management is no longer a tab: it is the setting the three calendars obey, so it
+    // opens from the gear beside them (see CALENDAR_PROFILES) — configured once and left.
   ];
+
+  // The three calendar sub-tabs and the profile each one's Time Management roster opens on.
+  const CALENDAR_PROFILES = { head_physio: "head_physio", physio: "physio", diet: "nutrition_coach" };
+  const calendarProfile = CALENDAR_PROFILES[consultationsSubTab];
+  const openTimeManagement = () => setTimeMgmtFor(calendarProfile || "head_physio");
+  // Blue, as on Activity Care > Zumba; shown only while one of the three calendars is open.
+  const timeGear = (testid) => calendarProfile && (
+    <button
+      type="button"
+      onClick={openTimeManagement}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
+      title="Time Management"
+      aria-label="Time Management"
+      data-testid={testid}
+    >
+      <Settings className="h-4 w-4" />
+    </button>
+  );
 
   return (
     // flex+gap rather than space-y: Tailwind's space-y keys off the `hidden` *attribute*,
@@ -1890,6 +1911,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t?.label}</span>
                 </button>
+                {timeGear("branch-mgmt-phone-time-settings")}
               </div>
             );
           })()}
@@ -1921,23 +1943,37 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </div>
           )}
           {/* From sm up: the boxed pill row, exactly as it was before the cards existed —
-              `hidden` below sm, where the stack above takes over. */}
-          <div className="hidden rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-nowrap sm:gap-1 sm:overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="branch-consultations-subtabs">
-            {MANAGEMENT_SUB_TABS.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setConsultationsSubTab(t.key)}
-                  className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:shrink-0 sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-2.5 sm:text-sm sm:font-medium 2xl:gap-2 2xl:px-3 ${consultationsSubTab === t.key ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
-                  data-testid={`branch-consultations-subtab-${t.key}`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />{t.label}
-                </button>
-              );
-            })}
+              `hidden` below sm, where the stack above takes over. Time Management's gear at
+              its end while a calendar is open. */}
+          <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex">
+            <div className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="branch-consultations-subtabs">
+              {MANAGEMENT_SUB_TABS.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setConsultationsSubTab(t.key)}
+                    className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:shrink-0 sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-2.5 sm:text-sm sm:font-medium 2xl:gap-2 2xl:px-3 ${consultationsSubTab === t.key ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
+                    data-testid={`branch-consultations-subtab-${t.key}`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />{t.label}
+                  </button>
+                );
+              })}
+            </div>
+            {timeGear("branch-mgmt-time-settings")}
           </div>
+          <Dialog open={!!timeMgmtFor} onOpenChange={(open) => { if (!open) { setTimeMgmtFor(null); setCalendarEpoch((n) => n + 1); } }}>
+            <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-6xl overflow-y-auto rounded-lg p-3 pt-11 sm:p-6 sm:pt-12" data-testid="time-management-dialog">
+              {/* The panel carries its own headings; these are for screen readers. */}
+              <DialogHeader className="sr-only">
+                <DialogTitle>Time Management</DialogTitle>
+                <DialogDescription>The branch's shift timings, and who works which shift.</DialogDescription>
+              </DialogHeader>
+              {timeMgmtFor && <TimeManagementPanel branchId={branchId} initialProfileType={timeMgmtFor} />}
+            </DialogContent>
+          </Dialog>
           {/* The panel under the cards: hidden on a phone while the card list is up — the
               list IS the screen then — and the only thing on screen once a card is tapped,
               so Consultant Calendar opens on its Select Consultant alone. The same
@@ -1949,22 +1985,20 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 is offered on all of these. Rehab declines it on its own — a programme day is
                 worked on the floor with the equipment in the room. See HeadPhysioCalendar. */}
             {consultationsSubTab === "physio" ? (
-              <HeadPhysioCalendar branchId={branchId} profileType="physio" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
+              <HeadPhysioCalendar key={`physio-${calendarEpoch}`} branchId={branchId} profileType="physio" onlineArm={armScoped} onOpenTimeManagement={openTimeManagement} />
             ) : consultationsSubTab === "diet" ? (
-              <HeadPhysioCalendar branchId={branchId} profileType="nutrition_coach" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
+              <HeadPhysioCalendar key={`diet-${calendarEpoch}`} branchId={branchId} profileType="nutrition_coach" onlineArm={armScoped} onOpenTimeManagement={openTimeManagement} />
             ) : consultationsSubTab === "missed" ? (
               <MissedClassPanel />
             ) : consultationsSubTab === "physio_absence" ? (
               <PhysioAbsencePanel mode="branch" branchId={branchId} />
             ) : consultationsSubTab === "calendar" ? (
               <BranchCalendarPanel branchId={branchId} />
-            ) : consultationsSubTab === "time" ? (
-              <TimeManagementPanel branchId={branchId} />
             ) : (
               // The Google Meet field rides on this: only an online arm's own admin is asked
               // for a video room, because only their consultations are held in one. The three
               // calendars above are room desks and never carry it — see HeadPhysioCalendar.
-              <HeadPhysioCalendar branchId={branchId} onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
+              <HeadPhysioCalendar key={`head-${calendarEpoch}`} branchId={branchId} onlineArm={armScoped} onOpenTimeManagement={openTimeManagement} />
             )}
           </div>
         </div>

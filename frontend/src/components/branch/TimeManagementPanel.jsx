@@ -383,9 +383,10 @@ const WorkingDayCard = ({ branchId }) => {
   );
 };
 
-export const TimeManagementPanel = ({ branchId }) => {
+// initialProfileType: the calendar the roster opens on — the one whose gear opened it.
+export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physio" }) => {
   const [shifts, setShifts] = useState([]);
-  const [profileType, setProfileType] = useState("head_physio");
+  const [profileType, setProfileType] = useState(initialProfileType);
   const [experts, setExperts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [rosterLoading, setRosterLoading] = useState(false);
