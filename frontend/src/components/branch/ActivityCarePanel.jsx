@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardCheck, Dumbbell, Music, Settings, User, UserCog } from "lucide-react";
+import { Activity, ClipboardCheck, Dumbbell, Music, Settings, Stethoscope, User, UserCog } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
@@ -10,7 +10,8 @@ import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
- * of their own, and Patients and Manager, which used to be Management's, as sub-tabs under one.
+ * of their own, Patients and Manager, which used to be Management's, and the branch's two
+ * teams, as sub-tabs under one.
  */
 const SUB_TABS = [
   // The other list of people the branch is signing up — but its own list, not a stage of
@@ -24,7 +25,19 @@ const SUB_TABS = [
   { key: "patients", label: "Patients", icon: User },
   // The branch's details and its manager, read-only.
   { key: "manager", label: "Manager", icon: UserCog },
+  // Empty for now: the tabs go in ahead of what will sit behind them (see ComingSoon).
+  { key: "team_consultants", label: "Team Consultants", short: "Consultants", icon: Stethoscope },
+  { key: "team_physio", label: "Team Physio", short: "Physio", icon: Activity },
 ];
+
+// What a tab shows until its panel is built.
+const ComingSoon = ({ icon: Icon, label }) => (
+  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center">
+    <Icon className="h-8 w-8 text-sky-600" />
+    <p className="text-sm font-semibold text-slate-700">{label}</p>
+    <p className="text-xs text-slate-500">Coming soon.</p>
+  </div>
+);
 
 // The two desks that only exist in a room. Zumba is a class taught in the branch's studio
 // in two fixed morning slots, and Fitness is the gym's membership roll — who is training,
@@ -42,8 +55,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   return (
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
       {/* The same underlined strip as Records' sub-tabs, with Zumba's gear at its end. On a
-          phone the tabs share the width, icon over label, so all five fit without a swipe
-          hiding Manager off the edge; from sm up they sit in a row as Records' do. */}
+          phone the tabs share the width, icon over a short label; seven are more than the
+          narrowest phones hold, so each keeps its own width and the strip scrolls as a last
+          resort. From sm up they sit in a row with full labels, as Records' do. */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" data-testid="activity-care-subtabs">
           {tabs.map((t) => {
@@ -53,12 +67,14 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
                 key={t.key}
                 type="button"
                 onClick={() => setActive(t.key)}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 whitespace-nowrap border-b-2 px-1 py-2 text-[11px] font-medium sm:flex-none sm:shrink-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm ${
+                className={`flex shrink-0 grow basis-0 flex-col items-center gap-0.5 whitespace-nowrap border-b-2 px-1 py-2 text-[10px] font-medium sm:grow-0 sm:basis-auto sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm ${
                   active === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
                 }`}
                 data-testid={`activity-care-subtab-${t.key}`}
               >
-                <Icon className="h-4 w-4 shrink-0" /> {t.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="sm:hidden">{t.short || t.label}</span>
+                <span className="hidden sm:inline">{t.label}</span>
               </button>
             );
           })}
@@ -96,6 +112,8 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         <PatientsPortalPanel branchId={branchId} />
       ) : active === "manager" ? (
         <BranchDetailPage branchId={branchId} readOnly />
+      ) : active === "team_consultants" || active === "team_physio" ? (
+        <ComingSoon {...tabs.find((t) => t.key === active)} />
       ) : (
         <BranchReviewPanel branchId={branchId} />
       )}
