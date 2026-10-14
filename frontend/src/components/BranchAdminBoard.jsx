@@ -3320,12 +3320,14 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // On RNR the branch's own opening ("Branch Assign") goes as well. The lead has already
   // been taken on and rung; sending it back to the intake stage is not a move the desk
   // makes from here. The same holds on Follow Up: the lead has been reached and given a
-  // call-back, so the intake stage is behind it.
+  // call-back, so the intake stage is behind it. And on Appointment, where a slot is
+  // booked: it was drawn there greyed out, which only read as a move that was missing.
   const onRnrStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_RNR);
   const onFollowUpStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP);
+  const onAppointmentStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_APPOINTMENT);
   const pipelineStages = entryStages.filter((s) => (
     !stageHasRole(s, STAGE_ROLE_CANCELLED)
-    && !((onRnrStage || onFollowUpStage) && s.name === realEntryStageName)
+    && !((onRnrStage || onFollowUpStage || onAppointmentStage) && s.name === realEntryStageName)
   ));
   // A lead whose appointment is booked and not yet consulted. From here the branch has
   // four things it can do, and none of them is moving the patient forward: forward is the
@@ -4136,7 +4138,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const atRnrStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_RNR);
   // Drawn for a lead that has been called and not answered even after it has moved on:
   // the attempts are the reason it sits where it does, and they do not stop being true.
-  const showRnrCard = atRnrStage || rnrCount > 0;
+  // Except on Appointment: once a slot is booked the unanswered calls and the call-back
+  // are behind the lead, and the Overview is about the appointment. Both stay readable on
+  // their own tabs.
+  const showRnrCard = !inAppointmentStage && (atRnrStage || rnrCount > 0);
+  const showFollowUpCard = !inAppointmentStage && (followUps.length > 0 || atFollowUpStage);
   // What the lead itself says about the patient, as against what the pipeline says about
   // them. This popup could show neither: it opened on a phone number, a stage strip and
   // nothing else, so a lead somebody had filled a whole intake form for read as blank as a
@@ -4377,7 +4383,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   Follow-Up tab still owns scheduling and the full history; this is the one
                   line of it worth reading without changing tabs, and it says so with a link
                   rather than repeating the form. */}
-              {(followUps.length > 0 || atFollowUpStage) && (
+              {showFollowUpCard && (
                 <div className="overflow-hidden rounded-xl border border-amber-100 bg-white shadow-sm" data-testid="branch-lead-followup-preview">
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
