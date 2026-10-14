@@ -50,7 +50,7 @@ const branchText = (m) => (m.all_branches ? "All Branches" : m.branches.map((b) 
 
 const GenderChip = ({ gender }) => (
   gender ? (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${gender === "female" ? "bg-pink-50 text-pink-700" : "bg-sky-50 text-sky-700"}`}>
+    <span className={`inline-flex rounded-[4px] px-2 py-0.5 text-[11px] font-semibold ${gender === "female" ? "bg-pink-50 text-pink-700" : "bg-sky-50 text-sky-700"}`}>
       {GENDER_LABEL[gender]}
     </span>
   ) : (
@@ -59,7 +59,7 @@ const GenderChip = ({ gender }) => (
 );
 
 const StatusChip = ({ status }) => (
-  <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+  <span className={`inline-flex rounded-[4px] px-2 py-0.5 text-[11px] font-semibold ${status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
     {capitalise(status) || "—"}
   </span>
 );
