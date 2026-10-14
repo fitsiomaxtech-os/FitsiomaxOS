@@ -324,6 +324,9 @@ export const listShifts = async (branchId) => (await api.get(`/branches/${branch
 export const createShift = async (branchId, payload) => (await api.post(`/branches/${branchId}/shifts`, payload)).data;
 export const updateShift = async (shiftId, payload) => (await api.patch(`/shifts/${shiftId}`, payload)).data;
 export const deleteShift = async (shiftId) => (await api.delete(`/shifts/${shiftId}`)).data;
+// Activity Care's Team Consultants / Team Physio: everyone of that kind across the org, with
+// their branches and gender. kind is "consultants" or "physio".
+export const getTeam = async (kind) => (await api.get(`/team/${kind}`)).data;
 export const getShiftRoster = async (branchId, profileType) => (await api.get(`/branches/${branchId}/shift-roster`, { params: { profile_type: profileType } })).data;
 // One expert, one or several shifts. Several because a split day is ordinary here — the
 // consultant who takes 8 AM – 1 PM and is back 5 PM – 9 PM works two windows, and rostering
@@ -1023,6 +1026,9 @@ export const collectTreatmentFee = async (leadId, payload) => (await api.post(`/
 // the amount for one session, which the server multiplies by the package's sessions.
 export const setSessionPackageAmount = async (leadId, perSessionAmount) => (await api.post(`/leads/${leadId}/session-package-amount`, { per_session_amount: perSessionAmount })).data;
 export const assignPhysioWithSessions = async (leadId, payload) => (await api.post(`/leads/${leadId}/assign-physio-sessions`, payload)).data;
+// The Offline <-> Online swap's figures, before anything is saved. The swap itself goes in
+// through assignPhysioWithSessions with swap_mode, once the physio and days are picked.
+export const getSessionModeSwapQuote = async (leadId, mode) => (await api.get(`/leads/${leadId}/session-mode-swap`, { params: { mode } })).data;
 // Who has delivered this patient's treatment days and how far each of them got — the
 // physios the patient has been through, oldest first, then the one they are with now.
 export const getLeadPhysioProgress = async (leadId) => (await api.get(`/leads/${leadId}/physio-progress`)).data;

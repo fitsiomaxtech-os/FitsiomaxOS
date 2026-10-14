@@ -7,6 +7,7 @@ import { BranchReviewPanel } from "@/components/branch/BranchReviewPanel";
 import { ZumbaMastersPanel } from "@/components/branch/ZumbaMastersPanel";
 import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
+import { TeamPanel } from "@/components/branch/TeamPanel";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
@@ -25,19 +26,11 @@ const SUB_TABS = [
   { key: "patients", label: "Patients", icon: User },
   // The branch's details and its manager, read-only.
   { key: "manager", label: "Manager", icon: UserCog },
-  // Empty for now: the tabs go in ahead of what will sit behind them (see ComingSoon).
+  // Every consultant and every physio across the organisation, filtered by branch and gender.
   { key: "team_consultants", label: "Team Consultants", short: "Consultants", icon: Stethoscope },
   { key: "team_physio", label: "Team Physio", short: "Physio", icon: Activity },
 ];
 
-// What a tab shows until its panel is built.
-const ComingSoon = ({ icon: Icon, label }) => (
-  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center">
-    <Icon className="h-8 w-8 text-sky-600" />
-    <p className="text-sm font-semibold text-slate-700">{label}</p>
-    <p className="text-xs text-slate-500">Coming soon.</p>
-  </div>
-);
 
 // The two desks that only exist in a room. Zumba is a class taught in the branch's studio
 // in two fixed morning slots, and Fitness is the gym's membership roll — who is training,
@@ -112,8 +105,10 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         <PatientsPortalPanel branchId={branchId} />
       ) : active === "manager" ? (
         <BranchDetailPage branchId={branchId} readOnly />
-      ) : active === "team_consultants" || active === "team_physio" ? (
-        <ComingSoon {...tabs.find((t) => t.key === active)} />
+      ) : active === "team_consultants" ? (
+        <TeamPanel kind="consultants" />
+      ) : active === "team_physio" ? (
+        <TeamPanel kind="physio" />
       ) : (
         <BranchReviewPanel branchId={branchId} />
       )}
