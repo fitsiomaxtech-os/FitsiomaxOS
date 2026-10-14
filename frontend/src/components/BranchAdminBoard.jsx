@@ -5971,7 +5971,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
       {followUpMoveDraft && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) setFollowUpMoveDraft(null); }} data-testid="branch-followup-move-modal">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
+            <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-white">
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
                 <p className="text-base font-semibold">Follow Up — Date & Time</p>
@@ -5980,9 +5980,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-4 p-5">
+            <div className="space-y-3 px-4 py-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-600">Date *</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Date *</label>
                 {/* Always open, in the OS's own palette — the native picker dropped a
                     browser dialog with its own chrome and blue over the popup. */}
                 <MilkCalendar
@@ -5997,19 +5997,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 <label className="mb-1 block text-xs font-semibold text-slate-600">Time *</label>
                 <MilkTimeInput value={followUpMoveDraft.time} onChange={(e) => setFollowUpMoveDraft({ ...followUpMoveDraft, time: e.target.value })} data-testid="branch-followup-move-time" />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Remarks</label>
-                <textarea
-                  rows={3}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  placeholder="Optional remarks..."
-                  value={followUpMoveDraft.remarks}
-                  onChange={(e) => setFollowUpMoveDraft({ ...followUpMoveDraft, remarks: e.target.value })}
-                  data-testid="branch-followup-move-remarks"
-                />
-              </div>
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5">
               <Button variant="outline" onClick={() => setFollowUpMoveDraft(null)} data-testid="branch-followup-move-cancel">Cancel</Button>
               <Button className="bg-amber-600 text-white hover:bg-amber-700" onClick={submitFollowUpMove} disabled={followUpMoveBusy} data-testid="branch-followup-move-save">Save & Move</Button>
             </div>
