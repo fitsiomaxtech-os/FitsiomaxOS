@@ -97,6 +97,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
   const [tab, setTab] = useState("details");
   const [extraFields, setExtraFields] = useState({});
   const [branches, setBranches] = useState([]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getBranches().then(setBranches).catch((e) => console.warn("[load failed]", e?.message || e));
@@ -161,12 +162,29 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
       online_fitness: "online_fitness",
     };
     payload.vertical = VERTICAL_MAP[payload.department] || "offline_physiotherapy";
+    // One request at a time: a second click while the first is still out would file the
+    // same patient twice, or stack one failure toast per click.
+    if (saving) return;
+    setSaving(true);
     try {
       await createManualLead(payload);
       toast.success("Lead created");
       onSaved && onSaved();
       onClose();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Create failed"); }
+    } catch (e) {
+      // A refusal the server explains comes back as `detail`. Anything else -- a crash
+      // (500), a gateway that gave up (502/504), or no answer at all -- used to read as a
+      // bare "Create failed", which says nothing about which of those it was. The status,
+      // or the fact that nothing came back, is what tells them apart.
+      console.error("[create lead failed]", e);
+      const status = e?.response?.status;
+      toast.error(
+        e?.response?.data?.detail
+          || (status ? `Create failed — server error ${status}` : "Create failed — could not reach the server"),
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -354,7 +372,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
 
         <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 max-sm:px-4 max-sm:py-3">
           <Button variant="outline" onClick={onClose} className="max-sm:h-8" data-testid="lead-create-cancel">Cancel</Button>
-          <Button onClick={submit} className="bg-indigo-600 hover:bg-indigo-700 max-sm:h-8" data-testid="lead-create-submit">Create Lead</Button>
+          <Button onClick={submit} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 max-sm:h-8" data-testid="lead-create-submit">{saving ? "Creating…" : "Create Lead"}</Button>
         </div>
       </div>
     </div>
