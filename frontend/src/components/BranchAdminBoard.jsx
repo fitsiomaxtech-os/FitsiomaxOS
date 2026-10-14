@@ -46,6 +46,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
+  HeartHandshake,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -103,6 +104,7 @@ import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { RecordsPanel } from "@/components/branch/RecordsPanel";
 import { SumaiyaConsultationsPanel } from "@/components/branch/SumaiyaConsultationsPanel";
+import { ActivityCarePanel } from "@/components/branch/ActivityCarePanel";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { CreateLeadModal, DEPARTMENT_OPTIONS, LEAD_DATA_FIELDS } from "@/components/CreateLeadModal";
 import { LeadEditModal } from "@/components/LeadEditModal";
@@ -1778,6 +1780,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // renews, rather than treatment a patient is referred for.
     { key: "fitness", label: "Fitness", short: "Fitness", icon: Dumbbell },
     { key: "review", label: "Review", short: "Review", icon: ClipboardCheck },
+    { key: "activity_care", label: "Activity Care", short: "Care", icon: HeartHandshake },
     { key: "consultations", label: "Management", short: "Manage", icon: Stethoscope },
     // The Super Admin's My Consultation board, held to this branch: the Head Chief's
     // patients here, with the same cards, table and actions. Her calendar is still published
@@ -2009,6 +2012,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <FitnessPanel branchId={branchId} />
       ) : activeView === "review" ? (
         <BranchReviewPanel branchId={branchId} />
+      ) : activeView === "activity_care" ? (
+        <ActivityCarePanel branchId={branchId} />
       ) : activeView === "sumaiya" ? (
         <SumaiyaConsultationsPanel branchId={branchId} />
       ) : activeView === "store" ? (
