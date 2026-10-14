@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { getTeam } from "@/lib/api";
 import { displayPhone, telNumber } from "@/lib/phone";
@@ -20,16 +21,29 @@ const GENDER_LABEL = { male: "Male", female: "Female" };
 
 const capitalise = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : "");
 
-/** The same dropdown as the Fitness form's, sized for a filter bar. */
-const FilterSelect = ({ value, onChange, children, testid }) => (
-  <select
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-sky-400 focus:outline-none lg:w-44 lg:flex-none"
-    data-testid={testid}
-  >
-    {children}
-  </select>
+/**
+ * The OS's own dropdown, as Branch Leads' list filters wear it: sky while it is narrowing the
+ * list, plain while it is on its "all" answer, and a capped menu that scrolls.
+ */
+const FilterSelect = ({ value, onChange, allLabel, options, label, testid }) => (
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger
+      title={label}
+      aria-label={label}
+      className={`h-9 min-w-0 flex-1 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 lg:w-44 lg:flex-none ${
+        value !== "all" ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      data-testid={testid}
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="max-h-72 border-slate-200" data-testid={`${testid}-menu`}>
+      <SelectItem value="all" className="text-xs font-medium text-slate-500">{allLabel}</SelectItem>
+      {options.map(([v, text]) => (
+        <SelectItem key={v} value={v} className="text-xs text-slate-700">{text}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
 );
 
 const branchText = (m) => (m.all_branches ? "All Branches" : m.branches.map((b) => b.name).join(", ") || "—");
@@ -104,15 +118,22 @@ export const TeamPanel = ({ kind, toolbarSlot = null }) => {
 
   const filters = (
     <>
-      <FilterSelect value={branch} onChange={setBranch} testid={`team-branch-filter-${kind}`}>
-        <option value="all">All Branches</option>
-        {data.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-      </FilterSelect>
-      <FilterSelect value={gender} onChange={setGender} testid={`team-gender-filter-${kind}`}>
-        <option value="all">Male &amp; Female</option>
-        <option value="male">Male</option>
-        <option value="female">Female</option>
-      </FilterSelect>
+      <FilterSelect
+        value={branch}
+        onChange={setBranch}
+        label="Branch"
+        allLabel="All Branches"
+        options={data.branches.map((b) => [b.id, b.name])}
+        testid={`team-branch-filter-${kind}`}
+      />
+      <FilterSelect
+        value={gender}
+        onChange={setGender}
+        label="Gender"
+        allLabel="Male & Female"
+        options={[["male", "Male"], ["female", "Female"]]}
+        testid={`team-gender-filter-${kind}`}
+      />
       <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh">
         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       </Button>
