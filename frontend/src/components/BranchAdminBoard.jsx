@@ -34,7 +34,6 @@ import {
   Star,
   AlertCircle,
   PhoneOff,
-  Music,
   Video,
   HeartPulse,
   IdCard,
@@ -92,7 +91,6 @@ import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
-import { ZumbaMastersPanel } from "@/components/branch/ZumbaMastersPanel";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import MissedClassPanel from "@/components/branch/MissedClassPanel";
@@ -1797,10 +1795,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const MANAGEMENT_SUB_TABS = [
     { key: "head_physio", label: "Consultant Calendar", icon: Calendar },
     { key: "physio", label: "Physiotherapist Calendar", icon: Activity },
-    // Zumba in the same place, because it answers the same question this row is asking —
-    // who works here and when — in the shape Zumba actually has. A master does not publish
-    // slots one booking at a time; there are two class times and somebody takes each.
-    { key: "zumba", label: "Zumba", icon: Music },
+    // Zumba Masters left this row for the gear on Activity Care > Zumba.
     // Diet is the third vertical, so its calendar sits beside the other two rather than
     // anywhere new — the Branch Admin publishes a Nutrition Coach's days exactly the way
     // they publish a Physio's.
@@ -1962,8 +1957,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 worked on the floor with the equipment in the room. See HeadPhysioCalendar. */}
             {consultationsSubTab === "physio" ? (
               <HeadPhysioCalendar branchId={branchId} profileType="physio" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
-            ) : consultationsSubTab === "zumba" ? (
-              <ZumbaMastersPanel branchId={branchId} />
             ) : consultationsSubTab === "diet" ? (
               <HeadPhysioCalendar branchId={branchId} profileType="nutrition_coach" onlineArm={armScoped} onOpenTimeManagement={() => setConsultationsSubTab("time")} />
             ) : consultationsSubTab === "missed" ? (
