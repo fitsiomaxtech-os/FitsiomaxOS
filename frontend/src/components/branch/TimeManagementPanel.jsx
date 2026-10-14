@@ -77,13 +77,13 @@ const spanLabel = (start, end) => {
 const windowLabel = (start, end) => `${to12h(start)} – ${to12h(end)}`;
 
 /** One editable shift. Kept local until Save, so a half-typed time never reaches the API. */
-function ShiftCard({ shift, onSaved, onDeleted }) {
+function ShiftRow({ shift, onSaved, onDeleted }) {
   const [draft, setDraft] = useState({ name: shift.name, start_time: shift.start_time, end_time: shift.end_time });
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
 
   // Re-sync when the list reloads under it (another edit saved, or a refresh), otherwise
-  // the card would keep showing values the server no longer holds.
+  // the row would keep showing values the server no longer holds.
   useEffect(() => {
     setDraft({ name: shift.name, start_time: shift.start_time, end_time: shift.end_time });
   }, [shift.id, shift.name, shift.start_time, shift.end_time]);
@@ -126,37 +126,28 @@ function ShiftCard({ shift, onSaved, onDeleted }) {
     setRemoving(false);
   };
 
+  // One row of the list. From md up: name, start to end, the 12-hour reading, Save, delete,
+  // on one line. A phone wraps it to three — name and delete, the two times, the reading
+  // and Save — via order, so the DOM stays in the desk's reading order.
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3" data-testid={`shift-card-${shift.id}`}>
-      <div className="flex items-center gap-2">
-        <Input
-          value={draft.name}
-          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-          className="h-8 flex-1 text-sm font-semibold"
-          placeholder="Shift name"
-          data-testid={`shift-name-${shift.id}`}
-        />
-        <button
-          type="button"
-          onClick={remove}
-          disabled={removing}
-          title="Delete this shift"
-          className="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 md:text-slate-300"
-          data-testid={`shift-delete-${shift.id}`}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <div className="flex flex-wrap items-center gap-2 p-3 md:flex-nowrap md:gap-3" data-testid={`shift-row-${shift.id}`}>
+      <Input
+        value={draft.name}
+        onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+        className="order-1 h-8 min-w-0 flex-1 text-sm font-semibold md:w-56 md:flex-none"
+        placeholder="Shift name"
+        data-testid={`shift-name-${shift.id}`}
+      />
 
       {/* 24-hour inputs on purpose — an <input type="time"> hands back "HH:MM" whatever the
           browser displays, which is exactly what the API stores. The 12-hour reading sits
-          underneath, because that is how the clinic says it out loud. */}
-      <div className="mt-2 flex items-center gap-2">
+          beside them, because that is how the clinic says it out loud. */}
+      <div className="order-3 flex w-full items-center gap-2 md:order-2 md:w-auto">
         <input
           type="time"
           value={draft.start_time}
           onChange={(e) => setDraft((d) => ({ ...d, start_time: e.target.value }))}
-          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none"
+          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-32 md:flex-none"
           data-testid={`shift-start-${shift.id}`}
         />
         <span className="shrink-0 text-xs text-slate-400">to</span>
@@ -164,29 +155,37 @@ function ShiftCard({ shift, onSaved, onDeleted }) {
           type="time"
           value={draft.end_time}
           onChange={(e) => setDraft((d) => ({ ...d, end_time: e.target.value }))}
-          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none"
+          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-32 md:flex-none"
           data-testid={`shift-end-${shift.id}`}
         />
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className={`min-w-0 truncate text-[11px] ${invalid ? "text-rose-500" : "text-slate-400"}`}>
-          {invalid
-            ? (!draft.name.trim() ? "Name it first" : "Must end after it starts")
-            : `${windowLabel(draft.start_time, draft.end_time)} · ${spanLabel(draft.start_time, draft.end_time)}`}
-        </p>
-        {dirty && (
-          <Button
-            size="sm"
-            onClick={save}
-            disabled={saving || invalid}
-            className="h-7 shrink-0 bg-violet-600 px-2.5 text-[11px] text-white hover:bg-violet-700"
-            data-testid={`shift-save-${shift.id}`}
-          >
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="mr-1 h-3 w-3" /> Save</>}
-          </Button>
-        )}
-      </div>
+      <p className={`order-4 min-w-0 flex-1 truncate text-[11px] md:order-3 ${invalid ? "text-rose-500" : "text-slate-400"}`}>
+        {invalid
+          ? (!draft.name.trim() ? "Name it first" : "Must end after it starts")
+          : `${windowLabel(draft.start_time, draft.end_time)} · ${spanLabel(draft.start_time, draft.end_time)}`}
+      </p>
+      {dirty && (
+        <Button
+          size="sm"
+          onClick={save}
+          disabled={saving || invalid}
+          className="order-5 h-7 shrink-0 bg-violet-600 px-2.5 text-[11px] text-white hover:bg-violet-700 md:order-4"
+          data-testid={`shift-save-${shift.id}`}
+        >
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="mr-1 h-3 w-3" /> Save</>}
+        </Button>
+      )}
+      <button
+        type="button"
+        onClick={remove}
+        disabled={removing}
+        title="Delete this shift"
+        className="order-2 shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 md:order-5 md:text-slate-300"
+        data-testid={`shift-delete-${shift.id}`}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -566,9 +565,9 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
           ) : shifts.length === 0 ? (
             <p className="py-6 text-center text-xs text-slate-400">No shifts yet — add one above.</p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="shift-list">
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="shift-list">
               {shifts.map((s) => (
-                <ShiftCard key={s.id} shift={s} onSaved={reloadAndAnnounce} onDeleted={reloadAndAnnounce} />
+                <ShiftRow key={s.id} shift={s} onSaved={reloadAndAnnounce} onDeleted={reloadAndAnnounce} />
               ))}
             </div>
           )}
