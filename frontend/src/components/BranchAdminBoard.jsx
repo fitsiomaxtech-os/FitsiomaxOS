@@ -4467,7 +4467,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         type="button"
                         onClick={openApptCard}
                         disabled={loadingApptCard}
-                        className="flex shrink-0 items-center gap-1 rounded-[5px] border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+                        className="flex shrink-0 items-center gap-1 rounded-[5px] border border-teal-600 bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-60"
                         title="Open the appointment confirmation — print, send or download it again"
                         data-testid="branch-lead-open-appt-card"
                       >
@@ -4504,10 +4504,6 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
 
               {lead.assigned_physio_name && (
                 <div className="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
-                  <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><UserPlus className="h-4 w-4" /></span>
-                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Assigned Jr. Physio</p>
-                  </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                     <p className="min-w-0 truncate text-sm font-medium text-slate-800">{lead.assigned_physio_name}</p>
                     {/* Only where there is a booked slot to hand over. Without a date and a
@@ -4516,8 +4512,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     {lead.appointment_date && lead.appointment_time && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="h-7 shrink-0 text-[11px]"
+                        className="h-7 shrink-0 bg-emerald-600 text-[11px] text-white shadow-sm hover:bg-emerald-700"
                         onClick={() => openHandover(lead)}
                         data-testid={`appt-handover-open-${lead.id}`}
                       >
