@@ -4224,7 +4224,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
           reads as a page you navigated to — there's no backdrop left to show it sits on
           top of the list, and nothing to tap beside it to dismiss. Height is capped so
           the darkened list stays visible above and below; the body below scrolls. */}
-      <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="branch-lead-modal">
+      <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="branch-lead-modal">
         {/* Plain header. The gradient made this the loudest thing on a screen whose
             subject is the cards underneath — the patient's name and their stage are the
             information here, and they read better on white than reversed out of three
@@ -4293,7 +4293,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`flex-auto whitespace-nowrap rounded-[5px] px-3.5 py-1 text-center text-xs sm:flex-none font-semibold capitalize transition-all ${activeTab === t.key ? `${t.color} text-white shadow-sm` : "bg-white text-slate-600 hover:bg-slate-100"}`}
+              className={`flex-auto whitespace-nowrap rounded-[3px] px-3.5 py-1 text-center text-xs sm:flex-none font-semibold capitalize transition-all ${activeTab === t.key ? `${t.color} text-white shadow-sm` : "bg-white text-slate-600 hover:bg-slate-100"}`}
               data-testid={`branch-lead-tab-${t.key}`}
             >
               {t.label}
@@ -4304,7 +4304,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
         <div className={`flex-1 overflow-y-auto bg-slate-50/30 ${activeTab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
           {activeTab === "overview" && (
             <div className="space-y-3">
-              <div className="overflow-hidden rounded-xl border border-sky-100 bg-white shadow-sm">
+              <div className="overflow-hidden rounded-[3px] border border-sky-100 bg-white shadow-sm">
                 <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600"><Phone className="h-4 w-4" /></span>
                   <p className="text-xs font-bold uppercase tracking-wider text-sky-700">Contact</p>
@@ -4324,7 +4324,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   RNR first and Follow Up second, matching the order the two stages come
                   in on the pipeline itself. */}
               {showRnrCard && (
-                <div className="overflow-hidden rounded-xl border border-rose-100 bg-white shadow-sm" data-testid="branch-lead-rnr-status">
+                <div className="overflow-hidden rounded-[3px] border border-rose-100 bg-white shadow-sm" data-testid="branch-lead-rnr-status">
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600"><PhoneOff className="h-4 w-4" /></span>
@@ -4384,7 +4384,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   line of it worth reading without changing tabs, and it says so with a link
                   rather than repeating the form. */}
               {showFollowUpCard && (
-                <div className="overflow-hidden rounded-xl border border-amber-100 bg-white shadow-sm" data-testid="branch-lead-followup-preview">
+                <div className="overflow-hidden rounded-[3px] border border-amber-100 bg-white shadow-sm" data-testid="branch-lead-followup-preview">
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Bell className="h-4 w-4" /></span>
@@ -4443,7 +4443,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   never mentioned either, and the only sign of the appointment was the
                   word in the header. */}
               {(lead.appointment_date || lead.appointment_time || lead.appointment_department || lead.appointment_mode || lead.diagnosis) && (
-                <div className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm" data-testid="branch-lead-appointment-details">
+                <div className="overflow-hidden rounded-[3px] border border-blue-100 bg-white shadow-sm" data-testid="branch-lead-appointment-details">
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ClipboardList className="h-4 w-4" /></span>
@@ -4503,7 +4503,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               )}
 
               {lead.assigned_physio_name && (
-                <div className="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-[3px] border border-emerald-100 bg-white shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                     <p className="min-w-0 truncate text-sm font-medium text-slate-800">{lead.assigned_physio_name}</p>
                     {/* Only where there is a booked slot to hand over. Without a date and a
@@ -4524,7 +4524,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               )}
 
               {lead.notes && (
-                <div className="overflow-hidden rounded-xl border border-amber-100 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-[3px] border border-amber-100 bg-white shadow-sm">
                   <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                     <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><FileText className="h-4 w-4" /></span>
                     <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Notes</p>
@@ -4534,11 +4534,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               )}
 
               {/* Stage Pipeline */}
-              <div className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm" data-testid="branch-lead-pipeline">
+              <div className="overflow-hidden rounded-[3px] border border-violet-100 bg-white shadow-sm" data-testid="branch-lead-pipeline">
                 {/* Three equal columns on a phone, so the six pills sit in two even rows
                     instead of wrapping wherever their widths happen to break. From sm up
                     they go back to a wrapping row of natural widths. */}
-                <div className="grid grid-cols-3 gap-1.5 px-4 py-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-2">
+                <div className="grid grid-cols-3 gap-1.5 px-4 py-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-1.5 sm:px-[5px]">
                   {(pipelineStages || []).map((s) => {
                     const stage = s.name;
                     // "Appointment Date & Time" is too long for a third of a phone, so
@@ -4637,7 +4637,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         disabled={isActive || notYetReached || isMirror || blockedFromAppointment}
                         onClick={handleClick}
                         title={blockedFromAppointment ? `${stage} is not reachable from Appointment — the consultation moves the patient on from here` : undefined}
-                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:px-3.5 sm:text-xs ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
+                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid={`branch-stage-btn-${stage}`}
                       >
@@ -4663,7 +4663,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         disabled={isActive}
                         onClick={() => setCancelDraft(true)}
                         title="Moves this lead to Cancel in Branch Consultation"
-                        className="rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:px-3.5 sm:text-xs"
+                        className="rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:whitespace-nowrap sm:px-3 sm:text-xs"
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid="branch-stage-btn-consultation-cancel"
                       >
@@ -4691,7 +4691,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               {/* Who the patient is and what they came in saying, read back off the record.
                   The lead's own fields first, then the answers it arrived with. */}
               {(leadDetailRows.length > 0 || formAnswers.length > 0) && (
-                <div className="overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm" data-testid="branch-lead-details">
+                <div className="overflow-hidden rounded-[3px] border border-indigo-100 bg-white shadow-sm" data-testid="branch-lead-details">
                   <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                     <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700"><IdCard className="h-4 w-4" /></span>
                     <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Lead Details</p>
@@ -4725,7 +4725,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   else, so this tab can legitimately be empty. Said plainly rather than
                   left blank, which reads as a screen that failed to load. */}
               {leadDetailRows.length === 0 && formAnswers.length === 0 && (
-                <p className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400" data-testid="branch-lead-details-empty">
+                <p className="rounded-[3px] border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400" data-testid="branch-lead-details-empty">
                   Nothing was recorded for this lead beyond their name and number.
                 </p>
               )}
@@ -4733,7 +4733,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
           )}
           {activeTab === "follow-up" && (
             <div className="space-y-4" data-testid="branch-lead-followup">
-              <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4" data-testid="branch-followup-form">
+              <div className="rounded-[3px] border border-amber-200 bg-amber-50/40 p-4" data-testid="branch-followup-form">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-700"><Bell className="h-3.5 w-3.5" /> Schedule Follow-Up</p>
                 {/* Every control in the row carries a label and the same h-9, so the
                     three fields and the button sit on one line rather than the unlabelled
@@ -4765,7 +4765,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     const isRescheduled = f.status === "rescheduled";
                     const isActive = idx === 0 && !isRescheduled;
                     return (
-                      <div key={f.id} className={`flex items-start gap-3 rounded-lg border p-3 ${isRescheduled ? "border-slate-200 bg-slate-50/70 opacity-70" : isUpcoming ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"}`} data-testid={`branch-followup-row-${f.id}`}>
+                      <div key={f.id} className={`flex items-start gap-3 rounded-[3px] border p-3 ${isRescheduled ? "border-slate-200 bg-slate-50/70 opacity-70" : isUpcoming ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"}`} data-testid={`branch-followup-row-${f.id}`}>
                         <span className={`mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${isRescheduled ? "bg-slate-100 text-slate-400" : isUpcoming ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                           <Bell className="h-3.5 w-3.5" />
                         </span>
@@ -4795,7 +4795,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               )}
 
               {rescheduleDraft && (
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4" data-testid="branch-followup-reschedule-form">
+                <div className="rounded-[3px] border border-amber-300 bg-amber-50 p-4" data-testid="branch-followup-reschedule-form">
                   <p className="mb-2 text-xs font-semibold text-amber-700">Reschedule Follow-Up</p>
                   <div className="flex flex-wrap items-end gap-2">
                     <div>
@@ -4827,7 +4827,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               in with the rest of the history. */}
           {activeTab === "rnr" && (
             <div className="space-y-3" data-testid="branch-lead-rnr-record">
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-100 bg-white px-4 py-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[3px] border border-rose-100 bg-white px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600"><PhoneOff className="h-4 w-4" /></span>
                   <div>
@@ -4862,7 +4862,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   {rnrLog.map((a) => (
                     <li key={a.id} className="relative" data-testid={`branch-lead-rnr-entry-${a.id}`}>
                       <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-rose-500" />
-                      <div className="rounded-lg border border-rose-100 bg-rose-50/50 p-3">
+                      <div className="rounded-[3px] border border-rose-100 bg-rose-50/50 p-3">
                         <p className="text-sm text-slate-700">{a.details}</p>
                         <p className="mt-1 text-[10px] text-slate-400">{a.created_by} · {a.created_at?.slice(0, 16).replace("T", " ")}</p>
                       </div>
@@ -4886,7 +4886,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     {events.map((h) => (
                       <li key={`${h._kind}-${h.id}`} className="relative" data-testid={`branch-timeline-${h._kind}-${h.id}`}>
                         <span className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white ${h._kind === "remark" ? "bg-amber-400" : "bg-sky-500"}`} />
-                        <div className={`rounded-lg border p-3 ${h._kind === "remark" ? "border-amber-100 bg-amber-50/50" : "border-slate-100 bg-slate-50"}`}>
+                        <div className={`rounded-[3px] border p-3 ${h._kind === "remark" ? "border-amber-100 bg-amber-50/50" : "border-slate-100 bg-slate-50"}`}>
                           <p className="text-sm text-slate-700">{h._kind === "remark" ? h.text : h.details}</p>
                           <p className="mt-1 text-[10px] text-slate-400">{h.created_by} · {h.created_at?.slice(0, 16).replace("T", " ")}</p>
                         </div>
