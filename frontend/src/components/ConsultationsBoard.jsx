@@ -10163,7 +10163,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <Bell className="h-3.5 w-3.5" /> Consultation Booked
                         </p>
                         <p className="mb-2 text-xs text-slate-600">
-                          {bookedFor ? `Booked for ${bookedFor} — waiting on the CONSULTANT.` : "Waiting on the CONSULTANT."}
+                          {bookedFor ? `Booked for ${bookedFor} — waiting on the Consultant.` : "Waiting on the Consultant."}
                         </p>
                         {/* Equal halves of the panel on a phone, so the pair spans the same
                             width as the line above instead of floating in the middle of it. */}
