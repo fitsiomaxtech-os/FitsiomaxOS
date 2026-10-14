@@ -35,7 +35,6 @@ import {
   AlertCircle,
   PhoneOff,
   Music,
-  Dumbbell,
   Video,
   HeartPulse,
   IdCard,
@@ -98,10 +97,7 @@ import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import MissedClassPanel from "@/components/branch/MissedClassPanel";
 import { PhysioAbsencePanel } from "@/components/PhysioAbsencePanel";
-import { BranchReviewPanel } from "@/components/branch/BranchReviewPanel";
 import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
-import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
-import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { RecordsPanel } from "@/components/branch/RecordsPanel";
 import { SumaiyaConsultationsPanel } from "@/components/branch/SumaiyaConsultationsPanel";
 import { ActivityCarePanel } from "@/components/branch/ActivityCarePanel";
@@ -799,20 +795,19 @@ const ARM_LIST_WIDTHS = {
 // Consultation sits between Leads and Review because that is the order the branch works
 // them in -- a lead is picked up, consulted, then reviewed -- and because it was the one
 // list a Branch Admin opens hourly that still cost two taps behind More.
-const BOTTOM_NAV_KEYS = ["pipeline", "branch_consultation", "review", "consultations"];
+//
+// Activity Care holds the slot Review had, since Review now sits inside it.
+const BOTTOM_NAV_KEYS = ["pipeline", "branch_consultation", "activity_care", "consultations"];
 
 // The tabs that are one long list of patient rows on a phone, so they get the
 // back-to-top arrow (ScrollTopButton). The other tabs are cards, calendars and forms.
-const LIST_VIEWS = ["pipeline", "branch_consultation", "branch_home_visit", "review"];
-
-// The two desks that only exist in a room. Zumba is a class taught in the branch's studio
-// in two fixed morning slots, and Fitness is the gym's membership roll — who is training,
-// who is paused, who owes on a package. Neither is something an arm with no floor sells.
-const ROOM_ONLY_TABS = ["zumba", "fitness"];
+// Activity Care is here for its Review sub-tab, the list among its three.
+const LIST_VIEWS = ["pipeline", "branch_consultation", "branch_home_visit", "activity_care"];
 
 /** Whether this role runs an arm that has no room in it.
  *
- * Both online branch admins do, and both lose both tabs above — including the Fitness one
+ * Both online branch admins do, and both lose Activity Care's Zumba and Fitness sub-tabs
+ * (see ROOM_ONLY_TABS in branch/ActivityCarePanel.jsx) — including the Fitness one
  * from ONLINE FITNESS ADMIN, which looks like the wrong tab to take off that board until
  * you read what it holds. It is the gym's membership roll, sold against the Fitness shelf
  * and worked on the floor; online fitness is not run from it. Leaving it there offered a
@@ -1772,14 +1767,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // consultant goes to the patient. A lead lands here the moment its appointment is
     // booked with that visit type, and Consultation stops listing it.
     { key: "branch_home_visit", label: "House Visit", short: "House", icon: Home },
-    // Sits next to Branch Leads because it is the other list of people the branch is
-    // signing up — but its own list, not a stage of theirs: nobody registering for a
-    // Zumba class is consulted, treated or discharged.
-    { key: "zumba", label: "Zumba", short: "Zumba", icon: Music },
-    // Beside Zumba because both are class-based memberships the branch sells and
-    // renews, rather than treatment a patient is referred for.
-    { key: "fitness", label: "Fitness", short: "Fitness", icon: Dumbbell },
-    { key: "review", label: "Review", short: "Review", icon: ClipboardCheck },
+    // Zumba, Fitness and Review, as sub-tabs — see branch/ActivityCarePanel.jsx.
     { key: "activity_care", label: "Activity Care", short: "Care", icon: HeartHandshake },
     { key: "consultations", label: "Management", short: "Manage", icon: Stethoscope },
     // The Super Admin's My Consultation board, held to this branch: the Head Chief's
@@ -1793,15 +1781,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     { key: "store", label: "Services and Products", short: "Services", icon: ShoppingCart },
     // The branch's kept records — Branch Transfer Records first, more to sit beside it.
     { key: "records", label: "Records", short: "Records", icon: FileText },
-    // Taken off an online arm's own board, where the studio and the gym floor those two
-    // desks run do not exist — see runsWithoutARoom.
-    //
-    // Off `currentUser`, which is only passed where somebody is looking at THEIR OWN
-    // branch (pages/CRMPage.jsx). Super Admin, Operations and Branch-wise all mount this
-    // board without one, and keep every tab: they are reading a branch rather than running
-    // it, and an org-level view that hid a desk depending on whose branch was picked would
-    // be answering a question about the viewer.
-  ].filter((t) => !(ROOM_ONLY_TABS.includes(t.key) && runsWithoutARoom(currentUser?.role)));
+  ];
 
   // The phone bar carries four of them plus More; the desktop strip above still shows
   // every one. Both halves come off VIEW_TABS, so a tab added there lands in one or the
@@ -2006,14 +1986,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             )}
           </div>
         </div>
-      ) : activeView === "zumba" ? (
-        <ZumbaPanel branchId={branchId} />
-      ) : activeView === "fitness" ? (
-        <FitnessPanel branchId={branchId} />
-      ) : activeView === "review" ? (
-        <BranchReviewPanel branchId={branchId} />
       ) : activeView === "activity_care" ? (
-        <ActivityCarePanel branchId={branchId} />
+        // armScoped takes Zumba and Fitness off an online arm's own board, where the studio
+        // and the gym floor those two desks run do not exist — see runsWithoutARoom.
+        <ActivityCarePanel branchId={branchId} withoutRoom={armScoped} />
       ) : activeView === "sumaiya" ? (
         <SumaiyaConsultationsPanel branchId={branchId} />
       ) : activeView === "store" ? (
