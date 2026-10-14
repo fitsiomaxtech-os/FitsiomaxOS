@@ -279,7 +279,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
     const entry = onBoard[0] || null;
     const mirror = entry ? {
       id: MIRROR_ROW_ID,
-      name: "Leads",
+      name: "New Leads",
       color: "#6366f1",
       // Its count is the entry stage's, because that is the match the board makes: everyone
       // still sitting at the branch's opening, let go of the moment they are moved on.

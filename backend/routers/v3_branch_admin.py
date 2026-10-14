@@ -146,7 +146,7 @@ async def _presales_mirror_stage(entry_stage_name: str) -> dict:
     """
     return {
         "id": "presales-new-leads",
-        "name": "Leads",
+        "name": "New Leads",
         "color": "#6366f1",
         "type": "sales",
         # Ahead of the real entry stage: it is the earlier step of the same journey.
