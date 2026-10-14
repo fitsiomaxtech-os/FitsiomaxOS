@@ -25,7 +25,7 @@ V3_BRANCH_STAGES = [
     "New Appointment",
     "Portfolio",
     "Follow Up",
-    "Appointment Date & Time",
+    "Appointment",
     "Not a prospect",
     "Cancelled",
 ]
@@ -57,7 +57,10 @@ BRANCH_CANCELLED_STAGE = "Cancelled"
 
 # Where a booked consultation lands. The other half of the booking dialog's two outcomes,
 # BRANCH_CANCELLED_STAGE being the first.
-BRANCH_APPOINTMENT_STAGE = "Appointment Date & Time"
+BRANCH_APPOINTMENT_STAGE = "Appointment"
+# What it was called until 2026-10-14 (see seed.rename_branch_appointment_stage). Still
+# written on leads from before the rename, and still sent by a browser running an older chunk.
+BRANCH_APPOINTMENT_STAGE_FORMER = "Appointment Date & Time"
 
 # Where a lead goes when the branch decides there is no client here to win -- the enquiry
 # was a wrong number, a competitor, a price-check, somebody outside the catchment, or a

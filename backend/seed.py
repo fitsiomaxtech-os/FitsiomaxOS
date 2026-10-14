@@ -7,7 +7,7 @@ from security import hash_password
 from constants import (
     V3_VERTICALS, V3_BRANCH_STAGES, V3_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_ADMIN_ENTRY_STAGE, BRANCH_ADMIN_RNR_STAGE,
-    BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_NOT_A_PROSPECT_STAGE,
+    BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_NOT_A_PROSPECT_STAGE,
     SALES_STAGE_ROLES_BY_NAME,
     SALES_STAGE_ROLE_CANCELLED,
     SALES_STAGE_ROLE_RNR,
@@ -24,14 +24,14 @@ from stage_utils import get_first_stage_name, first_branch_stage_for, realign_br
 _LEGACY_BRANCH_STAGE_MAP = {
     "Call & Confirm": "New Appointment",
     "Qualified": "New Appointment",
-    "Head Physio Appointment": "Appointment Date & Time",
+    "Head Physio Appointment": BRANCH_APPOINTMENT_STAGE,
     "Consultation Fee Collected": "New Appointment",
     "Consultation Done": "Portfolio",
     "Follow-up Package Upsell": "Follow Up",
-    "Package Paid": "Appointment Date & Time",
-    "Jr. Physio Assigned": "Appointment Date & Time",
-    "Assigned Physio": "Appointment Date & Time",
-    "Branch": "Appointment Date & Time",
+    "Package Paid": BRANCH_APPOINTMENT_STAGE,
+    "Jr. Physio Assigned": BRANCH_APPOINTMENT_STAGE,
+    "Assigned Physio": BRANCH_APPOINTMENT_STAGE,
+    "Branch": BRANCH_APPOINTMENT_STAGE,
 }
 
 # Maps deprecated pre-sales stage labels → new 4-stage flow. RNR is its own stage
@@ -191,6 +191,40 @@ async def ensure_sales_stage_roles() -> None:
             {"type": "sales", "name": name, "role": {"$exists": False}},
             {"$set": {"role": role}},
         )
+
+
+_RENAME_APPOINTMENT_MIGRATION = "rename_branch_appointment_stage"
+
+
+async def rename_branch_appointment_stage() -> None:
+    """Rename the Branch "Appointment Date & Time" stage to "Appointment", on both arms.
+
+    The same rewrite Pipeline Stage Management makes when Super Admin renames a stage: the
+    stage rows and every lead standing on them move together, or those leads would be left
+    on a name no pill matches and the next boot's orphan sweep would push them back to the
+    entry stage. The leads are rewritten unscoped because no sales stage on either arm is
+    called the old name once the rows are renamed -- a lead still carrying it has nowhere
+    else to belong.
+
+    A one-shot, by its marker in `migrations`: the name is Super Admin's after this, and a
+    later rename back to the old spelling must not be undone on the next restart.
+    """
+    if await v3_col("migrations").find_one({"name": _RENAME_APPOINTMENT_MIGRATION}):
+        return
+    stages = await v3_col("pipeline_stages").update_many(
+        {"type": "sales", "name": BRANCH_APPOINTMENT_STAGE_FORMER},
+        {"$set": {"name": BRANCH_APPOINTMENT_STAGE}},
+    )
+    leads = await v3_col("leads").update_many(
+        {"branch_stage": BRANCH_APPOINTMENT_STAGE_FORMER},
+        {"$set": {"branch_stage": BRANCH_APPOINTMENT_STAGE}},
+    )
+    await v3_col("migrations").insert_one({
+        "name": _RENAME_APPOINTMENT_MIGRATION,
+        "stages": stages.modified_count,
+        "leads": leads.modified_count,
+        "ran_at": now_iso(),
+    })
 
 
 async def ensure_sales_arm_split() -> None:

@@ -6,7 +6,7 @@ import logging
 
 from database import client
 from indexes import ensure_core_indexes
-from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_zumba_package_sessions, ensure_rnr_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources
+from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_zumba_package_sessions, ensure_rnr_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources
 from routers.v3_google_sheets import start_auto_sync_scheduler
 from payment_reminders import start_payment_reminder_scheduler
 import lead_package_pricing
@@ -102,6 +102,9 @@ async def startup_seed_data():
     # Last of the sales-pipeline passes, because it appends itself after whatever the ones
     # above left in place -- run earlier, the stages they add would land after Cancelled.
     await ensure_branch_cancelled_stage()
+    # Before the role stamping below, which matches by the new name: a row that has no
+    # role yet is renamed first and stamped in the same boot.
+    await rename_branch_appointment_stage()
     # After every pass that can create a sales stage, so each one gets stamped in the same
     # boot it appears in. From here on the behaviour hangs off the role rather than off the
     # name, which is what makes a rename in CI/CD ROOTS safe.

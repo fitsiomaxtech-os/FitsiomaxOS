@@ -18,7 +18,7 @@ const REFRESH_MS = 30000;
 // Appointment on the `stage` field) are intentionally not shown here.
 const JOURNEY_PILLS = [
   { label: "New Appointment",         key: "New Appointment",         color: "#3b82f6", icon: Calendar },
-  { label: "Appointment Date & Time", key: "Appointment Date & Time", color: "#14b8a6", icon: Clock },
+  { label: "Appointment",             key: "Appointment Date & Time", color: "#14b8a6", icon: Clock },
   { label: "Consultation",            key: "Consultation",            color: "#8b5cf6", icon: Stethoscope },
   { label: "Fee Collected",           key: "Fee Collected",           color: "#f59e0b", icon: IndianRupee },
   { label: "Physio Assign",           key: "Physio Assign",           color: "#a855f7", icon: Users },

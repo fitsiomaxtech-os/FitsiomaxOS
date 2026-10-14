@@ -6,7 +6,7 @@ from database import v3_col
 from utils import CLINIC_UTC_OFFSET, clinic_day_of, clinic_today, live_branch_query, without_past_moves
 from stage_utils import get_closing_stage_name
 from deps import v3_current_user, v3_require_roles
-from constants import V3_STAGES, V3_BRANCH_STAGES
+from constants import V3_STAGES, V3_BRANCH_STAGES, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_STAGE_ROLE_APPOINTMENT
 from schemas.v3 import V3UserOut, V3LeadOut
 from routers.v3_finance import REVENUE_ACTIONS, CONSULTATION_FEE_ACTIONS, _parse_rs_amount, _revenue_category, _lead_session_summary
 
@@ -477,6 +477,13 @@ async def v3_master_control(
     # The Head Physio pipeline's closing stage — renamed since it shipped, so counting the
     # old literal here reported zero consultations however many there were.
     head_closing_stage = await get_closing_stage_name("head_consultation", "Consultation Visit")
+    # The Branch appointment stage by role, on both arms -- Super Admin can rename it, and the
+    # literal this used to count read zero the moment it was ("Appointment Date & Time" is now
+    # "Appointment"). The former name stays in for leads written before that rename.
+    appointment_stages = await v3_col("pipeline_stages").distinct(
+        "name", {"type": "sales", "role": SALES_STAGE_ROLE_APPOINTMENT}
+    )
+    appointment_stages = list({*appointment_stages, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER})
 
     # Patient journey counts (label → count).
     # The displayed Journey Flow Map pills follow the real lifecycle
@@ -493,7 +500,7 @@ async def v3_master_control(
         "Portfolio": await leads.count_documents(merged({"branch_stage": "Portfolio"})),
         # Branch (leads) → Head Physio (consultation) → Branch (consultation) → End
         "New Appointment": await leads.count_documents(merged({"branch_stage": first_branch_stage})),
-        "Appointment Date & Time": await leads.count_documents(merged({"branch_stage": "Appointment Date & Time"})),
+        "Appointment Date & Time": await leads.count_documents(merged({"branch_stage": {"$in": appointment_stages}})),
         "Consultation": await leads.count_documents(merged({"head_consultation_stage": head_closing_stage})),
         "Fee Collected": await leads.count_documents(merged({"consultation_stage": "Fee Collected"})),
         "Physio Assign": await leads.count_documents(merged({"consultation_stage": "Physio Assign"})),

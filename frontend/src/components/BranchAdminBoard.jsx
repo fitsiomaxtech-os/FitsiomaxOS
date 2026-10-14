@@ -143,7 +143,7 @@ const CONSULTATION_CANCEL_STAGE = "Cancel";
 // the stamping pass carries no role, and until the next backend restart stamps it, the name
 // is all there is to go on.
 const STAGE_ROLE_FALLBACK_NAMES = {
-  [STAGE_ROLE_APPOINTMENT]: "Appointment Date & Time",
+  [STAGE_ROLE_APPOINTMENT]: "Appointment",
   [STAGE_ROLE_CANCELLED]: "Cancelled",
   [STAGE_ROLE_RNR]: "RNR",
   [STAGE_ROLE_PORTFOLIO]: "Portfolio",

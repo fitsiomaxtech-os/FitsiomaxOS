@@ -21,7 +21,7 @@ import lead_purge
 import store_branch_overrides
 from constants import (
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
-    BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, SALES_ARM_OFFLINE,
+    BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
     SALES_STAGE_ROLE_NOT_A_PROSPECT,
 )
@@ -791,6 +791,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
     # a chunk from before a rename books onto the renamed stage instead of being rejected.
     aliases = {
         BRANCH_APPOINTMENT_STAGE: appointment_stage,
+        BRANCH_APPOINTMENT_STAGE_FORMER: appointment_stage,
         BRANCH_CANCELLED_STAGE: cancelled_stage,
     }
     final_stage = aliases.get(payload.final_stage, payload.final_stage)

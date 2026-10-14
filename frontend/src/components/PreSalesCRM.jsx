@@ -261,6 +261,7 @@ const branchStatusInfo = (lead, branches) => {
     "New Appointment": "bg-blue-50 text-blue-700 border-blue-200",
     "Portfolio": "bg-violet-50 text-violet-700 border-violet-200",
     "Follow Up": "bg-orange-50 text-orange-700 border-orange-200",
+    "Appointment": "bg-teal-50 text-teal-700 border-teal-200",
     "Appointment Date & Time": "bg-teal-50 text-teal-700 border-teal-200",
     "Cancelled": "bg-rose-50 text-rose-700 border-rose-200",
   }[status] || "bg-slate-50 text-slate-600 border-slate-200";
@@ -1785,7 +1786,7 @@ const CONSULT_MILESTONES = [
 
 const consultMilestoneMatch = (l, key) => {
   if (key === "new") return l.branch_stage === "New Appointment";
-  if (key === "booked") return l.branch_stage === "Appointment Date & Time";
+  if (key === "booked") return l.branch_stage === "Appointment" || l.branch_stage === "Appointment Date & Time";
   if (key === "completed") return l.consultation_stage === "Consultation Visit" || l.head_consultation_stage === "Consultation Visit";
   return false;
 };
