@@ -207,11 +207,16 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
  */
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const RuleField = ({ label, hint, children }) => (
-  <label className="block">
-    <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
-    {children}
-    {hint && <span className="mt-1 hidden text-[10px] leading-snug text-slate-400 md:block">{hint}</span>}
+// One row of the Working Day list: the setting's name on the left, its control on the right,
+// and the unit after it where the number alone would not say minutes or hours. The unit's
+// slot is kept on every row, empty or not, so the four inputs line up.
+const RuleField = ({ label, unit, children }) => (
+  <label className="flex items-center justify-between gap-3 p-3">
+    <span className="text-sm font-medium text-slate-700">{label}</span>
+    <span className="flex shrink-0 items-center gap-2">
+      {children}
+      <span className="w-8 text-xs text-slate-400">{unit}</span>
+    </span>
   </label>
 );
 
@@ -280,73 +285,77 @@ const WorkingDayCard = ({ branchId }) => {
         </h3>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-4 md:p-4">
-        <RuleField label="Day starts">
-          <input
-            type="time"
-            value={rules.work_start || ""}
-            onChange={(e) => set({ work_start: e.target.value })}
-            className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300"
-            data-testid="working-day-start"
-          />
-        </RuleField>
-        <RuleField label="Day ends">
-          <input
-            type="time"
-            value={rules.work_end || ""}
-            onChange={(e) => set({ work_end: e.target.value })}
-            className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300"
-            data-testid="working-day-end"
-          />
-        </RuleField>
-        <RuleField label="Grace">
-          <input
-            type="number"
-            min={0}
-            max={120}
-            value={rules.grace_minutes ?? 0}
-            onChange={(e) => set({ grace_minutes: e.target.value })}
-            className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300"
-            data-testid="working-day-grace"
-          />
-        </RuleField>
-        <RuleField label="Half day under">
-          <input
-            type="number"
-            min={0}
-            max={12}
-            step={0.5}
-            value={Number(rules.half_day_minutes || 0) / 60}
-            onChange={(e) => set({ half_day_minutes: Math.round(Number(e.target.value || 0) * 60) })}
-            className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300"
-            data-testid="working-day-halfday"
-          />
-        </RuleField>
-      </div>
+      {/* A list, as Shift Timings is: one setting to a row, Week off the last of them. */}
+      <div className="p-3 md:p-4">
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="working-day-list">
+          <RuleField label="Day starts">
+            <input
+              type="time"
+              value={rules.work_start || ""}
+              onChange={(e) => set({ work_start: e.target.value })}
+              className="h-9 w-32 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 sm:w-40"
+              data-testid="working-day-start"
+            />
+          </RuleField>
+          <RuleField label="Day ends">
+            <input
+              type="time"
+              value={rules.work_end || ""}
+              onChange={(e) => set({ work_end: e.target.value })}
+              className="h-9 w-32 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 sm:w-40"
+              data-testid="working-day-end"
+            />
+          </RuleField>
+          <RuleField label="Grace" unit="mins">
+            <input
+              type="number"
+              min={0}
+              max={120}
+              value={rules.grace_minutes ?? 0}
+              onChange={(e) => set({ grace_minutes: e.target.value })}
+              className="h-9 w-32 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 sm:w-40"
+              data-testid="working-day-grace"
+            />
+          </RuleField>
+          <RuleField label="Half day under" unit="hrs">
+            <input
+              type="number"
+              min={0}
+              max={12}
+              step={0.5}
+              value={Number(rules.half_day_minutes || 0) / 60}
+              onChange={(e) => set({ half_day_minutes: Math.round(Number(e.target.value || 0) * 60) })}
+              className="h-9 w-32 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 sm:w-40"
+              data-testid="working-day-halfday"
+            />
+          </RuleField>
 
-      <div className="border-t border-slate-100 px-3 pb-3 pt-3 md:px-4 md:pb-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Week off</p>
-        {/* All seven in one row on a phone, where 56px buttons wrapped Sunday (and more)
-            onto a line of its own. */}
-        <div className="mt-2 grid grid-cols-7 gap-1 md:flex md:flex-wrap md:gap-1.5" data-testid="working-day-week-offs">
-          {DAY_LABELS.map((label, index) => {
-            const off = offDays.includes(index);
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => toggleDay(index)}
-                className={`h-9 w-full min-w-0 rounded-md border text-xs font-semibold transition md:w-14 ${
-                  off
-                    ? "border-emerald-500 bg-emerald-500 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
-                }`}
-                data-testid={`working-day-off-${index}`}
-              >
-                {label}
-              </button>
-            );
-          })}
+          {/* Week off: the name above the days on a phone, beside them from sm up. All seven
+              in one row on a phone, where 56px buttons wrapped Sunday (and more) onto a line
+              of its own. */}
+          <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-slate-700">Week off</p>
+            <div className="grid grid-cols-7 gap-1 md:flex md:flex-wrap md:justify-end md:gap-1.5" data-testid="working-day-week-offs">
+              {DAY_LABELS.map((label, index) => {
+                const off = offDays.includes(index);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => toggleDay(index)}
+                    className={`h-9 w-full min-w-0 rounded-md border text-xs font-semibold transition md:w-14 ${
+                      off
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
+                    }`}
+                    data-testid={`working-day-off-${index}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
         {offDays.length === 0 && (
           <p className="mt-2 text-[11px] font-medium text-amber-600" data-testid="working-day-no-off">
