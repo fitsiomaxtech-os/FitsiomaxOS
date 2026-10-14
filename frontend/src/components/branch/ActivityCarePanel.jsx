@@ -57,7 +57,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
           <button
             type="button"
             onClick={() => setMastersOpen(true)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-50 hover:text-sky-600"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
             title="Zumba Masters"
             aria-label="Zumba Masters"
             data-testid="activity-care-zumba-settings"
