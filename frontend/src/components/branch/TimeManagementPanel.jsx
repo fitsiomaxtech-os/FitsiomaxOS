@@ -389,6 +389,9 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
   // because the question is now "which windows", and a native multi-select is the one
   // control nobody can tell is multi.
   const [picking, setPicking] = useState(null);
+  // Which of the three tabs is open: Shift Timings, Who Works Which Shift, Working Day.
+  // Hidden rather than unmounted when shut, so an unsaved edit survives a look at another.
+  const [section, setSection] = useState("shifts");
 
   const kind = CALENDAR_KINDS.find((k) => k.key === profileType) || CALENDAR_KINDS[0];
 
@@ -496,172 +499,201 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
     // dropped and the padding tightens, so the controls themselves fill the card. From md
     // up nothing changes.
     <div className="flex flex-col gap-3 md:gap-4" data-testid="time-management-root">
-      {/* ------------------------------------------------- The windows themselves */}
-      <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-definitions">
-        <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-3 md:flex-wrap md:p-4">
-          <div className="min-w-0">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-              <Clock className="h-4 w-4 shrink-0 text-violet-500" /> Shift Timings
-            </h3>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button onClick={loadShifts} className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600 md:h-9 md:w-9" title="Refresh" aria-label="Refresh" data-testid="shifts-refresh">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setAdding((v) => !v)}
-              className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700"
-              data-testid="shift-add-toggle"
+      {/* The three parts as tabs, drawn as Records' underlined strip. On a phone they share
+          the width, icon over label, the longer labels wrapping onto a second line. */}
+      <div className="flex items-stretch gap-1 border-b border-slate-200" data-testid="time-management-tabs">
+        {[
+          { key: "shifts", label: "Shift Timings", icon: Clock },
+          { key: "roster", label: "Who Works Which Shift", icon: kind.icon },
+          { key: "working_day", label: "Working Day & Week Off", icon: CalendarDays },
+        ].map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setSection(t.key)}
+              className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 border-b-2 px-1 py-2 text-center text-[11px] font-medium leading-tight sm:flex-none sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-3 sm:text-sm ${
+                section === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
+              }`}
+              data-testid={`time-management-tab-${t.key}`}
             >
-              <Plus className="mr-1 h-3.5 w-3.5" /> Add Shift
-            </Button>
-          </div>
-        </div>
+              <Icon className="h-4 w-4 shrink-0" /> {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-        <div className="p-3 md:p-4">
-          {adding && (
-            <div className="mb-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/40 p-3" data-testid="shift-add-form">
-              {/* A phone gets three even rows — name, start to end, Add beside Cancel — where
-                  the wrapping row left the times and buttons scattered at whatever width
-                  each happened to need. md:contents hands the buttons back to the one row. */}
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 md:flex md:flex-wrap">
-                <Input
-                  value={newShift.name}
-                  onChange={(e) => setNewShift((s) => ({ ...s, name: e.target.value }))}
-                  placeholder="Shift name (e.g. Late Evening)"
-                  className="col-span-3 h-8 text-sm md:min-w-[10rem] md:flex-1"
-                  data-testid="shift-new-name"
-                />
-                <input
-                  type="time"
-                  value={newShift.start_time}
-                  onChange={(e) => setNewShift((s) => ({ ...s, start_time: e.target.value }))}
-                  className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
-                  data-testid="shift-new-start"
-                />
-                <span className="text-xs text-slate-400">to</span>
-                <input
-                  type="time"
-                  value={newShift.end_time}
-                  onChange={(e) => setNewShift((s) => ({ ...s, end_time: e.target.value }))}
-                  className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
-                  data-testid="shift-new-end"
-                />
-                <div className="col-span-3 grid grid-cols-2 gap-2 md:contents">
-                  <Button size="sm" onClick={create} disabled={creating} className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700" data-testid="shift-new-save">
-                    {creating ? "Adding..." : "Add"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewShift(NEW_SHIFT); }} className="h-8 text-xs">
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {loading ? (
-            <p className="py-6 text-center text-xs text-slate-400">Loading shifts…</p>
-          ) : shifts.length === 0 ? (
-            <p className="py-6 text-center text-xs text-slate-400">No shifts yet — add one above.</p>
-          ) : (
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="shift-list">
-              {shifts.map((s) => (
-                <ShiftRow key={s.id} shift={s} onSaved={reloadAndAnnounce} onDeleted={reloadAndAnnounce} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ------------------------------------------------- Who works which of them */}
-      <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-roster">
-        <div className="border-b border-slate-100 bg-slate-50/60 p-3 md:p-4">
-          <div className="flex items-center justify-between gap-2 md:flex-wrap">
+      {/* ------------------------------------------------- The windows themselves */}
+      <div className={section === "shifts" ? "" : "hidden"}>
+        <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-definitions">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-3 md:flex-wrap md:p-4">
             <div className="min-w-0">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                <kind.icon className="h-4 w-4 shrink-0 text-violet-500" /> Who Works Which Shift
-                {lockProfile && <span className="font-medium text-slate-400">· {kind.label}</span>}
+                <Clock className="h-4 w-4 shrink-0 text-violet-500" /> Shift Timings
               </h3>
             </div>
-            {experts.length > 0 && (
-              <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700" data-testid="roster-count">
-                {rostered} of {experts.length} rostered
-              </span>
-            )}
-          </div>
-          {!lockProfile && (
-            <div className="mt-3">
-              <SegmentedTabs
-                tabs={CALENDAR_KINDS}
-                value={profileType}
-                onChange={setProfileType}
-                mobileCols={3}
-                testid="roster-calendar-kind"
-              />
+            <div className="flex shrink-0 items-center gap-2">
+              <Button onClick={loadShifts} className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600 md:h-9 md:w-9" title="Refresh" aria-label="Refresh" data-testid="shifts-refresh">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setAdding((v) => !v)}
+                className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700"
+                data-testid="shift-add-toggle"
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add Shift
+              </Button>
             </div>
-          )}
-        </div>
+          </div>
 
-        <div className="divide-y divide-slate-100" data-testid="roster-list">
-          {rosterLoading ? (
-            <p className="py-8 text-center text-xs text-slate-400">Loading {kind.plural.toLowerCase()}…</p>
-          ) : experts.length === 0 ? (
-            <p className="py-8 text-center text-xs text-slate-400">
-              No {kind.plural} {profileType === "head_physio" ? "created" : "assigned to this branch"} yet — ask HR Admin to add one.
-            </p>
-          ) : (
-            experts.map((expert) => (
-              // A phone lays the row out as a grid: name across from the shift button, the
-              // hours chip under the name. Wrapped as a flex row it dropped the chip and the
-              // button onto lines of their own at whatever width each needed. The placement
-              // classes are inert from md up, where the row is the one flex line again.
-              <div key={expert.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 p-3 md:flex md:flex-wrap md:gap-3" data-testid={`roster-row-${expert.id}`}>
-                <div className="row-span-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
-                  {expert.full_name?.charAt(0)?.toUpperCase() || "E"}
-                </div>
-                <div className="col-start-2 row-start-1 min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-800">{expert.full_name}</p>
-                  <p className="truncate text-[10px] text-slate-400 md:whitespace-normal">
-                    {expert.specialization || kind.noun}
-                    {expert.slots_open > 0 && ` · ${expert.slots_open} slot${expert.slots_open > 1 ? "s" : ""} already published`}
-                  </p>
-                </div>
-                {/* The hours they will get, stated in full — the control says the names,
-                    this says what it means for their day. Both halves of a split day are
-                    written out: "8:00 AM – 9:00 PM" for a morning-and-evening consultant
-                    would be a working day they do not work. */}
-                {/* No chip without a shift: the button beside it already says "No shift — full day". */}
-                {expert.shift_id && (
-                  <span
-                    className="col-span-2 col-start-2 row-start-2 justify-self-start shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 md:whitespace-nowrap"
-                    data-testid={`roster-window-${expert.id}`}
-                  >
-                    {hoursLabel({ segments: expert.shift_windows, start_time: expert.shift_start, end_time: expert.shift_end })}
-                  </span>
-                )}
-                <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2">
-                  {assigning === expert.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />}
-                  <button
-                    type="button"
-                    onClick={() => setPicking(expert)}
-                    disabled={assigning === expert.id}
-                    className="flex max-w-[9rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 md:max-w-[15rem]"
-                    title="The working windows this expert's day is opened across"
-                    data-testid={`roster-select-${expert.id}`}
-                  >
-                    <span className="min-w-0 truncate">
-                      {expert.shift_name || "No shift — full day"}
-                    </span>
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  </button>
+          <div className="p-3 md:p-4">
+            {adding && (
+              <div className="mb-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/40 p-3" data-testid="shift-add-form">
+                {/* A phone gets three even rows — name, start to end, Add beside Cancel — where
+                    the wrapping row left the times and buttons scattered at whatever width
+                    each happened to need. md:contents hands the buttons back to the one row. */}
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 md:flex md:flex-wrap">
+                  <Input
+                    value={newShift.name}
+                    onChange={(e) => setNewShift((s) => ({ ...s, name: e.target.value }))}
+                    placeholder="Shift name (e.g. Late Evening)"
+                    className="col-span-3 h-8 text-sm md:min-w-[10rem] md:flex-1"
+                    data-testid="shift-new-name"
+                  />
+                  <input
+                    type="time"
+                    value={newShift.start_time}
+                    onChange={(e) => setNewShift((s) => ({ ...s, start_time: e.target.value }))}
+                    className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
+                    data-testid="shift-new-start"
+                  />
+                  <span className="text-xs text-slate-400">to</span>
+                  <input
+                    type="time"
+                    value={newShift.end_time}
+                    onChange={(e) => setNewShift((s) => ({ ...s, end_time: e.target.value }))}
+                    className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
+                    data-testid="shift-new-end"
+                  />
+                  <div className="col-span-3 grid grid-cols-2 gap-2 md:contents">
+                    <Button size="sm" onClick={create} disabled={creating} className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700" data-testid="shift-new-save">
+                      {creating ? "Adding..." : "Add"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewShift(NEW_SHIFT); }} className="h-8 text-xs">
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            )}
 
-      </section>
+            {loading ? (
+              <p className="py-6 text-center text-xs text-slate-400">Loading shifts…</p>
+            ) : shifts.length === 0 ? (
+              <p className="py-6 text-center text-xs text-slate-400">No shifts yet — add one above.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="shift-list">
+                {shifts.map((s) => (
+                  <ShiftRow key={s.id} shift={s} onSaved={reloadAndAnnounce} onDeleted={reloadAndAnnounce} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* ------------------------------------------------- Who works which of them */}
+      <div className={section === "roster" ? "" : "hidden"}>
+        <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-roster">
+          <div className="border-b border-slate-100 bg-slate-50/60 p-3 md:p-4">
+            <div className="flex items-center justify-between gap-2 md:flex-wrap">
+              <div className="min-w-0">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                  <kind.icon className="h-4 w-4 shrink-0 text-violet-500" /> Who Works Which Shift
+                  {lockProfile && <span className="font-medium text-slate-400">· {kind.label}</span>}
+                </h3>
+              </div>
+              {experts.length > 0 && (
+                <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700" data-testid="roster-count">
+                  {rostered} of {experts.length} rostered
+                </span>
+              )}
+            </div>
+            {!lockProfile && (
+              <div className="mt-3">
+                <SegmentedTabs
+                  tabs={CALENDAR_KINDS}
+                  value={profileType}
+                  onChange={setProfileType}
+                  mobileCols={3}
+                  testid="roster-calendar-kind"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="divide-y divide-slate-100" data-testid="roster-list">
+            {rosterLoading ? (
+              <p className="py-8 text-center text-xs text-slate-400">Loading {kind.plural.toLowerCase()}…</p>
+            ) : experts.length === 0 ? (
+              <p className="py-8 text-center text-xs text-slate-400">
+                No {kind.plural} {profileType === "head_physio" ? "created" : "assigned to this branch"} yet — ask HR Admin to add one.
+              </p>
+            ) : (
+              experts.map((expert) => (
+                // A phone lays the row out as a grid: name across from the shift button, the
+                // hours chip under the name. Wrapped as a flex row it dropped the chip and the
+                // button onto lines of their own at whatever width each needed. The placement
+                // classes are inert from md up, where the row is the one flex line again.
+                <div key={expert.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 p-3 md:flex md:flex-wrap md:gap-3" data-testid={`roster-row-${expert.id}`}>
+                  <div className="row-span-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+                    {expert.full_name?.charAt(0)?.toUpperCase() || "E"}
+                  </div>
+                  <div className="col-start-2 row-start-1 min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-800">{expert.full_name}</p>
+                    <p className="truncate text-[10px] text-slate-400 md:whitespace-normal">
+                      {expert.specialization || kind.noun}
+                      {expert.slots_open > 0 && ` · ${expert.slots_open} slot${expert.slots_open > 1 ? "s" : ""} already published`}
+                    </p>
+                  </div>
+                  {/* The hours they will get, stated in full — the control says the names,
+                      this says what it means for their day. Both halves of a split day are
+                      written out: "8:00 AM – 9:00 PM" for a morning-and-evening consultant
+                      would be a working day they do not work. */}
+                  {/* No chip without a shift: the button beside it already says "No shift — full day". */}
+                  {expert.shift_id && (
+                    <span
+                      className="col-span-2 col-start-2 row-start-2 justify-self-start shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 md:whitespace-nowrap"
+                      data-testid={`roster-window-${expert.id}`}
+                    >
+                      {hoursLabel({ segments: expert.shift_windows, start_time: expert.shift_start, end_time: expert.shift_end })}
+                    </span>
+                  )}
+                  <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2">
+                    {assigning === expert.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />}
+                    <button
+                      type="button"
+                      onClick={() => setPicking(expert)}
+                      disabled={assigning === expert.id}
+                      className="flex max-w-[9rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 md:max-w-[15rem]"
+                      title="The working windows this expert's day is opened across"
+                      data-testid={`roster-select-${expert.id}`}
+                    >
+                      <span className="min-w-0 truncate">
+                        {expert.shift_name || "No shift — full day"}
+                      </span>
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+        </section>
+      </div>
 
       {/* Which windows one expert works, as a dialog. The list is a set of ticks rather
           than a one-of-many, because a morning and an evening is one person's day. */}
@@ -677,9 +709,11 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
         />
       )}
 
-      {/* Last, because it is set once and then left alone, where the two above are worked
-          with. It is also the only thing on this screen that reaches somebody's pay. */}
-      <WorkingDayCard branchId={branchId} />
+      {/* Last, because it is set once and then left alone, where the two before it are
+          worked with. It is also the only thing on this screen that reaches somebody's pay. */}
+      <div className={section === "working_day" ? "" : "hidden"}>
+        <WorkingDayCard branchId={branchId} />
+      </div>
     </div>
   );
 };
