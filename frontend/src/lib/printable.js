@@ -22,10 +22,10 @@ export const PRINTABLE_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap');
   *{box-sizing:border-box}
   /* One accent per document state, set on .doc, so every tinted surface follows it. */
-  .doc{--accent:#0f766e;--soft:#f0fdfa;--edge:#99f6e4}
+  .doc{--accent:#115e59;--soft:#e6f6f3;--edge:#5eb8ac}
   .tone-paid{--accent:#047857;--soft:#ecfdf5;--edge:#a7f3d0}
   .tone-sch{--accent:#b45309;--soft:#fffbeb;--edge:#fde68a}
-  .tone-appt{--accent:#0f766e;--soft:#f0fdfa;--edge:#99f6e4}
+  .tone-appt{--accent:#115e59;--soft:#e6f6f3;--edge:#5eb8ac}
   /* print-color-adjust, or the browser drops every tint and the accent bar on paper. */
   body{margin:0;padding:32px 16px;font-family:'Lexend','Segoe UI',Arial,sans-serif;font-size:13px;line-height:1.45;
        color:#0f172a;background:#e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -33,18 +33,18 @@ export const PRINTABLE_STYLES = `
        box-shadow:0 12px 32px rgba(15,23,42,.14)}
   .bar{height:6px;background:var(--accent)}
 
-  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding:26px 34px 22px;border-bottom:1px solid #e2e8f0}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding:26px 34px 22px;border-bottom:1px solid #cbd5e1}
   .brand-row{display:flex;align-items:center;gap:14px;min-width:0}
   .logo{width:58px;height:58px;object-fit:contain;border-radius:14px;background:var(--soft);border:1px solid var(--edge);padding:7px;flex:none}
   .brand{font-size:23px;font-weight:800;letter-spacing:2px;line-height:1.1}
-  .sub{font-size:11.5px;color:#64748b;margin-top:2px}
-  .branch{font-size:12px;font-weight:600;color:#334155;margin-top:5px}
+  .sub{font-size:11.5px;color:#334155;margin-top:2px}
+  .branch{font-size:12px;font-weight:600;color:#0f172a;margin-top:5px}
   .meta{text-align:right;flex:none}
   /* -1.5px: letter-spacing puts a gap after the last letter as well, so a right-aligned
      title hangs 1.5px short of the lines beneath it. Pulled back onto the same edge. */
   .doc-title{font-size:19px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;
              line-height:1.1;margin-right:-1.5px}
-  .meta-line{font-size:11.5px;color:#64748b;margin-top:5px}
+  .meta-line{font-size:11.5px;color:#334155;margin-top:5px}
   .meta-line b{color:#0f172a;font-weight:600;margin-left:6px}
   /* The right padding is a letter-spacing short of the left on every tracked pill below:
      that trailing gap is inside the box, so matched padding leaves the words looking
@@ -64,14 +64,14 @@ export const PRINTABLE_STYLES = `
         font-size:10.5px;font-weight:700;letter-spacing:.9px;background:var(--soft);color:var(--accent);border:1px solid var(--edge)}
 
   .body{padding:24px 34px 8px}
-  .label{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#64748b;margin:0 0 8px}
+  .label{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#334155;margin:0 0 8px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:stretch}
-  .panel{border:1px solid #e2e8f0;border-radius:12px;padding:15px 17px}
+  .panel{border:1px solid #94a3b8;border-radius:12px;padding:15px 17px}
   .name{font-size:17px;font-weight:700;margin-bottom:6px}
   .kv{width:100%;border-collapse:collapse}
-  .kv td{padding:3.5px 0;font-size:12px;vertical-align:top}
-  .kv td.k{color:#64748b;width:42%;padding-right:12px}
-  .kv td.v{font-weight:600;word-break:break-word}
+  .kv td{padding:3.5px 0;font-size:12px;vertical-align:top;color:#0f172a}
+  .kv td.k{color:#334155;width:42%;padding-right:12px}
+  .kv td.v{font-weight:700;word-break:break-word}
 
   .amount{position:relative;display:flex;flex-direction:column;justify-content:center;text-align:right;
           background:var(--soft);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;overflow:hidden}
@@ -102,24 +102,29 @@ export const PRINTABLE_STYLES = `
   .totals .due td{color:#be123c;font-weight:700}
 
   .hero{display:flex;gap:20px;align-items:center;background:var(--soft);border:1px solid var(--edge);border-radius:14px;padding:18px 20px}
-  .tile{flex:none;width:100px;border-radius:12px;background:#fff;border:1px solid var(--edge);text-align:center;overflow:hidden}
+  .tile{flex:none;width:100px;border-radius:12px;background:#fff;border:1px solid var(--edge);color:#0f172a;text-align:center;overflow:hidden}
   .tile .m{background:var(--accent);color:#fff;font-size:11px;font-weight:700;letter-spacing:2px;padding:5px 0 5px 2px}
-  .tile .d{font-size:38px;font-weight:800;line-height:1.05;padding-top:8px}
-  .tile .w{font-size:11px;color:#64748b;padding:2px 0 9px}
+  .tile .d{font-size:38px;font-weight:800;line-height:1;padding-top:10px}
+  .tile .w{font-size:11px;font-weight:600;color:#334155;padding:6px 0 10px}
   .when{font-size:21px;font-weight:800;color:var(--accent);line-height:1.2}
-  .time{font-size:15px;font-weight:600;margin-top:3px}
-  .facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:10px;font-size:12px;color:#64748b}
-  .facts b{color:#0f172a;font-weight:600;word-break:break-all}
+  .time{font-size:15px;font-weight:700;margin-top:3px;color:#0f172a}
+  .facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:10px;font-size:12px;color:#334155}
+  .facts b{color:#0f172a;font-weight:700;word-break:break-all}
 
-  .note{margin-top:18px;padding:12px 15px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:12px;color:#475569;line-height:1.6}
+  .note{margin-top:18px;padding:12px 15px;border-radius:10px;background:#f8fafc;border:1px solid #94a3b8;font-size:12px;color:#1e293b;line-height:1.6}
   .note-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
   .steps{list-style:none;margin:0;padding:0}
-  .steps li{position:relative;padding-left:24px;margin:5px 0}
-  .steps li::before{content:"\\2713";position:absolute;left:0;top:2px;width:16px;height:16px;border-radius:50%;
-                    background:var(--accent);color:#fff;font-size:9px;line-height:16px;text-align:center;font-weight:700}
+  .steps li{position:relative;padding-left:26px;margin:6px 0;line-height:18px}
+  /* The tick is drawn, not typed. It used to be a check-mark character, which Lexend has no
+     glyph for: each renderer fell back to a different font, and in the PDF the tick sat
+     low and left inside its circle. A rotated border corner lands in the same place in
+     every renderer. */
+  .steps li::before{content:"";position:absolute;left:0;top:1px;width:16px;height:16px;border-radius:50%;background:var(--accent)}
+  .steps li::after{content:"";position:absolute;left:5.5px;top:4.5px;width:4px;height:7px;border:solid #fff;
+                   border-width:0 2px 2px 0;transform:rotate(45deg)}
 
   .foot{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-top:22px;padding:16px 34px 22px;
-        border-top:1px dashed #cbd5e1;font-size:11px;color:#94a3b8;line-height:1.6}
+        border-top:1px dashed #94a3b8;font-size:11px;color:#475569;line-height:1.6}
   .thanks{font-size:13px;font-weight:700;color:var(--accent);text-align:right}
 
   @page{size:A4;margin:12mm}

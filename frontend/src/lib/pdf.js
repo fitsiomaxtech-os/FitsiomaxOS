@@ -20,9 +20,37 @@ const MARGIN = 10;
 // rather than the phone breakpoint PRINTABLE_STYLES switches to under 600px.
 const RENDER_W = 794;
 
+// The sheet's font, every weight it uses, loaded into THIS page as well as the frame.
+// html2canvas lays the text out in the frame but paints it on a canvas that belongs to this
+// page, and a canvas can only draw with the fonts its own document has loaded. The app
+// loads Lexend 400-700 and only the faces it happens to use, so the brand and the titles
+// (800) and often the rest were painted in a fallback font at Lexend's positions: words
+// with double gaps between them, and every letter-spaced title broken apart ("F I T S I
+// OMAX", "APPOI NTMENT", "ANN-261013 -0029").
+const PRINT_FONT_URL = "https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap";
+const PRINT_FONT_WEIGHTS = [400, 500, 600, 700, 800];
+let printFontReady = null;
+const loadPrintFont = () => {
+  if (!printFontReady) {
+    printFontReady = (async () => {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = PRINT_FONT_URL;
+      document.head.appendChild(link);
+      await new Promise((resolve) => {
+        link.addEventListener("load", resolve, { once: true });
+        link.addEventListener("error", resolve, { once: true });
+        setTimeout(resolve, 4000);
+      });
+      await Promise.all(PRINT_FONT_WEIGHTS.map((w) => document.fonts?.load(`${w} 16px Lexend`).catch(() => {})));
+    })();
+  }
+  return printFontReady;
+};
+
 /** A standalone printable HTML document -> PDF Blob. */
 export const htmlToPdf = async (html) => {
-  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas")]);
+  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas"), loadPrintFont()]);
   // Off-screen rather than hidden: a display:none frame lays nothing out to draw.
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
@@ -44,7 +72,7 @@ export const htmlToPdf = async (html) => {
 
     const target = doc.querySelector(".doc") || doc.body;
     const canvas = await html2canvas(target, {
-      scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: RENDER_W, logging: false,
+      scale: 2.5, useCORS: true, backgroundColor: "#ffffff", windowWidth: RENDER_W, logging: false,
     });
 
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
@@ -62,7 +90,9 @@ export const htmlToPdf = async (html) => {
       ctx.fillRect(0, 0, slice.width, slice.height);
       ctx.drawImage(canvas, 0, -y);
       if (y > 0) pdf.addPage();
-      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", MARGIN, MARGIN, w, slice.height / pxPerMm);
+      // PNG, not JPEG: JPEG smears the edges of small coloured text into a grey haze,
+      // which is most of what made the sheet look washed out.
+      pdf.addImage(slice.toDataURL("image/png"), "PNG", MARGIN, MARGIN, w, slice.height / pxPerMm, undefined, "FAST");
     }
     return pdf.output("blob");
   } finally {
