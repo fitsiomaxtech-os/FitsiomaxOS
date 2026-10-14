@@ -1971,7 +1971,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <DialogTitle>Time Management</DialogTitle>
                 <DialogDescription>The branch's shift timings, and who works which shift.</DialogDescription>
               </DialogHeader>
-              {timeMgmtFor && <TimeManagementPanel branchId={branchId} initialProfileType={timeMgmtFor} />}
+              {timeMgmtFor && <TimeManagementPanel branchId={branchId} initialProfileType={timeMgmtFor} lockProfile />}
             </DialogContent>
           </Dialog>
           {/* The panel under the cards: hidden on a phone while the card list is up — the

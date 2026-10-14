@@ -384,7 +384,8 @@ const WorkingDayCard = ({ branchId }) => {
 };
 
 // initialProfileType: the calendar the roster opens on — the one whose gear opened it.
-export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physio" }) => {
+// lockProfile: that calendar's roster alone, with no switcher to the other two.
+export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physio", lockProfile = false }) => {
   const [shifts, setShifts] = useState([]);
   const [profileType, setProfileType] = useState(initialProfileType);
   const [experts, setExperts] = useState([]);
@@ -595,9 +596,10 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
             <div className="min-w-0">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
                 <kind.icon className="h-4 w-4 shrink-0 text-violet-500" /> Who Works Which Shift
+                {lockProfile && <span className="font-medium text-slate-400">· {kind.label}</span>}
               </h3>
               <p className="mt-1 hidden text-[11px] text-slate-400 md:block">
-                Pick the calendar, then put each {kind.noun} on a shift — or on two, for a morning
+                {lockProfile ? "Put" : "Pick the calendar, then put"} each {kind.noun} on a shift — or on two, for a morning
                 and an evening. Their day on {kind.label} opens across those hours only, and stays
                 closed in between.
               </p>
@@ -608,15 +610,17 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
               </span>
             )}
           </div>
-          <div className="mt-3">
-            <SegmentedTabs
-              tabs={CALENDAR_KINDS}
-              value={profileType}
-              onChange={setProfileType}
-              mobileCols={3}
-              testid="roster-calendar-kind"
-            />
-          </div>
+          {!lockProfile && (
+            <div className="mt-3">
+              <SegmentedTabs
+                tabs={CALENDAR_KINDS}
+                value={profileType}
+                onChange={setProfileType}
+                mobileCols={3}
+                testid="roster-calendar-kind"
+              />
+            </div>
+          )}
         </div>
 
         <div className="divide-y divide-slate-100" data-testid="roster-list">
