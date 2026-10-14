@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { getTeam } from "@/lib/api";
@@ -10,7 +11,7 @@ import { displayPhone, telNumber } from "@/lib/phone";
 /**
  * Activity Care's Team Consultants and Team Physio tabs: every consultant, or every physio,
  * in the organisation, one to a row — S.No, name, branch, phone, gender, status and an
- * arrow — narrowed by branch and by gender.
+ * arrow — narrowed by a search, by branch and by gender.
  */
 const KINDS = {
   consultants: { plural: "consultants" },
@@ -82,6 +83,7 @@ export const TeamPanel = ({ kind, toolbarSlot = null }) => {
   const [loading, setLoading] = useState(true);
   const [branch, setBranch] = useState("all");
   const [gender, setGender] = useState("all");
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,10 +97,20 @@ export const TeamPanel = ({ kind, toolbarSlot = null }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  const visible = useMemo(() => data.members.filter((m) =>
-    (branch === "all" || m.all_branches || m.branches.some((b) => b.id === branch))
-    && (gender === "all" || m.gender === gender)
-  ), [data.members, branch, gender]);
+  // Matches the name, the phone (digits alone, so "98765 43210" finds 9876543210) or a
+  // branch the person works at.
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const digits = q.replace(/\D/g, "");
+    return data.members.filter((m) =>
+      (branch === "all" || m.all_branches || m.branches.some((b) => b.id === branch))
+      && (gender === "all" || m.gender === gender)
+      && (!q
+        || m.full_name.toLowerCase().includes(q)
+        || (digits && String(m.phone || "").replace(/\D/g, "").includes(digits))
+        || branchText(m).toLowerCase().includes(q))
+    );
+  }, [data.members, branch, gender, search]);
 
   // Where the arrow will lead is still to be decided.
   const open = (m) => toast(`${m.full_name} — details coming soon`);
@@ -118,6 +130,27 @@ export const TeamPanel = ({ kind, toolbarSlot = null }) => {
 
   const filters = (
     <>
+      <div className="relative w-full lg:w-52">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name, phone or branch"
+          className="h-9 pl-8 pr-8 text-xs"
+          data-testid={`team-search-${kind}`}
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            title="Clear search"
+            aria-label="Clear search"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       <FilterSelect
         value={branch}
         onChange={setBranch}
@@ -143,13 +176,14 @@ export const TeamPanel = ({ kind, toolbarSlot = null }) => {
   return (
     <div className="flex flex-col gap-3" data-testid={`team-panel-${kind}`}>
       {toolbarSlot && createPortal(filters, toolbarSlot)}
-      <div className={`flex items-center gap-2 ${toolbarSlot ? "lg:hidden" : ""}`}>{filters}</div>
+      {/* Below lg the search takes a line of its own, the two filters and Refresh under it. */}
+      <div className={`flex flex-wrap items-center gap-2 ${toolbarSlot ? "lg:hidden" : ""}`}>{filters}</div>
 
       {loading && data.members.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white py-10 text-center text-xs text-slate-400">Loading {k.plural}…</p>
       ) : visible.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center text-xs text-slate-400">
-          No {k.plural} match these filters.
+          No {k.plural} match {search.trim() ? "this search" : "these filters"}.
         </p>
       ) : (
         <>
