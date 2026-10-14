@@ -41,7 +41,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
 
   return (
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
-      {/* The same underlined strip as Records' sub-tabs, with Zumba's gear at its end. */}
+      {/* The same underlined strip as Records' sub-tabs, with Zumba's gear at its end. On a
+          phone the tabs share the width, icon over label, so all five fit without a swipe
+          hiding Manager off the edge; from sm up they sit in a row as Records' do. */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" data-testid="activity-care-subtabs">
           {tabs.map((t) => {
@@ -51,12 +53,12 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
                 key={t.key}
                 type="button"
                 onClick={() => setActive(t.key)}
-                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium sm:text-sm ${
+                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 whitespace-nowrap border-b-2 px-1 py-2 text-[11px] font-medium sm:flex-none sm:shrink-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm ${
                   active === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
                 }`}
                 data-testid={`activity-care-subtab-${t.key}`}
               >
-                <Icon className="h-4 w-4" /> {t.label}
+                <Icon className="h-4 w-4 shrink-0" /> {t.label}
               </button>
             );
           })}
@@ -75,7 +77,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         )}
       </div>
       <Dialog open={mastersOpen} onOpenChange={setMastersOpen}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto" data-testid="zumba-masters-dialog">
+        {/* A gutter and rounded corners on a phone too, and the panel held below the close
+            ✕ so it does not sit on the panel's own Refresh button. */}
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg p-3 pt-11 sm:p-6 sm:pt-12" data-testid="zumba-masters-dialog">
           {/* The panel carries its own Zumba Masters heading; these are for screen readers. */}
           <DialogHeader className="sr-only">
             <DialogTitle>Zumba Masters</DialogTitle>

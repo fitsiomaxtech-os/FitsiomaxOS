@@ -3134,7 +3134,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       )}
 
       {/* Back-to-top arrow over the phone lists only (Branch Leads, Consultation, House
-          Visit, Review) -- the screens where the user scrolls a long list of rows. Left
+          Visit, Activity Care for its Review) -- the screens where the user scrolls a long list of rows. Left
           off while Loading... holds the same corner, and off when Super Admin embeds
           this board. */}
       {!embedded && !profileOpen && !loading && LIST_VIEWS.includes(activeView) && (
