@@ -44,6 +44,10 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   // Zumba Masters — which master takes each class time. It used to be Management's Zumba
   // sub-tab; it is set once and left, so it sits behind the gear rather than a tab.
   const [mastersOpen, setMastersOpen] = useState(false);
+  // The right end of the tab strip, where a Team tab puts its Branch and Gender filters and
+  // its Refresh from lg up (see TeamPanel's toolbarSlot). A node in state rather than a ref,
+  // so the panel re-renders into it once it exists.
+  const [toolbar, setToolbar] = useState(null);
 
   return (
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
@@ -72,6 +76,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
             );
           })}
         </div>
+        <div ref={setToolbar} className="mb-1 hidden shrink-0 items-center gap-2 lg:flex" data-testid="activity-care-toolbar" />
         {active === "zumba" && (
           <button
             type="button"
@@ -106,9 +111,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
       ) : active === "manager" ? (
         <BranchDetailPage branchId={branchId} readOnly />
       ) : active === "team_consultants" ? (
-        <TeamPanel kind="consultants" />
+        <TeamPanel kind="consultants" toolbarSlot={toolbar} />
       ) : active === "team_physio" ? (
-        <TeamPanel kind="physio" />
+        <TeamPanel kind="physio" toolbarSlot={toolbar} />
       ) : (
         <BranchReviewPanel branchId={branchId} />
       )}

@@ -1,14 +1,15 @@
 """Activity Care's Team Consultants and Team Physio tabs.
 
 Every consultant, or every physio, in the organisation -- not only the branch's own -- with
-the branches they work at and their gender, so a Branch Admin can see who is where and filter
-by either.
+the branches they work at, their phone, gender and HR status, so a Branch Admin can see who is
+where and filter by branch or gender.
 
 Three records answer it between them. The `doctors` row is the expert; its login (`users`)
 holds a Consultant's branches, because a Consultant's record is branchless on purpose (see
 consultants_serving_branch in deps.py); a Physio has one `doctors` row per branch instead, so
-theirs are read off the rows. Gender is on the HR record (`employees`), reached through the
-login's employee_id or, for a profile-only expert with no login, the row's own.
+theirs are read off the rows. Phone, gender and status are on the HR record (`employees`),
+reached through the login's employee_id or, for a profile-only expert with no login, the row's
+own; the login's phone stands in where HR has none.
 """
 from typing import Dict, List
 
@@ -59,7 +60,7 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
         async for u in v3_col("users").find(
             {"id": {"$in": user_ids}},
             {"_id": 0, "id": 1, "full_name": 1, "role": 1, "branch_id": 1, "branch_ids": 1,
-             "employee_id": 1, "is_active": 1},
+             "employee_id": 1, "is_active": 1, "phone": 1},
         ):
             users[u["id"]] = u
 
@@ -79,6 +80,7 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
             "id": key,
             "full_name": (login or {}).get("full_name") or r.get("full_name") or "",
             "employee_id": (login or {}).get("employee_id") or r.get("employee_id"),
+            "login_phone": (login or {}).get("phone") or "",
             "branch_ids": set(),
             "all_branches": False,
         })
@@ -94,10 +96,12 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
             person["branch_ids"].add(r["branch_id"])
 
     employee_ids = list({p["employee_id"] for p in people.values() if p.get("employee_id")})
-    genders: Dict[str, str] = {}
+    hr: Dict[str, dict] = {}
     if employee_ids:
-        async for e in v3_col("employees").find({"id": {"$in": employee_ids}}, {"_id": 0, "id": 1, "gender": 1}):
-            genders[e["id"]] = _gender(e.get("gender"))
+        async for e in v3_col("employees").find(
+            {"id": {"$in": employee_ids}}, {"_id": 0, "id": 1, "gender": 1, "phone": 1, "status": 1},
+        ):
+            hr[e["id"]] = e
 
     members: List[dict] = []
     for p in people.values():
@@ -106,10 +110,15 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
             ({"id": b, "name": branches[b]} for b in p["branch_ids"] if b in branches),
             key=lambda b: b["name"].lower(),
         )
+        e = hr.get(p.get("employee_id")) or {}
         members.append({
             "id": p["id"],
             "full_name": p["full_name"],
-            "gender": genders.get(p.get("employee_id"), ""),
+            "phone": e.get("phone") or p["login_phone"],
+            "gender": _gender(e.get("gender")),
+            # HR's word for them; "active" where there is no HR record, since an inactive
+            # login has already been left out above.
+            "status": str(e.get("status") or "active").strip().lower(),
             "all_branches": p["all_branches"],
             "branches": at,
         })
