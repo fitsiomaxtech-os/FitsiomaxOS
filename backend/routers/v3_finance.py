@@ -3671,6 +3671,9 @@ class OldClientPaymentInput(V3MarkInstallmentPaidInput):
     client: Optional[OldClientFields] = None
     # YYYY-MM-DD, today when left out. Never a future day, nor one whose book is closed.
     paid_on: Optional[str] = None
+    # "offline" at the branch counter, "online" paid from wherever the client is (UPI or
+    # Account Transfer only). Offline when left out -- old_clients.check_channel.
+    collection_channel: Optional[str] = None
 
 
 async def _old_clients_by_id(ids) -> dict:
@@ -3733,6 +3736,7 @@ def _old_client_txn_row(pay: dict, client: dict, history: list, branch_name: str
         # The old tracker's own patient ID, which is the number this client's file goes by.
         "patient_number": client.get("old_patient_id", ""),
         "payment_mode": pay.get("payment_mode") or "unknown",
+        "collection_channel": pay.get("collection_channel") or "offline",
         "payment_split": _lines_to_split(pay.get("payment_lines")),
         "client_balance": old_clients.balance(client, history),
         # What was left once this instalment was in -- what its receipt says, reissued or not.
@@ -3875,6 +3879,10 @@ async def record_old_client_payment(
         raise HTTPException(status_code=400, detail="Enter the amount paid")
     mode, amount, mode_fields, detail_suffix = _tender(payload, payload.amount or 0, "instalment")
     amount = round(amount, 2)
+    try:
+        channel = old_clients.check_channel(payload.collection_channel, mode, payload.upi_transaction_id or payload.upi_utr)
+    except old_clients.OldClientError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if capped and amount > owed + 0.01:
         raise HTTPException(status_code=400, detail=f"Rs.{amount:g} is more than the Rs.{owed:g} still owed on this course")
 
@@ -3898,8 +3906,9 @@ async def record_old_client_payment(
         "instalment_number": number,
         "amount": amount,
         "payment_mode": mode,
+        "collection_channel": channel,
         **mode_fields,
-        "details": old_clients.details_line(amount, mode, number, client, detail_suffix, transaction_id),
+        "details": old_clients.details_line(amount, mode, number, client, detail_suffix, transaction_id, channel),
         "paid_on": day,
         "created_at": old_clients.stamp_for(day, today, now),
         # When it was typed in, beside when it was paid -- the same thing for today's money,

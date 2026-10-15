@@ -157,14 +157,44 @@ def stamp_for(day: str, today: str, now: str) -> str:
     return now if day == today else f"{day}{NOON_IST}"
 
 
-def details_line(amount: float, mode: str, number: int, client: dict, detail_suffix: str, transaction_id: str) -> str:
+# Where the client was when they paid. Offline is at the branch counter, the way every
+# instalment was taken before the form asked; online is from wherever they are, by a UPI
+# request or a bank transfer, with nobody at the desk to see the money change hands.
+CHANNELS = {"offline": "Offline", "online": "Online"}
+
+# The modes money can arrive in when the client is not standing at the counter. Cash and
+# a cheque are handed over, and a card is swiped on the branch's own terminal.
+ONLINE_MODES = {"upi", "account_transfer"}
+
+
+def check_channel(channel: str, mode: str, upi_reference: str = "") -> str:
+    """The channel an instalment came in on, checked against how it was paid. Offline when
+    left out -- what every caller written before the switch means.
+
+    An online UPI payment has to carry its transaction id. At the counter the desk watched
+    the client's phone say "paid"; from a distance the id is the only proof the money left,
+    and the only thing the accountant can match against the bank statement."""
+    channel = (channel or "").strip().lower() or "offline"
+    if channel not in CHANNELS:
+        raise OldClientError("Collected must be Online or Offline")
+    if channel == "online":
+        if mode not in ONLINE_MODES:
+            raise OldClientError("An online payment comes in by UPI or Account Transfer")
+        if mode == "upi" and not (upi_reference or "").strip():
+            raise OldClientError("Enter the UPI Transaction ID the client paid online with")
+    return channel
+
+
+def details_line(amount: float, mode: str, number: int, client: dict, detail_suffix: str, transaction_id: str, channel: str = "offline") -> str:
     """The payment as one human line, in the shape the fee collections write theirs: the
     amount and the mode first (the finance readers take the first "Rs." and the first
-    "via"), then what it was for, then the reference _tender put together."""
+    "via"), then what it was for, then the reference _tender put together. Online is named;
+    offline is what an instalment always was, and goes unsaid."""
     what = client.get("package") or CATEGORIES.get(client.get("category"), "course")
     return (
         f"Collected Rs.{f'{amount:.2f}'.rstrip('0').rstrip('.')} via {mode}"
-        f" · Old client instalment #{number} for '{what}'"
+        + (" (online)" if channel == "online" else "")
+        + f" · Old client instalment #{number} for '{what}'"
         + (f" (old ID {client['old_patient_id']})" if client.get("old_patient_id") else "")
         + f"{detail_suffix} · Txn {transaction_id}"
     )
@@ -226,6 +256,7 @@ def summary(client: dict, payments: List[dict], today: str, branch_name: str = "
                 "instalment_number": p.get("instalment_number"),
                 "amount": money(p.get("amount")),
                 "payment_mode": p.get("payment_mode") or "",
+                "collection_channel": p.get("collection_channel") or "offline",
                 "paid_on": p.get("paid_on") or (p.get("created_at") or "")[:10],
             }
             for p in ordered
