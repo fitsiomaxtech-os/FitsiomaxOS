@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronDown, Clock, Loader2, Plus, RefreshCw, Save, Salad, Stethoscope, Activity, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ClockTimeInput } from "@/components/ui/clock-time-input";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ShiftPickerModal } from "@/components/ui/shift-picker";
 import { toast } from "@/components/ui/sonner";
@@ -139,20 +140,17 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
         data-testid={`shift-name-${shift.id}`}
       />
 
-      {/* 24-hour inputs on purpose — an <input type="time"> hands back "HH:MM" whatever the
-          browser displays, which is exactly what the API stores. The 12-hour reading sits
-          beside them, because that is how the clinic says it out loud. */}
+      {/* Read in 12-hour form, as the clinic says it out loud, and set on the clock dialog.
+          The value underneath stays 24-hour "HH:MM", which is exactly what the API stores. */}
       <div className="order-3 flex w-full items-center gap-2 md:order-2 md:w-auto">
-        <input
-          type="time"
+        <ClockTimeInput
           value={draft.start_time}
           onChange={(e) => setDraft((d) => ({ ...d, start_time: e.target.value }))}
           className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-32 md:flex-none"
           data-testid={`shift-start-${shift.id}`}
         />
         <span className="shrink-0 text-xs text-slate-400">to</span>
-        <input
-          type="time"
+        <ClockTimeInput
           value={draft.end_time}
           onChange={(e) => setDraft((d) => ({ ...d, end_time: e.target.value }))}
           className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-32 md:flex-none"
@@ -289,8 +287,7 @@ const WorkingDayCard = ({ branchId }) => {
       <div className="p-3 md:p-4">
         <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="working-day-list">
           <RuleField label="Day starts">
-            <input
-              type="time"
+            <ClockTimeInput
               value={rules.work_start || ""}
               onChange={(e) => set({ work_start: e.target.value })}
               className="h-9 w-32 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 sm:w-40"
@@ -298,8 +295,7 @@ const WorkingDayCard = ({ branchId }) => {
             />
           </RuleField>
           <RuleField label="Day ends">
-            <input
-              type="time"
+            <ClockTimeInput
               value={rules.work_end || ""}
               onChange={(e) => set({ work_end: e.target.value })}
               className="h-9 w-32 rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 sm:w-40"
@@ -571,19 +567,17 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
                     className="col-span-3 h-8 text-sm md:min-w-[10rem] md:flex-1"
                     data-testid="shift-new-name"
                   />
-                  <input
-                    type="time"
+                  <ClockTimeInput
                     value={newShift.start_time}
                     onChange={(e) => setNewShift((s) => ({ ...s, start_time: e.target.value }))}
-                    className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
+                    className="h-8 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 md:w-32"
                     data-testid="shift-new-start"
                   />
                   <span className="text-xs text-slate-400">to</span>
-                  <input
-                    type="time"
+                  <ClockTimeInput
                     value={newShift.end_time}
                     onChange={(e) => setNewShift((s) => ({ ...s, end_time: e.target.value }))}
-                    className="h-8 w-full min-w-0 rounded-md border border-slate-200 px-2 text-sm text-slate-700 md:w-auto"
+                    className="h-8 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 md:w-32"
                     data-testid="shift-new-end"
                   />
                   <div className="col-span-3 grid grid-cols-2 gap-2 md:contents">
