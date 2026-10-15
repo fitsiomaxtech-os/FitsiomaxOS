@@ -3654,7 +3654,11 @@ class OldClientFields(BaseModel):
     old_patient_id: Optional[str] = ""
     # One of old_clients.CATEGORIES: session (Treatment), rehab, consultation, diet.
     category: Optional[str] = ""
+    # "offline" | "online" -- which of the package's two prices the course was sold at.
+    mode: Optional[str] = ""
     package: Optional[str] = ""
+    # The FITSIO STORE package picked for it, if one was (store_items.id).
+    package_item_id: Optional[str] = ""
     total_fee: Optional[float] = None
     paid_before: Optional[float] = 0
     instalments_before: Optional[int] = None

@@ -136,3 +136,17 @@ def test_same_course_is_phone_line_and_package():
     assert not old_clients.same_course(a, {**a, "phone": "9000000000"})
     # Two clients entered without a phone are not one client.
     assert not old_clients.same_course({**a, "phone": ""}, {**a, "phone": ""})
+
+
+def test_mode_is_offline_unless_the_course_was_online():
+    assert old_clients.clean_client(FORM)["mode"] == "offline"
+    c = old_clients.clean_client({**FORM, "mode": "Online", "package_item_id": " ITEM-1 "})
+    assert c["mode"] == "online" and c["package_item_id"] == "ITEM-1"
+    assert old_clients.summary({"id": "C1", **c}, [], TODAY)["mode"] == "online"
+    # Entered before the form asked: read as offline.
+    assert old_clients.summary({"id": "C1", "category": "session"}, [], TODAY)["mode"] == "offline"
+
+
+def test_clean_client_refuses_an_unknown_mode():
+    with pytest.raises(OldClientError, match="Offline or Online"):
+        old_clients.clean_client({**FORM, "mode": "hybrid"})

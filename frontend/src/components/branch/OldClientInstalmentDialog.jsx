@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { History, X, Search, UserPlus, Info, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
-import { searchOldClients, recordOldClientPayment } from "@/lib/api";
+import { searchOldClients, recordOldClientPayment, listStoreItems } from "@/lib/api";
 import { CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 import { displayPhone } from "@/lib/phone";
 
@@ -22,8 +22,39 @@ const CATEGORIES = [
   ["diet", "Diet"],
 ];
 
+// Where the old course was run -- old_clients.MODES on the server. Every catalogue package
+// is priced once for each, so the mode is what picks the course fee off it.
+const MODES = [
+  ["offline", "Offline"],
+  ["online", "Online"],
+];
+
+// The FITSIO STORE shelf each Paid For is sold off -- the same filters the Consultations
+// board picks its packages with.
+const SHELVES = {
+  session: (i) => i.item_type === "session" && (i.category || "physiotherapy") === "physiotherapy",
+  rehab: (i) => i.item_type === "session" && i.category === "rehab",
+  consultation: (i) => (i.item_type || "consultation") === "consultation",
+  diet: (i) => i.item_type === "diet" || i.item_type === "diet_package",
+};
+
+const sessionsOf = (item, mode) => (item?.item_type === "session" ? Number(mode === "online" ? item.sessions_online : item.sessions_offline) || 0 : 0);
+
+/**
+ * What a package costs as a whole course, in one mode -- PackagesBoard's packageTotal. A
+ * session shelf holds a per-session rate (times the count) unless it is priced as the
+ * course; every other shelf holds the price itself.
+ */
+const packageTotal = (item, mode) => {
+  if (!item) return null;
+  const price = Number(mode === "online" ? item.price_online : item.price_offline);
+  if (!Number.isFinite(price)) return null;
+  if (item.item_type !== "session" || item.price_is_total) return Math.round(price);
+  return Math.round(price * sessionsOf(item, mode));
+};
+
 const emptyClient = {
-  name: "", phone: "", old_patient_id: "", category: "session", package: "",
+  name: "", phone: "", old_patient_id: "", category: "session", mode: "offline", package: "", package_item_id: "",
   total_fee: "", paid_before: "", instalments_before: "1",
 };
 
@@ -32,7 +63,9 @@ const clientFrom = (c) => ({
   phone: c.phone || "",
   old_patient_id: c.old_patient_id || "",
   category: c.category || "session",
+  mode: c.mode || "offline",
   package: c.package || "",
+  package_item_id: c.package_item_id || "",
   total_fee: String(c.total_fee ?? ""),
   paid_before: String(c.paid_before ?? ""),
   instalments_before: String(c.instalments_before ?? ""),
@@ -70,6 +103,11 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
   const [client, setClient] = useState(emptyClient);
   const [pay, setPay] = useState({ amount: "", paid_on: today, next_due_date: "", ...emptyTender });
   const [saving, setSaving] = useState(false);
+  // The branch's FITSIO STORE packages, for the Package picker and its two prices. null
+  // while loading; empty when there are none or they could not be read, and the package
+  // is then typed.
+  const [storeItems, setStoreItems] = useState(null);
+  const [typingPackage, setTypingPackage] = useState(false);
   // Opened from a Payment Schedule row: picked the first time the search hands it back,
   // and never again, so "Change client" goes back to a search rather than straight in.
   const autoPick = useRef(startWith?.id || null);
@@ -78,6 +116,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
     setPicked(c);
     setIsNew(false);
     setEditing(false);
+    setTypingPackage(false);
     setClient(clientFrom(c));
     setPay((p) => ({ ...p, amount: "" }));
   }, []);
@@ -102,6 +141,40 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
   }, [branch, q, picked, isNew, pick]);
 
   const setC = (patch) => setClient((c) => ({ ...c, ...patch }));
+
+  useEffect(() => {
+    if (!branch) return undefined;
+    let live = true;
+    listStoreItems(undefined, undefined, branch)
+      .then((rows) => { if (live) setStoreItems(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (live) setStoreItems([]); });
+    return () => { live = false; };
+  }, [branch]);
+
+  const shelf = (storeItems || []).filter(SHELVES[client.category] || (() => false));
+  const pickedItem = shelf.find((i) => i.id === client.package_item_id) || null;
+  // Typed when the shelf is empty, when the desk asked to, or when the course was saved
+  // under a name that is not (or is no longer) a package on the shelf.
+  const showTyped = typingPackage || !shelf.length || (Boolean(client.package) && !pickedItem);
+
+  // A package picked fills the fee in at the mode's price; the fee stays editable, since
+  // the old tracker may have sold it at another figure.
+  const choosePackage = (id) => {
+    if (id === "__typed") { setTypingPackage(true); setC({ package_item_id: "" }); return; }
+    const item = shelf.find((i) => i.id === id);
+    if (!item) { setC({ package_item_id: "", package: "" }); return; }
+    const total = packageTotal(item, client.mode);
+    setC({ package_item_id: item.id, package: item.name, ...(total > 0 ? { total_fee: String(total) } : {}) });
+  };
+  const chooseMode = (mode) => {
+    const total = packageTotal(pickedItem, mode);
+    setC({ mode, ...(pickedItem && total > 0 ? { total_fee: String(total) } : {}) });
+  };
+  // Another Paid For is another shelf: a package picked off this one no longer applies.
+  const chooseCategory = (category) => {
+    setTypingPackage(false);
+    setC({ category, ...(client.package_item_id ? { package_item_id: "", package: "" } : {}) });
+  };
   const setP = (patch) => setPay((p) => ({ ...p, ...patch }));
 
   const startNew = () => {
@@ -113,6 +186,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
     setPicked(null);
     setIsNew(true);
     setEditing(true);
+    setTypingPackage(false);
   };
 
   const backToSearch = () => {
@@ -243,7 +317,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold text-slate-800">{c.name || "Old client"}</span>
                           <span className="block truncate text-[11px] text-slate-500">
-                            {[displayPhone(c.phone), c.old_patient_id && `ID ${c.old_patient_id}`, c.category_label, c.package].filter(Boolean).join(" · ")}
+                            {[displayPhone(c.phone), c.old_patient_id && `ID ${c.old_patient_id}`, c.category_label, c.mode === "online" ? "Online" : "Offline", c.package].filter(Boolean).join(" · ")}
                           </span>
                         </span>
                         {c.balance > 0 ? (
@@ -301,7 +375,11 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                     {[displayPhone(client.phone), client.old_patient_id && `ID ${client.old_patient_id}`].filter(Boolean).join(" · ")}
                   </p>
                   <p className="truncate text-[11px] text-slate-500">
-                    {[CATEGORIES.find(([k]) => k === client.category)?.[1], client.package].filter(Boolean).join(" · ")}
+                    {[
+                      CATEGORIES.find(([k]) => k === client.category)?.[1],
+                      MODES.find(([k]) => k === client.mode)?.[1],
+                      client.package,
+                    ].filter(Boolean).join(" · ")}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2 text-[11px] font-semibold">
@@ -351,11 +429,10 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                   {picked ? "Done" : "Back to search"}
                 </button>
               </div>
-              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-3">
                 <CollectField compact label="Client Name" value={client.name} onChange={(e) => setC({ name: e.target.value })} testid="old-client-name" />
                 <CollectField compact label="Phone" value={client.phone} onChange={(e) => setC({ phone: e.target.value })} inputMode="tel" testid="old-client-phone" />
                 <CollectField compact label="Old Patient ID" value={client.old_patient_id} onChange={(e) => setC({ old_patient_id: e.target.value })} testid="old-client-old-id" />
-                <CollectField compact label="Package" value={client.package} onChange={(e) => setC({ package: e.target.value })} testid="old-client-package" />
               </div>
               <div>
                 <span className="mb-0.5 block text-xs font-semibold text-slate-700">Paid For</span>
@@ -364,7 +441,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setC({ category: key })}
+                      onClick={() => chooseCategory(key)}
                       className={`rounded-md border px-2 py-1.5 text-xs font-semibold transition ${
                         client.category === key ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
                       }`}
@@ -373,6 +450,74 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                       {label}
                     </button>
                   ))}
+                </div>
+              </div>
+              <div>
+                <div className="mb-0.5 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-700">Package</span>
+                  {shelf.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setTypingPackage(!showTyped); if (showTyped) setC({ package: "", package_item_id: "" }); }}
+                      className="text-[11px] font-semibold text-indigo-700 hover:underline"
+                      data-testid="old-client-package-toggle"
+                    >
+                      {showTyped ? "Pick from packages" : "Type the name instead"}
+                    </button>
+                  )}
+                </div>
+                {showTyped ? (
+                  <input
+                    value={client.package}
+                    onChange={(e) => setC({ package: e.target.value, package_item_id: "" })}
+                    placeholder={storeItems === null ? "Loading packages..." : "Package name as on the old tracker"}
+                    className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                    data-testid="old-client-package"
+                  />
+                ) : (
+                  <select
+                    value={client.package_item_id}
+                    onChange={(e) => choosePackage(e.target.value)}
+                    className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                    data-testid="old-client-package-select"
+                  >
+                    <option value="">Pick the package</option>
+                    {shelf.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    <option value="__typed">Other -- type the name</option>
+                  </select>
+                )}
+              </div>
+              <div>
+                <span className="mb-0.5 block text-xs font-semibold text-slate-700">Offline / Online</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {MODES.map(([key, label]) => {
+                    const active = client.mode === key;
+                    const price = packageTotal(pickedItem, key);
+                    const sessions = sessionsOf(pickedItem, key);
+                    const what = CATEGORIES.find(([k]) => k === client.category)?.[1] || "";
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => chooseMode(key)}
+                        aria-pressed={active}
+                        className={`rounded-lg border-2 px-3 py-1.5 text-left transition ${
+                          active ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white hover:border-indigo-300"
+                        }`}
+                        data-testid={`old-client-mode-${key}`}
+                      >
+                        <span className={`block text-[10px] font-bold uppercase tracking-wider ${active ? "text-indigo-700" : "text-slate-400"}`}>
+                          {label} {what}
+                        </span>
+                        <span className={`block text-base font-extrabold leading-tight ${active ? "text-indigo-700" : "text-slate-700"}`}>
+                          {price != null && pickedItem ? fmt(price) : "—"}
+                        </span>
+                        {sessions > 0 && (
+                          <span className={`block text-[10px] ${active ? "text-indigo-600" : "text-slate-400"}`}>{sessions} sessions</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-3">

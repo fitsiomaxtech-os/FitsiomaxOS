@@ -38,6 +38,12 @@ CATEGORIES = {
     "diet": "Diet",
 }
 
+# Whether the old course was run at the branch or online. The catalogue prices every
+# package twice, once for each (store_items.price_offline / price_online), so the mode is
+# what says which of the two the course fee was. Offline when the form does not say --
+# every old client entered before it asked.
+MODES = {"offline": "Offline", "online": "Online"}
+
 # The stamp a back-dated instalment is written under: noon in the clinic, so the day reads
 # the same in UTC as in India and lands in the right bucket whichever clock reads it. The
 # same hour past_data_live._stamp gives an Excel date.
@@ -83,6 +89,9 @@ def clean_client(fields: dict) -> dict:
     category = fields.get("category") or "session"
     if category not in CATEGORIES:
         raise OldClientError("Pick what the old course was for")
+    mode = str(fields.get("mode") or "").strip().lower() or "offline"
+    if mode not in MODES:
+        raise OldClientError("Pick Offline or Online for the old course")
     total_fee = money(fields.get("total_fee"))
     if total_fee < 0:
         raise OldClientError("Total course fee cannot be less than zero")
@@ -112,7 +121,10 @@ def clean_client(fields: dict) -> dict:
         "phone": phone,
         "old_patient_id": " ".join(str(fields.get("old_patient_id") or "").split()),
         "category": category,
+        "mode": mode,
         "package": " ".join(str(fields.get("package") or "").split()),
+        # The catalogue package the fee was read from, when it was picked rather than typed.
+        "package_item_id": str(fields.get("package_item_id") or "").strip(),
         "total_fee": total_fee,
         "paid_before": paid_before,
         "instalments_before": instalments_before,
@@ -210,7 +222,9 @@ def summary(client: dict, payments: List[dict], today: str, branch_name: str = "
         "old_patient_id": client.get("old_patient_id") or "",
         "category": client.get("category") or "",
         "category_label": CATEGORIES.get(client.get("category"), ""),
+        "mode": client.get("mode") or "offline",
         "package": client.get("package") or "",
+        "package_item_id": client.get("package_item_id") or "",
         "total_fee": money(client.get("total_fee")),
         "paid_before": money(client.get("paid_before")),
         "instalments_before": int(client.get("instalments_before") or 0),

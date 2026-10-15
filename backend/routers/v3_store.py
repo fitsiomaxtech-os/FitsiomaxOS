@@ -266,7 +266,9 @@ async def list_store_items(
     category: Optional[str] = None,
     item_type: Optional[str] = None,
     branch_id: Optional[str] = None,
-    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "head_physio", "business_dev")),
+    # accountant: read-only, for the package and its Offline / Online price on the Old
+    # Client Instalment form (Accountant Manage > Payment Schedule).
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "head_physio", "business_dev", "accountant")),
 ):
     q = {}
     if category:
@@ -279,7 +281,10 @@ async def list_store_items(
     docs = await v3_col("store_items").find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     # Every branch-side picker (booking, fee collection, Zumba, Fitness) reads through here,
     # so this one overlay is what makes a branch see its own prices and durations everywhere.
-    docs = await store_branch_overrides.overlay(docs, _branch_for(user, branch_id))
+    # The accountant keeps every branch's books and has no branch of their own, so they
+    # read whichever branch they name -- the same reading Super Admin gets, and only here.
+    branch = (branch_id or None) if user.role == "accountant" else _branch_for(user, branch_id)
+    docs = await store_branch_overrides.overlay(docs, branch)
     return [_normalize_legacy_prices(d) for d in docs]
 
 
