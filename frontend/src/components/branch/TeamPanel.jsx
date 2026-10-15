@@ -116,30 +116,36 @@ const Phone = ({ phone }) => (
 );
 
 /**
- * End a collaboration: take somebody off the viewer's branch. Asked first, because it changes
- * where they are offered. Their own branch is never this — the button is not shown for it,
- * and the server refuses it.
+ * A row's Add or Remove, asked before it is done: either one changes where the person is
+ * offered for booking. Add starts a collaboration at the viewer's branch; Remove ends it.
+ * Their own branch is never removed — the button is not shown for it, and the server
+ * refuses it.
  */
-const RemoveFromBranchDialog = ({ member, branch, desk, onClose, onSaved }) => {
+const BranchChangeDialog = ({ mode, member, branch, desk, onClose, onSaved }) => {
   const [busy, setBusy] = useState(false);
+  const adding = mode === "add";
 
-  const remove = async () => {
+  const confirm = async () => {
     setBusy(true);
     try {
-      const res = await bmTeamRemove(branch.id, member.user_id, desk.key);
-      toast.success(res?.message || `${member.full_name} removed from ${branch.name}`);
+      const res = adding
+        ? await bmTeamAdd(branch.id, member.user_id, desk.key)
+        : await bmTeamRemove(branch.id, member.user_id, desk.key);
+      toast.success(res?.message || `${member.full_name} ${adding ? "added to" : "removed from"} ${branch.name}`);
       onSaved();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not remove");
+      toast.error(e?.response?.data?.detail || (adding ? "Could not add" : "Could not remove"));
       setBusy(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl" data-testid="team-row-remove-dialog">
+      <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl" data-testid={`team-row-${mode}-dialog`}>
         <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
-          <h3 className="min-w-0 truncate text-base font-semibold text-slate-800">Remove from {branch.name}</h3>
+          <h3 className="min-w-0 truncate text-base font-semibold text-slate-800">
+            {adding ? "Add to" : "Remove from"} {branch.name}
+          </h3>
           <button
             type="button"
             onClick={onClose}
@@ -153,13 +159,21 @@ const RemoveFromBranchDialog = ({ member, branch, desk, onClose, onSaved }) => {
         </div>
         <div className="space-y-4 p-5">
           <p className="text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">{member.full_name}</span> stops working at {branch.name}
-            {member.own_branch && <> and stays at {member.own_branch.name}</>}. Appointments already booked here are kept.
+            <span className="font-semibold text-slate-800">{member.full_name}</span>
+            {adding ? <> starts working at {branch.name} too</> : <> stops working at {branch.name}</>}
+            {member.own_branch && <> and stays at {member.own_branch.name}</>}.
+            {!adding && <> Appointments already booked here are kept.</>}
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
-            <Button size="sm" onClick={remove} disabled={busy} className="bg-rose-600 text-white hover:bg-rose-700" data-testid="team-row-remove-confirm">
-              {busy ? "Removing..." : "Remove"}
+            <Button
+              size="sm"
+              onClick={confirm}
+              disabled={busy}
+              className={adding ? "bg-sky-600 text-white hover:bg-sky-700" : "bg-rose-600 text-white hover:bg-rose-700"}
+              data-testid={`team-row-${mode}-confirm`}
+            >
+              {busy ? (adding ? "Adding..." : "Removing...") : (adding ? "Add" : "Remove")}
             </Button>
           </div>
         </div>
@@ -179,8 +193,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const [gender, setGender] = useState("all");
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
-  const [addingId, setAddingId] = useState(null); // the row whose Add is in flight
-  const [removing, setRemoving] = useState(null); // { member, branch }, for a row's Remove
+  const [confirming, setConfirming] = useState(null); // { mode, member, branch }, a row's Add or Remove
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -225,21 +238,9 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
     </button>
   );
 
-  const myBranchName = data.branches.find((b) => b.id === branchId)?.name || "your branch";
-
-  // A row's Add: straight to the viewer's own branch, no picker — a Branch Admin brings
-  // people to their branch and to no other. Remove undoes it.
-  const addHere = async (m) => {
-    setAddingId(m.id);
-    try {
-      const res = await bmTeamAdd(branchId, m.user_id, k.desk.key);
-      toast.success(res?.message || `${m.full_name} added to ${myBranchName}`);
-      load();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not add");
-    }
-    setAddingId(null);
-  };
+  // A row's Add goes to the viewer's own branch, no picker — a Branch Admin brings people to
+  // their branch and to no other.
+  const myBranch = { id: branchId, name: data.branches.find((b) => b.id === branchId)?.name || "your branch" };
 
   // One action a row, decided by where they stand with the viewer's branch: their own
   // branch — nothing to do; collaborating with it — Remove; not at it — Add. A profile-only
@@ -257,7 +258,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setRemoving({ member: m, branch: here })}
+            onClick={() => setConfirming({ mode: "remove", member: m, branch: here })}
             className="h-8 gap-1 border-rose-200 px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700"
             title={`Remove ${m.full_name} from ${here.name}`}
             aria-label={`Remove ${m.full_name} from ${here.name}`}
@@ -269,14 +270,13 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => addHere(m)}
-            disabled={!!addingId}
+            onClick={() => setConfirming({ mode: "add", member: m, branch: myBranch })}
             className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
-            title={`Add ${m.full_name} to ${myBranchName}`}
-            aria-label={`Add ${m.full_name} to ${myBranchName}`}
+            title={`Add ${m.full_name} to ${myBranch.name}`}
+            aria-label={`Add ${m.full_name} to ${myBranch.name}`}
             data-testid={`team-row-add-${m.id}`}
           >
-            {addingId === m.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
+            <Plus className="h-3.5 w-3.5" /> Add
           </Button>
         )}
       </div>
@@ -349,13 +349,14 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           onSaved={() => { setAdding(false); load(); }}
         />
       )}
-      {removing && (
-        <RemoveFromBranchDialog
-          member={removing.member}
-          branch={removing.branch}
+      {confirming && (
+        <BranchChangeDialog
+          mode={confirming.mode}
+          member={confirming.member}
+          branch={confirming.branch}
           desk={k.desk}
-          onClose={() => setRemoving(null)}
-          onSaved={() => { setRemoving(null); load(); }}
+          onClose={() => setConfirming(null)}
+          onSaved={() => { setConfirming(null); load(); }}
         />
       )}
       {/* Below lg the search takes a line of its own, the two filters and Refresh under it.
