@@ -60,11 +60,12 @@ const FilterSelect = ({ value, onChange, allLabel, options, label, testid }) => 
 const branchText = (m) => (m.all_branches ? "All Branches" : m.branches.map((b) => b.name).join(", ") || "—");
 
 // The branch they were hired into, boxed in orange; a Super Admin taking consultations
-// belongs to every branch, so theirs reads All Branches.
+// belongs to every branch, so theirs reads All Branches. Branch tags share one width so the
+// column lines up; a longer name is cut short and given whole on hover.
 const OwnBranch = ({ m }) => {
   const name = m.all_branches ? "All Branches" : m.own_branch?.name;
   return name ? (
-    <span className="inline-flex whitespace-nowrap rounded-[4px] border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+    <span title={name} className="inline-block w-36 truncate whitespace-nowrap rounded-[4px] border border-orange-200 bg-orange-50 px-2 py-0.5 text-center text-[11px] font-semibold text-orange-700">
       {name}
     </span>
   ) : (
@@ -79,7 +80,7 @@ const CollabBranches = ({ m }) => (
   ) : (
     <span className="flex flex-wrap gap-1">
       {m.collab_branches.map((b) => (
-        <span key={b.id} className="inline-flex whitespace-nowrap rounded-[4px] border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+        <span key={b.id} title={b.name} className="inline-block w-36 truncate whitespace-nowrap rounded-[4px] border border-sky-200 bg-sky-50 px-2 py-0.5 text-center text-[11px] font-semibold text-sky-700">
           {b.name}
         </span>
       ))}
