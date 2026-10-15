@@ -11,8 +11,8 @@ import { TeamAddDialog } from "@/components/branch/BranchDetailPage";
 
 /**
  * Activity Care's Team Consultants and Team Physio tabs: every consultant, or every physio,
- * in the organisation, one to a row — S.No, name, branch, phone, gender, status, an Add and
- * an arrow — narrowed by a search, by branch and by gender. The toolbar's Add picks a branch
+ * in the organisation, one to a row — S.No, name, own branch, the branches they collaborate
+ * with, phone, gender, status, an Add and an arrow — narrowed by a search, by branch and by gender. The toolbar's Add picks a branch
  * and then a person; a row's Add has the person and picks the branch. Either way they gain
  * the branch and keep the ones they already have.
  */
@@ -58,6 +58,34 @@ const FilterSelect = ({ value, onChange, allLabel, options, label, testid }) => 
 );
 
 const branchText = (m) => (m.all_branches ? "All Branches" : m.branches.map((b) => b.name).join(", ") || "—");
+
+// The branch they were hired into, boxed in orange; a Super Admin taking consultations
+// belongs to every branch, so theirs reads All Branches.
+const OwnBranch = ({ m }) => {
+  const name = m.all_branches ? "All Branches" : m.own_branch?.name;
+  return name ? (
+    <span className="inline-flex whitespace-nowrap rounded-[4px] border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+      {name}
+    </span>
+  ) : (
+    <span className="text-slate-400">—</span>
+  );
+};
+
+// Every other branch they work: the ones they were brought to collaborate with.
+const CollabBranches = ({ m }) => (
+  m.all_branches || !m.collab_branches?.length ? (
+    <span className="text-slate-400">—</span>
+  ) : (
+    <span className="flex flex-wrap gap-1">
+      {m.collab_branches.map((b) => (
+        <span key={b.id} className="inline-flex whitespace-nowrap rounded-[4px] border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+          {b.name}
+        </span>
+      ))}
+    </span>
+  )
+);
 
 const GenderChip = ({ gender }) => (
   gender ? (
@@ -319,9 +347,11 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                 <span className="w-5 shrink-0 text-right text-xs tabular-nums text-slate-400">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-800">{m.full_name}</p>
-                  <p className="truncate text-[11px] text-slate-500">
-                    {branchText(m)}{m.phone && <> · <Phone phone={m.phone} /></>}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <OwnBranch m={m} />
+                    {!m.all_branches && m.collab_branches?.length > 0 && <CollabBranches m={m} />}
+                  </div>
+                  {m.phone && <p className="mt-0.5 truncate text-[11px] text-slate-500"><Phone phone={m.phone} /></p>}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <GenderChip gender={m.gender} />
@@ -340,7 +370,8 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                 <tr>
                   <th className="w-16 px-4 py-2.5">S.No</th>
                   <th className="px-4 py-2.5">Name</th>
-                  <th className="px-4 py-2.5">Branch</th>
+                  <th className="px-4 py-2.5">Own Branch</th>
+                  <th className="px-4 py-2.5">Collaborate Branch</th>
                   <th className="px-4 py-2.5">Phone</th>
                   <th className="px-4 py-2.5">Gender</th>
                   <th className="px-4 py-2.5">Status</th>
@@ -360,7 +391,8 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                         <span className="font-medium text-slate-800">{m.full_name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{branchText(m)}</td>
+                    <td className="px-4 py-3"><OwnBranch m={m} /></td>
+                    <td className="px-4 py-3"><CollabBranches m={m} /></td>
                     <td className="whitespace-nowrap px-4 py-3"><Phone phone={m.phone} /></td>
                     <td className="px-4 py-3"><GenderChip gender={m.gender} /></td>
                     <td className="px-4 py-3"><StatusChip status={m.status} /></td>

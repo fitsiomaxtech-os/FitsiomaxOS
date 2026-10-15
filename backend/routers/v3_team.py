@@ -84,6 +84,9 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
             "full_name": (login or {}).get("full_name") or r.get("full_name") or "",
             "employee_id": (login or {}).get("employee_id") or r.get("employee_id"),
             "login_phone": (login or {}).get("phone") or "",
+            # Where they belong, for Own Branch: the login's primary branch, or a
+            # profile-only expert's own row. HR's record outranks both, below.
+            "login_branch": (login or {}).get("branch_id") or (None if login else r.get("branch_id")),
             "branch_ids": set(),
             "all_branches": False,
         })
@@ -102,7 +105,7 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
     hr: Dict[str, dict] = {}
     if employee_ids:
         async for e in v3_col("employees").find(
-            {"id": {"$in": employee_ids}}, {"_id": 0, "id": 1, "gender": 1, "phone": 1, "status": 1},
+            {"id": {"$in": employee_ids}}, {"_id": 0, "id": 1, "gender": 1, "phone": 1, "status": 1, "branch_id": 1},
         ):
             hr[e["id"]] = e
 
@@ -114,6 +117,12 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
             key=lambda b: b["name"].lower(),
         )
         e = hr.get(p.get("employee_id")) or {}
+        # Own Branch is the one they were hired into; every other is a branch they
+        # collaborate with. Only a branch they actually work counts, so a stale HR branch
+        # falls through to the login's, and failing both, the first of theirs.
+        own = next((b for b in at if b["id"] == e.get("branch_id")), None) \
+            or next((b for b in at if b["id"] == p["login_branch"]), None) \
+            or (at[0] if at else None)
         members.append({
             "id": p["id"],
             "user_id": p["user_id"],
@@ -125,6 +134,8 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
             "status": str(e.get("status") or "active").strip().lower(),
             "all_branches": p["all_branches"],
             "branches": at,
+            "own_branch": own,
+            "collab_branches": [b for b in at if own is None or b["id"] != own["id"]],
         })
     members.sort(key=lambda m: m["full_name"].lower())
 
