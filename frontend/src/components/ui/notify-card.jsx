@@ -30,8 +30,10 @@ import { ChevronRight } from "lucide-react";
  *
  * `count` puts its own number in the badge where the figure is not one -- Accountant
  * Manage's Summary cards show an amount, and how many payments make it up in the corner.
+ *
+ * `dot` is the red new-since-last-opened dot (see tab-dot.jsx), for a row with no count.
  */
-export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount }) => {
+export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false }) => {
   const count = Number(badgeCount ?? value) || 0;
   const live = count > 0;
   const badge = badgeColor || color;
@@ -69,6 +71,9 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
             {count > 99 ? "99+" : count}
           </span>
         </span>
+      )}
+      {dot && !showCount && (
+        <span aria-hidden className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" data-testid={testid ? `${testid}-dot` : undefined} />
       )}
     </button>
   );

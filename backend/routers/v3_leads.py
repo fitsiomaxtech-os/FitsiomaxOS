@@ -373,7 +373,10 @@ async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, _: V3User
     if not existing_lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     new_branch_stage = await first_branch_stage_for_branch(payload.branch_id, "New Appointment")
-    updates = {"branch_id": payload.branch_id, "stage": "Appointment", "branch_stage": new_branch_stage, "updated_at": now_iso()}
+    # branch_assigned_at: the moment it arrived, which is what lights the Branch Leads dot
+    # (see v3_tab_activity) -- created_at is when Pre-Sales got it, often days earlier.
+    now = now_iso()
+    updates = {"branch_id": payload.branch_id, "stage": "Appointment", "branch_stage": new_branch_stage, "updated_at": now, "branch_assigned_at": now}
     # A lead created without a branch (e.g. straight from Pre-Sales) never got a Patient
     # Number — this is its first branch, so assign one now instead of leaving it blank forever.
     if not existing_lead.get("patient_number"):

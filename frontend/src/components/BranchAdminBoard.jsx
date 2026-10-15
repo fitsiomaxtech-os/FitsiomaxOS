@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { loadSession } from "@/lib/session";
 import {
   Calendar,
@@ -83,6 +83,7 @@ import {
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
+import { TabDot, TabDotsProvider, useTabDotsState } from "@/components/ui/tab-dot";
 import { ScrollTopButton } from "@/components/ui/scroll-top-button";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
@@ -1792,6 +1793,23 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const bottomTabs = VIEW_TABS.filter((t) => onBottomBar(t.key));
   const moreTabs = VIEW_TABS.filter((t) => !onBottomBar(t.key));
 
+  // The red dots: a tab with something new since this person last opened it (see
+  // ui/tab-dot). Not when Super Admin embeds the board -- the dots are the branch's
+  // own desk telling its admin what came in, not a supervisor's view of it.
+  const tabDots = useTabDotsState({
+    branchId,
+    userId: (currentUser || loadSession()?.user)?.id,
+    enabled: !embedded,
+  });
+  // Opening a tab puts its dot out, and keeps it out for a record that lands while it is open.
+  useLayoutEffect(() => {
+    if (!profileOpen && tabDots.has(activeView)) tabDots.markSeen(activeView);
+  }, [tabDots, activeView, profileOpen]);
+  const mgmtDotKey = `consultations.${consultationsSubTab}`;
+  useLayoutEffect(() => {
+    if (!profileOpen && activeView === "consultations" && tabDots.has(mgmtDotKey)) tabDots.markSeen(mgmtDotKey);
+  }, [tabDots, activeView, mgmtDotKey, profileOpen]);
+
   // Everything under MANAGEMENT — Experts and Calendar used to be their own
   // top-level tabs, and Manager used to sit one level deeper inside Calendar;
   // all three now live here alongside the two calendars.
@@ -1844,6 +1862,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // min-w-0 on the children because a flex item defaults to min-width:auto, which would
     // let the scrolling tab strip and the leads table widen the board instead of
     // scrolling inside it.
+    <TabDotsProvider value={tabDots}>
     <div className={`flex flex-col gap-4 [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
       {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file.
           90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
@@ -1858,7 +1877,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               key={tab.key}
               type="button"
               onClick={() => { setProfileOpen(false); setActiveView(tab.key); }}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
+              className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                 activeView === tab.key
                   ? "bg-sky-600 text-white shadow-sm"
                   : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
@@ -1866,6 +1885,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               data-testid={`branch-view-tab-${tab.key}`}
             >
               <Icon className="h-4 w-4" /> {tab.label}
+              <TabDot show={tabDots.has(tab.key)} className="right-0.5 top-0.5" testid={`branch-view-tab-${tab.key}-dot`} />
             </button>
           );
         })}
@@ -1931,6 +1951,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   label={t.label}
                   color={PHONE_CARD_HEX}
                   showCount={false}
+                  dot={tabDots.has(`consultations.${t.key}`)}
                   active={consultationsSubTab === t.key}
                   onClick={() => {
                     setConsultationsSubTab(t.key);
@@ -1954,10 +1975,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     key={t.key}
                     type="button"
                     onClick={() => setConsultationsSubTab(t.key)}
-                    className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:shrink-0 sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-2.5 sm:text-sm sm:font-medium 2xl:gap-2 2xl:px-3 ${consultationsSubTab === t.key ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
+                    className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:shrink-0 sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-2.5 sm:text-sm sm:font-medium 2xl:gap-2 2xl:px-3 ${consultationsSubTab === t.key ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
                     data-testid={`branch-consultations-subtab-${t.key}`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />{t.label}
+                    <TabDot show={tabDots.has(`consultations.${t.key}`)} className="right-0.5 top-0.5" testid={`branch-consultations-subtab-${t.key}-dot`} />
                   </button>
                 );
               })}
@@ -3204,6 +3226,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 title={tab.label}
                 aria-label={tab.label}
                 active={!profileOpen && activeView === tab.key}
+                dot={tabDots.has(tab.key)}
                 data-testid={`branch-bottom-nav-${tab.key}`}
               />
             );
@@ -3216,6 +3239,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             icon={<MoreHorizontal className="h-[18px] w-[18px] flex-none" />}
             label="More"
             active={(!profileOpen && moreTabs.some((t) => t.key === activeView)) || showMoreMenu}
+            dot={moreTabs.some((t) => tabDots.has(t.key))}
             data-testid="branch-bottom-nav-more"
           />
           {/* My Profile, and Logout on its Security tab -- the phone header carries neither. */}
@@ -3261,7 +3285,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium ${active ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"}`}
                   data-testid={`branch-bottom-nav-sheet-${tab.key}`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <span className="relative">
+                    <Icon className="h-4 w-4" />
+                    <TabDot show={tabDots.has(tab.key)} />
+                  </span>
                   {tab.label}
                 </button>
               );
@@ -3270,6 +3297,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         </div>
       )}
     </div>
+    </TabDotsProvider>
   );
 };
 

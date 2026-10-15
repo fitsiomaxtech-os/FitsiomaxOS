@@ -9,6 +9,7 @@ import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { TeamPanel } from "@/components/branch/TeamPanel";
 import { PortalControlsButton } from "@/components/branch/PortalControlsButton";
+import { TabDotFor, useMarkTabSeen } from "@/components/ui/tab-dot";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
@@ -42,6 +43,8 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   const tabs = withoutRoom ? SUB_TABS.filter((t) => !ROOM_ONLY_TABS.includes(t.key)) : SUB_TABS;
   // Opens on the first tab it has: Zumba, or Review on an online arm.
   const [active, setActive] = useState(tabs[0].key);
+  // Opening a sub-tab puts its red dot out (see ui/tab-dot).
+  useMarkTabSeen(`activity_care.${active}`);
   // Zumba Masters — which master takes each class time. It used to be Management's Zumba
   // sub-tab; it is set once and left, so it sits behind the gear rather than a tab.
   const [mastersOpen, setMastersOpen] = useState(false);
@@ -65,7 +68,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
                 key={t.key}
                 type="button"
                 onClick={() => setActive(t.key)}
-                className={`flex shrink-0 grow basis-0 flex-col items-center gap-0.5 whitespace-nowrap border-b-2 px-1 py-2 text-[10px] font-medium sm:grow-0 sm:basis-auto sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm ${
+                className={`relative flex shrink-0 grow basis-0 flex-col items-center gap-0.5 whitespace-nowrap border-b-2 px-1 py-2 text-[10px] font-medium sm:grow-0 sm:basis-auto sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm ${
                   active === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
                 }`}
                 data-testid={`activity-care-subtab-${t.key}`}
@@ -73,6 +76,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="sm:hidden">{t.short || t.label}</span>
                 <span className="hidden sm:inline">{t.label}</span>
+                <TabDotFor dotKey={`activity_care.${t.key}`} className="right-0.5 top-1" testid={`activity-care-subtab-${t.key}-dot`} />
               </button>
             );
           })}

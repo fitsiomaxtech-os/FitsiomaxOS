@@ -10,8 +10,11 @@
  *
  * `icon` is the rendered glyph, not the component, so each bar keeps its own icon size
  * and My Profile can pass its photo (ProfileNavGlyph) in the same slot.
+ *
+ * `dot` is the red new-since-last-opened dot (see tab-dot.jsx), for a bar that marks news
+ * without counting it. A count, when there is one, takes the corner instead.
  */
-export const BottomNavTab = ({ icon, label, active = false, badge = 0, badgeTestId, className = "", ...props }) => (
+export const BottomNavTab = ({ icon, label, active = false, badge = 0, badgeTestId, dot = false, className = "", ...props }) => (
   <button
     type="button"
     title={label}
@@ -31,6 +34,9 @@ export const BottomNavTab = ({ icon, label, active = false, badge = 0, badgeTest
         >
           {badge > 99 ? "99+" : badge}
         </span>
+      )}
+      {dot && !(badge > 0) && (
+        <span aria-hidden className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-500" />
       )}
     </span>
     <span className={`w-full truncate text-center text-[0.55rem] leading-tight ${active ? "font-semibold" : "font-medium"}`}>{label}</span>

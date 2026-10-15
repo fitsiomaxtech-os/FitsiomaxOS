@@ -2779,6 +2779,8 @@ async def v3_transfer_branch(
     updates = {
         "branch_id": payload.to_branch_id,
         "updated_at": now,
+        # Lights the receiving branch's Branch Leads dot -- see v3_tab_activity.
+        "branch_assigned_at": now,
         **physio_updates,
     }
     if stage is None or stage in TRANSFER_REBOOK_STAGES:
