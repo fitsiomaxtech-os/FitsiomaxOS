@@ -15,7 +15,7 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { VendorPanel } from "@/components/branch/VendorPanel";
-import { TabDotFor } from "@/components/ui/tab-dot";
+import { TabDotFor, useTabDotClick } from "@/components/ui/tab-dot";
 import { downloadLeadsReportPdf, downloadLeadsReportXlsx } from "@/components/branch/leadsReport";
 import {
   getBranchBoard,
@@ -72,6 +72,7 @@ const TRANSFER_VIEWS = [
 export const RecordsPanel = ({ branchId }) => {
   const [sub, setSub] = useState("branch_transfers");
   const [transferView, setTransferView] = useState("transfers");
+  const clickDot = useTabDotClick();
 
   return (
     <div className="flex flex-col gap-4" data-testid="branch-records-panel">
@@ -83,7 +84,7 @@ export const RecordsPanel = ({ branchId }) => {
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setSub(t.key)}
+                onClick={() => { setSub(t.key); clickDot(`records.${t.key}`); }}
                 className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium sm:text-sm ${
                   sub === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
                 }`}

@@ -1796,7 +1796,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The red dots: a tab with untouched records or anything from the last 24 hours (see
   // ui/tab-dot). Not when Super Admin embeds the board -- the dots are the branch's
   // own desk reminding its admin what is waiting, not a supervisor's view of it.
-  // Each dot runs on its own clock -- opening the tab does not put it out.
+  // A dot stays until its tab is clicked, then lasts 18 seconds more (see ui/tab-dot).
   const tabDots = useTabDotsState({ branchId, enabled: !embedded });
 
   // Everything under MANAGEMENT — Experts and Calendar used to be their own
@@ -1865,7 +1865,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             <button
               key={tab.key}
               type="button"
-              onClick={() => { setProfileOpen(false); setActiveView(tab.key); }}
+              onClick={() => { setProfileOpen(false); setActiveView(tab.key); tabDots.click(tab.key); }}
               className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                 activeView === tab.key
                   ? "bg-sky-600 text-white shadow-sm"
@@ -1944,6 +1944,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   active={consultationsSubTab === t.key}
                   onClick={() => {
                     setConsultationsSubTab(t.key);
+                    tabDots.click(`consultations.${t.key}`);
                     setPhoneStageList(activeView);
                     window.scrollTo({ top: 0 });
                   }}
@@ -1963,7 +1964,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <button
                     key={t.key}
                     type="button"
-                    onClick={() => setConsultationsSubTab(t.key)}
+                    onClick={() => { setConsultationsSubTab(t.key); tabDots.click(`consultations.${t.key}`); }}
                     className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:shrink-0 sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-2.5 sm:text-sm sm:font-medium 2xl:gap-2 2xl:px-3 ${consultationsSubTab === t.key ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
                     data-testid={`branch-consultations-subtab-${t.key}`}
                   >
@@ -3209,7 +3210,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 key={tab.key}
                 // Clearing phoneStageList too: pressing Consult while one of its stage lists
                 // is open goes back to its cards, as a second tap on a phone tab does.
-                onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); setPhoneStageList(null); }}
+                onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); setPhoneStageList(null); tabDots.click(tab.key); }}
                 icon={<Icon className="h-[18px] w-[18px] flex-none" />}
                 label={tab.short}
                 title={tab.label}
@@ -3270,7 +3271,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); }}
+                  onClick={() => { setProfileOpen(false); setActiveView(tab.key); setShowMoreMenu(false); tabDots.click(tab.key); }}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium ${active ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"}`}
                   data-testid={`branch-bottom-nav-sheet-${tab.key}`}
                 >
