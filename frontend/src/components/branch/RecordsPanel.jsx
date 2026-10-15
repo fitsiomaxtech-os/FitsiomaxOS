@@ -15,7 +15,7 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { VendorPanel } from "@/components/branch/VendorPanel";
-import { TabDotFor, useMarkTabSeen } from "@/components/ui/tab-dot";
+import { TabDotFor } from "@/components/ui/tab-dot";
 import { downloadLeadsReportPdf, downloadLeadsReportXlsx } from "@/components/branch/leadsReport";
 import {
   getBranchBoard,
@@ -72,8 +72,6 @@ const TRANSFER_VIEWS = [
 export const RecordsPanel = ({ branchId }) => {
   const [sub, setSub] = useState("branch_transfers");
   const [transferView, setTransferView] = useState("transfers");
-  // Opening a sub-tab puts its red dot out (see ui/tab-dot).
-  useMarkTabSeen(`records.${sub}`);
 
   return (
     <div className="flex flex-col gap-4" data-testid="branch-records-panel">

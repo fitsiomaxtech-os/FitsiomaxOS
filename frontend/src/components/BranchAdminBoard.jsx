@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSession } from "@/lib/session";
 import {
   Calendar,
@@ -1796,15 +1796,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The red dots: a tab with untouched records or anything from the last 24 hours (see
   // ui/tab-dot). Not when Super Admin embeds the board -- the dots are the branch's
   // own desk reminding its admin what is waiting, not a supervisor's view of it.
+  // Each dot runs on its own clock -- opening the tab does not put it out.
   const tabDots = useTabDotsState({ branchId, enabled: !embedded });
-  // Opening a tab puts its dot out for a few minutes, and keeps it out while it stays open.
-  useLayoutEffect(() => {
-    if (!profileOpen && tabDots.has(activeView)) tabDots.markSeen(activeView);
-  }, [tabDots, activeView, profileOpen]);
-  const mgmtDotKey = `consultations.${consultationsSubTab}`;
-  useLayoutEffect(() => {
-    if (!profileOpen && activeView === "consultations" && tabDots.has(mgmtDotKey)) tabDots.markSeen(mgmtDotKey);
-  }, [tabDots, activeView, mgmtDotKey, profileOpen]);
 
   // Everything under MANAGEMENT — Experts and Calendar used to be their own
   // top-level tabs, and Manager used to sit one level deeper inside Calendar;

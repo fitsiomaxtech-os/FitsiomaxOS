@@ -9,7 +9,7 @@ import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { TeamPanel } from "@/components/branch/TeamPanel";
 import { PortalControlsButton } from "@/components/branch/PortalControlsButton";
-import { TabDotFor, useMarkTabSeen } from "@/components/ui/tab-dot";
+import { TabDotFor } from "@/components/ui/tab-dot";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
@@ -43,8 +43,6 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   const tabs = withoutRoom ? SUB_TABS.filter((t) => !ROOM_ONLY_TABS.includes(t.key)) : SUB_TABS;
   // Opens on the first tab it has: Zumba, or Review on an online arm.
   const [active, setActive] = useState(tabs[0].key);
-  // Opening a sub-tab puts its red dot out (see ui/tab-dot).
-  useMarkTabSeen(`activity_care.${active}`);
   // Zumba Masters — which master takes each class time. It used to be Management's Zumba
   // sub-tab; it is set once and left, so it sits behind the gear rather than a tab.
   const [mastersOpen, setMastersOpen] = useState(false);

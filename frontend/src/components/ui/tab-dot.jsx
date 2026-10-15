@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getBranchTabActivity } from "@/lib/api";
 
 /**
@@ -8,15 +8,14 @@ import { getBranchTabActivity } from "@/lib/api";
  * a referral not accepted...) or anything added in the last 24 hours -- the server sends
  * both, see backend/routers/v3_tab_activity.
  *
- * A dot that comes on stays for SHOW_MS and then goes out by itself, as opening the tab
- * would put it out. Either way it comes back REMIND_MS later while the work is still there:
- * it is a reminder, not a notification to clear. It also comes back on a refresh, and so on
- * the first visit each morning, because all of this is held in memory and nowhere else. A
- * record that lands after the dot went out lights it again at once.
+ * Each dot runs on its own clock, and clicking the tab does not touch it: it shows for
+ * SHOW_MS, goes out by itself, and comes back REMIND_MS later while the work is still
+ * there -- a reminder, not a notification to clear. It also comes back on a refresh, and so
+ * on the first visit each morning, because all of this is held in memory and nowhere else.
+ * A record that lands after the dot went out lights it again at once.
  *
  * Keys are the board's own: a top tab's view key, and `<tab>.<sub-tab>` for a sub-tab. A top
- * tab is waiting when it or any of its sub-tabs is, and is put out on its own when opened --
- * its sub-tabs keep their dots until each is opened, so the reader still sees which one.
+ * tab is waiting when it or any of its sub-tabs is.
  */
 
 const REFRESH_MS = 2 * 60 * 1000;
@@ -124,31 +123,13 @@ export function useTabDotsState({ branchId, enabled = true }) {
 
   const has = useCallback((key) => !!key && !!litAt[key], [litAt]);
 
-  const markSeen = useCallback((key) => {
-    // The later of the newest record and now: a server clock ahead of this one would
-    // otherwise relight the tab the reader is looking at.
-    const at = Math.max(Date.now(), data ? newestFor(data.latest, key) : 0);
-    setHiddenAt((prev) => ({ ...prev, [key]: at }));
-    setLitAt((prev) => without(prev, [key]));
-  }, [data]);
-
-  return useMemo(() => ({ has, markSeen }), [has, markSeen]);
+  return useMemo(() => ({ has }), [has]);
 }
 
 /** Whether `key` has a dot. False outside a TabDotsProvider, so a panel reused elsewhere shows none. */
 export function useTabDot(key) {
   const ctx = useContext(TabDotsContext);
   return !!ctx && !!key && ctx.has(key);
-}
-
-/** Puts out `key`'s dot while it is open -- so the tab being read never shows one. */
-export function useMarkTabSeen(key, open = true) {
-  const ctx = useContext(TabDotsContext);
-  const lit = !!ctx && !!key && ctx.has(key);
-  // Layout effect so a dot relit on the open tab is put out before it paints.
-  useLayoutEffect(() => {
-    if (open && lit) ctx.markSeen(key);
-  }, [ctx, key, open, lit]);
 }
 
 /** The dot itself. The parent must be `relative`; `className` places it. */
