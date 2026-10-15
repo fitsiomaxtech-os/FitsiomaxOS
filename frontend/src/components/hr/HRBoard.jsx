@@ -3713,52 +3713,47 @@ const RolesTab = ({ meta, reloadMeta }) => {
           non-Super-Admin. */}
       <EmailDeliveryPanel />
 
-      {/* Department then Designation, two dropdowns of the same shape on one row, reading
-          off each row's linked employee.
+      {/* One toolbar, the same as Employees: Search, A → Z, Department, Designation, the
+          All Users / Branch Wise switch, then Create User pushed to the far end.
 
-          Department was a row of pills. Both halves of one narrowing — which department,
-          then which job in it — so as two differently shaped controls they read as two
-          unrelated filters, and the pill row sat directly under the tab bar competing with
-          it for the same band. Matched and paired, picking a department visibly narrows
-          the list beside it: that is the flow, and it is now on screen.
+          Department then Designation are two halves of one narrowing — which department,
+          then which job in it — reading off each row's linked employee, so picking a
+          department narrows the designations beside it.
 
-          One block rather than one per breakpoint — the row wraps on a narrow screen and
-          the state behind it is shared either way. */}
-      <div className="flex flex-wrap items-center gap-3" data-testid="hr-roles-filters">
-        <div className="flex items-center gap-2" data-testid="hr-roles-dept-filter">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Department</span>
-          <DepartmentFilterSelect
-            value={deptFilter}
-            onChange={selectDept}
-            departments={meta.departments}
-            testid="hr-roles-dept-filter-select"
-          />
+          The two views answer two questions: All Users "who is this person and what can
+          they do"; Branch Wise "which desks are staffed here, and by whom". Search and
+          the sort apply to both. */}
+      <div className="flex flex-wrap items-center gap-2" data-testid="hr-roles-toolbar">
+        <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or email..." testid="hr-roles-search" />
+        <button
+          type="button"
+          onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
+          title="Sort by name"
+          className={`h-10 shrink-0 rounded-md border px-3 text-sm font-medium transition ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+          data-testid="hr-roles-sort-az"
+        >
+          {sortAZ === "desc" ? "Z → A" : "A → Z"}
+        </button>
+        <DepartmentFilterSelect
+          value={deptFilter}
+          onChange={selectDept}
+          departments={meta.departments}
+          testid="hr-roles-dept-filter-select"
+        />
+        <DesignationFilterSelect
+          value={designationFilter}
+          onChange={setDesignationFilter}
+          groups={designationGroups}
+          testid="hr-roles-designation-filter-select"
+        />
+        <div className="flex items-center gap-2" data-testid="hr-roles-view">
+          {[{ key: "list", label: "All Users" }, { key: "branch", label: "Branch Wise" }].map((v) => (
+            <TabPill key={v.key} active={view === v.key} onClick={() => setView(v.key)} testid={`hr-roles-view-${v.key}`}>
+              {v.label}
+            </TabPill>
+          ))}
         </div>
-        <div className="flex items-center gap-2" data-testid="hr-roles-designation-filter">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Designation</span>
-          <DesignationFilterSelect
-            value={designationFilter}
-            onChange={setDesignationFilter}
-            groups={designationGroups}
-            testid="hr-roles-designation-filter-select"
-          />
-        </div>
-      </div>
-
-      {/* Two questions, two shapes. The list answers "who is this person and what can
-          they do"; Branch Wise answers "which desks are staffed here, and by whom". */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1" data-testid="hr-roles-view">
-        {[{ key: "list", label: "All Users" }, { key: "branch", label: "Branch Wise" }].map((v) => (
-          <button
-            key={v.key}
-            type="button"
-            onClick={() => setView(v.key)}
-            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${view === v.key ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-            data-testid={`hr-roles-view-${v.key}`}
-          >
-            {v.label}
-          </button>
-        ))}
+        <Button onClick={() => setShowCreate(true)} className="ml-auto bg-sky-600 hover:bg-sky-700" data-testid="hr-roles-create-btn"><UserPlus className="h-4 w-4 mr-1" />Create User</Button>
       </div>
 
       {view === "branch" && (
@@ -3800,18 +3795,6 @@ const RolesTab = ({ meta, reloadMeta }) => {
         </div>
       )}
 
-      <div className={`flex flex-wrap items-center gap-2 md:hidden ${view === "branch" ? "hidden" : ""}`}>
-        <button
-          onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
-          className={`rounded-md px-3 py-2 text-sm font-medium ${sortAZ ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`}
-          data-testid="hr-roles-sort-az-mobile"
-        >
-          {sortAZ === "desc" ? "Z → A" : "A → Z"}
-        </button>
-        <Input placeholder="Search name or email..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full" data-testid="hr-roles-search-mobile" />
-        <Button onClick={() => setShowCreate(true)} className="flex-1 bg-sky-600 hover:bg-sky-700" data-testid="hr-roles-create-btn-mobile"><UserPlus className="h-4 w-4 mr-1" />Create User</Button>
-      </div>
-
       <div className={`space-y-2 md:hidden ${view === "branch" ? "hidden" : ""}`} data-testid="hr-user-cards">
         {sortedUsers.map((u) => (
           <div key={u.id} className="rounded-xl border border-slate-200 bg-white p-3" data-testid={`hr-user-card-${u.id}`}>
@@ -3845,21 +3828,7 @@ const RolesTab = ({ meta, reloadMeta }) => {
         {sortedUsers.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">No users.</p>}
       </div>
 
-      <Card className={`hidden ${view === "branch" ? "" : "md:block"}`}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">User Credentials</CardTitle>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${sortAZ ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`}
-              data-testid="hr-roles-sort-az"
-            >
-              {sortAZ === "desc" ? "Z → A" : "A → Z"}
-            </button>
-            <Input placeholder="Search name or email..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" data-testid="hr-roles-search" />
-            <Button onClick={() => setShowCreate(true)} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-roles-create-btn"><UserPlus className="h-4 w-4 mr-1" />Create User</Button>
-          </div>
-        </CardHeader>
+      <Card className={`hidden overflow-hidden ${view === "branch" ? "" : "md:block"}`}>
         <CardContent className="p-0">
           <div className="overflow-auto">
             <table className="min-w-full text-sm">
@@ -3871,7 +3840,7 @@ const RolesTab = ({ meta, reloadMeta }) => {
 
                   Branch keeps its column and loses only its heading: a branch name says what
                   it is, where an employee code and a status pill do not. */}
-              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">User</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Linked Employee</th><th className="px-3 py-2">Status</th><th className="px-3 py-2" /><th className="px-3 py-2">Actions</th></tr></thead>
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">User</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Linked Employee</th><th className="px-3 py-2">Status</th><th className="px-3 py-2" /><th className="px-3 py-2">Action</th></tr></thead>
               <tbody>
                 {sortedUsers.map((u, i) => (
                   <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`hr-user-row-${u.id}`}>
@@ -3898,11 +3867,12 @@ const RolesTab = ({ meta, reloadMeta }) => {
                     <td className="px-3 py-2">
                       <button
                         onClick={() => setActionTarget(u)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                        title="Open actions"
+                        className="text-slate-500 hover:text-sky-600"
                         aria-label={`Actions for ${u.full_name}`}
                         data-testid={`hr-user-actions-${u.id}`}
                       >
-                        <MoreVertical className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
