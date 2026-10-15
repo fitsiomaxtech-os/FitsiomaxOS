@@ -553,12 +553,20 @@ async def _own_branch(user: dict, at: list):
     return user.get("branch_id") if user.get("branch_id") in at else (at[0] if at else None)
 
 
-# A Branch Admin may bring a Consultant or Physio from another branch to work at a branch --
-# Activity Care's Team Consultants and Team Physio tabs, where a branch takes in somebody
-# from elsewhere to collaborate -- and end that collaboration at their own branch. The other desks stay Super Admin's: these two are the
+# A Branch Admin may bring a Consultant or Physio from another branch to work at their own
+# branch -- Activity Care's Team Consultants and Team Physio tabs, where a branch takes in
+# somebody from elsewhere to collaborate -- and end that collaboration again. Their own
+# branch only, both ways. The other desks stay Super Admin's: these two are the
 # experts a branch books patients with, and posting one adds a branch to them rather than
 # taking them off theirs (both are multi-branch roles), so nobody's own branch loses them.
 BRANCH_ADMIN_TEAM_DESKS = ("head_physios", "physios")
+
+
+def _own_branch_or_403(user: V3UserOut, branch_id: str) -> None:
+    """A Branch Admin adds people to, and removes them from, their own branch only."""
+    mine = (user.branch_ids or []) or ([user.branch_id] if user.branch_id else [])
+    if branch_id not in mine:
+        raise HTTPException(status_code=403, detail="You can only add or remove people at your own branch")
 
 
 def _may_post_to_desk(user: V3UserOut, desk: str) -> bool:
@@ -582,6 +590,8 @@ async def team_candidates(branch_id: str, desk: str, user: V3UserOut = Depends(v
     for a single-branch role picking them moves them, and that is worth seeing beforehand.
     """
     may_move = _may_post_to_desk(user, desk)
+    if not may_move:
+        _own_branch_or_403(user, branch_id)
     branch, holds = await _team_desk_or_400(branch_id, desk)
 
     rows = await v3_col("users").find({"is_active": True}, {"_id": 0, "password": 0}).to_list(2000)
@@ -616,6 +626,8 @@ async def team_candidates(branch_id: str, desk: str, user: V3UserOut = Depends(v
 async def team_add_member(branch_id: str, user_id: str, desk: str, me: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     """Post an existing account to this branch."""
     may_move = _may_post_to_desk(me, desk)
+    if not may_move:
+        _own_branch_or_403(me, branch_id)
     branch, holds = await _team_desk_or_400(branch_id, desk)
     user = await v3_col("users").find_one({"id": user_id, "is_active": True}, {"_id": 0, "password": 0})
     if not user:
@@ -670,8 +682,8 @@ async def team_remove_member(branch_id: str, user_id: str, desk: str, me: V3User
     which is moving them -- HR's to do.
     """
     may_move = _may_post_to_desk(me, desk)
-    if not may_move and branch_id not in ((me.branch_ids or []) or ([me.branch_id] if me.branch_id else [])):
-        raise HTTPException(status_code=403, detail="You can only remove people from your own branch")
+    if not may_move:
+        _own_branch_or_403(me, branch_id)
     branch, holds = await _team_desk_or_400(branch_id, desk)
     user = await v3_col("users").find_one({"id": user_id}, {"_id": 0, "password": 0})
     if not user:

@@ -12,9 +12,10 @@ import { TeamAddDialog } from "@/components/branch/BranchDetailPage";
 /**
  * Activity Care's Team Consultants and Team Physio tabs: every consultant, or every physio,
  * in the organisation, one to a row — S.No, name, own branch, the branches they collaborate
- * with, phone, gender, status, an Add and an arrow — narrowed by a search, by branch and by gender. The toolbar's Add picks a branch
- * and then a person; a row's Add has the person and picks the branch. Either way they gain
- * the branch and keep the ones they already have.
+ * with, phone, gender, status, an Add or Remove and an arrow — narrowed by a search, by
+ * branch and by gender. Add — the toolbar's, picking a person, or a row's — brings them to the
+ * viewer's own branch and nowhere else; they keep the branches they already have. A row's
+ * Remove ends that collaboration again.
  */
 // desk: the Branch Manager Team desk that posts them, which Add goes through.
 const KINDS = {
@@ -115,68 +116,6 @@ const Phone = ({ phone }) => (
 );
 
 /**
- * One person, to a branch they don't work yet — a row's Add. The branches they are already
- * at are left out, so every one listed is a new one for them.
- */
-const AddToBranchDialog = ({ member, desk, branches, onClose, onSaved }) => {
-  const [busyId, setBusyId] = useState(null);
-  const at = new Set(member.branches.map((b) => b.id));
-  const open = branches.filter((b) => !at.has(b.id));
-
-  const pick = async (b) => {
-    setBusyId(b.id);
-    try {
-      const res = await bmTeamAdd(b.id, member.user_id, desk.key);
-      toast.success(res?.message || `${member.full_name} added to ${b.name}`);
-      onSaved();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not add");
-      setBusyId(null);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl bg-white shadow-2xl" data-testid="team-row-add-dialog">
-        <div className="border-b p-5">
-          <h3 className="text-base font-semibold text-slate-800">Add {member.full_name} to a branch</h3>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            {member.branches.length > 0 && <>Works at {branchText(member)} now, and keeps it. </>}
-            Click a branch to have them work there too.
-          </p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5">
-          {open.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-400">
-              {member.full_name} already works at every branch.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {open.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  disabled={!!busyId}
-                  onClick={() => pick(b)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-left text-sm font-medium text-slate-800 transition hover:border-sky-400 hover:bg-sky-50/40 disabled:opacity-50"
-                  data-testid={`team-row-add-branch-${b.id}`}
-                >
-                  {b.name}
-                  {busyId === b.id ? <span className="text-[11px] text-slate-400">Adding...</span> : <Plus className="h-4 w-4 text-sky-600" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end border-t p-4">
-          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
  * End a collaboration: take somebody off the viewer's branch. Asked first, because it changes
  * where they are offered. Their own branch is never this — the button is not shown for it,
  * and the server refuses it.
@@ -240,7 +179,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const [gender, setGender] = useState("all");
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
-  const [addingMember, setAddingMember] = useState(null); // a row, for its own Add
+  const [addingId, setAddingId] = useState(null); // the row whose Add is in flight
   const [removing, setRemoving] = useState(null); // { member, branch }, for a row's Remove
 
   const load = useCallback(async () => {
@@ -286,16 +225,35 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
     </button>
   );
 
-  // A row's options. Remove when they collaborate with the viewer's branch — it ends that,
-  // and only that — beside Add, which can still take them to another branch. Add is not for
-  // a profile-only expert, who has no login to post, nor for a Super Admin taking
-  // consultations, who already runs every branch.
+  const myBranchName = data.branches.find((b) => b.id === branchId)?.name || "your branch";
+
+  // A row's Add: straight to the viewer's own branch, no picker — a Branch Admin brings
+  // people to their branch and to no other. Remove undoes it.
+  const addHere = async (m) => {
+    setAddingId(m.id);
+    try {
+      const res = await bmTeamAdd(branchId, m.user_id, k.desk.key);
+      toast.success(res?.message || `${m.full_name} added to ${myBranchName}`);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not add");
+    }
+    setAddingId(null);
+  };
+
+  // One action a row, decided by where they stand with the viewer's branch: their own
+  // branch — nothing to do; collaborating with it — Remove; not at it — Add. A profile-only
+  // expert has no login to post, and a Super Admin taking consultations already runs every
+  // branch, so neither gets one.
   const rowOptions = (m) => {
-    const why = !m.user_id ? "No login to add to a branch" : m.all_branches ? "Already at every branch" : null;
-    const here = m.user_id && branchId ? m.collab_branches?.find((b) => b.id === branchId) : null;
+    const here = branchId ? m.collab_branches?.find((b) => b.id === branchId) : null;
+    const own = m.all_branches || (branchId && m.own_branch?.id === branchId);
+    if (!branchId || !m.user_id || own) {
+      return <div className="text-center text-slate-400">—</div>;
+    }
     return (
-      <div className="flex items-center justify-center gap-1.5">
-        {here && (
+      <div className="flex items-center justify-center">
+        {here ? (
           <Button
             variant="outline"
             size="sm"
@@ -307,19 +265,20 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           >
             <Minus className="h-3.5 w-3.5" /> Remove
           </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => addHere(m)}
+            disabled={!!addingId}
+            className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+            title={`Add ${m.full_name} to ${myBranchName}`}
+            aria-label={`Add ${m.full_name} to ${myBranchName}`}
+            data-testid={`team-row-add-${m.id}`}
+          >
+            {addingId === m.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
+          </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAddingMember(m)}
-          disabled={!!why || data.branches.length === 0}
-          className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
-          title={why || `Add ${m.full_name} to a branch`}
-          aria-label={`Add ${m.full_name} to a branch`}
-          data-testid={`team-row-add-${m.id}`}
-        >
-          <Plus className="h-3.5 w-3.5" /> Add
-        </Button>
       </div>
     );
   };
@@ -397,15 +356,6 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           desk={k.desk}
           onClose={() => setRemoving(null)}
           onSaved={() => { setRemoving(null); load(); }}
-        />
-      )}
-      {addingMember && (
-        <AddToBranchDialog
-          member={addingMember}
-          desk={k.desk}
-          branches={data.branches}
-          onClose={() => setAddingMember(null)}
-          onSaved={() => { setAddingMember(null); load(); }}
         />
       )}
       {/* Below lg the search takes a line of its own, the two filters and Refresh under it.
