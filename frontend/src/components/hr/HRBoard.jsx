@@ -942,7 +942,7 @@ const WorkModeToggle = ({ value, disabled, onPick, testid }) => (
           disabled={disabled}
           onClick={() => !on && onPick(m)}
           aria-pressed={on}
-          className={`px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
+          className={`h-8 min-w-[4.5rem] px-4 text-sm font-semibold transition disabled:opacity-50 ${
             on ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
           }`}
           data-testid={`${testid}-${m}`}
