@@ -497,6 +497,12 @@ class EmployeeUpdate(BaseModel):
     ifsc: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    # The role a changed designation resolves to, sent by the employee form alongside the
+    # new designation. Not a field on the employee: it is written to the linked login, the
+    # half of the person a role belongs to. Resolved in the browser because that is where
+    # the designation -> role map lives (ROLE_META plus custom roles, the same map Create
+    # User reads), so the login a designation change produces is the one Create User would.
+    account_role: Optional[str] = None
 
 
 class UserAccountCreate(BaseModel):
@@ -932,6 +938,14 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
     for field, label in (("department", "Department"), ("designation", "Designation")):
         if field in updates and not str(updates[field]).strip():
             raise HTTPException(status_code=400, detail=f"{label} is required")
+    # Checked before anything is written, so a role that would be refused leaves the
+    # employee as it was rather than saving the designation without the login following.
+    account_role = updates.pop("account_role", None)
+    if account_role:
+        if account_role == "super_admin":
+            raise HTTPException(status_code=403, detail="Super Admin accounts can only be created via the OTP-approved Super Admin creation page")
+        if account_role not in await _all_role_names():
+            raise HTTPException(status_code=400, detail="Invalid role")
 
     # Online is two arms, and Service says which. Before the branch block below rather than
     # instead of it: this decides the list, and that block is what reduces any list to the
@@ -977,6 +991,16 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
     res = await v3_col("employees").update_one({"id": emp_id}, {"$set": updates})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
+
+    # The designation is the role, and Credentials no longer edits either, so a change here
+    # is the only way a login's role moves. Before the branch cascade below, which reads the
+    # role to decide what the expert records do. A Super Admin's login is never moved by
+    # this: that is an access level held on purpose, not a job title to follow.
+    if account_role:
+        async for u in v3_col("users").find(
+            {"employee_id": emp_id, "role": {"$nin": ["super_admin", account_role]}}, {"_id": 0, "id": 1},
+        ):
+            await _apply_role(u["id"], account_role)
     # Both cascades want the same list, so it is fetched once and only when one of them
     # actually has something to do.
     # The role comes back with them: what a branch change has to do to the expert records
@@ -1045,6 +1069,22 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
             account["branch_ids"] = [] if branch_ids == [ALL_BRANCHES] else branch_ids
         await v3_col("users").update_many({"employee_id": emp_id}, {"$set": account})
 
+        # A plain move still has to reach the account's list, because Credentials reads
+        # branch_ids before branch_id: moving a Physio from Anna Nagar to Parrys rewrote
+        # branch_id and left branch_ids saying Anna Nagar, so Credentials went on printing
+        # the branch they had just been moved off. A list that already covers the new
+        # branch is a considered multi-branch selection and is left as it is; anything
+        # else — one branch, none, or several that no longer include where they work —
+        # becomes the one branch they were moved to.
+        if branch_ids is None:
+            async for u in v3_col("users").find({"employee_id": emp_id}, {"_id": 0, "id": 1, "branch_ids": 1}):
+                held = [b for b in (u.get("branch_ids") or []) if b]
+                if len(held) > 1 and target in held:
+                    continue
+                await v3_col("users").update_one(
+                    {"id": u["id"]}, {"$set": {"branch_ids": [target] if target else []}},
+                )
+
         # A selection of several branches is a different instruction to the expert records
         # than a move between two, so the two are handled apart rather than one being made
         # to stand in for the other. Sharing the move below is what would break here: it
@@ -1077,6 +1117,19 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
                 {"user_id": {"$in": linked_user_ids}, "branch_id": {"$nin": ["", None]}},
                 {"$set": {"branch_id": target}},
             )
+            # A login can now be created before its employee has a branch, and a desk that
+            # holds a calendar per branch then has no record to move — so the first branch
+            # they are posted to is where their calendar is made.
+            if target:
+                for u in linked_users:
+                    if not holds_calendar_per_branch(u.get("role")):
+                        continue
+                    placed = await v3_col("doctors").count_documents({
+                        "user_id": u["id"], "profile_type": expert_profile_type(u["role"]),
+                        "branch_id": {"$nin": ["", None]},
+                    })
+                    if not placed:
+                        await _sync_expert_branches(u, [target])
             # Somebody put back on every branch is offered at every branch again, including
             # the ones a narrower selection had earlier stood them down from. Only the
             # posting flag is lifted — a login that is switched off stays switched off, and
@@ -1091,13 +1144,53 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
 
 
 @router.delete("/employees/{emp_id}")
-async def delete_employee(emp_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
-    res = await v3_col("employees").delete_one({"id": emp_id})
-    if res.deleted_count == 0:
+async def delete_employee(emp_id: str, current: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+    """Delete an employee everywhere: the record, and the login linked to it.
+
+    Unlinking the login used to be all this did, which left the account standing in
+    Credentials with an empty Department — the person gone from Employees and from
+    Department & Designation, still signing in, and nothing on the account saying why.
+    The login is deleted permanently now, the same way Credentials' own permanent delete
+    does it, and a copy of both is written to employee_history first so the Employees
+    tab's History still has the record once the live one is gone.
+    """
+    emp = await v3_col("employees").find_one({"id": emp_id}, {"_id": 0})
+    if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-    # Unlink any users tied to this employee
-    await v3_col("users").update_many({"employee_id": emp_id}, {"$set": {"employee_id": None}})
-    return {"message": "Employee deleted"}
+    accounts = await v3_col("users").find({"employee_id": emp_id}, {"_id": 0, "password": 0}).to_list(20)
+    # Checked for every account before anything is written, so a refusal leaves the
+    # employee, the logins and the history exactly as they were.
+    for a in accounts:
+        if a["id"] == current.id:
+            raise HTTPException(status_code=400, detail="This employee holds the login you are signed in with — you cannot delete it")
+        await _guard_super_admin_target(a["id"], current)
+
+    # Through resolve_employee_branches so the history reads the branch the Employees tab
+    # printed for them, not an id that may name a branch later renamed or removed.
+    snapshot = (await resolve_employee_branches([dict(emp)]))[0]
+    await v3_col("employee_history").insert_one({
+        "id": str(uuid.uuid4()),
+        "employee": snapshot,
+        "accounts": [
+            {"id": a["id"], "full_name": a.get("full_name"), "email": a.get("email"), "role": a.get("role"), "is_active": a.get("is_active", True)}
+            for a in accounts
+        ],
+        "deleted_at": now_iso(),
+        "deleted_by": {"id": current.id, "full_name": current.full_name, "email": current.email},
+    })
+
+    for a in accounts:
+        await v3_col("users").delete_one({"id": a["id"]})
+        # Their expert profile goes with the login — see delete_user_permanent.
+        await _set_expert_active(a["id"], False)
+    await v3_col("employees").delete_one({"id": emp_id})
+    return {"message": "Employee deleted", "accounts_deleted": len(accounts)}
+
+
+@router.get("/employees/history")
+async def list_employee_history(_: V3UserOut = Depends(v3_require_roles("super_admin", "marketing_head", "business_dev"))):
+    """Employees deleted from HR, newest first, with the login each one had."""
+    return await v3_col("employee_history").find({}, {"_id": 0}).sort("deleted_at", -1).to_list(2000)
 
 
 # ---------- Roles & Credentials ----------
@@ -1190,7 +1283,9 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
         # A diet or rehab role belongs to a branch and holds a calendar there, exactly
         # like a Physio. Both are stamped with their own profile_type by
         # expert_profile_type, so each lands on its own calendar and not the other's.
-        for b_id in (payload.branch_ids or [payload.branch_id]):
+        # Branch is optional on Create User now. With none there is no branch to hold a
+        # calendar at yet; update_employee makes it when they are first posted to one.
+        for b_id in [b for b in (payload.branch_ids or [payload.branch_id]) if b]:
             await v3_col("doctors").insert_one({
                 "id": str(uuid.uuid4()),
                 "full_name": payload.full_name,
@@ -1223,7 +1318,8 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
     elif payload.role in MULTI_BRANCH_ROLES:
         # One doctors record per assigned branch (each branch's calendar/booking is
         # scoped to its own record) — plain single-branch case is just a list of one.
-        for b_id in (payload.branch_ids or [payload.branch_id]):
+        # None yet when the employee has no branch; see the diet/rehab case above.
+        for b_id in [b for b in (payload.branch_ids or [payload.branch_id]) if b]:
             await v3_col("doctors").insert_one({
                 "id": str(uuid.uuid4()),
                 "full_name": payload.full_name,
@@ -1339,9 +1435,20 @@ async def update_user_role(user_id: str, role: str, caller: V3UserOut = Depends(
         raise HTTPException(status_code=400, detail="Invalid role")
     if role == "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin accounts can only be created via the OTP-approved Super Admin creation page")
+    if not await _apply_role(user_id, role):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "Role updated"}
+
+
+async def _apply_role(user_id: str, role: str) -> bool:
+    """Give a login a role, and the expert records that role holds a calendar on.
+
+    Shared by the role endpoint and update_employee, where a designation change moves the
+    linked login's role. False when there is no such login. Validation is the caller's.
+    """
     res = await v3_col("users").update_one({"id": user_id}, {"$set": {"role": role}})
     if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
+        return False
     if is_expert_role(role):
         user = await v3_col("users").find_one({"id": user_id}, {"_id": 0})
         existing_docs = await v3_col("doctors").find(
@@ -1350,7 +1457,8 @@ async def update_user_role(user_id: str, role: str, caller: V3UserOut = Depends(
         existing_branch_ids = {d.get("branch_id") for d in existing_docs}
         # A CONSULTANT needs exactly one record and it belongs to no branch; a Physio
         # needs one per branch they cover.
-        wanted = [None] if role in SINGLE_CALENDAR_ROLES else (user.get("branch_ids") or [user.get("branch_id")])
+        # A per-branch desk with no branch yet gets none; its first posting makes one.
+        wanted = [None] if role in SINGLE_CALENDAR_ROLES else [b for b in (user.get("branch_ids") or [user.get("branch_id")]) if b]
         for b_id in wanted:
             if b_id not in existing_branch_ids:
                 await v3_col("doctors").insert_one({
@@ -1364,7 +1472,7 @@ async def update_user_role(user_id: str, role: str, caller: V3UserOut = Depends(
                     "user_id": user_id,
                     "created_at": now_iso(),
                 })
-    return {"message": "Role updated"}
+    return True
 
 
 # ---------- email delivery ----------

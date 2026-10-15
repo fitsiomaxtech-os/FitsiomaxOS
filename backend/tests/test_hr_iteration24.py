@@ -233,18 +233,24 @@ class TestHRDeletion:
         u = next((x for x in all_users if x["id"] == uid), None)
         assert u is not None and u["is_active"] is False
 
-    def test_delete_employee_unlinks_user(self, admin_client, created_ids):
+    def test_delete_employee_deletes_login_and_keeps_history(self, admin_client, created_ids):
         eid = created_ids["employees"][0]
         uid = created_ids["users"][0]
         r = admin_client.delete(f"{API}/v3/hr/employees/{eid}", timeout=10)
         assert r.status_code == 200, r.text
+        # The linked login goes with the employee, so Credentials no longer lists it.
         users = admin_client.get(f"{API}/v3/hr/users", timeout=10).json()
-        u = next((x for x in users if x["id"] == uid), None)
-        assert u is not None
-        assert u.get("employee_id") in (None, "")
+        assert not any(x["id"] == uid for x in users)
+        # ...and History still has both halves of the person.
+        history = admin_client.get(f"{API}/v3/hr/employees/history", timeout=10).json()
+        entry = next((h for h in history if h["employee"]["id"] == eid), None)
+        assert entry is not None
+        assert any(a["id"] == uid for a in entry["accounts"])
+        assert entry["deleted_at"] and entry["deleted_by"]["id"]
 
-        # Remove from created list since deleted
+        # Remove from created lists since deleted
         created_ids["employees"].remove(eid)
+        created_ids["users"].remove(uid)
 
     def test_delete_employee_404(self, admin_client):
         r = admin_client.delete(f"{API}/v3/hr/employees/does-not-exist", timeout=10)

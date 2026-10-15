@@ -912,6 +912,7 @@ export const uploadEmployeePhoto = async (file) => {
   return (await api.post("/hr/employees/upload-photo", form)).data;
 };
 export const hrDeleteEmployee = async (id) => (await api.delete(`/hr/employees/${id}`)).data;
+export const hrEmployeeHistory = async () => (await api.get("/hr/employees/history")).data;
 export const hrUsers = async (params = {}) => {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });

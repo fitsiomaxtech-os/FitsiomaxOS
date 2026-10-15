@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, uploadEmployeePhoto,
+  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, uploadEmployeePhoto,
   hrUsers, hrCreateUser, hrUpdateUser, hrResetPassword, hrEmailStatus, hrEmailTest, hrDeactivateUser, hrActivateUser, hrDeleteUserPermanent, hrMeta, hrAddCustomRole,
   hrDepartments, hrCreateDepartment, hrRenameDepartment, hrDeleteDepartment, hrAddDesignation, hrRenameDesignation, hrDeleteDesignation, hrReorderDesignations,
   getBranches, getVerticals,
@@ -261,7 +261,7 @@ export const HRBoard = ({ isSuperAdmin = false }) => {
       {/* The Dashboard's cards filter a list of their own now rather than switching tabs. */}
       {tab === "dashboard" && <DashboardTab />}
       {tab === "staff" && <StaffTab isSuperAdmin={isSuperAdmin} sub={staffSub} onSubChange={setStaffSub} />}
-      {tab === "employees" && <EmployeesTab meta={meta} />}
+      {tab === "employees" && <EmployeesTab meta={meta} reloadMeta={reloadMeta} />}
       {tab === "roles" && <RolesTab meta={meta} reloadMeta={reloadMeta} />}
       {tab === "structure" && <StructureTab meta={meta} reloadMeta={reloadMeta} />}
     </div>
@@ -1058,7 +1058,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
 
 // ---------- Employees ----------
 
-const EmployeesTab = ({ meta, initialFilter }) => {
+const EmployeesTab = ({ meta, reloadMeta, initialFilter }) => {
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState("");
   const filterStatus = initialFilter?.status || "active";
@@ -1072,6 +1072,7 @@ const EmployeesTab = ({ meta, initialFilter }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(() => hrEmployees({ status: filterStatus === "all" ? "" : filterStatus }).then(setEmployees).catch((e) => console.warn("[load failed]", e?.message || e)), [filterStatus]);
   useEffect(() => { load(); }, [load]);
@@ -1113,7 +1114,11 @@ const EmployeesTab = ({ meta, initialFilter }) => {
     : filtered;
 
   const remove = async (emp) => {
-    if (!window.confirm(`Delete employee ${emp.full_name}?`)) return;
+    // Says what else goes, because it is no longer only this row: the login linked to
+    // them is deleted permanently with it, and Credentials loses them too.
+    if (!window.confirm(`Delete employee ${emp.full_name}?
+
+Their login account (if linked) is permanently deleted too, so they leave Employees, Credentials and Department & Designation. A copy is kept in History.`)) return;
     try { await hrDeleteEmployee(emp.id); toast.success("Deleted"); setViewing(null); load(); }
     catch (e) { toast.error(e?.response?.data?.detail || "Delete failed"); }
   };
@@ -1164,7 +1169,19 @@ const EmployeesTab = ({ meta, initialFilter }) => {
             Offline
           </TabPill>
         </div>
-        <Button onClick={() => { setEditing(null); setShowAdd(true); }} className="ml-auto bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-add-btn"><Plus className="h-4 w-4 mr-1" />Add Employee</Button>
+        {/* History sits with Add Employee at the far end: both are about the list as a
+            whole rather than a filter on it. */}
+        <button
+          type="button"
+          onClick={() => setShowHistory(true)}
+          title="Deleted employees"
+          aria-label="Deleted employees"
+          className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+          data-testid="hr-emp-history-btn"
+        >
+          <History className="h-4 w-4" />
+        </button>
+        <Button onClick={() => { setEditing(null); setShowAdd(true); }} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-add-btn"><Plus className="h-4 w-4 mr-1" />Add Employee</Button>
       </div>
 
       <EmployeeDirectory employees={sorted} onView={setViewing} />
@@ -1178,7 +1195,9 @@ const EmployeesTab = ({ meta, initialFilter }) => {
         />
       )}
 
-      {showAdd && <AddEmployeeModal employee={editing} meta={meta} onClose={() => { setShowAdd(false); setEditing(null); }} onSaved={() => { setShowAdd(false); setEditing(null); load(); }} />}
+      {showHistory && <EmployeeHistoryModal onClose={() => setShowHistory(false)} />}
+
+      {showAdd && <AddEmployeeModal employee={editing} meta={meta} reloadMeta={reloadMeta} onClose={() => { setShowAdd(false); setEditing(null); }} onSaved={() => { setShowAdd(false); setEditing(null); load(); }} />}
     </div>
   );
 };
@@ -1327,6 +1346,9 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
+          {/* No Edit or Delete on a record read out of History: the employee it describes
+              no longer exists to be changed. */}
+          {onDelete ? (
           <button
             onClick={onDelete}
             className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
@@ -1334,14 +1356,119 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
           >
             <Trash2 className="h-4 w-4" /> Delete
           </button>
+          ) : <span />}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} data-testid="hr-emp-view-cancel">Close</Button>
-            <Button onClick={onEdit} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-view-edit">
-              <Pencil className="mr-1.5 h-4 w-4" /> Edit
-            </Button>
+            {onEdit && (
+              <Button onClick={onEdit} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-view-edit">
+                <Pencil className="mr-1.5 h-4 w-4" /> Edit
+              </Button>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ---------- Employee History ----------
+
+/**
+ * Employees deleted from HR. Deleting one removes the record and its login for good, so
+ * this is the only place what they were is still written down — read-only, opened from
+ * the History icon on the Employees toolbar. A row opens the same View dialog the live
+ * directory uses, minus Edit and Delete.
+ */
+const EmployeeHistoryModal = ({ onClose }) => {
+  const [rows, setRows] = useState(null);
+  const [search, setSearch] = useState("");
+  const [viewing, setViewing] = useState(null);
+
+  useEffect(() => {
+    hrEmployeeHistory().then(setRows).catch((e) => {
+      toast.error(e?.response?.data?.detail || "Failed to load history");
+      setRows([]);
+    });
+  }, []);
+
+  const q = search.trim().toLowerCase();
+  const shown = (rows || []).filter((r) => {
+    if (!q) return true;
+    const e = r.employee || {};
+    return [e.full_name, e.employee_code, e.email, e.department, e.designation, ...(r.accounts || []).map((a) => a.email)]
+      .some((v) => String(v || "").toLowerCase().includes(q));
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+      onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}
+      data-testid="hr-emp-history-modal"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <History className="h-4 w-4 shrink-0 text-slate-500" />
+            <h3 className="truncate text-base font-semibold text-slate-900">Deleted Employees</h3>
+            {rows && <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{rows.length}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search history..." testid="hr-emp-history-search" />
+            <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="hr-emp-history-close"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {rows === null ? (
+            <p className="p-6 text-center text-sm text-slate-500">Loading…</p>
+          ) : shown.length === 0 ? (
+            <p className="p-6 text-center text-sm text-slate-500">{rows.length ? "No deleted employee matches that search." : "No employees have been deleted yet."}</p>
+          ) : (
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Employee</th>
+                  <th className="px-3 py-2">Dept / Designation</th>
+                  <th className="px-3 py-2">Branch</th>
+                  <th className="px-3 py-2">Login</th>
+                  <th className="px-3 py-2">Deleted</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r) => {
+                  const e = r.employee || {};
+                  return (
+                    <tr key={r.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setViewing(e)} data-testid="hr-emp-history-row">
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-slate-900">{e.full_name || "—"}</p>
+                        <p className="text-xs text-slate-500">{e.employee_code || "No code"}</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <p className="text-slate-700">{e.department || "—"}</p>
+                        <p className="text-xs text-slate-500">{e.designation || "—"}</p>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-600">{e.branch_name || "—"}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {(r.accounts || []).length ? r.accounts.map((a) => (
+                          <p key={a.id} className="text-slate-700">{a.email} <span className="text-slate-400">· {roleLabel(a.role)}</span></p>
+                        )) : <span className="text-slate-400">No login</span>}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <p className="text-slate-700">{dashDate(r.deleted_at)}</p>
+                        <p className="text-slate-500">by {r.deleted_by?.full_name || "—"}</p>
+                      </td>
+                      <td className="px-3 py-2 text-slate-400"><ChevronRight className="h-4 w-4" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {viewing && <EmployeeViewModal employee={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 };
@@ -1454,7 +1581,58 @@ const blankEmployee = {
   status: "active", notes: "", work_type: "", service: "", branch_id: "",
 };
 
-const AddEmployeeModal = ({ employee, meta, initialDepartment, initialDesignation, onClose, onSaved }) => {
+/** Turns a designation into the role slug a login holds for it.
+ *
+ * A designation and a role are one thing in this OS, so the same answer is needed in two
+ * places: Create User, which gives a new login the employee's role, and the employee form,
+ * whose designation change moves the linked login's role with it. One map for both, or
+ * the two would hand the same title two different roles.
+ *
+ * A title that matches a real access role (built-in or custom) gives that slug. One that
+ * matches none is created as a custom role from that exact title — what Create User has
+ * always done. resolve() answers "" when there is no title or the role could not be made.
+ */
+const designationKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const useDesignationRole = (meta, reloadMeta) => {
+  const [resolving, setResolving] = useState(false);
+  // Retired slugs are skipped, not merely ordered around.
+  //
+  // A retired role wears the label of the role that replaced it — that is the whole point
+  // of keeping it, so a legacy account reads as a name rather than a raw slug — which
+  // means several entries answer to one label and the last one written would win. That is
+  // this map backwards: it exists to turn a job title into the slug to GIVE somebody, and
+  // the one slug it must never hand out is the one the OS has retired. Picking the "Branch
+  // Admin" designation would have created an account on branch_admin_physio_fitness, which
+  // the next restart then had to migrate back off.
+  const labelToSlug = useMemo(() => {
+    const map = {};
+    Object.entries(ROLE_META).forEach(([slug, m]) => { if (!m.retired) map[designationKey(m.label)] = slug; });
+    (meta?.custom_roles || []).forEach((r) => { if (r.name && r.label) map[designationKey(r.label)] = r.name; });
+    return map;
+  }, [meta?.custom_roles]);
+
+  const resolve = useCallback(async (label) => {
+    if (!label) return "";
+    const existing = labelToSlug[designationKey(label)];
+    if (existing) return existing;
+    setResolving(true);
+    try {
+      const created = await hrAddCustomRole(label);
+      await reloadMeta?.();
+      return created.name;
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to set role");
+      return "";
+    } finally {
+      setResolving(false);
+    }
+  }, [labelToSlug, reloadMeta]);
+
+  return { resolve, resolving };
+};
+
+const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initialDesignation, onClose, onSaved }) => {
+  const { resolve: resolveRole } = useDesignationRole(meta, reloadMeta);
   const [tab, setTab] = useState("personal");
   // initialDepartment/initialDesignation only seed a brand-new form — editing keeps using
   // the record's own values, and `employee` (not these fields) is what submit() checks to
@@ -1595,6 +1773,13 @@ const AddEmployeeModal = ({ employee, meta, initialDepartment, initialDesignatio
           const uploaded = await uploadEmployeePhoto(photoFile);
           payload.photo_url = uploaded.url;
         } finally { setUploadingPhoto(false); }
+      }
+      // A changed designation is a changed role: the linked login follows it. Only on a
+      // change, so a login whose role was set apart from its title on purpose is not
+      // pulled back to it by an unrelated edit to their phone number.
+      if (employee && jobKey(form.designation) !== jobKey(employee.designation)) {
+        const role = await resolveRole(form.designation);
+        if (role) payload.account_role = role;
       }
       if (employee) { await hrUpdateEmployee(employee.id, payload); toast.success("Employee updated"); }
       else { await hrCreateEmployee(payload); toast.success("Employee created"); }
@@ -1756,7 +1941,12 @@ const AddEmployeeModal = ({ employee, meta, initialDepartment, initialDesignatio
                 <Field label="Branch">
                   <select
                     value={form.branch_id}
-                    onChange={(e) => set("branch_id", e.target.value)}
+                    // The list goes with it. The form is seeded from the record, so it
+                    // carries whatever branch_ids the record held, and the server reads a
+                    // posted list ahead of branch_id — picking Parrys here over a record
+                    // holding [Anna Nagar] saved Anna Nagar again. Untouched, the stored
+                    // list still passes through as it was.
+                    onChange={(e) => { const v = e.target.value; setForm((p) => ({ ...p, branch_id: v, branch_ids: v ? [v] : [] })); }}
                     className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
                     data-testid="hr-emp-branch"
                   >
@@ -2855,6 +3045,7 @@ const StructureTab = ({ meta, reloadMeta }) => {
           employee={editingEmployee}
           initialDepartment={current?.name || ""}
           initialDesignation={pendingDesignation}
+          reloadMeta={reloadMeta}
           meta={meta}
           onClose={() => { setShowAddEmployee(false); setEditingEmployee(null); }}
           onSaved={() => {
@@ -3934,19 +4125,48 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
     hrEmployees({ status: "active" }).then(setEmployees).catch(() => {});
   }, [mode]);
 
+  // A login linked to an employee takes its Name and Branch from them: those are changed on
+  // the employee (Employees, or Department & Designation) and reach the login from there.
+  // Only a login with nobody behind it — "Past Data Entry" and the like — still has its
+  // own, since there is no employee record to change them on.
+  const linked = Boolean(editForm.employee_id);
+  const linkedEmp = employees.find((e) => e.id === editForm.employee_id);
+  const newlyLinked = linked && editForm.employee_id !== (user.employee_id || "");
+  const shownName = newlyLinked && linkedEmp ? linkedEmp.full_name : editForm.full_name;
+  const shownBranchIds = newlyLinked && linkedEmp
+    ? ((linkedEmp.branch_ids || []).filter((b) => b && b !== ALL_BRANCHES).length
+      ? linkedEmp.branch_ids.filter((b) => b && b !== ALL_BRANCHES)
+      : (linkedEmp.branch_id && linkedEmp.branch_id !== ALL_BRANCHES ? [linkedEmp.branch_id] : []))
+    : editForm.branch_ids;
+
   const submitEdit = async () => {
-    if (!editForm.full_name.trim() || !editForm.email.trim()) { toast.error("Name and email are required"); return; }
-    if (isMultiBranchRole && !BRANCHLESS_OK_ROLES.has(user.role) && editForm.branch_ids.length === 0) {
+    if (!editForm.email.trim()) { toast.error("Email is required"); return; }
+    if (!linked && !editForm.full_name.trim()) { toast.error("Name is required"); return; }
+    if (!linked && isMultiBranchRole && !BRANCHLESS_OK_ROLES.has(user.role) && editForm.branch_ids.length === 0) {
       toast.error("Select at least one branch"); return;
     }
     try {
       setBusy(true);
-      // branch_ids only applies (and is only sent) for Head Physio/Physio — every other
-      // role keeps its single `branch_id` select untouched by the multi-branch field.
-      const { branch_ids, branch_id, ...rest } = editForm;
-      const payload = isMultiBranchRole ? { ...rest, branch_ids } : { ...rest, branch_id };
+      const { branch_ids, branch_id, full_name, ...rest } = editForm;
+      let payload;
+      if (!linked) {
+        // branch_ids only applies (and is only sent) for Head Physio/Physio — every other
+        // role keeps its single `branch_id` select untouched by the multi-branch field.
+        payload = isMultiBranchRole ? { ...rest, full_name, branch_ids } : { ...rest, full_name, branch_id };
+      } else if (newlyLinked && linkedEmp) {
+        // Linked just now: the login adopts the employee's name and, where they have one,
+        // their branch — the same copy Create User makes. An employee on every branch
+        // sends none, since the server would write a login's "no branches" back onto the
+        // employee as no branch at all.
+        payload = { ...rest, full_name: linkedEmp.full_name };
+        if (shownBranchIds.length) {
+          payload = isMultiBranchRole ? { ...payload, branch_ids: shownBranchIds } : { ...payload, branch_id: shownBranchIds[0] };
+        }
+      } else {
+        payload = rest;
+      }
       await hrUpdateUser(user.id, payload);
-      toast.success(`${editForm.full_name} updated`);
+      toast.success(`${shownName || user.full_name} updated`);
       onDone();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to update user"); }
     finally { setBusy(false); }
@@ -4076,40 +4296,51 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
 
         {mode === "edit" && (
           <div className="space-y-3" data-testid="hr-actions-edit-form">
-            <Field label="Name"><Input placeholder="Full name" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} data-testid="hr-actions-edit-name" /></Field>
-            <Field label="Email"><Input placeholder="user@company.com" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} data-testid="hr-actions-edit-email" /></Field>
-            {isMultiBranchRole ? (
-              <Field label={`Branches (${roleLabelForMulti} can cover more than one)`}>
-                <div className="space-y-1.5 rounded-md border border-slate-200 p-2" data-testid="hr-actions-edit-branch-ids">
-                  {branches.map((b) => {
-                    const checked = editForm.branch_ids.includes(b.id);
-                    return (
-                      <label key={b.id} className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => setEditForm({
-                            ...editForm,
-                            branch_ids: e.target.checked
-                              ? [...editForm.branch_ids, b.id]
-                              : editForm.branch_ids.filter((id) => id !== b.id),
-                          })}
-                          data-testid={`hr-actions-edit-branch-ids-${b.id}`}
-                        />
-                        {b.branch_name}
-                      </label>
-                    );
-                  })}
-                  {branches.length === 0 && <p className="px-1.5 py-1 text-xs text-slate-400">No branches yet</p>}
-                </div>
-              </Field>
+            {linked ? (
+              <>
+                <Field label="Name (from employee)"><Input value={shownName} readOnly disabled className="bg-slate-50" data-testid="hr-actions-edit-name" /></Field>
+                <Field label="Branch (from employee)"><LockedBranches ids={shownBranchIds} branches={branches} testid="hr-actions-edit-branch" /></Field>
+              </>
             ) : (
-              <Field label="Branch">
-                <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={editForm.branch_id} onChange={(e) => setEditForm({ ...editForm, branch_id: e.target.value })} data-testid="hr-actions-edit-branch">
-                  <option value="">No branch</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-                </select>
-              </Field>
+              <Field label="Name"><Input placeholder="Full name" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} data-testid="hr-actions-edit-name" /></Field>
+            )}
+            <Field label="Email"><Input placeholder="user@company.com" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} data-testid="hr-actions-edit-email" /></Field>
+            {!linked && (
+              <>
+                {isMultiBranchRole ? (
+                  <Field label={`Branches (${roleLabelForMulti} can cover more than one)`}>
+                    <div className="space-y-1.5 rounded-md border border-slate-200 p-2" data-testid="hr-actions-edit-branch-ids">
+                      {branches.map((b) => {
+                        const checked = editForm.branch_ids.includes(b.id);
+                        return (
+                          <label key={b.id} className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => setEditForm({
+                                ...editForm,
+                                branch_ids: e.target.checked
+                                  ? [...editForm.branch_ids, b.id]
+                                  : editForm.branch_ids.filter((id) => id !== b.id),
+                              })}
+                              data-testid={`hr-actions-edit-branch-ids-${b.id}`}
+                            />
+                            {b.branch_name}
+                          </label>
+                        );
+                      })}
+                      {branches.length === 0 && <p className="px-1.5 py-1 text-xs text-slate-400">No branches yet</p>}
+                    </div>
+                  </Field>
+                ) : (
+                  <Field label="Branch">
+                    <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={editForm.branch_id} onChange={(e) => setEditForm({ ...editForm, branch_id: e.target.value })} data-testid="hr-actions-edit-branch">
+                      <option value="">No branch</option>
+                      {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+                    </select>
+                  </Field>
+                )}
+              </>
             )}
             <Field label="Linked Employee">
               <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={editForm.employee_id} onChange={(e) => setEditForm({ ...editForm, employee_id: e.target.value })} data-testid="hr-actions-edit-employee">
@@ -4251,75 +4482,13 @@ const EmployeeSelectDropdown = ({ value, employees, onChange }) => {
   );
 };
 
-/** Picks the branch a login is scoped to, in the same dialog the other two use. */
-/** Branches for a desk that can work more than one, as one line.
- *
- * A button rather than the checkbox list this form used to carry. The list was nine rows
- * tall in a dialog already scaled down to fit the window, and every one of them was on
- * screen whether or not anybody was going to change what the employee record already said.
- * The button says what is chosen and opens the same ticking dialog the branch picker in
- * Department & Designation uses, so the two screens answer this question the same way.
- */
-const BranchesSelectDropdown = ({ values, branches, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const picked = (values || []).filter(Boolean);
-  const names = picked.map((id) => branches.find((b) => b.id === id)?.branch_name).filter(Boolean);
-  const label = names.length === 0
-    ? "No branch"
-    : names.length <= 2 ? names.join(" + ") : `${names.length} branches`;
+/** A login's branches shown as the employee record has them — read, never picked. */
+const LockedBranches = ({ ids, branches, testid }) => {
+  const names = (ids || []).map((id) => branches.find((b) => b.id === id)?.branch_name).filter(Boolean);
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm text-slate-700"
-        data-testid="hr-create-user-branches"
-      >
-        <span className={`truncate ${names.length ? "" : "text-slate-400"}`}>{label}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-      </button>
-      {open && (
-        <PickerModal
-          title="Branches"
-          multi
-          values={picked}
-          options={branches.map((b) => ({ value: b.id, label: b.branch_name }))}
-          onSave={(ids) => { setOpen(false); onChange(ids); }}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
-  );
-};
-
-const BranchSelectDropdown = ({ value, branches, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const selected = branches.find((b) => b.id === value);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm text-slate-700"
-        data-testid="hr-create-user-branch"
-      >
-        <span className={`truncate ${selected ? "" : "text-slate-400"}`}>{selected ? selected.branch_name : "No branch"}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-      </button>
-      {open && (
-        <PickerModal
-          title="Select branch"
-          value={value || ""}
-          options={[
-            { value: "", label: "No branch", hint: "Not tied to a branch" },
-            ...branches.map((b) => ({ value: b.id, label: b.branch_name })),
-          ]}
-          onPick={(v) => { setOpen(false); onChange(v); }}
-          onClose={() => setOpen(false)}
-          checkbox
-        />
-      )}
-    </>
+    <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600" data-testid={testid}>
+      <span className="truncate">{names.length ? names.join(", ") : "No branch"}</span>
+    </div>
   );
 };
 
@@ -4327,51 +4496,15 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
   const [employees, setEmployees] = useState([]);
   const [branches, setBranches] = useState([]);
   const [form, setForm] = useState({ employee_id: "", full_name: "", email: "", role: "", branch_id: "", branch_ids: [], password: "", confirm: "" });
-  const roleLabelForMulti = multiBranchLabel(form.role);
-  const isMultiBranchRole = Boolean(roleLabelForMulti);
-  const [resolvingRole, setResolvingRole] = useState(false);
+  const isMultiBranchRole = Boolean(multiBranchLabel(form.role));
+  const { resolve, resolving: resolvingRole } = useDesignationRole(meta, reloadMeta);
   useEffect(() => { hrEmployees({ status: "active" }).then(setEmployees).catch((e) => console.warn("[load failed]", e?.message || e)); }, []);
   useEffect(() => { getBranches().then(setBranches).catch((e) => console.warn("[load failed]", e?.message || e)); }, []);
 
-  // Letters only, so "Online Physio Admin" and "ONLINE PHYSIO ADMIN" both normalize the
-  // same way — matching a Departments & Designation title back to whichever real access
-  // role (built-in or already-created custom) it stands for.
-  const key = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
-  // Retired slugs are skipped, not merely ordered around.
-  //
-  // A retired role wears the label of the role that replaced it — that is the whole point
-  // of keeping it, so a legacy account reads as a name rather than a raw slug — which
-  // means several entries answer to one label and the last one written would win. That is
-  // this map backwards: it exists to turn a job title into the slug to GIVE somebody, and
-  // the one slug it must never hand out is the one the OS has retired. Picking the "Branch
-  // Admin" designation would have created an account on branch_admin_physio_fitness, which
-  // the next restart then had to migrate back off.
-  const roleLabelToSlug = useMemo(() => {
-    const map = {};
-    Object.entries(ROLE_META).forEach(([slug, m]) => { if (!m.retired) map[key(m.label)] = slug; });
-    (meta.custom_roles || []).forEach((r) => { if (r.name && r.label) map[key(r.label)] = r.name; });
-    return map;
-  }, [meta.custom_roles]);
-
-  // A designation that already matches a real access role (built-in or previously created)
-  // is used as-is. One that doesn't is created as a new role from that exact title — the
-  // same thing "+ Add New Role" used to do by typing, just now always sourced from the job
-  // title the employee already holds. Either way form.role a moment later holds a real slug.
   const resolveRoleFrom = async (label) => {
-    if (!label) { setForm((p) => ({ ...p, role: "" })); return; }
-    const existingSlug = roleLabelToSlug[key(label)];
-    if (existingSlug) { setForm((p) => ({ ...p, role: existingSlug })); return; }
-    setResolvingRole(true);
-    try {
-      const created = await hrAddCustomRole(label);
-      await reloadMeta?.();
-      setForm((p) => ({ ...p, role: created.name }));
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to set role");
-      setForm((p) => ({ ...p, role: "" }));
-    }
-    setResolvingRole(false);
+    setForm((p) => ({ ...p, role: "" }));
+    const role = await resolve(label);
+    setForm((p) => ({ ...p, role }));
   };
 
   /** Everything this form used to ask twice, taken from the person it is creating a login for.
@@ -4412,14 +4545,9 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
     if (!form.email || !form.password) { toast.error("Email and password required"); return; }
     if (form.password.length < 6) { toast.error("Min 6 characters"); return; }
     if (form.password !== form.confirm) { toast.error("Passwords do not match"); return; }
-    // A desk that holds a calendar and is posted nowhere is offered nowhere — a Consultant
-    // with no branches cannot be booked at any of them. Refused here rather than created
-    // and quietly useless, and the message says where the answer actually lives, since this
-    // form no longer asks for it.
-    if (isMultiBranchRole && !BRANCHLESS_OK_ROLES.has(form.role) && form.branch_ids.length === 0) {
-      toast.error(`${form.full_name || "That employee"} has no branch yet — set it on their employee record first`);
-      return;
-    }
+    // No branch is allowed: the login can be made before the employee is posted anywhere.
+    // Their calendar, if their desk holds one, is made when the employee record is first
+    // given a branch (update_employee), so it is not refused here any more.
     try {
       await hrCreateUser({
         full_name: form.full_name || form.email.split("@")[0],
@@ -4458,28 +4586,13 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
           <EmployeeSelectDropdown value={form.employee_id} employees={employees} onChange={pickEmployee} />
           {resolvingRole && <p className="mt-1 text-[10px] text-slate-400">Setting up their role...</p>}
         </Field>
-        <Field label="Name"><Input placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} data-testid="hr-create-user-name" /></Field>
+        {/* Name and Branch are the employee's, read off the pick above and locked: they are
+            changed on the employee record (Employees, or Department & Designation), and a
+            login carrying its own copy is how the two came to disagree. */}
+        <Field label="Name"><Input placeholder="Filled from the employee" value={form.full_name} readOnly disabled className="bg-slate-50" data-testid="hr-create-user-name" /></Field>
         <Field label="Username (Email) *"><Input placeholder="user@company.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="hr-create-user-email" /></Field>
-        {/* Filled in by the employee pick, and editable after it.
-            Role is not offered beside it and this is not a step back towards that: a role
-            has exactly one right answer, the designation, so asking was inviting the two to
-            disagree. A branch does not — somebody can be hired onto a record naming one
-            branch and given a login that reaches another, or a second one — so the answer
-            the employee gives is a starting point rather than the whole of it. */}
-        <Field label={isMultiBranchRole ? `Branch (${roleLabelForMulti} can cover more than one)` : "Branch"}>
-          {isMultiBranchRole ? (
-            <BranchesSelectDropdown
-              values={form.branch_ids}
-              branches={branches}
-              onChange={(ids) => setForm({ ...form, branch_ids: ids, branch_id: ids[0] || "" })}
-            />
-          ) : (
-            <BranchSelectDropdown
-              value={form.branch_id}
-              branches={branches}
-              onChange={(id) => setForm({ ...form, branch_id: id, branch_ids: id ? [id] : [] })}
-            />
-          )}
+        <Field label="Branch (optional)">
+          <LockedBranches ids={form.branch_ids} branches={branches} testid="hr-create-user-branch" />
         </Field>
         <Field label="Password *"><PasswordInput placeholder="Min 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} testid="hr-create-user-pwd" /></Field>
         <Field label="Confirm Password *"><PasswordInput placeholder="Confirm password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} testid="hr-create-user-confirm" /></Field>
