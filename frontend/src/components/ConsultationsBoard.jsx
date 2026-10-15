@@ -3524,8 +3524,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const showBranchColumn = branchColumn && !showFeeAction && !showDiscountColumn && !showStageFeeAction && !showRowArrow;
   // Consultant Branch, on the plain table with or without its fee button.
   const showConsultantBranch = consultantBranchColumn && !showBranchColumn && !showFeeAction && !showDiscountColumn && !showRowArrow;
+  // Its Consultant Phone and Consultant Branch columns, though, are left off Consultation
+  // Booked and Consultation Visit; those two lists keep the short headers all the same.
+  const showConsultantContact = showConsultantBranch
+    && stageFilter !== "Consultation Booked" && stageFilter !== "Consultation Visit";
   const cols = showBranchColumn ? COLS_PLAIN_WITH_BRANCH
-    : showConsultantBranch ? (showStageFeeAction ? COLS_PLAIN_WITH_ACTION_CBRANCH : COLS_PLAIN_WITH_CBRANCH)
+    : showConsultantContact ? (showStageFeeAction ? COLS_PLAIN_WITH_ACTION_CBRANCH : COLS_PLAIN_WITH_CBRANCH)
     : showFeeAction
     ? COLS_WITH_ACTION
     : showDiscountColumn
@@ -6991,7 +6995,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showBranchColumn ? "min-w-[1000px]" : showConsultantBranch ? (showStageFeeAction ? "min-w-[1240px]" : "min-w-[1100px]") : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
+          <table className={`w-full table-fixed text-sm ${showBranchColumn ? "min-w-[1000px]" : showConsultantContact ? (showStageFeeAction ? "min-w-[1240px]" : "min-w-[1100px]") : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
             <thead className={`sticky top-0 z-10 bg-slate-500 uppercase text-white ${feeTable ? "text-[11px] tracking-wide" : "text-xs"}`}>
               <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-1.5" : ""}>
                 <th className={`${cols.sno} px-3 py-2 ${thAlign} align-middle`}>S.No</th>
@@ -7003,8 +7007,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 <th className={`${cols.expert} px-4 py-2 ${thAlign} align-middle`}>
                   {showDiscountColumn || showBranchColumn || showConsultantBranch ? "Consultant" : "Consultant Name"}
                 </th>
-                {showConsultantBranch && <th className={`${cols.cphone} px-4 py-2 ${thAlign} align-middle`}>Consultant Phone</th>}
-                {showConsultantBranch && <th className={`${cols.cbranch} px-4 py-2 ${thAlign} align-middle`}>Consultant Branch</th>}
+                {showConsultantContact && <th className={`${cols.cphone} px-4 py-2 ${thAlign} align-middle`}>Consultant Phone</th>}
+                {showConsultantContact && <th className={`${cols.cbranch} px-4 py-2 ${thAlign} align-middle`}>Consultant Branch</th>}
                 {/* Shortened on Fee Collected alone: that list carries three more columns than any
                     other stage, and the words the headings lose there — Consultation, Expert,
                     Applied — are the ones the column below already makes obvious. Every other
@@ -7133,7 +7137,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
                       </span>
                     </td>
-                    {showConsultantBranch && (() => {
+                    {showConsultantContact && (() => {
                       const phone = displayPhone(consultantPhones[l.assigned_physio_id]);
                       return (
                         <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={phone || ""}>
@@ -7141,7 +7145,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </td>
                       );
                     })()}
-                    {showConsultantBranch && (() => {
+                    {showConsultantContact && (() => {
                       const name = branchNames[consultantBranches[l.assigned_physio_id]] || "";
                       return (
                         <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={name}>
@@ -7375,7 +7379,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : showConsultantBranch ? (showStageFeeAction ? 10 : 9) : (showStageFeeAction || showRowArrow || showBranchColumn) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
+                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : showConsultantContact ? (showStageFeeAction ? 10 : 9) : (showStageFeeAction || showRowArrow || showBranchColumn) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
                   {loading
                     ? "Loading…"
                     // An empty tab is not an empty stage: saying "no leads in consultations"
