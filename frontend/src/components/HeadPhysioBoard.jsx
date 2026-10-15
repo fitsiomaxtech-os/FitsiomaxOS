@@ -474,8 +474,13 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
   // Head Physios cover every branch and carry none of their own, so "all" is the normal
   // case here — without it the board asked for branch `undefined` and every list came back
   // empty while the appointments sat there booked.
+  //
+  // A Consultant's own list (`mine`) posted to more than one branch — their own and those
+  // they collaborate with — reads every branch: the first alone left a booking made at a
+  // collaborating branch off their board. `mine` already narrows it to their own
+  // appointments, so "all" here never shows anybody else's patients.
   const assignedBranchIds = branchIds && branchIds.length ? branchIds : (branchId ? [branchId] : []);
-  const effectiveBranchId = assignedBranchIds[0] || branchId || "all";
+  const effectiveBranchId = mine && assignedBranchIds.length > 1 ? "all" : (assignedBranchIds[0] || branchId || "all");
 
   // Inside the All card rather than above the list: All is the only tab that merges three
   // queues, so the control that picks between them belongs to that card and to no other.
