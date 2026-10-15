@@ -13,7 +13,6 @@ import {
   getPortalAccountStatus, createOrResetPortalAccount,
   emailPortalLogin, setPortalBlocked, setPortalAutoSkip,
 } from "@/lib/api";
-import { PortalControlsCard } from "@/components/branch/PortalControlsCard";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 // Was a local copy of waNumber, identical to the three still inlined elsewhere. Now that
 // lib/phone.js exists this one points at it — the others can follow as they're touched.
@@ -305,8 +304,6 @@ export const PatientsPortalPanel = ({ branchId }) => {
 
   return (
     <div className="space-y-4" data-testid="branch-patients-panel">
-      <PortalControlsCard branchId={branchId} />
-
       {/* Six columns for six cards on a wide screen, so the row finishes flush with the
           page. Written as literal class names because Tailwind reads them out of the
           source — a count built from CARDS.length at runtime compiles to nothing.
@@ -364,17 +361,9 @@ export const PatientsPortalPanel = ({ branchId }) => {
         </Button>
       </div>
 
+      {/* No "Patients · N patients" heading here: the active card above already names the
+          list and counts it. */}
       <div>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-700">
-            Patients
-            {card !== "all" && (
-              <span className="ml-2 font-normal text-slate-400">· {CARDS.find((c) => c.key === card)?.label}</span>
-            )}
-          </h3>
-          <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-semibold text-sky-700">{visible.length} patients</span>
-        </div>
-
         {visible.length === 0 && !loading ? (
           <div className="py-16 text-center">
             <User className="mx-auto mb-3 h-10 w-10 text-slate-200" />

@@ -8,6 +8,7 @@ import { ZumbaMastersPanel } from "@/components/branch/ZumbaMastersPanel";
 import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { TeamPanel } from "@/components/branch/TeamPanel";
+import { PortalControlsButton } from "@/components/branch/PortalControlsButton";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
@@ -51,7 +52,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
 
   return (
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
-      {/* The same underlined strip as Records' sub-tabs, with Zumba's gear at its end. On a
+      {/* The same underlined strip as Records' sub-tabs, with Zumba's or Patients' gear at its end. On a
           phone the tabs share the width, icon over a short label; seven are more than the
           narrowest phones hold, so each keeps its own width and the strip scrolls as a last
           resort. From sm up they sit in a row with full labels, as Records' do. */}
@@ -89,6 +90,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
             <Settings className="h-4 w-4" />
           </button>
         )}
+        {/* Patients' gear: the automatic Client Portal login, which used to be a card above
+            the patient list. */}
+        {active === "patients" && <PortalControlsButton branchId={branchId} />}
       </div>
       <Dialog open={mastersOpen} onOpenChange={setMastersOpen}>
         {/* A gutter and rounded corners on a phone too, and the panel held below the close
