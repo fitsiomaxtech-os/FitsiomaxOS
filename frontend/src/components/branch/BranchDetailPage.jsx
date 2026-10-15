@@ -780,17 +780,20 @@ export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
               {shown.map((c) => (
                 <div key={c.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{initials(c.full_name)}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-slate-800">{c.full_name}</span>
-                    <span className="block truncate text-[11px] text-slate-500">{c.email}</span>
-                    <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-semibold text-slate-600">{String(c.role || "").replace(/_/g, " ")}</span>
-                      {c.current_branches?.length > 0 && (
-                        <span className={`rounded px-1.5 py-px text-[10px] font-semibold ${c.multi_branch ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                          {c.multi_branch ? "also at" : "moves from"} {c.current_branches.join(", ")}
-                        </span>
-                      )}
-                    </span>
+                  {/* Two lines on a fixed two-column grid, so every row lines up with the next:
+                      name over role on the left, email over where they work on the right. */}
+                  <span className="grid min-w-0 flex-1 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)]">
+                    <span className="truncate text-sm font-semibold text-slate-800" title={c.full_name}>{c.full_name}</span>
+                    <span className="truncate text-[11px] text-slate-500" title={c.email}>{c.email}</span>
+                    <span className="w-24 truncate rounded bg-slate-100 px-1.5 py-px text-center text-[10px] font-semibold text-slate-600">{String(c.role || "").replace(/_/g, " ")}</span>
+                    {c.current_branches?.length > 0 ? (
+                      <span
+                        className={`max-w-full justify-self-start truncate rounded px-1.5 py-px text-[10px] font-semibold ${c.multi_branch ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}
+                        title={c.current_branches.join(", ")}
+                      >
+                        {c.multi_branch ? "also at" : "moves from"} {c.current_branches.join(", ")}
+                      </span>
+                    ) : <span />}
                   </span>
                   <button
                     type="button"
