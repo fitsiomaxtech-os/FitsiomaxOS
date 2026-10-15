@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, GripVertical, Search, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1015,13 +1015,12 @@ const EmployeeDirectory = ({ employees, onView }) => (
       {employees.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">No employees.</p>}
     </div>
 
-    <Card className="hidden md:block">
-      <CardHeader><CardTitle className="text-base">Employee Directory</CardTitle></CardHeader>
+    <Card className="hidden overflow-hidden md:block">
       <CardContent className="p-0">
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">Employee</th><th className="px-3 py-2">Dept</th><th className="px-3 py-2">Designation</th><th className="px-3 py-2">Work Type</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Joining</th><th className="px-3 py-2">Salary</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Actions</th></tr>
+              <tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">Employee</th><th className="px-3 py-2">Dept</th><th className="px-3 py-2">Designation</th><th className="px-3 py-2">Work Type</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Joining</th><th className="px-3 py-2">Salary</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr>
             </thead>
             <tbody>
               {employees.map((e, i) => (
@@ -1044,7 +1043,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
                   <td className="px-3 py-2 font-semibold text-emerald-600" title={salaryBasis(e)}>₹{monthlySalary(e).toLocaleString("en-IN")}</td>
                   <td className="px-3 py-2"><span className={`rounded px-2 py-0.5 text-xs ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span></td>
                   <td className="px-3 py-2">
-                    <button onClick={() => onView(e)} title="View employee" className="text-slate-500 hover:text-sky-600" data-testid={`hr-emp-view-${e.id}`}><Eye className="h-4 w-4" /></button>
+                    <button onClick={() => onView(e)} title="View employee" aria-label={`View ${e.full_name}`} className="text-slate-500 hover:text-sky-600" data-testid={`hr-emp-view-${e.id}`}><ChevronRight className="h-4 w-4" /></button>
                   </td>
                 </tr>
               ))}
@@ -1062,7 +1061,8 @@ const EmployeeDirectory = ({ employees, onView }) => (
 const EmployeesTab = ({ meta, initialFilter }) => {
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState(initialFilter?.status || "active");
+  const filterStatus = initialFilter?.status || "active";
+  const [sortAZ, setSortAZ] = useState(null); // null = as-loaded | "asc" | "desc"
   // Arrived at from a Department Strength bar or a Departments & Designation tab.
   const [department, setDepartment] = useState(initialFilter?.department || "");
   const [designation, setDesignation] = useState(initialFilter?.designation || "");
@@ -1108,14 +1108,16 @@ const EmployeesTab = ({ meta, initialFilter }) => {
     return (e.full_name || "").toLowerCase().includes(q) || (e.email || "").toLowerCase().includes(q) || (e.employee_code || "").toLowerCase().includes(q);
   });
 
+  const sorted = sortAZ
+    ? [...filtered].sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "") * (sortAZ === "asc" ? 1 : -1))
+    : filtered;
+
   const remove = async (emp) => {
     if (!window.confirm(`Delete employee ${emp.full_name}?`)) return;
     try { await hrDeleteEmployee(emp.id); toast.success("Deleted"); setViewing(null); load(); }
     catch (e) { toast.error(e?.response?.data?.detail || "Delete failed"); }
   };
 
-  const active = employees.filter((e) => (e.status || "active") === "active").length;
-  const left = employees.filter((e) => (e.status || "active") !== "active").length;
   // Offered only when it would actually match someone — otherwise every install shows an
   // "Unassigned" option that filters to an empty list.
   const hasUnassigned = employees.some((e) => !e.department);
@@ -1123,54 +1125,35 @@ const EmployeesTab = ({ meta, initialFilter }) => {
   // flex+gap, not space-y — the desktop table below is hidden by class on mobile.
   return (
     <div className="flex flex-col gap-3" data-testid="hr-employees-tab">
-      {/* Status row */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => setFilterStatus("active")} className={`rounded-md px-3 py-2 text-sm font-medium ${filterStatus === "active" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="hr-emp-tab-active">Active Employees ({active})</button>
-        <button onClick={() => setFilterStatus("left")} className={`rounded-md px-3 py-2 text-sm font-medium ${filterStatus === "left" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="hr-emp-tab-left">Left ({left})</button>
-      </div>
-
-      {/* Department, Designation and Work Type on one row — the same pair of dropdowns
-          Credentials uses, in the same order and the same shape.
-
-          Department was a row of pills sitting directly under the tab bar, competing with
-          it for the same band, and it read as a filter unrelated to the designation
-          dropdown beside it even though the two are halves of one narrowing: which
-          department, then which job inside it. Matched and paired, picking a department
-          visibly narrows the list next to it, and Employees and Credentials now ask the
-          same question with the same control.
-
-          "Unassigned" joins the department list as an option rather than a trailing pill —
-          it is an answer to the same question, and it is still offered only when somebody
-          actually has no department. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2" data-testid="hr-emp-dept-filter">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Department</span>
-          <DepartmentFilterSelect
-            value={department}
-            onChange={(d) => { setDepartment(d); setDesignation(""); }}
-            departments={hasUnassigned ? [...meta.departments, "Unassigned"] : meta.departments}
-            testid="hr-emp-dept-filter-select"
-          />
-        </div>
-
-        <div className="flex items-center gap-2" data-testid="hr-emp-designation-filter">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Designation</span>
-          <DesignationFilterSelect
-            value={designation}
-            onChange={setDesignation}
-            groups={designationGroups}
-            testid="hr-emp-designation-filter-select"
-          />
-        </div>
-
-        <span className="hidden h-6 w-px shrink-0 bg-slate-200 sm:block" aria-hidden="true" />
-
-        {/* Same Online/Offline split as Branches & Verticals. No Both pill, though Both is
-            now an answer: somebody who works the two modes already appears under each of
-            these, so a third pill would list them a second time rather than reach anybody
-            the two cannot. */}
-        <div className="flex flex-wrap items-center gap-2" data-testid="hr-emp-worktype-filter">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Work Type</span>
+      {/* One toolbar: Search, A → Z, Department, Designation, Work Type, then Add Employee
+          pushed to the far end. Department and Designation are the same pair of dropdowns
+          Credentials uses — picking a department narrows the designations beside it.
+          "Unassigned" is offered only when somebody actually has no department. Work Type
+          has no Both pill: somebody who works the two modes already appears under each. */}
+      <div className="flex flex-wrap items-center gap-2" data-testid="hr-emp-toolbar">
+        <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." testid="hr-emp-search" />
+        <button
+          type="button"
+          onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
+          title="Sort by name"
+          className={`h-10 shrink-0 rounded-md border px-3 text-sm font-medium transition ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+          data-testid="hr-emp-sort-az"
+        >
+          {sortAZ === "desc" ? "Z → A" : "A → Z"}
+        </button>
+        <DepartmentFilterSelect
+          value={department}
+          onChange={(d) => { setDepartment(d); setDesignation(""); }}
+          departments={hasUnassigned ? [...meta.departments, "Unassigned"] : meta.departments}
+          testid="hr-emp-dept-filter-select"
+        />
+        <DesignationFilterSelect
+          value={designation}
+          onChange={setDesignation}
+          groups={designationGroups}
+          testid="hr-emp-designation-filter-select"
+        />
+        <div className="flex items-center gap-2" data-testid="hr-emp-worktype-filter">
           <TabPill active={workType === ""} onClick={() => setWorkType("")} testid="hr-emp-worktype-filter-all">
             All
           </TabPill>
@@ -1181,15 +1164,10 @@ const EmployeesTab = ({ meta, initialFilter }) => {
             Offline
           </TabPill>
         </div>
+        <Button onClick={() => { setEditing(null); setShowAdd(true); }} className="ml-auto bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-add-btn"><Plus className="h-4 w-4 mr-1" />Add Employee</Button>
       </div>
 
-      {/* Actions row */}
-      <div className="flex items-center justify-end gap-2">
-        <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." testid="hr-emp-search" />
-        <Button onClick={() => { setEditing(null); setShowAdd(true); }} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-add-btn"><Plus className="h-4 w-4 mr-1" />Add Employee</Button>
-      </div>
-
-      <EmployeeDirectory employees={filtered} onView={setViewing} />
+      <EmployeeDirectory employees={sorted} onView={setViewing} />
 
       {viewing && (
         <EmployeeViewModal
