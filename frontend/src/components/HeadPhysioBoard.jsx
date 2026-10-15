@@ -152,6 +152,8 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  *  - `rowArrow` — an Action column with an arrow at the end of the consultations table.
  *  - `oneLineRows` — that table's rows on one line: the name alone, no plan under it, and
  *    the appointment as "Sat, 12 Sept - 3:15 PM" rather than stacked.
+ *  - `branchColumn` — that table gains Patient Branch: a Consultant working several branches
+ *    reads all of them in one list.
  */
 /**
  * `headChief` — the board read as Branch Admin's Sumaiya Consultations tab: the consultations
@@ -165,7 +167,7 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * as the host's grey list cards instead, and a tap opens that list on its own screen with a
  * back bar above it, like the host's stage stacks.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false, phoneStack = false }) => {
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   // phoneStack only: a work tab's list is open on the phone, rather than the card list.
   const [phoneListOpen, setPhoneListOpen] = useState(false);
@@ -781,6 +783,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               homeVisitScope="exclude"
               rowArrow={rowArrow}
               oneLineRows={oneLineRows}
+              branchColumn={branchColumn}
             />
           </div>
 
@@ -847,6 +850,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               homeVisitScope="only"
               rowArrow={rowArrow}
               oneLineRows={oneLineRows}
+              branchColumn={branchColumn}
             />
           </div>
 

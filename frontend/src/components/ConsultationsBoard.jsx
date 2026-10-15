@@ -1752,6 +1752,14 @@ const COLS_PLAIN_WITH_ACTION = {
 // Patient gives up three points to Appointment there: its rows are the name alone (see
 // `oneLineRows`), and the appointment is one line, "Sat, 12 Sept - 3:15 PM", which needs
 // about 170px where the stacked chip needed 110.
+// The Consultant's own board (`branchColumn`): the plain table with the patient's branch
+// after the name, since a Consultant working more than one branch reads all of them in one
+// list. Must total 100.
+const COLS_PLAIN_WITH_BRANCH = {
+  sno: "w-[4%]", patient: "w-[17%]", branch: "w-[13%]", appt: "w-[15%]", expert: "w-[13%]", stage: "w-[14%]",
+  phone: "w-[12%]", pno: "w-[12%]",
+};
+
 const COLS_PLAIN_WITH_ARROW = {
   sno: "w-[4%]", patient: "w-[19%]", appt: "w-[17%]", expert: "w-[14%]", stage: "w-[14%]",
   phone: "w-[13%]", pno: "w-[13%]", arrow: "w-[6%]",
@@ -2531,7 +2539,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, compactTable = false }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, compactTable = false, branchColumn = false }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3491,7 +3499,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // An Action column with an arrow at the end of the row (My Consultation). Only on the
   // plain table: a row that already ends in a fee button has its action column.
   const showRowArrow = rowArrow && !showDiscountColumn && !showStageFeeAction;
-  const cols = showFeeAction
+  // Patient Branch, on the plain table only — every other set is already full.
+  const showBranchColumn = branchColumn && !showFeeAction && !showDiscountColumn && !showStageFeeAction && !showRowArrow;
+  const cols = showBranchColumn ? COLS_PLAIN_WITH_BRANCH : showFeeAction
     ? COLS_WITH_ACTION
     : showDiscountColumn
       ? COLS_WITH_DISCOUNT
@@ -6956,21 +6966,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
+          <table className={`w-full table-fixed text-sm ${showBranchColumn ? "min-w-[1000px]" : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
             <thead className={`sticky top-0 z-10 bg-slate-500 uppercase text-white ${feeTable ? "text-[11px] tracking-wide" : "text-xs"}`}>
               <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-1.5" : ""}>
                 <th className={`${cols.sno} px-3 py-2 ${thAlign} align-middle`}>S.No</th>
-                <th className={`${cols.patient} px-4 py-2 text-left align-middle`}>Patient Name</th>
+                {/* The Consultant's own board words its headings short, to make room for
+                    Patient Branch. */}
+                <th className={`${cols.patient} px-4 py-2 text-left align-middle`}>{showBranchColumn ? "Name" : "Patient Name"}</th>
+                {showBranchColumn && <th className={`${cols.branch} px-4 py-2 ${thAlign} align-middle`}>Patient Branch</th>}
                 <th className={`${cols.appt} px-3 py-2 ${thAlign} align-middle`}>Appointment</th>
                 <th className={`${cols.expert} px-4 py-2 ${thAlign} align-middle`}>
-                  {showDiscountColumn ? "Consultant" : "Consultant Name"}
+                  {showDiscountColumn || showBranchColumn ? "Consultant" : "Consultant Name"}
                 </th>
                 {/* Shortened on Fee Collected alone: that list carries three more columns than any
                     other stage, and the words the headings lose there — Consultation, Expert,
                     Applied — are the ones the column below already makes obvious. Every other
                     stage has the room and keeps the full wording. */}
                 <th className={`${cols.stage} px-4 py-2 ${thAlign} align-middle`}>
-                  {isConsultant ? "Live Stage" : showDiscountColumn ? "Stage" : "Consultation Stage"}
+                  {showBranchColumn ? "Stage" : isConsultant ? "Live Stage" : showDiscountColumn ? "Stage" : "Consultation Stage"}
                 </th>
                 <th className={`${cols.phone} px-4 py-2 ${thAlign} align-middle`}>Phone</th>
                 <th className={`${cols.pno} px-4 py-2 ${thAlign} align-middle`}>Patient No.</th>
@@ -7039,6 +7052,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           read one line per row too, the plan moved onto the cell's hover. */}
                       {!oneLine && <PlanLine parts={leadPlanParts(l)} testId={`cons-plan-${l.id}`} />}
                     </td>
+                    {showBranchColumn && (
+                      <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={branchNames[l.branch_id] || ""}>
+                        {branchNames[l.branch_id] || "—"}
+                      </td>
+                    )}
                     {/* Every cell sits on the row's middle, not its top. The patient
                         column runs to two lines — the name and what was decided under
                         it — and against that the one-line cells beside it hung level
@@ -7314,7 +7332,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : (showStageFeeAction || showRowArrow) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
+                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : (showStageFeeAction || showRowArrow || showBranchColumn) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
                   {loading
                     ? "Loading…"
                     // An empty tab is not an empty stage: saying "no leads in consultations"
