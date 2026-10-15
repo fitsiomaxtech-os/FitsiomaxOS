@@ -750,10 +750,21 @@ export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl" data-testid="branch-team-add-dialog">
-        <div className="border-b p-5">
-          <h3 className="text-base font-semibold text-slate-800">
+        {/* The ✕ is the only way out besides the backdrop: no footer under the list. */}
+        <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
+          <h3 className="min-w-0 truncate text-base font-semibold text-slate-800">
             Add {desk.label}{state.branchName && <> to {state.branchName}</>}
           </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            title="Close"
+            aria-label="Close"
+            data-testid="branch-team-add-close"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="border-b px-5 py-3">
@@ -810,10 +821,6 @@ export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
               ))}
             </div>
           )}
-        </div>
-
-        <div className="flex justify-end border-t p-4">
-          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>
