@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -3504,8 +3504,9 @@ const DesignationEmployeesModal = ({ designation, employees, departmentNames, on
  *  everyone else, and that 403 is what this reads as "not for me" rather than as an error
  *  worth a toast. Nothing here is broken for an HR user who cannot see it.
  *
- *  Quiet when it is working: one green line. The whole panel only earns its space on the
- *  day it is red.
+ *  Quiet when it is working: a gear on the Credentials toolbar, opening into the status
+ *  and the test button. When it is not, the gear carries an amber dot, so the day it is
+ *  broken still shows without anyone having to open it.
  */
 const EmailDeliveryPanel = () => {
   const [status, setStatus] = useState(null);
@@ -3550,49 +3551,61 @@ const EmailDeliveryPanel = () => {
   const ok = status.configured;
 
   return (
-    <div
-      className={`rounded-xl border p-3 ${ok ? "border-emerald-200 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}
-      data-testid="hr-email-panel"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          {ok
-            ? <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-            : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
-          <div className="min-w-0">
-            <p className={`text-sm font-semibold ${ok ? "text-emerald-800" : "text-amber-900"}`} data-testid="hr-email-headline">
-              {ok ? "Email delivery is configured" : "This server cannot send email"}
-            </p>
-            <p className={`text-xs ${ok ? "text-emerald-700" : "text-amber-800"}`} data-testid="hr-email-detail">
-              {ok
-                ? `Sending as ${status.user} via ${status.host}:${status.port}.`
-                : "Sign-in codes, password resets and two-factor all need this. Nobody can receive one until it is set."}
-            </p>
-            {!ok && status.hint && (
-              <p className="mt-1.5 text-xs text-amber-800" data-testid="hr-email-hint">{status.hint}</p>
-            )}
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title="Email delivery settings"
+          aria-label="Email delivery settings"
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
+          data-testid="hr-email-settings-btn"
+        >
+          <Settings className="h-4 w-4" />
+          {!ok && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-amber-500" data-testid="hr-email-settings-alert" />}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0" data-testid="hr-email-panel">
+        <div className={`rounded-t-md border-b p-3 ${ok ? "border-emerald-200 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}>
+          <div className="flex min-w-0 items-start gap-2.5">
+            {ok
+              ? <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
+            <div className="min-w-0">
+              <p className={`text-sm font-semibold ${ok ? "text-emerald-800" : "text-amber-900"}`} data-testid="hr-email-headline">
+                {ok ? "Email delivery is configured" : "This server cannot send email"}
+              </p>
+              <p className={`break-words text-xs ${ok ? "text-emerald-700" : "text-amber-800"}`} data-testid="hr-email-detail">
+                {ok
+                  ? `Sending as ${status.user} via ${status.host}:${status.port}.`
+                  : "Sign-in codes, password resets and two-factor all need this. Nobody can receive one until it is set."}
+              </p>
+              {!ok && status.hint && (
+                <p className="mt-1.5 text-xs text-amber-800" data-testid="hr-email-hint">{status.hint}</p>
+              )}
+            </div>
           </div>
         </div>
-        <Button
-          onClick={sendTest}
-          disabled={busy}
-          variant="outline"
-          className="shrink-0 bg-white"
-          data-testid="hr-email-test-btn"
-        >
-          {busy ? "Sending…" : "Send test email"}
-        </Button>
-      </div>
-
-      {result && (
-        <p
-          className={`mt-2.5 break-words rounded-md px-2.5 py-2 text-xs ${result.ok ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}
-          data-testid="hr-email-test-result"
-        >
-          {result.text}
-        </p>
-      )}
-    </div>
+        <div className="space-y-2.5 p-3">
+          <Button
+            onClick={sendTest}
+            disabled={busy}
+            variant="outline"
+            className="w-full"
+            data-testid="hr-email-test-btn"
+          >
+            {busy ? "Sending…" : "Send test email"}
+          </Button>
+          {result && (
+            <p
+              className={`break-words rounded-md px-2.5 py-2 text-xs ${result.ok ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}
+              data-testid="hr-email-test-result"
+            >
+              {result.text}
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -3707,12 +3720,6 @@ const RolesTab = ({ meta, reloadMeta }) => {
   // each hidden by class depending on breakpoint, not the hidden attribute.
   return (
     <div className="flex flex-col gap-4" data-testid="hr-roles-tab">
-      {/* First on the screen that depends on it. Everything below this line — creating an
-          account, resetting a password — hands somebody a way in, and two of those ways
-          travel by email. Draws nothing when email is working and nothing at all for a
-          non-Super-Admin. */}
-      <EmailDeliveryPanel />
-
       {/* One toolbar, the same as Employees: Search, A → Z, Department, Designation, the
           All Users / Branch Wise switch, then Create User pushed to the far end.
 
@@ -3753,7 +3760,12 @@ const RolesTab = ({ meta, reloadMeta }) => {
             </TabPill>
           ))}
         </div>
-        <Button onClick={() => setShowCreate(true)} className="ml-auto bg-sky-600 hover:bg-sky-700" data-testid="hr-roles-create-btn"><UserPlus className="h-4 w-4 mr-1" />Create User</Button>
+        {/* Email delivery: everything Credentials hands out — a new account, a password
+            reset — travels by email. Draws nothing for a non-Super-Admin. */}
+        <div className="ml-auto flex items-center gap-2">
+          <EmailDeliveryPanel />
+          <Button onClick={() => setShowCreate(true)} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-roles-create-btn"><UserPlus className="h-4 w-4 mr-1" />Create User</Button>
+        </div>
       </div>
 
       {view === "branch" && (
