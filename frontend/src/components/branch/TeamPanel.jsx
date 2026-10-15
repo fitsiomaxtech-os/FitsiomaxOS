@@ -178,7 +178,7 @@ const AddToBranchDialog = ({ member, desk, branches, onClose, onSaved }) => {
 
 // toolbarSlot: the right end of Activity Care's tab strip. From lg up the filters and Refresh
 // sit there, on the tabs' line; below lg, and when no slot is given, they sit above the table.
-// branchId: the viewer's own branch, which Add's branch dropdown opens on.
+// branchId: the viewer's own branch, which the toolbar's Add brings people to.
 export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const k = KINDS[kind];
   const [data, setData] = useState({ members: [], branches: [] });
@@ -296,7 +296,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
       </Button>
       <Button
         onClick={() => setAdding(true)}
-        disabled={data.branches.length === 0}
+        disabled={!branchId}
         className="h-9 w-9 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700"
         title={`Add ${k.desk.label}`}
         aria-label={`Add ${k.desk.label}`}
@@ -313,8 +313,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
       {adding && (
         <TeamAddDialog
           desk={k.desk}
-          branchId={data.branches.some((b) => b.id === branchId) ? branchId : null}
-          branches={data.branches}
+          branchId={branchId}
           onClose={() => setAdding(false)}
           onSaved={() => { setAdding(false); load(); }}
         />

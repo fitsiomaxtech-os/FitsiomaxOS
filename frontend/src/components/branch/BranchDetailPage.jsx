@@ -701,24 +701,22 @@ const TeamTab = ({ staff, branchId, onChanged, reloadToken = 0, readOnly = false
  * each one currently sits is shown, since for a single-branch role picking them moves them
  * off it — that should be read before clicking, not discovered afterwards.
  */
-// `branches`, when given, puts a branch dropdown at the top so the branch is chosen here —
-// Activity Care's Team tabs, where a Consultant or Physio is brought to whichever branch
-// they will work with. Without it the dialog is pinned to `branchId`, as Branch Manager's is.
-export const TeamAddDialog = ({ desk, branchId: startBranchId, branches = null, onClose, onSaved }) => {
-  const [branchId, setBranchId] = useState(startBranchId || branches?.[0]?.id || "");
-  const [state, setState] = useState({ loading: true, failed: false, candidates: [] });
+// Also Activity Care's Team tabs' Add, pinned to the viewer's own branch: a Consultant or
+// Physio from anywhere is brought to work with it. The heading is all the dialog says, so it
+// names the branch.
+export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
+  const [state, setState] = useState({ loading: true, failed: false, candidates: [], branchName: "" });
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
     if (!branchId) return undefined;
     let alive = true;
-    setState({ loading: true, failed: false, candidates: [] });
     bmTeamCandidates(branchId, desk.key)
-      .then((d) => { if (alive) setState({ loading: false, failed: false, candidates: d.candidates || [] }); })
+      .then((d) => { if (alive) setState({ loading: false, failed: false, candidates: d.candidates || [], branchName: d.branch_name || "" }); })
       .catch((e) => {
         if (!alive) return;
-        setState({ loading: false, failed: true, candidates: [] });
+        setState({ loading: false, failed: true, candidates: [], branchName: "" });
         // The Consultants desk answers 400 here with the reason, which is worth reading
         // rather than showing as a generic failure.
         const msg = e?.response?.data?.detail;
@@ -753,23 +751,9 @@ export const TeamAddDialog = ({ desk, branchId: startBranchId, branches = null, 
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl" data-testid="branch-team-add-dialog">
         <div className="border-b p-5">
-          <h3 className="text-base font-semibold text-slate-800">Add {desk.label}</h3>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            Everyone with this role who isn't already at this branch. Click one to post them here.
-          </p>
-          {branches && (
-            <FilterSelect
-              value={branchId}
-              onChange={setBranchId}
-              active
-              label="Branch"
-              title="The branch they will work at"
-              className="mt-3"
-              testid="branch-team-add-branch"
-            >
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </FilterSelect>
-          )}
+          <h3 className="text-base font-semibold text-slate-800">
+            Add {desk.label}{state.branchName && <> to {state.branchName}</>}
+          </h3>
         </div>
 
         <div className="border-b px-5 py-3">
@@ -792,16 +776,9 @@ export const TeamAddDialog = ({ desk, branchId: startBranchId, branches = null, 
                 : "Nobody matches that search."}
             </p>
           ) : (
-            <div className="space-y-2" data-testid="branch-team-add-list">
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="branch-team-add-list">
               {shown.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  disabled={!!busyId}
-                  onClick={() => pick(c)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-slate-200 p-3 text-left transition hover:border-sky-400 hover:bg-sky-50/40 disabled:opacity-50"
-                  data-testid={`branch-team-add-pick-${c.id}`}
-                >
+                <div key={c.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{initials(c.full_name)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-800">{c.full_name}</span>
@@ -815,8 +792,18 @@ export const TeamAddDialog = ({ desk, branchId: startBranchId, branches = null, 
                       )}
                     </span>
                   </span>
-                  {busyId === c.id && <span className="shrink-0 text-[11px] text-slate-400">Adding...</span>}
-                </button>
+                  <button
+                    type="button"
+                    disabled={!!busyId}
+                    onClick={() => pick(c)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-600 transition hover:border-sky-500 hover:text-sky-700 disabled:opacity-50"
+                    title={`Add ${c.full_name}`}
+                    aria-label={`Add ${c.full_name}`}
+                    data-testid={`branch-team-add-pick-${c.id}`}
+                  >
+                    {busyId === c.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </button>
+                </div>
               ))}
             </div>
           )}
