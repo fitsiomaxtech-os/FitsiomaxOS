@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ChevronRight, Minus, Plus, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
-import { bmTeamAdd, getTeam } from "@/lib/api";
+import { bmTeamAdd, bmTeamRemove, getTeam } from "@/lib/api";
 import { displayPhone, telNumber } from "@/lib/phone";
 import { TeamAddDialog } from "@/components/branch/BranchDetailPage";
 
@@ -176,6 +176,59 @@ const AddToBranchDialog = ({ member, desk, branches, onClose, onSaved }) => {
   );
 };
 
+/**
+ * End a collaboration: take somebody off the viewer's branch. Asked first, because it changes
+ * where they are offered. Their own branch is never this — the button is not shown for it,
+ * and the server refuses it.
+ */
+const RemoveFromBranchDialog = ({ member, branch, desk, onClose, onSaved }) => {
+  const [busy, setBusy] = useState(false);
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      const res = await bmTeamRemove(branch.id, member.user_id, desk.key);
+      toast.success(res?.message || `${member.full_name} removed from ${branch.name}`);
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not remove");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl" data-testid="team-row-remove-dialog">
+        <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
+          <h3 className="min-w-0 truncate text-base font-semibold text-slate-800">Remove from {branch.name}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            title="Close"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-4 p-5">
+          <p className="text-sm text-slate-600">
+            <span className="font-semibold text-slate-800">{member.full_name}</span> stops working at {branch.name}
+            {member.own_branch && <> and stays at {member.own_branch.name}</>}. Appointments already booked here are kept.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button size="sm" onClick={remove} disabled={busy} className="bg-rose-600 text-white hover:bg-rose-700" data-testid="team-row-remove-confirm">
+              {busy ? "Removing..." : "Remove"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // toolbarSlot: the right end of Activity Care's tab strip. From lg up the filters and Refresh
 // sit there, on the tabs' line; below lg, and when no slot is given, they sit above the table.
 // branchId: the viewer's own branch, which the toolbar's Add brings people to.
@@ -188,6 +241,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
   const [addingMember, setAddingMember] = useState(null); // a row, for its own Add
+  const [removing, setRemoving] = useState(null); // { member, branch }, for a row's Remove
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,23 +286,41 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
     </button>
   );
 
-  // A row's Add. Not for a profile-only expert, who has no login to post, nor for a Super
-  // Admin taking consultations, who already runs every branch.
-  const rowAdd = (m) => {
+  // A row's options. Remove when they collaborate with the viewer's branch — it ends that,
+  // and only that — beside Add, which can still take them to another branch. Add is not for
+  // a profile-only expert, who has no login to post, nor for a Super Admin taking
+  // consultations, who already runs every branch.
+  const rowOptions = (m) => {
     const why = !m.user_id ? "No login to add to a branch" : m.all_branches ? "Already at every branch" : null;
+    const here = m.user_id && branchId ? m.collab_branches?.find((b) => b.id === branchId) : null;
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setAddingMember(m)}
-        disabled={!!why || data.branches.length === 0}
-        className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
-        title={why || `Add ${m.full_name} to a branch`}
-        aria-label={`Add ${m.full_name} to a branch`}
-        data-testid={`team-row-add-${m.id}`}
-      >
-        <Plus className="h-3.5 w-3.5" /> Add
-      </Button>
+      <div className="flex items-center justify-center gap-1.5">
+        {here && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRemoving({ member: m, branch: here })}
+            className="h-8 gap-1 border-rose-200 px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+            title={`Remove ${m.full_name} from ${here.name}`}
+            aria-label={`Remove ${m.full_name} from ${here.name}`}
+            data-testid={`team-row-remove-${m.id}`}
+          >
+            <Minus className="h-3.5 w-3.5" /> Remove
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAddingMember(m)}
+          disabled={!!why || data.branches.length === 0}
+          className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+          title={why || `Add ${m.full_name} to a branch`}
+          aria-label={`Add ${m.full_name} to a branch`}
+          data-testid={`team-row-add-${m.id}`}
+        >
+          <Plus className="h-3.5 w-3.5" /> Add
+        </Button>
+      </div>
     );
   };
 
@@ -318,6 +390,15 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           onSaved={() => { setAdding(false); load(); }}
         />
       )}
+      {removing && (
+        <RemoveFromBranchDialog
+          member={removing.member}
+          branch={removing.branch}
+          desk={k.desk}
+          onClose={() => setRemoving(null)}
+          onSaved={() => { setRemoving(null); load(); }}
+        />
+      )}
       {addingMember && (
         <AddToBranchDialog
           member={addingMember}
@@ -357,7 +438,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                   <GenderChip gender={m.gender} />
                   {m.status !== "active" && <StatusChip status={m.status} />}
                 </div>
-                {rowAdd(m)}
+                {rowOptions(m)}
                 {arrow(m)}
               </div>
             ))}
@@ -375,7 +456,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                   <th className="px-4 py-2.5">Phone</th>
                   <th className="px-4 py-2.5">Gender</th>
                   <th className="px-4 py-2.5">Status</th>
-                  <th className="w-24 px-4 py-2.5 text-center">Option</th>
+                  <th className="px-4 py-2.5 text-center">Option</th>
                   <th className="w-20 px-4 py-2.5 text-center">Action</th>
                 </tr>
               </thead>
@@ -396,7 +477,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                     <td className="whitespace-nowrap px-4 py-3"><Phone phone={m.phone} /></td>
                     <td className="px-4 py-3"><GenderChip gender={m.gender} /></td>
                     <td className="px-4 py-3"><StatusChip status={m.status} /></td>
-                    <td className="px-4 py-3"><div className="flex justify-center">{rowAdd(m)}</div></td>
+                    <td className="whitespace-nowrap px-4 py-3">{rowOptions(m)}</td>
                     <td className="px-4 py-3"><div className="flex justify-center">{arrow(m)}</div></td>
                   </tr>
                 ))}

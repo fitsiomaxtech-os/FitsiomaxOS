@@ -9,7 +9,7 @@ from deps import v3_require_roles, role_satisfies, is_branch_admin_role, is_phys
 # The desks a Physio or Nutritionist can hold several of, and the doctors profile_type
 # each role keeps its calendar under. Imported from HR rather than restated so posting
 # somebody to a branch here builds the same record HR's own assign builds.
-from routers.v3_hr import is_multi_branch_role, holds_calendar_per_branch, expert_profile_type
+from routers.v3_hr import is_multi_branch_role, holds_calendar_per_branch, expert_profile_type, _sync_expert_branches
 from security import verify_password
 import lead_control
 import past_data_store
@@ -542,9 +542,20 @@ def _posted_to(user: dict) -> list:
     return user.get("branch_ids") or ([user["branch_id"]] if user.get("branch_id") else [])
 
 
+async def _own_branch(user: dict, at: list):
+    """The branch somebody was hired into, as Activity Care's Own Branch column reads it:
+    HR's, while they still work it, else the login's primary. Every other is a branch they
+    collaborate with."""
+    if user.get("employee_id"):
+        emp = await v3_col("employees").find_one({"id": user["employee_id"]}, {"_id": 0, "branch_id": 1})
+        if emp and emp.get("branch_id") in at:
+            return emp["branch_id"]
+    return user.get("branch_id") if user.get("branch_id") in at else (at[0] if at else None)
+
+
 # A Branch Admin may bring a Consultant or Physio from another branch to work at a branch --
 # Activity Care's Team Consultants and Team Physio tabs, where a branch takes in somebody
-# from elsewhere to collaborate. The other desks stay Super Admin's: these two are the
+# from elsewhere to collaborate -- and end that collaboration at their own branch. The other desks stay Super Admin's: these two are the
 # experts a branch books patients with, and posting one adds a branch to them rather than
 # taking them off theirs (both are multi-branch roles), so nobody's own branch loses them.
 BRANCH_ADMIN_TEAM_DESKS = ("head_physios", "physios")
@@ -622,22 +633,15 @@ async def team_add_member(branch_id: str, user_id: str, desk: str, me: V3UserOut
         at = list(dict.fromkeys(_posted_to(user) + [branch_id]))
         await v3_col("users").update_one({"id": user_id}, {"$set": {"branch_ids": at, "branch_id": at[0]}})
         # The calendar they hold at this branch. Without it they log in to a board with no
-        # calendar behind it and nothing explains why.
+        # calendar behind it and nothing explains why. HR's own sync, so a branch they were
+        # taken off and are now brought back to gets its old calendar back rather than an
+        # empty second one beside it.
         #
         # Not for a Consultant, who holds ONE branchless calendar however many branches they
         # are posted to — minting a second here is what would let the same person be booked
         # into the same hour at two of them, each record clash-checking only itself.
-        profile = expert_profile_type(user["role"]) if holds_calendar_per_branch(user["role"]) else None
-        if profile:
-            exists = await v3_col("doctors").find_one(
-                {"user_id": user_id, "profile_type": profile, "branch_id": branch_id}, {"_id": 0, "id": 1}
-            )
-            if not exists:
-                await v3_col("doctors").insert_one({
-                    "id": str(uuid.uuid4()), "full_name": user.get("full_name", ""),
-                    "profile_type": profile, "branch_id": branch_id, "specialization": "",
-                    "slots": [], "slot_details": [], "user_id": user_id, "created_at": now_iso(),
-                })
+        if holds_calendar_per_branch(user["role"]):
+            await _sync_expert_branches(user, at)
     else:
         current = user.get("branch_id")
         moved_from = current if current and current != branch_id else None
@@ -654,17 +658,26 @@ async def team_add_member(branch_id: str, user_id: str, desk: str, me: V3UserOut
 
 
 @router.delete("/{branch_id}/team/{user_id}")
-async def team_remove_member(branch_id: str, user_id: str, desk: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def team_remove_member(branch_id: str, user_id: str, desk: str, me: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     """Take an account off this branch. The account itself is untouched.
 
     Not a deletion and not a deactivation: they keep their login and their role and simply
     stop being posted here. Switching a person off is a different act, on their own row in
     Roles & Credentials.
+
+    A Branch Admin may do it only to end a collaboration at a branch of their own: never at
+    somebody else's branch, and never to take a person off the branch they were hired into,
+    which is moving them -- HR's to do.
     """
+    may_move = _may_post_to_desk(me, desk)
+    if not may_move and branch_id not in ((me.branch_ids or []) or ([me.branch_id] if me.branch_id else [])):
+        raise HTTPException(status_code=403, detail="You can only remove people from your own branch")
     branch, holds = await _team_desk_or_400(branch_id, desk)
     user = await v3_col("users").find_one({"id": user_id}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if not holds(user.get("role")):
+        raise HTTPException(status_code=400, detail=f"{user.get('full_name')} does not hold a role for this desk")
 
     # The branch's manager of record is held on the branch as well as on the user, so
     # clearing one side would leave the branch still naming somebody who no longer works
@@ -679,14 +692,26 @@ async def team_remove_member(branch_id: str, user_id: str, desk: str, _: V3UserO
     if branch_id not in at:
         raise HTTPException(status_code=400, detail=f"{user.get('full_name')} is not posted to this branch")
 
+    if not may_move and await _own_branch(user, at) == branch_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{branch.get('branch_name')} is {user.get('full_name')}'s own branch. HR Admin moves people between branches.",
+        )
+
     remaining = [b for b in at if b != branch_id]
+    # Their primary stays where it is unless it is the branch they are leaving, so ending
+    # a collaboration never quietly changes which branch they belong to.
+    primary = user.get("branch_id") if user.get("branch_id") in remaining else (remaining[0] if remaining else None)
     await v3_col("users").update_one(
         {"id": user_id},
-        {"$set": {"branch_ids": remaining, "branch_id": remaining[0] if remaining else None}},
+        {"$set": {"branch_ids": remaining, "branch_id": primary}},
     )
-    # Their calendar at this branch is left alone, the same way HR's own unassign leaves it:
-    # it carries published slots and booked appointments, and dropping it to undo a posting
-    # would take real bookings with it.
+    # Their calendar here is stood down, not deleted -- HR's own untick: it stops being
+    # offered, and the published slots and appointments already booked on it are kept.
+    # Adding them back brings it back intact. A Consultant's one branchless calendar is not
+    # touched; where they are offered is read off the branch list just written.
+    if holds_calendar_per_branch(user.get("role")):
+        await _sync_expert_branches(user, remaining)
     return {
         "message": f"{user.get('full_name')} removed from {branch.get('branch_name')}",
         "still_at": len(remaining),
