@@ -768,7 +768,7 @@ export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
         </div>
 
         <div className="border-b px-5 py-3">
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or email..." data-testid="branch-team-add-search" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or email..." className="border-0 shadow-[0_1px_3px_rgba(15,23,42,0.1)] focus-visible:ring-1 focus-visible:ring-sky-200" data-testid="branch-team-add-search" />
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
@@ -787,9 +787,9 @@ export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
                 : "Nobody matches that search."}
             </p>
           ) : (
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="branch-team-add-list">
+            <div className="divide-y divide-slate-100" data-testid="branch-team-add-list">
               {shown.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
+                <div key={c.id} className="flex items-center gap-3 px-1 py-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{initials(c.full_name)}</span>
                   {/* Two lines on a fixed two-column grid, so every row lines up with the next:
                       name over role on the left, email over where they work on the right. */}
@@ -810,7 +810,7 @@ export const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
                     type="button"
                     disabled={!!busyId}
                     onClick={() => pick(c)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-600 transition hover:border-sky-500 hover:text-sky-700 disabled:opacity-50"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sky-600 transition hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50"
                     title={`Add ${c.full_name}`}
                     aria-label={`Add ${c.full_name}`}
                     data-testid={`branch-team-add-pick-${c.id}`}
