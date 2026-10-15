@@ -36,7 +36,7 @@ export const BottomNavTab = ({ icon, label, active = false, badge = 0, badgeTest
         </span>
       )}
       {dot && !(badge > 0) && (
-        <span aria-hidden className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-500" />
+        <span aria-hidden className="absolute right-1 top-1 h-[6.5px] w-[6.5px] rounded-full bg-red-500 ring-1 ring-slate-500" />
       )}
     </span>
     <span className={`w-full truncate text-center text-[0.55rem] leading-tight ${active ? "font-semibold" : "font-medium"}`}>{label}</span>

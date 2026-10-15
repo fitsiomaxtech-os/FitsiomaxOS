@@ -115,7 +115,7 @@ export function useMarkTabSeen(key, open = true) {
 /** The dot itself. The parent must be `relative`; `className` places it. */
 export const TabDot = ({ show, className = "-right-1 -top-1", testid }) => (show ? (
   <span
-    className={`pointer-events-none absolute h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white ${className}`}
+    className={`pointer-events-none absolute h-[6.5px] w-[6.5px] rounded-full bg-red-500 ring-1 ring-white ${className}`}
     data-testid={testid}
   >
     <span className="sr-only">New</span>

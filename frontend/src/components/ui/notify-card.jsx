@@ -73,7 +73,7 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
         </span>
       )}
       {dot && !showCount && (
-        <span aria-hidden className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" data-testid={testid ? `${testid}-dot` : undefined} />
+        <span aria-hidden className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-1 ring-white" data-testid={testid ? `${testid}-dot` : undefined} />
       )}
     </button>
   );
