@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { History, X, Search, UserPlus, Info, Undo2, Store, Globe, Copy } from "lucide-react";
+import { History, X, Search, UserPlus, Info, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
-import { searchOldClients, recordOldClientPayment, listUpiCollectOptions } from "@/lib/api";
+import { searchOldClients, recordOldClientPayment } from "@/lib/api";
 import { CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
-import { displayPhone, waNumber } from "@/lib/phone";
+import { displayPhone } from "@/lib/phone";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -42,34 +40,6 @@ const clientFrom = (c) => ({
 
 const digitsOf = (s) => String(s || "").replace(/\D/g, "");
 
-// Where the client is when they pay -- old_clients.CHANNELS on the server. Offline is the
-// branch counter and every mode; online is from wherever they are, so only the two modes
-// that need no one at the desk (old_clients.ONLINE_MODES).
-const CHANNELS = [
-  { key: "offline", label: "Offline", hint: "At the counter", Icon: Store },
-  { key: "online", label: "Online", hint: "Paid remotely", Icon: Globe },
-];
-const ONLINE_MODES = ["upi", "account_transfer"];
-
-/**
- * The WhatsApp wording of an online payment request: what to pay, for what, where to pay
- * it, and the reference to send back -- the one thing the desk then records it by.
- */
-const requestText = ({ name, branchName, number, what, amount, balance, mode, account }) => {
-  const lines = [`Hi ${name || "there"},`, "", `This is a payment request from FITSIOMAX${branchName ? ` ${branchName}` : ""}.`];
-  lines.push(`Instalment #${number}${what ? ` for ${what}` : ""}${amount > 0 ? `: ${fmt(amount)}` : ""}.`);
-  if (balance > 0) lines.push(`Balance on the course: ${fmt(balance)}.`);
-  lines.push("");
-  if (mode === "upi" && account) {
-    lines.push(`Pay by UPI to: ${account.upi_id}`, `Name: ${account.holder_name || account.bank_name}`);
-    lines.push("", "Once paid, please reply with the UPI transaction ID so we can send your receipt.");
-  } else {
-    lines.push("Please pay by bank transfer and reply with the UTR / reference number so we can send your receipt.");
-  }
-  lines.push("", "Thank you!");
-  return lines.join("\n");
-};
-
 /**
  * Old Client Instalment -- money taken against a course begun on the old Physio Tracker,
  * for a client whose history never came across to the OS (backend/old_clients.py).
@@ -98,10 +68,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
   const [isNew, setIsNew] = useState(false);
   const [editing, setEditing] = useState(false);
   const [client, setClient] = useState(emptyClient);
-  const [pay, setPay] = useState({ amount: "", paid_on: today, next_due_date: "", collection_channel: "offline", upi_id: "", ...emptyTender });
-  // The company UPI accounts an online payment can be asked into (Finance > UPI). Fetched
-  // the first time Online is picked; null while that is in flight.
-  const [upiAccounts, setUpiAccounts] = useState(null);
+  const [pay, setPay] = useState({ amount: "", paid_on: today, next_due_date: "", ...emptyTender });
   const [saving, setSaving] = useState(false);
   // Opened from a Payment Schedule row: picked the first time the search hands it back,
   // and never again, so "Change client" goes back to a search rather than straight in.
@@ -137,31 +104,6 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
   const setC = (patch) => setClient((c) => ({ ...c, ...patch }));
   const setP = (patch) => setPay((p) => ({ ...p, ...patch }));
 
-  const online = pay.collection_channel === "online";
-  useEffect(() => {
-    if (!online || upiAccounts !== null) return undefined;
-    let live = true;
-    listUpiCollectOptions()
-      .then((rows) => {
-        if (!live) return;
-        const list = Array.isArray(rows) ? rows : [];
-        setUpiAccounts(list);
-        // This branch's own account first, then the group's, when the desk has not picked.
-        const mine = list.find((a) => a.branch_id === branch) || list.find((a) => !a.branch_id) || list[0];
-        if (mine) setPay((p) => (p.upi_id ? p : { ...p, upi_id: mine.upi_id }));
-      })
-      .catch(() => { if (live) setUpiAccounts([]); });
-    return () => { live = false; };
-  }, [online, upiAccounts, branch]);
-
-  // Switching to Online drops a counter-only mode for UPI; switching back keeps whatever
-  // was picked, since both online modes are offline ones too.
-  const setChannel = (key) => setPay((p) => ({
-    ...p,
-    collection_channel: key,
-    ...(key === "online" && !ONLINE_MODES.includes(p.payment_mode) ? { payment_mode: "upi" } : {}),
-  }));
-
   const startNew = () => {
     // Whatever was typed into the search is the start of the form: digits are a phone,
     // anything else a name.
@@ -191,35 +133,6 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
   const number = instalmentsBefore + (picked ? picked.payments.length : 0) + 1;
   const amount = parseFloat(pay.amount);
   const showPayment = Boolean(picked || isNew);
-  const account = (upiAccounts || []).find((a) => a.upi_id === pay.upi_id) || null;
-  const branchName = branches.find((b) => b.id === branch)?.branch_name || picked?.branch_name || "";
-  const request = requestText({
-    name: client.name,
-    branchName,
-    number,
-    what: client.package || CATEGORIES.find(([k]) => k === client.category)?.[1],
-    amount: amount > 0 ? amount : hasTotal ? owed : 0,
-    balance: hasTotal ? owed : 0,
-    mode: pay.payment_mode,
-    account,
-  });
-  const clientWa = waNumber(client.phone);
-
-  // A new tab, never this one: the form has to still be here, filled in, when the client
-  // replies with the reference it is recorded by.
-  const sendRequest = () => {
-    if (!clientWa) { toast.error("Add the client's phone to send the request on WhatsApp"); return; }
-    const tab = window.open(`https://wa.me/${clientWa}?text=${encodeURIComponent(request)}`, "_blank");
-    if (tab) tab.opener = null;
-  };
-  const copyText = async (text, what) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(`${what} copied`);
-    } catch {
-      toast.error("Could not copy -- select and copy it by hand");
-    }
-  };
 
   const submit = async () => {
     if (!branch) { toast.error("Pick the branch this payment was taken at"); return; }
@@ -232,21 +145,12 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
     if (pay.paid_on && pay.paid_on > today) { toast.error("Paid on cannot be a future date"); return; }
     const tender = tenderPayload(pay);
     if (tender.error) { toast.error(tender.error); return; }
-    if (online && !ONLINE_MODES.includes(pay.payment_mode)) { toast.error("An online payment comes in by UPI or Account Transfer"); return; }
-    if (online && pay.payment_mode === "upi" && !pay.upi_transaction_id.trim()) {
-      toast.error("Enter the UPI Transaction ID the client paid online with");
-      return;
-    }
 
     setSaving(true);
     try {
       const res = await recordOldClientPayment({
         ...tender.payload,
         amount,
-        collection_channel: pay.collection_channel,
-        // The company account an online UPI payment was asked into, so the accountant
-        // knows which statement to find it on.
-        upi_id: online && pay.payment_mode === "upi" ? pay.upi_id || undefined : undefined,
         // Left blank, the server takes it as today.
         paid_on: pay.paid_on || undefined,
         branch_id: branch,
@@ -489,28 +393,6 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                 </div>
               </div>
 
-              <div>
-                <span className="mb-0.5 block text-xs font-semibold text-slate-700">Collected</span>
-                <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Collected">
-                  {CHANNELS.map(({ key, label, hint, Icon }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      role="radio"
-                      aria-checked={pay.collection_channel === key}
-                      onClick={() => setChannel(key)}
-                      className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-semibold transition ${
-                        pay.collection_channel === key ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
-                      }`}
-                      data-testid={`old-client-channel-${key}`}
-                    >
-                      <Icon className="h-3.5 w-3.5" /> {label}
-                      <span className={`font-normal ${pay.collection_channel === key ? "text-white/80" : "text-slate-400"}`}>· {hint}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-3">
                 <CollectField compact label="Amount Paid *" value={pay.amount} onChange={(e) => setP({ amount: e.target.value })} placeholder="0" inputMode="decimal" testid="old-client-amount" />
                 <CollectField compact label="Paid On" type="date" max={today} value={pay.paid_on} onChange={(e) => setP({ paid_on: e.target.value })} testid="old-client-paid-on" />
@@ -536,83 +418,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
                 </p>
               )}
 
-              {online && (
-                <div className="space-y-2.5 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3" data-testid="old-client-online">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-800">Payment request</p>
-                  {pay.payment_mode === "upi" && (
-                    <>
-                      <div>
-                        <span className="mb-0.5 block text-xs font-semibold text-slate-700">Collect into</span>
-                        {/* Themed list, not the browser's -- z-[200] lifts it above this dialog. */}
-                        <Select value={pay.upi_id || ""} onValueChange={(v) => setP({ upi_id: v })}>
-                          <SelectTrigger className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-none focus:ring-1 focus:ring-sky-400 data-[placeholder]:text-slate-400" data-testid="old-client-upi-account">
-                            <SelectValue placeholder={upiAccounts === null ? "Loading UPI accounts..." : upiAccounts.length ? "Pick the UPI account" : "No UPI IDs saved in Finance > UPI"} />
-                          </SelectTrigger>
-                          <SelectContent className="z-[200] max-h-72 border-slate-200">
-                            {(upiAccounts || []).map((a) => (
-                              <SelectItem key={a.id} value={a.upi_id} className="text-xs text-slate-700 focus:bg-sky-50 focus:text-sky-700">
-                                {`${a.bank_name} (${a.branch_name}) · ${a.upi_id}`}
-                              </SelectItem>
-                            ))}
-                            {!(upiAccounts || []).length && (
-                              <p className="px-2 py-3 text-center text-xs text-slate-400">
-                                {upiAccounts === null ? "Loading UPI accounts..." : "No UPI IDs saved in Finance > UPI"}
-                              </p>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {account && (
-                        <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-2">
-                          {account.qr_image_url ? (
-                            <img src={account.qr_image_url} alt={`UPI QR for ${account.upi_id}`} className="h-20 w-20 shrink-0 rounded object-contain" data-testid="old-client-upi-qr" />
-                          ) : (
-                            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded border border-dashed border-slate-200 text-center text-[10px] text-slate-400">No QR saved</div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-slate-800">{account.upi_id}</p>
-                            <p className="truncate text-[11px] text-slate-500">{account.holder_name || account.bank_name}</p>
-                            <button
-                              type="button" onClick={() => copyText(account.upi_id, "UPI ID")}
-                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:underline"
-                              data-testid="old-client-upi-copy"
-                            >
-                              <Copy className="h-3 w-3" /> Copy UPI ID
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button" onClick={sendRequest}
-                      disabled={!clientWa}
-                      title={clientWa ? "Send the payment request on WhatsApp" : "Add the client's phone to send it on WhatsApp"}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-emerald-500 bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      data-testid="old-client-request-whatsapp"
-                    >
-                      <WhatsAppIcon className="h-3.5 w-3.5" /> Send on WhatsApp
-                    </button>
-                    <button
-                      type="button" onClick={() => copyText(request, "Payment request")}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      data-testid="old-client-request-copy"
-                    >
-                      <Copy className="h-3.5 w-3.5" /> Copy request
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Once the client has paid, enter the {pay.payment_mode === "upi" ? "UPI transaction ID" : "transfer details and UTR"} they send back below, then record the instalment.
-                  </p>
-                </div>
-              )}
-
-              <TenderFields
-                compact draft={pay} setDraft={setP} testid="old-client-collect"
-                modes={online ? ONLINE_MODES : null}
-                upiRequired={online}
-              />
+              <TenderFields compact draft={pay} setDraft={setP} testid="old-client-collect" />
             </div>
           )}
         </div>
@@ -631,7 +437,7 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
               className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
               data-testid="old-client-confirm"
             >
-              {saving ? "Recording..." : online ? "Record Online Payment" : "Record Instalment"}
+              {saving ? "Recording..." : "Record Instalment"}
             </button>
           )}
         </div>

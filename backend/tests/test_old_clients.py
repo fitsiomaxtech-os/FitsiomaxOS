@@ -136,28 +136,3 @@ def test_same_course_is_phone_line_and_package():
     assert not old_clients.same_course(a, {**a, "phone": "9000000000"})
     # Two clients entered without a phone are not one client.
     assert not old_clients.same_course({**a, "phone": ""}, {**a, "phone": ""})
-
-
-def test_channel_is_offline_unless_said_otherwise():
-    assert old_clients.check_channel(None, "cash") == "offline"
-    assert old_clients.check_channel("", "cheque") == "offline"
-    assert old_clients.check_channel("Online", "account_transfer") == "online"
-    assert old_clients.check_channel("online", "upi", "428301947281") == "online"
-
-
-@pytest.mark.parametrize("channel, mode, ref, says", [
-    ("online", "cash", "", "UPI or Account Transfer"),
-    ("online", "card", "", "UPI or Account Transfer"),
-    ("online", "cheque", "", "UPI or Account Transfer"),
-    ("online", "upi", " ", "UPI Transaction ID"),
-    ("courier", "cash", "", "Online or Offline"),
-])
-def test_channel_refuses(channel, mode, ref, says):
-    with pytest.raises(OldClientError, match=says):
-        old_clients.check_channel(channel, mode, ref)
-
-
-def test_details_line_names_an_online_payment():
-    c = _client()
-    assert "via upi (online) · Old client" in old_clients.details_line(5000, "upi", 2, c, "", "T1", "online")
-    assert "(online)" not in old_clients.details_line(5000, "cash", 2, c, "", "T1")
