@@ -672,9 +672,11 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
                       written out: "8:00 AM – 9:00 PM" for a morning-and-evening consultant
                       would be a working day they do not work. */}
                   {/* No chip without a shift: the button beside it already says "No shift — full day". */}
+                  {/* One width for every chip, wide enough for a split day, so the column lines up. */}
                   {expert.shift_id && (
                     <span
-                      className="col-span-2 col-start-2 row-start-2 justify-self-start shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 md:whitespace-nowrap"
+                      className="col-span-2 col-start-2 row-start-2 justify-self-start w-[14rem] max-w-full shrink-0 truncate whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-center text-[10px] font-semibold text-emerald-700"
+                      title={hoursLabel({ segments: expert.shift_windows, start_time: expert.shift_start, end_time: expert.shift_end })}
                       data-testid={`roster-window-${expert.id}`}
                     >
                       {hoursLabel({ segments: expert.shift_windows, start_time: expert.shift_start, end_time: expert.shift_end })}
@@ -686,7 +688,7 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
                       type="button"
                       onClick={() => setPicking(expert)}
                       disabled={assigning === expert.id}
-                      className="flex max-w-[9rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 md:max-w-[15rem]"
+                      className="flex w-[9rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 md:w-[11rem]"
                       title="The working windows this expert's day is opened across"
                       data-testid={`roster-select-${expert.id}`}
                     >
