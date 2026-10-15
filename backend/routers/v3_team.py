@@ -34,13 +34,13 @@ ALL_BRANCHES = "__all__"
 
 
 def _gender(value) -> str:
-    """'male', 'female', or '' when HR never recorded it -- the filter's three answers."""
+    """'male', 'female', 'other' for anything else HR recorded, or '' when it recorded nothing."""
     g = str(value or "").strip().lower()
     if g in ("male", "m"):
         return "male"
     if g in ("female", "f"):
         return "female"
-    return ""
+    return "other" if g else ""
 
 
 @router.get("/team/{kind}")
@@ -78,6 +78,9 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
         key = r.get("user_id") or r.get("employee_id") or r["id"]
         person = people.setdefault(key, {
             "id": key,
+            # The login, which a row's Add posts to another branch. None for a profile-only
+            # expert, who has no account to post.
+            "user_id": r.get("user_id") or None,
             "full_name": (login or {}).get("full_name") or r.get("full_name") or "",
             "employee_id": (login or {}).get("employee_id") or r.get("employee_id"),
             "login_phone": (login or {}).get("phone") or "",
@@ -113,6 +116,7 @@ async def team(kind: str, user: V3UserOut = Depends(v3_require_roles(*TEAM_ROLES
         e = hr.get(p.get("employee_id")) or {}
         members.append({
             "id": p["id"],
+            "user_id": p["user_id"],
             "full_name": p["full_name"],
             "phone": e.get("phone") or p["login_phone"],
             "gender": _gender(e.get("gender")),

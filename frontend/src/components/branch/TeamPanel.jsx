@@ -5,15 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
-import { getTeam } from "@/lib/api";
+import { bmTeamAdd, getTeam } from "@/lib/api";
 import { displayPhone, telNumber } from "@/lib/phone";
 import { TeamAddDialog } from "@/components/branch/BranchDetailPage";
 
 /**
  * Activity Care's Team Consultants and Team Physio tabs: every consultant, or every physio,
- * in the organisation, one to a row — S.No, name, branch, phone, gender, status and an
- * arrow — narrowed by a search, by branch and by gender. Add brings one from another branch
- * to work at a branch too, keeping the branches they already have.
+ * in the organisation, one to a row — S.No, name, branch, phone, gender, status, an Add and
+ * an arrow — narrowed by a search, by branch and by gender. The toolbar's Add picks a branch
+ * and then a person; a row's Add has the person and picks the branch. Either way they gain
+ * the branch and keep the ones they already have.
  */
 // desk: the Branch Manager Team desk that posts them, which Add goes through.
 const KINDS = {
@@ -21,7 +22,13 @@ const KINDS = {
   physio: { plural: "physios", desk: { key: "physios", label: "Physio" } },
 };
 
-const GENDER_LABEL = { male: "Male", female: "Female" };
+const GENDER_LABEL = { male: "Male", female: "Female", other: "Other" };
+const GENDER_CHIP = { male: "bg-sky-50 text-sky-700", female: "bg-pink-50 text-pink-700", other: "bg-violet-50 text-violet-700" };
+
+// Others is everyone the first two don't take, unrecorded included: otherwise a person HR
+// never gave a gender would be under All and nowhere else.
+const genderMatches = (filter, gender) =>
+  filter === "all" || (filter === "other" ? gender !== "male" && gender !== "female" : gender === filter);
 
 const capitalise = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : "");
 
@@ -34,7 +41,7 @@ const FilterSelect = ({ value, onChange, allLabel, options, label, testid }) => 
     <SelectTrigger
       title={label}
       aria-label={label}
-      className={`h-9 min-w-0 flex-1 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 lg:w-44 lg:flex-none ${
+      className={`h-9 min-w-0 flex-1 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 lg:w-36 lg:flex-none ${
         value !== "all" ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
       }`}
       data-testid={testid}
@@ -54,7 +61,7 @@ const branchText = (m) => (m.all_branches ? "All Branches" : m.branches.map((b) 
 
 const GenderChip = ({ gender }) => (
   gender ? (
-    <span className={`inline-flex rounded-[4px] px-2 py-0.5 text-[11px] font-semibold ${gender === "female" ? "bg-pink-50 text-pink-700" : "bg-sky-50 text-sky-700"}`}>
+    <span className={`inline-flex rounded-[4px] px-2 py-0.5 text-[11px] font-semibold ${GENDER_CHIP[gender]}`}>
       {GENDER_LABEL[gender]}
     </span>
   ) : (
@@ -78,6 +85,68 @@ const Phone = ({ phone }) => (
   )
 );
 
+/**
+ * One person, to a branch they don't work yet — a row's Add. The branches they are already
+ * at are left out, so every one listed is a new one for them.
+ */
+const AddToBranchDialog = ({ member, desk, branches, onClose, onSaved }) => {
+  const [busyId, setBusyId] = useState(null);
+  const at = new Set(member.branches.map((b) => b.id));
+  const open = branches.filter((b) => !at.has(b.id));
+
+  const pick = async (b) => {
+    setBusyId(b.id);
+    try {
+      const res = await bmTeamAdd(b.id, member.user_id, desk.key);
+      toast.success(res?.message || `${member.full_name} added to ${b.name}`);
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not add");
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl bg-white shadow-2xl" data-testid="team-row-add-dialog">
+        <div className="border-b p-5">
+          <h3 className="text-base font-semibold text-slate-800">Add {member.full_name} to a branch</h3>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            {member.branches.length > 0 && <>Works at {branchText(member)} now, and keeps it. </>}
+            Click a branch to have them work there too.
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">
+          {open.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-400">
+              {member.full_name} already works at every branch.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {open.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={!!busyId}
+                  onClick={() => pick(b)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-left text-sm font-medium text-slate-800 transition hover:border-sky-400 hover:bg-sky-50/40 disabled:opacity-50"
+                  data-testid={`team-row-add-branch-${b.id}`}
+                >
+                  {b.name}
+                  {busyId === b.id ? <span className="text-[11px] text-slate-400">Adding...</span> : <Plus className="h-4 w-4 text-sky-600" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end border-t p-4">
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // toolbarSlot: the right end of Activity Care's tab strip. From lg up the filters and Refresh
 // sit there, on the tabs' line; below lg, and when no slot is given, they sit above the table.
 // branchId: the viewer's own branch, which Add's branch dropdown opens on.
@@ -89,6 +158,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const [gender, setGender] = useState("all");
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
+  const [addingMember, setAddingMember] = useState(null); // a row, for its own Add
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,7 +179,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
     const digits = q.replace(/\D/g, "");
     return data.members.filter((m) =>
       (branch === "all" || m.all_branches || m.branches.some((b) => b.id === branch))
-      && (gender === "all" || m.gender === gender)
+      && genderMatches(gender, m.gender)
       && (!q
         || m.full_name.toLowerCase().includes(q)
         || (digits && String(m.phone || "").replace(/\D/g, "").includes(digits))
@@ -132,6 +202,26 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
       <ChevronRight className="h-4 w-4" />
     </button>
   );
+
+  // A row's Add. Not for a profile-only expert, who has no login to post, nor for a Super
+  // Admin taking consultations, who already runs every branch.
+  const rowAdd = (m) => {
+    const why = !m.user_id ? "No login to add to a branch" : m.all_branches ? "Already at every branch" : null;
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setAddingMember(m)}
+        disabled={!!why || data.branches.length === 0}
+        className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+        title={why || `Add ${m.full_name} to a branch`}
+        aria-label={`Add ${m.full_name} to a branch`}
+        data-testid={`team-row-add-${m.id}`}
+      >
+        <Plus className="h-3.5 w-3.5" /> Add
+      </Button>
+    );
+  };
 
   const filters = (
     <>
@@ -168,24 +258,22 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
         value={gender}
         onChange={setGender}
         label="Gender"
-        allLabel="Male & Female"
-        options={[["male", "Male"], ["female", "Female"]]}
+        allLabel="All"
+        options={[["male", "Male"], ["female", "Female"], ["other", "Others"]]}
         testid={`team-gender-filter-${kind}`}
       />
       <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh">
         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       </Button>
-      {/* Icon only until xl, where the tab strip leaves room for the words. */}
       <Button
         onClick={() => setAdding(true)}
         disabled={data.branches.length === 0}
-        className="h-9 shrink-0 gap-1 bg-sky-600 px-2.5 text-xs font-semibold text-white hover:bg-sky-700"
+        className="h-9 w-9 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700"
         title={`Add ${k.desk.label}`}
         aria-label={`Add ${k.desk.label}`}
         data-testid={`team-add-${kind}`}
       >
         <Plus className="h-4 w-4" />
-        <span className="hidden xl:inline">Add {k.desk.label}</span>
       </Button>
     </>
   );
@@ -202,8 +290,19 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           onSaved={() => { setAdding(false); load(); }}
         />
       )}
-      {/* Below lg the search takes a line of its own, the two filters and Refresh under it. */}
-      <div className={`flex flex-wrap items-center gap-2 ${toolbarSlot ? "lg:hidden" : ""}`}>{filters}</div>
+      {addingMember && (
+        <AddToBranchDialog
+          member={addingMember}
+          desk={k.desk}
+          branches={data.branches}
+          onClose={() => setAddingMember(null)}
+          onSaved={() => { setAddingMember(null); load(); }}
+        />
+      )}
+      {/* Below lg the search takes a line of its own, the two filters and Refresh under it.
+          Up to 2xl they stay above the table: on the tab line any narrower they pushed the
+          last tabs out of sight. */}
+      <div className={`flex flex-wrap items-center gap-2 ${toolbarSlot ? "2xl:hidden" : ""}`}>{filters}</div>
 
       {loading && data.members.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white py-10 text-center text-xs text-slate-400">Loading {k.plural}…</p>
@@ -228,6 +327,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                   <GenderChip gender={m.gender} />
                   {m.status !== "active" && <StatusChip status={m.status} />}
                 </div>
+                {rowAdd(m)}
                 {arrow(m)}
               </div>
             ))}
@@ -244,6 +344,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                   <th className="px-4 py-2.5">Phone</th>
                   <th className="px-4 py-2.5">Gender</th>
                   <th className="px-4 py-2.5">Status</th>
+                  <th className="w-24 px-4 py-2.5 text-center">Option</th>
                   <th className="w-20 px-4 py-2.5 text-center">Action</th>
                 </tr>
               </thead>
@@ -263,6 +364,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
                     <td className="whitespace-nowrap px-4 py-3"><Phone phone={m.phone} /></td>
                     <td className="px-4 py-3"><GenderChip gender={m.gender} /></td>
                     <td className="px-4 py-3"><StatusChip status={m.status} /></td>
+                    <td className="px-4 py-3"><div className="flex justify-center">{rowAdd(m)}</div></td>
                     <td className="px-4 py-3"><div className="flex justify-center">{arrow(m)}</div></td>
                   </tr>
                 ))}

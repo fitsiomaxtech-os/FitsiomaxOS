@@ -46,7 +46,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   // sub-tab; it is set once and left, so it sits behind the gear rather than a tab.
   const [mastersOpen, setMastersOpen] = useState(false);
   // The right end of the tab strip, where a Team tab puts its Branch and Gender filters and
-  // its Refresh from lg up (see TeamPanel's toolbarSlot). A node in state rather than a ref,
+  // its Refresh from 2xl up (see TeamPanel's toolbarSlot). A node in state rather than a ref,
   // so the panel re-renders into it once it exists.
   const [toolbar, setToolbar] = useState(null);
 
@@ -77,7 +77,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
             );
           })}
         </div>
-        <div ref={setToolbar} className="mb-1 hidden shrink-0 items-center gap-2 lg:flex" data-testid="activity-care-toolbar" />
+        <div ref={setToolbar} className="mb-1 hidden shrink-0 items-center gap-2 2xl:flex" data-testid="activity-care-toolbar" />
         {active === "zumba" && (
           <button
             type="button"
