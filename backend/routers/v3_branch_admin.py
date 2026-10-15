@@ -1576,6 +1576,48 @@ async def v3_available_dates(
     return {"month": month, "branch_id": branch_id, "dates": dates}
 
 
+async def _expert_own_branches(doctor_ids) -> Dict[str, str]:
+    """Each expert's own branch -- the one they were hired into -- by expert record id.
+
+    Read the way Activity Care's Own Branch column reads it (routers/v3_team.py): HR's
+    branch while they still work it, else the login's primary, else the first they work. A
+    Consultant's record is branchless, so the answer is never on the record itself; only a
+    profile-only expert, with no login, is read off its own row.
+    """
+    ids = [d for d in set(doctor_ids) if d]
+    if not ids:
+        return {}
+    docs = await v3_col("doctors").find(
+        {"id": {"$in": ids}}, {"_id": 0, "id": 1, "user_id": 1, "employee_id": 1, "branch_id": 1},
+    ).to_list(len(ids))
+    users: Dict[str, dict] = {}
+    user_ids = [d["user_id"] for d in docs if d.get("user_id")]
+    if user_ids:
+        async for u in v3_col("users").find(
+            {"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "branch_id": 1, "branch_ids": 1, "employee_id": 1},
+        ):
+            users[u["id"]] = u
+    emp_ids = {u.get("employee_id") for u in users.values()} | {d.get("employee_id") for d in docs}
+    hr: Dict[str, str] = {}
+    emp_ids.discard(None)
+    if emp_ids:
+        async for e in v3_col("employees").find({"id": {"$in": list(emp_ids)}}, {"_id": 0, "id": 1, "branch_id": 1}):
+            if e.get("branch_id"):
+                hr[e["id"]] = e["branch_id"]
+    out: Dict[str, str] = {}
+    for d in docs:
+        u = users.get(d.get("user_id"))
+        if u is not None:
+            at = [b for b in (u.get("branch_ids") or ([u["branch_id"]] if u.get("branch_id") else [])) if b and b != "__all__"]
+            mine = hr.get(u.get("employee_id"))
+            own = mine if mine in at else (u.get("branch_id") if u.get("branch_id") in at else (at[0] if at else None))
+        else:
+            own = hr.get(d.get("employee_id")) or d.get("branch_id")
+        if own:
+            out[d["id"]] = own
+    return out
+
+
 @router.get("/branch-admin/consultations/{branch_id}/board")
 async def v3_consultations_board(
     branch_id: str,
@@ -1683,12 +1725,17 @@ async def v3_consultations_board(
         sa_consultant_ids = await v3_col("doctors").distinct(
             "id", {"profile_type": "head_physio", "is_super_admin": True},
         )
+        # The Consultant Branch column: where each row's consultant belongs, which is not the
+        # patient's branch when a consultant from elsewhere collaborates here. Beside the
+        # leads, for the reason the two lists above are.
+        consultant_branches = await _expert_own_branches(ld.get("assigned_physio_id") for ld in leads_docs)
         return {
             "leads": lead_list,
             "stage_counts": stage_counts,
             "stages": stage_names,
             "rx_lead_ids": sorted(rx_ids),
             "super_admin_consultant_ids": sorted(sa_consultant_ids),
+            "consultant_branches": consultant_branches,
         }
     except HTTPException:
         raise

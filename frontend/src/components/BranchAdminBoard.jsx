@@ -2550,6 +2550,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               // 90%, one line a row, on every Consultation stage. Not on House Visit,
               // which shares this board.
               compactTable={!onHomeVisitTab}
+              consultantBranchColumn={!onHomeVisitTab}
               // The numbers on the cards above. Reported from this board rather than
               // computed up here, so a pill counts exactly the rows its own click shows --
               // see consultationCounts.
