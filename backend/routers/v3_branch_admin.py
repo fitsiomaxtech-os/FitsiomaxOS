@@ -1576,8 +1576,11 @@ async def v3_available_dates(
     return {"month": month, "branch_id": branch_id, "dates": dates}
 
 
-async def _expert_own_branches(doctor_ids) -> Dict[str, str]:
-    """Each expert's own branch -- the one they were hired into -- by expert record id.
+async def _expert_branches_and_phones(doctor_ids):
+    """Each expert's own branch -- the one they were hired into -- and phone, by expert
+    record id, as two maps.
+
+    The phone is HR's, else the login's -- the same order the Team tabs read it in.
 
     Read the way Activity Care's Own Branch column reads it (routers/v3_team.py): HR's
     branch while they still work it, else the login's primary, else the first they work. A
@@ -1586,7 +1589,7 @@ async def _expert_own_branches(doctor_ids) -> Dict[str, str]:
     """
     ids = [d for d in set(doctor_ids) if d]
     if not ids:
-        return {}
+        return {}, {}
     docs = await v3_col("doctors").find(
         {"id": {"$in": ids}}, {"_id": 0, "id": 1, "user_id": 1, "employee_id": 1, "branch_id": 1},
     ).to_list(len(ids))
@@ -1594,28 +1597,39 @@ async def _expert_own_branches(doctor_ids) -> Dict[str, str]:
     user_ids = [d["user_id"] for d in docs if d.get("user_id")]
     if user_ids:
         async for u in v3_col("users").find(
-            {"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "branch_id": 1, "branch_ids": 1, "employee_id": 1},
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "branch_id": 1, "branch_ids": 1, "employee_id": 1, "phone": 1, "mobile_number": 1},
         ):
             users[u["id"]] = u
     emp_ids = {u.get("employee_id") for u in users.values()} | {d.get("employee_id") for d in docs}
     hr: Dict[str, str] = {}
+    hr_phone: Dict[str, str] = {}
     emp_ids.discard(None)
     if emp_ids:
-        async for e in v3_col("employees").find({"id": {"$in": list(emp_ids)}}, {"_id": 0, "id": 1, "branch_id": 1}):
+        async for e in v3_col("employees").find(
+            {"id": {"$in": list(emp_ids)}}, {"_id": 0, "id": 1, "branch_id": 1, "phone": 1},
+        ):
             if e.get("branch_id"):
                 hr[e["id"]] = e["branch_id"]
-    out: Dict[str, str] = {}
+            if e.get("phone"):
+                hr_phone[e["id"]] = e["phone"]
+    branches: Dict[str, str] = {}
+    phones: Dict[str, str] = {}
     for d in docs:
         u = users.get(d.get("user_id"))
         if u is not None:
             at = [b for b in (u.get("branch_ids") or ([u["branch_id"]] if u.get("branch_id") else [])) if b and b != "__all__"]
             mine = hr.get(u.get("employee_id"))
             own = mine if mine in at else (u.get("branch_id") if u.get("branch_id") in at else (at[0] if at else None))
+            phone = hr_phone.get(u.get("employee_id")) or u.get("mobile_number") or u.get("phone")
         else:
             own = hr.get(d.get("employee_id")) or d.get("branch_id")
+            phone = hr_phone.get(d.get("employee_id"))
         if own:
-            out[d["id"]] = own
-    return out
+            branches[d["id"]] = own
+        if phone:
+            phones[d["id"]] = phone
+    return branches, phones
 
 
 @router.get("/branch-admin/consultations/{branch_id}/board")
@@ -1725,10 +1739,13 @@ async def v3_consultations_board(
         sa_consultant_ids = await v3_col("doctors").distinct(
             "id", {"profile_type": "head_physio", "is_super_admin": True},
         )
-        # The Consultant Branch column: where each row's consultant belongs, which is not the
-        # patient's branch when a consultant from elsewhere collaborates here. Beside the
-        # leads, for the reason the two lists above are.
-        consultant_branches = await _expert_own_branches(ld.get("assigned_physio_id") for ld in leads_docs)
+        # The Consultant Phone and Consultant Branch columns: how to reach each row's
+        # consultant, and where they belong -- not the patient's branch when a consultant
+        # from elsewhere collaborates here. Beside the leads, for the reason the two lists
+        # above are.
+        consultant_branches, consultant_phones = await _expert_branches_and_phones(
+            ld.get("assigned_physio_id") for ld in leads_docs
+        )
         return {
             "leads": lead_list,
             "stage_counts": stage_counts,
@@ -1736,6 +1753,7 @@ async def v3_consultations_board(
             "rx_lead_ids": sorted(rx_ids),
             "super_admin_consultant_ids": sorted(sa_consultant_ids),
             "consultant_branches": consultant_branches,
+            "consultant_phones": consultant_phones,
         }
     except HTTPException:
         raise

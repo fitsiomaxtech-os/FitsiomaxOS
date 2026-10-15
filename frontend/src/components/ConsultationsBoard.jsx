@@ -1760,16 +1760,16 @@ const COLS_PLAIN_WITH_BRANCH = {
   phone: "w-[12%]", pno: "w-[12%]",
 };
 
-// Branch Admin's Consultation tab (`consultantBranchColumn`): the consultant's own branch
-// after their name, which differs from this branch when a consultant from elsewhere
-// collaborates here. With and without the stage's fee button. Each must total 100.
+// Branch Admin's Consultation tab (`consultantBranchColumn`): the consultant's phone and
+// own branch after their name — the branch differs from this one when a consultant from
+// elsewhere collaborates here. With and without the stage's fee button. Each must total 100.
 const COLS_PLAIN_WITH_CBRANCH = {
-  sno: "w-[4%]", patient: "w-[19%]", appt: "w-[15%]", expert: "w-[14%]", cbranch: "w-[13%]", stage: "w-[13%]",
-  phone: "w-[11%]", pno: "w-[11%]",
+  sno: "w-[4%]", patient: "w-[16%]", appt: "w-[14%]", expert: "w-[12%]", cphone: "w-[11%]", cbranch: "w-[12%]",
+  stage: "w-[11%]", phone: "w-[10%]", pno: "w-[10%]",
 };
 const COLS_PLAIN_WITH_ACTION_CBRANCH = {
-  sno: "w-[4%]", patient: "w-[15%]", appt: "w-[13%]", expert: "w-[12%]", cbranch: "w-[11%]", stage: "w-[12%]",
-  phone: "w-[11%]", pno: "w-[11%]", action: "w-[11%]",
+  sno: "w-[3%]", patient: "w-[13%]", appt: "w-[12%]", expert: "w-[11%]", cphone: "w-[10%]", cbranch: "w-[10%]",
+  stage: "w-[11%]", phone: "w-[10%]", pno: "w-[10%]", action: "w-[10%]",
 };
 
 const COLS_PLAIN_WITH_ARROW = {
@@ -2578,6 +2578,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [saConsultantIds, setSaConsultantIds] = useState(() => new Set());
   // Each consultant's own branch by expert id, for the Consultant Branch column.
   const [consultantBranches, setConsultantBranches] = useState({});
+  const [consultantPhones, setConsultantPhones] = useState({});
   const noteRxFiled = useCallback((leadId, filed) => {
     setRxLeadIds((prev) => {
       if (prev.has(leadId) === !!filed) return prev;
@@ -3181,6 +3182,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           setRxLeadIds(new Set(res?.rx_lead_ids || []));
           setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
           setConsultantBranches(res?.consultant_branches || {});
+      setConsultantPhones(res?.consultant_phones || {});
         }
       } catch (err) {
         console.error("Consultations board load error:", err);
@@ -3201,6 +3203,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       setRxLeadIds(new Set(res?.rx_lead_ids || []));
       setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
       setConsultantBranches(res?.consultant_branches || {});
+      setConsultantPhones(res?.consultant_phones || {});
     } catch (err) {
       console.error("Consultations board load error:", err);
       toast.error("Failed to load consultations");
@@ -6986,7 +6989,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showBranchColumn ? "min-w-[1000px]" : showConsultantBranch ? (showStageFeeAction ? "min-w-[1100px]" : "min-w-[1000px]") : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
+          <table className={`w-full table-fixed text-sm ${showBranchColumn ? "min-w-[1000px]" : showConsultantBranch ? (showStageFeeAction ? "min-w-[1240px]" : "min-w-[1100px]") : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
             <thead className={`sticky top-0 z-10 bg-slate-500 uppercase text-white ${feeTable ? "text-[11px] tracking-wide" : "text-xs"}`}>
               <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-1.5" : ""}>
                 <th className={`${cols.sno} px-3 py-2 ${thAlign} align-middle`}>S.No</th>
@@ -6998,6 +7001,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 <th className={`${cols.expert} px-4 py-2 ${thAlign} align-middle`}>
                   {showDiscountColumn || showBranchColumn || showConsultantBranch ? "Consultant" : "Consultant Name"}
                 </th>
+                {showConsultantBranch && <th className={`${cols.cphone} px-4 py-2 ${thAlign} align-middle`}>Consultant Phone</th>}
                 {showConsultantBranch && <th className={`${cols.cbranch} px-4 py-2 ${thAlign} align-middle`}>Consultant Branch</th>}
                 {/* Shortened on Fee Collected alone: that list carries three more columns than any
                     other stage, and the words the headings lose there — Consultation, Expert,
@@ -7127,6 +7131,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
                       </span>
                     </td>
+                    {showConsultantBranch && (() => {
+                      const phone = displayPhone(consultantPhones[l.assigned_physio_id]);
+                      return (
+                        <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={phone || ""}>
+                          {phone || "—"}
+                        </td>
+                      );
+                    })()}
                     {showConsultantBranch && (() => {
                       const name = branchNames[consultantBranches[l.assigned_physio_id]] || "";
                       return (
@@ -7361,7 +7373,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : (showStageFeeAction || showRowArrow || showBranchColumn || showConsultantBranch) ? (showConsultantBranch && showStageFeeAction ? 9 : 8) : 7} className="px-4 py-8 text-center text-sm text-slate-400">
+                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : showConsultantBranch ? (showStageFeeAction ? 10 : 9) : (showStageFeeAction || showRowArrow || showBranchColumn) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
                   {loading
                     ? "Loading…"
                     // An empty tab is not an empty stage: saying "no leads in consultations"
