@@ -654,10 +654,31 @@ export const DashboardBoard = () => {
     // No title block. The tab above already reads Dashboard, and the strapline named the
     // five tabs sitting right below it.
     <div className="space-y-4" data-testid="dashboard-board">
-      {/* One toolbar row, read left to right: which dates, which side of the business,
-          which branch, then Refresh held to the far right. On a phone the six ranges
-          take the first line and the rest wrap onto a second. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="dashboard-toolbar">
+      {/* One toolbar row, read left to right: which tab, which dates, which side of the
+          business, which branch, then Refresh held to the far right. On a phone the tabs
+          take the first lines, the six ranges the next, and the rest wrap below them. */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2" data-testid="dashboard-toolbar">
+        {/* The six tabs in the Super Admin nav's own style: plain text, no box or icon, the
+            open one filled sky. Two rows of three on a phone, where six in a row leaves each
+            too narrow to read; natural widths from sm up. */}
+        <div className="grid w-full grid-cols-3 gap-1 sm:flex sm:w-auto" data-testid="dashboard-tab">
+          {DASH_TABS.map((t) => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                aria-current={active ? "page" : undefined}
+                className={`h-10 min-w-0 truncate rounded-md px-3 text-sm font-medium transition ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                data-testid={`dashboard-tab-${t.key}`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Five one-tap ranges, then Custom for everything else — the OS's shared date
             filter, which also carries Yesterday, Last Month and an exact day.
 
@@ -721,27 +742,6 @@ export const DashboardBoard = () => {
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
-      </div>
-
-      {/* The six tabs in the Super Admin nav's own style: plain text, no box or icon, the
-          open one filled sky. Two rows of three on a phone, where six in a row leaves each
-          too narrow to read; natural widths from sm up. */}
-      <div className="grid grid-cols-3 gap-1 border-b border-slate-200 pb-2 sm:flex sm:flex-wrap sm:gap-2" data-testid="dashboard-tab">
-        {DASH_TABS.map((t) => {
-          const active = activeTab === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setActiveTab(t.key)}
-              aria-current={active ? "page" : undefined}
-              className={`min-w-0 truncate rounded-md px-3 py-2 text-sm font-medium transition ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              data-testid={`dashboard-tab-${t.key}`}
-            >
-              {t.label}
-            </button>
-          );
-        })}
       </div>
 
       <DashboardTabPanel key={reloadKey} tab={activeTab} dateFilter={dateFilter} dash={dash} scope={scope} />
