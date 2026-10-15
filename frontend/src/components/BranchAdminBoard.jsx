@@ -1793,15 +1793,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const bottomTabs = VIEW_TABS.filter((t) => onBottomBar(t.key));
   const moreTabs = VIEW_TABS.filter((t) => !onBottomBar(t.key));
 
-  // The red dots: a tab with something new since this person last opened it (see
+  // The red dots: a tab with untouched records or anything from the last 24 hours (see
   // ui/tab-dot). Not when Super Admin embeds the board -- the dots are the branch's
-  // own desk telling its admin what came in, not a supervisor's view of it.
-  const tabDots = useTabDotsState({
-    branchId,
-    userId: (currentUser || loadSession()?.user)?.id,
-    enabled: !embedded,
-  });
-  // Opening a tab puts its dot out, and keeps it out for a record that lands while it is open.
+  // own desk reminding its admin what is waiting, not a supervisor's view of it.
+  const tabDots = useTabDotsState({ branchId, enabled: !embedded });
+  // Opening a tab puts its dot out for a few minutes, and keeps it out while it stays open.
   useLayoutEffect(() => {
     if (!profileOpen && tabDots.has(activeView)) tabDots.markSeen(activeView);
   }, [tabDots, activeView, profileOpen]);

@@ -2,21 +2,28 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { getBranchTabActivity } from "@/lib/api";
 
 /**
- * The red dot on a Branch Admin tab: something was added to it since this person last
- * opened it. Opening the tab puts it out until the next new record.
+ * The red dot on a Branch Admin tab: something in it is waiting for the admin.
  *
- * The server says when each tab last had something new (backend/routers/v3_tab_activity);
- * this browser keeps when each tab was last opened, per login and branch. Kept here rather
- * than on the server because it is a reading aid, not a record -- a second device lighting
- * a tab the first one already opened costs a click, and saves a write on every tab change.
+ * A tab is waiting when it has records nobody has acted on yet (a lead still on New Leads,
+ * a referral not accepted...) or anything added in the last 24 hours -- the server sends
+ * both, see backend/routers/v3_tab_activity.
+ *
+ * Opening the tab puts its dot out, but only for REMIND_MS: it is a reminder, not a
+ * notification to clear, so it comes back after that while the work is still there. And
+ * it comes back on a refresh, and so on the first visit each morning, because what has
+ * been opened is held in memory and nowhere else. A record that lands after the tab was
+ * opened lights it again at once.
  *
  * Keys are the board's own: a top tab's view key, and `<tab>.<sub-tab>` for a sub-tab. A top
- * tab answers with the newest of itself and its sub-tabs, and is put out on its own when
- * opened -- its sub-tabs keep their dots until each is opened, so the reader still sees
- * which one inside has the news.
+ * tab is waiting when it or any of its sub-tabs is, and is put out on its own when opened --
+ * its sub-tabs keep their dots until each is opened, so the reader still sees which one.
  */
 
 const REFRESH_MS = 2 * 60 * 1000;
+const REMIND_MS = 4 * 60 * 1000;
+const RECENT_MS = 24 * 60 * 60 * 1000;
+// How often the dots are re-read against the clock, so one put out comes back on time.
+const TICK_MS = 15 * 1000;
 
 const TabDotsContext = createContext(null);
 export const TabDotsProvider = TabDotsContext.Provider;
@@ -26,44 +33,30 @@ const ms = (iso) => {
   return Number.isNaN(t) ? 0 : t;
 };
 
-function stampFor(latest, key) {
-  let best = latest[key] || "";
-  const prefix = `${key}.`;
-  for (const [k, v] of Object.entries(latest)) {
-    if (k.startsWith(prefix) && ms(v) > ms(best)) best = v;
-  }
-  return best;
+// A key and its sub-tabs.
+const family = (map, key) => Object.keys(map).filter((k) => k === key || k.startsWith(`${key}.`));
+
+function newestFor(latest, key) {
+  return family(latest, key).reduce((best, k) => Math.max(best, ms(latest[k])), 0);
 }
 
-// Private windows and blocked storage throw; the dots then simply last the session.
-function readSeen(storageKey) {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-function writeSeen(storageKey, seen) {
-  try { localStorage.setItem(storageKey, JSON.stringify(seen)); } catch { /* ignore */ }
-}
-
-/** The board's half: fetches the stamps and holds what has been seen. Pass the result to TabDotsProvider. */
-export function useTabDotsState({ branchId, userId, enabled = true }) {
-  const storageKey = `tab-dots:${userId || "anon"}:${branchId || ""}`;
-  const [latest, setLatest] = useState(null);
-  const [seen, setSeen] = useState(() => readSeen(storageKey));
+/** The board's half: fetches what is waiting and holds what has been opened. Pass the result to TabDotsProvider. */
+export function useTabDotsState({ branchId, enabled = true }) {
+  const [data, setData] = useState(null);
+  // key -> when it was opened. Memory only: a refresh is meant to bring every dot back.
+  const [opened, setOpened] = useState({});
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setSeen(readSeen(storageKey));
-    setLatest(null);
-  }, [storageKey]);
+    setData(null);
+    setOpened({});
+  }, [branchId]);
 
   useEffect(() => {
     if (!enabled || !branchId) return undefined;
     let alive = true;
     const load = () => getBranchTabActivity(branchId)
-      .then((res) => { if (alive) setLatest(res?.latest || {}); })
+      .then((res) => { if (alive) setData({ latest: res?.latest || {}, pending: res?.pending || {} }); })
       .catch(() => { /* a missed poll leaves the dots as they were */ });
     load();
     const timer = setInterval(load, REFRESH_MS);
@@ -76,36 +69,29 @@ export function useTabDotsState({ branchId, userId, enabled = true }) {
     };
   }, [enabled, branchId]);
 
-  // First load in this browser: what is already there counts as seen, or every tab would
-  // open lit on the day this ships and the dots would say nothing.
   useEffect(() => {
-    if (seen !== null || latest === null) return;
-    const keys = new Set(Object.keys(latest).flatMap((k) => [k, k.split(".")[0]]));
-    const initial = {};
-    keys.forEach((k) => { initial[k] = stampFor(latest, k); });
-    setSeen(initial);
-    writeSeen(storageKey, initial);
-  }, [latest, seen, storageKey]);
+    if (!enabled) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
+    return () => clearInterval(timer);
+  }, [enabled]);
 
   const has = useCallback((key) => {
-    if (!latest || !seen) return false;
-    const stamp = stampFor(latest, key);
-    return !!stamp && ms(stamp) > ms(seen[key]);
-  }, [latest, seen]);
+    if (!data || !key) return false;
+    const newest = newestFor(data.latest, key);
+    const untouched = family(data.pending, key).some((k) => data.pending[k] > 0);
+    if (!untouched && !(newest && now - newest < RECENT_MS)) return false;
+    const at = opened[key];
+    if (!at) return true;
+    return now - at >= REMIND_MS || newest > at;
+  }, [data, opened, now]);
 
   const markSeen = useCallback((key) => {
-    if (!latest) return;
     // The later of the newest record and now: a server clock ahead of this one would
     // otherwise relight the tab the reader is looking at.
-    const stamp = stampFor(latest, key);
-    const at = ms(stamp) > Date.now() ? stamp : new Date().toISOString();
-    setSeen((prev) => {
-      if (!prev || ms(prev[key]) >= ms(at)) return prev;
-      const next = { ...prev, [key]: at };
-      writeSeen(storageKey, next);
-      return next;
-    });
-  }, [latest, storageKey]);
+    const at = Math.max(Date.now(), data ? newestFor(data.latest, key) : 0);
+    setNow(Date.now());
+    setOpened((prev) => ({ ...prev, [key]: at }));
+  }, [data]);
 
   return useMemo(() => ({ has, markSeen }), [has, markSeen]);
 }
@@ -116,11 +102,11 @@ export function useTabDot(key) {
   return !!ctx && !!key && ctx.has(key);
 }
 
-/** Puts out `key`'s dot while it is open -- including for a record that lands while the reader is on it. */
+/** Puts out `key`'s dot while it is open -- so the tab being read never shows one. */
 export function useMarkTabSeen(key, open = true) {
   const ctx = useContext(TabDotsContext);
   const lit = !!ctx && !!key && ctx.has(key);
-  // Layout effect so a dot lit by a poll on the open tab is put out before it paints.
+  // Layout effect so a dot relit on the open tab is put out before it paints.
   useLayoutEffect(() => {
     if (open && lit) ctx.markSeen(key);
   }, [ctx, key, open, lit]);
