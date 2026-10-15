@@ -954,7 +954,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-red-300 text-red-700 hover:bg-red-50"
+                  className="w-44 justify-center border-red-300 text-red-700 hover:bg-red-50"
                   onClick={row.onClick}
                   disabled={row.busy}
                   data-testid={row.key}
