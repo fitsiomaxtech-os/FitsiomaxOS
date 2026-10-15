@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Clock, X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { to12h } from "@/lib/time";
 
@@ -193,7 +193,7 @@ export const ClockTimeInput = ({
         {...rest}
       >
         <span className="truncate tabular-nums">{value ? to12h(value) : placeholder}</span>
-        <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <Pencil className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       </button>
       {open && (
         <ClockDialog
