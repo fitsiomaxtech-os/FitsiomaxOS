@@ -2536,7 +2536,9 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
                           {to12h(x.time)}{durationRule ? ` – ${endTime12h(x.time, Number(x.duration) || slotMinutes)}` : ""}
                         </span>
                         <span className="min-w-0 truncate">
-                          {(x.lead_name || "").trim() || (x.review_id ? "Review" : "Booked")}{x.review_id && x.lead_name ? " · Review" : ""}
+                          {(x.lead_name || "").trim() || (x.review_id ? "Review" : "Booked")}
+                          {(x.lead_branch || "").trim() ? ` - ${x.lead_branch.trim()}` : ""}
+                          {x.review_id && x.lead_name ? " · Review" : ""}
                         </span>
                       </li>
                     ))}

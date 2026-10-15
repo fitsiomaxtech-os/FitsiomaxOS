@@ -5840,8 +5840,14 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                                 {to12h(x.time)}
                                 {apptDurationRule ? ` – ${endTime12h(x.time, Number(x.duration) || apptSlotMinutes)}` : ""}
                               </span>
-                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700" title={(x.lead_name || "").trim()}>
+                              <span
+                                className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700"
+                                title={[(x.lead_name || "").trim(), (x.lead_branch || "").trim()].filter(Boolean).join(" - ")}
+                              >
                                 {(x.lead_name || "").trim() || "Booked"}
+                                {(x.lead_branch || "").trim() && (
+                                  <span className="font-semibold text-slate-500"> - {x.lead_branch.trim()}</span>
+                                )}
                                 {x.review_id && <span className="ml-1 text-[11px] font-semibold text-slate-400">· Review</span>}
                               </span>
                               {/* A review is moved from Review > Reassign, not from here:

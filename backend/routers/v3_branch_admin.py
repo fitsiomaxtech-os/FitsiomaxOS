@@ -1383,6 +1383,9 @@ def _consultant_day(
                 "duration": t_end - t_start,
                 "lead_name": b.get("lead_name"),
                 "lead_id": b.get("lead_id"),
+                # The branch the patient belongs to — a Consultant serves several, and
+                # "Bala" alone doesn't say which branch's Bala is in the 1:30.
+                "lead_branch": b.get("lead_branch") or "",
                 # Set when the hour is held by a review rather than a consultation.
                 "review_id": b.get("review_id"),
             }
@@ -1455,6 +1458,25 @@ async def v3_available_experts(
             own_by_doc[r.get("doctor_id")] = r
             continue
         bookings_by_doc.setdefault(r.get("doctor_id"), []).append(r)
+
+    # Each booked patient's own branch, for the Already Booked This Day list. Two lookups
+    # for the whole day rather than one per row: leads -> branch_id -> branch_name.
+    booked_lead_ids = {b.get("lead_id") for rows in bookings_by_doc.values() for b in rows if b.get("lead_id")}
+    lead_branch_ids: Dict[str, str] = {}
+    if booked_lead_ids:
+        lead_branch_ids = {
+            l["id"]: l.get("branch_id") or ""
+            async for l in v3_col("leads").find({"id": {"$in": list(booked_lead_ids)}}, {"_id": 0, "id": 1, "branch_id": 1})
+        }
+    branch_name_by_id: Dict[str, str] = {}
+    if any(lead_branch_ids.values()):
+        branch_name_by_id = {
+            b["id"]: b.get("branch_name") or ""
+            async for b in v3_col("branches").find({"id": {"$in": list({v for v in lead_branch_ids.values() if v})}}, {"_id": 0, "id": 1, "branch_name": 1})
+        }
+    for rows in bookings_by_doc.values():
+        for b in rows:
+            b["lead_branch"] = branch_name_by_id.get(lead_branch_ids.get(b.get("lead_id") or "", ""), "")
 
     # Slot length is this branch's Consultation Duration, fetched fresh on every open.
     slot_minutes = await consultation_slot_minutes(branch_id)
