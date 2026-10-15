@@ -701,13 +701,19 @@ const TeamTab = ({ staff, branchId, onChanged, reloadToken = 0, readOnly = false
  * each one currently sits is shown, since for a single-branch role picking them moves them
  * off it — that should be read before clicking, not discovered afterwards.
  */
-const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
+// `branches`, when given, puts a branch dropdown at the top so the branch is chosen here —
+// Activity Care's Team tabs, where a Consultant or Physio is brought to whichever branch
+// they will work with. Without it the dialog is pinned to `branchId`, as Branch Manager's is.
+export const TeamAddDialog = ({ desk, branchId: startBranchId, branches = null, onClose, onSaved }) => {
+  const [branchId, setBranchId] = useState(startBranchId || branches?.[0]?.id || "");
   const [state, setState] = useState({ loading: true, failed: false, candidates: [] });
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
+    if (!branchId) return undefined;
     let alive = true;
+    setState({ loading: true, failed: false, candidates: [] });
     bmTeamCandidates(branchId, desk.key)
       .then((d) => { if (alive) setState({ loading: false, failed: false, candidates: d.candidates || [] }); })
       .catch((e) => {
@@ -751,6 +757,19 @@ const TeamAddDialog = ({ desk, branchId, onClose, onSaved }) => {
           <p className="mt-0.5 text-[11px] text-slate-500">
             Everyone with this role who isn't already at this branch. Click one to post them here.
           </p>
+          {branches && (
+            <FilterSelect
+              value={branchId}
+              onChange={setBranchId}
+              active
+              label="Branch"
+              title="The branch they will work at"
+              className="mt-3"
+              testid="branch-team-add-branch"
+            >
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </FilterSelect>
+          )}
         </div>
 
         <div className="border-b px-5 py-3">

@@ -5,7 +5,7 @@ import uuid
 
 from database import v3_col
 from utils import now_iso, derive_branch_code, active_doctor_query, live_branch_query
-from deps import v3_require_roles, is_branch_admin_role, is_physio_role, is_head_physio_role, is_diet_role, is_pre_sales_role, is_zumba_role, consultants_serving_branch, PHYSIO_ROLES, HEAD_PHYSIO_ROLES
+from deps import v3_require_roles, role_satisfies, is_branch_admin_role, is_physio_role, is_head_physio_role, is_diet_role, is_pre_sales_role, is_zumba_role, consultants_serving_branch, PHYSIO_ROLES, HEAD_PHYSIO_ROLES
 # The desks a Physio or Nutritionist can hold several of, and the doctors profile_type
 # each role keeps its calendar under. Imported from HR rather than restated so posting
 # somebody to a branch here builds the same record HR's own assign builds.
@@ -542,8 +542,27 @@ def _posted_to(user: dict) -> list:
     return user.get("branch_ids") or ([user["branch_id"]] if user.get("branch_id") else [])
 
 
+# A Branch Admin may bring a Consultant or Physio from another branch to work at a branch --
+# Activity Care's Team Consultants and Team Physio tabs, where a branch takes in somebody
+# from elsewhere to collaborate. The other desks stay Super Admin's: these two are the
+# experts a branch books patients with, and posting one adds a branch to them rather than
+# taking them off theirs (both are multi-branch roles), so nobody's own branch loses them.
+BRANCH_ADMIN_TEAM_DESKS = ("head_physios", "physios")
+
+
+def _may_post_to_desk(user: V3UserOut, desk: str) -> bool:
+    """Refuse a desk this caller may not post to. True when they may post to every desk;
+    False for a Branch Admin, who may only ADD a branch to somebody -- never move them off
+    their own, which is what posting a single-branch account does."""
+    if role_satisfies(user.role, ("super_admin", "business_dev")):
+        return True
+    if desk not in BRANCH_ADMIN_TEAM_DESKS:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    return False
+
+
 @router.get("/{branch_id}/team-candidates")
-async def team_candidates(branch_id: str, desk: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def team_candidates(branch_id: str, desk: str, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     """Everyone holding this desk's role who is not already at this branch.
 
     Org-wide rather than branch-scoped on purpose: the point of the picker is to bring in
@@ -551,6 +570,7 @@ async def team_candidates(branch_id: str, desk: str, _: V3UserOut = Depends(v3_r
     exactly when it is wanted. Where each one currently sits comes back with them, because
     for a single-branch role picking them moves them, and that is worth seeing beforehand.
     """
+    may_move = _may_post_to_desk(user, desk)
     branch, holds = await _team_desk_or_400(branch_id, desk)
 
     rows = await v3_col("users").find({"is_active": True}, {"_id": 0, "password": 0}).to_list(2000)
@@ -560,6 +580,8 @@ async def team_candidates(branch_id: str, desk: str, _: V3UserOut = Depends(v3_r
     out = []
     for u in rows:
         if not holds(u.get("role")):
+            continue
+        if not may_move and not is_multi_branch_role(u.get("role")):
             continue
         at = _posted_to(u)
         if branch_id in at:
@@ -580,14 +602,17 @@ async def team_candidates(branch_id: str, desk: str, _: V3UserOut = Depends(v3_r
 
 
 @router.post("/{branch_id}/team/{user_id}")
-async def team_add_member(branch_id: str, user_id: str, desk: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def team_add_member(branch_id: str, user_id: str, desk: str, me: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
     """Post an existing account to this branch."""
+    may_move = _may_post_to_desk(me, desk)
     branch, holds = await _team_desk_or_400(branch_id, desk)
     user = await v3_col("users").find_one({"id": user_id, "is_active": True}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not holds(user.get("role")):
         raise HTTPException(status_code=400, detail=f"{user.get('full_name')} does not hold a role for this desk")
+    if not may_move and not is_multi_branch_role(user.get("role")):
+        raise HTTPException(status_code=400, detail=f"{user.get('full_name')} works one branch only; Super Admin can move them")
 
     moved_from = None
     if is_multi_branch_role(user.get("role")):

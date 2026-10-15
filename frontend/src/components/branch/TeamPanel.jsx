@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, RefreshCw, Search, X } from "lucide-react";
+import { ChevronRight, Plus, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { getTeam } from "@/lib/api";
 import { displayPhone, telNumber } from "@/lib/phone";
+import { TeamAddDialog } from "@/components/branch/BranchDetailPage";
 
 /**
  * Activity Care's Team Consultants and Team Physio tabs: every consultant, or every physio,
  * in the organisation, one to a row — S.No, name, branch, phone, gender, status and an
- * arrow — narrowed by a search, by branch and by gender.
+ * arrow — narrowed by a search, by branch and by gender. Add brings one from another branch
+ * to work at a branch too, keeping the branches they already have.
  */
+// desk: the Branch Manager Team desk that posts them, which Add goes through.
 const KINDS = {
-  consultants: { plural: "consultants" },
-  physio: { plural: "physios" },
+  consultants: { plural: "consultants", desk: { key: "head_physios", label: "Consultant" } },
+  physio: { plural: "physios", desk: { key: "physios", label: "Physio" } },
 };
 
 const GENDER_LABEL = { male: "Male", female: "Female" };
@@ -77,13 +80,15 @@ const Phone = ({ phone }) => (
 
 // toolbarSlot: the right end of Activity Care's tab strip. From lg up the filters and Refresh
 // sit there, on the tabs' line; below lg, and when no slot is given, they sit above the table.
-export const TeamPanel = ({ kind, toolbarSlot = null }) => {
+// branchId: the viewer's own branch, which Add's branch dropdown opens on.
+export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const k = KINDS[kind];
   const [data, setData] = useState({ members: [], branches: [] });
   const [loading, setLoading] = useState(true);
   const [branch, setBranch] = useState("all");
   const [gender, setGender] = useState("all");
   const [search, setSearch] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -170,12 +175,33 @@ export const TeamPanel = ({ kind, toolbarSlot = null }) => {
       <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh">
         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       </Button>
+      {/* Icon only until xl, where the tab strip leaves room for the words. */}
+      <Button
+        onClick={() => setAdding(true)}
+        disabled={data.branches.length === 0}
+        className="h-9 shrink-0 gap-1 bg-sky-600 px-2.5 text-xs font-semibold text-white hover:bg-sky-700"
+        title={`Add ${k.desk.label}`}
+        aria-label={`Add ${k.desk.label}`}
+        data-testid={`team-add-${kind}`}
+      >
+        <Plus className="h-4 w-4" />
+        <span className="hidden xl:inline">Add {k.desk.label}</span>
+      </Button>
     </>
   );
 
   return (
     <div className="flex flex-col gap-3" data-testid={`team-panel-${kind}`}>
       {toolbarSlot && createPortal(filters, toolbarSlot)}
+      {adding && (
+        <TeamAddDialog
+          desk={k.desk}
+          branchId={data.branches.some((b) => b.id === branchId) ? branchId : null}
+          branches={data.branches}
+          onClose={() => setAdding(false)}
+          onSaved={() => { setAdding(false); load(); }}
+        />
+      )}
       {/* Below lg the search takes a line of its own, the two filters and Refresh under it. */}
       <div className={`flex flex-wrap items-center gap-2 ${toolbarSlot ? "lg:hidden" : ""}`}>{filters}</div>
 

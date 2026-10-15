@@ -115,9 +115,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
       ) : active === "manager" ? (
         <BranchDetailPage branchId={branchId} readOnly />
       ) : active === "team_consultants" ? (
-        <TeamPanel kind="consultants" toolbarSlot={toolbar} />
+        <TeamPanel kind="consultants" branchId={branchId} toolbarSlot={toolbar} />
       ) : active === "team_physio" ? (
-        <TeamPanel kind="physio" toolbarSlot={toolbar} />
+        <TeamPanel kind="physio" branchId={branchId} toolbarSlot={toolbar} />
       ) : (
         <BranchReviewPanel branchId={branchId} />
       )}
