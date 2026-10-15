@@ -763,13 +763,13 @@ const waNumber = (raw) => {
  *  so the entry header can only ever draw the eight it always has. */
 const BRANCH_LIST_WIDTHS = {
   base: {
-    patient: "w-[19%]", phone: "w-[12%]", source: "w-[11%]", painType: "w-[12%]",
-    painDuration: "w-[11%]", physio: "w-[11%]", appt: "w-[10%]", followUp: "", stage: "w-[8%]",
+    patient: "w-[17%]", phone: "w-[12%]", source: "w-[11%]", painType: "w-[12%]",
+    painDuration: "w-[11%]", physio: "w-[11%]", appt: "w-[10%]", followUp: "", stage: "w-[10%]",
     action: "w-[6%]",
   },
   withFollowUp: {
-    patient: "w-[17%]", phone: "w-[11%]", source: "w-[10%]", painType: "w-[10%]",
-    painDuration: "w-[10%]", physio: "w-[10%]", appt: "w-[9%]", followUp: "w-[9%]", stage: "w-[8%]",
+    patient: "w-[15%]", phone: "w-[11%]", source: "w-[10%]", painType: "w-[10%]",
+    painDuration: "w-[10%]", physio: "w-[10%]", appt: "w-[9%]", followUp: "w-[9%]", stage: "w-[10%]",
     action: "w-[6%]",
   },
 };
@@ -3034,9 +3034,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         )}
                         </>)}
                         <td className="px-4 py-3">
+                          {/* One width for every pill, so the column reads as a row of equal
+                              boxes; sized to fit the longest stage name ("New Appointment")
+                              whole. truncate stays only as a guard for a custom name longer
+                              than that, with the full name in the title. */}
                           <span
                             title={rowStage ? rowStage : undefined}
-                            className="inline-block max-w-full truncate rounded-[5px] border px-2.5 py-0.5 align-middle text-xs font-medium"
+                            className="inline-block w-[118px] max-w-full truncate rounded-[5px] border px-2 py-0.5 text-center align-middle text-xs font-medium"
                             style={rowStageHex ? { background: `${rowStageHex}14`, color: rowStageHex, border: `1px solid ${rowStageHex}33` } : { background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}
                           >
                             {rowStage ? rowStage : "—"}
