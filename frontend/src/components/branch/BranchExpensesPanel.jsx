@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { LedgerCard } from "@/components/ui/ledger-card";
 import { EntriesPanel } from "@/components/finance/BranchCashBoard";
+import { PendingBadge } from "@/components/finance/ApprovalsBoard";
 import {
   getBranches, getFinanceExpenses, createFinanceExpense, deleteFinanceExpense,
   getBranchCash, createCashHandover, createCashReturn,
@@ -666,35 +667,22 @@ const CashReturnDialog = ({ onClose, onSaved, branchId, branches }) => {
 };
 
 /**
- * One of the four piles this panel opens on, in the shape HR Admin's own stage cards
- * wear: white and bordered at rest, its own colour on the label and the figure, and the
- * colour pulled onto the border with a wash through the card when it is the one being
- * read. Money first and the count under it — the opposite way round to HR's, where a
- * count is the whole answer; here what was spent is the answer and how many rows it took
- * is the footnote.
+ * One pile this panel opens on, as a segment of the same toggle Finance > Approvals
+ * switches its Income Approval and Expenses Approval ledgers with: sky when it is the
+ * one being read, the red count of what is still waiting in its corner. The figure rides
+ * in the tooltip -- the Expenses card above already carries the open total.
  */
-const SummaryCard = ({ label, color, amount, sub, active, onClick, testid }) => (
+const PileTab = ({ label, amount, count, active, onClick, testid }) => (
   <button
     type="button"
     onClick={onClick}
     aria-pressed={active}
-    className={`min-w-0 rounded-[5px] border border-slate-200 px-3 py-3 text-left transition hover:shadow-sm ${
-      active ? "shadow-sm" : "bg-white"
-    }`}
-    style={active ? { borderColor: color, backgroundColor: `${color}14` } : undefined}
+    title={amount}
+    className={`relative whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${active ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"}`}
     data-testid={testid}
   >
-    <span
-      className="block break-words text-[10px] font-bold uppercase leading-[1.15] tracking-wider sm:truncate sm:text-[11px]"
-      style={{ color }}
-      title={label}
-    >
-      {label}
-    </span>
-    <span className="mt-1 block truncate text-lg font-extrabold leading-tight tabular-nums sm:text-xl" style={{ color }}>
-      {amount}
-    </span>
-    {sub ? <span className="mt-0.5 block truncate text-[10px] text-slate-400">{sub}</span> : null}
+    {label}
+    <PendingBadge count={count} testId={`${testid}-badge`} />
   </button>
 );
 
@@ -808,40 +796,53 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid, onDelete, delet
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((r, i) => (
-              <tr key={r.id} className="align-top hover:bg-slate-50" data-testid={`branch-expense-row-${r.id}`}>
-                <td className="px-4 py-3 tabular-nums text-slate-400" data-testid={`branch-expense-sno-${r.id}`}>{i + 1}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-slate-500">{r.expense_date || "—"}</td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-slate-800">{r.category}</p>
-                  {showBranch && r.branch_name ? <p className="text-[11px] text-slate-400">{r.branch_name}</p> : null}
-                  {r.note ? <p className="text-[11px] text-slate-400">{r.note}</p> : null}
-                  {r.payment_mode && r.payment_mode !== "cash" ? (
-                    <span className="mt-0.5 inline-block rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-                      {MODE_LABELS[r.payment_mode] || r.payment_mode}
-                    </span>
-                  ) : null}
+              // One line a row: what used to sit under a cell (the note, the branch, the
+              // notes counted out, why it was sent back) rides beside it, muted, and is cut
+              // short with the whole of it in the tooltip rather than wrapping the row tall.
+              <tr key={r.id} className="whitespace-nowrap hover:bg-slate-50" data-testid={`branch-expense-row-${r.id}`}>
+                <td className="px-4 py-2.5 tabular-nums text-slate-400" data-testid={`branch-expense-sno-${r.id}`}>{i + 1}</td>
+                <td className="px-4 py-2.5 text-slate-500">{r.expense_date || "—"}</td>
+                <td className="max-w-[260px] px-4 py-2.5">
+                  <div
+                    className="flex items-center gap-1.5"
+                    title={[r.category, showBranch ? r.branch_name : null, r.note].filter(Boolean).join(" · ")}
+                  >
+                    <span className="shrink-0 font-medium text-slate-800">{r.category}</span>
+                    {r.payment_mode && r.payment_mode !== "cash" ? (
+                      <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                        {MODE_LABELS[r.payment_mode] || r.payment_mode}
+                      </span>
+                    ) : null}
+                    {(showBranch && r.branch_name) || r.note ? (
+                      <span className="min-w-0 truncate text-[11px] text-slate-400">
+                        {[showBranch ? r.branch_name : null, r.note].filter(Boolean).join(" · ")}
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
-                <td className="break-words px-4 py-3 text-slate-600">
+                <td className="px-4 py-2.5 text-slate-600">
                   {r.paid_to || "—"}
                   {r.vendor_id ? <VendorTag /> : null}
                 </td>
-                <td className="break-words px-4 py-3 text-slate-500">{r.reference || "—"}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-slate-800">
-                  {fmt(r.amount)}
+                <td className="max-w-[240px] truncate px-4 py-2.5 text-slate-500" title={r.reference || undefined}>{r.reference || "—"}</td>
+                <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">
                   {notesLabel(r.cash_denominations) ? (
-                    <span className="mt-0.5 block text-[10px] font-normal text-slate-400" data-testid={`branch-expense-notes-${r.id}`}>
+                    <span className="mr-2 text-[10px] font-normal text-slate-400" data-testid={`branch-expense-notes-${r.id}`}>
                       {notesLabel(r.cash_denominations)}{Number(r.cash_coins) > 0 ? ` + Rs.${r.cash_coins} coins` : ""}
                     </span>
                   ) : null}
+                  {fmt(r.amount)}
                 </td>
-                <td className="px-4 py-3">
-                  <StatusChip row={r} />
-                  {r.rejected && r.rejection_reason ? (
-                    <span className="mt-0.5 block text-[10px] text-rose-600">{r.rejection_reason}</span>
-                  ) : null}
+                <td className="max-w-[260px] px-4 py-2.5">
+                  <div className="flex items-center gap-1.5" title={r.rejected && r.rejection_reason ? r.rejection_reason : undefined}>
+                    <span className="shrink-0"><StatusChip row={r} /></span>
+                    {r.rejected && r.rejection_reason ? (
+                      <span className="min-w-0 truncate text-[10px] text-rose-600">{r.rejection_reason}</span>
+                    ) : null}
+                  </div>
                 </td>
                 {onDelete ? (
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     <DeleteBin row={r} onDelete={onDelete} busy={deletingId === r.id} testid={`branch-expense-delete-${r.id}`} />
                   </td>
                 ) : null}
@@ -1087,7 +1088,8 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
       label: "Expense Request",
       color: "#6366f1",
       amount: fmt(piles.request.total),
-      sub: piles.rejected.count ? `+ ${fmt(piles.rejected.total)} rejected` : undefined,
+      // What is still waiting on someone: the open rows, not the turned-down ones.
+      count: piles.request.rows.length - piles.rejected.count,
     },
     {
       key: "expense_approved",
@@ -1190,30 +1192,28 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
 
   return (
     <div className={activeView === "cash" ? "space-y-3" : "space-y-4"} data-testid="branch-expenses-panel">
-      {/* The piles, as cards that are also the tabs onto them — the shape HR Admin's
-          stage cards already wear on this system, and for the same reason: a figure you
-          press to read the rows behind it, rather than a row of figures and a tab bar
-          under it saying the same thing twice.
-
-          Two across a phone so the amounts stay readable, the whole row across from sm. */}
+      {/* The piles, as one toggle -- the Income Approval / Expenses Approval switch on
+          Finance > Approvals -- rather than a row of cards: the figure is the Expenses
+          card's already, and a pressed segment says which rows are open underneath. */}
       {section !== "cash" && (
-      <div
-        className={`grid grid-cols-2 gap-2 sm:gap-3 ${CARDS.length === 3 ? "sm:grid-cols-3" : ""}`}
-        data-testid="branch-expense-summary-cards"
-      >
-        {CARDS.map((c) => (
-          <SummaryCard
-            key={c.key}
-            label={c.label}
-            color={c.color}
-            amount={c.amount}
-            sub={c.sub}
-            active={activeView === c.key}
-            onClick={() => setView(c.key)}
-            testid={`branch-expense-card-${c.key}`}
-          />
-        ))}
-      </div>
+        <div className="flex">
+          <div
+            className="flex items-center gap-0.5 rounded-[2px] border border-slate-200 bg-slate-50 p-0.5"
+            data-testid="branch-expense-summary-cards"
+          >
+            {CARDS.map((c) => (
+              <PileTab
+                key={c.key}
+                label={c.label}
+                amount={c.amount}
+                count={c.count}
+                active={activeView === c.key}
+                onClick={() => setView(c.key)}
+                testid={`branch-expense-card-${c.key}`}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
       {activeView === "cash" && cash && (
