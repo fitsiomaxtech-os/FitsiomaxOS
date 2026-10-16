@@ -23,7 +23,7 @@ due date and lets the remaining days go ahead unpaid until that date.
 
 Two ways it reaches people:
   * GET /api/v3/session-payment-alerts — the header's rupee bell, for Branch Admin (their
-    branch), Super Admin, BDE and Accountant (all).
+    branch), Super Admin and BDE (all).
   * notify_after_session_complete — called when a physio completes a treatment day. It
     logs the crossing on the client's timeline and, on the day the paid sessions run out,
     emails the branch's admins, the accountants and the physio (when SMTP is configured).
@@ -246,7 +246,7 @@ async def alerts_for_query(lead_query: dict) -> list:
 
 @router.get("/session-payment-alerts")
 async def session_payment_alerts(
-    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "accountant")),
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
 ):
     """Clients whose paid treatment sessions have run out (or are about to) with a balance
     still owing — the header's rupee bell."""

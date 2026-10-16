@@ -897,8 +897,8 @@ export const CRMPage = ({ auth, onLogout }) => {
   const showAccountantBoard = role === "accountant";
   const showZumbaBoard = isZumbaRole(role);
   // Clients whose paid treatment sessions have run out with a balance owing: Branch Admin,
-  // Super Admin, the BDE and the Accountant only.
-  const canSeeSessionPayments = showSuperAdminBoard || showBranchBoard || showBusinessDevBoard || showAccountantBoard;
+  // Super Admin and the BDE only.
+  const canSeeSessionPayments = showSuperAdminBoard || showBranchBoard || showBusinessDevBoard;
 
   // What patients have sent past their branch, waiting to be read. Asked once when the
   // board opens rather than polled: feedback arrives at the pace people write it, and a

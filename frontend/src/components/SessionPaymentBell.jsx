@@ -26,8 +26,8 @@ const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN", { maximumFraction
 
 /**
  * The header's rupee bell: clients whose paid treatment sessions have been used up (or have
- * one left) while a Treatment Fee balance is still owing. Shown to Super Admin, Branch Admin,
- * BDE and Accountant; the backend narrows a Branch Admin's list to their own branch.
+ * one left) while a Treatment Fee balance is still owing. Shown to Super Admin, Branch Admin
+ * and BDE only; the backend narrows a Branch Admin's list to their own branch.
  *
  * Red with a count when anyone is past what they paid for, amber when it is only heads-ups.
  * The first load of a browser session also says so in a toast, since a bell is easy to miss.
