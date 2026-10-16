@@ -104,7 +104,13 @@ export const LoginPage = ({ onLogin }) => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-white" data-testid="screen1-login-page">
+    // 100dvh where the browser has it: on a phone 100vh is the height with the address bar
+    // hidden, so a page that tall puts its bottom edge — and the footer pinned to it —
+    // under the bar until the reader scrolls. Older browsers keep min-h-screen.
+    <div
+      className="relative min-h-screen overflow-hidden bg-white supports-[height:100dvh]:min-h-[100dvh]"
+      data-testid="screen1-login-page"
+    >
       <img
         src={BG_IMAGE}
         alt="Minimal background"
@@ -116,9 +122,8 @@ export const LoginPage = ({ onLogin }) => {
       {/* On phones the card is drawn at 90%. transform: scale rather than zoom — the card is
           w-full, and zoom leaves a percentage width alone, so only its contents would shrink.
           The card sits centred in a full-height flex box, so scaling about its centre keeps it there. */}
-      {/* pb-20 on phones keeps the card clear of the footer, which stacks centred under it
-          there and spreads to the two bottom corners from md up. */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-20 pt-8 md:px-8 md:py-10">
+      {/* pb-12 on phones keeps the card clear of the one-line footer under it. */}
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-12 pt-8 supports-[height:100dvh]:min-h-[100dvh] md:px-8 md:py-10">
         <Card
           className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
           data-testid="screen1-login-card"
@@ -261,9 +266,9 @@ export const LoginPage = ({ onLogin }) => {
         </Card>
       </div>
 
-      {/* Version in the bottom-left corner, legal links in the bottom-right. On phones the
-          two stack centred, links above the version. */}
-      <div className="absolute inset-x-0 bottom-5 z-10 flex flex-col-reverse items-center gap-1.5 px-4 md:bottom-6 md:flex-row md:justify-between md:px-8">
+      {/* Version in the bottom-left corner, legal links in the bottom-right — on phones
+          too, one line across the bottom. */}
+      <div className="absolute inset-x-0 bottom-5 z-10 flex items-center justify-between gap-3 px-5 md:bottom-6 md:px-8">
         {/* 8.4px is 70% of text-xs, asked for so the corners stay quiet beside the card. */}
         <span title={versionDetail} className="text-[8.4px] text-slate-400" data-testid="app-version">
           {versionLabel}
