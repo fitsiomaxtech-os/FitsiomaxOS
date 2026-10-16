@@ -26,8 +26,8 @@ const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN", { maximumFraction
 
 /**
  * The header's rupee bell: clients whose paid treatment sessions have been used up (or have
- * one left) while a Treatment Fee balance is still owing. Shown to Branch Admin, Accountant,
- * Physio and Super Admin; the backend narrows the list to each one's own clients.
+ * one left) while a Treatment Fee balance is still owing. Shown to Super Admin, Branch Admin,
+ * BDE and Accountant; the backend narrows a Branch Admin's list to their own branch.
  *
  * Red with a count when anyone is past what they paid for, amber when it is only heads-ups.
  * The first load of a browser session also says so in a toast, since a bell is easy to miss.
@@ -38,6 +38,9 @@ const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN", { maximumFraction
  */
 export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
   const [data, setData] = useState({ alerts: [], due: 0, last_paid: 0, extension_requests: 0 });
+  // "loading" until the first answer, "error" when the last fetch failed -- so a list that
+  // could not be fetched never reads as "nobody owes anything".
+  const [status, setStatus] = useState("loading");
   const [open, setOpen] = useState(false);
   const isPhone = useIsPhone();
   const asPage = mobilePage && isPhone;
@@ -48,6 +51,7 @@ export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
       .then((res) => {
         const next = res || { alerts: [], due: 0, last_paid: 0, extension_requests: 0 };
         setData(next);
+        setStatus("ok");
         if (announced.current) return;
         announced.current = true;
         let seen = false;
@@ -60,7 +64,7 @@ export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
           try { sessionStorage.setItem("session-payment-alerts-announced", "1"); } catch { /* ignore */ }
         }
       })
-      .catch(() => { /* no count; nothing to act on */ });
+      .catch(() => setStatus("error"));
   }, []);
 
   useEffect(() => {
@@ -101,7 +105,7 @@ export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
 
   const intro = (
     <>
-      <p className="text-[11px] text-slate-500">Clients whose paid sessions are used up, with a balance still owing. Their next session is on hold until paid or extended.</p>
+      <p className="text-[11px] text-slate-500">Clients who have used up, or are about to use up, their paid sessions with a balance still owing. Past the last paid session the next one is on hold until paid or extended.</p>
       {data.extension_requests > 0 && (
         <p className="mt-1 text-[11px] font-semibold text-violet-700" data-testid="session-payment-extension-count">
           {data.extension_requests} request{data.extension_requests === 1 ? "" : "s"} for more time waiting
@@ -140,7 +144,18 @@ export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
     </div>
   );
 
-  const empty = <p className="px-4 py-6 text-center text-xs text-slate-400">No balances due against completed sessions.</p>;
+  const empty = data.alerts.length > 0 ? null : status === "loading" ? (
+    <p className="px-4 py-6 text-center text-xs text-slate-400">Loading…</p>
+  ) : status === "error" ? (
+    <div className="px-4 py-6 text-center text-xs" data-testid="session-payment-error">
+      <p className="text-rose-600">Could not load session payments.</p>
+      <button type="button" onClick={() => { setStatus("loading"); load(); }} className="mt-2 rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-700 hover:bg-slate-50">
+        Retry
+      </button>
+    </div>
+  ) : (
+    <p className="px-4 py-6 text-center text-xs text-slate-400">No client has run out of paid sessions.</p>
+  );
 
   // On a phone, `mobilePage` hosts get the list as its own screen: a popover narrower than
   // the phone cannot hold a card a client, and the page lets every one of them be read.
