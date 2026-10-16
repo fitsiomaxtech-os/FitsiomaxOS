@@ -1099,17 +1099,15 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
     },
   ];
 
-  // What the list under the cards is, per card: what it is called, what it holds, and
-  // what it says when it holds nothing.
+  // What the list under the toggle is, per pile: what it holds, and what it says when it
+  // holds nothing.
   const LISTS = {
     request: {
-      title: "Expense requests not yet approved",
       hint: "Waiting and sent back, newest first — approved ones move to Expense Approved",
       rows: piles.request.rows,
       empty: "No open requests.",
     },
     expense_approved: {
-      title: "Expenses approved by the accountant",
       hint: "Each one as it was raised, approved and paid",
       rows: piles.approved.rows,
       empty: "Nothing approved yet.",
@@ -1194,9 +1192,12 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
     <div className={activeView === "cash" ? "space-y-3" : "space-y-4"} data-testid="branch-expenses-panel">
       {/* The piles, as one toggle -- the Income Approval / Expenses Approval switch on
           Finance > Approvals -- rather than a row of cards: the figure is the Expenses
-          card's already, and a pressed segment says which rows are open underneath. */}
+          card's already, and a pressed segment says which rows are open underneath.
+          Add Expense at the far end of the same bar, on every expense pile rather than
+          only the requests: wanting to log spending does not depend on which pile
+          happened to be open. No title over the list -- the pressed segment names it. */}
       {section !== "cash" && (
-        <div className="flex">
+        <div className="flex flex-wrap items-center gap-2">
           <div
             className="flex items-center gap-0.5 rounded-[2px] border border-slate-200 bg-slate-50 p-0.5"
             data-testid="branch-expense-summary-cards"
@@ -1213,6 +1214,15 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
               />
             ))}
           </div>
+          {activeView !== "cash" && (
+            <Button
+              className="ml-auto bg-sky-600 text-white hover:bg-sky-700"
+              onClick={() => setAdding(true)}
+              data-testid="branch-expense-add"
+            >
+              <Plus className="mr-1 h-4 w-4" /> Add Expense
+            </Button>
+          )}
         </div>
       )}
 
@@ -1265,21 +1275,6 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
         )
       ) : (
         <>
-          {/* What is being read, and the one thing there is to do to it. Add Expense sits
-              on every expense pile rather than only the requests: wanting to log spending
-              does not depend on which pile happened to be open when you thought of it. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-700" data-testid="branch-expense-list-title">{list.title}</p>
-            </div>
-            <Button
-              className="ml-auto bg-sky-600 text-white hover:bg-sky-700"
-              onClick={() => setAdding(true)}
-              data-testid="branch-expense-add"
-            >
-              <Plus className="mr-1 h-4 w-4" /> Add Expense
-            </Button>
-          </div>
           <ExpenseList
             rows={list.rows}
             loading={loading}
