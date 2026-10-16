@@ -140,23 +140,20 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
           a panel centred on the viewport itself is taller than a phone screen here, and
           clips its own Save button off the bottom with no way to reach it. */}
       <div className="flex min-h-full items-center justify-center">
-      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
-          <div className="flex items-start gap-3 sm:gap-4">
-            <div className="hidden rounded-xl bg-indigo-50 p-3 sm:block">
-              <Landmark className="h-6 w-6 text-indigo-600" />
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="flex items-center gap-3">
+            <div className="hidden rounded-lg bg-indigo-50 p-2 sm:block">
+              <Landmark className="h-5 w-5 text-indigo-600" />
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Bank Details</h3>
-              <p className="text-xs text-slate-500 sm:text-sm">Please enter your bank account details and QR code for payment.</p>
-            </div>
+            <h3 className="text-lg font-bold text-slate-900">Bank Details</h3>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="finance-bank-dialog-close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="grid gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5 md:grid-cols-2">
+        <div className="grid gap-3 px-4 py-4 sm:gap-4 sm:px-5 md:grid-cols-2">
           {/* Which branch collects into it. A branch can bank with more than one, and the
               same bank turns up at several branches, so this is what tells two otherwise
               identical cards apart. Shown even with a branch already picked above the
@@ -167,7 +164,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
             <select
               value={form.branch_id || ""}
               onChange={(e) => setForm((f) => ({ ...f, branch_id: e.target.value }))}
-              className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
               data-testid="finance-bank-branch"
             >
               <option value="">All Branches (group account)</option>
@@ -184,7 +181,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
                 setOtherBank(false);
                 setForm((f) => ({ ...f, bank_name: e.target.value }));
               }}
-              className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
               data-testid="finance-bank-name"
             >
               <option value="">Select your bank name</option>
@@ -217,7 +214,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
             <Input placeholder="Enter branch name" value={form.bank_branch_name} onChange={set("bank_branch_name")} data-testid="finance-bank-branch-name" />
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-4">
             <div>
               <FieldLabel icon={Banknote}>UPI ID</FieldLabel>
               <Input placeholder="Enter UPI ID" value={form.upi_id} onChange={set("upi_id")} data-testid="finance-bank-upi-id" />
@@ -233,12 +230,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
                 form.is_active ? "border-slate-200 bg-slate-50" : "border-rose-200 bg-rose-50"
               }`}
             >
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Status</p>
-                <p className={`text-xs ${form.is_active ? "text-slate-500" : "text-rose-600"}`}>
-                  {form.is_active ? "Active — this account is collecting." : "Inactive — not offered for payment."}
-                </p>
-              </div>
+              <p className="text-sm font-semibold text-slate-800">Status</p>
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-bold ${form.is_active ? "text-emerald-600" : "text-rose-600"}`}>
                   {form.is_active ? "ON" : "OFF"}
@@ -258,12 +250,12 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
 
           <div>
             <FieldLabel icon={QrCode}>QR Image</FieldLabel>
-            <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 text-center">
-              <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-lg bg-white p-2">
+            <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-3 text-center">
+              <div className="mx-auto flex h-32 w-32 items-center justify-center rounded-lg bg-white p-2">
                 {form.qr_image_url ? (
                   <img src={form.qr_image_url} alt="Payment QR" className="h-full w-full object-contain" data-testid="finance-bank-qr-preview" />
                 ) : (
-                  <QrCode className="h-16 w-16 text-slate-200" />
+                  <QrCode className="h-12 w-12 text-slate-200" />
                 )}
               </div>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={pickQr} data-testid="finance-bank-qr-input" />
@@ -272,7 +264,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={uploading}
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-200 disabled:opacity-60"
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-200 disabled:opacity-60"
                   data-testid="finance-bank-qr-upload"
                 >
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -285,7 +277,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, qr_image_url: "" }))}
                     disabled={uploading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
                     title="Remove QR image"
                     data-testid="finance-bank-qr-remove"
                   >
@@ -294,16 +286,15 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
                   </button>
                 )}
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">Supported formats: JPG, PNG<br />(Max size: 5MB)</p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-4 py-4 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:px-5">
           <button
             type="button"
             onClick={onClose}
-            className="h-11 rounded-lg border border-slate-200 px-6 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="h-10 rounded-lg border border-slate-200 px-6 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             data-testid="finance-bank-cancel"
           >
             Cancel
@@ -312,7 +303,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
             type="button"
             onClick={save}
             disabled={saving}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-8 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-8 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
             data-testid="finance-bank-save"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
