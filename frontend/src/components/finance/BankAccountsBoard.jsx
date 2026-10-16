@@ -267,16 +267,33 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
                 )}
               </div>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={pickQr} data-testid="finance-bank-qr-input" />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-200 disabled:opacity-60"
-                data-testid="finance-bank-qr-upload"
-              >
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {form.qr_image_url ? "Replace QR Image" : "Upload QR Image"}
-              </button>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-200 disabled:opacity-60"
+                  data-testid="finance-bank-qr-upload"
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {form.qr_image_url ? "Replace QR Image" : "Upload QR Image"}
+                </button>
+                {/* Clears the QR off the form only; the card loses it when Save is pressed,
+                    so a slip here is undone by Cancel. */}
+                {form.qr_image_url && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, qr_image_url: "" }))}
+                    disabled={uploading}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+                    title="Remove QR image"
+                    data-testid="finance-bank-qr-remove"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove
+                  </button>
+                )}
+              </div>
               <p className="mt-2 text-[11px] text-slate-500">Supported formats: JPG, PNG<br />(Max size: 5MB)</p>
             </div>
           </div>
