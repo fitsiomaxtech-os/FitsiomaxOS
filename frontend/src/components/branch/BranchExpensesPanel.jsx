@@ -103,20 +103,20 @@ const todayIso = () => {
 const StatusChip = ({ row }) => {
   if (row.rejected) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-none border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+      <span className="inline-flex items-center gap-1 rounded-none border border-rose-600 bg-transparent px-2 py-0.5 text-[10px] font-bold text-rose-700">
         <XCircle className="h-3 w-3" /> Rejected
       </span>
     );
   }
   if (row.approved) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-none border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+      <span className="inline-flex items-center gap-1 rounded-none border border-emerald-600 bg-transparent px-2 py-0.5 text-[10px] font-bold text-emerald-700">
         <CheckCircle2 className="h-3 w-3" /> Approved
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-none border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+    <span className="inline-flex items-center gap-1 rounded-none border border-amber-600 bg-transparent px-2 py-0.5 text-[10px] font-bold text-amber-700">
       <Clock className="h-3 w-3" /> Waiting on the accountant
     </span>
   );
