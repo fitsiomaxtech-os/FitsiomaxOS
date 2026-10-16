@@ -669,19 +669,24 @@ const CashReturnDialog = ({ onClose, onSaved, branchId, branches }) => {
 /**
  * One pile this panel opens on, as a segment of the same toggle Finance > Approvals
  * switches its Income Approval and Expenses Approval ledgers with: sky when it is the
- * one being read, the red count of what is still waiting in its corner. The figure rides
- * in the tooltip -- the Expenses card above already carries the open total.
+ * one being read, the red count of what is still waiting in its corner, and the pile's
+ * total in a chip beside its name.
  */
 const PileTab = ({ label, amount, count, active, onClick, testid }) => (
   <button
     type="button"
     onClick={onClick}
     aria-pressed={active}
-    title={amount}
-    className={`relative whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${active ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"}`}
+    className={`relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${active ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"}`}
     data-testid={testid}
   >
     {label}
+    <span
+      className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${active ? "bg-white/25 text-white" : "bg-slate-200/70 text-slate-600"}`}
+      data-testid={`${testid}-amount`}
+    >
+      {amount}
+    </span>
     <PendingBadge count={count} testId={`${testid}-badge`} />
   </button>
 );
@@ -1191,8 +1196,8 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
   return (
     <div className={activeView === "cash" ? "space-y-3" : "space-y-4"} data-testid="branch-expenses-panel">
       {/* The piles, as one toggle -- the Income Approval / Expenses Approval switch on
-          Finance > Approvals -- rather than a row of cards: the figure is the Expenses
-          card's already, and a pressed segment says which rows are open underneath.
+          Finance > Approvals -- rather than a row of cards, each pile's total in a chip
+          on its segment, and a pressed segment says which rows are open underneath.
           Add Expense at the far end of the same bar, on every expense pile rather than
           only the requests: wanting to log spending does not depend on which pile
           happened to be open. No title over the list -- the pressed segment names it. */}
