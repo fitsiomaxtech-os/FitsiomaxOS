@@ -1,6 +1,24 @@
 // craco.config.js
 const path = require("path");
+const { execSync } = require("child_process");
 require("dotenv").config();
+
+// The build the login page's version label names, read from git when the app is built or
+// the dev server starts — the deploy pulls and restarts on every push, so this is the code
+// that is actually live. Total commits make the build number: it only ever goes up, and
+// one number identifies exactly one state of the code. Any git failure (no .git, git not
+// installed, a repo owned by another user) leaves these blank and the label falls back
+// to the plain version rather than stopping the app from starting.
+const git = (args) => {
+  try {
+    return execSync(`git ${args}`, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return "";
+  }
+};
+process.env.REACT_APP_BUILD_NUMBER = process.env.REACT_APP_BUILD_NUMBER || git("rev-list --count HEAD");
+process.env.REACT_APP_BUILD_COMMIT = process.env.REACT_APP_BUILD_COMMIT || git("rev-parse --short=8 HEAD");
+process.env.REACT_APP_BUILD_DATE = process.env.REACT_APP_BUILD_DATE || git("log -1 --format=%cs");
 
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build

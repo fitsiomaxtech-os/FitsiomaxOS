@@ -8,6 +8,7 @@ import { apiLogin, apiResendLogin2fa, apiVerifyLogin2fa } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 import { ForgotPasswordModal } from "@/components/ForgotPasswordModal";
 import { LegalLinks } from "@/components/LegalLinks";
+import { versionDetail, versionLabel } from "@/lib/version";
 // The same six-digit box the Security tab uses to switch two-factor on, so the field
 // somebody meets at sign-in is the one they already used to set it up.
 import { CODE_LENGTH, CodeInput } from "@/components/ui/code-input";
@@ -115,9 +116,9 @@ export const LoginPage = ({ onLogin }) => {
       {/* On phones the card is drawn at 90%. transform: scale rather than zoom — the card is
           w-full, and zoom leaves a percentage width alone, so only its contents would shrink.
           The card sits centred in a full-height flex box, so scaling about its centre keeps it there. */}
-      {/* pb-16 on phones keeps the card clear of the footer links, which sit centred under
-          it there and in the bottom-right corner from md up. */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-16 pt-8 md:px-8 md:py-10">
+      {/* pb-20 on phones keeps the card clear of the footer, which stacks centred under it
+          there and spreads to the two bottom corners from md up. */}
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-20 pt-8 md:px-8 md:py-10">
         <Card
           className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
           data-testid="screen1-login-card"
@@ -260,7 +261,14 @@ export const LoginPage = ({ onLogin }) => {
         </Card>
       </div>
 
-      <LegalLinks className="absolute inset-x-0 bottom-5 z-10 justify-center md:inset-x-auto md:bottom-6 md:right-8" />
+      {/* Version in the bottom-left corner, legal links in the bottom-right. On phones the
+          two stack centred, links above the version. */}
+      <div className="absolute inset-x-0 bottom-5 z-10 flex flex-col-reverse items-center gap-1.5 px-4 md:bottom-6 md:flex-row md:justify-between md:px-8">
+        <span title={versionDetail} className="text-xs text-slate-400" data-testid="app-version">
+          {versionLabel}
+        </span>
+        <LegalLinks />
+      </div>
 
       <ForgotPasswordModal open={forgotOpen} onOpenChange={setForgotOpen} />
     </div>
