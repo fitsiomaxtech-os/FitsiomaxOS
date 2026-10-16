@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/sonner";
 import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { rangeFor, todayIso } from "@/lib/dateRange";
 import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
@@ -149,6 +150,9 @@ const PAYMENT_MODES = [
   ["account_transfer", "Bank Transfer"],
   ["cheque", "Cheque"],
 ];
+
+// The branch dropdown's value for All Branches (branchId ""): Radix refuses "" as an item.
+const ALL_BRANCHES = "__all_branches__";
 
 // Online vs offline verticals, for the desks that want to read one side of the business
 // at a time -- the Accountant's own Summary tab asks for it. It lives in here rather than
@@ -971,17 +975,17 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
-            <label htmlFor="accountant-manage-branch" className="text-xs font-medium text-slate-600">Branch:</label>
-            <select
-              id="accountant-manage-branch"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-xs text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:flex-none min-[1900px]:text-sm"
-              data-testid="accountant-manage-branch-select"
-            >
-              <option value="">All Branches</option>
-              {branches.map((br) => <option key={br.id} value={br.id}>{br.branch_name}</option>)}
-            </select>
+            <span className="text-xs font-medium text-slate-600">Branch:</span>
+            {/* The app's own list, not the OS's blue one. All Branches rides under ALL_BRANCHES
+                rather than "", which ThemedSelect would grey out as a cleared field. */}
+            <ThemedSelect
+              value={branchId || ALL_BRANCHES}
+              onChange={(v) => setBranchId(v === ALL_BRANCHES ? "" : v)}
+              options={[{ value: ALL_BRANCHES, label: "All Branches" }, ...branches.map((br) => ({ value: String(br.id), label: br.branch_name }))]}
+              title="Branch"
+              className="h-10 min-w-0 flex-1 px-2.5 text-xs font-semibold sm:w-44 sm:flex-none min-[1900px]:text-sm"
+              testid="accountant-manage-branch-select"
+            />
           </div>
         )}
         {/* gap-2, not gap-1: a badge stands 6px out past its tab's right edge, and any
