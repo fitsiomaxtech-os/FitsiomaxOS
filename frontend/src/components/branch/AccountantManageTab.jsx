@@ -73,12 +73,12 @@ const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month", "
 // Every tab a bordered button, the picked one filled solid in its own colour.
 const mainTabClasses = (tab, active) => {
   if (tab.tone === "discount") {
-    return active ? "border-amber-600 bg-amber-600 text-white shadow-sm" : "border-amber-200 bg-amber-50/40 text-amber-700 hover:border-amber-300 hover:bg-amber-50";
+    return active ? "bg-amber-600 text-white shadow-sm" : "bg-amber-50 text-amber-700 hover:bg-amber-100";
   }
   if (tab.tone === "closing") {
-    return active ? "border-emerald-600 bg-emerald-600 text-white shadow-sm" : "border-emerald-200 bg-emerald-50/40 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50";
+    return active ? "bg-emerald-600 text-white shadow-sm" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100";
   }
-  return active ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-sky-50/40 text-slate-600 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700";
+  return active ? "bg-sky-600 text-white shadow-sm" : "bg-sky-50/60 text-slate-600 hover:bg-sky-50 hover:text-sky-700";
 };
 
 /**
@@ -972,7 +972,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           scrolling, and the bar stays flush with the board's edges instead of leaving the
           gap a scaled-down full-width row would. Not on a phone, where the bar is laid out
           to fit and 90% of 12px type was only harder to read. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
             <span className="text-xs font-medium text-slate-600">Branch:</span>
@@ -983,7 +983,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               onChange={(v) => setBranchId(v === ALL_BRANCHES ? "" : v)}
               options={[{ value: ALL_BRANCHES, label: "All Branches" }, ...branches.map((br) => ({ value: String(br.id), label: br.branch_name }))]}
               title="Branch"
-              className="h-10 min-w-0 flex-1 px-2.5 text-xs font-semibold sm:w-44 sm:flex-none min-[1900px]:text-sm"
+              className="h-10 min-w-0 flex-1 border-0 px-2.5 text-xs font-semibold sm:w-44 sm:flex-none min-[1900px]:text-sm"
               testid="accountant-manage-branch-select"
             />
           </div>
@@ -1005,7 +1005,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                 onClick={() => setTab(t.key)}
                 title={badge?.title}
                 aria-label={badge ? `${t.label} (${badge.title})` : undefined}
-                className={`relative h-11 min-w-0 grow basis-[30%] rounded-lg border px-1.5 text-center text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:h-10 sm:shrink-0 sm:grow-0 sm:basis-auto sm:whitespace-nowrap sm:px-2.5 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
+                className={`relative h-11 min-w-0 grow basis-[30%] rounded-lg border-0 px-1.5 text-center text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:h-10 sm:shrink-0 sm:grow-0 sm:basis-auto sm:whitespace-nowrap sm:px-2.5 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
                 data-testid={`accountant-manage-maintab-${t.key}`}
               >
                 {t.label}
@@ -1027,8 +1027,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                     key={key}
                     type="button"
                     onClick={() => setVerticalMode(key)}
-                    className={`h-10 shrink-0 whitespace-nowrap rounded-md border px-3 text-xs font-medium transition min-[1900px]:text-sm ${
-                      verticalMode === key ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+                    className={`h-10 shrink-0 whitespace-nowrap rounded-md border-0 px-3 text-xs font-medium transition min-[1900px]:text-sm ${
+                      verticalMode === key ? "bg-sky-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-50 hover:text-sky-600"
                     }`}
                     data-testid={`accountant-manage-vertical-mode-${key}`}
                   >
@@ -1059,8 +1059,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                   key={key}
                   type="button"
                   onClick={() => setPaymentModeFilter(key)}
-                  className={`h-10 shrink-0 whitespace-nowrap rounded-md border px-3 text-xs font-medium transition min-[1900px]:text-sm ${
-                    paymentModeFilter === key ? "border-indigo-600 bg-indigo-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
+                  className={`h-10 shrink-0 whitespace-nowrap rounded-md border-0 px-3 text-xs font-medium transition min-[1900px]:text-sm ${
+                    paymentModeFilter === key ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
                   }`}
                   data-testid={`accountant-manage-payment-mode-${key}`}
                 >

@@ -248,7 +248,7 @@ export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => 
 
       {/* Which page of it. No heading over this row: "Finance" above a row that already
           names its pages costs a band of screen to say where you are. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid={`${testId}-tabs`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-1" data-testid={`${testId}-tabs`}>
         <div className="flex min-w-0 flex-1 flex-wrap gap-1 sm:gap-2">
           {visibleTabs.map((t) => {
             const Icon = t.icon;

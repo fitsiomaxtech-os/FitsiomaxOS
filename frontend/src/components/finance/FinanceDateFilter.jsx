@@ -263,7 +263,8 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
  * `inline` is the toolbar button on a diet, for Summary, where the row shares its line with
  * five tab buttons and the two together have to fit without wrapping. It gives back its
  * padding and a point of type, which is roughly a quarter of the row's width, and takes both
- * back on a desk genuinely wide enough for them. It never scrolls itself: the toolbar it
+ * back on a desk genuinely wide enough for them. Borderless while idle, like the rest of
+ * the Summary bar it sits in. It never scrolls itself: the toolbar it
  * sits in is the one scroll container, and a scrolling row inside a scrolling row is a trap
  * to get a mouse out of.
  *
@@ -286,7 +287,7 @@ const VARIANTS = {
     scrolls: false,
     btn: "h-10 shrink-0 whitespace-nowrap rounded-md px-2 text-xs font-medium transition min-[1900px]:px-3 min-[1900px]:text-sm",
     on: "bg-sky-600 text-white",
-    off: "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+    off: "bg-white text-slate-600 hover:bg-slate-50",
   },
   pill: {
     gap: "gap-1.5",
