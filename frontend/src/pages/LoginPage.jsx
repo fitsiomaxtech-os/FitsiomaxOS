@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiLogin, apiResendLogin2fa, apiVerifyLogin2fa } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 import { ForgotPasswordModal } from "@/components/ForgotPasswordModal";
+import { LegalLinks } from "@/components/LegalLinks";
 // The same six-digit box the Security tab uses to switch two-factor on, so the field
 // somebody meets at sign-in is the one they already used to set it up.
 import { CODE_LENGTH, CodeInput } from "@/components/ui/code-input";
@@ -114,7 +115,9 @@ export const LoginPage = ({ onLogin }) => {
       {/* On phones the card is drawn at 90%. transform: scale rather than zoom — the card is
           w-full, and zoom leaves a percentage width alone, so only its contents would shrink.
           The card sits centred in a full-height flex box, so scaling about its centre keeps it there. */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-8 md:px-8 md:py-10">
+      {/* pb-16 on phones keeps the card clear of the footer links, which sit centred under
+          it there and in the bottom-right corner from md up. */}
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-16 pt-8 md:px-8 md:py-10">
         <Card
           className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
           data-testid="screen1-login-card"
@@ -256,6 +259,8 @@ export const LoginPage = ({ onLogin }) => {
           </CardContent>
         </Card>
       </div>
+
+      <LegalLinks className="absolute inset-x-0 bottom-5 z-10 justify-center md:inset-x-auto md:bottom-6 md:right-8" />
 
       <ForgotPasswordModal open={forgotOpen} onOpenChange={setForgotOpen} />
     </div>

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { ZoomableImage, ZoomablePdf } from "@/components/ui/zoomable-view";
+import { LegalLinks } from "@/components/LegalLinks";
 import { slotTo12h } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
 import {
@@ -135,7 +136,7 @@ function PortalLogin({ onLogin }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8" data-testid="patient-portal-login">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-slate-50 px-4 py-8" data-testid="patient-portal-login">
       <Card className="w-full max-w-sm rounded-xl border border-slate-200 shadow-[0_8px_30px_rgb(2,6,23,0.06)]">
         <CardHeader className="space-y-2 pb-2 text-center">
           <img src={LOGO_URL} alt="Fitsiomax" className="mx-auto h-12 w-12 rounded-lg object-contain" />
@@ -205,6 +206,7 @@ function PortalLogin({ onLogin }) {
           )}
         </CardContent>
       </Card>
+      <LegalLinks from="/portal" />
     </div>
   );
 }

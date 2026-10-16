@@ -26,6 +26,7 @@ const CreateSuperAdminPublicPage = lazy(() => import("@/pages/CreateSuperAdminPu
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
 const PatientPortalPage = lazy(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })));
 const TestimonialsPage = lazy(() => import("@/pages/TestimonialsPage").then((m) => ({ default: m.TestimonialsPage })));
+const LegalPage = lazy(() => import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage })));
 
 /**
  * What a route shows while its chunk is on the wire.
@@ -121,6 +122,10 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/portal" element={<PatientPortalPage />} />
           <Route path="/testimonials" element={<TestimonialsPage />} />
+          {/* Public whether signed in or not: Google sign-in and Meta lead forms both need a
+              link anybody can open. */}
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="*" element={<Navigate to={isAuthenticated ? "/app" : "/"} replace />} />
         </Routes>
       </Suspense>
