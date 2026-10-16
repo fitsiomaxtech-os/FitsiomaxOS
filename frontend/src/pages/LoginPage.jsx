@@ -264,10 +264,11 @@ export const LoginPage = ({ onLogin }) => {
       {/* Version in the bottom-left corner, legal links in the bottom-right. On phones the
           two stack centred, links above the version. */}
       <div className="absolute inset-x-0 bottom-5 z-10 flex flex-col-reverse items-center gap-1.5 px-4 md:bottom-6 md:flex-row md:justify-between md:px-8">
-        <span title={versionDetail} className="text-xs text-slate-400" data-testid="app-version">
+        {/* 8.4px is 70% of text-xs, asked for so the corners stay quiet beside the card. */}
+        <span title={versionDetail} className="text-[8.4px] text-slate-400" data-testid="app-version">
           {versionLabel}
         </span>
-        <LegalLinks />
+        <LegalLinks textClass="gap-2 text-[8.4px]" />
       </div>
 
       <ForgotPasswordModal open={forgotOpen} onOpenChange={setForgotOpen} />
