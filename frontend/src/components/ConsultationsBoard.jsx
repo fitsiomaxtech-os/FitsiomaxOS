@@ -39,7 +39,7 @@ import { displayPhone, telNumber, waNumber } from "@/lib/phone";
 import { pdfJob, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/printable";
 import { loadSession } from "@/lib/session";
-import { endTime12h, slotRange12h, to12h } from "@/lib/time";
+import { dateStampFull, endTime12h, slotRange12h, to12h } from "@/lib/time";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { PortalLoginCreatedDialog } from "@/components/branch/PortalLoginCreatedDialog";
@@ -2553,7 +2553,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, compactTable = false, branchColumn = false, consultantBranchColumn = false }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, compactTable = false, branchColumn = false, consultantBranchColumn = false, exportRef }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -3654,6 +3654,92 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   useEffect(() => {
     if (onRowsChange) onRowsChange(preStageFiltered);
   }, [preStageFiltered, onRowsChange]);
+
+  // The list as the table is showing it, for a parent's Download button (Branch Admin's
+  // Consultation tab). The same rows in the same order, and the same columns the stage
+  // draws -- Consultant Phone and Branch where the table has them, the stage's own fee
+  // where it has one, Fee Collected's fee, discount and total -- with the Plan that the
+  // table keeps on hover written out, since a file has no hover. A ref rather than a prop
+  // callback: nothing is built until somebody asks for the file.
+  //
+  // Any stage can be asked for, not just the open one: the every-stage workbook takes a
+  // sheet per pill. Each is cut the way its own pill would cut it -- the same date range,
+  // search and marks, then that stage, then (on Fee Collected) the fee tab and the
+  // dropdown as they stand -- and ordered as the table orders.
+  const buildExport = useCallback((askedStage) => {
+    const stage = askedStage === undefined ? stageFilter : askedStage;
+    const isFeeStage = stage === "Fee Collected";
+    const withContact = consultantBranchColumn && !branchColumn && !rowArrow && !isFeeStage
+      && stage !== "Consultation Booked" && stage !== "Consultation Visit";
+    const withStageFee = !isFeeStage && !isConsultant && stage !== "Consultation Booked" && stage !== "Cancel";
+    const stageFee = STAGE_ROW_FEE[stage] || "consultation";
+    const stageFeeSpec = ROW_FEES[stageFee];
+    let list;
+    if (askedStage === undefined) {
+      list = filtered;
+    } else {
+      const inIt = stage ? preStageFiltered.filter((l) => matchesStage(l, stage)) : preStageFiltered;
+      const cut = isFeeStage ? inIt.filter((l) => activeFee.scope(l) && activeStatus.match(activeFee.paid(l))) : inIt;
+      // The table's own order -- see `filtered`.
+      const at = (l) => `${l.appointment_date}T${l.appointment_time || "99:99"}`;
+      const dir = externalSortOrder === "newest" ? -1 : 1;
+      list = [...cut].sort((a, b) => {
+        if (!a.appointment_date) return b.appointment_date ? 1 : 0;
+        if (!b.appointment_date) return -1;
+        return at(a).localeCompare(at(b)) * dir;
+      });
+    }
+    const feeText = (st) => (st.kind === "paid" ? `Paid${st.mode ? ` (${String(st.mode).toUpperCase()})` : ""}`
+      : st.kind === "balance" ? `Balance Rs.${Math.round(st.balance).toLocaleString("en-IN")}`
+      : st.kind === "due" ? "Not collected"
+      : "");
+    const columns = [
+      { header: "S.No", xlsx: 7, align: "right", muted: true, get: (l, i) => i + 1 },
+      { header: "Patient No.", xlsx: 17, get: (l) => l.patient_number || "" },
+      { header: "Patient Name", wrap: true, xlsx: 26, get: (l) => l.name || "" },
+      { header: "Phone", xlsx: 15, get: (l) => displayPhone(l.phone) || "" },
+      { header: "Appointment Date", xlsx: 15, get: (l) => (l.appointment_date ? dateStampFull(l.appointment_date) : "") },
+      { header: "Time", xlsx: 10, get: (l) => (l.appointment_time ? to12h(l.appointment_time) : "") },
+      { header: "Consultant", wrap: true, xlsx: 22, get: (l) => l.assigned_physio_name || "" },
+      ...(withContact ? [
+        { header: "Consultant Phone", xlsx: 16, get: (l) => displayPhone(consultantPhones[l.assigned_physio_id]) || "" },
+        { header: "Consultant Branch", wrap: true, xlsx: 20, get: (l) => branchNames[consultantBranches[l.assigned_physio_id]] || "" },
+      ] : []),
+      { header: "Stage", wrap: true, xlsx: 20, get: (l) => rowStageName(l) || "" },
+      { header: "Plan", wrap: true, xlsx: 30, get: (l) => leadPlanParts(l).join(", ") },
+      ...(isFeeStage ? [
+        { header: `${activeFee.label} Fee`, xlsx: 16, align: "right", money: true, get: (l) => (activeFee.paid(l) > 0 ? activeFee.paid(l) : "Not collected") },
+        { header: "Mode", xlsx: 10, get: (l) => (activeFee.paid(l) > 0 ? String(activeFee.mode(l) || "").toUpperCase() : "") },
+        { header: "Discount", xlsx: 14, get: (l) => { const d = consultationDiscount(l); return d ? `Rs.${d.off.toLocaleString("en-IN")} (${d.pct.toFixed(0)}%)` : ""; } },
+        { header: "Total", xlsx: 12, align: "right", money: true, get: (l) => totalPaid(l) },
+      ] : []),
+      ...(withStageFee ? [
+        {
+          header: stageFeeSpec.label,
+          xlsx: 20,
+          get: (l) => {
+            const fee = feeStateOf(l, stageFee);
+            // Same reading as the row's button: a cancelled patient owes nothing more.
+            return feeText(l[stageField] === "Cancel" && fee.kind !== "paid" ? { kind: "none" } : fee);
+          },
+        },
+      ] : []),
+    ];
+    return {
+      branch: branchNames[branchId] || "",
+      stage: stage || "All Stages",
+      feeView: isFeeStage ? `${activeFee.label} · ${activeStatus.label}` : "",
+      columns: columns.map(({ get, ...c }) => c),
+      rows: list.map((l, i) => columns.map((c) => c.get(l, i))),
+    };
+  }, [filtered, preStageFiltered, matchesStage, externalSortOrder, consultantBranchColumn, branchColumn, rowArrow, isConsultant,
+    activeFee, activeStatus, consultantPhones, consultantBranches, branchNames, branchId, stageFilter, stageField, rowStageName]);
+
+  useEffect(() => {
+    if (!exportRef) return undefined;
+    exportRef.current = buildExport;
+    return () => { if (exportRef.current === buildExport) exportRef.current = null; };
+  }, [exportRef, buildExport]);
 
   // Asked for immediately, and ahead of the catalogues below. Every summary card over this
   // board is counted per stage, so a board holding its rows and not yet its stage list has

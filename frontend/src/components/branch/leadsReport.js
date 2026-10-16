@@ -146,8 +146,8 @@ const drawLetterhead = (pdf, r, logo) => {
   const right = PAGE_W - M;
   font(pdf, "bold", 14);
   ink(pdf, C.accent);
-  pdf.text("LEADS REPORT", right, top + 6.5, { align: "right" });
-  const meta = [["Period", r.period], ["Source", r.source], ["Showing", r.showing]];
+  pdf.text(r.title || "LEADS REPORT", right, top + 6.5, { align: "right" });
+  const meta = r.meta || [["Period", r.period], ["Source", r.source], ["Showing", r.showing]];
   meta.forEach(([k, v], i) => {
     const y = top + 12 + i * 4.6;
     font(pdf, "bold", 8.5);
@@ -172,10 +172,11 @@ const drawStrip = (pdf, r) => {
   pdf.rect(0, 0, PAGE_W, 2, "F");
   font(pdf, "bold", 9.5);
   ink(pdf, C.accent);
-  pdf.text("LEADS REPORT", M, 10, { charSpace: 0.4 });
+  pdf.text(r.title || "LEADS REPORT", M, 10, { charSpace: 0.4 });
   font(pdf, "normal", 8);
   ink(pdf, C.muted);
-  pdf.text(fit(pdf, [r.branch, r.period, r.source].filter(Boolean).join("  ·  "), 200), PAGE_W - M, 10, { align: "right" });
+  const strip = r.strip || [r.branch, r.period, r.source];
+  pdf.text(fit(pdf, strip.filter(Boolean).join("  ·  "), 200), PAGE_W - M, 10, { align: "right" });
   stroke(pdf, C.rule);
   pdf.setLineWidth(0.3);
   pdf.line(M, 13.5, PAGE_W - M, 13.5);
@@ -208,7 +209,9 @@ const drawTiles = (pdf, summary, y) => {
 
 /**
  * A table that runs onto as many pages as it needs, its header repeated on each.
- * cols: [{ header, width, align }]; rows: arrays of cell text; total: an optional last row.
+ * cols: [{ header, width, align, wrap }]; rows: arrays of cell text; total: an optional last row.
+ * A `wrap` column runs a long value onto a second line (and a third at most) instead of
+ * cutting it, and its row grows to hold it; every other column stays one line.
  * Returns the y it finished at.
  */
 const drawTable = (pdf, { cols, rows, total, y, rowH = 6.4, size = 8, onNewPage }) => {
@@ -240,44 +243,61 @@ const drawTable = (pdf, { cols, rows, total, y, rowH = 6.4, size = 8, onNewPage 
     return top + headH;
   };
 
+  const lineGap = size * 0.3528 * 1.25;
+  // Each cell's lines, and the height the row needs to hold the tallest of them.
+  const layoutRow = (cells, bold) => {
+    font(pdf, bold ? "bold" : "normal", size);
+    const lines = cols.map((c, i) => {
+      const raw = cells[i] === null || cells[i] === undefined || cells[i] === "" ? "-" : cells[i];
+      if (!c.wrap) return [fit(pdf, raw, c.width - pad * 2)];
+      const all = pdf.splitTextToSize(pdfSafe(raw), c.width - pad * 2);
+      return all.length <= 3 ? all : [...all.slice(0, 2), fit(pdf, all.slice(2).join(" "), c.width - pad * 2)];
+    });
+    const most = Math.max(...lines.map((l) => l.length));
+    return { lines, h: Math.max(rowH, rowH + (most - 1) * lineGap) };
+  };
+
   const drawRow = (cells, top, { zebra, bold, totalRow }) => {
+    const { lines, h } = layoutRow(cells, bold);
     if (totalRow) {
       fill(pdf, C.shade);
-      pdf.rect(M, top, CONTENT_W, rowH, "F");
+      pdf.rect(M, top, CONTENT_W, h, "F");
       stroke(pdf, C.ink);
       pdf.setLineWidth(0.5);
       pdf.line(M, top, M + CONTENT_W, top);
     } else if (zebra) {
       fill(pdf, C.zebra);
-      pdf.rect(M, top, CONTENT_W, rowH, "F");
+      pdf.rect(M, top, CONTENT_W, h, "F");
     }
     font(pdf, bold ? "bold" : "normal", size);
-    // Baseline at the optical middle of the row: half the row, plus a third of the cap
-    // height, which is where Helvetica's x-height centres.
-    const baseY = top + rowH / 2 + size * 0.3528 * 0.35;
     let x = M;
     cols.forEach((c, i) => {
       ink(pdf, c.muted && !totalRow ? C.faint : C.ink);
-      const text = fit(pdf, cells[i] === null || cells[i] === undefined || cells[i] === "" ? "-" : cells[i], c.width - pad * 2);
+      // Baseline at the optical middle of the row: half the row, plus a third of the cap
+      // height, which is where Helvetica's x-height centres. A cell of several lines
+      // centres the block the same way, so a one-line neighbour sits level with its middle.
+      const baseY = top + h / 2 - ((lines[i].length - 1) * lineGap) / 2 + size * 0.3528 * 0.35;
       const tx = c.align === "right" ? x + c.width - pad : x + pad;
-      pdf.text(text, tx, baseY, { align: c.align === "right" ? "right" : "left" });
+      lines[i].forEach((line, li) => {
+        pdf.text(line, tx, baseY + li * lineGap, { align: c.align === "right" ? "right" : "left" });
+      });
       x += c.width;
     });
     if (!totalRow) {
       stroke(pdf, C.rule);
       pdf.setLineWidth(0.2);
-      pdf.line(M, top + rowH, M + CONTENT_W, top + rowH);
+      pdf.line(M, top + h, M + CONTENT_W, top + h);
     }
-    return top + rowH;
+    return top + h;
   };
 
   let cursor = drawHead(y);
   rows.forEach((cells, i) => {
-    if (cursor + rowH > BOTTOM) cursor = drawHead(onNewPage());
+    if (cursor + layoutRow(cells).h > BOTTOM) cursor = drawHead(onNewPage());
     cursor = drawRow(cells, cursor, { zebra: i % 2 === 1 });
   });
   if (total) {
-    if (cursor + rowH > BOTTOM) cursor = drawHead(onNewPage());
+    if (cursor + layoutRow(total, true).h > BOTTOM) cursor = drawHead(onNewPage());
     cursor = drawRow(total, cursor, { bold: true, totalRow: true });
   }
   return cursor;
@@ -450,4 +470,170 @@ export const downloadLeadsReportXlsx = (r, filename) => {
       autoFilter: `A${listStart}:${xlsxColName(leadHeads.length - 1)}${listStart + Math.max(r.leads.length, 1)}`,
     },
   ], filename);
+};
+
+// ---------------------------------------------------------------------------------------
+// A plain list report: the same letterhead and table as above, with no summary page --
+// one titled list of rows, as a board's own table is showing them. Branch Admin's
+// Consultation tab downloads its stage this way.
+//
+// list = {
+//   title, sheetTitle, sheetName, branch, generated,
+//   meta:    [[label, value]] -- up to three lines under the title on page one
+//   strip:   [text]           -- the line beside the title on every later page
+//   listLabel, empty,
+//   columns: [{ header, xlsx, align, money, wrap }] -- xlsx is the Excel column width;
+//            money prints Rs. in the PDF and stays a number in Excel so the column sums;
+//            wrap lets a long value take a second line in the PDF (see fitColumns)
+//   rows:    [[value]]        -- in column order; null / "" reads as a dash
+// }
+// ---------------------------------------------------------------------------------------
+
+const LIST_SIZE = 7.6;
+
+/**
+ * Widths from what is in each column rather than fixed shares, so nothing short is ever
+ * cut: a patient number, a phone, a date, a time, a fee each gets the width of its longest
+ * value. `wrap` columns -- names, plans, branches -- are the ones that give, sharing what the
+ * page has left in proportion to what they would like, and wrapping onto a second line
+ * where that is less than their longest value. Space to spare goes to them as well.
+ */
+const fitColumns = (pdf, columns, cells, size) => {
+  const pad = 4.6;
+  const words = (t) => pdfSafe(t).split(" ");
+  const natural = [];
+  const floor = [];
+  columns.forEach((c, i) => {
+    font(pdf, "bold", 6.8);
+    // A header may wrap between words, never inside one: its longest word is a floor.
+    const head = Math.max(...words(c.header.toUpperCase()).map((w) => pdf.getTextWidth(w)));
+    font(pdf, "normal", size);
+    let whole = pdf.getTextWidth("-");
+    let word = 0;
+    cells.forEach((row) => {
+      whole = Math.max(whole, pdf.getTextWidth(pdfSafe(row[i])));
+      if (c.wrap) word = Math.max(word, ...words(row[i]).map((w) => pdf.getTextWidth(w)));
+    });
+    natural.push(Math.max(head, whole) + pad);
+    // A wrapping column breaks between words, so its own longest word is its floor too.
+    floor.push(c.wrap ? Math.min(Math.max(head, word) + pad, natural[i]) : natural[i]);
+  });
+
+  const widths = [...floor];
+  let room = CONTENT_W - widths.reduce((n, w) => n + w, 0);
+  if (room < 0) {
+    // More than the page holds even at the floors: everything gives, in proportion.
+    const total = widths.reduce((n, w) => n + w, 0);
+    return columns.map((c, i) => ({ header: c.header, width: (widths[i] * CONTENT_W) / total, align: c.align, muted: c.muted, wrap: c.wrap }));
+  }
+  // What is left goes to the wrapping columns still short of their longest value, an equal
+  // share each, so one long Plan cannot take the page while the Stage beside it wraps.
+  for (let pass = 0; pass < 20 && room > 0.01; pass += 1) {
+    const short = columns.map((c, i) => i).filter((i) => columns[i].wrap && widths[i] < natural[i] - 0.01);
+    if (!short.length) break;
+    const share = room / short.length;
+    short.forEach((i) => {
+      const add = Math.min(share, natural[i] - widths[i]);
+      widths[i] += add;
+      room -= add;
+    });
+  }
+  // Everything whole and page to spare: it goes to the wrapping columns, or across all.
+  if (room > 0.01) {
+    const takers = columns.map((c, i) => i).filter((i) => columns[i].wrap);
+    const pool = takers.length ? takers : columns.map((c, i) => i);
+    const base = pool.reduce((n, i) => n + widths[i], 0);
+    pool.forEach((i) => { widths[i] += (room * widths[i]) / base; });
+  }
+  return columns.map((c, i) => ({ header: c.header, width: widths[i], align: c.align, muted: c.muted, wrap: c.wrap }));
+};
+
+const moneyText = (v) => (typeof v === "number" && Number.isFinite(v) ? `Rs.${Math.round(v).toLocaleString("en-IN")}` : v);
+
+export const buildListReportPdf = async (list) => {
+  const [{ jsPDF }, logo] = await Promise.all([import("jspdf"), loadLogo()]);
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape", compress: true });
+  pdf.setLineHeightFactor(1.15);
+  const newPage = () => { pdf.addPage(); return drawStrip(pdf, list); };
+
+  const cells = list.rows.map((row) => row.map((v, i) => {
+    const shown = list.columns[i].money ? moneyText(v) : v;
+    return shown === null || shown === undefined ? "" : String(shown);
+  }));
+  const cols = fitColumns(pdf, list.columns, cells, LIST_SIZE);
+
+  let y = drawLetterhead(pdf, list, logo);
+  sectionLabel(pdf, list.listLabel, y, String(list.rows.length));
+  y += 3;
+  if (!list.rows.length) {
+    drawEmpty(pdf, list.empty || "Nothing in this selection.", y);
+  } else {
+    drawTable(pdf, {
+      cols,
+      rows: cells,
+      y,
+      rowH: 6.4,
+      size: LIST_SIZE,
+      onNewPage: () => { const t = newPage(); sectionLabel(pdf, list.listLabel, t, "continued"); return t + 3; },
+    });
+  }
+
+  drawFooters(pdf, list.generated);
+  return pdf.output("blob");
+};
+
+export const downloadListReportPdf = async (list, filename) => {
+  try {
+    savePdf(await buildListReportPdf(list), filename);
+  } catch {
+    toast.error("Couldn't build the PDF");
+  }
+};
+
+// One sheet: the title and its lines, then the list with its header frozen and filterable.
+const listSheet = (list) => {
+  const heads = list.columns.map((c) => c.header);
+  const last = xlsxColName(heads.length - 1);
+  const top = [
+    { cells: [{ v: list.sheetTitle || list.title, s: "title" }], height: 24 },
+    { cells: [{ v: [`Branch: ${list.branch || "—"}`, ...list.meta.map(([k, v]) => `${k}: ${v}`)].join("   ·   "), s: "subtitle" }] },
+    { cells: [{ v: `Generated: ${list.generated}`, s: "subtitle" }] },
+  ];
+  const headRow = top.length + 1;
+  const rows = [
+    ...top,
+    { cells: heads, style: "header", height: 20 },
+    ...list.rows.map((row) => ({
+      cells: row.map((v) => (v === null || v === undefined || v === "" ? "" : v)),
+      style: "cell",
+    })),
+  ];
+  return {
+    name: list.sheetName || "List",
+    rows,
+    cols: list.columns.map((c) => c.xlsx || 16),
+    freezeRows: headRow,
+    merges: [`A1:${last}1`],
+    autoFilter: `A${headRow}:${last}${headRow + Math.max(list.rows.length, 1)}`,
+  };
+};
+
+export const downloadListReportXlsx = (list, filename) => downloadXlsx([listSheet(list)], filename);
+
+/**
+ * Several lists, one sheet each, in one workbook -- Branch Admin's every-stage download.
+ * Each entry is a list as above; sheetName is its tab. Excel refuses a workbook with two
+ * tabs of the same name (case ignored) or a name past 31 characters, so a clash gets a
+ * number rather than a corrupt file.
+ */
+export const downloadListWorkbookXlsx = (lists, filename) => {
+  const used = new Set();
+  const sheets = lists.map((list, i) => {
+    const base = (String(list.sheetName || `Sheet ${i + 1}`).replace(/[[\]:*?/\\]/g, " ").trim() || `Sheet ${i + 1}`).slice(0, 31);
+    let name = base;
+    for (let n = 2; used.has(name.toLowerCase()); n += 1) name = `${base.slice(0, 31 - String(n).length - 1)} ${n}`;
+    used.add(name.toLowerCase());
+    return listSheet({ ...list, sheetName: name });
+  });
+  downloadXlsx(sheets, filename);
 };

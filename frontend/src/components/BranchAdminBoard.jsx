@@ -44,13 +44,17 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  HeartHandshake,
+  HeartHandshake, Download, FileSpreadsheet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { downloadListReportPdf, downloadListWorkbookXlsx } from "@/components/branch/leadsReport";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
@@ -1684,6 +1688,123 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     return filteredLeads;
   }, [filteredLeads, stageFilter, stages, isConsultationOnlyStage, consultationOpeningStage]);
 
+  // The Consultation tab's Download, in two shapes.
+  //
+  // PDF: the open stage's list exactly as the table under the toolbar shows it -- stage,
+  // date range, search, marks and order all applied. The board underneath builds the rows
+  // (see its exportRef), because it is the one that knows which columns each stage draws.
+  //
+  // Excel: one workbook, a sheet per pill across both tabs -- Branch Leads' All Stages and
+  // each of its stages, then every Consultation stage -- each cut the way its own pill
+  // cuts it, so a sheet holds exactly what clicking that card would list.
+  const consultationExportRef = useRef(null);
+  const [exportingConsultation, setExportingConsultation] = useState(false);
+  const downloadConsultation = async (kind) => {
+    const build = consultationExportRef.current;
+    const data = build?.();
+    if (!data) { toast.error("The list is still loading — try again in a moment"); return; }
+    const f = effectiveDateFilter;
+    const dates = !f?.from && !f?.to ? "All dates"
+      : !f.to ? `From ${dateStampFull(f.from)}`
+      : !f.from ? `Up to ${dateStampFull(f.to)}`
+      : dateStampFull(f.from) === dateStampFull(f.to) ? dateStampFull(f.from)
+      : `${dateStampFull(f.from)} – ${dateStampFull(f.to)}`;
+    const period = f?.label && f.key && !String(f.key).includes("+") ? `${f.label} (${dates})` : dates;
+    const marks = markFilter === "vip" ? "VIP only" : markFilter === "attention" ? "Needs attention only" : "";
+    const searched = searchQuery.trim() ? `Search "${searchQuery.trim()}"` : "";
+    const showing = (n, extra) => {
+      const count = `${n} patient${n === 1 ? "" : "s"}`;
+      const narrowed = [extra, searched, marks].filter(Boolean).join(" · ");
+      return narrowed ? `${count} · ${narrowed}` : count;
+    };
+    const now = new Date();
+    const generated = `${dateStampFull(now)}, ${callTimeStamp(now)}`;
+    const branch = data.branch;
+    const slug = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+    // One Consultation stage as a list.
+    const consultationList = (d) => ({
+      title: "CONSULTATION REPORT",
+      sheetTitle: `FITSIOMAX — Consultation — ${d.stage}`,
+      sheetName: d.stage,
+      branch,
+      generated,
+      meta: [["Stage", d.stage], ["Period", period], ["Showing", showing(d.rows.length, d.feeView)]],
+      strip: [branch, d.stage, period],
+      listLabel: `${d.stage} — Patient List`,
+      empty: "No patients in this stage for the selected period.",
+      columns: d.columns,
+      rows: d.rows,
+    });
+
+    // One Branch Leads pill as a list: All Stages (stage null) or one stage. The columns
+    // the Branch Leads table reads, with the stage-only ones where that stage draws them --
+    // the follow-up call on Follow Up, Moved On and the reminder on Not a prospect -- and
+    // the date the lead arrived, which is what that tab's date range is read on.
+    const followUpName = stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP);
+    const notProspectName = stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
+    const leadsList = (stage) => {
+      const name = stage?.name || "All Stages";
+      const rows = stage
+        ? filteredLeads.filter((l) => matchesBranchStage(l, stage, isConsultationOnlyStage, consultationOpeningStage))
+        : filteredLeads;
+      const onFollowUp = !!stage && (name === followUpName || /follow\s*-?\s*up/i.test(name));
+      const onNotProspect = !!stage && name === notProspectName;
+      const slot = (x) => (x ? [x.date, x.time].filter(Boolean).join(" · ") : "");
+      const columns = [
+        { header: "S.No", xlsx: 7, get: (l, i) => i + 1 },
+        { header: "Patient No.", xlsx: 17, get: (l) => l.patient_number || "" },
+        { header: "Patient Name", xlsx: 26, get: (l) => l.name || "" },
+        { header: "Phone", xlsx: 15, get: (l) => displayPhone(l.phone) || "" },
+        onArmBoard
+          ? { header: "City", xlsx: 16, get: (l) => cityAnswer(l) || "" }
+          : { header: "Source", xlsx: 18, get: (l) => sourceAnswer(l) || "" },
+        ...intakeQuestions.map((q) => ({ header: q.label, xlsx: 18, get: (l) => formAnswer(l, q.question, q.fallback, q.formatFallback) || "" })),
+        ...(onArmBoard ? [] : [{ header: "Assigned Physio", xlsx: 20, get: (l) => l.assigned_physio_name || "" }]),
+        ...(onNotProspect ? [
+          { header: "Moved On", xlsx: 14, get: (l) => notProspectLabel(l).markedOn || "" },
+          { header: "Reminder Call", xlsx: 14, get: (l) => notProspectLabel(l).reminder || "" },
+        ] : [
+          { header: "Appointment Date", xlsx: 15, get: (l) => (l.appointment_date ? dateStampFull(l.appointment_date) : "") },
+          { header: "Time", xlsx: 10, get: (l) => (l.appointment_time ? to12h(l.appointment_time) : "") },
+        ]),
+        ...(onFollowUp ? [{ header: "Follow Up Call", xlsx: 18, get: (l) => slot(followUpSlotLabel(l)) }] : []),
+        { header: "Stage", xlsx: 20, get: (l) => rowStageName(l) || "" },
+        { header: "Lead Created", xlsx: 15, get: (l) => (l.created_at ? dateStampFull(l.created_at) : "") },
+      ];
+      return {
+        title: "BRANCH LEADS REPORT",
+        sheetTitle: `FITSIOMAX — Branch Leads — ${name}`,
+        sheetName: name,
+        branch,
+        generated,
+        meta: [["Stage", name], ["Period", `${period}, by lead created date`], ["Showing", showing(rows.length)]],
+        columns: columns.map(({ get, ...c }) => c),
+        rows: rows.map((l, i) => columns.map((c) => c.get(l, i))),
+      };
+    };
+
+    setExportingConsultation(true);
+    try {
+      if (kind === "pdf") {
+        const filename = ["consultation", slug(branch), slug(data.stage), slug(dates)].filter(Boolean).join("-") + ".pdf";
+        await downloadListReportPdf(consultationList(data), filename);
+      } else {
+        const lists = [
+          leadsList(null),
+          ...leadPillStages.map((st) => leadsList(st)),
+          ...consultationOnlyStages.map((st) => consultationList(build(st.name))),
+        ];
+        const filename = ["all-stages", slug(branch), slug(dates)].filter(Boolean).join("-") + ".xlsx";
+        downloadListWorkbookXlsx(lists, filename);
+      }
+    } catch {
+      toast.error("Couldn't build the file");
+    } finally {
+      setExportingConsultation(false);
+    }
+  };
+
   // A tick survives scrolling and reopening a row, but not a change to what is on screen.
   // Searching, filtering by date or switching stage replaces the list under the selection,
   // and a delete confirmed against rows the person can no longer see is one they cannot
@@ -2420,6 +2541,44 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
+            {/* Consultation tab only -- not Branch Leads, not House Visit. One button, two
+                files: a PDF to print or send, and an Excel sheet to sort and total. Either
+                holds the open stage's list as the table shows it. */}
+            {activeView === "branch_consultation" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    disabled={exportingConsultation}
+                    title="Download this list — PDF or Excel"
+                    aria-label="Download this list"
+                    className="h-10 w-10 shrink-0 bg-indigo-600 p-0 text-white hover:bg-indigo-700"
+                    data-testid="branch-consultation-download"
+                  >
+                    {exportingConsultation ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60" data-testid="branch-consultation-download-menu">
+                  <DropdownMenuLabel className="text-[11px] font-normal text-slate-500">
+                    Date range, search and marks as on screen
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => downloadConsultation("pdf")} className="gap-2.5 py-2" data-testid="branch-consultation-download-pdf">
+                    <FileText className="h-4 w-4 text-rose-600" />
+                    <span className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-800">PDF — {stageFilter || "This Stage"}</span>
+                      <span className="text-[11px] text-slate-400">This stage's list, ready to print or send</span>
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => downloadConsultation("xlsx")} className="gap-2.5 py-2" data-testid="branch-consultation-download-excel">
+                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                    <span className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-800">Excel — All Stages</span>
+                      <span className="text-[11px] text-slate-400">One file, a sheet for every stage</span>
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {/* Branch Leads only. This toolbar is shared by both tabs (see the note
                 above it), which is what put a Create Lead button over the Consultation
                 pills -- and a consultation is a patient the branch already has, arrived
@@ -2587,6 +2746,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               // order Branch Leads and leave the tab it is actually sitting over reading
               // whichever way that board sorts on its own.
               externalSortOrder={sortOrder}
+              // Read by the toolbar's Download (Consultation tab only).
+              exportRef={onHomeVisitTab ? undefined : consultationExportRef}
               reloadToken={refreshTick}
               // Eight columns can't be read on a phone — without this the consultation
               // stages fall back to the desk table and every field arrives truncated.
