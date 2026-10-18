@@ -9,6 +9,9 @@ on:
     # -- leaves the VPS one commit behind on a README until the next real push.
     # Nothing served at runtime reads these files, so that lag costs nothing.
     # Drop this filter if a .md ever becomes a runtime input.
+    # A side effect: an empty commit (git commit --allow-empty) changes no files,
+    # so it matches nothing outside the filter and starts no run either. To force
+    # a redeploy, push a commit that touches a non-markdown file.
     paths-ignore:
       - '**.md'
 
