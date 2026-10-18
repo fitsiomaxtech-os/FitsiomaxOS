@@ -55,3 +55,32 @@ jobs:
 
       - name: Deploy to VPS
         run: bash /root/deploy-osfitsiomax.sh
+
+      # The script above restarts the services and reports "Deploy complete" whether
+      # or not the backend came back. On 2026-10-18 it did not: the page loaded and
+      # every /api call was a 502, so nobody could sign in, and the run was green.
+      # This waits for the API to answer, and if it never does, prints what the box
+      # knows about why and fails the run.
+      - name: Check the backend is answering
+        run: |
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 -X POST https://os.fitsiomax.clinic/api/v3/auth/login -H "Content-Type: application/json" -d '{"email":"deploy-check@invalid","password":"x"}' || true)
+            echo "attempt $i: /api/v3/auth/login -> $code"
+            case "$code" in 2*|4*) exit 0;; esac
+            sleep 5
+          done
+          echo "::error::Backend is not answering after the deploy"
+          set +e
+          echo "== nginx upstream =="; grep -rhn "proxy_pass" /etc/nginx/sites-enabled/ 2>/dev/null
+          echo "== listening ports =="; ss -ltnp 2>/dev/null | grep -Ei "uvicorn|python|mongo|:80|:443|:8001|:8000"
+          echo "== services =="; systemctl list-units --all --type=service --no-pager 2>/dev/null | grep -Ei "osfit|fitsio|backend|uvicorn|mongo|nginx"
+          for u in $(systemctl list-units --all --type=service --no-pager --plain 2>/dev/null | awk '{print $1}' | grep -Ei "osfit|fitsio|backend|uvicorn|mongo"); do
+            echo "== status $u =="; systemctl status "$u" --no-pager -l 2>/dev/null | head -20
+            echo "== journal $u =="; journalctl -u "$u" --no-pager -n 80 2>/dev/null | tail -80
+          done
+          command -v pm2 >/dev/null && { echo "== pm2 =="; pm2 ls; pm2 logs --nostream --lines 60 2>/dev/null | tail -80; }
+          command -v supervisorctl >/dev/null && { echo "== supervisor =="; supervisorctl status; for f in /var/log/supervisor/*backend*err*.log; do echo "-- $f"; tail -60 "$f"; done; }
+          echo "== disk =="; df -h / /var 2>/dev/null
+          echo "== memory =="; free -m
+          echo "== oom =="; dmesg 2>/dev/null | grep -i -E "killed process|out of memory" | tail -5
+          exit 1
