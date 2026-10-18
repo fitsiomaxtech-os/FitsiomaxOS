@@ -53,6 +53,21 @@ jobs:
       - name: Compile backend
         run: python3 -m compileall -q backend
 
+      # MongoDB was installed with its unit disabled, so it does not come back when
+      # the VPS reboots. On 2026-10-17 the box rebooted, mongod stayed down, and the
+      # backend sat in startup waiting on 127.0.0.1:27017 -- every /api call a 502,
+      # nobody able to sign in. Enabling it here starts it now and on every boot.
+      - name: Make sure MongoDB is running
+        run: |
+          systemctl enable --now mongod
+          for i in $(seq 1 30); do
+            systemctl is-active --quiet mongod && (echo > /dev/tcp/127.0.0.1/27017) 2>/dev/null && { echo "mongod is up"; exit 0; }
+            sleep 2
+          done
+          systemctl status mongod --no-pager -l | head -20
+          journalctl -u mongod --no-pager -n 60
+          exit 1
+
       - name: Deploy to VPS
         run: bash /root/deploy-osfitsiomax.sh
 
