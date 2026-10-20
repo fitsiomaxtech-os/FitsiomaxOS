@@ -687,6 +687,98 @@ const storedPaymentPayload = (details, mode, amount) => ({
   account_number: details.account_last4,
 });
 
+/**
+ * Every Treatment Fee payment that has come in, oldest first, each with the course days it
+ * paid for and the mode those days run in -- so a fee taken in parts, or re-priced by Mark
+ * Online between payments, says which money bought the Offline days and which the Online.
+ *
+ * The days come off the sessions each schedule row carries. A row without them (the opening
+ * row a swap writes over a fee taken in one go, or a Partial Payment plan) is placed by its
+ * money instead, laid against the course's runs in order: days already paid keep their
+ * price on a swap, so the money paid lines up with the start of the plan.
+ *
+ * A fee taken in one go, with no schedule, is a single payment over the whole course.
+ */
+const treatmentPayments = (lead) => {
+  if (!lead || lead.treatment_fee_paid == null) return [];
+  const rows = lead.treatment_fee_payment_details?.installments || [];
+  const totalDays = Number(lead.session_package_sessions) || 0;
+  const plan = lead.session_mode_plan?.length
+    ? lead.session_mode_plan
+    : totalDays > 0
+      ? [{ mode: lead.session_package_mode, days: totalDays, amount: Number(lead.session_package_price) || 0 }]
+      : [];
+  let day = 1;
+  let money = 0;
+  const runs = plan.map((r) => {
+    const days = Number(r.days) || 0;
+    const run = { mode: r.mode === "online" ? "online" : "offline", from: day, to: day + days - 1, days, m0: money, m1: money + (Number(r.amount) || 0) };
+    day += days;
+    money = run.m1;
+    return run;
+  });
+
+  const paid = rows.length
+    ? rows.map((inst, idx) => ({ inst, idx })).filter((p) => p.inst.paid)
+    : [{ inst: { amount: lead.treatment_fee_paid, paid: true }, idx: -1 }];
+  const byDays = paid.every((p) => Number(p.inst.sessions) > 0);
+  let dayAt = 1;
+  let moneyAt = 0;
+  return paid.map((p, i) => {
+    let segments = [];
+    if (p.idx < 0) {
+      segments = runs.map((r) => ({ mode: r.mode, from: r.from, to: r.to }));
+    } else if (byDays) {
+      const a = dayAt;
+      const b = dayAt + Number(p.inst.sessions) - 1;
+      dayAt = b + 1;
+      segments = runs
+        .filter((r) => r.from <= b && r.to >= a)
+        .map((r) => ({ mode: r.mode, from: Math.max(a, r.from), to: Math.min(b, r.to) }));
+    } else {
+      const x = moneyAt;
+      const y = moneyAt + (Number(p.inst.scheduled_amount ?? p.inst.amount) || 0);
+      moneyAt = y;
+      segments = runs.flatMap((r) => {
+        const lo = Math.max(x, r.m0);
+        const hi = Math.min(y, r.m1);
+        const rate = r.days ? (r.m1 - r.m0) / r.days : 0;
+        if (hi - lo < 0.005 || rate <= 0) return [];
+        return [{
+          mode: r.mode,
+          from: r.from + Math.floor((lo - r.m0) / rate + 1e-6),
+          to: r.from + Math.ceil((hi - r.m0) / rate - 1e-6) - 1,
+        }];
+      });
+    }
+    // Neighbouring days in the same mode read as one stretch.
+    segments = segments.reduce((out, s) => {
+      const last = out[out.length - 1];
+      if (last && last.mode === s.mode && last.to + 1 >= s.from) last.to = Math.max(last.to, s.to);
+      else out.push({ ...s });
+      return out;
+    }, []);
+    const mode = lead.session_package_mode === "online" ? "online" : "offline";
+    const label = segments.length
+      ? segments.map((s) => `Day ${s.from}${s.to > s.from ? `–${s.to}` : ""} · ${s.mode === "online" ? "Online" : "Offline"}`).join(" + ")
+      : mode === "online" ? "Online" : "Offline";
+    return { n: i + 1, idx: p.idx, inst: p.inst, segments: segments.length ? segments : [{ mode }], label };
+  });
+};
+
+/** A payment's days and mode, one stretch after another, in ModeSplitLines' colours. */
+const PaymentModeLine = ({ payment }) => (
+  <p className="truncate text-[11px] tabular-nums text-slate-500" data-testid={`cons-fee-payment-mode-${payment.n}`}>
+    {payment.segments.map((s, i) => (
+      <span key={i}>
+        {i > 0 ? " + " : ""}
+        {s.from != null ? `Day ${s.from}${s.to > s.from ? `–${s.to}` : ""} · ` : ""}
+        <span className={s.mode === "online" ? "font-semibold text-sky-700" : "font-semibold text-slate-600"}>{s.mode === "online" ? "Online" : "Offline"}</span>
+      </span>
+    ))}
+  </p>
+);
+
 // A discount above this reads as a mistyped amount (120 for 1200) more often than a real
 // decision, so it's called out — but never blocked. Talking a price down is the Branch
 // Admin's call to make; the popup's job is to make sure they meant it.
@@ -2809,26 +2901,66 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const firstPaymentMode = (inst) => inst?.payment_mode
     || (selectedLead?.treatment_fee_payment_mode !== "partial" ? selectedLead?.treatment_fee_payment_mode : "")
     || "";
-  const openFirstTreatmentReceipt = () => {
+
+  // The day the money came in and who took it, off the activity row with the receipt's
+  // transaction id -- the two fields the lead itself does not keep.
+  const refineReceiptFromActivity = async (leadId, txnId) => {
+    try {
+      const rows = await getLeadActivity(leadId);
+      const row = (rows || []).find((a) => a.transaction_id === txnId);
+      if (!row) return;
+      setReceipt((r) => (r && r.receiptNo === txnId
+        ? {
+          ...r,
+          dateLabel: row.created_at
+            ? new Date(row.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+            : r.dateLabel,
+          collectedBy: row.created_by || r.collectedBy,
+        }
+        : r));
+    } catch {
+      // The receipt is already on screen and correct in every field but its date. Saying
+      // so would be a toast over a document the branch is about to hand over.
+    }
+  };
+
+  // A schedule row's mode: its own once mark-paid has written one, the fee's otherwise --
+  // which only the first payment of a short collection relies on.
+  const paymentRowMode = (pay) => (pay.inst.transaction_id || pay.n > 1 ? pay.inst.payment_mode || "" : firstPaymentMode(pay.inst));
+  // Whether a payment has a receipt to give: its own transaction, or the fee's for the first.
+  const paymentHasReceipt = (pay) => !!(pay.inst.transaction_id || (pay.n === 1 && selectedLead?.treatment_fee_payment_details?.transaction_id));
+
+  // The receipt for one Treatment Fee payment, from treatmentPayments: its own amount,
+  // tender and transaction, with the days it paid for and their mode on the Sessions line.
+  const openTreatmentPaymentReceipt = (pay) => {
     const cfg = REISSUE_FEES.treatment;
     const lead = selectedLead;
     const details = lead?.[cfg.details] || {};
-    const inst = (details.installments || [])[0];
-    if (!inst?.paid) return;
+    const inst = pay?.inst;
+    if (!inst?.paid || !paymentHasReceipt(pay)) return;
     const own = !!inst.transaction_id;
-    showReceipt(() => makeReceipt({
-      lead,
-      payload: storedPaymentPayload(own ? inst : details, firstPaymentMode(inst), Number(inst.amount)),
-      prefix: `${cfg.prefix}1`,
-      paidFor: `${cfg.paidFor} · 1st Payment`,
-      packageName: cfg.packageName(lead),
-      assignedPrice: cfg.price(lead) ?? null,
-      discount: Number(inst.discount_amount ?? details.discount_amount) || 0,
-      balanceDue: balanceDueLabel(details.installments),
-      installments: details.installments || [],
-      transactionId: inst.transaction_id || details.transaction_id || "",
-    }));
+    const txnId = inst.transaction_id || details.transaction_id || "";
+    let opened = false;
+    showReceipt(() => {
+      const built = makeReceipt({
+        lead,
+        payload: storedPaymentPayload(own ? inst : details, paymentRowMode(pay), Number(inst.amount)),
+        prefix: `${cfg.prefix}${pay.n}`,
+        paidFor: `${cfg.paidFor} · Payment ${pay.n}`,
+        packageName: cfg.packageName(lead),
+        sessionsCovered: pay.label,
+        assignedPrice: cfg.price(lead) ?? null,
+        discount: Number(inst.discount_amount ?? (pay.n === 1 ? details.discount_amount : 0)) || 0,
+        balanceDue: balanceDueLabel(details.installments),
+        installments: details.installments || [],
+        transactionId: txnId,
+      });
+      opened = true;
+      return built;
+    });
+    if (opened && txnId) refineReceiptFromActivity(lead.id, txnId);
   };
+
 
   const openFeeReceipt = async (feeKey) => {
     const cfg = REISSUE_FEES[feeKey];
@@ -2853,6 +2985,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         // likely to be a balance still owed — which would print a settled bill for a
         // patient who owes money.
         discount: Number(details.discount_amount) || 0,
+        // The Treatment Fee's days and their mode -- Online or Offline -- on its receipt.
+        sessionsCovered: feeKey === "treatment" ? (treatmentPayments(lead)[0]?.label || "") : "",
         balanceDue: balanceDueLabel(details.installments),
         installments: details.installments || [],
         transactionId: txnId,
@@ -2861,24 +2995,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       return built;
     });
     if (!opened || !txnId) return;
-
-    try {
-      const rows = await getLeadActivity(lead.id);
-      const row = (rows || []).find((a) => a.transaction_id === txnId);
-      if (!row) return;
-      setReceipt((r) => (r && r.receiptNo === txnId
-        ? {
-          ...r,
-          dateLabel: row.created_at
-            ? new Date(row.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-            : r.dateLabel,
-          collectedBy: row.created_by || r.collectedBy,
-        }
-        : r));
-    } catch {
-      // The receipt is already on screen and correct in every field but its date. Saying
-      // so would be a toast over a document the branch is about to hand over.
-    }
+    await refineReceiptFromActivity(lead.id, txnId);
   };
 
   // The appointment confirmation, reopened off the booking rather than off a dialog that
@@ -10065,6 +10182,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   };
                 };
 
+                // Each Treatment Fee payment off its schedule, for a row and a receipt apiece.
+                // A fee taken in one go has no schedule and keeps its single row.
+                const treatmentPaymentRows = treatmentPayments(selectedLead).filter((p) => p.idx >= 0);
+
                 // Which of the Long Term services this patient is marked for, and what was
                 // written about each. A key being present is the mark; its value may be "".
                 const longTermNotes = Object.fromEntries(
@@ -10101,7 +10222,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // neither collected nor untouched: the card keeps its button and names
                     // the installment that is due instead of ticking itself green.
                     paid: treatmentFeePaid && !partialPlan,
-                    note: treatmentFeePaid ? selectedLead.treatment_fee_payment_mode : null,
+                    // Taken in more than one payment, each has its own row and tender
+                    // above this one; the fee's own mode would name only the first.
+                    note: treatmentFeePaid
+                      ? (treatmentPaymentRows.length > 1 ? `${treatmentPaymentRows.length} payments` : selectedLead.treatment_fee_payment_mode)
+                      : null,
                     // Part-paid: the row's figure is the balance still owed, with the
                     // package total named above it, so the amount beside Collect Balance
                     // is the one that button collects.
@@ -10256,44 +10381,50 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   // beside it, and the third fee sat alone under the first.
                   <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid={testid}>
                     {steps.map(({ step: f, n }) => {
-                      // A part-paid Treatment Fee: the payment already in gets a row of its
-                      // own above the fee, with the receipt for that payment -- the fee's
-                      // own row is still owed money and has no receipt to give.
-                      const firstPaid = f.key === "treatment" && feeBalances.treatment
-                        ? (selectedLead.treatment_fee_payment_details?.installments || [])[0]
-                        : null;
-                      const firstRow = firstPaid?.paid ? (
-                        <div className="flex items-center gap-3 bg-emerald-50/60 px-3 py-2.5" data-testid="cons-fee-step-treatment-first">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
-                            <CheckCircle2 className="h-3 w-3" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-slate-700">Treatment Fee · 1st Payment</p>
-                            <p className="text-sm font-bold tabular-nums text-emerald-700 sm:hidden">Rs.{Number(firstPaid.amount).toLocaleString("en-IN")}</p>
-                            <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
-                              Paid{firstPaymentMode(firstPaid) ? ` · ${ALL_PAYMENT_MODE_LABELS[firstPaymentMode(firstPaid)] || firstPaymentMode(firstPaid)}` : ""}{firstPaid.due_date ? ` · ${firstPaid.due_date}` : ""}
-                            </p>
+                      // A Treatment Fee taken in parts: every payment already in gets a row
+                      // of its own above the fee -- Payment 1, Payment 2, ... -- with the days
+                      // it paid for, Online or Offline, and the receipt for that payment.
+                      // The fee's own row is then the total, or the balance still owed.
+                      const payRows = f.key === "treatment" ? treatmentPaymentRows : [];
+                      const paymentList = payRows.map((pay) => {
+                        const mode = paymentRowMode(pay);
+                        return (
+                          <div key={`pay-${pay.n}`} className="flex items-center gap-3 bg-emerald-50/60 px-3 py-2.5" data-testid={`cons-fee-step-treatment-payment-${pay.n}`}>
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                              <CheckCircle2 className="h-3 w-3" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-semibold text-slate-700">Treatment Fee · Payment {pay.n}</p>
+                              <PaymentModeLine payment={pay} />
+                              <p className="text-sm font-bold tabular-nums text-emerald-700 sm:hidden">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</p>
+                              <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
+                                Paid{mode ? ` · ${ALL_PAYMENT_MODE_LABELS[mode] || mode}` : ""}{pay.inst.due_date ? ` · ${pay.inst.due_date}` : ""}
+                              </p>
+                            </div>
+                            <p className="hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums text-emerald-700 sm:block">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</p>
+                            <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
+                              {paymentHasReceipt(pay) ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={`w-full border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 ${ACT_BTN}`}
+                                  onClick={() => openTreatmentPaymentReceipt(pay)}
+                                  title={`Open the receipt for Treatment Fee payment ${pay.n}`}
+                                  data-testid={`cons-fee-receipt-treatment-payment-${pay.n}`}
+                                >
+                                  <Eye className="mr-1 h-3.5 w-3.5" /> Receipt
+                                </Button>
+                              ) : null}
+                            </div>
                           </div>
-                          <p className="hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums text-emerald-700 sm:block">Rs.{Number(firstPaid.amount).toLocaleString("en-IN")}</p>
-                          <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={`w-full border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 ${ACT_BTN}`}
-                              onClick={() => openFirstTreatmentReceipt()}
-                              title="Open the receipt for the first Treatment Fee payment"
-                              data-testid="cons-fee-receipt-treatment-first"
-                            >
-                              <Eye className="mr-1 h-3.5 w-3.5" /> Receipt
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null;
+                        );
+                      });
                       const isNext = nextFeeStep && f.key === nextFeeStep.key;
                       // The same two locks the cards below hold: the Consultation Fee waits
                       // on the prescription, and every other fee waits on that one.
                       const waiting = f.key === "consultation" ? consultationRxBlocked : !consultationPaid;
-                      const receipt = f.paid && REISSUE_FEES[f.key] && selectedLead[REISSUE_FEES[f.key].details]?.transaction_id;
+                      // Paid in parts, the receipts are on the payment rows above.
+                      const receipt = f.paid && !payRows.length && REISSUE_FEES[f.key] && selectedLead[REISSUE_FEES[f.key].details]?.transaction_id;
                       const owing = !f.paid && f.balanceDue != null;
                       const amount = owing
                         ? `Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`
@@ -10302,7 +10433,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       const amountTone = f.paid ? "text-emerald-700" : owing ? "text-amber-700" : "text-slate-800";
                       return (
                         <div key={f.key} className="divide-y divide-slate-100">
-                        {firstRow}
+                        {paymentList}
                         <div
                           className={`flex items-center gap-3 px-3 py-2.5 ${f.paid ? "bg-emerald-50/60" : ""}`}
                           data-testid={`cons-fee-step-${f.key}`}
@@ -10389,6 +10520,40 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
                           </div>
                         </div>
+                        {/* Each Treatment Fee payment, with its days, Online or Offline, and
+                            its own receipt -- as the narrow popup lists them. */}
+                        {f.key === "treatment" && treatmentPaymentRows.length > 0 && (
+                          <div className="divide-y divide-emerald-100 rounded-md border border-emerald-100 bg-white/70" data-testid="cons-fee-treatment-payments">
+                            {treatmentPaymentRows.map((pay) => {
+                              const mode = paymentRowMode(pay);
+                              return (
+                                <div key={pay.n} className="flex items-center gap-2 px-2 py-1.5" data-testid={`cons-fee-step-treatment-payment-${pay.n}`}>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[11px] font-semibold text-slate-700">
+                                      Payment {pay.n} · <span className="tabular-nums text-emerald-700">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</span>
+                                    </p>
+                                    <PaymentModeLine payment={pay} />
+                                    <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
+                                      Paid{mode ? ` · ${ALL_PAYMENT_MODE_LABELS[mode] || mode}` : ""}{pay.inst.due_date ? ` · ${pay.inst.due_date}` : ""}
+                                    </p>
+                                  </div>
+                                  {paymentHasReceipt(pay) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={`shrink-0 border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 ${ACT_BTN}`}
+                                      onClick={() => openTreatmentPaymentReceipt(pay)}
+                                      title={`Open the receipt for Treatment Fee payment ${pay.n}`}
+                                      data-testid={`cons-fee-receipt-treatment-payment-${pay.n}`}
+                                    >
+                                      <Eye className="mr-1 h-3.5 w-3.5" /> Receipt
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                         {/* No amount, no line. A fee with nothing set against it used to
                             print an em dash here, at the same size and weight as a price —
                             a bold stroke under the title that reads as a value rather than
@@ -10428,7 +10593,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 transaction id and no mode fields behind it, and a button
                                 that opened a receipt with a blank transaction number on it
                                 would be worse than no button. */}
-                            {REISSUE_FEES[f.key] && (selectedLead[REISSUE_FEES[f.key].details]?.transaction_id) && (
+                            {REISSUE_FEES[f.key] && (selectedLead[REISSUE_FEES[f.key].details]?.transaction_id)
+                              && !(f.key === "treatment" && treatmentPaymentRows.length) && (
                               <Button
                                 size="sm"
                                 variant="outline"
