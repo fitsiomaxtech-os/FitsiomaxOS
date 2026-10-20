@@ -164,9 +164,10 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         {active === "patients" && <PortalControlsButton branchId={branchId} />}
       </div>
       <Dialog open={mastersOpen} onOpenChange={setMastersOpen}>
-        {/* A gutter and rounded corners on a phone too, and the panel held below the close
-            ✕ so it does not sit on the panel's own Refresh button. */}
-        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg p-3 pt-11 sm:p-6 sm:pt-12" data-testid="zumba-masters-dialog">
+        {/* A gutter and rounded corners on a phone too. On a phone the panel's header is the
+            dialog's, edge to edge with the close ✕ lowered to sit level with it; on a desk
+            the panel is held below the ✕ so it does not sit on the panel's Refresh button. */}
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl gap-0 overflow-y-auto rounded-2xl p-0 [&>button:last-child]:top-5 sm:gap-4 sm:rounded-lg sm:p-6 sm:pt-12 sm:[&>button:last-child]:top-4" data-testid="zumba-masters-dialog">
           {/* The panel carries its own Zumba Masters heading; these are for screen readers. */}
           <DialogHeader className="sr-only">
             <DialogTitle>Zumba Masters</DialogTitle>

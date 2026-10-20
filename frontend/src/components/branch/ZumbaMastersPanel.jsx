@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Music, RefreshCw } from "lucide-react";
+import { Clock, Music, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { listZumbaMasters, setZumbaMasterSlot } from "@/lib/api";
@@ -65,16 +65,39 @@ export const ZumbaMastersPanel = ({ branchId }) => {
     setBusy(false);
   };
 
+  // One class's dropdown, shared by the phone rows and the desk cards so the two layouts
+  // cannot set a class differently.
+  const classSelect = (slot, holder, className, testid) => (
+    <select
+      value={holder?.id || ""}
+      disabled={busy}
+      onChange={(e) => setClassMaster(slot, e.target.value, holder?.id || "")}
+      className={`rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60 ${className}`}
+      data-testid={testid}
+    >
+      <option value="">Nobody</option>
+      {masters.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+    </select>
+  );
+
   return (
     <div className="flex flex-col gap-4" data-testid="zumba-masters-panel">
-      <section className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-4">
-          <div className="min-w-0">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-              <Music className="h-4 w-4 text-violet-500" /> Zumba Masters
-            </h3>
+      <section className="bg-white sm:rounded-xl sm:border sm:border-slate-200">
+        {/* Phone: the dialog's own header, level with its close ✕ (pr-12 keeps Refresh
+            clear of it). Desk: the panel's header as before. */}
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 py-3 pl-4 pr-12 sm:flex-wrap sm:bg-slate-50/60 sm:p-4">
+          <div className="flex min-w-0 items-center gap-2.5 sm:block">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600 sm:hidden">
+              <Music className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 sm:text-slate-700">
+                <Music className="hidden h-4 w-4 text-violet-500 sm:block" /> Zumba Masters
+              </h3>
+              <p className="truncate text-[11px] text-slate-400 sm:hidden">Who takes each class</p>
+            </div>
           </div>
-          <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh" data-testid="zumba-masters-refresh">
+          <Button onClick={load} disabled={loading} className="h-8 w-8 shrink-0 rounded-lg bg-slate-100 p-0 text-slate-600 hover:bg-slate-200 sm:h-9 sm:w-9 sm:rounded-md sm:bg-slate-500 sm:text-white sm:hover:bg-slate-600" title="Refresh" aria-label="Refresh" data-testid="zumba-masters-refresh">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
@@ -87,49 +110,70 @@ export const ZumbaMastersPanel = ({ branchId }) => {
               No Zumba accounts at this branch yet — add one in HR Admin, then customers are filed to a class automatically.
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TIME_SLOTS.map((slot) => {
-                const holder = masters.find((m) => m.time_slot === slot);
-                return (
-                  <div key={slot} className="rounded-lg border border-slate-200 p-3" data-testid={`zumba-slot-${slot}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">{slot}</p>
-                    <select
-                      value={holder?.id || ""}
-                      disabled={busy}
-                      onChange={(e) => setClassMaster(slot, e.target.value, holder?.id || "")}
-                      className="mt-2 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60"
-                      data-testid={`zumba-class-master-${slot}`}
-                    >
-                      <option value="">Nobody</option>
-                      {masters.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                    <p className="mt-1.5 hidden text-[11px] text-slate-400 sm:block">
-                      {/* Whether anybody said so, or it simply follows from the roster —
-                          presenting an arrangement nobody chose as though somebody had is
-                          how a branch ends up disputing a revenue split. Desk only: on a
-                          phone the dropdown above already names who holds the class. */}
-                      {holder
-                        ? holder.slot_set ? "Set for this branch" : "Implied — nobody has chosen this yet"
-                        : "This class has nobody on it"}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            <>
+              {/* Phone: the two classes as rows of one list, the time beside its dropdown. */}
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 sm:hidden">Classes</p>
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 sm:hidden" data-testid="zumba-slots-phone">
+                {TIME_SLOTS.map((slot) => {
+                  const holder = masters.find((m) => m.time_slot === slot);
+                  const [from, to] = slot.split(" - ");
+                  return (
+                    <li key={slot} className="flex items-center gap-3 px-3 py-2.5" data-testid={`zumba-slot-phone-${slot}`}>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                        <Clock className="h-4 w-4" />
+                      </span>
+                      <span className="w-[4.25rem] shrink-0 leading-tight">
+                        <span className="block text-xs font-semibold text-slate-800">{from}</span>
+                        <span className="block text-[10px] text-slate-400">to {to}</span>
+                      </span>
+                      {classSelect(slot, holder, "h-9 min-w-0 flex-1", `zumba-class-master-phone-${slot}`)}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Desk: a card per class, with whether anybody chose the holder. */}
+              <div className="hidden gap-3 sm:grid sm:grid-cols-2">
+                {TIME_SLOTS.map((slot) => {
+                  const holder = masters.find((m) => m.time_slot === slot);
+                  return (
+                    <div key={slot} className="rounded-lg border border-slate-200 p-3" data-testid={`zumba-slot-${slot}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">{slot}</p>
+                      {classSelect(slot, holder, "mt-2 h-9 w-full", `zumba-class-master-${slot}`)}
+                      <p className="mt-1.5 text-[11px] text-slate-400">
+                        {/* Whether anybody said so, or it simply follows from the roster —
+                            presenting an arrangement nobody chose as though somebody had is
+                            how a branch ends up disputing a revenue split. */}
+                        {holder
+                          ? holder.slot_set ? "Set for this branch" : "Implied — nobody has chosen this yet"
+                          : "This class has nobody on it"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {masters.length > 0 && (
-            <div className="mt-4 border-t border-slate-100 pt-3">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Masters at this branch</p>
-              <ul className="flex flex-wrap gap-2">
+            <div className="mt-5 sm:mt-4 sm:border-t sm:border-slate-100 sm:pt-3">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                Masters at this branch
+                <span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500 sm:hidden">{masters.length}</span>
+              </p>
+              {/* Phone: one full-width row each, the class they hold as a pill. Desk: chips. */}
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 sm:flex sm:flex-wrap sm:gap-2 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0">
                 {masters.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5" data-testid={`zumba-master-${m.id}`}>
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                  <li key={m.id} className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-2 sm:rounded-lg sm:border sm:border-slate-200 sm:px-2.5 sm:py-1.5" data-testid={`zumba-master-${m.id}`}>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700 sm:h-7 sm:w-7">
                       {(m.name || "?").charAt(0).toUpperCase()}
                     </span>
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1 sm:flex-none">
                       <span className="block truncate text-sm font-medium text-slate-800">{m.name || "—"}</span>
-                      <span className="block text-[10px] text-slate-400">{m.time_slot || "No class yet"}</span>
+                      <span className="hidden text-[10px] text-slate-400 sm:block">{m.time_slot || "No class yet"}</span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium sm:hidden ${m.time_slot ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-500"}`}>
+                      {m.time_slot || "No class yet"}
                     </span>
                   </li>
                 ))}
