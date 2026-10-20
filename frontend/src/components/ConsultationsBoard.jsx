@@ -3276,6 +3276,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [pickerMonth, setPickerMonth] = useState(new Date().getMonth());
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
   const [pickerDate, setPickerDate] = useState(null); // "YYYY-MM-DD"
+  const [bulkTime, setBulkTime] = useState(""); // "HH:MM" — the slot picker's bulk select
+  const [bulkSkipSun, setBulkSkipSun] = useState(false);
   const [sessionMinutes, setSessionMinutes] = useState(FALLBACK_SESSION_MINUTES);
 
   // Diet Appointment (Branch Admin only) — books the Diet Consultation.
@@ -6232,6 +6234,33 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         setPickerDate(nextDate);
       }
     }
+  };
+
+  // Bulk select: one time, laid down on every date from the focused one onwards that has
+  // it published and open, until the package is full. Days already fixed keep their own
+  // time; a date where that hour is full or not published is skipped rather than given a
+  // different time, so the branch sees exactly which days still need a hand-picked slot.
+  const bulkFillFrom = (startDate, time, skipSundays) => {
+    if (!startDate || !time) return;
+    const fixedDays = new Set(pickedSessionSlots.map((s) => s.split("T")[0]));
+    const room = openEndedRehab ? Infinity : totalSessionsNeeded - pickedSessionSlots.length;
+    if (room <= 0) { toast.error(`All ${totalSessionsNeeded} ${dayNoun}s are already fixed — clear some first`); return; }
+    // Open-ended rehab has no count to stop at, so it stops at the end of the month in view.
+    const monthEnd = isoDate(pickerYear, pickerMonth, new Date(pickerYear, pickerMonth + 1, 0).getDate());
+    const added = [];
+    for (const d of Object.keys(physioSlotsByDate).sort()) {
+      if (added.length >= room) break;
+      if (d < startDate || fixedDays.has(d)) continue;
+      if (openEndedRehab && d > monthEnd) break;
+      if (skipSundays && new Date(`${d}T00:00:00`).getDay() === 0) continue;
+      const slot = `${d}T${time}`;
+      if (!physioSlotsByDate[d].includes(time) || slotFull(slot)) continue;
+      added.push(slot);
+    }
+    if (added.length === 0) { toast.error(`${to12h(time)} is not open on any unfixed day from here`); return; }
+    setPickedSessionSlots([...pickedSessionSlots, ...added]);
+    const short = openEndedRehab ? 0 : room - added.length;
+    toast.success(`${added.length} ${dayNoun}${added.length === 1 ? "" : "s"} fixed at ${to12h(time)}${short > 0 ? ` · ${short} still need a time (that hour isn't open on enough days)` : ""}`);
   };
 
   // Opening the picker for the physio this lead is already with pre-loads the sessions
@@ -14142,6 +14171,53 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" /> Booked</span>
                               </div>
                             </div>
+
+                            {/* Bulk select: the same hour on every open day from this date
+                                on, instead of one click per day for a 28-day package. */}
+                            {(physioSlotsByDate[pickerDate] || []).length > 0 && (
+                              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[12px] font-semibold text-violet-900" data-testid="cons-slot-bulk">
+                                <span className="font-bold uppercase tracking-wider text-[10px] text-violet-700">Bulk select</span>
+                                <select
+                                  value={(physioSlotsByDate[pickerDate] || []).includes(bulkTime) ? bulkTime : ""}
+                                  onChange={(e) => setBulkTime(e.target.value)}
+                                  className="h-7 rounded border border-violet-300 bg-white px-1.5 text-[12px] font-semibold text-slate-800"
+                                  data-testid="cons-slot-bulk-time"
+                                >
+                                  <option value="">Pick a time…</option>
+                                  {(physioSlotsByDate[pickerDate] || []).map((t) => (
+                                    <option key={t} value={t}>{slotRange12h(t, sessionMinutes)}</option>
+                                  ))}
+                                </select>
+                                <span className="font-normal text-violet-800">every day from {dayLabel(pickerDate)}</span>
+                                <label className="flex cursor-pointer items-center gap-1 font-normal text-violet-800">
+                                  <input type="checkbox" checked={bulkSkipSun} onChange={(e) => setBulkSkipSun(e.target.checked)} className="h-3.5 w-3.5 accent-violet-600" data-testid="cons-slot-bulk-skip-sun" />
+                                  Skip Sundays
+                                </label>
+                                <div className="ml-auto flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => bulkFillFrom(pickerDate, bulkTime, bulkSkipSun)}
+                                    disabled={!(physioSlotsByDate[pickerDate] || []).includes(bulkTime) || (!openEndedRehab && sortedPickedSlots.length >= totalSessionsNeeded)}
+                                    className="h-7 rounded bg-violet-600 px-2.5 text-[12px] font-bold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    data-testid="cons-slot-bulk-apply"
+                                  >
+                                    {openEndedRehab
+                                      ? "Fill this month"
+                                      : `Fill ${Math.max(0, totalSessionsNeeded - sortedPickedSlots.length)} day${totalSessionsNeeded - sortedPickedSlots.length === 1 ? "" : "s"}`}
+                                  </button>
+                                  {sortedPickedSlots.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPickedSessionSlots([])}
+                                      className="h-7 rounded border border-violet-300 bg-white px-2.5 text-[12px] font-bold text-violet-700 hover:bg-violet-100"
+                                      data-testid="cons-slot-bulk-clear"
+                                    >
+                                      Clear all
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             {planByDate[pickerDate] && (
                               <p
