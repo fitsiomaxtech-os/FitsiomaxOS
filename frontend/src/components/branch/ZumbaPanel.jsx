@@ -1492,7 +1492,9 @@ const EMPTY = {
  * every stage filter while answering none of them. The cards split by source instead,
  * which is what a branch wants to know about a class it is filling.
  */
-export const ZumbaPanel = ({ branchId }) => {
+// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
+// drop its own back bar and leave this one as the only way back.
+export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState({});
   const [masters, setMasters] = useState([]);
@@ -1532,6 +1534,7 @@ export const ZumbaPanel = ({ branchId }) => {
   // list on a screen of its own with a back bar above it -- seven rows fill the screen, so
   // a list left under them would change out of sight. From sm up nothing reads this.
   const [phoneList, setPhoneList] = useState(false);
+  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the books
   // The Zumba pipeline exactly as Super Admin has it in CI/CD ROOTS. Nothing is hardcoded
   // here: a clinic that has not set the pipeline up has no stages, and the Stage column
@@ -1841,7 +1844,7 @@ export const ZumbaPanel = ({ branchId }) => {
         const p = cardProps(c);
         const others = CARDS.filter((x) => x.key !== c.key);
         return (
-          <div className="flex items-center gap-2 border-b border-slate-200 pb-2 sm:hidden" data-testid="zumba-phone-back">
+          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="zumba-phone-back">
             <button
               type="button"
               onClick={() => setPhoneList(false)}

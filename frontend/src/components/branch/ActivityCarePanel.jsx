@@ -73,6 +73,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   // Phone only, as Management does it: the sub-tabs are a stack of cards, and a tap opens
   // that tab on a screen of its own with a back bar above it. From sm up nothing reads it.
   const [phoneOpen, setPhoneOpen] = useState(false);
+  // Phone, Zumba open on one of its cards: Zumba's own back bar (card > Zumba) takes this
+  // bar's place, so there is one way back at a time rather than two stacked.
+  const [zumbaListOpen, setZumbaListOpen] = useState(false);
   const activeTab = tabs.find((t) => t.key === active) || tabs[0];
   const ActiveIcon = activeTab.icon;
   const zumbaGear = (testid) => (
@@ -92,7 +95,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
       {/* Phone, one tab open: where the cards sat, the tab being read, the way back to the
           cards, and that tab's gear -- the bar Management's sub-tabs wear. */}
-      {phoneOpen && (
+      {phoneOpen && !(active === "zumba" && zumbaListOpen) && (
         <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="activity-care-phone-back">
           <button
             type="button"
@@ -180,7 +183,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
           way back; `contents` keeps the panel a flex child as before. */}
       <div className={phoneOpen ? "contents" : "hidden sm:contents"}>
       {active === "zumba" ? (
-        <ZumbaPanel branchId={branchId} />
+        <ZumbaPanel branchId={branchId} onPhoneListChange={setZumbaListOpen} />
       ) : active === "fitness" ? (
         <FitnessPanel branchId={branchId} />
       ) : active === "patients" ? (
