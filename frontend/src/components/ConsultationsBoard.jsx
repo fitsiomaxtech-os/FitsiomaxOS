@@ -10102,13 +10102,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // the installment that is due instead of ticking itself green.
                     paid: treatmentFeePaid && !partialPlan,
                     note: treatmentFeePaid ? selectedLead.treatment_fee_payment_mode : null,
+                    // Part-paid: the row's figure is the balance still owed, with the
+                    // package total named above it, so the amount beside Collect Balance
+                    // is the one that button collects.
+                    balanceDue: partialPlan ? partialPlan.balance : null,
                     pending: partialPlan
-                      ? `${savedInstallments.filter((i) => i.paid).length} of ${savedInstallments.length} in · balance Rs.${Number(partialPlan.balance).toLocaleString("en-IN")}`
+                      ? `${savedInstallments.filter((i) => i.paid).length} of ${savedInstallments.length} in`
                       : null,
                     pendingTone: partialPlan && partialPlan.overdue ? "text-rose-600" : "text-amber-600",
                     show: decision === "consultation_treatment",
                     act: partialPlan ? () => openPartialCollectPopup(partialPlan.nextIdx) : openTreatmentFeeDraft,
-                    actLabel: partialPlan ? `Collect ${installmentLabelFor(partialPlan.nextIdx)}` : "Collect",
+                    actLabel: partialPlan ? "Collect Balance" : "Collect",
                   },
                   {
                     key: "diet",
@@ -10290,8 +10294,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       // on the prescription, and every other fee waits on that one.
                       const waiting = f.key === "consultation" ? consultationRxBlocked : !consultationPaid;
                       const receipt = f.paid && REISSUE_FEES[f.key] && selectedLead[REISSUE_FEES[f.key].details]?.transaction_id;
-                      const amount = f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
-                      const amountTone = f.paid ? "text-emerald-700" : "text-slate-800";
+                      const owing = !f.paid && f.balanceDue != null;
+                      const amount = owing
+                        ? `Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`
+                        : f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
+                      const total = owing && f.amount != null ? `Total Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
+                      const amountTone = f.paid ? "text-emerald-700" : owing ? "text-amber-700" : "text-slate-800";
                       return (
                         <div key={f.key} className="divide-y divide-slate-100">
                         {firstRow}
@@ -10310,14 +10318,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
                             {/* Under the name on a phone, where a column of its own would
                                 leave the name a dozen pixels. */}
-                            {amount && <p className={`text-sm font-bold tabular-nums sm:hidden ${amountTone}`}>{amount}</p>}
+                            {amount && (
+                              <p className={`text-sm font-bold tabular-nums sm:hidden ${amountTone}`}>
+                                {total && <span className="mr-1.5 text-[11px] font-medium text-slate-400">{total} ·</span>}
+                                {amount}
+                              </p>
+                            )}
                             {f.paid ? (
                               <p className="text-[11px] font-medium capitalize text-emerald-700">{f.note ? `Paid · ${f.note}` : "Paid"}</p>
                             ) : f.pending ? (
                               <p className={`truncate text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</p>
                             ) : null}
                           </div>
-                          <p className={`hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums sm:block ${amountTone}`}>{amount}</p>
+                          <div className="hidden min-w-[4.5rem] shrink-0 text-right sm:block">
+                            {total && <p className="text-[11px] font-medium tabular-nums text-slate-400" data-testid={`cons-fee-total-${f.key}`}>{total}</p>}
+                            <p className={`text-sm font-bold tabular-nums ${amountTone}`}>{amount}</p>
+                          </div>
                           <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
                             {f.paid ? (
                               receipt ? (
@@ -10378,7 +10394,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             a bold stroke under the title that reads as a value rather than
                             as the absence of one. The card already says what it wants: its
                             title, and a button to collect. */}
-                        {f.amount != null ? (
+                        {!f.paid && f.balanceDue != null ? (
+                          <div>
+                            {f.amount != null && <p className="text-[11px] font-medium text-slate-400">Total Rs.{Number(f.amount).toLocaleString("en-IN")}</p>}
+                            <p className="text-lg font-extrabold leading-none text-amber-700">
+                              {`Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`}
+                            </p>
+                          </div>
+                        ) : f.amount != null ? (
                           <p className="text-lg font-extrabold leading-none text-slate-800">
                             {`Rs.${Number(f.amount).toLocaleString("en-IN")}`}
                           </p>
