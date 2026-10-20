@@ -5221,7 +5221,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // read off the lead it hands over rather than off derived state that still belongs to
   // whoever was selected before. A saved row is the whole answer there — a plan reached
   // from a row exists already, or the row would not be showing a balance to collect.
-  const openPartialCollectPopup = (idx, fee = "treatment", leadArg = null) => {
+  // `mode` is the tender the popup opens on. Collect Online Payment opens it on UPI, the
+  // money having already moved from the patient's phone; the picker can still change it.
+  const openPartialCollectPopup = (idx, fee = "treatment", leadArg = null, mode = "cash") => {
     // Only the Treatment Fee is ever collected against a schedule that has not been
     // saved yet (its Partial Payment plan is built in the popup and stored on first
     // collect). Every other fee's schedule exists already, because a collection is what
@@ -5239,7 +5241,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // still be typed short of the net for a part payment, as it always could.
       due: amount > 0 ? amount : 0,
       discount: "",
-      payment_mode: "cash",
+      payment_mode: mode,
       upi_id: "",
       upi_transaction_id: "",
       card_transaction_id: "",
@@ -9679,6 +9681,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </p>
                       )}
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {/* The Treatment Fee balance paid online, marked before the physio
+                            is assigned or changed — Collect Balance's popup, opened on UPI. */}
+                        {feeBalances.treatment && (
+                          <Button
+                            size="sm"
+                            className={`bg-sky-600 text-white shadow-sm hover:bg-sky-700 ${ACT_BTN}`}
+                            onClick={() => openPartialCollectPopup(feeBalances.treatment.nextIdx, "treatment", null, "upi")}
+                            data-testid="cons-physio-assign-collect-online"
+                          >
+                            <IndianRupee className="mr-1 h-3.5 w-3.5" />
+                            Collect Online Payment
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           disabled={(treatmentAssigned && courseDone) || !treatmentFeePaid}
@@ -10678,7 +10693,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                                     Its own inset, because the panel body is flush: without
                                     it the button sat jammed in the panel's corner. */}
-                                <div className="p-3">
+                                <div className="flex flex-wrap items-center gap-2 p-3">
+                                  {/* A balance the patient paid from their phone is marked
+                                      here, before the course goes to a physio — the same
+                                      installment popup as Collect Balance, opened on UPI. */}
+                                  {allBalances && (() => {
+                                    const plan = feeBalances.treatment || allBalances.plans[0];
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        className={`bg-sky-600 text-white shadow-sm transition hover:bg-sky-700 hover:shadow ${ACT_BTN}`}
+                                        onClick={() => openPartialCollectPopup(plan.nextIdx, plan.fee, null, "upi")}
+                                        data-testid="cons-collect-online-from-fee-collected"
+                                      >
+                                        <IndianRupee className="mr-1 h-3.5 w-3.5" />
+                                        <Lbl full="Collect Online Payment" short="Online Pay" />
+                                      </Button>
+                                    );
+                                  })()}
                                   <Button
                                     size="sm"
                                     className={`bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 hover:shadow ${ACT_BTN}`}
