@@ -10434,6 +10434,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         : f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const total = owing && f.amount != null ? `Total Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const amountTone = f.paid ? "text-emerald-700" : owing ? "text-amber-700" : "text-slate-800";
+                      // Settled in parts, the payment rows are the whole story: the fee's own
+                      // row would only repeat their days and money, so it stays off.
+                      if (f.paid && payRows.length) {
+                        return <div key={f.key} className="divide-y divide-slate-100">{paymentList}</div>;
+                      }
                       return (
                         <div key={f.key} className="divide-y divide-slate-100">
                         {paymentList}
