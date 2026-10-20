@@ -68,10 +68,8 @@ const STANDARD_PAYMENT_MODES = [
   { value: "cheque", label: "Cheque" },
   { value: "partial", label: "Partial Payment" },
 ];
-// The two halves of the panel's payment buttons. Offline Payment is money handed over at
-// the desk; Collect Online Payment, which opens once the patient is Marked Online, is money
-// that moved from their phone or bank. A split is cut from the same half it was opened on.
-const OFFLINE_COLLECT_MODES = ["cash", "card", "cheque"];
+// Collect Online Payment's tenders: money that moved from the patient's phone or bank, once
+// the course is Online. A split is cut from the same tenders.
 const ONLINE_COLLECT_MODES = ["upi", "account_transfer"];
 const INSTALLMENT_PAYMENT_MODES = [
   { value: "cash", label: "Cash" },
@@ -2805,6 +2803,33 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
    * The refinement is keyed on the transaction id so a slow answer for one fee cannot
    * land on a different receipt the branch has opened in the meantime.
    */
+  // The first payment of a Treatment Fee taken in parts. A payment that left a balance
+  // writes its tender onto the fee's details and only the amount onto the first row; a
+  // planned schedule's rows carry their own mode and transaction once they are paid.
+  const firstPaymentMode = (inst) => inst?.payment_mode
+    || (selectedLead?.treatment_fee_payment_mode !== "partial" ? selectedLead?.treatment_fee_payment_mode : "")
+    || "";
+  const openFirstTreatmentReceipt = () => {
+    const cfg = REISSUE_FEES.treatment;
+    const lead = selectedLead;
+    const details = lead?.[cfg.details] || {};
+    const inst = (details.installments || [])[0];
+    if (!inst?.paid) return;
+    const own = !!inst.transaction_id;
+    showReceipt(() => makeReceipt({
+      lead,
+      payload: storedPaymentPayload(own ? inst : details, firstPaymentMode(inst), Number(inst.amount)),
+      prefix: `${cfg.prefix}1`,
+      paidFor: `${cfg.paidFor} · 1st Payment`,
+      packageName: cfg.packageName(lead),
+      assignedPrice: cfg.price(lead) ?? null,
+      discount: Number(inst.discount_amount ?? details.discount_amount) || 0,
+      balanceDue: balanceDueLabel(details.installments),
+      installments: details.installments || [],
+      transactionId: inst.transaction_id || details.transaction_id || "",
+    }));
+  };
+
   const openFeeReceipt = async (feeKey) => {
     const cfg = REISSUE_FEES[feeKey];
     const lead = selectedLead;
@@ -5618,12 +5643,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     }
     setMarkingOnline(true);
     try {
-      const res = await markLeadOnline(selectedLead.id, swapDraft.dueDate || null);
+      const res = await markLeadOnline(selectedLead.id, swapDraft.dueDate || null, swapDraft.mode);
       const updated = { ...selectedLead, ...res.lead };
       setSelectedLead(updated);
       setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => (l.id === updated.id ? { ...l, ...res.lead } : l)) }));
       setSwapDraft(null);
-      toast.success(`Marked Online -- Treatment Fee Rs.${Number(res.quote.new_total).toLocaleString("en-IN")}`);
+      toast.success(`${swapDraft.mode === "online" ? "Marked" : "Unmarked"} Online -- Treatment Fee Rs.${Number(res.quote.new_total).toLocaleString("en-IN")}`);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Couldn't mark this patient Online");
     } finally {
@@ -9201,26 +9226,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   && !!selectedLead.session_package_id
                   && selectedLead.visit_type !== "home"
                   && !selectedLead.session_package_manual;
-                // The payment row Fee Collected and Physio Assign share:
-                //   [ Offline Payment ] [ Assign / Reassign Physio ] [ Mark Online ] [ Collect Online Payment ]
-                // Both payment buttons take the next balance owed -- the Treatment Fee's first,
-                // else whichever fee still has one -- through the same installment popup Collect
-                // Balance opens, offering only their own half of the tenders. Collect Online
-                // Payment is there once the course is Online, by Mark Online, a swap, or sale.
+                // The row Fee Collected and Physio Assign share, on one line:
+                //   [ Assign / Reassign Physio ] [ Online ] [ Collect Online Payment ]
+                // Collect Online Payment takes the next balance owed -- the Treatment Fee's
+                // first, else whichever fee still has one -- through the installment popup
+                // Collect Balance opens, offering UPI and Account Transfer only. It is there
+                // once the course is Online, by Mark Online, a swap, or the sale itself.
                 const balancePlan = feeBalances.treatment || allBalances?.plans[0] || null;
-                const OfflinePayButton = (
-                  <Button
-                    size="sm"
-                    disabled={!balancePlan}
-                    title={balancePlan ? undefined : "Nothing is due"}
-                    className={`${balancePlan ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-slate-100 text-slate-400"} shadow-sm ${ACT_BTN}`}
-                    onClick={() => openPartialCollectPopup(balancePlan.nextIdx, balancePlan.fee, null, OFFLINE_COLLECT_MODES)}
-                    data-testid="cons-offline-payment"
-                  >
-                    <IndianRupee className="mr-1 h-3.5 w-3.5" />
-                    <Lbl full="Offline Payment" short="Offline" />
-                  </Button>
-                );
                 const MarkOnlineButton = (
                   <Button
                     size="sm"
@@ -9664,6 +9676,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               due {feeBalances.treatment.next.due_date}
                             </p>
                           )}
+                          <Button
+                            size="sm"
+                            className={`mt-2 w-full ${feeBalances.treatment.overdue ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700"} text-white shadow-sm ${ACT_BTN}`}
+                            onClick={() => openTreatmentFeeFor(selectedLead)}
+                            data-testid="cons-physio-assign-collect-balance"
+                          >
+                            <IndianRupee className="mr-1 h-3.5 w-3.5" />
+                            Collect Balance
+                          </Button>
                         </div>
                       )}
 
@@ -9755,7 +9776,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </p>
                       )}
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {OfflinePayButton}
                         <Button
                           size="sm"
                           disabled={(treatmentAssigned && courseDone) || !treatmentFeePaid}
@@ -10206,6 +10226,39 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   // beside it, and the third fee sat alone under the first.
                   <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid={testid}>
                     {steps.map(({ step: f, n }) => {
+                      // A part-paid Treatment Fee: the payment already in gets a row of its
+                      // own above the fee, with the receipt for that payment -- the fee's
+                      // own row is still owed money and has no receipt to give.
+                      const firstPaid = f.key === "treatment" && feeBalances.treatment
+                        ? (selectedLead.treatment_fee_payment_details?.installments || [])[0]
+                        : null;
+                      const firstRow = firstPaid?.paid ? (
+                        <div className="flex items-center gap-3 bg-emerald-50/60 px-3 py-2.5" data-testid="cons-fee-step-treatment-first">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                            <CheckCircle2 className="h-3 w-3" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-slate-700">Treatment Fee · 1st Payment</p>
+                            <p className="text-sm font-bold tabular-nums text-emerald-700 sm:hidden">Rs.{Number(firstPaid.amount).toLocaleString("en-IN")}</p>
+                            <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
+                              Paid{firstPaymentMode(firstPaid) ? ` · ${ALL_PAYMENT_MODE_LABELS[firstPaymentMode(firstPaid)] || firstPaymentMode(firstPaid)}` : ""}{firstPaid.due_date ? ` · ${firstPaid.due_date}` : ""}
+                            </p>
+                          </div>
+                          <p className="hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums text-emerald-700 sm:block">Rs.{Number(firstPaid.amount).toLocaleString("en-IN")}</p>
+                          <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`w-full border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 ${ACT_BTN}`}
+                              onClick={() => openFirstTreatmentReceipt()}
+                              title="Open the receipt for the first Treatment Fee payment"
+                              data-testid="cons-fee-receipt-treatment-first"
+                            >
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Receipt
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null;
                       const isNext = nextFeeStep && f.key === nextFeeStep.key;
                       // The same two locks the cards below hold: the Consultation Fee waits
                       // on the prescription, and every other fee waits on that one.
@@ -10214,8 +10267,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       const amount = f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const amountTone = f.paid ? "text-emerald-700" : "text-slate-800";
                       return (
+                        <div key={f.key} className="divide-y divide-slate-100">
+                        {firstRow}
                         <div
-                          key={f.key}
                           className={`flex items-center gap-3 px-3 py-2.5 ${f.paid ? "bg-emerald-50/60" : ""}`}
                           data-testid={`cons-fee-step-${f.key}`}
                         >
@@ -10266,6 +10320,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               </Button>
                             )}
                           </div>
+                        </div>
                         </div>
                       );
                     })}
@@ -10746,8 +10801,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                                     Its own inset, because the panel body is flush: without
                                     it the button sat jammed in the panel's corner. */}
-                                <div className="flex flex-wrap items-center gap-2 p-3">
-                                  {OfflinePayButton}
+                                <div className="flex flex-wrap items-center gap-2 p-3 sm:flex-nowrap">
                                   <Button
                                     size="sm"
                                     className={`bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 hover:shadow ${ACT_BTN}`}
@@ -13258,14 +13312,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 },
                 {
                   key: "mark",
-                  icon: CheckCircle2,
-                  title: isOnline ? "Marked Online" : "Mark Online",
+                  icon: isOnline ? XCircle : CheckCircle2,
+                  title: isOnline ? "Unmark Online" : "Mark Online",
                   desc: isOnline
-                    ? `This course is on the Online price${markedOn ? ` · marked ${markedOn}` : ""}. Collect Online Payment is on the panel.`
+                    ? `Back to the Offline price${markedOn ? ` (marked Online ${markedOn})` : ""}. Collect Online Payment goes; the booked days and physio stay.`
                     : "Switch the course to the Online price, then collect the payment online (UPI / Account Transfer). The booked days and physio stay.",
-                  disabled: isOnline || !onlineMenu.canSwap,
-                  why: isOnline ? undefined : noReprice,
-                  go: () => openSwapDraft("online", true),
+                  disabled: !onlineMenu.canSwap,
+                  why: noReprice,
+                  go: () => openSwapDraft(isOnline ? "offline" : "online", true),
                 },
                 {
                   key: "physio",
@@ -13327,7 +13381,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                         <ArrowLeftRight className="h-4 w-4 text-sky-600" />
-                        {swapDraft.markOnly ? "Mark Online" : `Swap to ${toLabel}`}
+                        {swapDraft.markOnly ? (swapDraft.mode === "online" ? "Mark Online" : "Unmark Online") : `Swap to ${toLabel}`}
                       </p>
                       <button onClick={() => setSwapDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-swap-close"><X className="h-4 w-4" /></button>
                     </div>
@@ -13388,7 +13442,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         )}
                         <p className="text-[11px] text-slate-500">
                           {swapDraft.markOnly
-                            ? "Confirm saves the Online price now. The booked days and the physio stay as they are, and Collect Online Payment opens on the panel."
+                            ? (swapDraft.mode === "online"
+                              ? "Confirm saves the Online price now. The booked days and the physio stay as they are, and Collect Online Payment opens on the panel."
+                              : "Confirm puts the Offline price back now. The booked days and the physio stay as they are.")
                             : `Nothing is saved yet — the swap is saved when the ${toLabel} physio's days are confirmed.`}
                         </p>
                       </>
@@ -13402,7 +13458,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         onClick={swapDraft.markOnly ? submitMarkOnline : continueSwap}
                         data-testid={swapDraft.markOnly ? "cons-mark-online-confirm" : "cons-swap-next"}
                       >
-                        {swapDraft.markOnly ? (markingOnline ? "Saving..." : "Confirm Mark Online") : "Next: Choose Physio"}
+                        {swapDraft.markOnly ? (markingOnline ? "Saving..." : swapDraft.mode === "online" ? "Confirm Mark Online" : "Confirm Unmark Online") : "Next: Choose Physio"}
                       </Button>
                     </div>
                   </div>

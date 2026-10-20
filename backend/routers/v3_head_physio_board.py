@@ -1228,6 +1228,8 @@ def _swap_summary(swap: dict) -> str:
 
 class MarkOnlineInput(BaseModel):
     due_date: Optional[str] = None
+    # "online" marks, "offline" unmarks: the price goes back and the tag comes off.
+    mode: str = "online"
 
 
 @router.post("/leads/{lead_id}/mark-online")
@@ -1239,28 +1241,32 @@ async def hp_mark_online(
     """Mark Online (Branch Admin): the days still to come are priced at the package's
     Online rate, the same figures the Swap popup quotes, but no day is moved and no physio
     changes — the booking, if there is one, stands. The patient is tagged as paying online,
-    which is what opens Collect Online Payment on the panel."""
+    which is what opens Collect Online Payment on the panel. Unmark (`mode` "offline") is
+    the same move back: the Offline rate for the days left, and the tag cleared."""
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     if lead.get("consultation_stage") not in ("Fee Collected", "Physio Assign"):
         raise HTTPException(status_code=400, detail="Mark Online is for a patient at Fee Collected or Physio Assign")
-    swap = await _mode_swap_quote(lead, "online", payload.due_date)
+    if payload.mode not in session_mode_swap.MODES:
+        raise HTTPException(status_code=400, detail="Mark Online or Unmark Online")
+    marking = payload.mode == "online"
+    swap = await _mode_swap_quote(lead, payload.mode, payload.due_date)
     if swap["needs_due_date"]:
         raise HTTPException(status_code=400, detail="Pick a due date for the new balance")
     now = now_iso()
     fields = {
         **_swap_fields(lead, swap),
-        "online_marked_at": now,
-        "online_marked_by": user.full_name,
+        "online_marked_at": now if marking else None,
+        "online_marked_by": user.full_name if marking else None,
         "updated_at": now,
     }
     await v3_col("leads").update_one({"id": lead_id}, {"$set": fields})
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
-        "action": "session_mode_marked_online",
-        "details": "Marked Online · " + _swap_summary(swap),
+        "action": "session_mode_marked_online" if marking else "session_mode_unmarked_online",
+        "details": ("Marked Online · " if marking else "Unmarked Online · ") + _swap_summary(swap),
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": now,
