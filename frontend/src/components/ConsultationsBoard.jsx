@@ -13491,7 +13491,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       <>
                         <p className="text-xs text-slate-600">
                           Day {q.done_days + 1}–{q.total_days} ({q.remaining_days} day{q.remaining_days === 1 ? "" : "s"}) move to {toLabel} at {rs(q.rate)} a day.
-                          {q.done_days > 0 ? ` The ${q.done_days} day${q.done_days === 1 ? "" : "s"} already done keep their price.` : ""}
+                          {q.done_days > 0 ? ` The ${q.done_days} day${q.done_days === 1 ? "" : "s"} already ${(q.paid_days || 0) > (q.completed_days ?? q.done_days) ? "paid for" : "done"} keep their price.` : ""}
                         </p>
                         <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-swap-plan">
                           {q.plan_after.map((run) => {
@@ -13501,7 +13501,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 <span className="text-slate-600">
                                   <span className="font-semibold text-slate-700">Day {run.from_day}{run.to_day > run.from_day ? `–${run.to_day}` : ""}</span>
                                   {" · "}{label(run.mode)} · {run.days} × {rs(run.rate)}
-                                  <span className={`ml-1.5 text-[10px] font-semibold uppercase ${isNew ? "text-sky-700" : "text-slate-400"}`}>{isNew ? "new" : "done"}</span>
+                                  <span className={`ml-1.5 text-[10px] font-semibold uppercase ${isNew ? "text-sky-700" : "text-slate-400"}`}>{isNew ? "new" : (q.paid_days || 0) > (q.completed_days ?? q.done_days) ? "paid" : "done"}</span>
                                 </span>
                                 <span className="font-semibold tabular-nums text-slate-800">{rs(run.amount)}</span>
                               </div>

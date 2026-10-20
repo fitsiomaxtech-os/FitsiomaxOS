@@ -1111,18 +1111,25 @@ async def _mode_swap_quote(lead: dict, to_mode: str, due_date: Optional[str] = N
     if rate is None:
         raise HTTPException(status_code=400, detail=f"This package has no {to_mode.title()} price in Services and Products")
 
-    done = await v3_col("sessions").count_documents({"lead_id": lead["id"], "status": "completed"})
-    if done >= total:
+    completed = await v3_col("sessions").count_documents({"lead_id": lead["id"], "status": "completed"})
+    if completed >= total:
         raise HTTPException(status_code=400, detail=f"All {total} treatment days are already completed — there is nothing left to swap")
+
+    details = lead.get("treatment_fee_payment_details") or {}
+    installments = details.get("installments") or []
+    # Days already paid for keep the price they were paid at, the same as days already
+    # done: 14 sessions paid Offline stay Offline, and only the days nobody has paid for
+    # yet move to the new rate. Counted off the sessions each paid row covers.
+    paid_days = min(total, sum(int(i.get("sessions") or 0) for i in installments if i.get("paid")))
+    done = max(completed, paid_days)
+    if done >= total:
+        raise HTTPException(status_code=400, detail=f"All {total} treatment days are already paid for — there is nothing left to re-price")
 
     before = session_mode_swap.plan_of(lead)
     after = session_mode_swap.swapped_plan(before, done, to_mode, float(rate))
     old_total = session_mode_swap.plan_total(before)
     new_total = session_mode_swap.plan_total(after)
     delta = round(new_total - old_total, 2)
-
-    details = lead.get("treatment_fee_payment_details") or {}
-    installments = details.get("installments") or []
     paid_before, due_before = _schedule_sums(installments)
     if not installments:
         paid_before = round(float(lead.get("treatment_fee_paid") or 0), 2)
@@ -1151,6 +1158,8 @@ async def _mode_swap_quote(lead: dict, to_mode: str, due_date: Optional[str] = N
         "to_mode": to_mode,
         "total_days": total,
         "done_days": done,
+        "completed_days": completed,
+        "paid_days": paid_days,
         "remaining_days": total - done,
         "rate": float(rate),
         "plan_before": session_mode_swap.with_day_ranges(before),
