@@ -35,7 +35,8 @@ import { ChevronRight } from "lucide-react";
  *
  * `inline` lays the row out on one line instead, drawn to the reference the user sent:
  * a plain grey icon, the label, the count in a light orange box beside it, a plain grey
- * chevron on the right -- no tinted squares, no shadow, no big figure. The corner badge
+ * chevron on the right -- no tinted squares, no big figure; the same soft shadow as the
+ * stacked card, so the tabs' card lists match Manage's. The corner badge
  * gives way to a red dot inside the corner that pops up every 3s (tailwind.config's
  * dot-pop), shown only while the count is above 0: the dot says someone is waiting, the
  * box says how many. Colours are fixed rather than taken from `color`/`badgeColor`, the
@@ -52,7 +53,7 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
         type="button"
         onClick={onClick}
         aria-pressed={active}
-        className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
+        className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left shadow-sm transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
         data-testid={testid}
       >
         {/* 80% of the chevron's 24px, at 75% opacity: the name leads, the icon only hints. */}
