@@ -36,7 +36,8 @@ import { ChevronRight } from "lucide-react";
  * `inline` lays the row out on one line instead, drawn to the reference the user sent:
  * a plain grey icon, the label, the count in a light orange box beside it, a plain grey
  * chevron on the right -- no tinted squares, no big figure; a deeper shadow (shadow-md)
- * than the stacked card's, and the label at Manage's text-xs. The corner badge
+ * than the stacked card's, and the label at Manage's text-xs. The open card's border is
+ * 2px, its padding 1px less each side so the card does not grow when picked. The corner badge
  * gives way to a red dot inside the corner that pops up every 3s (tailwind.config's
  * dot-pop), shown only while the count is above 0: the dot says someone is waiting, the
  * box says how many. Colours are fixed rather than taken from `color`/`badgeColor`, the
@@ -56,7 +57,7 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
         type="button"
         onClick={onClick}
         aria-pressed={active}
-        className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left shadow-md transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
+        className={`relative flex w-full items-center gap-4 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 px-[15px] py-[13px]" : "border border-slate-200 px-4 py-3.5"}`}
         data-testid={testid}
       >
         {/* Both icons at 80% of their old size and 85% of their old opacity: the stage icon
