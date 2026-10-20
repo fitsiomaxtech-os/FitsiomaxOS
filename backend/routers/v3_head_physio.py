@@ -122,6 +122,9 @@ async def get_doctor_calendar(doctor_id: str, _: V3UserOut = Depends(v3_require_
         "slot_details": doctor.get("slot_details", []),
         "booked": booked_map,
         "slot_capacity": slot_capacity_of(doctor),
+        # This physio's own session length, set from the calendar header. None means they
+        # follow the session item's duration in FITSIO STORE, as every physio used to.
+        "slot_duration": doctor.get("slot_duration_minutes") or None,
         "occupancy": occupancy,
         "occupants": occupants,
         "shift": window,
@@ -160,6 +163,50 @@ async def set_slot_capacity(
         {"$set": {"slot_capacity": payload.slot_capacity, "updated_at": now_iso()}},
     )
     return {"doctor_id": doctor_id, "slot_capacity": payload.slot_capacity}
+
+
+SLOT_DURATION_MIN_MINUTES = 5
+SLOT_DURATION_MAX_MINUTES = 480
+
+
+class SlotDurationInput(BaseModel):
+    # None clears the override, so the physio goes back to FITSIO STORE's session length.
+    slot_duration_minutes: Optional[int] = None
+
+
+@router.patch("/doctors/{doctor_id}/slot-duration")
+async def set_slot_duration(
+    doctor_id: str,
+    payload: SlotDurationInput,
+    _: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """How long one treatment session runs on this physio's calendar.
+
+    Only the days opened from now on are cut at it; slots already published keep the
+    length they were saved with.
+    """
+    doctor = await v3_col("doctors").find_one({"id": doctor_id}, {"_id": 0, "id": 1, "profile_type": 1})
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    if doctor.get("profile_type") != "physio":
+        # A consultation's length is the one Branch Leads → Appointment books against
+        # (consultation_slot_minutes), so it stays with FITSIO STORE.
+        raise HTTPException(status_code=400, detail="Only a Physio's treatment session length can be set here.")
+    minutes = payload.slot_duration_minutes
+    if minutes is not None and not (
+        SLOT_DURATION_MIN_MINUTES <= minutes <= SLOT_DURATION_MAX_MINUTES and minutes % 5 == 0
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Session length must be {SLOT_DURATION_MIN_MINUTES}–{SLOT_DURATION_MAX_MINUTES} minutes, in steps of 5",
+        )
+    update = (
+        {"$set": {"slot_duration_minutes": minutes, "updated_at": now_iso()}}
+        if minutes is not None
+        else {"$unset": {"slot_duration_minutes": ""}, "$set": {"updated_at": now_iso()}}
+    )
+    await v3_col("doctors").update_one({"id": doctor_id}, update)
+    return {"doctor_id": doctor_id, "slot_duration": minutes}
 
 
 @router.post("/doctors/{doctor_id}/calendar-slots")

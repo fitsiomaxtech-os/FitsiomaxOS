@@ -314,6 +314,8 @@ export const rescheduleConsultationFollowUp = async (leadId, followupId, payload
 
 export const getDoctorCalendar = async (doctorId) => (await api.get(`/doctors/${doctorId}/calendar`)).data;
 export const setDoctorSlotCapacity = async (doctorId, slotCapacity) => (await api.patch(`/doctors/${doctorId}/slot-capacity`, { slot_capacity: slotCapacity })).data;
+// A physio's own session length; null hands them back to FITSIO STORE's.
+export const setDoctorSlotDuration = async (doctorId, minutes) => (await api.patch(`/doctors/${doctorId}/slot-duration`, { slot_duration_minutes: minutes })).data;
 
 // ---- Shifts (MANAGEMENT → TIME MANAGEMENT) ----
 // The working windows a branch runs, and who is on each. An expert's shift is what their

@@ -28,11 +28,13 @@ import {
   setDoctorDayShift,
   updateShift,
   setDoctorSlotCapacity,
+  setDoctorSlotDuration,
   getPhysioTypes,
   setDoctorService,
   setDoctorMeetLink,
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
+import { ClockDurationDialog, durationLabel } from "@/components/ui/clock-time-input";
 import { announceShiftsChanged, gridTimesFor, hoursLabel, onShiftsChanged, shiftIdsOf } from "@/lib/shifts";
 
 const CONSULTATION_TYPES = [
@@ -143,7 +145,11 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   const [selectedDates, setSelectedDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
 
-  const [slotDuration, setSlotDuration] = useState(FALLBACK_SLOT_MINUTES);
+  const [storeDuration, setStoreDuration] = useState(FALLBACK_SLOT_MINUTES);
+  // A physio can be given their own session length from the header; otherwise the day is
+  // cut at FITSIO STORE's, as it always was.
+  const ownDuration = isPhysio ? Number(calendarData?.slot_duration) || null : null;
+  const slotDuration = ownDuration || storeDuration;
   const slotType = SLOT_TYPES[0].value;
   const [pendingSlots, setPendingSlots] = useState([]);
   // Select whole month: every day from today to the month's end is staged at once, leave
@@ -174,7 +180,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
             return pb - pa || tb.localeCompare(ta);
           })
           .map((i) => i.duration_minutes)[0];
-        if (!cancelled && configured) setSlotDuration(Number(configured));
+        if (!cancelled && configured) setStoreDuration(Number(configured));
       })
       .catch(() => { /* keep the fallback */ });
     return () => { cancelled = true; };
@@ -275,6 +281,22 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   );
 
   const [savingCapacity, setSavingCapacity] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
+
+  // null clears the physio's own length, so they follow FITSIO STORE again.
+  const saveDuration = async (minutes) => {
+    setDurationOpen(false);
+    if (!selectedDoctor || minutes === ownDuration) return;
+    try {
+      await setDoctorSlotDuration(selectedDoctor.id, minutes);
+      toast.success(minutes
+        ? `${selectedDoctor.full_name}'s sessions now run ${durationLabel(minutes)}`
+        : `${selectedDoctor.full_name} is back on FITSIO STORE's ${durationLabel(storeDuration)}`);
+      await loadCalendar();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not change the session length");
+    }
+  };
 
   // Lowering this never evicts anyone. Slots already over the new number stay booked and
   // simply stop accepting more — cancelling a patient's treatment day as a side effect of
@@ -1056,9 +1078,36 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   <p className="hidden text-[11px] text-slate-400 sm:block">
                     {isConsultant
                       ? `${purpose} · ${publishedDays.size} day${publishedDays.size === 1 ? "" : "s"} available`
-                      : `${purpose} · ${slotDuration} min · ${(calendarData?.slots || []).length} slots open`}
+                      : isPhysio
+                        ? <>
+                            {purpose} ·{" "}
+                            {/* The session length, editable here per physio on the clock dial.
+                                Only days opened after the change are cut at it. */}
+                            <button
+                              type="button"
+                              onClick={() => setDurationOpen(true)}
+                              className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-px font-semibold text-sky-700 hover:bg-sky-100"
+                              title={ownDuration ? "Set for this physio — tap to change" : "From FITSIO STORE — tap to set this physio's own length"}
+                              data-testid="calendar-duration-edit"
+                            >
+                              {durationLabel(slotDuration)}
+                              <Pencil className="h-2.5 w-2.5" />
+                            </button>
+                            {` · ${(calendarData?.slots || []).length} slots open`}
+                          </>
+                        : `${purpose} · ${slotDuration} min · ${(calendarData?.slots || []).length} slots open`}
                     {isPhysio && ` · ${calendarData?.slot_capacity ?? 3} per slot`}
                   </p>
+                  {durationOpen && (
+                    <ClockDurationDialog
+                      value={slotDuration}
+                      title="Treatment Session Duration"
+                      fallback={ownDuration ? storeDuration : null}
+                      onCancel={() => setDurationOpen(false)}
+                      onOk={saveDuration}
+                      testid="calendar-duration"
+                    />
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
