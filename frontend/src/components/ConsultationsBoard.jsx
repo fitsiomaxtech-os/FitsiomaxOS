@@ -2610,8 +2610,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // unrolling in place, so reading it never pushes the payment panel down the card.
   const [recordDetailsOpen, setRecordDetailsOpen] = useState(false);
   // The popup's size, chosen when a patient is opened and held while they stay open. A
-  // Branch Admin opening someone at Consultation Visit or Fee Collected gets a 565 × 660
-  // card: the work there is the payments, and a 1024px sheet around them was mostly white.
+  // Branch Admin opening someone at Consultation Visit, Fee Collected or Physio Assign gets a
+  // 565 × 660 card: the work there is the payments and the physio, and a 1024px sheet around
+  // them was mostly white. Physio Assign's two halves stack in it (see PhysioDetailBody).
   // Held rather than read off the stage live, so a fee taken or a physio assigned with the
   // popup still up does not resize the card under the hand that just pressed the button.
   // At Consultation Booked the card is narrower still, 514 wide: all it holds is the booked
@@ -2620,7 +2621,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   if (detailFrame.id !== (selectedLead?.id ?? null)) {
     setDetailFrame({
       id: selectedLead?.id ?? null,
-      compact: !isConsultant && ["Consultation Visit", "Fee Collected"].includes(selectedLead?.consultation_stage),
+      compact: !isConsultant && ["Consultation Visit", "Fee Collected", "Physio Assign"].includes(selectedLead?.consultation_stage),
       booked: !isConsultant && ["Consultation Booked", "Follow Up"].includes(selectedLead?.consultation_stage),
     });
   }
