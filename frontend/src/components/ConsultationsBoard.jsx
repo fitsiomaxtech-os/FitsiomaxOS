@@ -1428,10 +1428,12 @@ const COLS_WITH_DISCOUNT = {
 // Fee Collected ends its rows with a fee action on every tab, so it needs a set of its own
 // — every other column gives up a point or two to pay for it. The table widens by the same
 // amount at its min-width, so nothing is squeezed on a laptop.
+// Action is sized for its longest label, "Collect Balance" with its rupee icon: at 7% the
+// button ran past the table's right edge. Patient pays for it — the names are short.
 const COLS_WITH_ACTION = {
-  sno: "w-[3%]", patient: "w-[22%]", appt: "w-[11%]", expert: "w-[13%]", stage: "w-[8%]",
+  sno: "w-[3%]", patient: "w-[18%]", appt: "w-[11%]", expert: "w-[13%]", stage: "w-[8%]",
   phone: "w-[7%]", pno: "w-[8%]", collected: "w-[8%]", discount: "w-[7%]", total: "w-[6%]",
-  action: "w-[7%]",
+  action: "w-[11%]",
 };
 
 /**
@@ -7563,7 +7565,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         // button would otherwise open the popup this button is a shortcut
                         // past. Nothing in here wants the row's own click.
                         <td
-                          className="whitespace-nowrap px-3 py-3 text-center align-middle text-xs"
+                          className="whitespace-nowrap px-2 py-3 text-center align-middle text-xs"
                           onClick={(e) => e.stopPropagation()}
                           data-testid={`cons-row-${rowFee}-${l.id}`}
                         >
@@ -7593,7 +7595,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 // that is blocking it — but drops out of the filled colours
                                 // the collectable ones wear, so a row that cannot take money
                                 // does not look like one that can.
-                                className={`w-full ${gate
+                                className={`w-full max-w-full ${gate
                                   ? "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
                                   : t.kind === "balance"
                                   ? "bg-amber-500 text-white hover:bg-amber-600"
@@ -7605,7 +7607,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 {gate
                                   ? <AlertCircle className="mr-1 h-3.5 w-3.5 shrink-0" />
                                   : <IndianRupee className="mr-1 h-3.5 w-3.5 shrink-0" />}
-                                {gate ? gate.label : t.kind === "balance" ? "Collect Balance" : "Collect"}
+                                <span className="truncate">{gate ? gate.label : t.kind === "balance" ? "Collect Balance" : "Collect"}</span>
                               </Button>
                             </>
                           )}
