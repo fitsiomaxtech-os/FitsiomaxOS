@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, Minus, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ChevronRight, Minus, Phone as PhoneIcon, Plus, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,12 +37,13 @@ const capitalise = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_
  * The OS's own dropdown, as Branch Leads' list filters wear it: sky while it is narrowing the
  * list, plain while it is on its "all" answer, and a capped menu that scrolls.
  */
-const FilterSelect = ({ value, onChange, allLabel, options, label, testid }) => (
+// size: its width; by default it shares the row, and from lg up it is a fixed 9rem.
+const FilterSelect = ({ value, onChange, allLabel, options, label, testid, size = "min-w-0 flex-1 lg:w-36 lg:flex-none" }) => (
   <Select value={value} onValueChange={onChange}>
     <SelectTrigger
       title={label}
       aria-label={label}
-      className={`h-9 min-w-0 flex-1 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 lg:w-36 lg:flex-none ${
+      className={`h-9 rounded-md border px-2.5 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${size} ${
         value !== "all" ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
       }`}
       data-testid={testid}
@@ -192,6 +193,7 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   const [branch, setBranch] = useState("all");
   const [gender, setGender] = useState("all");
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   const [adding, setAdding] = useState(false);
   const [confirming, setConfirming] = useState(null); // { mode, member, branch }, a row's Add or Remove
 
@@ -245,97 +247,163 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
   // One action a row, decided by where they stand with the viewer's branch: their own
   // branch — nothing to do; collaborating with it — Remove; not at it — Add. A profile-only
   // expert has no login to post, and a Super Admin taking consultations already runs every
-  // branch, so neither gets one.
-  const rowOptions = (m) => {
+  // branch, so neither gets one. null when there is nothing to do: the table shows a dash
+  // there, the phone card nothing.
+  const rowAction = (m) => {
     const here = branchId ? m.collab_branches?.find((b) => b.id === branchId) : null;
     const own = m.all_branches || (branchId && m.own_branch?.id === branchId);
-    if (!branchId || !m.user_id || own) {
-      return <div className="text-center text-slate-400">—</div>;
-    }
-    return (
-      <div className="flex items-center justify-center">
-        {here ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirming({ mode: "remove", member: m, branch: here })}
-            className="h-8 gap-1 border-rose-200 px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-            title={`Remove ${m.full_name} from ${here.name}`}
-            aria-label={`Remove ${m.full_name} from ${here.name}`}
-            data-testid={`team-row-remove-${m.id}`}
-          >
-            <Minus className="h-3.5 w-3.5" /> Remove
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirming({ mode: "add", member: m, branch: myBranch })}
-            className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
-            title={`Add ${m.full_name} to ${myBranch.name}`}
-            aria-label={`Add ${m.full_name} to ${myBranch.name}`}
-            data-testid={`team-row-add-${m.id}`}
-          >
-            <Plus className="h-3.5 w-3.5" /> Add
-          </Button>
-        )}
-      </div>
+    if (!branchId || !m.user_id || own) return null;
+    return here ? (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setConfirming({ mode: "remove", member: m, branch: here })}
+        className="h-8 gap-1 border-rose-200 px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+        title={`Remove ${m.full_name} from ${here.name}`}
+        aria-label={`Remove ${m.full_name} from ${here.name}`}
+        data-testid={`team-row-remove-${m.id}`}
+      >
+        <Minus className="h-3.5 w-3.5" /> Remove
+      </Button>
+    ) : (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setConfirming({ mode: "add", member: m, branch: myBranch })}
+        className="h-8 gap-1 border-sky-200 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+        title={`Add ${m.full_name} to ${myBranch.name}`}
+        aria-label={`Add ${m.full_name} to ${myBranch.name}`}
+        data-testid={`team-row-add-${m.id}`}
+      >
+        <Plus className="h-3.5 w-3.5" /> Add
+      </Button>
     );
   };
 
+  const rowOptions = (m) => {
+    const action = rowAction(m);
+    return action
+      ? <div className="flex items-center justify-center">{action}</div>
+      : <div className="text-center text-slate-400">—</div>;
+  };
+
+  // The toolbar's pieces, laid out twice: in one row on a phone, and wrapping (or on the
+  // tab line) from sm up. Each copy keeps its own test ids.
+  const searchBox = (wrapClass, testid, autoFocus = false) => (
+    <div className={`relative ${wrapClass}`}>
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search name, phone or branch"
+        className="h-9 pl-8 pr-8 text-xs"
+        autoFocus={autoFocus}
+        data-testid={testid}
+      />
+      {search && (
+        <button
+          type="button"
+          onClick={() => setSearch("")}
+          className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          title="Clear search"
+          aria-label="Clear search"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+
+  const branchFilter = (testid, size) => (
+    <FilterSelect
+      value={branch}
+      onChange={setBranch}
+      label="Branch"
+      allLabel="All Branches"
+      options={data.branches.map((b) => [b.id, b.name])}
+      testid={testid}
+      size={size}
+    />
+  );
+
+  const genderFilter = (testid, size) => (
+    <FilterSelect
+      value={gender}
+      onChange={setGender}
+      label="Gender"
+      allLabel="All"
+      options={[["male", "Male"], ["female", "Female"], ["other", "Others"]]}
+      testid={testid}
+      size={size}
+    />
+  );
+
+  const refreshButton = (
+    <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh">
+      <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+    </Button>
+  );
+
+  const addButton = (testid) => (
+    <Button
+      onClick={() => setAdding(true)}
+      disabled={!branchId}
+      className="h-9 w-9 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700"
+      title={`Add ${k.desk.label}`}
+      aria-label={`Add ${k.desk.label}`}
+      data-testid={testid}
+    >
+      <Plus className="h-4 w-4" />
+    </Button>
+  );
+
   const filters = (
     <>
-      <div className="relative w-full lg:w-52">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, phone or branch"
-          className="h-9 pl-8 pr-8 text-xs"
-          data-testid={`team-search-${kind}`}
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch("")}
-            className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            title="Clear search"
-            aria-label="Clear search"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-      <FilterSelect
-        value={branch}
-        onChange={setBranch}
-        label="Branch"
-        allLabel="All Branches"
-        options={data.branches.map((b) => [b.id, b.name])}
-        testid={`team-branch-filter-${kind}`}
-      />
-      <FilterSelect
-        value={gender}
-        onChange={setGender}
-        label="Gender"
-        allLabel="All"
-        options={[["male", "Male"], ["female", "Female"], ["other", "Others"]]}
-        testid={`team-gender-filter-${kind}`}
-      />
-      <Button onClick={load} disabled={loading} className="h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh">
-        <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-      </Button>
-      <Button
-        onClick={() => setAdding(true)}
-        disabled={!branchId}
-        className="h-9 w-9 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700"
-        title={`Add ${k.desk.label}`}
-        aria-label={`Add ${k.desk.label}`}
-        data-testid={`team-add-${kind}`}
-      >
-        <Plus className="h-4 w-4" />
-      </Button>
+      {searchBox("w-full lg:w-52", `team-search-${kind}`)}
+      {branchFilter(`team-branch-filter-${kind}`)}
+      {genderFilter(`team-gender-filter-${kind}`)}
+      {refreshButton}
+      {addButton(`team-add-${kind}`)}
     </>
+  );
+
+  // Phone: everything on one line, the search behind an icon. Opened, the box takes the
+  // line until its ✕, which also clears it, so no search is left narrowing the list unseen.
+  const phoneToolbar = (
+    <div className="flex items-center gap-1.5 sm:hidden" data-testid={`team-toolbar-phone-${kind}`}>
+      {searchOpen ? (
+        <>
+          {searchBox("min-w-0 flex-1", `team-search-phone-${kind}`, true)}
+          <Button
+            variant="outline"
+            onClick={() => { setSearch(""); setSearchOpen(false); }}
+            className="h-9 w-9 shrink-0 border-slate-200 p-0 text-slate-500"
+            title="Close search"
+            aria-label="Close search"
+            data-testid={`team-search-close-phone-${kind}`}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            variant="outline"
+            onClick={() => setSearchOpen(true)}
+            className="h-9 w-9 shrink-0 border-slate-200 bg-white p-0 text-slate-500 hover:bg-slate-50"
+            title="Search"
+            aria-label="Search"
+            data-testid={`team-search-open-phone-${kind}`}
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+          {branchFilter(`team-branch-filter-phone-${kind}`, "min-w-0 flex-1")}
+          {genderFilter(`team-gender-filter-phone-${kind}`, "w-[4.5rem] shrink-0")}
+          {refreshButton}
+          {addButton(`team-add-phone-${kind}`)}
+        </>
+      )}
+    </div>
   );
 
   return (
@@ -359,10 +427,11 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
           onSaved={() => { setConfirming(null); load(); }}
         />
       )}
-      {/* Below lg the search takes a line of its own, the two filters and Refresh under it.
-          Up to 2xl they stay above the table: on the tab line any narrower they pushed the
-          last tabs out of sight. */}
-      <div className={`flex flex-wrap items-center gap-2 ${toolbarSlot ? "2xl:hidden" : ""}`}>{filters}</div>
+      {phoneToolbar}
+      {/* From sm to lg the search takes a line of its own, the two filters and Refresh under
+          it. Up to 2xl they stay above the table: on the tab line any narrower they pushed
+          the last tabs out of sight. */}
+      <div className={`hidden flex-wrap items-center gap-2 sm:flex ${toolbarSlot ? "2xl:hidden" : ""}`}>{filters}</div>
 
       {loading && data.members.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white py-10 text-center text-xs text-slate-400">Loading {k.plural}…</p>
@@ -372,27 +441,51 @@ export const TeamPanel = ({ kind, branchId = null, toolbarSlot = null }) => {
         </p>
       ) : (
         <>
-          {/* Phone: one row each, branch and phone under the name. */}
-          <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white md:hidden">
-            {visible.map((m, i) => (
-              <div key={m.id} className="flex items-center gap-3 p-3" data-testid={`team-row-${m.id}`}>
-                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-slate-400">{i + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-800">{m.full_name}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                    <OwnBranch m={m} />
-                    {!m.all_branches && m.collab_branches?.length > 0 && <CollabBranches m={m} />}
+          {/* Phone: a card each. Who they are on top — initial with the S.No, name and
+              gender, their branches under it — and what to do below a rule: the phone to
+              ring and the Add or Remove. A card with neither has no lower line. */}
+          <div className="flex flex-col gap-2 md:hidden">
+            {visible.map((m, i) => {
+              const action = rowAction(m);
+              return (
+                <div key={m.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid={`team-row-${m.id}`}>
+                  <div className="flex items-center gap-3 p-3">
+                    <span className="relative shrink-0">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 text-sm font-bold text-sky-700">
+                        {m.full_name?.charAt(0)?.toUpperCase() || "?"}
+                      </span>
+                      <span className="absolute -bottom-1 -left-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-white bg-slate-500 px-1 text-[9px] font-semibold tabular-nums text-white">
+                        {i + 1}
+                      </span>
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="min-w-0 truncate text-sm font-semibold text-slate-800">{m.full_name}</p>
+                        {m.gender && <span className="shrink-0"><GenderChip gender={m.gender} /></span>}
+                        {m.status !== "active" && <span className="shrink-0"><StatusChip status={m.status} /></span>}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        <OwnBranch m={m} />
+                        {!m.all_branches && m.collab_branches?.length > 0 && <CollabBranches m={m} />}
+                      </div>
+                    </div>
+                    {arrow(m)}
                   </div>
-                  {m.phone && <p className="mt-0.5 truncate text-[11px] text-slate-500"><Phone phone={m.phone} /></p>}
+                  {(m.phone || action) && (
+                    <div className="flex min-h-[2.75rem] items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5 truncate text-xs">
+                        {m.phone ? (
+                          <><PhoneIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" /><Phone phone={m.phone} /></>
+                        ) : (
+                          <span className="text-slate-400">No phone</span>
+                        )}
+                      </span>
+                      {action}
+                    </div>
+                  )}
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <GenderChip gender={m.gender} />
-                  {m.status !== "active" && <StatusChip status={m.status} />}
-                </div>
-                {rowOptions(m)}
-                {arrow(m)}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
