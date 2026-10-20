@@ -2683,6 +2683,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     window.scrollTo({ top: 0 });
                   }}
                   testid={`branch-consult-phone-card-${s.name}`}
+                  inline
                 />
               ))}
             </div>

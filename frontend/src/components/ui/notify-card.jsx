@@ -39,7 +39,8 @@ import { ChevronRight } from "lucide-react";
  * gives way to a red dot inside the corner that pops up every 3s (tailwind.config's
  * dot-pop), shown only while the count is above 0: the dot says someone is waiting, the
  * box says how many. Colours are fixed rather than taken from `color`/`badgeColor`, the
- * reference being one look for every stage. Branch Leads' stage cards on a phone.
+ * reference being one look for every stage. Branch Leads' and Consultation's stage cards
+ * on a phone.
  */
 export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false, inline = false }) => {
   const count = Number(badgeCount ?? value) || 0;
@@ -56,14 +57,16 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
       >
         {/* 80% of the chevron's 24px, at 75% opacity: the name leads, the icon only hints. */}
         {Icon && <Icon aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-75" strokeWidth={2} />}
-        <span className="min-w-0 flex-1 truncate text-base font-medium text-slate-900">{label}</span>
-        {/* Right-aligned beside the chevron, so the counts line up down the stack. Only the
+        <span className="min-w-0 flex-1 truncate text-base font-medium text-slate-900 opacity-75">{label}</span>
+        {/* Right-aligned beside the chevron, so the counts line up down the stack. One width
+            for every box, wide enough for three digits, so 0 and 123 sit in the same shape;
+            the full figure is shown (no 99+), and only a fourth digit widens it. Only the
             fill is faded (to 35%); the number stays solid, in a darker orange to read on it. */}
         <span
-          className="inline-flex h-7 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium text-orange-700"
+          className="inline-flex h-7 min-w-[3rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium tabular-nums text-orange-700"
           data-testid={testid ? `${testid}-badge` : undefined}
         >
-          {count > 99 ? "99+" : count}
+          {count}
         </span>
         <ChevronRight aria-hidden className="h-6 w-6 shrink-0 text-slate-500" />
         {live && (
