@@ -54,15 +54,18 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
         className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
         data-testid={testid}
       >
-        {Icon && <Icon aria-hidden className="h-6 w-6 shrink-0 text-slate-500" strokeWidth={2} />}
-        <span className="min-w-0 truncate text-base font-medium text-slate-900">{label}</span>
+        {/* 80% of the chevron's 24px, at 75% opacity: the name leads, the icon only hints. */}
+        {Icon && <Icon aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-75" strokeWidth={2} />}
+        <span className="min-w-0 flex-1 truncate text-base font-medium text-slate-900">{label}</span>
+        {/* Right-aligned beside the chevron, so the counts line up down the stack. Only the
+            fill is faded (to 35%); the number stays solid, in a darker orange to read on it. */}
         <span
-          className="inline-flex h-7 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100 px-2 text-base font-medium text-orange-500"
+          className="inline-flex h-7 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium text-orange-700"
           data-testid={testid ? `${testid}-badge` : undefined}
         >
           {count > 99 ? "99+" : count}
         </span>
-        <ChevronRight aria-hidden className="ml-auto h-6 w-6 shrink-0 text-slate-500" />
+        <ChevronRight aria-hidden className="h-6 w-6 shrink-0 text-slate-500" />
         {live && (
           <span aria-hidden className="absolute right-2.5 top-2 h-2.5 w-2.5 rounded-full bg-red-500 motion-safe:animate-dot-pop" data-testid={testid ? `${testid}-dot` : undefined} />
         )}
