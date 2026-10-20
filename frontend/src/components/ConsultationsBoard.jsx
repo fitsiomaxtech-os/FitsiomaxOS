@@ -5270,9 +5270,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       : (fee === "treatment" ? savedInstallments : (feeBalances[fee]?.rows || []))[idx];
     const inst = !leadArg && fee === "treatment" ? (partialInstallments[idx] || {}) : {};
     const amount = saved?.amount ?? Math.round((parseInt(inst.sessions, 10) || 0) * perSessionRate);
+    // The sessions this row pays for, which "Sessions Covered Now" can take fewer of today.
+    // Only the Treatment Fee's rows carry sessions; the other fees are a single price.
+    const rowSessions = fee === "treatment" ? (parseInt(saved?.sessions ?? inst.sessions, 10) || 0) : 0;
     setPartialCollectDraft({
       idx,
       fee,
+      sessions_total: rowSessions,
+      sessions_now: rowSessions > 0 ? String(rowSessions) : "",
+      // The row's full amount, which a part of its sessions is priced as a share of.
+      row_amount: amount > 0 ? amount : 0,
       amount: amount > 0 ? String(amount) : "",
       // What this installment is due at, which a discount comes off. The amount box can
       // still be typed short of the net for a part payment, as it always could.
@@ -5449,6 +5456,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     }
     const mode = draft.payment_mode;
     const payload = { payment_mode: mode, amount };
+    // Fewer sessions than the row holds: the server cuts the row in two, and the rest
+    // stays owing on the same due date.
+    const sessionsNow = parseInt(draft.sessions_now, 10) || 0;
+    if (draft.sessions_total > 0) {
+      if (sessionsNow < 1 || sessionsNow > draft.sessions_total) {
+        toast.error(`Sessions Covered Now has to be between 1 and ${draft.sessions_total}`);
+        return;
+      }
+      if (sessionsNow < draft.sessions_total) payload.sessions_now = sessionsNow;
+    }
     const discount = round2(Math.max(0, parseFloat(draft.discount) || 0));
     if (discount > 0) {
       if (draft.due > 0 && discount >= draft.due) {
@@ -5508,7 +5525,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       }
       payload.fee = fee;
       const paidRes = await markInstallmentPaid(lead.id, draft.idx + 1, payload);
-      const installments = (lead[detailsField]?.installments || []).map((inst, i) =>
+      // The same cut the server made when fewer sessions were paid for: this row keeps the
+      // sessions taken now, and the rest follows it as an unpaid row on the same due date.
+      const rows = [...(lead[detailsField]?.installments || [])];
+      if (payload.sessions_now && rows[draft.idx]) {
+        const whole = Number(rows[draft.idx].amount) || draft.row_amount;
+        const part = round2((whole * payload.sessions_now) / draft.sessions_total);
+        rows.splice(draft.idx + 1, 0, { ...rows[draft.idx], paid: false, amount: round2(whole - part), sessions: draft.sessions_total - payload.sessions_now, split_rest: true });
+        rows[draft.idx] = { ...rows[draft.idx], sessions: payload.sessions_now };
+      }
+      const installments = rows.map((inst, i) =>
         i === draft.idx ? { ...inst, paid: true, amount, payment_mode: draft.payment_lines ? "split" : mode, transaction_id: paidRes?.transaction_id, ...(discount > 0 ? { discount_amount: discount } : {}) } : inst
       );
       const agreedDiscount = round2((Number(lead[detailsField]?.discount_amount) || 0) + discount);
@@ -12246,7 +12272,57 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {/* A discount on the balance, the same Discount % / ₹ pair the fee's own
                         Collect popup asks. The amount below follows it while it is still on
                         the net payable. */}
+                    {/* How many of this row's sessions are being paid for now. Fewer than
+                        all prices this collection at their share of the row; the sessions
+                        left over stay owing as a row of their own on the same due date. */}
+                    {partialCollectDraft.sessions_total > 0 && (() => {
+                      const total = partialCollectDraft.sessions_total;
+                      const n = parseInt(partialCollectDraft.sessions_now, 10) || 0;
+                      const left = total - n;
+                      const leftAmount = n > 0 && n < total
+                        ? round2(partialCollectDraft.row_amount - round2((partialCollectDraft.row_amount * n) / total))
+                        : 0;
+                      return (
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Sessions Covered Now *</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max={total}
+                            value={partialCollectDraft.sessions_now}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const count = parseInt(raw, 10) || 0;
+                              const due = count > 0 && count <= total
+                                ? round2((partialCollectDraft.row_amount * count) / total)
+                                : partialCollectDraft.row_amount;
+                              const off = Math.max(0, parseFloat(partialCollectDraft.discount) || 0);
+                              setPartialCollectDraft((d) => ({
+                                ...d,
+                                sessions_now: raw,
+                                due,
+                                // A discount bigger than the smaller bill would be refused, so
+                                // it goes; otherwise it stays, off the new figure.
+                                ...(off >= due ? { discount: "" } : {}),
+                                amount: String(round2(Math.max(0, due - (off >= due ? 0 : off)))),
+                              }));
+                            }}
+                            className="h-9"
+                            data-testid="cons-partial-collect-sessions-now"
+                          />
+                          <p className={`mt-1 text-[11px] ${n < 1 || n > total ? "text-rose-500" : "text-slate-400"}`} data-testid="cons-partial-collect-sessions-note">
+                            {n < 1 || n > total
+                              ? `Enter 1 to ${total} sessions`
+                              : left > 0
+                                ? `Covers ${n} of ${total} sessions · ${left} sessions (Rs.${leftAmount.toLocaleString("en-IN")}) stay as balance`
+                                : `Covers all ${total} sessions`}
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     <BalanceDiscount
+                      key={`sessions-${partialCollectDraft.sessions_now}`}
                       due={partialCollectDraft.due}
                       discount={partialCollectDraft.discount}
                       amount={partialCollectDraft.amount}
@@ -12448,6 +12524,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       disabled={
                         collectingTreatmentFee ||
                         !(parseFloat(partialCollectDraft.amount) > 0) ||
+                        (partialCollectDraft.sessions_total > 0 && !((parseInt(partialCollectDraft.sessions_now, 10) || 0) >= 1 && (parseInt(partialCollectDraft.sessions_now, 10) || 0) <= partialCollectDraft.sessions_total)) ||
                         (partialCollectDraft.due > 0 && (parseFloat(partialCollectDraft.discount) || 0) >= partialCollectDraft.due) ||
                         (partialCollectDraft.payment_lines
                           ? (partialCollectDraft.payment_lines.some((l) => !(parseFloat(l.amount) > 0)) ||

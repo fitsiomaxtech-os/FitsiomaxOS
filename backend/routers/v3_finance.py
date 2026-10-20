@@ -3255,6 +3255,21 @@ async def mark_installment_paid(
 
     activity_details = None
     transaction_id = None
+    # Sessions Covered Now: a Treatment Fee row carries the sessions it pays for, and the
+    # desk can take fewer of them today. The row is cut in two -- the sessions paid for now
+    # at their share of the row, and the rest left owing on the same due date -- so the
+    # sessions not bought stay a balance instead of going with a short amount. `split_from`
+    # is what Undo puts the row back to.
+    row_sessions = int(installments[idx].get("sessions") or 0)
+    if payload.sessions_now is not None and row_sessions:
+        if payload.sessions_now < 1 or payload.sessions_now > row_sessions:
+            raise HTTPException(status_code=400, detail=f"Sessions Covered Now has to be between 1 and {row_sessions}")
+        if payload.sessions_now < row_sessions:
+            whole = float(installments[idx].get("amount") or 0)
+            part = round(whole * payload.sessions_now / row_sessions, 2)
+            rest = {k: v for k, v in installments[idx].items() if k not in _INSTALMENT_PAYMENT_KEYS and k != "split_from"}
+            installments[idx] = {**installments[idx], "amount": part, "sessions": payload.sessions_now, "split_from": {"amount": whole, "sessions": row_sessions}}
+            installments.insert(idx + 1, {**rest, "paid": False, "amount": round(whole - part, 2), "sessions": row_sessions - payload.sessions_now, "split_rest": True})
     # A discount agreed on this installment. It settles part of what was scheduled without
     # any money behind it, so it is held to the installment: never more than is owed, and
     # never the whole of it -- an installment let go entirely is not a collection.
@@ -3453,10 +3468,19 @@ async def _put_instalment_back(lead: dict, fee: str, transaction_id: str) -> flo
         if inst.get("transaction_id") == transaction_id:
             collected = float(inst.get("amount") or 0)
             discount = float(inst.get("discount_amount") or 0)
-            restored = {k: v for k, v in inst.items() if k not in _INSTALMENT_PAYMENT_KEYS}
+            restored = {k: v for k, v in inst.items() if k not in _INSTALMENT_PAYMENT_KEYS and k != "split_from"}
             restored["paid"] = False
             if inst.get("scheduled_amount") is not None:
                 restored["amount"] = inst["scheduled_amount"]
+            # Collected for fewer sessions than the row held: the rest went on a row of its
+            # own after it, which is folded back in so the row reads as it was planned.
+            split = inst.get("split_from")
+            if split:
+                restored["amount"] = split.get("amount", restored.get("amount"))
+                restored["sessions"] = split.get("sessions", restored.get("sessions"))
+                nxt = installments[idx + 1] if idx + 1 < len(installments) else None
+                if nxt and nxt.get("split_rest") and not nxt.get("paid"):
+                    installments.pop(idx + 1)
             installments[idx] = restored
             break
     set_fields = {f"{cfg['details']}.installments": installments, "updated_at": _now()}

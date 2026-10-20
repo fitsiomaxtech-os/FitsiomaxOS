@@ -903,6 +903,9 @@ class V3MarkInstallmentPaidInput(BaseModel):
     # Taken off this installment at the desk. The installment is settled by the money plus
     # the discount: what was scheduled, less what was let go, is what has to arrive.
     discount_amount: Optional[float] = None
+    # Sessions Covered Now, on a Treatment Fee row that carries sessions: fewer than the
+    # row holds cuts it in two, and the sessions not paid for stay owing as their own row.
+    sessions_now: Optional[int] = None
     discount_reason: Optional[str] = None
 
 
