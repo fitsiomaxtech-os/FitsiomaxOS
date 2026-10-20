@@ -30,7 +30,7 @@ import {
   UserX,
   Clock,
   Settings,
-  MoreHorizontal,
+  Dumbbell,
   Star,
   AlertCircle,
   PhoneOff,
@@ -44,7 +44,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  HeartHandshake, Download, FileSpreadsheet, Menu, LayoutGrid,
+  Download, FileSpreadsheet, Menu, LayoutGrid,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -1891,7 +1891,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // booked with that visit type, and Consultation stops listing it.
     { key: "branch_home_visit", label: "House Visit", short: "House", icon: Home },
     // Zumba, Fitness and Review, as sub-tabs — see branch/ActivityCarePanel.jsx.
-    { key: "activity_care", label: "Activity Care", short: "Care", icon: HeartHandshake },
+    { key: "activity_care", label: "Activity Care", short: "Care", icon: Dumbbell },
     { key: "consultations", label: "Management", short: "Manage", icon: Stethoscope },
     // The Super Admin's My Consultation board, held to this branch: the Head Chief's
     // patients here, with the same cards, table and actions. Her calendar is still published
@@ -3424,7 +3424,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           <BottomNavTab
             onClick={() => setShowMoreMenu((v) => !v)}
             aria-expanded={showMoreMenu}
-            icon={<MoreHorizontal className="h-[18px] w-[18px] flex-none" />}
+            icon={<Menu className="h-[18px] w-[18px] flex-none" />}
             label="More"
             active={(!profileOpen && moreTabs.some((t) => t.key === activeView)) || showMoreMenu}
             dot={moreTabs.some((t) => tabDots.has(t.key))}
