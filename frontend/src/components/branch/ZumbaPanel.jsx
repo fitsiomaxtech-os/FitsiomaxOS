@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 
@@ -98,6 +99,31 @@ const MODE_FILTERS = [
   // without a pill it was the one kind of row the filter row could not find.
   ["split", "Split"],
 ];
+
+/**
+ * The phone toolbar's dropdown, as Team Consultants' filters wear it: sky while it is
+ * narrowing the list, plain while it is on its "all" answer. `options` is [value, label]
+ * pairs; `allValue` is the one that means no filter.
+ */
+const PhoneFilterSelect = ({ value, onChange, options, allValue, label, testid, size = "min-w-0 flex-1" }) => (
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger
+      title={label}
+      aria-label={label}
+      className={`h-8 rounded-md border px-2 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${size} ${
+        value !== allValue ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      data-testid={testid}
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="z-[200] max-h-72 border-slate-200" data-testid={`${testid}-menu`}>
+      {options.map(([v, text]) => (
+        <SelectItem key={v} value={v} className={`text-xs ${v === allValue ? "font-medium text-slate-500" : "text-slate-700"}`}>{text}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+);
 
 const REFERENCE_LABELS = { upi: "UPI ID", card: "Transaction ID", account_transfer: "Transaction ID" };
 
@@ -1501,6 +1527,9 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
   const [loading, setLoading] = useState(true);
   const [card, setCard] = useState("all");
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
+  // The phone toolbar's calendar, so the date dropdown's Custom can open it.
+  const phoneCalendar = useRef(null);
   const [modeFilter, setModeFilter] = useState(""); // "" = every mode, including none
   // The same shape Branch Leads keeps: { key, label, from, to } with Dates on the ends,
   // or null for no filter. The presets and the typed range both come from the one
@@ -1949,7 +1978,109 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
               search, refresh and create at the right. The title row that used to sit above
               it only repeated what the tab already says. On a window too narrow for all
               three groups they wrap onto their own lines rather than interleaving. */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
+          {/* Phone: the toolbar in one row -- search behind an icon, the dates and the
+              payment modes as dropdowns, the calendar for a range of its own, Refresh and
+              Add. Opened, the search box takes the row until its ✕, which also clears it,
+              so no search is left narrowing the list unseen. */}
+          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2.5 sm:hidden" data-testid="zumba-toolbar-phone">
+            {searchOpen ? (
+              <>
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search name or phone"
+                    className="h-8 pl-8 text-xs"
+                    autoFocus
+                    data-testid="zumba-search-phone"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => { setSearch(""); setSearchOpen(false); }}
+                  className="h-8 w-8 shrink-0 border-slate-200 p-0 text-slate-500"
+                  title="Close search"
+                  aria-label="Close search"
+                  data-testid="zumba-search-close-phone"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setSearchOpen(true)}
+                  className="h-8 w-8 shrink-0 border-slate-200 bg-white p-0 text-slate-500 hover:bg-slate-50"
+                  title="Search"
+                  aria-label="Search"
+                  data-testid="zumba-search-open-phone"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+                {/* Custom is what a range from the calendar reads as; picked here, it opens
+                    that calendar. */}
+                <PhoneFilterSelect
+                  value={!dateFilter ? "all" : isPreset(dateFilter) ? dateFilter.key : "custom"}
+                  onChange={(v) => {
+                    if (v === "custom") {
+                      setTimeout(() => phoneCalendar.current?.querySelector("button")?.click(), 0);
+                      return;
+                    }
+                    setDateFilter(presetFilter(DATE_PRESETS.find((x) => x.key === v) || DATE_PRESETS[0]));
+                  }}
+                  options={[...DATE_PRESETS.map((x) => [x.key, x.label]), ["custom", "Custom"]]}
+                  allValue="all"
+                  label="Dates"
+                  testid="zumba-date-phone"
+                />
+                {/* The app's date filter, squared to its calendar glyph; while a range of
+                    its own is on it turns amber with its ✕ beside it. */}
+                <span ref={phoneCalendar} className="flex shrink-0 [&>div>button]:h-8 [&>div>button:first-child]:w-8">
+                  <DateFilterPopover
+                    value={isPreset(dateFilter) ? null : dateFilter}
+                    onChange={setDateFilter}
+                    centered
+                    iconOnly
+                    phoneIconOnly
+                    placeholder="Custom"
+                    testid="zumba-date-custom-phone"
+                  />
+                </span>
+                <PhoneFilterSelect
+                  value={modeFilter || "all"}
+                  onChange={(v) => setModeFilter(v === "all" ? "" : v)}
+                  options={MODE_FILTERS.map(([key, text]) => [key || "all", text])}
+                  allValue="all"
+                  label="Payment mode"
+                  testid="zumba-mode-phone"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+                  onClick={load}
+                  disabled={loading}
+                  title="Refresh"
+                  aria-label="Refresh"
+                  data-testid="zumba-refresh-phone"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 w-8 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700"
+                  onClick={() => openForm(null)}
+                  title="Zumba Lead Create"
+                  aria-label="Zumba Lead Create"
+                  data-testid="zumba-add-phone"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5 sm:flex">
             <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-date-filter">
               {DATE_PRESETS.map((preset) => {
                 const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
