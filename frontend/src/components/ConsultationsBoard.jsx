@@ -3097,18 +3097,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // "rehab". A tab selects a view outright — pressing the lit one again used to hide it
   // and drop the reader back onto a different panel, which is not what a tab does.
   const [programmeDetail, setProgrammeDetail] = useState("own");
-  // Whether this patient has anything on file at all. Consultation Visit will not take a
-  // payment until they do — see the panel — so this has to be known before the button is
-  // drawn rather than discovered when it is pressed. Bumped by the uploader so the gate
-  // opens on the upload rather than on a reload.
-  const [leadDocCount, setLeadDocCount] = useState(null); // null = not counted yet
   // The prescription is counted on its own, because it is the one the fee is gated on.
-  // Off the general count it could not be: that number goes up for a scheme letter or an
-  // old MRI report, so a patient with paperwork on file and no prescription would have
-  // opened the gate with somebody else's document.
+  // Off a count of everything on file it could not be: that number goes up for a scheme
+  // letter or an old MRI report, so a patient with paperwork on file and no prescription
+  // would have opened the gate with somebody else's document.
   const [leadRxCount, setLeadRxCount] = useState(null);
   // Bumped by the uploaders whenever anything is filed or removed, which is what makes the
-  // two counts above a live figure instead of the one that happened to be true when the
+  // count above a live figure instead of the one that happened to be true when the
   // card was opened. Without it the tab said "Documents (0)" with the page the reader had
   // just filed sitting on screen underneath it: the only count ever taken predated the
   // upload, and nothing asked for another.
@@ -3117,15 +3112,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Cleared on the way to a different patient, and only there. A refresh must not blank
   // them: the counts are what the fee gate reads, so a flash of "not counted yet" straight
   // after an upload relocks the step that upload had just cleared.
-  useEffect(() => { setLeadDocCount(null); setLeadRxCount(null); }, [selectedLead?.id]);
+  useEffect(() => { setLeadRxCount(null); }, [selectedLead?.id]);
   useEffect(() => {
     if (!selectedLead?.id) return;
     let cancelled = false;
-    leadDocuments(selectedLead.id)
-      .then((r) => { if (!cancelled) setLeadDocCount((r?.documents || []).length); })
-      // Counted as none rather than left unknown: an upload screen that cannot say whether
-      // anything is there should ask for one, not quietly wave the patient through.
-      .catch(() => { if (!cancelled) setLeadDocCount(0); });
     leadDocuments(selectedLead.id, "prescription")
       .then((r) => {
         if (cancelled) return;
@@ -3176,7 +3166,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Opens on Documents while that gate is shut. The panel used to open on Collect Fees
   // with the collect button dead in it, which is a screen that asks for something and
   // refuses it in the same breath; the first thing on screen should be the thing that can
-  // actually be done. Waits for the count to arrive — leadDocCount is null until then, and
+  // actually be done. Waits for the count to arrive — leadRxCount is null until then, and
   // jumping tabs on a guess would move somebody off a step they had already finished.
   useEffect(() => {
     if (leadRxCount === null) return;
@@ -10897,8 +10887,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <FileText className="mr-1 h-3.5 w-3.5" />
                               {/* Amber until the prescription is in, whatever else is on
                                   file: the colour is about the step that is outstanding, and
-                                  a scheme letter does not finish this one. */}
-                              <Lbl full={!hasRx ? "Prescription — required" : leadDocCount == null ? "Documents" : `Documents (${leadDocCount})`} short="Docs" />
+                                  a scheme letter does not finish this one. Named for the
+                                  prescription once it is in as well — the step only ever
+                                  holds the prescription, and "Documents (3)" sent people
+                                  looking elsewhere for the page they had just filed. */}
+                              <Lbl full={!hasRx ? "Prescription — required" : `Prescription (${leadRxCount})`} short="Rx" />
                             </Button>
                             {/* Always on screen, and shut until the scan is filed. This panel
                                 is a sequence — paperwork, then money — so a step that
@@ -11243,6 +11236,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   remove them — a report is ordered and filed by the branch or the Head
                   Physio, and a treating clinician deleting one is not a workflow. */}
               {detailTab === "documents" && (
+                <div className="space-y-4">
+                {/* The prescription is filed from the stage panel's Collect a Payment step
+                    under a kind of its own, so the general list below never showed it —
+                    the one page the fee waits on was the one page missing from Documents.
+                    Listed here to read and remove; filed only from the step. */}
+                <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-documents-tab-prescription">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
+                    <FileText className="h-3.5 w-3.5" />Prescription
+                  </p>
+                  <LeadDocuments
+                    leadId={selectedLead.id}
+                    kind="prescription"
+                    fixedLabel="Prescription"
+                    canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
+                    canUpload={false}
+                    onChanged={notePrescriptionCount}
+                  />
+                </div>
                 <LeadDocuments
                   leadId={selectedLead.id}
                   canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
@@ -11256,6 +11267,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                      the card opened. */
                   onChanged={noteDocsChanged}
                 />
+                </div>
               )}
 
               {/* canVerify carries the same list the backend gates on, so a role that cannot
