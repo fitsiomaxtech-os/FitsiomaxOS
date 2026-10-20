@@ -2280,8 +2280,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           {/* Eight squares on a phone now (search, order, two marks, calendar, refresh,
               create, pull): 320px of buttons against the 336 a 360px phone leaves inside
               the page padding. Gaps of 4px fit from 375 up and 2px below it -- at 6px the
-              last button hung off the edge and dragged the whole page sideways. */}
-          <div className="flex items-center gap-1 max-[374px]:gap-0.5 sm:gap-3" data-testid="branch-toolbar">
+              last button hung off the edge and dragged the whole page sideways. Centred on
+              a phone, so the spare width sits evenly either side rather than all on the
+              right; from sm up the row starts at the left as before. */}
+          <div className="flex items-center justify-center gap-1 max-[374px]:gap-0.5 sm:justify-start sm:gap-3" data-testid="branch-toolbar">
             {searchOpen ? (
               <div className="relative min-w-0 flex-1 sm:hidden">
                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />

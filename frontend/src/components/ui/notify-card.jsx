@@ -35,8 +35,8 @@ import { ChevronRight } from "lucide-react";
  *
  * `inline` lays the row out on one line instead, drawn to the reference the user sent:
  * a plain grey icon, the label, the count in a light orange box beside it, a plain grey
- * chevron on the right -- no tinted squares, no big figure; the same soft shadow as the
- * stacked card, so the tabs' card lists match Manage's. The corner badge
+ * chevron on the right -- no tinted squares, no big figure; a deeper shadow (shadow-md)
+ * than the stacked card's, and the label at Manage's text-xs. The corner badge
  * gives way to a red dot inside the corner that pops up every 3s (tailwind.config's
  * dot-pop), shown only while the count is above 0: the dot says someone is waiting, the
  * box says how many. Colours are fixed rather than taken from `color`/`badgeColor`, the
@@ -56,12 +56,15 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
         type="button"
         onClick={onClick}
         aria-pressed={active}
-        className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left shadow-sm transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
+        className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left shadow-md transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
         data-testid={testid}
       >
-        {/* 80% of the chevron's 24px, at 75% opacity: the name leads, the icon only hints. */}
-        {Icon && <Icon aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-75" strokeWidth={2} />}
-        <span className="min-w-0 flex-1 truncate text-base font-medium text-slate-900 opacity-75">{label}</span>
+        {/* Both icons at 80% of their old size and 85% of their old opacity: the stage icon
+            19.2px -> 15.4px at 75% -> 64%, the chevron 24px -> 19.2px at 85%. The name
+            leads, the icons only hint. */}
+        {Icon && <Icon aria-hidden className="h-[0.96rem] w-[0.96rem] shrink-0 text-slate-500 opacity-[0.64]" strokeWidth={2} />}
+        {/* Manage's card label size (text-xs, see the stacked card below). */}
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-900 opacity-75">{label}</span>
         {/* Right-aligned beside the chevron, so the counts line up down the stack. One width
             for every box, wide enough for three digits, so 0 and 123 sit in the same shape;
             the full figure is shown (no 99+), and only a fourth digit widens it. Only the
@@ -72,7 +75,7 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
         >
           {display ?? count}
         </span>
-        <ChevronRight aria-hidden className="h-6 w-6 shrink-0 text-slate-500" />
+        <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />
         {live && (
           <span aria-hidden className="absolute right-2.5 top-2 h-2.5 w-2.5 rounded-full bg-red-500 motion-safe:animate-dot-pop" data-testid={testid ? `${testid}-dot` : undefined} />
         )}
