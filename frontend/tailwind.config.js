@@ -80,12 +80,27 @@ module.exports = {
   				'20%': {
   					transform: 'translateX(-5px)'
   				}
+  			},
+  			// A notification dot popping up: grows from nothing past full size and settles,
+  			// then sits still for the rest of a 3s beat, so it reads as a fresh alert
+  			// every few seconds rather than a constant throb.
+  			'dot-pop': {
+  				'0%': {
+  					transform: 'scale(0)'
+  				},
+  				'8%': {
+  					transform: 'scale(1.35)'
+  				},
+  				'14%, 100%': {
+  					transform: 'scale(1)'
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-  			'nudge-left': 'nudge-left 1.5s ease-in-out infinite'
+  			'nudge-left': 'nudge-left 1.5s ease-in-out infinite',
+  			'dot-pop': 'dot-pop 3s ease-out infinite'
   		}
   	}
   },

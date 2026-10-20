@@ -44,7 +44,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  HeartHandshake, Download, FileSpreadsheet, Menu,
+  HeartHandshake, Download, FileSpreadsheet, Menu, LayoutGrid,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -2697,7 +2697,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           {phoneLeadStageCards && (
             <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-leads-phone-cards">
               <NotifyCard
-                icon={LayoutDashboard}
+                icon={LayoutGrid}
                 label="All Stages"
                 value={totalLeads}
                 color={PHONE_CARD_HEX}
@@ -2710,6 +2710,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   window.scrollTo({ top: 0 });
                 }}
                 testid="branch-leads-phone-card-all-stages"
+                inline
               />
               {leadPillStages.map((s) => (
                 <NotifyCard
@@ -2726,6 +2727,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     window.scrollTo({ top: 0 });
                   }}
                   testid={`branch-leads-phone-card-${s.name}`}
+                  inline
                 />
               ))}
             </div>

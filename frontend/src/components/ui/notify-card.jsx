@@ -32,11 +32,43 @@ import { ChevronRight } from "lucide-react";
  * Manage's Summary cards show an amount, and how many payments make it up in the corner.
  *
  * `dot` is the red new-since-last-opened dot (see tab-dot.jsx), for a row with no count.
+ *
+ * `inline` lays the row out on one line instead, drawn to the reference the user sent:
+ * a plain grey icon, the label, the count in a light orange box beside it, a plain grey
+ * chevron on the right -- no tinted squares, no shadow, no big figure. The corner badge
+ * gives way to a red dot inside the corner that pops up every 3s (tailwind.config's
+ * dot-pop), shown only while the count is above 0: the dot says someone is waiting, the
+ * box says how many. Colours are fixed rather than taken from `color`/`badgeColor`, the
+ * reference being one look for every stage. Branch Leads' stage cards on a phone.
  */
-export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false }) => {
+export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false, inline = false }) => {
   const count = Number(badgeCount ?? value) || 0;
   const live = count > 0;
   const badge = badgeColor || color;
+  if (inline) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={`relative flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3.5 text-left transition active:scale-[0.99] ${active ? "border-slate-400" : "border-slate-200"}`}
+        data-testid={testid}
+      >
+        {Icon && <Icon aria-hidden className="h-6 w-6 shrink-0 text-slate-500" strokeWidth={2} />}
+        <span className="min-w-0 truncate text-base font-medium text-slate-900">{label}</span>
+        <span
+          className="inline-flex h-7 min-w-[2rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100 px-2 text-base font-medium text-orange-500"
+          data-testid={testid ? `${testid}-badge` : undefined}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+        <ChevronRight aria-hidden className="ml-auto h-6 w-6 shrink-0 text-slate-500" />
+        {live && (
+          <span aria-hidden className="absolute right-2.5 top-2 h-2.5 w-2.5 rounded-full bg-red-500 motion-safe:animate-dot-pop" data-testid={testid ? `${testid}-dot` : undefined} />
+        )}
+      </button>
+    );
+  }
   return (
     <button
       type="button"
