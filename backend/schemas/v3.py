@@ -104,8 +104,13 @@ class V3DoctorServiceInput(BaseModel):
 
     Empty clears it — an expert offered under no particular service is the state every
     one of them starts in.
+
+    `service_types` is the whole list when an expert is offered under several (Manual
+    Therapy and Dry Needling, say). When it is sent it wins, and `service_type` is
+    kept as its first entry for the callers that only ever read one.
     """
     service_type: str = ""
+    service_types: Optional[List[str]] = None
 
 
 class V3DoctorMeetLinkInput(BaseModel):
@@ -229,6 +234,10 @@ class V3DoctorOut(BaseModel):
     # without it however faithfully it was saved. service_type is the standing proof —
     # stored, patched by its own endpoint, and invisible to every caller of this list.
     meet_link: Optional[str] = ""
+    # The services this expert is offered under, from Services and Products. Declared
+    # so the calendar reads back what it saved rather than "No service" on every load.
+    service_type: Optional[str] = ""
+    service_types: Optional[List[str]] = []
     # The working window this expert is rostered on (MANAGEMENT → TIME MANAGEMENT). The
     # name and both ends are resolved from the shift on read, not stored here, so editing
     # a shift's hours moves everyone on it — see shift_utils.attach_shifts.

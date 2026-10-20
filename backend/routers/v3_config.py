@@ -238,6 +238,10 @@ async def v3_update_physio_type(
         await v3_col("doctors").update_many(
             {"service_type": existing.get("name")}, {"$set": {"service_type": name}}
         )
+        # And inside the list of an expert offered under several services.
+        await v3_col("doctors").update_many(
+            {"service_types": existing.get("name")}, {"$set": {"service_types.$": name}}
+        )
     return V3PhysioTypeOut(**{**existing, "name": name})
 
 
@@ -256,19 +260,27 @@ async def v3_set_doctor_service(
     Checked against the picklist so the calendar can never print a service Super Admin
     does not offer — the same reason the list exists rather than a free-text field.
     """
-    name = (payload.service_type or "").strip()
-    if name:
+    asked = payload.service_types if payload.service_types is not None else [payload.service_type or ""]
+    names: List[str] = []
+    for raw in asked:
+        name = (raw or "").strip()
+        if not name:
+            continue
         known = await v3_col("physio_types").find_one(
             {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "name": 1}
         )
         if not known:
             raise HTTPException(status_code=404, detail=f"'{name}' is not a service in Services and Products")
         # Stored as the picklist spells it, not as the caller typed it.
-        name = known["name"]
-    res = await v3_col("doctors").update_one({"id": doctor_id}, {"$set": {"service_type": name}})
+        if known["name"] not in names:
+            names.append(known["name"])
+    first = names[0] if names else ""
+    res = await v3_col("doctors").update_one(
+        {"id": doctor_id}, {"$set": {"service_type": first, "service_types": names}}
+    )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Expert not found")
-    return {"message": "Service updated", "service_type": name}
+    return {"message": "Service updated", "service_type": first, "service_types": names}
 
 
 def _clean_meet_link(raw) -> str:
@@ -364,7 +376,9 @@ async def v3_delete_physio_type(physio_type_id: str, _: V3UserOut = Depends(v3_r
     existing = await v3_col("physio_types").find_one({"id": physio_type_id}, {"_id": 0, "name": 1})
     if not existing:
         raise HTTPException(status_code=404, detail="Service not found")
-    in_use = await v3_col("doctors").count_documents({"service_type": existing["name"]})
+    in_use = await v3_col("doctors").count_documents(
+        {"$or": [{"service_type": existing["name"]}, {"service_types": existing["name"]}]}
+    )
     if in_use > 0:
         raise HTTPException(
             status_code=409,

@@ -35,6 +35,7 @@ import {
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
 import { ClockDurationDialog, durationLabel } from "@/components/ui/clock-time-input";
+import { CreamPicker } from "@/components/ui/cream-picker";
 import { announceShiftsChanged, gridTimesFor, hoursLabel, onShiftsChanged, shiftIdsOf } from "@/lib/shifts";
 
 const CONSULTATION_TYPES = [
@@ -57,6 +58,10 @@ const shortDate = (iso) => {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 };
+
+/** The services an expert is offered under — the list, or the single one older records hold. */
+const servicesOf = (doc) =>
+  (doc?.service_types?.length ? doc.service_types : doc?.service_type ? [doc.service_type] : []);
 
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -227,17 +232,20 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     getPhysioTypes().then(setServices).catch(() => setServices([]));
   }, [isPhysio]);
 
-  const changeService = async (name) => {
+  // A physio can be offered under several services at once (Manual Therapy and Dry
+  // Needling, say); `names` is the whole list after the tick.
+  const changeServices = async (names) => {
     if (!selectedDoctor) return;
     setSavingService(true);
     try {
-      await setDoctorService(selectedDoctor.id, name);
+      const res = await setDoctorService(selectedDoctor.id, names);
+      const saved = res?.service_types ?? names;
+      const patch = { service_types: saved, service_type: saved[0] || "" };
       // Patched on both copies: the card in the list and the header above the grid read
       // from different objects, and reloading the whole board to move one word would
       // close the day that is mid-publish.
-      setSelectedDoctor((d) => (d ? { ...d, service_type: name } : d));
-      setDoctors((all) => all.map((d) => (d.id === selectedDoctor.id ? { ...d, service_type: name } : d)));
-      toast.success(name ? `Offered under ${name}` : "Service cleared");
+      setSelectedDoctor((d) => (d ? { ...d, ...patch } : d));
+      setDoctors((all) => all.map((d) => (d.id === selectedDoctor.id ? { ...d, ...patch } : d)));
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not set the service");
     }
@@ -919,7 +927,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   <p className="truncate text-[10px] text-slate-400">
                     {doc.shift_name
                       ? `${doc.shift_name} · ${hoursLabel(doc.shift_windows?.length ? { segments: doc.shift_windows } : { start_time: doc.shift_start, end_time: doc.shift_end })}`
-                      : doc.service_type || doc.specialization || roleLabel}
+                      : servicesOf(doc).join(", ") || doc.specialization || roleLabel}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end">
@@ -1037,18 +1045,21 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                 name and initial are already on the dropdown right above it, and the count
                 line under them went as text nobody there was reading. */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2.5 sm:flex-nowrap sm:gap-0 sm:p-4">
-              <div className="flex items-center gap-3">
-                <div className="hidden h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:flex">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:flex">
                   {selectedDoctor.full_name?.charAt(0)?.toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
-                    <span className="hidden sm:inline">{selectedDoctor.full_name}</span>
+                {/* A physio's header is one row: name, shift, services, session length,
+                    slots open and seats per slot side by side, so everything the day is
+                    about to be opened against reads in a single glance. */}
+                <div className={isPhysio ? "flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap" : ""}>
+                  <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 xl:flex-nowrap">
+                    <span className="hidden whitespace-nowrap sm:inline">{selectedDoctor.full_name}</span>
                     {/* The shift is stated on the header rather than left to be inferred
                         from where the grid below starts — the day is being published
                         against it, so it has to be visible while publishing. */}
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${shiftLabel ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}
+                      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${shiftLabel ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}
                       title={shiftLabel ? "Set in MANAGEMENT → TIME MANAGEMENT" : "No shift set — the full working day is offered"}
                       data-testid="calendar-shift-chip"
                     >
@@ -1057,47 +1068,56 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     {/* Which of the clinic's services this expert's day is being opened
                         under. Beside the shift because the two are the same kind of fact —
                         what is being published, and when — and both have to be right
-                        before a date is clicked. A select rather than a chip: the answer
-                        is set here, on the screen that asks the question. */}
-                    {isPhysio && (
-                      <select
-                        value={selectedDoctor.service_type || ""}
-                        onChange={(e) => changeService(e.target.value)}
-                        disabled={savingService}
-                        className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 outline-none disabled:opacity-60"
-                        title="The service this expert is offered under — from Services and Products"
-                        data-testid="calendar-service-select"
-                      >
-                        <option value="">No service</option>
-                        {services.map((sv) => (
-                          <option key={sv.id} value={sv.name}>{sv.name}</option>
-                        ))}
-                      </select>
-                    )}
+                        before a date is clicked. Several can be ticked: a physio is often
+                        offered under more than one. */}
+                    {isPhysio && (() => {
+                      const mine = servicesOf(selectedDoctor);
+                      return (
+                        <CreamPicker
+                          multiple
+                          value={mine}
+                          onChange={changeServices}
+                          options={services.map((sv) => sv.name)}
+                          label={mine.length ? `${mine[0]}${mine.length > 1 ? ` +${mine.length - 1}` : ""}` : "No service"}
+                          set={mine.length > 0}
+                          disabled={savingService}
+                          title={mine.length ? mine.join(", ") : "The services this expert is offered under — from Services and Products"}
+                          emptyText="No services in Services and Products yet"
+                          testid="calendar-service-select"
+                        />
+                      );
+                    })()}
                   </h3>
-                  <p className="hidden text-[11px] text-slate-400 sm:block">
-                    {isConsultant
-                      ? `${purpose} · ${publishedDays.size} day${publishedDays.size === 1 ? "" : "s"} available`
-                      : isPhysio
-                        ? <>
-                            {purpose} ·{" "}
-                            {/* The session length, editable here per physio on the clock dial.
-                                Only days opened after the change are cut at it. */}
-                            <button
-                              type="button"
-                              onClick={() => setDurationOpen(true)}
-                              className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-px font-semibold text-sky-700 hover:bg-sky-100"
-                              title={ownDuration ? "Set for this physio — tap to change" : "From FITSIO STORE — tap to set this physio's own length"}
-                              data-testid="calendar-duration-edit"
-                            >
-                              {durationLabel(slotDuration)}
-                              <Pencil className="h-2.5 w-2.5" />
-                            </button>
-                            {` · ${(calendarData?.slots || []).length} slots open`}
-                          </>
+                  {isPhysio ? (
+                    <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap">
+                      {/* The session length, editable here per physio on the clock dial.
+                          Only days opened after the change are cut at it. */}
+                      <button
+                        type="button"
+                        onClick={() => setDurationOpen(true)}
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[#EFEAE0] bg-[#FDFCF8] px-3 text-sm text-slate-500 transition hover:bg-[#F3EFE6]"
+                        title={ownDuration ? "Set for this physio — tap to change" : "From FITSIO STORE — tap to set this physio's own length"}
+                        data-testid="calendar-duration-edit"
+                      >
+                        <Clock className="h-3.5 w-3.5 text-slate-400" />
+                        {purpose} ·
+                        <span className="font-bold text-sky-700">{durationLabel(slotDuration)}</span>
+                        <Pencil className="h-3 w-3 text-slate-400" />
+                      </button>
+                      <span className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-slate-100 px-2.5 text-xs font-semibold text-slate-600 sm:inline-flex" data-testid="calendar-slots-open">
+                        {(calendarData?.slots || []).length} slots open
+                      </span>
+                      <span className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-slate-100 px-2.5 text-xs font-semibold text-slate-600 sm:inline-flex">
+                        {calendarData?.slot_capacity ?? 3} per slot
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="hidden text-[11px] text-slate-400 sm:block">
+                      {isConsultant
+                        ? `${purpose} · ${publishedDays.size} day${publishedDays.size === 1 ? "" : "s"} available`
                         : `${purpose} · ${slotDuration} min · ${(calendarData?.slots || []).length} slots open`}
-                    {isPhysio && ` · ${calendarData?.slot_capacity ?? 3} per slot`}
-                  </p>
+                    </p>
+                  )}
                   {durationOpen && (
                     <ClockDurationDialog
                       value={slotDuration}
@@ -1116,19 +1136,20 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     Head Physio has no control: a consultation is one-to-one and the
                     backend pins them to 1 whatever is sent. */}
                 {isPhysio && (
-                  <label className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1" title="Patients this physio treats in the same slot">
-                    <Users className="h-3.5 w-3.5 text-slate-400" />
-                    <span className="text-[11px] font-medium text-slate-500">Per slot</span>
-                    <select
-                      value={calendarData?.slot_capacity ?? 3}
-                      onChange={(e) => saveCapacity(Number(e.target.value))}
-                      disabled={savingCapacity}
-                      className="rounded border border-slate-200 bg-white px-1 py-0.5 text-xs font-semibold text-slate-700"
-                      data-testid="physio-slot-capacity"
-                    >
-                      {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </label>
+                  <CreamPicker
+                    value={calendarData?.slot_capacity ?? 3}
+                    onChange={saveCapacity}
+                    options={[1, 2, 3, 4].map((n) => ({ value: n, label: `${n} patient${n > 1 ? "s" : ""}` }))}
+                    icon={Users}
+                    prefix="Per slot"
+                    label={String(calendarData?.slot_capacity ?? 3)}
+                    set
+                    align="end"
+                    width="w-44"
+                    disabled={savingCapacity}
+                    title="Patients this physio treats in the same slot — up to 4"
+                    testid="physio-slot-capacity"
+                  />
                 )}
                 {selectedDates.length > 0 && (
                   <span className="text-xs font-medium text-slate-500" data-testid="selected-days-count">

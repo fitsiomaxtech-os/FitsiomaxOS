@@ -130,7 +130,8 @@ export const createPhysioType = async (payload) => (await api.post("/physio-type
 export const updatePhysioType = async (id, payload) => (await api.patch(`/physio-types/${id}`, payload)).data;
 export const deletePhysioType = async (id) => (await api.delete(`/physio-types/${id}`)).data;
 // Which service an expert is offered under, set where their calendar is published.
-export const setDoctorService = async (doctorId, serviceType) => (await api.patch(`/doctors/${doctorId}/service`, { service_type: serviceType })).data;
+// A list sets every service the expert is offered under; a plain name still sets just one.
+export const setDoctorService = async (doctorId, service) => (await api.patch(`/doctors/${doctorId}/service`, Array.isArray(service) ? { service_types: service } : { service_type: service })).data;
 // The video room an expert takes appointments in. Saved against the person rather than
 // the record, so one link covers every branch they cover — see v3_set_doctor_meet_link.
 export const setDoctorMeetLink = async (doctorId, meetLink) => (await api.patch(`/doctors/${doctorId}/meet-link`, { meet_link: meetLink || "" })).data;

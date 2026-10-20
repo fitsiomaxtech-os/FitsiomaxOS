@@ -321,7 +321,8 @@ def without_past_moves(query: dict = None) -> dict:
 # three people on adjacent beds inside the same hour is how the treatment room actually
 # works, so one-per-slot was blocking bookings that happen in real life.
 DEFAULT_PHYSIO_SLOT_CAPACITY = 3
-MAX_PHYSIO_SLOT_CAPACITY = 10
+# Four beds is the most one physio's floor runs; the calendar's Per slot offers 1 to 4.
+MAX_PHYSIO_SLOT_CAPACITY = 4
 
 
 def slot_capacity_of(doctor: dict) -> int:
