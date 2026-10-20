@@ -435,7 +435,88 @@ export const FitnessPanel = ({ branchId }) => {
               {rows.length === 0 ? "No gym members yet. Add one with the button above." : "Nothing under this filter."}
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* The phone face of the table below. Eleven columns behind a sideways swipe
+                showed S.No, Name and Mobile and nothing else, so on a phone each member is
+                one card: name and status, then the term, package and money, and the same
+                one settling button the Payment column carries. sm-up keeps the table. */}
+            <div className="divide-y divide-slate-100 sm:hidden" data-testid="fitness-phone-cards">
+              {visible.map((r, i) => {
+                const referral = r.origin === "consultation";
+                const paid = Number(r.fee_paid || 0);
+                const due = Number(r.fee_due || 0);
+                const statusKey = r.status || "active";
+                const chip = referral ? REFERRED_META : (STATUS_ROW[statusKey] || STATUS_ROW.active);
+                return (
+                  <div
+                    key={r.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setViewing(r)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewing(r); } }}
+                    className="cursor-pointer px-3 py-3 active:bg-slate-50"
+                    data-testid={`fitness-card-row-${r.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800">
+                          <span className="mr-1.5 font-normal text-slate-400">{i + 1}.</span>{r.name || "—"}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {displayPhone(r.phone) || "—"}
+                          {r.package_name ? <> · {r.package_name}</> : null}
+                        </p>
+                      </div>
+                      <span className={`inline-flex shrink-0 whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
+                        {chip.label}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                      <span>{shortDate(r.joined_date || r.created_at)} – {r.due_date ? shortDate(r.due_date) : "—"}</span>
+                      {r.package_sessions ? (
+                        <span className={r.renewal_due ? "font-semibold text-amber-600" : ""}>{r.package_sessions} classes</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 border-t border-slate-100 pt-2 text-[11px]">
+                      <span className="text-slate-500">Paid <b className="font-semibold text-emerald-700">{rupees(paid)}</b></span>
+                      {due > 0
+                        ? <span className="text-slate-500">Due <b className="font-semibold text-rose-600">{rupees(due)}</b></span>
+                        : Number(r.fee_amount || 0) > 0 ? <span className="text-emerald-600">Paid up</span> : null}
+                      <span className="ml-auto inline-flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {referral ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
+                            disabled={accepting === r.id}
+                            onClick={() => acceptAndEdit(r)}
+                            data-testid={`fitness-card-accept-${r.id}`}
+                          >
+                            <Stethoscope className="h-3 w-3" />
+                            {accepting === r.id ? "Taking on…" : "Referred"}
+                          </Button>
+                        ) : due > 0 ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className={`h-7 gap-1 px-2 text-[10px] font-semibold ${paid > 0
+                              ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                              : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
+                            onClick={() => setCollecting(r)}
+                            data-testid={`fitness-card-collect-${r.id}`}
+                          >
+                            <IndianRupee className="h-3 w-3" />
+                            {paid > 0 ? "Due Collect" : "Collect"}
+                          </Button>
+                        ) : null}
+                        <ChevronRight className="h-4 w-4 text-slate-400" onClick={() => setViewing(r)} />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[60rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   {/* The Zumba list's columns, less Master — the gym has no class masters.
@@ -566,6 +647,7 @@ export const FitnessPanel = ({ branchId }) => {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
