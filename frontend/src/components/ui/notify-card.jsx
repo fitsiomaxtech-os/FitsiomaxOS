@@ -41,9 +41,12 @@ import { ChevronRight } from "lucide-react";
  * dot-pop), shown only while the count is above 0: the dot says someone is waiting, the
  * box says how many. Colours are fixed rather than taken from `color`/`badgeColor`, the
  * reference being one look for every stage. Branch Leads' and Consultation's stage cards
- * on a phone.
+ * on a phone, and Activity Care > Zumba's.
+ *
+ * `display` puts other text in the inline box than the count -- Zumba's money cards show
+ * their amount there, while `count` (the customers behind it) still decides the dot.
  */
-export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false, inline = false }) => {
+export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false, inline = false, display }) => {
   const count = Number(badgeCount ?? value) || 0;
   const live = count > 0;
   const badge = badgeColor || color;
@@ -67,7 +70,7 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
           className="inline-flex h-7 min-w-[3rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium tabular-nums text-orange-700"
           data-testid={testid ? `${testid}-badge` : undefined}
         >
-          {count}
+          {display ?? count}
         </span>
         <ChevronRight aria-hidden className="h-6 w-6 shrink-0 text-slate-500" />
         {live && (

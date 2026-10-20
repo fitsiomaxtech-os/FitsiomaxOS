@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, ClipboardCheck, Dumbbell, Music, Settings, Stethoscope, User, UserCog } from "lucide-react";
+import { Activity, ChevronLeft, ClipboardCheck, Dumbbell, Music, Settings, Stethoscope, User, UserCog } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
@@ -9,7 +9,8 @@ import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { TeamPanel } from "@/components/branch/TeamPanel";
 import { PortalControlsButton } from "@/components/branch/PortalControlsButton";
-import { TabDotFor, useTabDotClick } from "@/components/ui/tab-dot";
+import { TabDotFor, useTabDot, useTabDotClick } from "@/components/ui/tab-dot";
+import { NotifyCard } from "@/components/ui/notify-card";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
@@ -39,6 +40,24 @@ const SUB_TABS = [
 // who is paused, who owes on a package. Neither is something an arm with no floor sells.
 export const ROOM_ONLY_TABS = ["zumba", "fitness"];
 
+// The shared grey every phone card list on Branch Admin is drawn in (PHONE_CARD_HEX there).
+const PHONE_CARD_HEX = "#64748b";
+
+// One sub-tab as a phone card: Management's sub-tab card, no count, with the tab's red
+// new-since-last-opened dot. Its own component so each card can ask for its own dot.
+const SubTabCard = ({ tab, active, onClick }) => (
+  <NotifyCard
+    icon={tab.icon}
+    label={tab.label}
+    color={PHONE_CARD_HEX}
+    showCount={false}
+    dot={useTabDot(`activity_care.${tab.key}`)}
+    active={active}
+    onClick={onClick}
+    testid={`activity-care-subtab-card-${tab.key}`}
+  />
+);
+
 export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   const tabs = withoutRoom ? SUB_TABS.filter((t) => !ROOM_ONLY_TABS.includes(t.key)) : SUB_TABS;
   // Opens on the first tab it has: Zumba, or Review on an online arm.
@@ -51,14 +70,72 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   // its Refresh from 2xl up (see TeamPanel's toolbarSlot). A node in state rather than a ref,
   // so the panel re-renders into it once it exists.
   const [toolbar, setToolbar] = useState(null);
+  // Phone only, as Management does it: the sub-tabs are a stack of cards, and a tap opens
+  // that tab on a screen of its own with a back bar above it. From sm up nothing reads it.
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const activeTab = tabs.find((t) => t.key === active) || tabs[0];
+  const ActiveIcon = activeTab.icon;
+  const zumbaGear = (testid) => (
+    <button
+      type="button"
+      onClick={() => setMastersOpen(true)}
+      className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
+      title="Zumba Masters"
+      aria-label="Zumba Masters"
+      data-testid={testid}
+    >
+      <Settings className="h-4 w-4" />
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
+      {/* Phone, one tab open: where the cards sat, the tab being read, the way back to the
+          cards, and that tab's gear -- the bar Management's sub-tabs wear. */}
+      {phoneOpen && (
+        <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="activity-care-phone-back">
+          <button
+            type="button"
+            onClick={() => setPhoneOpen(false)}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+            aria-label="Back to the tab cards"
+            data-testid="activity-care-phone-back-btn"
+          >
+            <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${PHONE_CARD_HEX}1F` }}>
+              <ActiveIcon aria-hidden className="h-4 w-4" style={{ color: PHONE_CARD_HEX }} />
+            </span>
+            <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{activeTab.label}</span>
+          </button>
+          {active === "zumba" && <span className="[&>button]:mb-0">{zumbaGear("activity-care-phone-zumba-settings")}</span>}
+          {active === "patients" && <span className="[&>button]:mb-0"><PortalControlsButton branchId={branchId} /></span>}
+        </div>
+      )}
+
+      {/* Phone: the sub-tabs as Management's sub-tab cards, one to a row. */}
+      {!phoneOpen && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="activity-care-subtab-cards">
+          {tabs.map((t) => (
+            <SubTabCard
+              key={t.key}
+              tab={t}
+              active={active === t.key}
+              onClick={() => {
+                setActive(t.key);
+                clickDot(`activity_care.${t.key}`);
+                setPhoneOpen(true);
+                window.scrollTo({ top: 0 });
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* The same underlined strip as Records' sub-tabs, with Zumba's or Patients' gear at its end. On a
           phone the tabs share the width, icon over a short label; seven are more than the
           narrowest phones hold, so each keeps its own width and the strip scrolls as a last
           resort. From sm up they sit in a row with full labels, as Records' do. */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
+      <div className="hidden items-center gap-2 border-b border-slate-200 sm:flex">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" data-testid="activity-care-subtabs">
           {tabs.map((t) => {
             const Icon = t.icon;
@@ -81,18 +158,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
           })}
         </div>
         <div ref={setToolbar} className="mb-1 hidden shrink-0 items-center gap-2 2xl:flex" data-testid="activity-care-toolbar" />
-        {active === "zumba" && (
-          <button
-            type="button"
-            onClick={() => setMastersOpen(true)}
-            className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
-            title="Zumba Masters"
-            aria-label="Zumba Masters"
-            data-testid="activity-care-zumba-settings"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-        )}
+        {active === "zumba" && zumbaGear("activity-care-zumba-settings")}
         {/* Patients' gear: the automatic Client Portal login, which used to be a card above
             the patient list. */}
         {active === "patients" && <PortalControlsButton branchId={branchId} />}
@@ -109,6 +175,9 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
           {mastersOpen && <ZumbaMastersPanel branchId={branchId} />}
         </DialogContent>
       </Dialog>
+      {/* Hidden, not unmounted, behind the phone's cards, so a tab keeps its state for the
+          way back; `contents` keeps the panel a flex child as before. */}
+      <div className={phoneOpen ? "contents" : "hidden sm:contents"}>
       {active === "zumba" ? (
         <ZumbaPanel branchId={branchId} />
       ) : active === "fitness" ? (
@@ -124,6 +193,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
       ) : (
         <BranchReviewPanel branchId={branchId} />
       )}
+      </div>
     </div>
   );
 };

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, IndianRupee, Pencil, Plus, RefreshCw, Stethoscope, Trash2, UserPlus, X } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
+import { NotifyCard } from "@/components/ui/notify-card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 
@@ -671,6 +673,18 @@ const CARDS = [
   // the server still counts them apart, so nothing downstream is coarsened by this.
   { key: "discontinued", label: "Discontinue", color: "#e11d48", sum: ["discontinued", "leave"] },
 ];
+
+// The icon each card wears on a phone, where the cards are Branch Leads' one-line rows
+// (NotifyCard `inline`) and the icon is the only thing telling one grey row from the next.
+const CARD_ICONS = {
+  all: LayoutGrid,
+  direct: UserCheck,
+  consultant: Stethoscope,
+  masters: Share2,
+  payment_done: BadgeCheck,
+  due_payment: Clock,
+  discontinued: UserX,
+};
 
 // Stage colours are stored as #rrggbb; anything else falls back to the card's own colour
 // rather than drawing the figure and ring in a colour the browser cannot read.
@@ -1514,6 +1528,10 @@ export const ZumbaPanel = ({ branchId }) => {
   // than a value of `card`, because the list underneath is left on whatever it was
   // showing: reading the takings is not a reason to lose the view being worked.
   const [paymentDoneOpen, setPaymentDoneOpen] = useState(false);
+  // Phone only: the cards are a stack of Branch Leads' rows, and a tap opens that card's
+  // list on a screen of its own with a back bar above it -- seven rows fill the screen, so
+  // a list left under them would change out of sight. From sm up nothing reads this.
+  const [phoneList, setPhoneList] = useState(false);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the books
   // The Zumba pipeline exactly as Super Admin has it in CI/CD ROOTS. Nothing is hardcoded
   // here: a clinic that has not set the pipeline up has no stages, and the Stage column
@@ -1772,6 +1790,36 @@ export const ZumbaPanel = ({ branchId }) => {
     }
   };
 
+  // One card's figures, shared by the desktop strip, the phone stack and its back bar.
+  // Direct, Consultant and Refer Master are Zumba pipeline stages too, and wear the name and
+  // colour Super Admin gives them in CI/CD ROOTS. The other cards have no stage behind them
+  // and keep their own. `people` is the headcount behind the card -- the figure itself on a
+  // count card, the caption's on a money one -- which is what lights the phone row's dot.
+  const cardProps = (c) => {
+    const stage = stages.find((st) => st.card === c.key);
+    const hex = stage && HEX_COLOR.test(stage.color || "") ? stage.color : null;
+    const people = c.money
+      ? Number(summary?.[c.count || c.key]) || 0
+      : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0);
+    return {
+      label: stage?.name || c.label,
+      value: c.money ? rupees(summary?.[c.money]) : people,
+      // A caption only where it carries a figure: the customer count behind a money
+      // card. The guide lines the count cards used to wear are gone.
+      sub: c.countSub && c.countSub(pluralCustomers(people)),
+      color: hex || c.color,
+      people,
+    };
+  };
+
+  // A phone card's tap: Payment Done opens its popup as on desktop; any other card filters
+  // to itself (no toggling back to All -- All is a card of its own) and opens its list.
+  const openPhoneCard = (key) => {
+    if (key === "payment_done") { setPaymentDoneOpen(true); return; }
+    setCard(key);
+    setPhoneList(true);
+    window.scrollTo({ top: 0 });
+  };
 
   return (
     <div className="flex flex-col gap-4" data-testid="branch-zumba-panel">
@@ -1785,38 +1833,114 @@ export const ZumbaPanel = ({ branchId }) => {
 
           The Fitness tab's card, `arrow` and all: white, a grey label and the figure in the
           card's colour, the picked one ringed in it. */}
+      {/* Phone, one card open: where the stack sat, the card being read -- its figure in a
+          box in the card's colour, as Branch Leads' back bar has it -- the way back to the
+          cards, and a menu to jump to another card without going back first. */}
+      {phoneList && (() => {
+        const c = CARDS.find((x) => x.key === card) || CARDS[0];
+        const p = cardProps(c);
+        const others = CARDS.filter((x) => x.key !== c.key);
+        return (
+          <div className="flex items-center gap-2 border-b border-slate-200 pb-2 sm:hidden" data-testid="zumba-phone-back">
+            <button
+              type="button"
+              onClick={() => setPhoneList(false)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+              aria-label="Back to the Zumba cards"
+              data-testid="zumba-phone-back-btn"
+            >
+              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: p.color }}>
+                {p.value}
+              </span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{p.label}</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+                  aria-label="Switch card"
+                  data-testid="zumba-phone-card-menu"
+                >
+                  <Menu aria-hidden className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {others.map((o) => {
+                  const op = cardProps(o);
+                  const Icon = CARD_ICONS[o.key];
+                  return (
+                    <DropdownMenuItem
+                      key={o.key}
+                      onSelect={() => openPhoneCard(o.key)}
+                      className="gap-2.5 py-2"
+                      data-testid={`zumba-phone-card-menu-${o.key}`}
+                    >
+                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{op.label}</span>
+                      <span className="text-xs font-semibold text-slate-500">{op.value}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      })()}
+
+      {/* Phone: the cards as Branch Leads' one-line rows, one to a row. The box holds the
+          card's figure -- the amount on the two money cards -- and the red dot pops while
+          anybody is behind it. */}
+      {!phoneList && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="zumba-phone-cards">
+          {CARDS.map((c) => {
+            const p = cardProps(c);
+            return (
+              <NotifyCard
+                key={c.key}
+                icon={CARD_ICONS[c.key]}
+                label={p.label}
+                value={p.value}
+                count={p.people}
+                display={p.value}
+                active={c.key !== "payment_done" && card === c.key}
+                onClick={() => openPhoneCard(c.key)}
+                testid={`zumba-phone-card-${c.key}`}
+                inline
+              />
+            );
+          })}
+        </div>
+      )}
+
       <div
-        className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-4 lg:grid-cols-7"
+        className="hidden items-stretch gap-3 sm:grid sm:grid-cols-4 lg:grid-cols-7"
         data-testid="zumba-summary"
       >
         {CARDS.map((c) => {
-          // Direct, Consultant and Refer Master are Zumba pipeline stages too, and wear the
-          // name and colour Super Admin gives them in CI/CD ROOTS. The other cards have no
-          // stage behind them and keep their own.
-          const stage = stages.find((st) => st.card === c.key);
-          const hex = stage && HEX_COLOR.test(stage.color || "") ? stage.color : null;
-          const props = {
-            label: stage?.name || c.label,
-            value: c.money
-              ? rupees(summary?.[c.money])
-              : (c.sum || [c.key]).reduce((n, k) => n + (Number(summary?.[k]) || 0), 0),
-            // A caption only where it carries a figure: the customer count behind a money
-            // card. The guide lines the count cards used to wear are gone.
-            sub: c.countSub && c.countSub(pluralCustomers(Number(summary?.[c.count || c.key]) || 0)),
-            color: hex || c.color,
-            active: c.key === "payment_done" ? paymentDoneOpen : card === c.key,
-            onClick: () => (c.key === "payment_done"
-              ? setPaymentDoneOpen(true)
-              : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key))),
-            testid: `zumba-card-${c.key}`,
-          };
-          return <StatTile key={c.key} {...props} arrow="desk" />;
+          const { people, ...props } = cardProps(c);
+          return (
+            <StatTile
+              key={c.key}
+              {...props}
+              active={c.key === "payment_done" ? paymentDoneOpen : card === c.key}
+              onClick={() => (c.key === "payment_done"
+                ? setPaymentDoneOpen(true)
+                : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)))}
+              testid={`zumba-card-${c.key}`}
+              arrow="desk"
+            />
+          );
         })}
       </div>
 
-      <ClassMasters masters={zumbaMasters} onSet={setClassMaster} busy={settingSlot} />
+      {/* The class settings belong with the cards on a phone, not with one card's list. */}
+      <div className={phoneList ? "hidden sm:block" : undefined}>
+        <ClassMasters masters={zumbaMasters} onSet={setClassMaster} busy={settingSlot} />
+      </div>
 
-      <Card>
+      <Card className={phoneList ? undefined : "hidden sm:block"}>
         <CardContent className="p-0">
           {/* One toolbar, then the table: dates on the left, payment mode beside them, and
               search, refresh and create at the right. The title row that used to sit above
@@ -2312,7 +2436,7 @@ export const ZumbaPanel = ({ branchId }) => {
         <PaymentDoneModal
           rows={paymentDoneRows}
           owed={owedRows}
-          onShowDue={() => { setPaymentDoneOpen(false); setCard("due_payment"); }}
+          onShowDue={() => { setPaymentDoneOpen(false); setCard("due_payment"); setPhoneList(true); }}
           onClose={() => setPaymentDoneOpen(false)}
         />
       )}
