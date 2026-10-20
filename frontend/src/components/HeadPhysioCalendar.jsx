@@ -322,6 +322,26 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     setSavingCapacity(false);
   };
 
+  // The Per slot dropdown, drawn twice: on the right of the header from sm up, and beside
+  // slots open on a phone, where the header stacks.
+  const renderPerSlot = (className, testid) => (
+    <CreamPicker
+      value={calendarData?.slot_capacity ?? 3}
+      onChange={saveCapacity}
+      options={[1, 2, 3, 4].map((n) => ({ value: n, label: `${n} patient${n > 1 ? "s" : ""}` }))}
+      icon={Users}
+      prefix="Per slot"
+      label={String(calendarData?.slot_capacity ?? 3)}
+      set
+      align="end"
+      width="w-44"
+      disabled={savingCapacity}
+      title="Patients this physio treats in the same slot — up to 4"
+      className={className}
+      testid={testid}
+    />
+  );
+
   // The shift window and the day grid it cuts, above the handlers that reach for them.
   // These were written two hundred lines lower, which is where a const starts existing —
   // so saveDayShift was restaging a day against bindings that did not exist yet.
@@ -1045,21 +1065,23 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                 name and initial are already on the dropdown right above it, and the count
                 line under them went as text nobody there was reading. */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2.5 sm:flex-nowrap sm:gap-0 sm:p-4">
-              <div className="flex min-w-0 items-center gap-3">
+              <div className={`flex min-w-0 items-center gap-3 ${isPhysio ? "max-sm:w-full" : ""}`}>
                 <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:flex">
                   {selectedDoctor.full_name?.charAt(0)?.toUpperCase()}
                 </div>
                 {/* A physio's header is one row: name, shift, services, session length,
                     slots open and seats per slot side by side, so everything the day is
-                    about to be opened against reads in a single glance. */}
-                <div className={isPhysio ? "flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap" : ""}>
-                  <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 xl:flex-nowrap">
+                    about to be opened against reads in a single glance. On a phone it
+                    stacks into three full-width rows instead: shift and services, the
+                    session length, then slots open beside Per slot. */}
+                <div className={isPhysio ? "flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap max-sm:w-full max-sm:flex-col max-sm:items-stretch" : ""}>
+                  <h3 className={`flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 xl:flex-nowrap ${isPhysio ? "max-sm:flex-nowrap" : ""}`}>
                     <span className="hidden whitespace-nowrap sm:inline">{selectedDoctor.full_name}</span>
                     {/* The shift is stated on the header rather than left to be inferred
                         from where the grid below starts — the day is being published
                         against it, so it has to be visible while publishing. */}
                     <span
-                      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${shiftLabel ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}
+                      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold max-sm:shrink-0 ${shiftLabel ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"}`}
                       title={shiftLabel ? "Set in MANAGEMENT → TIME MANAGEMENT" : "No shift set — the full working day is offered"}
                       data-testid="calendar-shift-chip"
                     >
@@ -1083,19 +1105,20 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                           disabled={savingService}
                           title={mine.length ? mine.join(", ") : "The services this expert is offered under — from Services and Products"}
                           emptyText="No services in Services and Products yet"
+                          className="max-sm:min-w-0 max-sm:flex-1 max-sm:shrink max-sm:justify-between"
                           testid="calendar-service-select"
                         />
                       );
                     })()}
                   </h3>
                   {isPhysio ? (
-                    <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap">
+                    <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap max-sm:grid max-sm:grid-cols-2">
                       {/* The session length, editable here per physio on the clock dial.
                           Only days opened after the change are cut at it. */}
                       <button
                         type="button"
                         onClick={() => setDurationOpen(true)}
-                        className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[#EFEAE0] bg-[#FDFCF8] px-3 text-sm text-slate-500 transition hover:bg-[#F3EFE6]"
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[#EFEAE0] bg-[#FDFCF8] px-3 text-sm text-slate-500 transition hover:bg-[#F3EFE6] max-sm:col-span-2 max-sm:h-9 max-sm:justify-center"
                         title={ownDuration ? "Set for this physio — tap to change" : "From FITSIO STORE — tap to set this physio's own length"}
                         data-testid="calendar-duration-edit"
                       >
@@ -1104,12 +1127,15 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                         <span className="font-bold text-sky-700">{durationLabel(slotDuration)}</span>
                         <Pencil className="h-3 w-3 text-slate-400" />
                       </button>
-                      <span className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-slate-100 px-2.5 text-xs font-semibold text-slate-600 sm:inline-flex" data-testid="calendar-slots-open">
+                      <span className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-slate-100 px-2.5 text-xs font-semibold text-slate-600 sm:inline-flex max-sm:inline-flex max-sm:justify-center" data-testid="calendar-slots-open">
                         {(calendarData?.slots || []).length} slots open
                       </span>
                       <span className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-slate-100 px-2.5 text-xs font-semibold text-slate-600 sm:inline-flex">
                         {calendarData?.slot_capacity ?? 3} per slot
                       </span>
+                      {/* On a phone Per slot sits here beside slots open; the one on the
+                          right of the header is the desktop's. */}
+                      {renderPerSlot("sm:hidden max-sm:w-full max-sm:justify-center", "physio-slot-capacity-mobile")}
                     </div>
                   ) : (
                     <p className="hidden text-[11px] text-slate-400 sm:block">
@@ -1130,27 +1156,12 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   )}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className={`flex flex-wrap items-center justify-end gap-2 ${isPhysio ? "max-sm:w-full max-sm:empty:hidden" : ""}`}>
                 {/* A physio runs a floor — two or three patients in the same hour. Set
                     here rather than assumed, because it varies by physio and by room.
                     Head Physio has no control: a consultation is one-to-one and the
                     backend pins them to 1 whatever is sent. */}
-                {isPhysio && (
-                  <CreamPicker
-                    value={calendarData?.slot_capacity ?? 3}
-                    onChange={saveCapacity}
-                    options={[1, 2, 3, 4].map((n) => ({ value: n, label: `${n} patient${n > 1 ? "s" : ""}` }))}
-                    icon={Users}
-                    prefix="Per slot"
-                    label={String(calendarData?.slot_capacity ?? 3)}
-                    set
-                    align="end"
-                    width="w-44"
-                    disabled={savingCapacity}
-                    title="Patients this physio treats in the same slot — up to 4"
-                    testid="physio-slot-capacity"
-                  />
-                )}
+                {isPhysio && renderPerSlot("max-sm:hidden", "physio-slot-capacity")}
                 {selectedDates.length > 0 && (
                   <span className="text-xs font-medium text-slate-500" data-testid="selected-days-count">
                     {selectedDates.length} day{selectedDates.length > 1 ? "s" : ""} selected

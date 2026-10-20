@@ -25,6 +25,7 @@ const ROW_OFF = "text-slate-700 hover:bg-[#F3EFE6]";
 export const CreamPicker = ({
   value, onChange, options, multiple = false, label, prefix, icon: Icon, set = false,
   disabled, title, testid = "cream-picker", align = "start", width = "w-56", emptyText = "Nothing to pick",
+  className = "",
 }) => {
   const [open, setOpen] = useState(false);
   const opts = (options || []).map((o) => (typeof o === "object" ? o : { value: o, label: String(o) }));
@@ -43,13 +44,13 @@ export const CreamPicker = ({
       <PopoverPrimitive.Trigger
         disabled={disabled}
         title={title}
-        className={`${TRIGGER} ${set ? TRIGGER_SET : TRIGGER_IDLE}`}
+        className={`${TRIGGER} ${set ? TRIGGER_SET : TRIGGER_IDLE} ${className}`}
         data-testid={testid}
       >
-        {Icon && <Icon className="h-3.5 w-3.5 opacity-70" />}
-        {prefix && <span className="font-medium opacity-80">{prefix}</span>}
-        <span className="max-w-[12rem] truncate">{label}</span>
-        <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition ${open ? "rotate-180" : ""}`} />
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+        {prefix && <span className="shrink-0 font-medium opacity-80">{prefix}</span>}
+        <span className="min-w-0 max-w-[12rem] truncate">{label}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 opacity-60 transition ${open ? "rotate-180" : ""}`} />
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
