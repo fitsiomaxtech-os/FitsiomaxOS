@@ -44,7 +44,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  HeartHandshake, Download, FileSpreadsheet,
+  HeartHandshake, Download, FileSpreadsheet, Menu,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -2185,24 +2185,27 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           />
 
           {/* Phone, with one stage's list open: where the strip sat, flush under the header,
-              the stage being read and its count, and the way back to the cards. The wash is
-              the cards' grey now; the count pill alone keeps the stage's colour, so the bar
-              still says which card it came from without re-colouring the row — and on
-              Branch Leads it may have been opened on All Stages, which is a card there
-              rather than a stage. */}
+              the way back to the cards, the stage's count and its name, and on the right a
+              menu of the tab's other stages — so going from New Leads to RNR is one tap
+              into the menu rather than back out to the cards and in again. The count box
+              alone keeps the stage's colour, so the bar still says which card it came
+              from — and on Branch Leads it may have been opened on All Stages, which is a
+              card there rather than a stage. */}
           {phoneStageListOpen && (() => {
             const onLeadsList = activeView === "pipeline";
-            // Same rule as the cards: grey wash, colour only in the count pill — the strip's
-            // own blue where the stage is All Stages.
-            const wash = PHONE_CARD_HEX;
+            // Colour only in the count box — the strip's own blue where the stage is All Stages.
             const stageHex = onLeadsList
               ? (stageFilter ? notifyHex(leadPillStages.find((s) => s.name === stageFilter)?.color) : "#0ea5e9")
               : notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
-            const Icon = onLeadsList ? leadStageIcon(stageFilter) : consultationStageIcon(stageFilter);
             const count = onLeadsList
               ? (stageFilter ? salesCounts[stageFilter] || 0 : totalLeads)
               : (consultationCounts[stageFilter] || 0);
             const label = stageFilter || "All Stages";
+            // The same stages the cards offer, less the one already open. All Stages is left
+            // to the back arrow: it is the cards' summary, not a stage to work.
+            const otherStages = (onLeadsList ? leadPillStages : consultationOnlyStages).filter((s) => s.name !== stageFilter);
+            const countFor = (name) => (onLeadsList ? salesCounts[name] : consultationCounts[name]) || 0;
+            const iconFor = onLeadsList ? leadStageIcon : consultationStageIcon;
             return (
               <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid={onLeadsList ? "branch-leads-phone-back" : "branch-consult-phone-back"}>
                 <button
@@ -2216,14 +2219,42 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       to the cards is seen. motion-safe: a phone set to reduce motion gets
                       it still. */}
                   <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${wash}1F` }}>
-                    <Icon aria-hidden className="h-4 w-4" style={{ color: wash }} />
+                  <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: stageHex }}>
+                    {count}
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{label}</span>
                 </button>
-                <span className="mr-1 inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold text-white" style={{ background: stageHex }}>
-                  {count}
-                </span>
+                {otherStages.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+                        aria-label="Switch stage"
+                        data-testid={onLeadsList ? "branch-leads-phone-stage-menu" : "branch-consult-phone-stage-menu"}
+                      >
+                        <Menu aria-hidden className="h-5 w-5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {otherStages.map((s) => {
+                        const StageIcon = iconFor(s.name);
+                        return (
+                          <DropdownMenuItem
+                            key={s.id}
+                            onSelect={() => { setStageFilter(s.name); window.scrollTo({ top: 0 }); }}
+                            className="gap-2.5 py-2"
+                            data-testid={`${onLeadsList ? "branch-leads" : "branch-consult"}-phone-stage-menu-${s.name}`}
+                          >
+                            <StageIcon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                            <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{s.name}</span>
+                            <span className="text-xs font-semibold text-slate-500">{countFor(s.name)}</span>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             );
           })()}
