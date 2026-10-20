@@ -10426,8 +10426,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       // Paid in parts, the receipts are on the payment rows above.
                       const receipt = f.paid && !payRows.length && REISSUE_FEES[f.key] && selectedLead[REISSUE_FEES[f.key].details]?.transaction_id;
                       const owing = !f.paid && f.balanceDue != null;
+                      // Settled in parts, the payments above carry the figures; the fee's
+                      // row names the package and its days without a total under them.
                       const amount = owing
                         ? `Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`
+                        : f.paid && payRows.length ? ""
                         : f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const total = owing && f.amount != null ? `Total Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const amountTone = f.paid ? "text-emerald-700" : owing ? "text-amber-700" : "text-slate-800";
@@ -10566,7 +10569,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               {`Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`}
                             </p>
                           </div>
-                        ) : f.amount != null ? (
+                        ) : f.amount != null && !(f.paid && f.key === "treatment" && treatmentPaymentRows.length) ? (
                           <p className="text-lg font-extrabold leading-none text-slate-800">
                             {`Rs.${Number(f.amount).toLocaleString("en-IN")}`}
                           </p>
