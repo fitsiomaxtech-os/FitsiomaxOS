@@ -18,7 +18,7 @@ import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
   saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
-  assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote,
+  assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
   rehabSessionsForLead,
   listNutritionCoaches, bookDietAppointment, collectDietFee, collectDietChartFee,
   listDietStoreItems,
@@ -68,6 +68,11 @@ const STANDARD_PAYMENT_MODES = [
   { value: "cheque", label: "Cheque" },
   { value: "partial", label: "Partial Payment" },
 ];
+// The two halves of the panel's payment buttons. Offline Payment is money handed over at
+// the desk; Collect Online Payment, which opens once the patient is Marked Online, is money
+// that moved from their phone or bank. A split is cut from the same half it was opened on.
+const OFFLINE_COLLECT_MODES = ["cash", "card", "cheque"];
+const ONLINE_COLLECT_MODES = ["upi", "account_transfer"];
 const INSTALLMENT_PAYMENT_MODES = [
   { value: "cash", label: "Cash" },
   { value: "upi", label: "UPI" },
@@ -3067,6 +3072,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // while the physio picker books the swapped days, and goes out with that booking.
   const [swapDraft, setSwapDraft] = useState(null); // { mode, quote, loading, dueDate }
   const [swapMode, setSwapMode] = useState(null); // "online" | "offline" | null
+  // The Mark Online popup: its three ways onto Online, with what the panel knew about the
+  // course when it was opened (whether it can be re-priced, its mode, whether it is paid).
+  const [onlineMenu, setOnlineMenu] = useState(null);
+  // Set while the physio picker is Online Physio Assign: Online physios only, no re-price.
+  const [onlineAssign, setOnlineAssign] = useState(false);
+  const [markingOnline, setMarkingOnline] = useState(false);
   const [physioOptions, setPhysioOptions] = useState([]);
   // A House Visit patient can be treated by a physio from any branch: the branch is
   // picked first, and the physio list is that branch's. "" until one is picked.
@@ -5222,9 +5233,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // read off the lead it hands over rather than off derived state that still belongs to
   // whoever was selected before. A saved row is the whole answer there — a plan reached
   // from a row exists already, or the row would not be showing a balance to collect.
-  // `mode` is the tender the popup opens on. Collect Online Payment opens it on UPI, the
-  // money having already moved from the patient's phone; the picker can still change it.
-  const openPartialCollectPopup = (idx, fee = "treatment", leadArg = null, mode = "cash") => {
+  // `modes`, when given, is all the picker offers — Offline Payment's desk tenders or
+  // Collect Online Payment's — and the popup opens on the first of them.
+  const openPartialCollectPopup = (idx, fee = "treatment", leadArg = null, modes = null) => {
     // Only the Treatment Fee is ever collected against a schedule that has not been
     // saved yet (its Partial Payment plan is built in the popup and stored on first
     // collect). Every other fee's schedule exists already, because a collection is what
@@ -5242,7 +5253,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // still be typed short of the net for a part payment, as it always could.
       due: amount > 0 ? amount : 0,
       discount: "",
-      payment_mode: mode,
+      payment_mode: modes ? modes[0] : "cash",
+      modes,
       upi_id: "",
       upi_transaction_id: "",
       card_transaction_id: "",
@@ -5534,10 +5546,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // (its own sessions, paid by the Treatment Fee) or the rehab course (its own days, paid
   // by the Rehab Fee). They share a physio and a published calendar and nothing else — see
   // backend/v3_rehab for why they are separate records.
-  const openPhysioModal = async (track = "treatment", swapTo = null) => {
+  // `listMode` "online" is Online Physio Assign: only Online physios are listed, and the
+  // course keeps its price -- re-pricing is Swap to Online's job, or Mark Online's.
+  const openPhysioModal = async (track = "treatment", swapTo = null, listMode = null) => {
     setAssignTrack(track);
     // Set for the Offline <-> Online swap, cleared for a plain assign or reassign.
     setSwapMode(track === "treatment" ? swapTo : null);
+    setOnlineAssign(track === "treatment" && !swapTo && listMode === "online");
     setShowPhysioModal(true);
     setShowSlotPicker(false);
     setPhysioPick("");
@@ -5558,7 +5573,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // swapped before, so a patient now Online is not handed back to the floor by accident.
     // A course never swapped lists exactly what it always has.
     const physioMode = track === "treatment"
-      ? (swapTo || (selectedLead?.session_mode_plan?.length ? (selectedLead.session_package_mode || "offline") : null))
+      ? (swapTo || listMode || (selectedLead?.session_mode_plan?.length ? (selectedLead.session_package_mode || "offline") : null))
       : null;
     try {
       const rows = await getDoctors(physioMode ? { branch_id: branchId, physio_mode: physioMode } : { branch_id: branchId });
@@ -5581,15 +5596,38 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // what that does to the Payment Schedule, read off the server so the figures on screen
   // are the ones the booking will save. Nothing is saved until the physio and days are
   // confirmed in the picker that "Next" opens.
-  const openSwapDraft = async (mode) => {
+  // `markOnly` is Mark Online: the same figures, saved by Confirm without a physio or a
+  // day being picked -- see submitMarkOnline.
+  const openSwapDraft = async (mode, markOnly = false) => {
     if (!selectedLead) return;
-    setSwapDraft({ mode, quote: null, loading: true, dueDate: "" });
+    setSwapDraft({ mode, quote: null, loading: true, dueDate: "", markOnly });
     try {
       const quote = await getSessionModeSwapQuote(selectedLead.id, mode);
       setSwapDraft((d) => (d && d.mode === mode ? { ...d, quote, loading: false } : d));
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Couldn't work out the swap");
       setSwapDraft(null);
+    }
+  };
+
+  const submitMarkOnline = async () => {
+    if (!swapDraft?.quote || !selectedLead) return;
+    if (swapDraft.quote.needs_due_date && !swapDraft.dueDate) {
+      toast.error("Pick a due date for the new balance");
+      return;
+    }
+    setMarkingOnline(true);
+    try {
+      const res = await markLeadOnline(selectedLead.id, swapDraft.dueDate || null);
+      const updated = { ...selectedLead, ...res.lead };
+      setSelectedLead(updated);
+      setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => (l.id === updated.id ? { ...l, ...res.lead } : l)) }));
+      setSwapDraft(null);
+      toast.success(`Marked Online -- Treatment Fee Rs.${Number(res.quote.new_total).toLocaleString("en-IN")}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Couldn't mark this patient Online");
+    } finally {
+      setMarkingOnline(false);
     }
   };
 
@@ -5665,6 +5703,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // days being booked, sitting under a heading that named the other course.
   const assignTitle = isRehabAssign ? "Assign Rehab Physio"
     : swapMode ? `Swap to ${swapMode === "online" ? "Online" : "Offline"} · Choose Physio`
+    : onlineAssign ? "Online Physio Assign"
     : "Assign Physio";
   const assignFeeLabel = isRehabAssign ? "Rehab Fee" : "Treatment Fee";
   const assignFeePaid = isRehabAssign ? selectedLead?.rehab_fee_paid : selectedLead?.treatment_fee_paid;
@@ -9162,6 +9201,49 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   && !!selectedLead.session_package_id
                   && selectedLead.visit_type !== "home"
                   && !selectedLead.session_package_manual;
+                // The payment row Fee Collected and Physio Assign share:
+                //   [ Offline Payment ] [ Assign / Reassign Physio ] [ Mark Online ] [ Collect Online Payment ]
+                // Both payment buttons take the next balance owed -- the Treatment Fee's first,
+                // else whichever fee still has one -- through the same installment popup Collect
+                // Balance opens, offering only their own half of the tenders. Collect Online
+                // Payment is there once the course is Online, by Mark Online, a swap, or sale.
+                const balancePlan = feeBalances.treatment || allBalances?.plans[0] || null;
+                const OfflinePayButton = (
+                  <Button
+                    size="sm"
+                    disabled={!balancePlan}
+                    title={balancePlan ? undefined : "Nothing is due"}
+                    className={`${balancePlan ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-slate-100 text-slate-400"} shadow-sm ${ACT_BTN}`}
+                    onClick={() => openPartialCollectPopup(balancePlan.nextIdx, balancePlan.fee, null, OFFLINE_COLLECT_MODES)}
+                    data-testid="cons-offline-payment"
+                  >
+                    <IndianRupee className="mr-1 h-3.5 w-3.5" />
+                    <Lbl full="Offline Payment" short="Offline" />
+                  </Button>
+                );
+                const MarkOnlineButton = (
+                  <Button
+                    size="sm"
+                    className={`bg-white text-sky-700 shadow-sm ring-1 ring-sky-200 hover:bg-sky-50 ${ACT_BTN}`}
+                    onClick={() => setOnlineMenu({ canSwap: canSwapMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
+                    data-testid="cons-mark-online-menu"
+                  >
+                    <Video className="mr-1 h-3.5 w-3.5" />
+                    {courseMode === "online" ? "Online" : "Mark Online"}
+                    <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                  </Button>
+                );
+                const OnlinePayButton = courseMode === "online" && balancePlan ? (
+                  <Button
+                    size="sm"
+                    className={`bg-sky-600 text-white shadow-sm hover:bg-sky-700 ${ACT_BTN}`}
+                    onClick={() => openPartialCollectPopup(balancePlan.nextIdx, balancePlan.fee, null, ONLINE_COLLECT_MODES)}
+                    data-testid="cons-collect-online"
+                  >
+                    <IndianRupee className="mr-1 h-3.5 w-3.5" />
+                    <Lbl full="Collect Online Payment" short="Online Pay" />
+                  </Button>
+                ) : null;
                 // Whether there is a delivery to report at all. Read once: the column it
                 // fills, that column's heading and the spells inside it are three places that
                 // would otherwise each decide for themselves.
@@ -9582,15 +9664,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               due {feeBalances.treatment.next.due_date}
                             </p>
                           )}
-                          <Button
-                            size="sm"
-                            className={`mt-2 w-full ${feeBalances.treatment.overdue ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700"} text-white shadow-sm ${ACT_BTN}`}
-                            onClick={() => openTreatmentFeeFor(selectedLead)}
-                            data-testid="cons-physio-assign-collect-balance"
-                          >
-                            <IndianRupee className="mr-1 h-3.5 w-3.5" />
-                            Collect Balance
-                          </Button>
                         </div>
                       )}
 
@@ -9682,19 +9755,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </p>
                       )}
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {/* The Treatment Fee balance paid online, marked before the physio
-                            is assigned or changed — Collect Balance's popup, opened on UPI. */}
-                        {feeBalances.treatment && (
-                          <Button
-                            size="sm"
-                            className={`bg-sky-600 text-white shadow-sm hover:bg-sky-700 ${ACT_BTN}`}
-                            onClick={() => openPartialCollectPopup(feeBalances.treatment.nextIdx, "treatment", null, "upi")}
-                            data-testid="cons-physio-assign-collect-online"
-                          >
-                            <IndianRupee className="mr-1 h-3.5 w-3.5" />
-                            Collect Online Payment
-                          </Button>
-                        )}
+                        {OfflinePayButton}
                         <Button
                           size="sm"
                           disabled={(treatmentAssigned && courseDone) || !treatmentFeePaid}
@@ -9718,20 +9779,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <Users className="mr-1 h-3.5 w-3.5" />
                           {treatmentAssigned ? "Reassign Physio" : "Assign Physio & Book Sessions"}
                         </Button>
-                        {/* Offline <-> Online for the days still to come, at the new mode's
-                            price. The Branch Admin's call, any time in the course — the
-                            Consultant only chose the package. */}
-                        {canSwapMode && (
-                          <Button
-                            size="sm"
-                            className={`bg-white text-sky-700 shadow-sm ring-1 ring-sky-200 hover:bg-sky-50 ${ACT_BTN}`}
-                            onClick={() => openSwapDraft(courseMode === "online" ? "offline" : "online")}
-                            data-testid="cons-swap-mode"
-                          >
-                            <ArrowLeftRight className="mr-1 h-3.5 w-3.5" />
-                            Swap to {courseMode === "online" ? "Offline" : "Online"}
-                          </Button>
-                        )}
+                        {/* Offline <-> Online for the days still to come -- Swap, Mark
+                            Online and Online Physio Assign -- now sits behind this one
+                            button. The Branch Admin's call, any time in the course. */}
+                        {MarkOnlineButton}
+                        {OnlinePayButton}
                       </div>
                       {!treatmentFeePaid && (
                         <GateNote testId="cons-physio-detail-gate">
@@ -10695,23 +10747,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     Its own inset, because the panel body is flush: without
                                     it the button sat jammed in the panel's corner. */}
                                 <div className="flex flex-wrap items-center gap-2 p-3">
-                                  {/* A balance the patient paid from their phone is marked
-                                      here, before the course goes to a physio — the same
-                                      installment popup as Collect Balance, opened on UPI. */}
-                                  {allBalances && (() => {
-                                    const plan = feeBalances.treatment || allBalances.plans[0];
-                                    return (
-                                      <Button
-                                        size="sm"
-                                        className={`bg-sky-600 text-white shadow-sm transition hover:bg-sky-700 hover:shadow ${ACT_BTN}`}
-                                        onClick={() => openPartialCollectPopup(plan.nextIdx, plan.fee, null, "upi")}
-                                        data-testid="cons-collect-online-from-fee-collected"
-                                      >
-                                        <IndianRupee className="mr-1 h-3.5 w-3.5" />
-                                        <Lbl full="Collect Online Payment" short="Online Pay" />
-                                      </Button>
-                                    );
-                                  })()}
+                                  {OfflinePayButton}
                                   <Button
                                     size="sm"
                                     className={`bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 hover:shadow ${ACT_BTN}`}
@@ -10735,6 +10771,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                         what it says. */}
                                     Assign Physio
                                   </Button>
+                                  {MarkOnlineButton}
+                                  {OnlinePayButton}
                                 </div>
                               </>
                             )}
@@ -12130,6 +12168,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 where the row it belongs to is rendered. */}
             {partialCollectDraft && (() => {
               const mode = partialCollectDraft.payment_mode;
+              const allowed = partialCollectDraft.modes;
+              const pickModes = allowed ? INSTALLMENT_PAYMENT_MODES.filter((m) => allowed.includes(m.value)) : INSTALLMENT_PAYMENT_MODES;
+              const splitModes = allowed ? SPLIT_PAYMENT_MODES.filter((m) => allowed.includes(m.value)) : SPLIT_PAYMENT_MODES;
               const modeLabel = INSTALLMENT_PAYMENT_MODES.find((m) => m.value === mode)?.label || "";
               return (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" data-testid="cons-partial-collect-modal">
@@ -12139,6 +12180,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         Collect {partialCollectDraft.fee && partialCollectDraft.fee !== "treatment"
                           ? `${FEE_LABELS[partialCollectDraft.fee]} Balance`
                           : installmentLabelFor(partialCollectDraft.idx)}
+                        {allowed && (
+                          <span className={`ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase ${allowed === ONLINE_COLLECT_MODES ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"}`}>
+                            {allowed === ONLINE_COLLECT_MODES ? "Online" : "Offline"}
+                          </span>
+                        )}
                       </p>
                       <button onClick={() => setPartialCollectDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-partial-collect-close"><X className="h-4 w-4" /></button>
                     </div>
@@ -12174,7 +12220,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <label className="mb-1 block text-[11px] font-medium text-slate-500">Payment Mode</label>
                         <PaymentModeSelect
                           value={mode}
-                          options={INSTALLMENT_PAYMENT_MODES}
+                          options={pickModes}
                           // The count goes with the mode that was counted in. Switching
                           // away from Cash and back would otherwise leave the old notes
                           // sitting under a tender nobody counted -- the same reason a
@@ -12225,7 +12271,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       <>
                         <SplitPaymentLines
                           lines={partialCollectDraft.payment_lines}
-                          modes={SPLIT_PAYMENT_MODES}
+                          modes={splitModes}
                           expected={partialCollectDraft.amount}
                           onChange={(next) => setPartialCollectDraft({ ...partialCollectDraft, payment_lines: next })}
                           testPrefix="cons-partial-collect"
@@ -12235,7 +12281,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           type="button"
                           onClick={() => setPartialCollectDraft({
                             ...partialCollectDraft,
-                            payment_lines: [...partialCollectDraft.payment_lines, { mode: "cash", amount: "", reference: "", notes: {} }],
+                            payment_lines: [...partialCollectDraft.payment_lines, { mode: splitModes[0]?.value || "cash", amount: "", reference: "", notes: {} }],
                           })}
                           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 py-2 text-xs font-semibold text-slate-600 transition hover:border-emerald-400 hover:text-emerald-700"
                           data-testid="cons-partial-collect-split-more"
@@ -13192,6 +13238,84 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* Offline <-> Online swap, step one: the money. Hidden while its own
                 physio picker is open, and back on Cancel there, so the branch can step
                 back to the figures without starting again. */}
+            {/* Mark Online: three ways onto Online for a Treatment course. Swap re-prices the
+                days left and books them with an Online physio in one go; Mark Online re-prices
+                and opens Collect Online Payment without moving a day; Online Physio Assign
+                books an Online physio at the price the course already has. */}
+            {onlineMenu && (() => {
+              const isOnline = onlineMenu.mode === "online";
+              const markedOn = selectedLead?.online_marked_at ? String(selectedLead.online_marked_at).slice(0, 10) : null;
+              const noReprice = "This package can't be re-priced: a House Visit, a branch-priced or whole-course package, or no days left.";
+              const options = [
+                {
+                  key: "swap",
+                  icon: ArrowLeftRight,
+                  title: `Swap to ${isOnline ? "Offline" : "Online"}`,
+                  desc: `The days left move to ${isOnline ? "Offline" : "Online"} at its price, booked with ${isOnline ? "a branch" : "an Online"} physio.`,
+                  disabled: !onlineMenu.canSwap,
+                  why: noReprice,
+                  go: () => openSwapDraft(isOnline ? "offline" : "online"),
+                },
+                {
+                  key: "mark",
+                  icon: CheckCircle2,
+                  title: isOnline ? "Marked Online" : "Mark Online",
+                  desc: isOnline
+                    ? `This course is on the Online price${markedOn ? ` · marked ${markedOn}` : ""}. Collect Online Payment is on the panel.`
+                    : "Switch the course to the Online price, then collect the payment online (UPI / Account Transfer). The booked days and physio stay.",
+                  disabled: isOnline || !onlineMenu.canSwap,
+                  why: isOnline ? undefined : noReprice,
+                  go: () => openSwapDraft("online", true),
+                },
+                {
+                  key: "physio",
+                  icon: Users,
+                  title: "Online Physio Assign",
+                  desc: "Pick from the Online physios and book the days. The price stays as it is.",
+                  disabled: !onlineMenu.feePaid || (onlineMenu.assigned && onlineMenu.courseDone),
+                  why: !onlineMenu.feePaid ? "Collect the Treatment Fee first" : "The course is finished",
+                  go: () => openPhysioModal("treatment", null, "online"),
+                },
+              ];
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) setOnlineMenu(null); }} data-testid="cons-online-menu">
+                  <div className="w-full max-w-sm space-y-3 rounded-xl bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                        <Video className="h-4 w-4 text-sky-600" />
+                        {isOnline ? "Online" : "Mark Online"}
+                      </p>
+                      <button onClick={() => setOnlineMenu(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-online-menu-close"><X className="h-4 w-4" /></button>
+                    </div>
+                    <div className="space-y-2">
+                      {options.map((o) => (
+                        <button
+                          key={o.key}
+                          type="button"
+                          disabled={o.disabled}
+                          title={o.disabled ? o.why : undefined}
+                          onClick={() => { setOnlineMenu(null); o.go(); }}
+                          className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition ${o.disabled
+                            ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-70"
+                            : "border-sky-200 bg-white hover:border-sky-400 hover:bg-sky-50"}`}
+                          data-testid={`cons-online-menu-${o.key}`}
+                        >
+                          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${o.disabled ? "bg-slate-200 text-slate-400" : "bg-sky-100 text-sky-700"}`}>
+                            <o.icon className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className={`block text-xs font-semibold ${o.disabled ? "text-slate-500" : "text-slate-800"}`}>{o.title}</span>
+                            <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{o.desc}</span>
+                            {o.disabled && o.why && <span className="mt-0.5 block text-[10px] text-amber-700">{o.why}</span>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {swapDraft && !showPhysioModal && (() => {
               const q = swapDraft.quote;
               const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN")}`;
@@ -13203,7 +13327,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                         <ArrowLeftRight className="h-4 w-4 text-sky-600" />
-                        Swap to {toLabel}
+                        {swapDraft.markOnly ? "Mark Online" : `Swap to ${toLabel}`}
                       </p>
                       <button onClick={() => setSwapDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-swap-close"><X className="h-4 w-4" /></button>
                     </div>
@@ -13262,19 +13386,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             />
                           </label>
                         )}
-                        <p className="text-[11px] text-slate-500">Nothing is saved yet — the swap is saved when the {toLabel} physio's days are confirmed.</p>
+                        <p className="text-[11px] text-slate-500">
+                          {swapDraft.markOnly
+                            ? "Confirm saves the Online price now. The booked days and the physio stay as they are, and Collect Online Payment opens on the panel."
+                            : `Nothing is saved yet — the swap is saved when the ${toLabel} physio's days are confirmed.`}
+                        </p>
                       </>
                     )}
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setSwapDraft(null)} data-testid="cons-swap-cancel">Cancel</Button>
                       <Button
                         size="sm"
-                        disabled={!q}
+                        disabled={!q || markingOnline}
                         className={`bg-sky-600 text-white hover:bg-sky-700 ${ACT_BTN}`}
-                        onClick={continueSwap}
-                        data-testid="cons-swap-next"
+                        onClick={swapDraft.markOnly ? submitMarkOnline : continueSwap}
+                        data-testid={swapDraft.markOnly ? "cons-mark-online-confirm" : "cons-swap-next"}
                       >
-                        Next: Choose Physio
+                        {swapDraft.markOnly ? (markingOnline ? "Saving..." : "Confirm Mark Online") : "Next: Choose Physio"}
                       </Button>
                     </div>
                   </div>

@@ -1030,6 +1030,8 @@ export const assignPhysioWithSessions = async (leadId, payload) => (await api.po
 // The Offline <-> Online swap's figures, before anything is saved. The swap itself goes in
 // through assignPhysioWithSessions with swap_mode, once the physio and days are picked.
 export const getSessionModeSwapQuote = async (leadId, mode) => (await api.get(`/leads/${leadId}/session-mode-swap`, { params: { mode } })).data;
+// Mark Online: the swap's Online price saved on its own, with no day moved -- see mark-online.
+export const markLeadOnline = async (leadId, dueDate) => (await api.post(`/leads/${leadId}/mark-online`, { due_date: dueDate })).data;
 // Who has delivered this patient's treatment days and how far each of them got — the
 // physios the patient has been through, oldest first, then the one they are with now.
 export const getLeadPhysioProgress = async (leadId) => (await api.get(`/leads/${leadId}/physio-progress`)).data;

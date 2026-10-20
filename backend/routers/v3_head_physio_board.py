@@ -1191,6 +1191,83 @@ async def hp_session_mode_swap_preview(
     return _public_quote(await _mode_swap_quote(lead, mode))
 
 
+def _swap_fields(lead: dict, swap: dict) -> dict:
+    """What a quoted swap writes onto the lead: the new mode and its price, and the
+    Treatment Fee's schedule carrying the difference. Shared by the swap that rides on a
+    booking and by Mark Online, which re-prices without moving a day."""
+    fields = {
+        "session_mode_plan": swap["_plan"],
+        "session_package_mode": swap["to_mode"],
+        "session_package_price": swap["new_total"],
+        "treatment_fee_payment_details": {
+            **(lead.get("treatment_fee_payment_details") or {}),
+            "installments": swap["_installments"],
+        },
+        "treatment_fee_excess": swap["excess_after"] or None,
+    }
+    # A Partial Payment plan booked its whole price up front, so it follows the part
+    # of the change now on its schedule. Every other mode's paid figure is the money
+    # that has actually come in, which a swap does not move.
+    if lead.get("treatment_fee_payment_mode") == "partial":
+        fields["treatment_fee_paid"] = round(float(lead.get("treatment_fee_paid") or 0) + swap["_booked"], 2)
+    return fields
+
+
+def _swap_summary(swap: dict) -> str:
+    """The Timeline line for a swap, after the verb: the days, the rate, the fee and the due."""
+    change = swap["delta"]
+    return (
+        f"{swap['from_mode'].title()} to {swap['to_mode'].title()} from Day {swap['done_days'] + 1} · "
+        f"{swap['remaining_days']} days × Rs.{swap['rate']:g} · "
+        f"Treatment Fee Rs.{swap['old_total']:g} → Rs.{swap['new_total']:g} "
+        f"({'+' if change >= 0 else '-'}Rs.{abs(change):g}) · "
+        f"Due Rs.{swap['due_before']:g} → Rs.{swap['due_after']:g}"
+        + (f" · Paid over the new fee Rs.{swap['excess_after']:g}" if swap["excess_after"] else "")
+    )
+
+
+class MarkOnlineInput(BaseModel):
+    due_date: Optional[str] = None
+
+
+@router.post("/leads/{lead_id}/mark-online")
+async def hp_mark_online(
+    lead_id: str,
+    payload: MarkOnlineInput,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """Mark Online (Branch Admin): the days still to come are priced at the package's
+    Online rate, the same figures the Swap popup quotes, but no day is moved and no physio
+    changes — the booking, if there is one, stands. The patient is tagged as paying online,
+    which is what opens Collect Online Payment on the panel."""
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if lead.get("consultation_stage") not in ("Fee Collected", "Physio Assign"):
+        raise HTTPException(status_code=400, detail="Mark Online is for a patient at Fee Collected or Physio Assign")
+    swap = await _mode_swap_quote(lead, "online", payload.due_date)
+    if swap["needs_due_date"]:
+        raise HTTPException(status_code=400, detail="Pick a due date for the new balance")
+    now = now_iso()
+    fields = {
+        **_swap_fields(lead, swap),
+        "online_marked_at": now,
+        "online_marked_by": user.full_name,
+        "updated_at": now,
+    }
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": fields})
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "action": "session_mode_marked_online",
+        "details": "Marked Online · " + _swap_summary(swap),
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "created_at": now,
+    })
+    return {"lead": {**lead, **fields}, "quote": _public_quote(swap)}
+
+
 @router.post("/leads/{lead_id}/assign-physio-sessions")
 async def hp_assign_physio_with_sessions(
     lead_id: str,
@@ -1338,23 +1415,7 @@ async def hp_assign_physio_with_sessions(
     await v3_col("sessions").insert_many([d.copy() for d in session_docs])
 
     handover = _physio_handover(lead, physio["id"], user, now)
-    swap_fields = {}
-    if swap:
-        swap_fields = {
-            "session_mode_plan": swap["_plan"],
-            "session_package_mode": swap["to_mode"],
-            "session_package_price": swap["new_total"],
-            "treatment_fee_payment_details": {
-                **(lead.get("treatment_fee_payment_details") or {}),
-                "installments": swap["_installments"],
-            },
-            "treatment_fee_excess": swap["excess_after"] or None,
-        }
-        # A Partial Payment plan booked its whole price up front, so it follows the part
-        # of the change now on its schedule. Every other mode's paid figure is the money
-        # that has actually come in, which a swap does not move.
-        if lead.get("treatment_fee_payment_mode") == "partial":
-            swap_fields["treatment_fee_paid"] = round(float(lead.get("treatment_fee_paid") or 0) + swap["_booked"], 2)
+    swap_fields = _swap_fields(lead, swap) if swap else {}
     await v3_col("leads").update_one({"id": lead_id}, {
         "$set": {
             "assigned_physio_id": physio["id"],
@@ -1367,19 +1428,11 @@ async def hp_assign_physio_with_sessions(
         **handover,
     })
     if swap:
-        change = swap["delta"]
         await v3_col("lead_activity").insert_one({
             "id": str(uuid.uuid4()),
             "lead_id": lead_id,
             "action": "session_mode_swapped",
-            "details": (
-                f"Swapped {swap['from_mode'].title()} to {swap['to_mode'].title()} from Day {swap['done_days'] + 1} · "
-                f"{swap['remaining_days']} days × Rs.{swap['rate']:g} · "
-                f"Treatment Fee Rs.{swap['old_total']:g} → Rs.{swap['new_total']:g} "
-                f"({'+' if change >= 0 else '-'}Rs.{abs(change):g}) · "
-                f"Due Rs.{swap['due_before']:g} → Rs.{swap['due_after']:g}"
-                + (f" · Paid over the new fee Rs.{swap['excess_after']:g}" if swap["excess_after"] else "")
-            ),
+            "details": "Swapped " + _swap_summary(swap),
             "created_by": user.full_name,
             "created_by_role": user.role,
             "created_at": now,
