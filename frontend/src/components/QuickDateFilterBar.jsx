@@ -41,6 +41,8 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
  *            is on `title`, and sm and up is untouched: same h-10 buttons, same words.
  *  - showTomorrow: adds Tomorrow after Today. For boards whose list is read by
  *            appointment date; off by default.
+ *  - omit: preset keys this board leaves out, e.g. ["last_90"]. The keys still work
+ *            through quickDatePreset; only the buttons go.
  */
 
 const startOfDay = (d) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
@@ -120,8 +122,8 @@ export const intersectDateFilters = (a, b) => {
   return { key: `${a.key}+${b.key}`, label: `${a.label} · ${b.label}`, from, to };
 };
 
-export const QuickDateFilterBar = ({ value, onChange, testid = "quick-date", inline = false, showCustom = true, micro = false, showTomorrow = false }) => {
-  const presets = QUICK_DATE_PRESETS.filter((p) => !p.optional || showTomorrow);
+export const QuickDateFilterBar = ({ value, onChange, testid = "quick-date", inline = false, showCustom = true, micro = false, showTomorrow = false, omit = [] }) => {
+  const presets = QUICK_DATE_PRESETS.filter((p) => (!p.optional || showTomorrow) && !omit.includes(p.key));
   // What lights up. All is the resting state, so a cleared filter lights All rather than
   // leaving the row with nothing selected and no way to tell it apart from a custom range.
   const activeKey = value?.key || "all";

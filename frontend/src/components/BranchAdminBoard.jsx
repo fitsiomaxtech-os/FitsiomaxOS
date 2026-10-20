@@ -110,6 +110,10 @@ import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk
 import { isCourseComplete } from "@/lib/leadStage";
 import { displayPhone } from "@/lib/phone";
 
+// Ranges this board's row leaves out. Last 90 Days went so the search beside the
+// ranges gets its width back; anything older is still on the toolbar's calendar.
+const BRANCH_OMITTED_RANGES = ["last_90"];
+
 // The Branch (sales) stages this file has to recognise, addressed by the role the backend
 // stamps on the stage row rather than by what the stage is called.
 //
@@ -2369,6 +2373,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 inline
                 showCustom={false}
                 showTomorrow={onConsultationTab}
+                omit={BRANCH_OMITTED_RANGES}
               />
             </div>
             {/* Pain Type, Pain Duration and City — the columns the list grew, now askable
@@ -2658,6 +2663,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               testid="branch-quick-date"
               showCustom={false}
               showTomorrow={onConsultationTab}
+              omit={BRANCH_OMITTED_RANGES}
             />
           </div>
 
