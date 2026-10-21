@@ -3295,11 +3295,12 @@ async def mark_installment_paid(
         # as it was paid -- see undo_last_instalment.
         keep_scheduled = {"scheduled_amount": scheduled} if scheduled is not None and abs(float(scheduled) - float(amount)) >= 0.005 else {}
         keep_discount = {"discount_amount": discount} if discount > 0 else {}
-        installments[idx] = {**installments[idx], "paid": True, "amount": amount, "payment_mode": mode, "transaction_id": transaction_id, **keep_scheduled, **keep_discount, **mode_fields}
+        installments[idx] = {**installments[idx], "paid": True, "paid_on": clinic_today(), "amount": amount, "payment_mode": mode, "transaction_id": transaction_id, **keep_scheduled, **keep_discount, **mode_fields}
         discount_suffix = f" · Discount Rs.{discount:g} off Rs.{float(scheduled):g}" if discount > 0 else ""
         activity_details = f"Collected {cfg['label']} Installment #{installment_number} for '{lead.get(cfg['package']) or cfg['label']}' · Rs.{amount} via {mode}{discount_suffix}{detail_suffix} · Txn {transaction_id}"
     else:
         installments[idx]["paid"] = True
+        installments[idx]["paid_on"] = clinic_today()
 
     # Keep the fee's own *_paid field in step with the money that has actually arrived,
     # but only where it is tracking that. A Partial Payment plan books the whole price the
@@ -3359,7 +3360,7 @@ async def mark_installment_paid(
 # What mark_installment_paid writes onto an instalment, and so what Undo takes off it.
 # Everything else on the row (amount, due_date) was there before the money was.
 _INSTALMENT_PAYMENT_KEYS = {
-    "paid", "payment_mode", "transaction_id", "scheduled_amount", "payment_lines", "denominations",
+    "paid", "paid_on", "payment_mode", "transaction_id", "scheduled_amount", "payment_lines", "denominations",
     "upi_transaction_id", "upi_utr", "upi_id", "card_transaction_id", "bank_name", "cheque_number",
     "account_last4", "account_holder_name", "ifsc_code", "transfer_reference", "discount_amount",
 }

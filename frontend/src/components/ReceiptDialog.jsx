@@ -134,12 +134,15 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
 
           {(receipt.installments || []).length > 0 && (
             <div className="mt-5">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Installments</p>
+              <p className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-600">Installments</p>
               <div className="space-y-1.5">
+                {/* A paid row shows the day the money came in; rows paid before paid_on was
+                    stamped fall back to their due date, which is the day the first one is taken. */}
                 {receipt.installments.map((i, n) => (
                   <div key={n} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs">
                     <span className="text-slate-600">
-                      #{n + 1}{i.sessions ? ` · ${i.sessions} sessions` : ""} · due {i.due_date || "—"}
+                      {i.sessions ? `${i.sessions} sessions · ` : ""}
+                      {i.paid ? `Paid on ${i.paid_on || i.due_date || "—"}` : `due ${i.due_date || "—"}`}
                     </span>
                     <span className={`font-bold ${i.paid ? "text-emerald-600" : "text-amber-600"}`}>
                       Rs.{i.amount}{i.paid ? " · PAID" : ""}
