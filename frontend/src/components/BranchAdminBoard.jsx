@@ -1418,7 +1418,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // On a phone the Consultation tab opens on its stages as a stack of cards, the Review
   // tab's (see ui/notify-card), and tapping one opens that stage's list with a back bar
   // above it. Nine stages as full-width rows fill the screen, so the list goes on a screen
-  // of its own rather than under them. House Visit and every width from sm keep the strip.
+  // of its own rather than under them. House Visit wears the same stack and back bar, since
+  // it is the same board over the same stages; every width from sm keeps the strip.
   //
   // Branch Leads now wears the same stack below sm, drawn in the shared card grey with
   // only its corner badge coloured (see PHONE_CARD_HEX): its summary cards were already
@@ -1437,8 +1438,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // Both card tabs share the back bar. The cards themselves stay told apart: the
   // consultation board's own hiding is keyed to phoneStageCards, and it must not be told
   // the leads stack is up over it.
-  const onPhoneCardTab = activeView === "branch_consultation" || activeView === "pipeline";
-  const phoneStageCards = activeView === "branch_consultation" && phoneStageList !== activeView;
+  const onPhoneCardTab = onConsultationTab || activeView === "pipeline";
+  const phoneStageCards = onConsultationTab && phoneStageList !== activeView;
   const phoneLeadStageCards = activeView === "pipeline" && phoneStageList !== activeView;
   const phoneStageListOpen = onPhoneCardTab && phoneStageList === activeView;
   // The Management tab answers the same way on a phone: its nine sub-tabs as the same
@@ -2237,9 +2238,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // under the header. House Visit keeps its cards.
             phoneFlush={!onHomeVisitTab}
             // The Consultation tab's phone wears its stages as cards instead (see
-            // phoneStageCards) and Branch Leads its colourless stack (phoneLeadStageCards),
-            // so the strip is desk-only on both. House Visit, which keeps neither, still
-            // shows it on a phone.
+            // phoneStageCards, House Visit too) and Branch Leads its colourless stack
+            // (phoneLeadStageCards), so the strip is desk-only on all three.
             className={onPhoneCardTab ? "max-sm:hidden" : ""}
             testid="branch-metric"
             plain
