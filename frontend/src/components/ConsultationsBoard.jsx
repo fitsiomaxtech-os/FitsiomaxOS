@@ -9397,11 +9397,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // it: a per-day package with its fee in and days left. A House Visit or a
                 // branch-priced package has no per-day catalogue rate to swap to.
                 const courseMode = selectedLead.session_package_mode === "online" ? "online" : "offline";
-                const canSwapMode = treatmentFeePaid && !courseDone
-                  && selectedLead.consultation_decision === "consultation_treatment"
+                const repriceable = selectedLead.consultation_decision === "consultation_treatment"
                   && !!selectedLead.session_package_id
                   && selectedLead.visit_type !== "home"
                   && !selectedLead.session_package_manual;
+                const canSwapMode = treatmentFeePaid && !courseDone && repriceable;
+                // Mark Online also works before the Treatment Fee is in -- the whole course is
+                // re-priced, so the Collect beside it takes the Online figure.
+                const canMarkMode = repriceable && (treatmentFeePaid ? !courseDone : selectedLead.package_paid != null);
                 // The row Fee Collected and Physio Assign share, on one line:
                 //   [ Assign / Reassign Physio ] [ Online ] [ Collect Online Payment ]
                 // Collect Online Payment takes the next balance owed -- the Treatment Fee's
@@ -9413,12 +9416,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <Button
                     size="sm"
                     className={`bg-white text-sky-700 shadow-sm ring-1 ring-sky-200 hover:bg-sky-50 ${ACT_BTN}`}
-                    onClick={() => setOnlineMenu({ canSwap: canSwapMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
+                    onClick={() => setOnlineMenu({ canSwap: canSwapMode, canMark: canMarkMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
                     data-testid="cons-mark-online-menu"
                   >
                     <Video className="mr-1 h-3.5 w-3.5" />
                     {courseMode === "online" ? "Online" : "Mark Online"}
                     <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                  </Button>
+                );
+                // The same menu on the Treatment Fee row before the fee is collected, filled
+                // orange beside Collect: [ Mark Online ] [ Collect ].
+                const FeeRowMarkOnlineButton = (
+                  <Button
+                    size="sm"
+                    className={`bg-orange-500 text-white shadow-sm hover:bg-orange-600 ${ACT_BTN}`}
+                    onClick={() => setOnlineMenu({ canSwap: canSwapMode, canMark: canMarkMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
+                    data-testid="cons-fee-mark-online"
+                  >
+                    <Video className="mr-1 h-3.5 w-3.5" />
+                    <Lbl full={courseMode === "online" ? "Online" : "Mark Online"} short="Online" />
                   </Button>
                 );
                 const OnlinePayButton = courseMode === "online" && balancePlan ? (
@@ -10506,6 +10522,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {total && <p className="text-[11px] font-medium tabular-nums text-slate-400" data-testid={`cons-fee-total-${f.key}`}>{total}</p>}
                             <p className={`text-sm font-bold tabular-nums ${amountTone}`}>{amount}</p>
                           </div>
+                          {f.key === "treatment" && !treatmentFeePaid && consultationPaid && (
+                            <div className="flex shrink-0">{FeeRowMarkOnlineButton}</div>
+                          )}
                           <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
                             {f.paid ? (
                               receipt ? (
@@ -10652,6 +10671,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         ) : (
                           <>
                             {f.pending ? <span className={`text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</span> : null}
+                            {f.key === "treatment" && !treatmentFeePaid && consultationPaid && FeeRowMarkOnlineButton}
                             <Button
                               size="sm"
                               variant={nextFeeStep && f.key === nextFeeStep.key ? undefined : "outline"}
@@ -13636,17 +13656,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   title: `Swap to ${isOnline ? "Offline" : "Online"}`,
                   desc: `The days left move to ${isOnline ? "Offline" : "Online"} at its price, booked with ${isOnline ? "a branch" : "an Online"} physio.`,
                   disabled: !onlineMenu.canSwap,
-                  why: noReprice,
+                  why: !onlineMenu.feePaid ? "Collect the Treatment Fee first" : noReprice,
                   go: () => openSwapDraft(isOnline ? "offline" : "online"),
                 },
                 {
                   key: "mark",
                   icon: isOnline ? XCircle : CheckCircle2,
                   title: isOnline ? "Unmark Online" : "Mark Online",
-                  desc: isOnline
+                  desc: !onlineMenu.feePaid
+                    ? (isOnline
+                      ? "Back to the Offline price before the Treatment Fee is collected."
+                      : "Switch the course to the Online price before the Treatment Fee is collected. Collect then takes the Online figure.")
+                    : isOnline
                     ? `Back to the Offline price${markedOn ? ` (marked Online ${markedOn})` : ""}. Collect Online Payment goes; the booked days and physio stay.`
                     : "Switch the course to the Online price, then collect the payment online (UPI / Account Transfer). The booked days and physio stay.",
-                  disabled: !onlineMenu.canSwap,
+                  disabled: !onlineMenu.canMark,
                   why: noReprice,
                   go: () => openSwapDraft(isOnline ? "offline" : "online", true),
                 },
@@ -13771,7 +13795,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         )}
                         <p className="text-[11px] text-slate-500">
                           {swapDraft.markOnly
-                            ? (swapDraft.mode === "online"
+                            ? (q.unpaid
+                              ? `Confirm saves the ${toLabel} price now. Collect on the Treatment Fee then takes ${rs(q.new_total)}.`
+                              : swapDraft.mode === "online"
                               ? "Confirm saves the Online price now. The booked days and the physio stay as they are, and Collect Online Payment opens on the panel."
                               : "Confirm puts the Offline price back now. The booked days and the physio stay as they are.")
                             : `Nothing is saved yet — the swap is saved when the ${toLabel} physio's days are confirmed.`}

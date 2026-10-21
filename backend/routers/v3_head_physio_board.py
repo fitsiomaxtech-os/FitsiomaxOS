@@ -1090,8 +1090,12 @@ async def _mode_swap_quote(lead: dict, to_mode: str, due_date: Optional[str] = N
     total = int(lead.get("session_package_sessions") or 0)
     if total <= 0:
         raise HTTPException(status_code=400, detail="This Treatment Package has no days to swap")
-    if lead.get("treatment_fee_paid") is None:
-        raise HTTPException(status_code=400, detail="Collect the Treatment Fee first")
+    # Before the Treatment Fee is in, the course can still be marked Online -- the whole of
+    # it re-priced at the Online rate, so the Collect beside it takes the new figure. There
+    # is no schedule to carry a difference yet; the price itself is what changes.
+    unpaid = lead.get("treatment_fee_paid") is None
+    if unpaid and lead.get("package_paid") is None:
+        raise HTTPException(status_code=400, detail="Collect the Consultation Fee first")
     from_mode = session_mode_swap.current_mode(lead)
     if to_mode == from_mode:
         raise HTTPException(status_code=400, detail=f"This course is already {to_mode.title()}")
@@ -1130,6 +1134,33 @@ async def _mode_swap_quote(lead: dict, to_mode: str, due_date: Optional[str] = N
     old_total = session_mode_swap.plan_total(before)
     new_total = session_mode_swap.plan_total(after)
     delta = round(new_total - old_total, 2)
+    if unpaid:
+        # Nothing collected: the fee still owed is the whole course, before and after.
+        return {
+            "from_mode": from_mode,
+            "to_mode": to_mode,
+            "total_days": total,
+            "done_days": done,
+            "completed_days": completed,
+            "paid_days": paid_days,
+            "remaining_days": total - done,
+            "rate": float(rate),
+            "plan_before": session_mode_swap.with_day_ranges(before),
+            "plan_after": session_mode_swap.with_day_ranges(after),
+            "old_total": old_total,
+            "new_total": new_total,
+            "delta": delta,
+            "paid": 0.0,
+            "due_before": old_total,
+            "due_after": new_total,
+            "excess_before": 0.0,
+            "excess_after": 0.0,
+            "needs_due_date": False,
+            "unpaid": True,
+            "_installments": [],
+            "_booked": 0.0,
+            "_plan": after,
+        }
     paid_before, due_before = _schedule_sums(installments)
     if not installments:
         paid_before = round(float(lead.get("treatment_fee_paid") or 0), 2)
@@ -1204,6 +1235,14 @@ def _swap_fields(lead: dict, swap: dict) -> dict:
     """What a quoted swap writes onto the lead: the new mode and its price, and the
     Treatment Fee's schedule carrying the difference. Shared by the swap that rides on a
     booking and by Mark Online, which re-prices without moving a day."""
+    if swap.get("unpaid"):
+        # Before the Treatment Fee is collected there is no schedule to touch: the course
+        # is simply sold at the new mode's price.
+        return {
+            "session_mode_plan": swap["_plan"],
+            "session_package_mode": swap["to_mode"],
+            "session_package_price": swap["new_total"],
+        }
     fields = {
         "session_mode_plan": swap["_plan"],
         "session_package_mode": swap["to_mode"],
@@ -1255,7 +1294,9 @@ async def hp_mark_online(
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    if lead.get("consultation_stage") not in ("Fee Collected", "Physio Assign"):
+    # Before the Treatment Fee, the Consultation Fee being in is the test (the quote makes
+    # it), since a lead can still sit at Consultation Visit with that fee taken.
+    if lead.get("consultation_stage") not in ("Fee Collected", "Physio Assign") and lead.get("treatment_fee_paid") is not None:
         raise HTTPException(status_code=400, detail="Mark Online is for a patient at Fee Collected or Physio Assign")
     if payload.mode not in session_mode_swap.MODES:
         raise HTTPException(status_code=400, detail="Mark Online or Unmark Online")
