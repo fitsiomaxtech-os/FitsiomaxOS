@@ -10503,7 +10503,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <CheckCircle2 className="h-3 w-3" />
                             </span>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold text-slate-700">Treatment Fee · Payment {pay.n}</p>
+                              <p className="truncate text-xs font-semibold text-slate-700">{selectedLead.consultation_stage === "Fee Collected" ? "Treatment Fee" : `Treatment Fee · Payment ${pay.n}`}</p>
                               <PaymentModeLine payment={pay} />
                               <p className="text-sm font-bold tabular-nums text-emerald-700 sm:hidden">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</p>
                               <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
