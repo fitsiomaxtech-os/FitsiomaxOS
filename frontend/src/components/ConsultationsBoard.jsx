@@ -9431,7 +9431,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const FeeRowMarkOnlineButton = (
                   <Button
                     size="sm"
-                    className={`bg-orange-500 text-white shadow-sm hover:bg-orange-600 ${ACT_BTN}`}
+                    className={`rounded-[2px] bg-orange-500 text-white shadow-sm hover:bg-orange-600 ${ACT_BTN}`}
                     onClick={() => setOnlineMenu({ canSwap: canSwapMode, canMark: canMarkMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
                     data-testid="cons-fee-mark-online"
                   >
@@ -10433,7 +10433,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <button
                     type="button"
                     onClick={() => setFeeInspect(true)}
-                    className="mt-1 flex h-[20px] w-[70px] shrink-0 items-center justify-center rounded-md bg-slate-600 text-[10px] font-medium text-white shadow-sm transition hover:bg-slate-700"
+                    className="mt-1 flex h-[20px] w-[70px] shrink-0 items-center justify-center rounded-[2px] bg-slate-600 opacity-[0.55] text-[10px] font-medium text-white shadow-sm transition hover:bg-slate-700"
                     style={{ fontFamily: "Lexend, sans-serif" }}
                     data-testid="cons-fee-inspect-treatment"
                   >
@@ -10568,7 +10568,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 variant={isNext ? undefined : "outline"}
                                 disabled={waiting}
                                 title={waiting ? (f.key === "consultation" ? "Upload the prescription first" : "Collect the consultation fee first") : undefined}
-                                className={`w-full ${isNext ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${ACT_BTN}`}
+                                className={`w-full ${isNext ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${f.key === "treatment" ? "rounded-[2px]" : ""} ${ACT_BTN}`}
                                 onClick={f.act}
                                 data-testid={`cons-fee-act-${f.key}`}
                               >
@@ -10709,7 +10709,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               title={f.key === "consultation"
                                 ? (consultationRxBlocked ? "Upload the prescription first" : undefined)
                                 : (!consultationPaid ? "Collect the consultation fee first" : undefined)}
-                              className={`w-full ${nextFeeStep && f.key === nextFeeStep.key ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${ACT_BTN}`}
+                              className={`w-full ${nextFeeStep && f.key === nextFeeStep.key ? "bg-sky-600 text-white hover:bg-sky-700" : ""} ${f.key === "treatment" ? "rounded-[2px]" : ""} ${ACT_BTN}`}
                               onClick={f.act}
                               data-testid={`cons-fee-act-${f.key}`}
                             >
