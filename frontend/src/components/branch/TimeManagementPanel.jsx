@@ -378,7 +378,10 @@ const WorkingDayCard = ({ branchId }) => {
 
 // initialProfileType: the calendar the roster opens on — the one whose gear opened it.
 // lockProfile: that calendar's roster alone, with no switcher to the other two.
-export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physio", lockProfile = false }) => {
+// section: which part to show, when the caller draws the tabs itself — the physio gear lays
+// these three out in its own top row beside Duration and Per Slot, so the panel's strip is
+// left off rather than stacked under it as a second row.
+export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physio", lockProfile = false, section: sectionProp }) => {
   const [shifts, setShifts] = useState([]);
   const [profileType, setProfileType] = useState(initialProfileType);
   const [experts, setExperts] = useState([]);
@@ -396,7 +399,8 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
   const [picking, setPicking] = useState(null);
   // Which of the three tabs is open: Shift Timings, Who Works Which Shift, Working Day.
   // Hidden rather than unmounted when shut, so an unsaved edit survives a look at another.
-  const [section, setSection] = useState("shifts");
+  const [ownSection, setSection] = useState("shifts");
+  const section = sectionProp || ownSection;
 
   const kind = CALENDAR_KINDS.find((k) => k.key === profileType) || CALENDAR_KINDS[0];
 
@@ -506,7 +510,7 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
     <div className="flex flex-col gap-3 md:gap-4" data-testid="time-management-root">
       {/* The three parts as tabs, drawn as Records' underlined strip. On a phone they share
           the width, icon over label, the longer labels wrapping onto a second line. */}
-      <div className="flex items-stretch gap-1 border-b border-slate-200" data-testid="time-management-tabs">
+      {!sectionProp && <div className="flex items-stretch gap-1 border-b border-slate-200" data-testid="time-management-tabs">
         {[
           { key: "shifts", label: "Shift Timings", icon: Clock },
           { key: "roster", label: "Who Works Which Shift", icon: kind.icon },
@@ -527,7 +531,7 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* ------------------------------------------------- The windows themselves */}
       <div className={section === "shifts" ? "" : "hidden"}>

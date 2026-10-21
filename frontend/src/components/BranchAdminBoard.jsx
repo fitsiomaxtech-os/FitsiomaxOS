@@ -4,6 +4,7 @@ import {
   Calendar,
   CalendarCheck,
   CalendarX,
+  CalendarDays,
   CheckCircle2,
   ArrowLeftRight,
   RefreshCw,
@@ -1066,8 +1067,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // Time Management's popup: the calendar profile it opens on, or null while shut.
   const [timeMgmtFor, setTimeMgmtFor] = useState(null);
   // Which tab of that popup is up. Only the Physiotherapist Calendar's gear has more than
-  // Time Management: its Treatment Session Duration and Per slot sit beside it as tabs.
-  const [calendarSettingsTab, setCalendarSettingsTab] = useState("time");
+  // Time Management's three parts: its Treatment Session Duration and Per slot sit beside
+  // them, all five in one row.
+  const [calendarSettingsTab, setCalendarSettingsTab] = useState("shifts");
   // Bumped as that popup shuts, so the calendar under it re-reads the shifts just changed.
   const [calendarEpoch, setCalendarEpoch] = useState(0);
   const [stageFilter, setStageFilter] = useState(null); // null = show all stages
@@ -1957,12 +1959,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The three calendar sub-tabs and the profile each one's Time Management roster opens on.
   const CALENDAR_PROFILES = { head_physio: "head_physio", physio: "physio", diet: "nutrition_coach" };
   const calendarProfile = CALENDAR_PROFILES[consultationsSubTab];
-  const openTimeManagement = () => { setCalendarSettingsTab("time"); setTimeMgmtFor(calendarProfile || "head_physio"); };
+  const openTimeManagement = () => { setCalendarSettingsTab("shifts"); setTimeMgmtFor(calendarProfile || "head_physio"); };
+  // The first three are Time Management's own parts, handed to it as `section`; the last
+  // two are the physio settings.
   const CALENDAR_SETTINGS_TABS = [
-    { key: "time", label: "Time Management", short: "Time", icon: Clock },
+    { key: "shifts", label: "Shift Timings", short: "Shifts", icon: Clock },
+    { key: "roster", label: "Who Works Which Shift", short: "Who Works", icon: Activity },
+    { key: "working_day", label: "Working Day & Week Off", short: "Week Off", icon: CalendarDays },
     { key: "duration", label: "Treatment Session Duration", short: "Duration", icon: Timer },
     { key: "capacity", label: "Per Slot", short: "Per Slot", icon: Users },
   ];
+  const physioSettingsTab = ["duration", "capacity"].includes(calendarSettingsTab);
   // Blue, as on Activity Care > Zumba; shown only while one of the three calendars is open.
   const timeGear = (testid) => calendarProfile && (
     <button
@@ -2120,8 +2127,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <DialogTitle>Time Management</DialogTitle>
                 <DialogDescription>The branch's shift timings, and who works which shift.</DialogDescription>
               </DialogHeader>
-              {/* The physio's gear opens on tabs: the shifts, then the two settings its
-                  calendar header carries per physio, here for the whole floor at once. */}
+              {/* The physio's gear opens on one row of five tabs: Time Management's three
+                  parts, then the two settings its calendar header carries per physio, here
+                  for the whole floor at once. */}
               {timeMgmtFor === "physio" && (
                 <div className="mb-4">
                   <SegmentedTabs
@@ -2133,10 +2141,19 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   />
                 </div>
               )}
-              {timeMgmtFor && (timeMgmtFor !== "physio" || calendarSettingsTab === "time") && (
-                <TimeManagementPanel branchId={branchId} initialProfileType={timeMgmtFor} lockProfile />
+              {/* Hidden rather than unmounted behind Duration and Per Slot, so a shift
+                  edit left unsaved is still there on the way back. */}
+              {timeMgmtFor && (
+                <div className={timeMgmtFor === "physio" && physioSettingsTab ? "hidden" : ""}>
+                  <TimeManagementPanel
+                    branchId={branchId}
+                    initialProfileType={timeMgmtFor}
+                    lockProfile
+                    section={timeMgmtFor === "physio" && !physioSettingsTab ? calendarSettingsTab : undefined}
+                  />
+                </div>
               )}
-              {timeMgmtFor === "physio" && calendarSettingsTab !== "time" && (
+              {timeMgmtFor === "physio" && physioSettingsTab && (
                 <PhysioSessionSettings key={calendarSettingsTab} branchId={branchId} mode={calendarSettingsTab} />
               )}
             </DialogContent>
