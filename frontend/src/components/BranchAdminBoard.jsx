@@ -101,7 +101,6 @@ import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
 import { PhysioSessionSettings } from "@/components/branch/PhysioSessionSettings";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import MissedClassPanel from "@/components/branch/MissedClassPanel";
 import { PhysioAbsencePanel } from "@/components/PhysioAbsencePanel";
@@ -1963,11 +1962,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The first three are Time Management's own parts, handed to it as `section`; the last
   // two are the physio settings.
   const CALENDAR_SETTINGS_TABS = [
-    { key: "shifts", label: "Shift Timings", short: "Shifts", icon: Clock },
-    { key: "roster", label: "Who Works Which Shift", short: "Who Works", icon: Activity },
-    { key: "working_day", label: "Working Day & Week Off", short: "Week Off", icon: CalendarDays },
-    { key: "duration", label: "Treatment Session Duration", short: "Duration", icon: Timer },
-    { key: "capacity", label: "Per Slot", short: "Per Slot", icon: Users },
+    { key: "shifts", label: "Shift Timings", icon: Clock },
+    { key: "roster", label: "Which Shift", icon: Activity },
+    { key: "working_day", label: "Day & Week Off", icon: CalendarDays },
+    { key: "duration", label: "Treatment Duration", icon: Timer },
+    { key: "capacity", label: "Per Slot", icon: Users },
   ];
   const physioSettingsTab = ["duration", "capacity"].includes(calendarSettingsTab);
   // Blue, as on Activity Care > Zumba; shown only while one of the three calendars is open.
@@ -2131,14 +2130,25 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   parts, then the two settings its calendar header carries per physio, here
                   for the whole floor at once. */}
               {timeMgmtFor === "physio" && (
-                <div className="mb-4">
-                  <SegmentedTabs
-                    tabs={CALENDAR_SETTINGS_TABS}
-                    value={calendarSettingsTab}
-                    onChange={setCalendarSettingsTab}
-                    mobileCols={3}
-                    testid="calendar-settings-tabs"
-                  />
+                // Time Management's own underlined strip, so the five read as the tabs the
+                // first three always were. On a phone they share the width, icon over label.
+                <div className="mb-3 flex items-stretch gap-1 border-b border-slate-200 md:mb-4" data-testid="calendar-settings-tabs">
+                  {CALENDAR_SETTINGS_TABS.map((t) => {
+                    const Icon = t.icon;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setCalendarSettingsTab(t.key)}
+                        className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 border-b-2 px-1 py-2 text-center text-[11px] font-medium leading-tight sm:flex-none sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-3 sm:text-sm ${
+                          calendarSettingsTab === t.key ? "border-sky-500 text-sky-700" : "border-transparent text-slate-400 hover:text-slate-600"
+                        }`}
+                        data-testid={`calendar-settings-tab-${t.key}`}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" /> {t.label}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {/* Hidden rather than unmounted behind Duration and Per Slot, so a shift
