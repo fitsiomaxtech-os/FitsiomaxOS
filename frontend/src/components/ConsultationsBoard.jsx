@@ -7835,7 +7835,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         title="Open the appointment confirmation — print, send or download it again"
                         data-testid="cons-open-appt-card"
                       >
-                        <Eye className="h-3 w-3 shrink-0" />
+                        {selectedLead.consultation_stage !== "Fee Collected" && <Eye className="h-3 w-3 shrink-0" />}
                         {loadingApptCard ? "Opening..." : "Appointment Card"}
                       </button>
                     )}
@@ -7906,7 +7906,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   the finding costs two lines rather than four cards, reading it first no
                   longer costs the panel its place on the screen. */}
               {detailTab === "overview" && (
-              <div className="flex flex-col gap-3">
+              // Fee Collected draws its Overview flat: no borders, 2px corners, and no icons
+              // on its buttons -- see .fee-flat in index.css.
+              <div className={`flex flex-col gap-3 ${selectedLead.consultation_stage === "Fee Collected" ? "fee-flat" : ""}`}>
               {/* The consultation as it was written up — what pre-sales heard, what the
                   Consultant diagnosed, what they wrote down as the treatment, and the plan
                   they confirmed.

@@ -184,3 +184,20 @@ code {
         border-bottom-color: inherit;
     }
 }
+
+/* Branch Admin > Consultation: the Overview tab of a patient at Fee Collected is drawn flat --
+   no borders, 2px corners, and its buttons (View Details, Payment Schedule, Receipt) carry no
+   icon. Round things (the step numbers and ticks) stay round. */
+.fee-flat,
+.fee-flat * {
+  border-style: none !important;
+}
+.fee-flat [class*="rounded"]:not(.rounded-full),
+.fee-flat button:not(.rounded-full) {
+  border-radius: 2px !important;
+}
+.fee-flat [data-testid="cons-case-record-open"] > span.ml-auto svg,
+.fee-flat [data-testid="cons-open-partial-schedule-sidebar"] svg,
+.fee-flat [data-testid^="cons-fee-receipt"] svg {
+  display: none !important;
+}
