@@ -2177,7 +2177,74 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                     : "No Zumba registrations yet."}
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Phone: one row per customer -- initial, name over mobile and master, then the
+                one thing to act on (take on a referral, collect a balance) or, with nothing
+                owed, their status. A tap opens the record, as a table row does. */}
+            <ul className="divide-y divide-slate-100 sm:hidden" data-testid="zumba-phone-rows">
+              {visible.map((r) => {
+                const paid = Number(r.fee_paid || 0);
+                const due = Number(r.fee_amount || 0) - paid;
+                const master = masterNameOf(r.assigned_master_id);
+                const chip = STATUS_ROW[r.status || "active"] || STATUS_ROW.active;
+                return (
+                  <li
+                    key={r.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setViewing(r)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewing(r); } }}
+                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 active:bg-slate-50"
+                    data-testid={`zumba-phone-row-${r.id}`}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-violet-100 text-xs font-bold text-violet-700">
+                      {(r.name || "?").charAt(0).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-slate-800">{r.name || "—"}</span>
+                      <span className="block truncate text-[11px] text-slate-500">
+                        {displayPhone(r.phone) || "—"}{master ? ` · ${master}` : ""}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {r.origin === "consultation" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 rounded-[5px] border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
+                          disabled={accepting === r.id}
+                          onClick={() => acceptAndEdit(r)}
+                          data-testid={`zumba-phone-accept-${r.id}`}
+                        >
+                          <Stethoscope className="h-3 w-3" />
+                          {accepting === r.id ? "Taking on…" : "Referred"}
+                        </Button>
+                      ) : due > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`h-7 gap-0.5 rounded-[5px] px-2 text-[10px] font-semibold ${paid > 0
+                            ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
+                          onClick={() => setCollecting(r)}
+                          title={paid > 0 ? "Due Collect" : "Collect"}
+                          data-testid={`zumba-phone-collect-${r.id}`}
+                        >
+                          <IndianRupee className="h-3 w-3" />
+                          {Number(due).toLocaleString("en-IN")}
+                        </Button>
+                      ) : (
+                        <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
+                          {chip.label}
+                        </span>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-slate-400" onClick={() => setViewing(r)} />
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[64rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   {/* One fact per column, every header and cell on a single line. */}
@@ -2324,6 +2391,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

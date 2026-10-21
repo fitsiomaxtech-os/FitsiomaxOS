@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { listFitness, addFitness, updateFitness, setFitnessStatus, deleteFitness, collectFitnessPayment, renewFitness, acceptFitnessReferral, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 
@@ -137,6 +138,28 @@ const CARD_ICONS = {
   discontinued: UserX,
 };
 
+// The phone toolbar's dropdown, as the Zumba list's: tinted while it narrows the list, so a
+// filter left on is never mistaken for the whole roll.
+const PhoneFilterSelect = ({ value, onChange, options, allValue, label, testid }) => (
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger
+      title={label}
+      aria-label={label}
+      className={`h-8 min-w-0 flex-1 rounded-md border px-2 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${
+        value !== allValue ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      data-testid={testid}
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="z-[200] max-h-72 border-slate-200" data-testid={`${testid}-menu`}>
+      {options.map(([v, text]) => (
+        <SelectItem key={v} value={v} className={`text-xs ${v === allValue ? "font-medium text-slate-500" : "text-slate-700"}`}>{text}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+);
+
 const FieldLabel = ({ children }) => (
   <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</label>
 );
@@ -173,6 +196,9 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
   // opens that card's list on a screen of its own with a back bar above it. From sm up
   // nothing reads this.
   const [phoneList, setPhoneList] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
+  // The phone toolbar's calendar, so picking Custom from the dates dropdown can open it.
+  const phoneCalendar = useRef(null);
   useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
 
   // Rises with every roll fetch started here, so a reply that is no longer the newest is
@@ -448,7 +474,104 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
         <CardContent className="p-0">
           {/* The Zumba list's toolbar: dates, then payment mode, then search, refresh and
               create at the right. Wraps group by group on a narrow window. */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
+          {/* Phone: the Zumba list's one-row toolbar -- search behind an icon, the dates and
+              payment modes as dropdowns, the calendar for a range of its own, Refresh and
+              Add. Opened, the search box takes the row until its close, which also clears it. */}
+          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2.5 sm:hidden" data-testid="fitness-toolbar-phone">
+            {searchOpen ? (
+              <>
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search name or phone"
+                    className="h-8 pl-8 text-xs"
+                    autoFocus
+                    data-testid="fitness-search-phone"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => { setSearch(""); setSearchOpen(false); }}
+                  className="h-8 w-8 shrink-0 border-slate-200 p-0 text-slate-500"
+                  title="Close search"
+                  aria-label="Close search"
+                  data-testid="fitness-search-close-phone"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setSearchOpen(true)}
+                  className="h-8 w-8 shrink-0 border-slate-200 bg-white p-0 text-slate-500 hover:bg-slate-50"
+                  title="Search"
+                  aria-label="Search"
+                  data-testid="fitness-search-open-phone"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+                <PhoneFilterSelect
+                  value={!dateFilter ? "all" : isPreset(dateFilter) ? dateFilter.key : "custom"}
+                  onChange={(v) => {
+                    if (v === "custom") {
+                      setTimeout(() => phoneCalendar.current?.querySelector("button")?.click(), 0);
+                      return;
+                    }
+                    setDateFilter(presetFilter(DATE_PRESETS.find((x) => x.key === v) || DATE_PRESETS[0]));
+                  }}
+                  options={[...DATE_PRESETS.map((x) => [x.key, x.label]), ["custom", "Custom"]]}
+                  allValue="all"
+                  label="Dates"
+                  testid="fitness-date-phone"
+                />
+                <span ref={phoneCalendar} className="flex shrink-0 [&>div>button]:h-8 [&>div>button:first-child]:w-8">
+                  <DateFilterPopover
+                    value={isPreset(dateFilter) ? null : dateFilter}
+                    onChange={setDateFilter}
+                    centered
+                    iconOnly
+                    phoneIconOnly
+                    placeholder="Custom"
+                    testid="fitness-date-custom-phone"
+                  />
+                </span>
+                <PhoneFilterSelect
+                  value={modeFilter}
+                  onChange={setModeFilter}
+                  options={MODE_FILTERS}
+                  allValue="all"
+                  label="Payment mode"
+                  testid="fitness-mode-phone"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+                  onClick={refresh}
+                  disabled={loading}
+                  title="Refresh"
+                  aria-label="Refresh"
+                  data-testid="fitness-refresh-phone"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 w-8 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700"
+                  onClick={() => setEditing({})}
+                  title="Add Member"
+                  aria-label="Add Member"
+                  data-testid="fitness-add-phone"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5 sm:flex">
             <div className="flex flex-wrap items-center gap-1.5" data-testid="fitness-date-filter">
               {DATE_PRESETS.map((preset) => {
                 const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
@@ -535,86 +658,74 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
             </p>
           ) : (
             <>
-            {/* The phone face of the table below. Eleven columns behind a sideways swipe
-                showed S.No, Name and Mobile and nothing else, so on a phone each member is
-                one card: name and status, then the term, package and money, and the same
-                one settling button the Payment column carries. sm-up keeps the table. */}
-            <div className="divide-y divide-slate-100 sm:hidden" data-testid="fitness-phone-cards">
-              {visible.map((r, i) => {
+            {/* The phone face of the table below: one row per member -- initial, name over
+                mobile and package, then the one thing to act on (take on a referral,
+                collect a balance) or, with nothing owed, their status. A tap opens the
+                record. sm-up keeps the table. */}
+            <ul className="divide-y divide-slate-100 sm:hidden" data-testid="fitness-phone-rows">
+              {visible.map((r) => {
                 const referral = r.origin === "consultation";
                 const paid = Number(r.fee_paid || 0);
                 const due = Number(r.fee_due || 0);
                 const statusKey = r.status || "active";
                 const chip = referral ? REFERRED_META : (STATUS_ROW[statusKey] || STATUS_ROW.active);
                 return (
-                  <div
+                  <li
                     key={r.id}
                     role="button"
                     tabIndex={0}
                     onClick={() => setViewing(r)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewing(r); } }}
-                    className="cursor-pointer px-3 py-3 active:bg-slate-50"
+                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 active:bg-slate-50"
                     data-testid={`fitness-card-row-${r.id}`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-800">
-                          <span className="mr-1.5 font-normal text-slate-400">{i + 1}.</span>{r.name || "—"}
-                        </p>
-                        <p className="truncate text-xs text-slate-500">
-                          {displayPhone(r.phone) || "—"}
-                          {r.package_name ? <> · {r.package_name}</> : null}
-                        </p>
-                      </div>
-                      <span className={`inline-flex shrink-0 whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
-                        {chip.label}
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-100 text-xs font-bold text-sky-700">
+                      {(r.name || "?").charAt(0).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-slate-800">{r.name || "—"}</span>
+                      <span className="block truncate text-[11px] text-slate-500">
+                        {displayPhone(r.phone) || "—"}{r.package_name ? ` · ${r.package_name}` : ""}
                       </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                      <span>{shortDate(r.joined_date || r.created_at)} – {r.due_date ? shortDate(r.due_date) : "—"}</span>
-                      {r.package_sessions ? (
-                        <span className={r.renewal_due ? "font-semibold text-amber-600" : ""}>{r.package_sessions} classes</span>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 flex items-center gap-3 border-t border-slate-100 pt-2 text-[11px]">
-                      <span className="text-slate-500">Paid <b className="font-semibold text-emerald-700">{rupees(paid)}</b></span>
-                      {due > 0
-                        ? <span className="text-slate-500">Due <b className="font-semibold text-rose-600">{rupees(due)}</b></span>
-                        : Number(r.fee_amount || 0) > 0 ? <span className="text-emerald-600">Paid up</span> : null}
-                      <span className="ml-auto inline-flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        {referral ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 gap-1 border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
-                            disabled={accepting === r.id}
-                            onClick={() => acceptAndEdit(r)}
-                            data-testid={`fitness-card-accept-${r.id}`}
-                          >
-                            <Stethoscope className="h-3 w-3" />
-                            {accepting === r.id ? "Taking on…" : "Referred"}
-                          </Button>
-                        ) : due > 0 ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className={`h-7 gap-1 px-2 text-[10px] font-semibold ${paid > 0
-                              ? "border-rose-300 text-rose-700 hover:bg-rose-50"
-                              : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
-                            onClick={() => setCollecting(r)}
-                            data-testid={`fitness-card-collect-${r.id}`}
-                          >
-                            <IndianRupee className="h-3 w-3" />
-                            {paid > 0 ? "Due Collect" : "Collect"}
-                          </Button>
-                        ) : null}
-                        <ChevronRight className="h-4 w-4 text-slate-400" onClick={() => setViewing(r)} />
-                      </span>
-                    </div>
-                  </div>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {referral ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 rounded-[5px] border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
+                          disabled={accepting === r.id}
+                          onClick={() => acceptAndEdit(r)}
+                          data-testid={`fitness-card-accept-${r.id}`}
+                        >
+                          <Stethoscope className="h-3 w-3" />
+                          {accepting === r.id ? "Taking on…" : "Referred"}
+                        </Button>
+                      ) : due > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`h-7 gap-0.5 rounded-[5px] px-2 text-[10px] font-semibold ${paid > 0
+                            ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
+                          onClick={() => setCollecting(r)}
+                          title={paid > 0 ? "Due Collect" : "Collect"}
+                          data-testid={`fitness-card-collect-${r.id}`}
+                        >
+                          <IndianRupee className="h-3 w-3" />
+                          {due.toLocaleString("en-IN")}
+                        </Button>
+                      ) : (
+                        <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
+                          {chip.label}
+                        </span>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-slate-400" onClick={() => setViewing(r)} />
+                    </span>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[60rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
