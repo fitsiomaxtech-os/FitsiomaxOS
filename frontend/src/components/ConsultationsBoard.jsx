@@ -7826,19 +7826,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         the lead, so nothing can be drawn without asking. Fetching for
                         every patient opened, against a card almost nobody asks for, would
                         be a request per open to save a click on the rare one. */}
-                    {selectedLead.appointment_date && (
+                    {selectedLead.appointment_date && selectedLead.consultation_stage !== "Fee Collected" && (
                       <button
                         type="button"
                         onClick={openApptCard}
                         disabled={loadingApptCard}
-                        // Fee Collected: filled in its own teal, at the Inspect button's 55%.
-                        className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold transition ${selectedLead.consultation_stage === "Fee Collected"
-                          ? "h-8 w-[104px] justify-center rounded-[2px] bg-teal-600 text-xs text-white opacity-[0.55] hover:bg-teal-700 sm:w-[130px]"
-                          : "rounded-[5px] border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-60"}`}
+                        className="flex items-center gap-1 rounded-[5px] border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
                         title="Open the appointment confirmation — print, send or download it again"
                         data-testid="cons-open-appt-card"
                       >
-                        {selectedLead.consultation_stage !== "Fee Collected" && <Eye className="h-3 w-3 shrink-0" />}
+                        <Eye className="h-3 w-3 shrink-0" />
                         {loadingApptCard ? "Opening..." : "Appointment Card"}
                       </button>
                     )}
@@ -7912,6 +7909,29 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               // Fee Collected draws its Overview flat: no borders, 2px corners, and no icons
               // on its buttons -- see .fee-flat in index.css.
               <div className={`flex flex-col gap-3 ${selectedLead.consultation_stage === "Fee Collected" ? "fee-flat" : ""}`}>
+              {/* Fee Collected: the Appointment Card comes down out of the header onto a row
+                  of its own, drawn like Consultation Record under it, so its button sits in
+                  the same column as View Details and the fee buttons. */}
+              {selectedLead.consultation_stage === "Fee Collected" && selectedLead.appointment_date && (
+                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="cons-appt-record">
+                  <div className="flex w-full items-center gap-2 px-4 py-2.5">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                      <Calendar className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-slate-600">Appointment Record</span>
+                    <button
+                      type="button"
+                      onClick={openApptCard}
+                      disabled={loadingApptCard}
+                      className="ml-auto flex h-8 w-[104px] shrink-0 items-center justify-center rounded-[2px] bg-teal-600 text-xs font-semibold text-white opacity-[0.55] transition hover:bg-teal-700 sm:w-[130px]"
+                      title="Open the appointment confirmation — print, send or download it again"
+                      data-testid="cons-open-appt-card"
+                    >
+                      {loadingApptCard ? "Opening..." : "Appointment Card"}
+                    </button>
+                  </div>
+                </section>
+              )}
               {/* The consultation as it was written up — what pre-sales heard, what the
                   Consultant diagnosed, what they wrote down as the treatment, and the plan
                   they confirmed.
