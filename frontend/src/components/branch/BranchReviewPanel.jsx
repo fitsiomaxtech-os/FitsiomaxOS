@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Send, CheckCircle2, Clock, X, Search, RefreshCw, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { Send, CheckCircle2, Clock, X, Search, RefreshCw, ChevronLeft, ChevronRight, Menu, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
+import { QuickDateFilterBar, QUICK_DATE_PRESETS, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StatTile } from "@/components/ui/stat-tile";
+import { NotifyCard } from "@/components/ui/notify-card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
@@ -61,6 +64,28 @@ const dmy = (d) => {
   return y && m && day ? `${day} - ${m} - ${y}` : d;
 };
 
+// The phone toolbar's dropdown, as the Zumba and Fitness lists': tinted while it narrows
+// the list, so a range left on is never mistaken for the whole stage.
+const PhoneFilterSelect = ({ value, onChange, options, allValue, label, testid }) => (
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger
+      title={label}
+      aria-label={label}
+      className={`h-8 min-w-0 flex-1 rounded-md border px-2 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${
+        value !== allValue ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      data-testid={testid}
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="z-[200] max-h-72 border-slate-200" data-testid={`${testid}-menu`}>
+      {options.map(([v, text]) => (
+        <SelectItem key={v} value={v} className={`text-xs ${v === allValue ? "font-medium text-slate-500" : "text-slate-700"}`}>{text}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+);
+
 const Empty = ({ children }) => (
   <p className="rounded-lg border border-dashed border-slate-200 px-3 py-12 text-center text-sm text-slate-400">{children}</p>
 );
@@ -71,8 +96,16 @@ const Empty = ({ children }) => (
  * Branch Admin puts it in front of a named Head Physio for a date, and watches it through
  * to done.
  */
-export const BranchReviewPanel = ({ branchId }) => {
+// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
+// stand its own back bar down while this panel's is showing.
+export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
   const [sub, setSub] = useState("send");
+  // Phone only, as Zumba and Fitness do it: the three stages are a stack of Branch Leads'
+  // rows, and a tap opens that stage's list on a screen of its own with a back bar above
+  // it. From sm up nothing reads this.
+  const [phoneList, setPhoneList] = useState(false);
+  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
+  const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   const [data, setData] = useState({ reviews: [], counts: {}, head_physios: [], today: "" });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -300,8 +333,163 @@ export const BranchReviewPanel = ({ branchId }) => {
     );
   };
 
+  // A stage picked from the phone's cards or its back-bar menu: the same as tapping the
+  // desk's tile, then its list on its own screen.
+  const openPhoneCard = (key) => {
+    setSub(key);
+    setDateFilter(null);
+    setPhoneList(true);
+    window.scrollTo({ top: 0 });
+  };
+
   return (
     <div className="space-y-4" data-testid="branch-review-panel">
+      {/* Phone, one stage open: the stage being read with its count in a box, the way back
+          to the cards, and a menu to jump to another stage without going back first. */}
+      {phoneList && (() => {
+        const t = SUB_TABS.find((x) => x.key === sub) || SUB_TABS[0];
+        return (
+          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-review-phone-back">
+            <button
+              type="button"
+              onClick={() => setPhoneList(false)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+              aria-label="Back to the Review cards"
+              data-testid="branch-review-phone-back-btn"
+            >
+              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: t.color }}>
+                {countFor(t.key)}
+              </span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t.label}</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+                  aria-label="Switch card"
+                  data-testid="branch-review-phone-card-menu"
+                >
+                  <Menu aria-hidden className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {SUB_TABS.filter((o) => o.key !== t.key).map((o) => {
+                  const Icon = o.icon;
+                  return (
+                    <DropdownMenuItem
+                      key={o.key}
+                      onSelect={() => openPhoneCard(o.key)}
+                      className="gap-2.5 py-2"
+                      data-testid={`branch-review-phone-card-menu-${o.key}`}
+                    >
+                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
+                      <span className="text-xs font-semibold text-slate-500">{countFor(o.key)}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      })()}
+
+      {/* Phone: the three stages as Branch Leads' one-line stage rows, one to a row. */}
+      {!phoneList && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-review-phone-cards">
+          {SUB_TABS.map((t) => (
+            <NotifyCard
+              key={t.key}
+              icon={t.icon}
+              label={t.label}
+              value={countFor(t.key)}
+              active={sub === t.key}
+              onClick={() => openPhoneCard(t.key)}
+              testid={`branch-review-phone-card-${t.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Phone, one stage open: the toolbar in one row -- search behind an icon, the
+          ranges as a dropdown, the calendar, Refresh. Opened, the search box takes the row
+          until its close, which also clears it. */}
+      {phoneList && (
+        <div className="flex items-center gap-1 sm:hidden" data-testid="branch-review-toolbar-phone">
+          {searchOpen ? (
+            <>
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search patient, number, phone…"
+                  className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-2 text-xs text-slate-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  autoFocus
+                  data-testid="branch-review-search-phone"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setSearchOpen(false); }}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500"
+                title="Close search"
+                aria-label="Close search"
+                data-testid="branch-review-search-close-phone"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                title="Search"
+                aria-label="Search"
+                data-testid="branch-review-search-open-phone"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+              <PhoneFilterSelect
+                value={quickDate?.key || "all"}
+                onChange={(v) => setQuickDate(quickDatePreset(v))}
+                options={QUICK_DATE_PRESETS.map((x) => [x.key, x.label])}
+                allValue="all"
+                label="Dates"
+                testid="branch-review-quick-date-phone"
+              />
+              <span className="flex shrink-0 [&>div>button]:h-8 [&>div>button:first-child]:w-8" title={DATE_FIELD[sub].label}>
+                <DateFilterPopover
+                  value={dateFilter}
+                  onChange={(next) => setDateFilter(next || null)}
+                  testid="branch-review-date-filter-phone"
+                  placeholder={DATE_FIELD[sub].label}
+                  centered
+                  iconOnly
+                  phoneIconOnly
+                />
+              </span>
+              <button
+                type="button"
+                onClick={load}
+                disabled={loading}
+                title="Refresh"
+                aria-label="Refresh"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-500 text-white shadow-sm transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                data-testid="branch-review-refresh-phone"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* The Head Physio board's work cards, so both ends of the review chain read the
           same way. These replaced the coloured stage pills the Branch Leads bar uses:
           three permanently tinted pills gave every stage the same shout, and a filled
@@ -312,7 +500,7 @@ export const BranchReviewPanel = ({ branchId }) => {
           `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
           on a 5px corner, matching the Fitness and Zumba strips. "desk": the chevron is
           sm-up only, a phone card is label and figure alone. */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3" data-testid="branch-review-subtabs">
+      <div className="hidden grid-cols-3 gap-3 sm:grid" data-testid="branch-review-subtabs">
         {SUB_TABS.map((t) => (
           <StatTile
             key={t.key}
@@ -334,7 +522,7 @@ export const BranchReviewPanel = ({ branchId }) => {
           The Consultation tab's toolbar, in its order: search, the one-tap ranges, then
           the calendar and Refresh on the right. Everything is h-10 so the preset buttons,
           which are h-10 wherever they appear, sit level with the field beside them. */}
-      <div className="flex items-center gap-2">
+      <div className="hidden items-center gap-2 sm:flex">
         <div className="group relative min-w-0 flex-1 lg:max-w-sm">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-sky-500" />
           <input
@@ -403,7 +591,7 @@ export const BranchReviewPanel = ({ branchId }) => {
         </div>
       </div>
 
-      <div className="lg:hidden">
+      <div className="hidden sm:block lg:hidden">
         <QuickDateFilterBar
           value={quickDate}
           onChange={setQuickDate}
@@ -413,6 +601,8 @@ export const BranchReviewPanel = ({ branchId }) => {
         />
       </div>
 
+      {/* On a phone the list is only shown on its own screen, under the back bar. */}
+      <div className={phoneList ? undefined : "hidden sm:block"}>
       {loading && rows.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-400">Loading reviews...</p>
       ) : rows.length === 0 ? (
@@ -449,6 +639,7 @@ export const BranchReviewPanel = ({ branchId }) => {
         </div>
         </>
       )}
+      </div>
 
       {/* Send to Head Physio — the same three-step booking the Appointment popup uses:
           the date narrows who's free, the chosen Head Physio narrows which times exist.
