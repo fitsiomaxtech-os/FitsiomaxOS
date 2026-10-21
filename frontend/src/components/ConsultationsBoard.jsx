@@ -10501,8 +10501,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       // it paid for, Online or Offline, and the receipt for that payment.
                       // The fee's own row is then the total, or the balance still owed.
                       const payRows = f.key === "treatment" ? treatmentPaymentRows : [];
+                      // Title and Inspect only: the days, mode and paid date are in the
+                      // Inspect popup and on the receipt, not repeated on the row.
                       const paymentList = payRows.map((pay) => {
-                        const mode = paymentRowMode(pay);
                         return (
                           <div key={`pay-${pay.n}`} className="flex items-center gap-3 bg-emerald-50/60 px-3 py-2.5" data-testid={`cons-fee-step-treatment-payment-${pay.n}`}>
                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
@@ -10511,11 +10512,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-semibold text-slate-700">{selectedLead.consultation_stage === "Fee Collected" ? "Treatment Fee" : `Treatment Fee · Payment ${pay.n}`}</p>
                               {inspectButton(`-payment-${pay.n}`)}
-                              <PaymentModeLine payment={pay} />
                               <p className="text-sm font-bold tabular-nums text-emerald-700 sm:hidden">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</p>
-                              <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
-                                Paid{mode ? ` · ${ALL_PAYMENT_MODE_LABELS[mode] || mode}` : ""}{pay.inst.due_date ? ` · ${pay.inst.due_date}` : ""}
-                              </p>
                             </div>
                             <p className="hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums text-emerald-700 sm:block">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</p>
                             <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
@@ -10583,9 +10580,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 {amount}
                               </p>
                             )}
-                            {f.paid ? (
-                              <p className="text-[11px] font-medium capitalize text-emerald-700">{f.note ? `Paid · ${f.note}` : "Paid"}</p>
-                            ) : f.pending ? (
+                            {/* A paid row says nothing under its title -- the tick and the
+                                Receipt button already say it is in. */}
+                            {f.paid ? null : f.pending ? (
                               <p className={`truncate text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</p>
                             ) : null}
                           </div>
@@ -11132,11 +11129,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     owed on them. The fee row above names only the balance. */}
                                 <div className="flex items-center justify-between" data-testid="cons-partial-balance-total">
                                   <span className="text-[11px] font-semibold text-slate-500">Total</span>
-                                  <span className="text-sm font-semibold tabular-nums text-slate-600">Rs.{Number(allBalances.quoted).toLocaleString("en-IN")}</span>
+                                  <span className="min-w-[6.5rem] rounded-[2px] bg-slate-100 px-2 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200">Rs.{Number(allBalances.quoted).toLocaleString("en-IN")}</span>
                                 </div>
-                                <div className="mt-1 flex items-center justify-between" data-testid="cons-partial-balance-due">
+                                <div className="mt-1.5 flex items-center justify-between" data-testid="cons-partial-balance-due">
                                   <span className={`text-[11px] font-semibold ${allBalances.overdue ? "text-rose-700" : "text-amber-700"}`}>Balance{allBalances.overdue ? " · Overdue" : ""}</span>
-                                  <span className={`text-sm font-bold tabular-nums ${allBalances.overdue ? "text-rose-700" : "text-amber-700"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
+                                  <span className={`min-w-[6.5rem] rounded-[2px] px-2 py-0.5 text-center text-xs font-bold tabular-nums ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-800 ring-rose-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
                                 </div>
                               </div>
                             )}
