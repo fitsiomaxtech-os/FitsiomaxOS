@@ -10427,16 +10427,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </span>
                 ) : null);
 
-                // Under the Treatment Fee's title: opens the popup that shows how the fee was
+                // Beside the Treatment Fee's title: opens the popup that shows how the fee was
                 // worked out -- the package, each run of days × its rate, and what is paid.
                 const InspectButton = (
                   <button
                     type="button"
                     onClick={() => setFeeInspect(true)}
-                    className="mt-1 inline-flex h-6 w-full max-w-[7.5rem] items-center justify-center gap-1 rounded-md bg-slate-600 px-2 text-[11px] font-semibold text-white shadow-sm transition hover:bg-slate-700"
+                    className="inline-flex h-[20px] w-[70px] shrink-0 items-center justify-center rounded-md bg-slate-600 text-[6px] font-bold text-white shadow-sm transition hover:bg-slate-700"
+                    style={{ fontFamily: "Lexend, sans-serif" }}
                     data-testid="cons-fee-inspect-treatment"
                   >
-                    <Eye className="h-3 w-3" /> Inspect
+                    Inspect
                   </button>
                 );
 
@@ -10519,8 +10520,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {f.paid ? <CheckCircle2 className="h-3 w-3" /> : n}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.inspect ? InspectButton : (
+                            <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}{f.inspect && InspectButton}</p>
+                            {!f.inspect && (
                               <>
                                 {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                                 {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
@@ -10597,8 +10598,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {f.paid ? <CheckCircle2 className="h-3 w-3" /> : n}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.inspect ? InspectButton : (
+                            <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}{f.inspect && InspectButton}</p>
+                            {!f.inspect && (
                               <>
                                 {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                                 {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
