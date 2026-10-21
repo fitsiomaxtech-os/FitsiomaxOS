@@ -4644,12 +4644,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const allBalances = useMemo(() => {
     const plans = Object.values(feeBalances);
     if (!plans.length) return null;
+    // What the owing fees were quoted at, for the Total line over the balance: the
+    // Treatment Fee at its package price, the same figure its row used to print.
+    const quoted = (p) => (p.fee === "treatment" && selectedLead?.session_package_price != null
+      ? Number(selectedLead.session_package_price)
+      : p.rows.reduce((sum, i) => sum + (i.amount || 0), 0));
     return {
       plans,
       total: round2(plans.reduce((sum, p) => sum + p.balance, 0)),
+      quoted: round2(plans.reduce((sum, p) => sum + quoted(p), 0)),
       overdue: plans.some((p) => p.overdue),
     };
-  }, [feeBalances]);
+  }, [feeBalances, selectedLead]);
 
   // The gym membership behind a Fitness referral, for the Long Term rows of Collect a
   // Payment. A Fitness fee does not live on the lead -- it is a fitness_registrations row
@@ -10322,11 +10328,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // Part-paid: the row's figure is the balance still owed, with the
                     // package total named above it, so the amount beside Collect Balance
                     // is the one that button collects.
+                    // No "1 of 2 in" under it: the Balance Amount box below the list
+                    // carries the total and the balance.
                     balanceDue: partialPlan ? partialPlan.balance : null,
-                    pending: partialPlan
-                      ? `${savedInstallments.filter((i) => i.paid).length} of ${savedInstallments.length} in`
-                      : null,
-                    pendingTone: partialPlan && partialPlan.overdue ? "text-rose-600" : "text-amber-600",
+                    noTotal: true,
                     show: decision === "consultation_treatment",
                     // Title over an Inspect button; the package and its day-by-day price
                     // live in the popup it opens rather than under the title.
@@ -10470,13 +10475,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                 // Under the Treatment Fee's title: opens the popup that shows how the fee was
                 // worked out -- the package, each run of days × its rate, and what is paid.
-                const InspectButton = (
+                // Every Treatment Fee row carries one, paid or still owed.
+                const inspectButton = (suffix = "") => (
                   <button
                     type="button"
                     onClick={() => setFeeInspect(true)}
                     className="mt-1 flex h-[20px] w-[70px] shrink-0 items-center justify-center rounded-[2px] bg-slate-600 opacity-[0.55] text-[10px] font-medium text-white shadow-sm transition hover:bg-slate-700"
                     style={{ fontFamily: "Lexend, sans-serif" }}
-                    data-testid="cons-fee-inspect-treatment"
+                    data-testid={`cons-fee-inspect-treatment${suffix}`}
                   >
                     Inspect
                   </button>
@@ -10504,6 +10510,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-semibold text-slate-700">{selectedLead.consultation_stage === "Fee Collected" ? "Treatment Fee" : `Treatment Fee · Payment ${pay.n}`}</p>
+                              {inspectButton(`-payment-${pay.n}`)}
                               <PaymentModeLine payment={pay} />
                               <p className="text-sm font-bold tabular-nums text-emerald-700 sm:hidden">Rs.{Number(pay.inst.amount).toLocaleString("en-IN")}</p>
                               <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
@@ -10541,7 +10548,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         ? `Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`
                         : f.paid && payRows.length ? ""
                         : f.amount != null ? `Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
-                      const total = owing && f.amount != null ? `Total Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
+                      const total = owing && f.amount != null && !f.noTotal ? `Total Rs.${Number(f.amount).toLocaleString("en-IN")}` : "";
                       const amountTone = f.paid ? "text-emerald-700" : owing ? "text-amber-700" : "text-slate-800";
                       // Settled in parts, the payment rows are the whole story: the fee's own
                       // row would only repeat their days and money, so it stays off.
@@ -10562,7 +10569,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.inspect ? InspectButton : (
+                            {f.inspect ? inspectButton() : (
                               <>
                                 {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                                 {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
@@ -10640,7 +10647,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.inspect ? InspectButton : (
+                            {f.inspect ? inspectButton() : (
                               <>
                                 {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                                 {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
@@ -10689,7 +10696,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             title, and a button to collect. */}
                         {!f.paid && f.balanceDue != null ? (
                           <div>
-                            {f.amount != null && <p className="text-[11px] font-medium text-slate-400">Total Rs.{Number(f.amount).toLocaleString("en-IN")}</p>}
+                            {f.amount != null && !f.noTotal && <p className="text-[11px] font-medium text-slate-400">Total Rs.{Number(f.amount).toLocaleString("en-IN")}</p>}
                             <p className="text-lg font-extrabold leading-none text-amber-700">
                               {`Rs.${Number(f.balanceDue).toLocaleString("en-IN")}`}
                             </p>
@@ -11121,22 +11128,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 has a balance — the cards above are what collect them. */}
                             {allBalances && (
                               <div className={`mt-2 rounded-lg border px-3 py-2 ${allBalances.overdue ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`} data-testid="cons-partial-balance-summary">
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-[11px] font-semibold ${allBalances.overdue ? "text-rose-700" : "text-amber-700"}`}>Balance Amount</span>
-                                  <span className={`text-sm font-bold ${allBalances.overdue ? "text-rose-700" : "text-amber-700"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
+                                {/* Two rows: what the owing fees came to, and what is still
+                                    owed on them. The fee row above names only the balance. */}
+                                <div className="flex items-center justify-between" data-testid="cons-partial-balance-total">
+                                  <span className="text-[11px] font-semibold text-slate-500">Total</span>
+                                  <span className="text-sm font-semibold tabular-nums text-slate-600">Rs.{Number(allBalances.quoted).toLocaleString("en-IN")}</span>
                                 </div>
-                                {/* One line per fee still owed, because a patient can owe on
-                                    two at once and a single total says nothing about which
-                                    card to press. */}
-                                {allBalances.plans.map((plan) => (
-                                  <p key={plan.fee} className={`mt-0.5 text-[10px] ${plan.overdue ? "text-rose-600" : "text-amber-600"}`}>
-                                    {FEE_LABELS[plan.fee]} · {plan.fee === "treatment" ? installmentLabelFor(plan.nextIdx) : "Balance"}
-                                    {plan.next.sessions ? ` · ${plan.next.sessions} sessions` : ""}
-                                    {plan.next.amount != null ? ` · Rs.${plan.next.amount}` : ""}
-                                    {plan.next.due_date ? ` · due ${plan.next.due_date}` : ""}
-                                    {plan.overdue ? " · OVERDUE" : ""}
-                                  </p>
-                                ))}
+                                <div className="mt-1 flex items-center justify-between" data-testid="cons-partial-balance-due">
+                                  <span className={`text-[11px] font-semibold ${allBalances.overdue ? "text-rose-700" : "text-amber-700"}`}>Balance{allBalances.overdue ? " · Overdue" : ""}</span>
+                                  <span className={`text-sm font-bold tabular-nums ${allBalances.overdue ? "text-rose-700" : "text-amber-700"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
+                                </div>
                               </div>
                             )}
 
