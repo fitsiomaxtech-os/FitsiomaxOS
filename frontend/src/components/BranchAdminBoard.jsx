@@ -92,6 +92,7 @@ import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { TabDot, TabDotsProvider, useTabDotsState } from "@/components/ui/tab-dot";
 import { ScrollTopButton } from "@/components/ui/scroll-top-button";
+import { PhoneBackProvider, usePhoneBackState, useStageBack } from "@/components/ui/phone-back";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
 import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
@@ -1438,6 +1439,29 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   useEffect(() => {
     setPhoneStageList((on) => (on === activeView ? on : null));
   }, [activeView]);
+  // The phone's Back, here and in every panel under it: one press lands on the open tab's
+  // stage cards with everything above them closed (see ui/phone-back). backEpoch keys the
+  // views, so a press remounts the tab and takes the panels' own lists and popups with it;
+  // the board's own layers are closed by hand. Off when Super Admin embeds the board --
+  // the page and its history are hers.
+  const [backEpoch, setBackEpoch] = useState(0);
+  const resetToCards = useCallback(() => {
+    setPhoneStageList(null);
+    setSelectedLead(null);
+    setProfileOpen(false);
+    setShowMoreMenu(false);
+    setTimeMgmtFor(null);
+    setShowCreateLead(false);
+    setShowBulkDelete(false);
+    setRowDelete(null);
+    setBackEpoch((n) => n + 1);
+    window.scrollTo({ top: 0 });
+  }, []);
+  const phoneBack = usePhoneBackState({ enabled: !embedded, onBack: resetToCards });
+  useStageBack(
+    phoneStageList !== null || !!selectedLead || profileOpen || showMoreMenu || !!timeMgmtFor || showCreateLead,
+    phoneBack,
+  );
   // Both card tabs share the back bar. The cards themselves stay told apart: the
   // consultation board's own hiding is keyed to phoneStageCards, and it must not be told
   // the leads stack is up over it.
@@ -2042,6 +2066,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // let the scrolling tab strip and the leads table widen the board instead of
     // scrolling inside it.
     <TabDotsProvider value={tabDots}>
+    <PhoneBackProvider value={phoneBack}>
     <div className={`flex flex-col gap-4 [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
       {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file.
           90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
@@ -2079,7 +2104,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
       {/* Hidden, not unmounted, while My Profile is open: `contents` keeps every view a
           flex child of the root as before, and the lists keep their state for the way back. */}
-      <div className={profileOpen ? "hidden" : "contents"}>
+      <div key={backEpoch} className={profileOpen ? "hidden" : "contents"}>
       {/* flex+gap rather than space-y-4 inside the Management block: its children now show
           and hide by width and by which screen of the stack is open (cards, back bar,
           panel), and space-y counts a hidden first child — leaving the next one a stray
@@ -3597,6 +3622,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         </div>
       )}
     </div>
+    </PhoneBackProvider>
     </TabDotsProvider>
   );
 };

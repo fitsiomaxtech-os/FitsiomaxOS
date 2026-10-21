@@ -11,6 +11,7 @@ import { TeamPanel } from "@/components/branch/TeamPanel";
 import { PortalControlsButton } from "@/components/branch/PortalControlsButton";
 import { TabDotFor, useTabDot, useTabDotClick } from "@/components/ui/tab-dot";
 import { NotifyCard } from "@/components/ui/notify-card";
+import { useStageBack } from "@/components/ui/phone-back";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
@@ -73,6 +74,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   // Phone only, as Management does it: the sub-tabs are a stack of cards, and a tap opens
   // that tab on a screen of its own with a back bar above it. From sm up nothing reads it.
   const [phoneOpen, setPhoneOpen] = useState(false);
+  useStageBack(phoneOpen); // the phone's Back closes the list -- see ui/phone-back
   // Phone, Zumba open on one of its cards: Zumba's own back bar (card > Zumba) takes this
   // bar's place, so there is one way back at a time rather than two stacked.
   const [zumbaListOpen, setZumbaListOpen] = useState(false);

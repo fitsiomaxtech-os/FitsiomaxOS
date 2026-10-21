@@ -13,6 +13,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useStageBack } from "@/components/ui/phone-back";
 import {
   getBranchBoard, updateLead, listFitness, listZumba,
   getPortalAccountStatus, createOrResetPortalAccount,
@@ -293,6 +294,7 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
   // rows, and a tap opens that card's list on a screen of its own with a back bar above
   // it. From sm up nothing reads this.
   const [phoneList, setPhoneList] = useState(false);
+  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
   useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   // The phone toolbar's calendar, so picking Custom from the dates dropdown can open it.

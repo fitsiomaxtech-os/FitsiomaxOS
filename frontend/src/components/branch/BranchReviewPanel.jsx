@@ -9,6 +9,7 @@ import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
+import { useStageBack } from "@/components/ui/phone-back";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
 import { displayPhone, waNumber } from "@/lib/phone";
@@ -104,6 +105,7 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
   // rows, and a tap opens that stage's list on a screen of its own with a back bar above
   // it. From sm up nothing reads this.
   const [phoneList, setPhoneList] = useState(false);
+  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
   useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   const [data, setData] = useState({ reviews: [], counts: {}, head_physios: [], today: "" });

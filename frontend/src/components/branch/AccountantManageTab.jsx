@@ -11,6 +11,7 @@ import { BranchExpensesPanel } from "@/components/branch/BranchExpensesPanel";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { useStageBack } from "@/components/ui/phone-back";
 import { rangeFor, todayIso } from "@/lib/dateRange";
 import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
@@ -446,6 +447,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // Phone only (phoneCards): whether a tab is open on its own screen, or the cards are up.
   const [phoneOpen, setPhoneOpen] = useState(false);
   const phoneCardsUp = phoneCards && !phoneOpen;
+  useStageBack(phoneCards && phoneOpen); // the phone's Back closes the list -- see ui/phone-back
   // Summary's own drill on a phone, Branch Leads' stack again at each step: 0 its five
   // cards, 1 the one picked (an income pile's eight revenue cards, or the drawer / expense
   // panel), 2 one revenue card's list. The back bar climbs it a step at a time.

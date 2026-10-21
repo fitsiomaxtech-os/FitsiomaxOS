@@ -9,6 +9,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useStageBack } from "@/components/ui/phone-back";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 
@@ -1563,6 +1564,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
   // list on a screen of its own with a back bar above it -- seven rows fill the screen, so
   // a list left under them would change out of sight. From sm up nothing reads this.
   const [phoneList, setPhoneList] = useState(false);
+  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
   useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the books
   // The Zumba pipeline exactly as Super Admin has it in CI/CD ROOTS. Nothing is hardcoded

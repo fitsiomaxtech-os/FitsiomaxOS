@@ -36,6 +36,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
+import { useStageBack } from "@/components/ui/phone-back";
 import {
   getHPMyCalendar,
   hpRecommendPackage,
@@ -172,6 +173,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
   // phoneStack only: a work tab's list is open on the phone, rather than the card list.
   const [phoneListOpen, setPhoneListOpen] = useState(false);
   const phoneCards = phoneStack && !phoneListOpen;
+  useStageBack(phoneStack && phoneListOpen); // the phone's Back closes the list -- see ui/phone-back
   const withProfile = roleLabel !== undefined;
   const profileOpen = withProfile && workTab === "profile";
   const bottomTabs = withProfile ? [...VISIBLE_WORK_TABS, PROFILE_TAB] : VISIBLE_WORK_TABS;
