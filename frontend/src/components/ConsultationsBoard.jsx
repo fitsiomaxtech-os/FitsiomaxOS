@@ -7831,7 +7831,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         type="button"
                         onClick={openApptCard}
                         disabled={loadingApptCard}
-                        className="flex items-center gap-1 rounded-[5px] border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+                        // Fee Collected: filled in its own teal, at the Inspect button's 55%.
+                        className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold transition ${selectedLead.consultation_stage === "Fee Collected"
+                          ? "rounded-[2px] bg-teal-600 text-white opacity-[0.55] hover:bg-teal-700"
+                          : "rounded-[5px] border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-60"}`}
                         title="Open the appointment confirmation — print, send or download it again"
                         data-testid="cons-open-appt-card"
                       >
@@ -8168,7 +8171,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <X className="h-3.5 w-3.5" /> Close
                             </span>
                           ) : (
-                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100">
+                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100" data-testid="cons-case-record-view">
                               <Eye className="h-3.5 w-3.5" /> View Details
                             </span>
                           )}

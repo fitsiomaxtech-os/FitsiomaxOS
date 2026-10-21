@@ -201,3 +201,15 @@ code {
 .fee-flat [data-testid^="cons-fee-receipt"] svg {
   display: none !important;
 }
+/* ...and View Details and Payment Schedule are filled in their own colours, at the Inspect
+   button's 55%. */
+.fee-flat [data-testid="cons-case-record-view"] {
+  background-color: #0284c7 !important; /* sky-600 */
+  color: #fff !important;
+  opacity: 0.55;
+}
+.fee-flat [data-testid="cons-open-partial-schedule-sidebar"] {
+  background-color: #475569 !important; /* slate-600 */
+  color: #fff !important;
+  opacity: 0.55;
+}
