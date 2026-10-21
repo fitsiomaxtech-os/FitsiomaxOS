@@ -11128,12 +11128,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 {/* Two rows: what the owing fees came to, and what is still
                                     owed on them. The fee row above names only the balance. */}
                                 <div className="flex items-center justify-between" data-testid="cons-partial-balance-total">
-                                  <span className="rounded-[2px] bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">Total</span>
-                                  <span className="min-w-[6.5rem] rounded-[2px] bg-slate-100 px-2 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200">Rs.{Number(allBalances.quoted).toLocaleString("en-IN")}</span>
+                                  <span className="flex h-6 w-28 items-center justify-center rounded-[2px] bg-slate-100 px-2 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">Total</span>
+                                  <span className="flex h-6 w-28 items-center justify-center rounded-[2px] bg-slate-100 px-2 text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200">Rs.{Number(allBalances.quoted).toLocaleString("en-IN")}</span>
                                 </div>
                                 <div className="mt-1.5 flex items-center justify-between" data-testid="cons-partial-balance-due">
-                                  <span className={`rounded-[2px] px-2 py-0.5 text-[11px] font-semibold ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-700 ring-rose-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>Balance{allBalances.overdue ? " · Overdue" : ""}</span>
-                                  <span className={`min-w-[6.5rem] rounded-[2px] px-2 py-0.5 text-center text-xs font-bold tabular-nums ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-800 ring-rose-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
+                                  <span className={`flex h-6 w-28 items-center justify-center whitespace-nowrap rounded-[2px] px-2 text-[11px] font-semibold ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-700 ring-rose-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>Balance{allBalances.overdue ? " · Overdue" : ""}</span>
+                                  <span className={`flex h-6 w-28 items-center justify-center rounded-[2px] px-2 text-xs font-bold tabular-nums ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-800 ring-rose-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
                                 </div>
                               </div>
                             )}
