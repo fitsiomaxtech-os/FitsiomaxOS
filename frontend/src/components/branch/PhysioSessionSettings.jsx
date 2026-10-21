@@ -98,14 +98,18 @@ export const PhysioSessionSettings = ({ branchId, mode }) => {
   const editingPhysio = editing && editing !== "all" ? physios.find((p) => p.id === editing) : null;
 
   return (
-    <div className="space-y-3" data-testid={`physio-session-settings-${mode}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    // Below md it is drawn as Time Management's cards are — a bordered card, a grey header
+    // bar carrying the title and "Set for all" on one row, the list under it — and the
+    // captions are dropped, so the five popups of the calendar's gear read alike on a phone.
+    <div className="space-y-3 max-md:space-y-0 max-md:overflow-hidden max-md:rounded-xl max-md:border max-md:border-slate-200 max-md:bg-white" data-testid={`physio-session-settings-${mode}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 max-md:flex-nowrap max-md:border-b max-md:border-slate-100 max-md:bg-slate-50/60 max-md:p-3">
         <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            {isDuration ? <Clock className="h-4 w-4 text-sky-600" /> : <Users className="h-4 w-4 text-sky-600" />}
-            {isDuration ? "Treatment Session Duration" : "Patients per slot"}
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 max-md:gap-1.5 max-md:text-slate-700">
+            {isDuration ? <Clock className="h-4 w-4 shrink-0 text-sky-600" /> : <Users className="h-4 w-4 shrink-0 text-sky-600" />}
+            <span className="truncate md:hidden">{isDuration ? "Treatment Duration" : "Per Slot"}</span>
+            <span className="hidden md:inline">{isDuration ? "Treatment Session Duration" : "Patients per slot"}</span>
           </h3>
-          <p className="mt-0.5 text-[11px] text-slate-500">
+          <p className="mt-0.5 hidden text-[11px] text-slate-500 md:block">
             {isDuration
               ? `How long one session runs on each physio's calendar. Unset follows FITSIO STORE's ${durationLabel(storeMinutes)}. Only days opened after a change are cut at it.`
               : "How many patients each physio treats in the same slot — up to 4. Lowering it never moves anyone already booked."}
@@ -120,7 +124,8 @@ export const PhysioSessionSettings = ({ branchId, mode }) => {
             data-testid="physio-duration-all"
           >
             {busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
-            Set for all physios
+            <span className="md:hidden">Set for all</span>
+            <span className="hidden md:inline">Set for all physios</span>
           </button>
         ) : (
           <CreamPicker
@@ -128,7 +133,7 @@ export const PhysioSessionSettings = ({ branchId, mode }) => {
             onChange={(n) => saveCapacity("all", n)}
             options={CAPACITY_OPTIONS}
             icon={Users}
-            label="Set for all physios"
+            label={<><span className="md:hidden">Set for all</span><span className="hidden md:inline">Set for all physios</span></>}
             align="end"
             width="w-44"
             disabled={!!busy}
@@ -137,7 +142,7 @@ export const PhysioSessionSettings = ({ branchId, mode }) => {
         ))}
       </div>
 
-      <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white max-md:rounded-none max-md:border-0">
         {loading ? (
           <p className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading physios…
@@ -156,7 +161,8 @@ export const PhysioSessionSettings = ({ branchId, mode }) => {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-slate-800">{p.full_name}</p>
-                <p className="truncate text-[11px] text-slate-400">
+                {/* Per Slot's caption only says the number its picker shows: desk only. */}
+                <p className={`truncate text-[11px] text-slate-400 ${isDuration ? "" : "hidden md:block"}`}>
                   {isDuration
                     ? (mins ? "Own length" : "From FITSIO STORE")
                     : `${cap} patient${cap > 1 ? "s" : ""} in the same slot`}

@@ -128,21 +128,22 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
   };
 
   // One row of the list. From md up: name, start to end, the 12-hour reading, Save, delete,
-  // on one line. A phone wraps it to three — name and delete, the two times, the reading
-  // and Save — via order, so the DOM stays in the desk's reading order.
+  // on one line, in that order. A phone lays it out as a grid of two rows — name and
+  // delete, then the two times with Save beside them — and drops the reading, which only
+  // repeats the times above it; it comes back on a third row to say what is wrong.
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 md:flex-nowrap md:gap-3" data-testid={`shift-row-${shift.id}`}>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-3 md:flex md:flex-nowrap md:gap-3" data-testid={`shift-row-${shift.id}`}>
       <Input
         value={draft.name}
         onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-        className="order-1 h-8 min-w-0 flex-1 text-sm font-semibold md:w-56 md:flex-none"
+        className="col-start-1 row-start-1 h-8 min-w-0 text-sm font-semibold md:order-1 md:w-56 md:flex-none"
         placeholder="Shift name"
         data-testid={`shift-name-${shift.id}`}
       />
 
       {/* Read in 12-hour form, as the clinic says it out loud, and set on the clock dialog.
           The value underneath stays 24-hour "HH:MM", which is exactly what the API stores. */}
-      <div className="order-3 flex w-full items-center gap-2 md:order-2 md:w-auto">
+      <div className={`row-start-2 flex min-w-0 items-center gap-2 md:order-2 ${dirty ? "col-start-1" : "col-span-2"}`}>
         <ClockTimeInput
           value={draft.start_time}
           onChange={(e) => setDraft((d) => ({ ...d, start_time: e.target.value }))}
@@ -158,7 +159,7 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
         />
       </div>
 
-      <p className={`order-4 min-w-0 flex-1 truncate text-[11px] md:order-3 ${invalid ? "text-rose-500" : "text-slate-400"}`}>
+      <p className={`min-w-0 truncate text-[11px] md:order-3 md:block md:flex-1 ${invalid ? "col-span-2 row-start-3 text-rose-500" : "hidden text-slate-400"}`}>
         {invalid
           ? (!draft.name.trim() ? "Name it first" : "Must end after it starts")
           : `${windowLabel(draft.start_time, draft.end_time)} · ${spanLabel(draft.start_time, draft.end_time)}`}
@@ -168,7 +169,7 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
           size="sm"
           onClick={save}
           disabled={saving || invalid}
-          className="order-5 h-7 shrink-0 bg-violet-600 px-2.5 text-[11px] text-white hover:bg-violet-700 md:order-4"
+          className="col-start-2 row-start-2 h-8 shrink-0 bg-violet-600 px-2.5 text-[11px] text-white hover:bg-violet-700 md:order-4 md:h-7"
           data-testid={`shift-save-${shift.id}`}
         >
           {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="mr-1 h-3 w-3" /> Save</>}
@@ -179,7 +180,7 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
         onClick={remove}
         disabled={removing}
         title="Delete this shift"
-        className="order-2 shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 md:order-5 md:text-slate-300"
+        className="col-start-2 row-start-1 shrink-0 justify-self-end rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 md:order-5 md:text-slate-300"
         data-testid={`shift-delete-${shift.id}`}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -619,7 +620,8 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
               <div className="min-w-0">
                 <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
                   <kind.icon className="h-4 w-4 shrink-0 text-violet-500" /> Who Works Which Shift
-                  {lockProfile && <span className="font-medium text-slate-400">· {kind.label}</span>}
+                  {/* Desk only: a phone opens this from the calendar it names. */}
+                  {lockProfile && <span className="hidden font-medium text-slate-400 md:inline">· {kind.label}</span>}
                 </h3>
               </div>
               {experts.length > 0 && (
@@ -660,7 +662,7 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
                   </div>
                   <div className="col-start-2 row-start-1 min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">{expert.full_name}</p>
-                    <p className="truncate text-[10px] text-slate-400 md:whitespace-normal">
+                    <p className="hidden truncate text-[10px] text-slate-400 md:block md:whitespace-normal">
                       {expert.specialization || kind.noun}
                       {expert.slots_open > 0 && ` · ${expert.slots_open} slot${expert.slots_open > 1 ? "s" : ""} already published`}
                     </p>
