@@ -1069,6 +1069,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // Time Management's three parts: its Treatment Session Duration and Per slot sit beside
   // them, all five in one row.
   const [calendarSettingsTab, setCalendarSettingsTab] = useState("shifts");
+  // True when a phone opened that popup from the gear's dropdown: the tab was picked
+  // there, so the popup shows that one part alone, with no tab strip of its own.
+  const [calendarSettingsPicked, setCalendarSettingsPicked] = useState(false);
   // Bumped as that popup shuts, so the calendar under it re-reads the shifts just changed.
   const [calendarEpoch, setCalendarEpoch] = useState(0);
   const [stageFilter, setStageFilter] = useState(null); // null = show all stages
@@ -1959,7 +1962,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The three calendar sub-tabs and the profile each one's Time Management roster opens on.
   const CALENDAR_PROFILES = { head_physio: "head_physio", physio: "physio", diet: "nutrition_coach" };
   const calendarProfile = CALENDAR_PROFILES[consultationsSubTab];
-  const openTimeManagement = () => { setCalendarSettingsTab("shifts"); setTimeMgmtFor(calendarProfile || "head_physio"); };
+  const openTimeManagement = () => { setCalendarSettingsTab("shifts"); setCalendarSettingsPicked(false); setTimeMgmtFor(calendarProfile || "head_physio"); };
+  const openCalendarSetting = (key) => { setCalendarSettingsTab(key); setCalendarSettingsPicked(true); setTimeMgmtFor(calendarProfile); };
   // The first three are Time Management's own parts, handed to it as `section`; the last
   // two are the physio settings.
   const CALENDAR_SETTINGS_TABS = [
@@ -1983,6 +1987,48 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       <Settings className="h-4 w-4" />
     </button>
   );
+  // Phone, Consultant and Physiotherapist Calendars: the gear drops down the popup's tabs
+  // as a list, and a tap on one opens the popup on that tab. The Consultant's are Time
+  // Management's own three; the Physio's are the five above.
+  const CONSULTANT_SETTINGS_TABS = [
+    { key: "shifts", label: "Shift Timings", icon: Clock },
+    { key: "roster", label: "Who Works Which Shift", icon: Calendar },
+    { key: "working_day", label: "Working Day & Week Off", icon: CalendarDays },
+  ];
+  const phoneSettingsTabs = { head_physio: CONSULTANT_SETTINGS_TABS, physio: CALENDAR_SETTINGS_TABS }[calendarProfile];
+  // Not modal: a modal menu that opens a Dialog as it shuts can leave the page's
+  // pointer-events off once that Dialog closes.
+  const phoneTimeGear = (testid) => (phoneSettingsTabs ? (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-600 text-white shadow-sm transition hover:bg-sky-700"
+          title="Time Management"
+          aria-label="Time Management"
+          data-testid={testid}
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        {phoneSettingsTabs.map((t) => {
+          const Icon = t.icon;
+          return (
+            <DropdownMenuItem
+              key={t.key}
+              onSelect={() => openCalendarSetting(t.key)}
+              className="gap-2.5 py-2"
+              data-testid={`${testid}-menu-${t.key}`}
+            >
+              <Icon aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : timeGear(testid));
 
   return (
     // flex+gap rather than space-y: Tailwind's space-y keys off the `hidden` *attribute*,
@@ -2064,7 +2110,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t?.label}</span>
                 </button>
-                {timeGear("branch-mgmt-phone-time-settings")}
+                {phoneTimeGear("branch-mgmt-phone-time-settings")}
               </div>
             );
           })()}
@@ -2130,7 +2176,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               {/* The physio's gear opens on one row of five tabs: Time Management's three
                   parts, then the two settings its calendar header carries per physio, here
                   for the whole floor at once. */}
-              {timeMgmtFor === "physio" && (
+              {timeMgmtFor === "physio" && !calendarSettingsPicked && (
                 // Time Management's own underlined strip, so the five read as the tabs the
                 // first three always were. On a phone they share the width, icon over label.
                 <div className="mb-3 flex items-stretch gap-1 border-b border-slate-200 md:mb-4" data-testid="calendar-settings-tabs">
@@ -2160,7 +2206,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     branchId={branchId}
                     initialProfileType={timeMgmtFor}
                     lockProfile
-                    section={timeMgmtFor === "physio" && !physioSettingsTab ? calendarSettingsTab : undefined}
+                    section={(timeMgmtFor === "physio" || calendarSettingsPicked) && !physioSettingsTab ? calendarSettingsTab : undefined}
                   />
                 </div>
               )}
