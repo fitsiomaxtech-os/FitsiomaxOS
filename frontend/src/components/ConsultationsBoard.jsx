@@ -3210,6 +3210,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // The Mark Online popup: its three ways onto Online, with what the panel knew about the
   // course when it was opened (whether it can be re-priced, its mode, whether it is paid).
   const [onlineMenu, setOnlineMenu] = useState(null);
+  // The Treatment Fee's Inspect popup: how the figure on the fee row was worked out.
+  const [feeInspect, setFeeInspect] = useState(false);
   // Set while the physio picker is Online Physio Assign: Online physios only, no re-price.
   const [onlineAssign, setOnlineAssign] = useState(false);
   const [markingOnline, setMarkingOnline] = useState(false);
@@ -10285,6 +10287,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       : null,
                     pendingTone: partialPlan && partialPlan.overdue ? "text-rose-600" : "text-amber-600",
                     show: decision === "consultation_treatment",
+                    // Title over an Inspect button; the package and its day-by-day price
+                    // live in the popup it opens rather than under the title.
+                    inspect: true,
                     act: partialPlan ? () => openPartialCollectPopup(partialPlan.nextIdx) : openTreatmentFeeDraft,
                     actLabel: partialPlan ? "Collect Balance" : "Collect",
                   },
@@ -10422,6 +10427,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </span>
                 ) : null);
 
+                // Under the Treatment Fee's title: opens the popup that shows how the fee was
+                // worked out -- the package, each run of days × its rate, and what is paid.
+                const InspectButton = (
+                  <button
+                    type="button"
+                    onClick={() => setFeeInspect(true)}
+                    className="mt-1 inline-flex h-6 w-full max-w-[7.5rem] items-center justify-center gap-1 rounded-md bg-slate-600 px-2 text-[11px] font-semibold text-white shadow-sm transition hover:bg-slate-700"
+                    data-testid="cons-fee-inspect-treatment"
+                  >
+                    <Eye className="h-3 w-3" /> Inspect
+                  </button>
+                );
+
                 const renderFeeSteps = (steps, testid = "cons-fee-steps") => compactDetail ? (
                   // The narrow popup lists the fees one under the other, like the
                   // Consultation Record above it: a row each, the price and the button in
@@ -10502,8 +10520,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
-                            {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
+                            {f.inspect ? InspectButton : (
+                              <>
+                                {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
+                                {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
+                              </>
+                            )}
                             {/* Under the name on a phone, where a column of its own would
                                 leave the name a dozen pixels. */}
                             {amount && (
@@ -10576,8 +10598,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
-                            {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
+                            {f.inspect ? InspectButton : (
+                              <>
+                                {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
+                                {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
+                              </>
+                            )}
                           </div>
                         </div>
                         {/* Each Treatment Fee payment, with its days, Online or Offline, and
@@ -13645,6 +13671,137 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 days left and books them with an Online physio in one go; Mark Online re-prices
                 and opens Collect Online Payment without moving a day; Online Physio Assign
                 books an Online physio at the price the course already has. */}
+            {/* Inspect (Treatment Fee): how the figure on the fee row was arrived at -- the
+                package, each run of days at its mode's rate, any discount, what has been
+                paid and what is still owed, read straight off the lead. */}
+            {feeInspect && selectedLead && (() => {
+              const L = selectedLead;
+              const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN")}`;
+              const sessions = Number(L.session_package_sessions) || 0;
+              const price = Number(L.session_package_price) || 0;
+              // Never swapped, the course is one run at one mode: its price divided down.
+              const plan = L.session_mode_plan?.length
+                ? L.session_mode_plan
+                : sessions > 0
+                  ? [{ mode: L.session_package_mode === "online" ? "online" : "offline", days: sessions, rate: Math.round((price / sessions) * 100) / 100, amount: price }]
+                  : [];
+              const discount = Number(L.treatment_fee_payment_details?.discount_amount) || 0;
+              const feeIn = L.treatment_fee_paid != null;
+              const sum = (rows) => rows.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+              const paidIn = savedInstallments.length
+                ? sum(savedInstallments.filter((i) => i.paid))
+                : feeIn ? Number(L.treatment_fee_paid) || 0 : 0;
+              const balance = savedInstallments.length
+                ? sum(savedInstallments.filter((i) => !i.paid))
+                : feeIn ? 0 : Math.max(0, price - discount);
+              const excess = Number(L.treatment_fee_excess) || 0;
+              const markedOn = L.online_marked_at ? String(L.online_marked_at).slice(0, 10) : null;
+              const modeTone = (m) => (m === "online" ? "font-semibold text-sky-700" : "font-semibold text-slate-600");
+              let day = 1;
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) setFeeInspect(false); }} data-testid="cons-fee-inspect-popup">
+                  <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                        <IndianRupee className="h-4 w-4 text-sky-600" />
+                        Treatment Fee · Calculation
+                      </p>
+                      <button onClick={() => setFeeInspect(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-fee-inspect-close"><X className="h-4 w-4" /></button>
+                    </div>
+
+                    {/* The package as sold. */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                      <p className="font-semibold text-slate-800">{L.session_package_name || "Treatment Package"}</p>
+                      <p className="mt-0.5 text-slate-500">
+                        {sessions} session{sessions === 1 ? "" : "s"} · Now <span className={modeTone(L.session_package_mode)}>{L.session_package_mode === "online" ? "Online" : "Offline"}</span>
+                      </p>
+                    </div>
+
+                    {/* Each run of days × its rate, adding up to the fee. */}
+                    <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-fee-inspect-plan">
+                      <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        <span>Days · Mode</span>
+                        <span>Days × Rate = Amount</span>
+                      </div>
+                      {plan.map((run, i) => {
+                        const from = day;
+                        day += Number(run.days) || 0;
+                        return (
+                          <div key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="text-slate-600">
+                              <span className="font-semibold text-slate-700">Day {from}{run.days > 1 ? `–${from + run.days - 1}` : ""}</span>
+                              {" · "}<span className={modeTone(run.mode)}>{run.mode === "online" ? "Online" : "Offline"}</span>
+                            </span>
+                            <span className="text-right tabular-nums text-slate-600">
+                              {run.days} × {rs(run.rate)} = <span className="font-semibold text-slate-800">{rs(run.amount)}</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="font-semibold text-slate-700">Treatment Fee</span>
+                        <span className="font-bold tabular-nums text-slate-900">{rs(price)}</span>
+                      </div>
+                      {discount > 0 && (
+                        <>
+                          <div className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="text-slate-600">Discount</span>
+                            <span className="font-semibold tabular-nums text-rose-600">− {rs(discount)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="font-semibold text-slate-700">Payable</span>
+                            <span className="font-bold tabular-nums text-slate-900">{rs(price - discount)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Where the money stands. */}
+                    <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="cons-fee-inspect-money">
+                      <div className="flex justify-between gap-2"><span className="text-slate-600">Paid</span><span className="font-semibold tabular-nums text-emerald-700">{rs(paidIn)}</span></div>
+                      <div className="flex justify-between gap-2"><span className="text-slate-600">{feeIn ? "Balance" : "Due"}</span><span className={`font-semibold tabular-nums ${balance > 0 ? "text-amber-700" : "text-slate-500"}`}>{rs(balance)}</span></div>
+                      {feeIn && L.treatment_fee_payment_mode && (
+                        <div className="flex justify-between gap-2"><span className="text-slate-600">Payment Mode</span><span className="font-semibold capitalize text-slate-700">{String(L.treatment_fee_payment_mode).replace(/_/g, " ")}</span></div>
+                      )}
+                      {excess > 0 && (
+                        <div className="flex justify-between gap-2"><span className="text-slate-600">Paid over the fee</span><span className="font-semibold tabular-nums text-rose-600">{rs(excess)} · refund / adjust</span></div>
+                      )}
+                    </div>
+
+                    {/* The Payment Schedule, when the fee is taken in parts. */}
+                    {savedInstallments.length > 0 && (
+                      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-fee-inspect-schedule">
+                        <p className="bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Payment Schedule</p>
+                        {savedInstallments.map((inst, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="text-slate-600">
+                              <span className="font-semibold text-slate-700">Payment {i + 1}</span>
+                              {inst.sessions ? ` · ${inst.sessions} sessions` : ""}
+                              {inst.due_date ? ` · ${inst.due_date}` : ""}
+                            </span>
+                            <span className="text-right tabular-nums">
+                              <span className="font-semibold text-slate-800">{rs(inst.amount)}</span>
+                              <span className={`ml-1.5 text-[10px] font-semibold uppercase ${inst.paid ? "text-emerald-600" : "text-amber-600"}`}>{inst.paid ? "Paid" : "Due"}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {markedOn && (
+                      <p className="text-[11px] text-slate-500">
+                        Marked Online on {markedOn}{L.online_marked_by ? ` by ${L.online_marked_by}` : ""}.
+                      </p>
+                    )}
+
+                    <div className="flex justify-end">
+                      <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setFeeInspect(false)} data-testid="cons-fee-inspect-done">Close</Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {onlineMenu && (() => {
               const isOnline = onlineMenu.mode === "online";
               const markedOn = selectedLead?.online_marked_at ? String(selectedLead.online_marked_at).slice(0, 10) : null;
