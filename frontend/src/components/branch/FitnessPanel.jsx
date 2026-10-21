@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, IndianRupee, Pencil, Plus, RefreshCw, Trash2, UserPlus, X, PlayCircle, Stethoscope } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
+import { NotifyCard } from "@/components/ui/notify-card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { listFitness, addFitness, updateFitness, setFitnessStatus, deleteFitness, collectFitnessPayment, renewFitness, acceptFitnessReferral, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 
@@ -124,6 +126,17 @@ const packageTotal = (item) => {
 };
 const packageSessions = (item) => item?.sessions_offline || item?.sessions_online || 0;
 
+// The icon each card wears on a phone, where the cards are Branch Leads' one-line rows
+// (NotifyCard `inline`) and the icon is the only thing telling one grey row from the next.
+const CARD_ICONS = {
+  all: LayoutGrid,
+  referred: Stethoscope,
+  current: UserCheck,
+  unpaid: Clock,
+  paid: BadgeCheck,
+  discontinued: UserX,
+};
+
 const FieldLabel = ({ children }) => (
   <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</label>
 );
@@ -140,7 +153,9 @@ const FormSelect = ({ value, onChange, children, testid }) => (
   </select>
 );
 
-export const FitnessPanel = ({ branchId }) => {
+// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
+// stand its own back bar down while this panel's is showing.
+export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
   const [data, setData] = useState({ registrations: [], counts: {}, totals: {} });
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -154,6 +169,11 @@ export const FitnessPanel = ({ branchId }) => {
   const [viewing, setViewing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the roll
+  // Phone only, as Zumba does it: the cards are a stack of Branch Leads' rows, and a tap
+  // opens that card's list on a screen of its own with a back bar above it. From sm up
+  // nothing reads this.
+  const [phoneList, setPhoneList] = useState(false);
+  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
 
   // Rises with every roll fetch started here, so a reply that is no longer the newest is
   // dropped rather than written. Refresh going dead while busy stops two presses racing,
@@ -306,6 +326,13 @@ export const FitnessPanel = ({ branchId }) => {
     }
   };
 
+  // A phone card's tap: filter to that card (All is a card of its own) and open its list.
+  const openPhoneCard = (key) => {
+    setCard(key);
+    setPhoneList(true);
+    window.scrollTo({ top: 0 });
+  };
+
   const remove = async (row) => {
     try {
       // A referral has no row of this collection to delete. The same call records that the
@@ -330,7 +357,79 @@ export const FitnessPanel = ({ branchId }) => {
           `arrow` on each tile: no corner disc and no dumbbell, just the ledger card's
           chevron on a 5px corner, matching the Zumba strip beside this one. "desk": the
           chevron is sm-up only, a phone card is label and figure alone. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {/* Phone, one card open: where the stack sat, the card being read -- its figure in a
+          box, as Zumba's back bar has it -- the way back to the cards, and a menu to jump
+          to another card without going back first. */}
+      {phoneList && (() => {
+        const c = CARDS.find((x) => x.key === card) || CARDS[0];
+        const others = CARDS.filter((x) => x.key !== c.key);
+        return (
+          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="fitness-phone-back">
+            <button
+              type="button"
+              onClick={() => setPhoneList(false)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+              aria-label="Back to the Fitness cards"
+              data-testid="fitness-phone-back-btn"
+            >
+              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: c.color }}>
+                {c.value ?? 0}
+              </span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{c.label}</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+                  aria-label="Switch card"
+                  data-testid="fitness-phone-card-menu"
+                >
+                  <Menu aria-hidden className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {others.map((o) => {
+                  const Icon = CARD_ICONS[o.key];
+                  return (
+                    <DropdownMenuItem
+                      key={o.key}
+                      onSelect={() => openPhoneCard(o.key)}
+                      className="gap-2.5 py-2"
+                      data-testid={`fitness-phone-card-menu-${o.key}`}
+                    >
+                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
+                      <span className="text-xs font-semibold text-slate-500">{o.value ?? 0}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      })()}
+
+      {/* Phone: the cards as Branch Leads' one-line stage rows, one to a row. */}
+      {!phoneList && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="fitness-phone-cards">
+          {CARDS.map((c) => (
+            <NotifyCard
+              key={c.key}
+              icon={CARD_ICONS[c.key]}
+              label={c.label}
+              value={c.value ?? 0}
+              active={card === c.key}
+              onClick={() => openPhoneCard(c.key)}
+              testid={`fitness-phone-card-${c.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="hidden grid-cols-2 gap-3 sm:grid md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
             key={c.key}
@@ -345,7 +444,7 @@ export const FitnessPanel = ({ branchId }) => {
         ))}
       </div>
 
-      <Card>
+      <Card className={phoneList ? undefined : "hidden sm:block"}>
         <CardContent className="p-0">
           {/* The Zumba list's toolbar: dates, then payment mode, then search, refresh and
               create at the right. Wraps group by group on a narrow window. */}

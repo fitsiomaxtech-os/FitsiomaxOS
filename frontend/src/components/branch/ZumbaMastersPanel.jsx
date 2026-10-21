@@ -170,7 +170,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
                 Masters at this branch
                 <span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500 sm:hidden">{masters.length}</span>
               </p>
-              {/* Phone: one edge-to-edge row each, the class they hold as a pill. Desk: chips. */}
+              {/* Phone: one edge-to-edge row each, the class they hold as a boxed tag. Desk: chips. */}
               <ul className="divide-y divide-slate-100 sm:flex sm:flex-wrap sm:gap-2 sm:divide-y-0">
                 {masters.map((m) => (
                   <li key={m.id} className="flex items-center gap-2.5 px-4 py-2.5 sm:gap-2 sm:rounded-lg sm:border sm:border-slate-200 sm:px-2.5 sm:py-1.5" data-testid={`zumba-master-${m.id}`}>
@@ -181,7 +181,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
                       <span className="block truncate text-sm font-medium text-slate-800">{m.name || "—"}</span>
                       <span className="hidden text-[10px] text-slate-400 sm:block">{m.time_slot || "No class yet"}</span>
                     </span>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium sm:hidden ${m.time_slot ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-500"}`}>
+                    <span className={`shrink-0 rounded-[5px] border px-2 py-0.5 text-[10px] font-medium sm:hidden ${m.time_slot ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}>
                       {m.time_slot || "No class yet"}
                     </span>
                   </li>

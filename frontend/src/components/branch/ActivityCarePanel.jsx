@@ -76,6 +76,8 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
   // Phone, Zumba open on one of its cards: Zumba's own back bar (card > Zumba) takes this
   // bar's place, so there is one way back at a time rather than two stacked.
   const [zumbaListOpen, setZumbaListOpen] = useState(false);
+  // The same for Fitness: its own back bar (card > Fitness) stands in for this one.
+  const [fitnessListOpen, setFitnessListOpen] = useState(false);
   const activeTab = tabs.find((t) => t.key === active) || tabs[0];
   const ActiveIcon = activeTab.icon;
   const zumbaGear = (testid) => (
@@ -95,7 +97,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
     <div className="flex flex-col gap-4" data-testid="activity-care-panel">
       {/* Phone, one tab open: where the cards sat, the tab being read, the way back to the
           cards, and that tab's gear -- the bar Management's sub-tabs wear. */}
-      {phoneOpen && !(active === "zumba" && zumbaListOpen) && (
+      {phoneOpen && !(active === "zumba" && zumbaListOpen) && !(active === "fitness" && fitnessListOpen) && (
         <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="activity-care-phone-back">
           <button
             type="button"
@@ -185,7 +187,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
       {active === "zumba" ? (
         <ZumbaPanel branchId={branchId} onPhoneListChange={setZumbaListOpen} />
       ) : active === "fitness" ? (
-        <FitnessPanel branchId={branchId} />
+        <FitnessPanel branchId={branchId} onPhoneListChange={setFitnessListOpen} />
       ) : active === "patients" ? (
         <PatientsPortalPanel branchId={branchId} />
       ) : active === "manager" ? (
