@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Copy, Phone, PhoneCall, RefreshCw, Trash2, User, X,
+  Activity, ChevronLeft, Copy, Dumbbell, HeartPulse, LayoutGrid, Menu, Music, Phone, PhoneCall, RefreshCw, Search,
+  Stethoscope, Trash2, User, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatTile } from "@/components/ui/stat-tile";
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
-import { QuickDateFilterBar } from "@/components/QuickDateFilterBar";
+import { QuickDateFilterBar, QUICK_DATE_PRESETS, quickDatePreset } from "@/components/QuickDateFilterBar";
+import { DateFilterPopover } from "@/components/DateFilterPopover";
+import { NotifyCard } from "@/components/ui/notify-card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   getBranchBoard, updateLead, listFitness, listZumba,
   getPortalAccountStatus, createOrResetPortalAccount,
@@ -105,6 +110,42 @@ const CARDS = [
   { key: "fitness", label: "Fitness", color: "#7c3aed" },
   { key: "zumba", label: "Zumba", color: "#db2777" },
 ];
+
+// The icon each card wears on a phone, where the cards are Branch Leads' one-line rows
+// (NotifyCard `inline`) and the icon is the only thing telling one grey row from the next.
+const CARD_ICONS = {
+  all: LayoutGrid,
+  consultation: Stethoscope,
+  treatment: Activity,
+  rehab: HeartPulse,
+  fitness: Dumbbell,
+  zumba: Music,
+};
+
+// The ranges the phone's dates dropdown offers: the desk bar's, which leaves Tomorrow out.
+const PHONE_DATE_PRESETS = QUICK_DATE_PRESETS.filter((x) => !x.optional);
+
+// The phone toolbar's dropdown, as the Zumba, Fitness and Review lists': tinted while it
+// narrows the list, so a range left on is never mistaken for the whole roll.
+const PhoneFilterSelect = ({ value, onChange, options, allValue, label, testid }) => (
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger
+      title={label}
+      aria-label={label}
+      className={`h-8 min-w-0 flex-1 rounded-md border px-2 text-xs font-medium shadow-none transition-colors focus:ring-2 focus:ring-sky-200 ${
+        value !== allValue ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      data-testid={testid}
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="z-[200] max-h-72 border-slate-200" data-testid={`${testid}-menu`}>
+      {options.map(([v, text]) => (
+        <SelectItem key={v} value={v} className={`text-xs ${v === allValue ? "font-medium text-slate-500" : "text-slate-700"}`}>{text}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+);
 
 const SERVICE_LABEL = {
   consultation: "Consultation", treatment: "Treatment", rehab: "Rehab",
@@ -234,7 +275,9 @@ const buildRoll = (leads, gymRows, classRows) => {
   });
 };
 
-export const PatientsPortalPanel = ({ branchId }) => {
+// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
+// stand its own back bar down while this panel's is showing.
+export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
   const [leads, setLeads] = useState([]);
   const [gym, setGym] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -246,6 +289,14 @@ export const PatientsPortalPanel = ({ branchId }) => {
   // and null is the shape QuickDateFilterBar already speaks.
   const [dateFilter, setDateFilter] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Phone only, as Zumba, Fitness and Review do it: the cards are a stack of Branch Leads'
+  // rows, and a tap opens that card's list on a screen of its own with a back bar above
+  // it. From sm up nothing reads this.
+  const [phoneList, setPhoneList] = useState(false);
+  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
+  const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
+  // The phone toolbar's calendar, so picking Custom from the dates dropdown can open it.
+  const phoneCalendar = useRef(null);
 
   const load = useCallback(async () => {
     if (!branchId) return;
@@ -302,8 +353,168 @@ export const PatientsPortalPanel = ({ branchId }) => {
 
   const openLead = (row) => { if (row.lead) setSelected(row.lead); };
 
+  // A phone card's tap: filter to that card (All is a card of its own) and open its list.
+  const openPhoneCard = (key) => {
+    setCard(key);
+    setPhoneList(true);
+    window.scrollTo({ top: 0 });
+  };
+
+  const presetKey = !dateFilter ? "all" : PHONE_DATE_PRESETS.some((x) => x.key === dateFilter.key) ? dateFilter.key : "custom";
+
   return (
     <div className="space-y-4" data-testid="branch-patients-panel">
+      {/* Phone, one card open: the card being read with its count in a box, the way back
+          to the cards, and a menu to jump to another card without going back first. */}
+      {phoneList && (() => {
+        const c = CARDS.find((x) => x.key === card) || CARDS[0];
+        return (
+          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-patients-phone-back">
+            <button
+              type="button"
+              onClick={() => setPhoneList(false)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+              aria-label="Back to the Patients cards"
+              data-testid="branch-patients-phone-back-btn"
+            >
+              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: c.color }}>
+                {counts[c.key] ?? 0}
+              </span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{c.label}</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+                  aria-label="Switch card"
+                  data-testid="branch-patients-phone-card-menu"
+                >
+                  <Menu aria-hidden className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {CARDS.filter((o) => o.key !== c.key).map((o) => {
+                  const Icon = CARD_ICONS[o.key];
+                  return (
+                    <DropdownMenuItem
+                      key={o.key}
+                      onSelect={() => openPhoneCard(o.key)}
+                      className="gap-2.5 py-2"
+                      data-testid={`branch-patients-phone-card-menu-${o.key}`}
+                    >
+                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
+                      <span className="text-xs font-semibold text-slate-500">{counts[o.key] ?? 0}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      })()}
+
+      {/* Phone: the cards as Branch Leads' one-line stage rows, one to a row. */}
+      {!phoneList && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-patients-phone-cards">
+          {CARDS.map((c) => (
+            <NotifyCard
+              key={c.key}
+              icon={CARD_ICONS[c.key]}
+              label={c.label}
+              value={counts[c.key] ?? 0}
+              active={card === c.key}
+              onClick={() => openPhoneCard(c.key)}
+              testid={`branch-patients-phone-card-${c.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Phone, one card open: the toolbar in one row -- search behind an icon, the ranges
+          as a dropdown, the calendar for a range of its own, Refresh. Opened, the search
+          box takes the row until its close, which also clears it. */}
+      {phoneList && (
+        <div className="flex items-center gap-1 sm:hidden" data-testid="branch-patients-toolbar-phone">
+          {searchOpen ? (
+            <>
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name or phone"
+                  className="h-8 pl-8 text-xs"
+                  autoFocus
+                  data-testid="branch-patients-search-phone"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => { setSearch(""); setSearchOpen(false); }}
+                className="h-8 w-8 shrink-0 border-slate-200 p-0 text-slate-500"
+                title="Close search"
+                aria-label="Close search"
+                data-testid="branch-patients-search-close-phone"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setSearchOpen(true)}
+                className="h-8 w-8 shrink-0 border-slate-200 bg-white p-0 text-slate-500 hover:bg-slate-50"
+                title="Search"
+                aria-label="Search"
+                data-testid="branch-patients-search-open-phone"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+              <PhoneFilterSelect
+                value={presetKey}
+                onChange={(v) => {
+                  if (v === "custom") {
+                    setTimeout(() => phoneCalendar.current?.querySelector("button")?.click(), 0);
+                    return;
+                  }
+                  setDateFilter(quickDatePreset(v));
+                }}
+                options={[...PHONE_DATE_PRESETS.map((x) => [x.key, x.label]), ["custom", "Custom"]]}
+                allValue="all"
+                label="Dates"
+                testid="branch-patients-date-phone"
+              />
+              <span ref={phoneCalendar} className="flex shrink-0 [&>div>button]:h-8 [&>div>button:first-child]:w-8">
+                <DateFilterPopover
+                  value={presetKey === "custom" ? dateFilter : null}
+                  onChange={(next) => setDateFilter(next || null)}
+                  centered
+                  iconOnly
+                  phoneIconOnly
+                  placeholder="Custom"
+                  testid="branch-patients-date-custom-phone"
+                />
+              </span>
+              <Button
+                onClick={load}
+                disabled={loading}
+                title="Refresh"
+                aria-label="Refresh"
+                className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+                data-testid="branch-patients-refresh-phone"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Six columns for six cards on a wide screen, so the row finishes flush with the
           page. Written as literal class names because Tailwind reads them out of the
           source — a count built from CARDS.length at runtime compiles to nothing.
@@ -312,7 +523,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
           on a 5px corner — the same strip the Fitness tab carries, so the two boards read
           as one family beside the Zumba strip. "desk": the chevron is sm-up only, a phone
           card is label and figure alone. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="hidden grid-cols-2 gap-3 sm:grid md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
             key={c.key}
@@ -336,7 +547,7 @@ export const PatientsPortalPanel = ({ branchId }) => {
           width instead of the row breaking in two. The row still wraps as a whole on a
           phone, where six buttons and a text field cannot honestly share 390px — the
           field drops to its own line there rather than being squeezed to nothing. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="branch-patients-toolbar">
+      <div className="hidden flex-wrap items-center gap-2 sm:flex" data-testid="branch-patients-toolbar">
         <QuickDateFilterBar value={dateFilter} onChange={setDateFilter} testid="branch-patients-date" inline />
         <Input
           value={search}
@@ -362,8 +573,8 @@ export const PatientsPortalPanel = ({ branchId }) => {
       </div>
 
       {/* No "Patients · N patients" heading here: the active card above already names the
-          list and counts it. */}
-      <div>
+          list and counts it. On a phone the list is only shown on its own screen. */}
+      <div className={phoneList ? undefined : "hidden sm:block"}>
         {visible.length === 0 && !loading ? (
           <div className="py-16 text-center">
             <User className="mx-auto mb-3 h-10 w-10 text-slate-200" />
@@ -379,19 +590,15 @@ export const PatientsPortalPanel = ({ branchId }) => {
           </div>
         ) : (
           <>
-          {/* Cards on a phone. Four columns can't hold their width there — the phone
-              column was cut off mid-number, which is the one thing this list is used to
-              look up. Call and WhatsApp sit on the card for the same reason. */}
-          <div className="space-y-2 md:hidden" data-testid="branch-patients-mobile">
-            {visible.map((r, i) => {
+          {/* Phone: one row per patient -- initial, name over mobile and what they are here
+              for, then paid or awaiting, Call and WhatsApp. Tapping the row opens the
+              record; a gym or class member with no lead has none, so theirs is not a button. */}
+          <ul className="divide-y divide-slate-100 overflow-hidden rounded-[5px] border border-slate-200 bg-white md:hidden" data-testid="branch-patients-mobile">
+            {visible.map((r) => {
               const wa = waNumber(r.phone);
-              // Only a lead has a record to open. A gym or class member registered at the
-              // desk has none, so their card is a card and not a button — offering a popup
-              // that cannot load anything is worse than not offering one.
               const openable = !!r.lead;
               return (
-                // A div, not a button: the actions below are interactive themselves.
-                <div
+                <li
                   key={r.key}
                   {...(openable ? {
                     role: "button",
@@ -399,57 +606,57 @@ export const PatientsPortalPanel = ({ branchId }) => {
                     onClick: () => openLead(r),
                     onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLead(r); } },
                   } : {})}
-                  className={`w-full rounded-xl border border-slate-200 bg-white p-3 text-left ${openable ? "cursor-pointer active:bg-slate-50" : ""}`}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 ${openable ? "cursor-pointer active:bg-slate-50" : ""}`}
                   data-testid={`branch-patient-card-${r.key}`}
                 >
-                  <div className="flex items-start gap-2.5">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-xs font-bold text-sky-700">
-                      {r.name?.charAt(0)?.toUpperCase() || "?"}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-100 text-xs font-bold text-sky-700">
+                    {r.name?.charAt(0)?.toUpperCase() || "?"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
+                    <span className="block truncate text-[11px] text-slate-500">
+                      {displayPhone(r.phone) || "—"}
+                      {r.services.length > 0 && <> · {r.services.map((x) => SERVICE_LABEL[x]).join(", ")}</>}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        {/* The same running number the table column carries, so a reader
-                            switching between phone and desk is counting one list. */}
-                        <span className="truncate font-semibold text-slate-800">
-                          <span className="mr-1.5 font-normal tabular-nums text-slate-400">{i + 1}.</span>
-                          {r.name}
-                        </span>
-                        <span className="shrink-0"><PaidBadge paid={r.paid} /></span>
-                      </div>
-                      <p className="truncate text-xs text-slate-600">{displayPhone(r.phone) || "—"}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        Rs.{r.paid} paid
-                        {r.lead && <span className="text-slate-400"> · {feeParts(r.lead)}</span>}
-                      </p>
-                      <div className="mt-1.5"><ServiceChips services={r.services} /></div>
-                    </div>
-                  </div>
-                  {wa && (
-                    <div className="mt-2.5 flex gap-2 border-t border-slate-100 pt-2.5">
-                      <a
-                        href={`tel:${telNumber(wa)}`}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 active:bg-slate-100"
-                        data-testid={`branch-patient-call-${r.key}`}
-                      >
-                        <Phone className="h-3.5 w-3.5" /> Call
-                      </a>
-                      <a
-                        href={`https://wa.me/${wa}`}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#25D366]/40 bg-[#25D366]/10 py-2 text-xs font-semibold text-[#128C7E] active:bg-[#25D366]/20"
-                        data-testid={`branch-patient-whatsapp-${r.key}`}
-                      >
-                        <WhatsAppIcon className="h-3.5 w-3.5" /> WhatsApp
-                      </a>
-                    </div>
-                  )}
-                </div>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span
+                      className={`rounded-[5px] border px-1.5 py-0.5 text-[10px] font-semibold ${r.paid > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                      title={`Rs.${r.paid} paid`}
+                    >
+                      {r.paid > 0 ? "Paid" : "Awaiting"}
+                    </span>
+                    {wa && (
+                      <>
+                        <a
+                          href={`tel:${telNumber(wa)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          className="flex h-7 w-7 items-center justify-center rounded-[5px] border border-slate-200 text-slate-600 active:bg-slate-100"
+                          title="Call"
+                          aria-label="Call"
+                          data-testid={`branch-patient-call-${r.key}`}
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                        </a>
+                        <a
+                          href={`https://wa.me/${wa}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          className="flex h-7 w-7 items-center justify-center rounded-[5px] border border-[#25D366]/40 bg-[#25D366]/10 text-[#128C7E] active:bg-[#25D366]/20"
+                          title="WhatsApp"
+                          aria-label="WhatsApp"
+                          data-testid={`branch-patient-whatsapp-${r.key}`}
+                        >
+                          <WhatsAppIcon className="h-3.5 w-3.5" />
+                        </a>
+                      </>
+                    )}
+                  </span>
+                </li>
               );
             })}
-          </div>
+          </ul>
 
           <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
             <table className="min-w-full text-sm">
