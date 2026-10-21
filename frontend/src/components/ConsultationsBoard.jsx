@@ -7778,6 +7778,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 drops under the start of its line and lines up on the left with it, rather
                 than hanging off the right edge on a row of its own. */}
             <div className="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+              {/* Fee Collected: one row -- name, patient number, phone, no icons. The expert
+                  and the appointment's day are left to the Overview below it. */}
+              {selectedLead.consultation_stage === "Fee Collected" ? (
+              <div className="min-w-0 flex-1 self-center">
+                <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
+                  <span className="truncate">{selectedLead.name || "Lead"}</span>
+                  {selectedLead.patient_number && (
+                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                  )}
+                  <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
+                </h3>
+              </div>
+              ) : (
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 className="flex min-w-0 flex-auto items-center gap-2 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
@@ -7853,7 +7866,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 )}
                 </div>
               </div>
-              <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-detail-close"><XCircle className="h-4 w-4" /></button>
+              )}
+              <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-detail-close">
+                <XCircle className={selectedLead.consultation_stage === "Fee Collected" ? "h-6 w-6" : "h-4 w-4"} />
+              </button>
             </div>
 
             {/* Sub tabs. An underline rail rather than six filled pills: the pills read as
