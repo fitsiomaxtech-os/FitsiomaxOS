@@ -213,3 +213,29 @@ code {
   color: #fff !important;
   opacity: 0.55;
 }
+/* ...and its buttons down the right-hand side -- View Details, Payment Schedule, every
+   Receipt and Collect -- are one size and end on one edge: the fee rows take the same 16px
+   inset the section headings have. (Appointment Card is sized to match in the JSX.) */
+.fee-flat [data-testid^="cons-fee-step-"] {
+  padding-right: 16px !important;
+}
+.fee-flat [data-testid="cons-case-record-view"],
+.fee-flat [data-testid="cons-open-partial-schedule-sidebar"],
+.fee-flat [data-testid^="cons-fee-receipt"],
+.fee-flat [data-testid^="cons-fee-act-"] {
+  width: 104px !important;
+  min-width: 104px !important;
+  height: 32px !important;
+  padding: 0 8px !important;
+  justify-content: center !important;
+  font-size: 12px !important;
+}
+@media (min-width: 640px) {
+  .fee-flat [data-testid="cons-case-record-view"],
+  .fee-flat [data-testid="cons-open-partial-schedule-sidebar"],
+  .fee-flat [data-testid^="cons-fee-receipt"],
+  .fee-flat [data-testid^="cons-fee-act-"] {
+    width: 130px !important;
+    min-width: 130px !important;
+  }
+}
