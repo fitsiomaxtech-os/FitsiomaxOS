@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Flag, GripVertical, AlertTriangle, Lock, KeyRound, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Flag, GripVertical, AlertTriangle, Lock, KeyRound, Check, Palette } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getAppThemeAdmin, setAppThemeAdmin } from "@/lib/api";
+import { ThemeAppearanceCard } from "@/components/ThemeAppearanceCard";
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
@@ -966,6 +967,29 @@ export const PipelineStageManagement = ({ leading = null }) => {
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {/* Not a danger, so not in the Danger Zone: the look of the OS, behind the same password. */}
+      {devPassword && (
+        <Card data-testid="theme-appearance-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Palette className="h-4 w-4 text-sky-600" /> Theme Appearance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ThemeAppearanceCard
+              password={devPassword}
+              getSetting={getAppThemeAdmin}
+              saveSetting={async (pw, setting) => {
+                const r = await setAppThemeAdmin(pw, setting);
+                toast.success("Theme saved");
+                return r;
+              }}
+              onFailed={resetFailed}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {showAdd && (

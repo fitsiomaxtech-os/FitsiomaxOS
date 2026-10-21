@@ -54,6 +54,7 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 // lazy boards below: it is on screen for every role from the first paint, so splitting
 // it would only add a round trip to the one control that is always there.
 import { ClockWidget } from "@/components/ClockWidget";
+import { HeaderThemePicker } from "@/components/ThemeAppearance";
 import { SessionPaymentBell } from "@/components/SessionPaymentBell";
 import { displayPhone } from "@/lib/phone";
 
@@ -1018,6 +1019,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <ClockWidget />
+                <HeaderThemePicker userId={auth.user.id} />
                 <button type="button" onClick={() => setShowPhysioCalendar(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" data-testid="physio-mobile-header-calendar">
                   <CalendarDays className="h-5 w-5" />
                 </button>
@@ -1056,6 +1058,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <ClockWidget />
+                <HeaderThemePicker userId={auth.user.id} />
                 {/* Clients whose sessions have run out owing money. canDecide, because a
                     Branch Admin is one of the two roles that can act on it — the same
                     prop the desktop header hands it below. */}
@@ -1142,6 +1145,8 @@ export const CRMPage = ({ auth, onLogout }) => {
                   here that is about the person rather than about their work, and it is the
                   one they press twice a day whatever board they are on. */}
               <ClockWidget />
+              {/* Theme Appearance, only while Developer Access lets users choose. */}
+              <HeaderThemePicker userId={auth.user.id} />
               {/* A Head Physio's own calendar sits beside their profile rather than in the
                   board's tab row — it's a reference, not one of the lists they work. */}
               {showHeadPhysioBoard && (

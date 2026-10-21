@@ -741,6 +741,10 @@ export const getConsultationDurationRule = async (password) => (await api.get("/
 export const setConsultationDurationRule = async (password, enabled) => (await api.put("/admin/consultation-duration-rule", { enabled }, { headers: developerHeaders(password) })).data;
 export const getLeadSourceButton =async (password) => (await api.get("/admin/lead-source-visibility-button", { headers: developerHeaders(password) })).data;
 export const setLeadSourceButton = async (password, enabled) => (await api.put("/admin/lead-source-visibility-button", { enabled }, { headers: developerHeaders(password) })).data;
+// Theme Appearance: read by everyone (the login screen included), changed behind the password.
+export const getAppTheme = async () => (await api.get("/app-theme")).data;
+export const getAppThemeAdmin = async (password) => (await api.get("/admin/app-theme", { headers: developerHeaders(password) })).data;
+export const setAppThemeAdmin = async (password, setting) => (await api.put("/admin/app-theme", setting, { headers: developerHeaders(password) })).data;
 export const resetAllUsers = async (password) => (await api.post("/admin/reset-all-users", null, { params: { confirm: true }, headers: developerHeaders(password) })).data;
 
 // HR

@@ -4,6 +4,7 @@ import "@/App.css";
 import { LoginPage } from "@/pages/LoginPage";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import { apiMe, MY_PHOTO_CHANGED_EVENT } from "@/lib/api";
+import { AppThemeController } from "@/components/ThemeAppearance";
 
 /**
  * Everything behind the login screen is split out of the first download.
@@ -96,6 +97,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <AppThemeController userId={auth?.user?.id} />
       {/* One boundary around the table rather than one per route: only ever a single route
           is resolving, and five identical fallbacks would say the same thing five times. */}
       <Suspense fallback={<RouteFallback />}>

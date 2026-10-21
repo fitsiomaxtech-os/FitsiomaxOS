@@ -1,4 +1,29 @@
 /** @type {import('tailwindcss').Config} */
+const twColors = require("tailwindcss/colors");
+
+// Developer Access > Theme Appearance re-colours the whole OS by swapping CSS variables
+// (see src/lib/theme.js), so every scale the boards draw with reads its shade from one.
+// Background, text and border get their own variables because Dark cannot invert a shade
+// the same way for all three: slate-900 text has to turn light while a slate-900 button
+// behind white text has to stay dark. Each falls back to Tailwind's own value, so with no
+// theme stylesheet the app is pixel-for-pixel what it was.
+const THEMED_SCALES = ["slate", "gray", "sky", "blue", "indigo", "violet", "purple", "fuchsia", "pink", "rose", "red", "orange", "amber", "yellow", "lime", "green", "emerald", "teal", "cyan"];
+const toRgb = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+};
+const themedColors = (kind) => {
+  const out = {};
+  THEMED_SCALES.forEach((name) => {
+    out[name] = {};
+    Object.entries(twColors[name]).forEach(([shade, hex]) => {
+      out[name][shade] = `rgb(var(--${kind}-${name}-${shade}, ${toRgb(hex)}) / <alpha-value>)`;
+    });
+  });
+  return out;
+};
+const themedBg = { ...themedColors("bg"), white: "rgb(var(--bg-white, 255 255 255) / <alpha-value>)" };
+
 module.exports = {
     darkMode: ["class"],
     content: [
@@ -54,6 +79,11 @@ module.exports = {
   				'5': 'hsl(var(--chart-5))'
   			}
   		},
+  		backgroundColor: themedBg,
+  		gradientColorStops: themedBg,
+  		textColor: themedColors("tx"),
+  		borderColor: themedColors("bd"),
+  		divideColor: themedColors("bd"),
   		keyframes: {
   			'accordion-down': {
   				from: {

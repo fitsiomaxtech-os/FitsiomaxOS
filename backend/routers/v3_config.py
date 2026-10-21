@@ -1484,6 +1484,71 @@ async def v3_set_lead_source_button(
     return {"enabled": payload.enabled}
 
 
+# Theme Appearance -- the look of the whole OS, picked in Developer Access: Default, Dark,
+# or Multi (five colours set by hand). allow_user_choice puts a palette icon in the header
+# so each person can pick their own; that pick lives in their browser, not here.
+APP_THEME_ID = "app_theme"
+APP_THEME_MODES = ("default", "dark", "custom")
+APP_THEME_COLOR_KEYS = ("primary", "background", "surface", "text", "border")
+APP_THEME_DEFAULT_CUSTOM = {"primary": "#0284c7", "background": "#f8fafc", "surface": "#ffffff", "text": "#0f172a", "border": "#e2e8f0"}
+_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+class AppThemeInput(BaseModel):
+    mode: str
+    custom: Dict[str, str] = {}
+    allow_user_choice: bool = False
+
+
+async def _app_theme() -> dict:
+    row = await v3_col("app_settings").find_one({"id": APP_THEME_ID}, {"_id": 0}) or {}
+    custom = dict(APP_THEME_DEFAULT_CUSTOM)
+    custom.update({k: v for k, v in (row.get("custom") or {}).items() if k in APP_THEME_COLOR_KEYS and _HEX_COLOR.match(str(v))})
+    mode = row.get("mode") if row.get("mode") in APP_THEME_MODES else "default"
+    return {"mode": mode, "custom": custom, "allow_user_choice": bool(row.get("allow_user_choice", False))}
+
+
+@router.get("/app-theme")
+async def v3_get_app_theme():
+    """No sign-in needed: the login screen wears the theme too, and it is only colours."""
+    return await _app_theme()
+
+
+@router.get("/admin/app-theme")
+async def v3_get_app_theme_admin(_: V3UserOut = Depends(require_developer_password)):
+    return await _app_theme()
+
+
+@router.put("/admin/app-theme")
+async def v3_set_app_theme(
+    payload: AppThemeInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    if payload.mode not in APP_THEME_MODES:
+        raise HTTPException(status_code=400, detail="Theme must be Default, Dark or Multi")
+    custom = dict(APP_THEME_DEFAULT_CUSTOM)
+    for k in APP_THEME_COLOR_KEYS:
+        v = (payload.custom or {}).get(k)
+        if v is None:
+            continue
+        if not _HEX_COLOR.match(str(v)):
+            raise HTTPException(status_code=400, detail=f"{k} must be a colour like #1a2b3c")
+        custom[k] = str(v).lower()
+    await v3_col("app_settings").update_one(
+        {"id": APP_THEME_ID},
+        {"$set": {
+            "id": APP_THEME_ID,
+            "mode": payload.mode,
+            "custom": custom,
+            "allow_user_choice": payload.allow_user_choice,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return await _app_theme()
+
+
 @router.put("/admin/lead-source-visibility")
 async def v3_set_lead_source_visibility(
     payload: LeadSourceHiddenInput,
