@@ -30,6 +30,8 @@ import {
   UserX,
   Clock,
   Settings,
+  Timer,
+  Users,
   Dumbbell,
   Star,
   AlertCircle,
@@ -97,6 +99,8 @@ import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
+import { PhysioSessionSettings } from "@/components/branch/PhysioSessionSettings";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import MissedClassPanel from "@/components/branch/MissedClassPanel";
 import { PhysioAbsencePanel } from "@/components/PhysioAbsencePanel";
@@ -1061,6 +1065,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [consultationsSubTab, setConsultationsSubTab] = useState("head_physio");
   // Time Management's popup: the calendar profile it opens on, or null while shut.
   const [timeMgmtFor, setTimeMgmtFor] = useState(null);
+  // Which tab of that popup is up. Only the Physiotherapist Calendar's gear has more than
+  // Time Management: its Treatment Session Duration and Per slot sit beside it as tabs.
+  const [calendarSettingsTab, setCalendarSettingsTab] = useState("time");
   // Bumped as that popup shuts, so the calendar under it re-reads the shifts just changed.
   const [calendarEpoch, setCalendarEpoch] = useState(0);
   const [stageFilter, setStageFilter] = useState(null); // null = show all stages
@@ -1950,7 +1957,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The three calendar sub-tabs and the profile each one's Time Management roster opens on.
   const CALENDAR_PROFILES = { head_physio: "head_physio", physio: "physio", diet: "nutrition_coach" };
   const calendarProfile = CALENDAR_PROFILES[consultationsSubTab];
-  const openTimeManagement = () => setTimeMgmtFor(calendarProfile || "head_physio");
+  const openTimeManagement = () => { setCalendarSettingsTab("time"); setTimeMgmtFor(calendarProfile || "head_physio"); };
+  const CALENDAR_SETTINGS_TABS = [
+    { key: "time", label: "Time Management", short: "Time", icon: Clock },
+    { key: "duration", label: "Treatment Session Duration", short: "Duration", icon: Timer },
+    { key: "capacity", label: "Per Slot", short: "Per Slot", icon: Users },
+  ];
   // Blue, as on Activity Care > Zumba; shown only while one of the three calendars is open.
   const timeGear = (testid) => calendarProfile && (
     <button
@@ -2108,7 +2120,25 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <DialogTitle>Time Management</DialogTitle>
                 <DialogDescription>The branch's shift timings, and who works which shift.</DialogDescription>
               </DialogHeader>
-              {timeMgmtFor && <TimeManagementPanel branchId={branchId} initialProfileType={timeMgmtFor} lockProfile />}
+              {/* The physio's gear opens on tabs: the shifts, then the two settings its
+                  calendar header carries per physio, here for the whole floor at once. */}
+              {timeMgmtFor === "physio" && (
+                <div className="mb-4">
+                  <SegmentedTabs
+                    tabs={CALENDAR_SETTINGS_TABS}
+                    value={calendarSettingsTab}
+                    onChange={setCalendarSettingsTab}
+                    mobileCols={3}
+                    testid="calendar-settings-tabs"
+                  />
+                </div>
+              )}
+              {timeMgmtFor && (timeMgmtFor !== "physio" || calendarSettingsTab === "time") && (
+                <TimeManagementPanel branchId={branchId} initialProfileType={timeMgmtFor} lockProfile />
+              )}
+              {timeMgmtFor === "physio" && calendarSettingsTab !== "time" && (
+                <PhysioSessionSettings key={calendarSettingsTab} branchId={branchId} mode={calendarSettingsTab} />
+              )}
             </DialogContent>
           </Dialog>
           {/* The panel under the cards: hidden on a phone while the card list is up — the

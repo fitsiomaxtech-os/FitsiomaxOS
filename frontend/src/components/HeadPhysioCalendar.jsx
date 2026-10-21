@@ -34,6 +34,7 @@ import {
   setDoctorMeetLink,
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
+import { pickStoreMinutes } from "@/lib/sessionLength";
 import { ClockDurationDialog, durationLabel } from "@/components/ui/clock-time-input";
 import { CreamPicker } from "@/components/ui/cream-picker";
 import { announceShiftsChanged, gridTimesFor, hoursLabel, onShiftsChanged, shiftIdsOf } from "@/lib/shifts";
@@ -173,19 +174,10 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     // same store item a treatment session does until Diet gets its own.
     listStoreItems(undefined, isRecurring ? "session" : "consultation")
       .then((items) => {
-        // The same pick the booking popup's server makes (consultation_slot_minutes): a
-        // physiotherapy item before any other shelf, then the one Super Admin edited last,
-        // so the length published here is the length Branch Leads → Appointment offers.
-        const rank = (i) => [["", "physiotherapy"].includes(i.category || "") ? 1 : 0, i.updated_at || i.created_at || ""];
-        const configured = (items || [])
-          .filter((i) => Number(i.duration_minutes) > 0)
-          .sort((a, b) => {
-            const [pa, ta] = rank(a);
-            const [pb, tb] = rank(b);
-            return pb - pa || tb.localeCompare(ta);
-          })
-          .map((i) => i.duration_minutes)[0];
-        if (!cancelled && configured) setStoreDuration(Number(configured));
+        // The same pick the booking popup's server makes (consultation_slot_minutes), so
+        // the length published here is the length Branch Leads → Appointment offers.
+        const configured = pickStoreMinutes(items);
+        if (!cancelled && configured) setStoreDuration(configured);
       })
       .catch(() => { /* keep the fallback */ });
     return () => { cancelled = true; };

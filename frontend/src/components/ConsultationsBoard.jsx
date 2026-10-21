@@ -40,6 +40,7 @@ import { pdfJob, whatsappPdf } from "@/lib/pdf";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/printable";
 import { loadSession } from "@/lib/session";
 import { dateStampFull, endTime12h, slotRange12h, to12h } from "@/lib/time";
+import { pickStoreMinutes } from "@/lib/sessionLength";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { PortalLoginCreatedDialog } from "@/components/branch/PortalLoginCreatedDialog";
@@ -3270,7 +3271,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [pickerDate, setPickerDate] = useState(null); // "YYYY-MM-DD"
   const [bulkTime, setBulkTime] = useState(""); // "HH:MM" — the slot picker's bulk select
   const [bulkSkipSun, setBulkSkipSun] = useState(false);
-  const [sessionMinutes, setSessionMinutes] = useState(FALLBACK_SESSION_MINUTES);
+  const [storeSessionMinutes, setStoreSessionMinutes] = useState(FALLBACK_SESSION_MINUTES);
+  // How long this physio's sessions run: their own Treatment Session Duration, set on
+  // MANAGEMENT → Physiotherapist Calendar, else FITSIO STORE's. This picker used to read
+  // only the store, so a physio moved to 45 minutes still showed 30-minute ranges here.
+  const sessionMinutes = Number(physioCalendarData?.slot_duration) || storeSessionMinutes;
+  // A published slot keeps the length it was opened at, so a day opened at 30 minutes still
+  // reads 8:00 to 8:30 after the physio moves to 45 — saying 8:00 to 8:45 would overlap the
+  // 8:30 slot next to it.
+  const savedSlotMinutes = useMemo(() => Object.fromEntries(
+    (physioCalendarData?.slot_details || []).map((d) => [d.slot_time, Number(d.duration) || 0]),
+  ), [physioCalendarData]);
+  const minutesAt = (date, time) => savedSlotMinutes[`${date}T${time}`] || sessionMinutes;
 
   // Diet Appointment (Branch Admin only) — books the Diet Consultation.
   //
@@ -5824,8 +5836,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     let cancelled = false;
     listStoreItems(undefined, "session")
       .then((items) => {
-        const configured = (items || []).map((i) => i.duration_minutes).find((d) => Number(d) > 0);
-        if (!cancelled && configured) setSessionMinutes(Number(configured));
+        const configured = pickStoreMinutes(items);
+        if (!cancelled && configured) setStoreSessionMinutes(configured);
       })
       .catch(() => { /* keep the fallback */ });
     return () => { cancelled = true; };
@@ -6014,7 +6026,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         patient_confirmed: true,
         reason: manageReason.trim(),
       });
-      toast.success(`${booking.lead_name || "Booking"} moved to ${dayLabel(manageDate)} · ${slotRange12h(manageTime, sessionMinutes)}`);
+      toast.success(`${booking.lead_name || "Booking"} moved to ${dayLabel(manageDate)} · ${slotRange12h(manageTime, minutesAt(manageDate, manageTime))}`);
       closeSlotManager();
       await reloadPhysioCalendar();
     } catch (err) {
@@ -13948,7 +13960,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       <div className="max-h-28 space-y-1 overflow-y-auto text-xs" data-testid="cons-physio-sessions-list">
                         {treatmentPlan.map((p) => (
                           <p key={p.slot} className={isPaidSession(p.day) ? "text-emerald-700" : "text-rose-700"}>
-                            <b>Day {p.day}</b> · {dayLabel(p.date)} · {to12h(p.time)} – {endTime12h(p.time, sessionMinutes)}
+                            <b>Day {p.day}</b> · {dayLabel(p.date)} · {to12h(p.time)} – {endTime12h(p.time, minutesAt(p.date, p.time))}
                             <span className="ml-1 font-bold">{isPaidSession(p.day) ? "PAID" : "UNPAID"}</span>
                           </p>
                         ))}
@@ -14199,7 +14211,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 >
                                   <option value="">Pick a time…</option>
                                   {(physioSlotsByDate[pickerDate] || []).map((t) => (
-                                    <option key={t} value={t}>{slotRange12h(t, sessionMinutes)}</option>
+                                    <option key={t} value={t}>{slotRange12h(t, minutesAt(pickerDate, t))}</option>
                                   ))}
                                 </select>
                                 <span className="font-normal text-violet-800">every day from {dayLabel(pickerDate)}</span>
@@ -14242,7 +14254,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 }`}
                                 data-testid="cons-slot-day-fixed"
                               >
-                                <b>Day {planByDate[pickerDate].day}</b> is fixed for {to12h(planByDate[pickerDate].time)} – {endTime12h(planByDate[pickerDate].time, sessionMinutes)} ·{" "}
+                                <b>Day {planByDate[pickerDate].day}</b> is fixed for {to12h(planByDate[pickerDate].time)} – {endTime12h(planByDate[pickerDate].time, minutesAt(pickerDate, planByDate[pickerDate].time))} ·{" "}
                                 {isPaidSession(planByDate[pickerDate].day) ? "PAID" : "UNPAID"}.
                                 <span className="ml-1 font-normal">Pick another time to move it, or click it again to free the day.</span>
                               </p>
@@ -14303,7 +14315,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                           ? `${selectedLead.name} already has a ${ownClash} at ${to12h(time)} — move that first, or pick another time`
                                           : taken
                                           ? `Full · ${seats}/${slotCapacity} · ${slotOccupantNames(slot) || "—"}`
-                                          : `${slotRange12h(time, sessionMinutes)} · ${seats}/${slotCapacity} taken${seats ? ` · ${slotOccupantNames(slot)}` : ""}${picked ? ` · Day ${planByDate[pickerDate].day} · ${pickedPaid ? "PAID" : "UNPAID"} — click to unselect` : ""}`}
+                                          : `${slotRange12h(time, minutesAt(pickerDate, time))} · ${seats}/${slotCapacity} taken${seats ? ` · ${slotOccupantNames(slot)}` : ""}${picked ? ` · Day ${planByDate[pickerDate].day} · ${pickedPaid ? "PAID" : "UNPAID"} — click to unselect` : ""}`}
                                         data-testid={`cons-slot-pick-${time}`}
                                       >
                                         {/* Both ends of the hour, then the seat gauge on the
@@ -14317,7 +14329,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                             nowhere left to go, so it truncates rather than
                                             wrapping the tile to a third line. */}
                                         <p className={`flex items-center gap-1.5 pr-6 text-[12px] font-bold ${taken ? "text-amber-800" : picked ? (pickedPaid ? "text-emerald-900" : "text-rose-900") : "text-emerald-800"}`}>
-                                          <span className="min-w-0 truncate whitespace-nowrap">{slotRange12h(time, sessionMinutes)}</span>
+                                          <span className="min-w-0 truncate whitespace-nowrap">{slotRange12h(time, minutesAt(pickerDate, time))}</span>
                                           <SeatDots taken={seats} capacity={slotCapacity} />
                                         </p>
                                         {/* Under the time: what the hour is already spoken
@@ -14377,8 +14389,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                           type="button"
                                           onClick={() => openSlotManager(slot)}
                                           className={`absolute right-1 top-1 rounded p-1 transition hover:bg-white ${taken ? "text-amber-700" : picked ? (pickedPaid ? "text-emerald-800" : "text-rose-800") : "text-emerald-700"}`}
-                                          title={`Manage what is booked at ${slotRange12h(time, sessionMinutes)}`}
-                                          aria-label={`Manage bookings at ${slotRange12h(time, sessionMinutes)}`}
+                                          title={`Manage what is booked at ${slotRange12h(time, minutesAt(pickerDate, time))}`}
+                                          aria-label={`Manage bookings at ${slotRange12h(time, minutesAt(pickerDate, time))}`}
                                           data-testid={`cons-slot-manage-${time}`}
                                         >
                                           <Pencil className="h-3.5 w-3.5" />
@@ -14445,7 +14457,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-[13px] font-semibold text-slate-900 sm:text-[15px]" data-testid="cons-slot-manage-title">
-                        Booked at {slotRange12h(manageSlot.split("T")[1], sessionMinutes)}
+                        Booked at {slotRange12h(manageSlot.split("T")[1], minutesAt(...manageSlot.split("T")))}
                       </p>
                       <p className="mt-0.5 truncate text-[11px] text-slate-500">
                         {longDate(manageSlot.split("T")[0])} · {physioCalendarData?.doctor_name || "this physio"}
@@ -14523,7 +14535,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           Moving <b className="text-slate-800">{manageAction.booking.lead_name || "this patient"}</b>&apos;s{" "}
                           {COURSE_TAG[manageAction.booking.course] || "booking"}
                           {manageAction.booking.day_number ? ` (Day ${manageAction.booking.day_number})` : ""} off{" "}
-                          {slotRange12h(manageSlot.split("T")[1], sessionMinutes)} on {dayLabel(manageSlot.split("T")[0])}.
+                          {slotRange12h(manageSlot.split("T")[1], minutesAt(...manageSlot.split("T")))} on {dayLabel(manageSlot.split("T")[0])}.
                         </p>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -14561,7 +14573,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 const here = target === manageSlot;
                                 return (
                                   <option key={t} value={t} disabled={full || here}>
-                                    {slotRange12h(t, sessionMinutes)}
+                                    {slotRange12h(t, minutesAt(manageDate, t))}
                                     {here ? " — where it is now" : full ? " — full" : ` — ${slotCapacity - slotSeatsRaw(target)} free`}
                                   </option>
                                 );
@@ -14586,7 +14598,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <span className="text-[11px] leading-snug text-amber-800">
                             I have spoken to <b>{manageAction.booking.lead_name || "the patient"}</b> and they have agreed to
                             {manageTime && manageDate
-                              ? <> <b>{dayLabel(manageDate)} · {slotRange12h(manageTime, sessionMinutes)}</b>.</>
+                              ? <> <b>{dayLabel(manageDate)} · {slotRange12h(manageTime, minutesAt(manageDate, manageTime))}</b>.</>
                               : " the new time."}
                           </span>
                         </label>
@@ -14608,7 +14620,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           Declining <b className="text-slate-800">{manageAction.booking.lead_name || "this patient"}</b>&apos;s{" "}
                           {COURSE_TAG[manageAction.booking.course] || "booking"}
                           {manageAction.booking.day_number ? ` (Day ${manageAction.booking.day_number})` : ""} off{" "}
-                          {slotRange12h(manageSlot.split("T")[1], sessionMinutes)}.
+                          {slotRange12h(manageSlot.split("T")[1], minutesAt(...manageSlot.split("T")))}.
                         </p>
                         {/* What declining actually costs, per course, before it is done. A
                             paid-for day is refused this hour and keeps its place in the

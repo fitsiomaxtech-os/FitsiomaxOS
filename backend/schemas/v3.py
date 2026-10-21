@@ -226,6 +226,10 @@ class V3DoctorOut(BaseModel):
     # once. None means the default; a Head Physio is pinned to 1 whatever is stored.
     # See slot_capacity_of() in utils.py.
     slot_capacity: Optional[int] = None
+    # This physio's own Treatment Session Duration, in minutes. None means they follow the
+    # session item's length in FITSIO STORE. Declared so the calendar gear's settings can
+    # list every physio's length without opening each calendar.
+    slot_duration_minutes: Optional[int] = None
     # The expert's own video room, recorded on the calendar that publishes their days and
     # sent to the patient when one of those days is booked.
     #
