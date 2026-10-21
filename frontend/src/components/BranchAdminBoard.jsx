@@ -92,7 +92,7 @@ import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { TabDot, TabDotsProvider, useTabDotsState } from "@/components/ui/tab-dot";
 import { ScrollTopButton } from "@/components/ui/scroll-top-button";
-import { PhoneBackProvider, usePhoneBackState, useStageBack } from "@/components/ui/phone-back";
+import { PhoneBackProvider, PhoneExitConfirm, usePhoneBackState, useStageBack } from "@/components/ui/phone-back";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
 import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
@@ -1049,6 +1049,26 @@ function BulkDeleteLeadsModal({ leads, onClose, onDeleted, purge = false }) {
   );
 }
 
+// The tab the board was on, for when the phone's browser reloads a page it had put away
+// in the background -- it lands back on that tab's cards rather than on Branch Leads.
+// sessionStorage: one browser tab's, and gone with it, so a fresh visit still opens on
+// Branch Leads. Storage throws in private mode; the board just will not remember there.
+const BRANCH_VIEW_STORAGE_KEY = "fitsiomax.branch_admin_view";
+const readStoredBranchView = () => {
+  try {
+    return window.sessionStorage.getItem(BRANCH_VIEW_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+const writeStoredBranchView = (view) => {
+  try {
+    window.sessionStorage.setItem(BRANCH_VIEW_STORAGE_KEY, view);
+  } catch {
+    // As above.
+  }
+};
+
 // `roleLabel` / `onLogout` are for the phone bar's My Profile stop, which opens the page in
 // the board's place (so the bar stays under it) with Logout on its Security tab.
 export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = null, currentUser = null, canTransferBranch = false, roleLabel = "", onLogout }) => {
@@ -1060,7 +1080,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // open and ignores this.
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [activeView, setActiveView] = useState("pipeline");
+  const [activeView, setActiveView] = useState(() => (!embedded && readStoredBranchView()) || "pipeline");
+  useEffect(() => { if (!embedded) writeStoredBranchView(activeView); }, [embedded, activeView]);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [consultationsSubTab, setConsultationsSubTab] = useState("head_physio");
@@ -1951,6 +1972,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // other rather than being dropped -- and in VIEW_TABS order, which is what puts
   // Consultation between Leads and Review on the bar without a second list to keep in step.
   const onBottomBar = (key) => BOTTOM_NAV_KEYS.includes(key);
+  // A stored tab that no longer exists (renamed since) falls through to Branch Leads.
+  useEffect(() => {
+    if (!VIEW_TABS.some((t) => t.key === activeView)) setActiveView("pipeline");
+  }, [activeView]); // eslint-disable-line react-hooks/exhaustive-deps
   const bottomTabs = VIEW_TABS.filter((t) => onBottomBar(t.key));
   const moreTabs = VIEW_TABS.filter((t) => !onBottomBar(t.key));
 
@@ -3621,6 +3646,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           </div>
         </div>
       )}
+      {!embedded && <PhoneExitConfirm phoneBack={phoneBack} />}
     </div>
     </PhoneBackProvider>
     </TabDotsProvider>
