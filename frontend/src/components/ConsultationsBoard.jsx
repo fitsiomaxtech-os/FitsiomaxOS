@@ -9472,14 +9472,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const MarkOnlineButton = (
                   <Button
                     size="sm"
-                    className={`${courseMode === "online" ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-white text-sky-700 ring-1 ring-sky-200 hover:bg-sky-50"} shadow-sm ${ACT_BTN}`}
+                    className={`bg-orange-500 text-white shadow-sm hover:bg-orange-600 ${ACT_BTN}`}
                     onClick={() => setOnlineMenu({ canSwap: canSwapMode, canMark: canMarkMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
                     data-testid="cons-mark-online-menu"
                   >
                     <Video className="mr-1 h-3.5 w-3.5" />
                     {courseMode === "online" ? "Online" : "Mark Online"}
-                    {/* Once Online, the arrow bounces (1s cycle) to point at the menu. */}
-                    <ChevronDown className={`ml-1 h-3.5 w-3.5 ${courseMode === "online" ? "animate-bounce" : ""}`} />
+                    {/* Orange in both states, the arrow bouncing (1s cycle) to point at the menu. */}
+                    <ChevronDown className="ml-1 h-3.5 w-3.5 animate-bounce" />
                   </Button>
                 );
                 // The same menu on the Treatment Fee row before the fee is collected, filled
