@@ -201,17 +201,26 @@ code {
 .fee-flat [data-testid^="cons-fee-receipt"] svg {
   display: none !important;
 }
-/* ...and View Details and Payment Schedule are filled in their own colours, at the Inspect
-   button's 55%. */
+/* ...and View Details and Payment Schedule are filled in their own colours, at 75% like the
+   Appointment button (set in the JSX). */
 .fee-flat [data-testid="cons-case-record-view"] {
   background-color: #0284c7 !important; /* sky-600 */
   color: #fff !important;
-  opacity: 0.55;
+  opacity: 0.75;
 }
 .fee-flat [data-testid="cons-open-partial-schedule-sidebar"] {
   background-color: #475569 !important; /* slate-600 */
   color: #fff !important;
-  opacity: 0.55;
+  opacity: 0.75;
+}
+/* ...and every button down the right-hand side casts a shadow under its bottom edge only:
+   the negative spread pulls it in from the sides. */
+.fee-flat [data-testid="cons-open-appt-card"],
+.fee-flat [data-testid="cons-case-record-view"],
+.fee-flat [data-testid="cons-open-partial-schedule-sidebar"],
+.fee-flat [data-testid^="cons-fee-receipt"],
+.fee-flat [data-testid^="cons-fee-act-"] {
+  box-shadow: 0 4px 4px -2px rgba(0, 0, 0, 0.7) !important;
 }
 /* ...and its buttons down the right-hand side -- View Details, Payment Schedule, every
    Receipt and Collect -- are one size and end on one edge: the fee rows take the same 16px

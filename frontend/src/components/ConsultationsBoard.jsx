@@ -7981,11 +7981,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       type="button"
                       onClick={openApptCard}
                       disabled={loadingApptCard}
-                      className="ml-auto flex h-8 w-[104px] shrink-0 items-center justify-center rounded-[2px] bg-teal-600 text-xs font-semibold text-white opacity-[0.55] transition hover:bg-teal-700 sm:w-[130px]"
+                      className="ml-auto flex h-8 w-[104px] shrink-0 items-center justify-center rounded-[2px] bg-teal-600 text-xs font-semibold text-white opacity-[0.75] transition hover:bg-teal-700 sm:w-[130px]"
                       title="Open the appointment confirmation — print, send or download it again"
                       data-testid="cons-open-appt-card"
                     >
-                      {loadingApptCard ? "Opening..." : "Appointment Card"}
+                      {loadingApptCard ? "Opening..." : "Appointment"}
                     </button>
                   </div>
                 </section>
