@@ -2067,8 +2067,9 @@ const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun 
       {spell.sessions_assigned === 0 && (
         <p className="mt-0.5 text-[11px] italic text-slate-400">Replaced before any day was delivered.</p>
       )}
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200">
-        <div className={`h-full rounded-full ${current ? skin.bar : "bg-slate-400"}`} style={{ width: `${pct}%` }} />
+      {/* Square ends: rounded-none, not rounded-full. */}
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-none bg-slate-200">
+        <div className={`h-full rounded-none ${current ? skin.bar : "bg-slate-400"}`} style={{ width: `${pct}%` }} />
       </div>
       {(from || to) && (
         <p className="mt-1.5 text-[10px] text-slate-500">
@@ -9897,15 +9898,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               : treatmentFeePaid ? "text-emerald-600" : "text-amber-600"
                           }
                         />
-                        <PanelRow
-                          label="Assigned Physio"
-                          value={selectedLead.assigned_physio_name || "Not assigned"}
-                          tone={treatmentAssigned ? "" : "text-amber-700"}
-                        />
-                        {/* The two numbers this card is opened for. Sessions Completed carries
-                            what is left rather than making the reader subtract, because "4
-                            left" is the thing the branch acts on. */}
-                        <PanelRow label="Total Sessions" value={totalCourseSessions || "—"} />
+                        {/* No Assigned Physio or Total Sessions rows: the physio card below
+                            names the physio, and Sessions Completed already reads "14 of 35".
+                            It carries what is left rather than making the reader subtract,
+                            because "4 left" is the thing the branch acts on. */}
                         <PanelRow
                           label="Sessions Completed"
                           value={`${courseCompleted} of ${totalCourseSessions || "—"}`}
@@ -9954,39 +9950,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </div>
                       )}
 
-                      {/* The same two numbers as one length, so how far in the patient is
-                          reads at a glance instead of by subtraction. */}
-                      {totalCourseSessions > 0 && (
-                        <div data-testid="cons-physio-assign-progress">
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                            <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${coursePct}%` }} />
-                          </div>
-                          <p className="mt-1 text-[10px] font-medium text-slate-500">
-                            {coursePct}% of the course delivered
-                            {courseRemaining > 0 ? ` · ${courseRemaining} session${courseRemaining === 1 ? "" : "s"} to go` : ""}
-                          </p>
-                        </div>
-                      )}
+                      {/* No green course bar here: the physio card's own bar shows the same. */}
                     </div>
 
                     <div className="min-w-0 space-y-2">
                       {/* No heading over this column (Delivered By / Next Step / Physio
-                          History): the physio cards and the button say it. Only the mode
-                          the days still to come run in -- what the Swap below changes --
-                          shown wherever there is a package to run in one. */}
-                      {selectedLead.session_package_id && (
-                      <div className="flex items-center justify-end gap-2">
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                              courseMode === "online" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"
-                            }`}
-                            data-testid="cons-physio-mode-badge"
-                          >
-                            {courseMode === "online" ? "Online" : "Offline"}
-                          </span>
-                      </div>
-                      )}
-
+                          History) and no Online/Offline tag: the physio cards and the
+                          buttons say it. */}
                       {/* Who delivered it, in the order the patient had them: every physio
                           before this one, then this one. A reassignment leaves the previous
                           physio's completed days behind it, and the branch needs to see where
