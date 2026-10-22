@@ -30,7 +30,6 @@ export const ConsultationReassignModal = ({ branches = [], defaultBranchId, onCl
     : (branches[0]?.id || "");
   const [branchId, setBranchId] = useState(initialBranch);
   const [leads, setLeads] = useState([]);
-  const [saIds, setSaIds] = useState(() => new Set());
   const [consultants, setConsultants] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -54,7 +53,6 @@ export const ConsultationReassignModal = ({ branches = [], defaultBranchId, onCl
         if (cancelled) return;
         // A cancelled consultation has no booking left to hand to anybody.
         setLeads((board?.leads || []).filter((l) => l.head_consultation_stage !== "Cancel"));
-        setSaIds(new Set(board?.super_admin_consultant_ids || []));
         const rows = staff?.consultants || [];
         setConsultants(rows);
         // Open on the reader: taking a patient yourself is the common case.
@@ -104,7 +102,6 @@ export const ConsultationReassignModal = ({ branches = [], defaultBranchId, onCl
       setLeads((prev) => prev.map((l) => (movedIds.has(l.id)
         ? { ...l, assigned_physio_id: res.consultant.id, assigned_physio_name: res.consultant.full_name }
         : l)));
-      if (res?.consultant?.is_super_admin) setSaIds((prev) => new Set([...prev, res.consultant.id]));
       setPicked(new Set());
       if (n && onDone) onDone();
     } catch (e) {
@@ -209,9 +206,6 @@ export const ConsultationReassignModal = ({ branches = [], defaultBranchId, onCl
                         <td className="px-3 py-2.5 text-xs text-slate-700">
                           <span className="inline-flex items-center gap-1.5">
                             {l.assigned_physio_name || "—"}
-                            {saIds.has(l.assigned_physio_id) && (
-                              <span className="rounded-[4px] border border-slate-300 bg-slate-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-slate-600">Head Chief</span>
-                            )}
                             {alreadyThere && <span className="text-[10px] font-medium text-sky-600">· already with them</span>}
                           </span>
                         </td>

@@ -2225,26 +2225,6 @@ const buildRehabProgress = (rows, lead) => {
   };
 };
 
-/**
- *  The tag on a consultation a Super Admin is taking themselves.
- *
- *  A Super Admin has no consultant record until they need one, so anybody they consult is
- *  booked against a record that did not exist when the branch was set up. Left unmarked,
- *  that row is indistinguishable from a hire's — the same name in the same column — and
- *  "who saw this patient" is a question the Consultant column exists to answer.
- *
- *  Deliberately quiet: a slate outline, not a colour that competes with the stage pills
- *  beside it. It says who, not how urgent.
- */
-const SuperAdminTag = ({ className = "" }) => (
-  <span
-    className={`ml-1.5 shrink-0 whitespace-nowrap rounded-[4px] border border-slate-300 bg-slate-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-slate-600 ${className}`}
-    title="Consultation taken by the Head Chief"
-    data-testid="super-admin-tag"
-  >
-    Head Chief
-  </span>
-);
 
 
 /** Pick a consultation slot the way the branch actually has to pick one: a date, then a
@@ -2533,7 +2513,6 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold text-slate-700">
                         {doc.full_name}
-                        {doc.is_super_admin && <SuperAdminTag />}
                         {/* Named rather than hidden. Keeping the same consultant is a
                             legitimate reschedule — the patient is the one who could not
                             make the day — and a list that quietly left them out would
@@ -2695,7 +2674,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [rxLeadIds, setRxLeadIds] = useState(() => new Set());
   // Which consultants on this board are a Super Admin taking consultations. Held beside
   // the leads, not on them — see super_admin_consultant_ids on the endpoint.
-  const [saConsultantIds, setSaConsultantIds] = useState(() => new Set());
   // Each consultant's own branch by expert id, for the Consultant Branch column.
   const [consultantBranches, setConsultantBranches] = useState({});
   const [consultantPhones, setConsultantPhones] = useState({});
@@ -3364,7 +3342,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         if (!cancelled) {
           setBoard(res);
           setRxLeadIds(new Set(res?.rx_lead_ids || []));
-          setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
           setConsultantBranches(res?.consultant_branches || {});
       setConsultantPhones(res?.consultant_phones || {});
         }
@@ -3385,7 +3362,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       const res = await getConsultationsBoard(branchId, isConsultant ? "head_consultation" : undefined, mine, headChief);
       setBoard(res);
       setRxLeadIds(new Set(res?.rx_lead_ids || []));
-      setSaConsultantIds(new Set(res?.super_admin_consultant_ids || []));
       setConsultantBranches(res?.consultant_branches || {});
       setConsultantPhones(res?.consultant_phones || {});
     } catch (err) {
@@ -7260,7 +7236,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       {l.assigned_physio_name && (
                         <p className="flex min-w-0 items-center text-[10px] text-slate-400">
                           <span className="truncate">Expert: {l.assigned_physio_name}</span>
-                          {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
                         </p>
                       )}
                     </>
@@ -7309,7 +7284,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {l.assigned_physio_name && (
                     <span className="inline-flex items-center">
                       · {l.assigned_physio_name}
-                      {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
                     </span>
                   )}
                   {l.appointment_date && (
@@ -7506,7 +7480,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <td className="px-4 py-3 align-middle leading-5 text-slate-600" title={l.assigned_physio_name}>
                       <span className={`flex min-w-0 items-center ${feeTable ? "justify-center" : ""}`}>
                         <span className="truncate">{l.assigned_physio_name || "—"}</span>
-                        {saConsultantIds.has(l.assigned_physio_id) && <SuperAdminTag />}
                       </span>
                     </td>
                     {showConsultantContact && (() => {
@@ -7849,7 +7822,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         weight instead of the colour. */}
                     <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Expert</span>
                     <span className="truncate font-semibold text-slate-800">{selectedLead.assigned_physio_name}</span>
-                    {saConsultantIds.has(selectedLead.assigned_physio_id) && <SuperAdminTag className="ml-0" />}
                   </p>
                 )}
                 </div>

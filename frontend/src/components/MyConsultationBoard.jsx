@@ -642,8 +642,7 @@ export const MyConsultationBoard = ({ user, search = "", onSearchChange, branche
 
       {/* Whose book this is, said once at the top. The page is named after the reader
           and lists only their patients now, so the name is confirmation rather than a
-          warning — and the tag beside it is the same one their rows wear downstream,
-          so the reader recognises their own work on a Branch Admin's screen too. */}
+          warning. The name alone, no Head Chief tag: it was taken off every screen. */}
       {resolved?.is_mine && resolved.consultant_name && (
         <div
           className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3"
@@ -651,11 +650,6 @@ export const MyConsultationBoard = ({ user, search = "", onSearchChange, branche
         >
           <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
           <span className="text-xs font-semibold text-slate-700">{resolved.consultant_name}</span>
-          {resolved.is_super_admin && (
-            <span className="rounded-[4px] border border-slate-300 bg-slate-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-slate-600">
-              Head Chief
-            </span>
-          )}
         </div>
       )}
 
