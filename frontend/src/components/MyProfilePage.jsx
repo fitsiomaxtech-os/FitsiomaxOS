@@ -1426,15 +1426,16 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             </h2>
           </div>
         </div>
-        {/* Full width on a phone, where the bar is its own row of four columns; sized to
-            its labels from sm up. It used to be pinned to w-96, which fitted three tabs
-            and cut all four down to "Atte…", "Tim…", "My …", "Sec…" — a tab clipped to
-            four characters is not a tab. shrink-0 keeps the greeting beside it from
-            squeezing it back into an ellipsis; the row wraps instead. */}
-        <div className="w-full sm:w-auto sm:shrink-0" data-testid="my-profile-tabs-wrap">
+        {/* Full width on a phone, where the bar is its own row. From sm up it stretches
+            over everything right of the name, the tabs sharing it equally. Sized to its
+            labels it still came out "Monthly …" and "Attendan…"; stretched, every tab has
+            room for its whole label. The 48rem basis is what five full labels need: on a
+            window narrower than name plus that, the row wraps and the bar takes a row of
+            its own rather than squeezing the labels back into an ellipsis. */}
+        <div className="w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:basis-[48rem]" data-testid="my-profile-tabs-wrap">
           {phoneBar
-            ? <SegmentedTabs tabs={phoneTabs} value={tab} onChange={setTab} testid="my-profile-tabs" fit />
-            : <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} fit />}
+            ? <SegmentedTabs tabs={phoneTabs} value={tab} onChange={setTab} testid="my-profile-tabs" />
+            : <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} />}
         </div>
       </div>
 
