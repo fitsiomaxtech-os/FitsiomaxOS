@@ -2034,7 +2034,9 @@ const SPELL_TONE = {
  * a rehab spell drawn in the treatment's violet reads as a treatment spell at a glance,
  * which is the one mistake this component must not invite.
  */
-const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun = "sessions" }) => {
+// `modeTag` (Physio Assign only): the current spell's chip names the mode its days run in --
+// "Offline" or "Online" -- in place of "Current", and the card and chip take square corners.
+const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun = "sessions", modeTag = null }) => {
   const current = !!spell.is_current;
   const skin = SPELL_TONE[tone] || SPELL_TONE.violet;
   const total = packageSessions || spell.sessions_assigned || 0;
@@ -2043,15 +2045,15 @@ const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun 
   const to = spell.ended_at ? dayLabel(String(spell.ended_at).slice(0, 10)) : null;
   return (
     <div
-      className={`rounded-lg border p-2.5 ${current ? skin.card : "border-slate-200 bg-slate-50"}`}
+      className={`${modeTag ? "rounded-[2px]" : "rounded-lg"} border p-2.5 ${current ? skin.card : "border-slate-200 bg-slate-50"}`}
       data-testid={testid}
     >
       <div className="flex items-center justify-between gap-2">
         <p className={`min-w-0 truncate text-sm font-semibold ${current ? skin.name : "text-slate-600"}`} title={spell.physio_name}>
           {spell.physio_name || "Unknown physio"}
         </p>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${current ? skin.chip : "bg-slate-200 text-slate-600"}`}>
-          {current ? "Current" : "Previous"}
+        <span className={`shrink-0 ${modeTag ? "rounded-[2px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${current ? skin.chip : "bg-slate-200 text-slate-600"}`} data-testid={current && modeTag ? "cons-physio-mode-badge" : undefined}>
+          {current ? (modeTag || "Current") : "Previous"}
         </span>
       </div>
       <p className="mt-1 text-[11px] text-slate-600">
@@ -9976,6 +9978,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               spell={physioProgress.current}
                               packageSessions={totalCourseSessions}
                               testid="cons-physio-spell-current"
+                              modeTag={courseMode === "online" ? "Online" : "Offline"}
                             />
                           )}
                         </div>
