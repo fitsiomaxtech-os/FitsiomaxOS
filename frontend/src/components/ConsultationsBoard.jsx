@@ -1386,25 +1386,6 @@ const DueDot = ({ testid }) => (
   />
 );
 
-/**
- * What was knocked off this patient's Consultation Fee, or null if nothing was.
- *
- * Taken from the lead itself — the listed price against what was actually collected. The
- * activity trail carries an explicit discount_amount, but a lead row never loads its
- * activities, and by construction the two are the same figure.
- *
- * Null rather than zero for a fee paid in full, so the column can show a dash instead of
- * "Rs.0" on the majority of rows. A negative gap means more than the listed fee came in,
- * which is not a discount and is left out.
- */
-const consultationDiscount = (l) => {
-  const listed = Number(l.package_price);
-  const paid = Number(l.package_paid);
-  if (!Number.isFinite(listed) || !Number.isFinite(paid) || listed <= 0) return null;
-  const off = Math.round((listed - paid) * 100) / 100;
-  return off > 0 ? { off, pct: (off / listed) * 100 } : null;
-};
-
 // Patient No. is the column all four sets were re-cut around. It was the narrowest thing
 // on the table — six to eight per cent — and a patient number is a fixed-width mono string
 // of about fifteen characters, so every row on every stage read "ANN-260831-0…". A record
@@ -1693,6 +1674,38 @@ const ROW_FEES = {
     noneHint: "No Diet Chart has been recommended — there is no chart fee to collect",
     tone: "bg-orange-500 text-white hover:bg-orange-600",
   },
+};
+
+/**
+ * What was knocked off one of this patient's fees, or null if nothing was.
+ *
+ * Asked of the fee the open tab is about. It used to read the Consultation Fee on every
+ * tab, so the Treatment tab's Discount column reported the consultation's discount beside
+ * the Treatment Fee — a dash against a treatment sold at a discount, or a consultation
+ * discount printed against a treatment that had none.
+ *
+ * Read off the fee's own payment details, where every collection and installment writes
+ * the discount it agreed. Price less paid is no good for the other fees: a short collection
+ * leaves a balance on a schedule, and that gap is money still owed, not money let go. The
+ * Consultation Fee falls back to that gap for rows collected before the figure was kept.
+ *
+ * Null rather than zero for a fee paid in full, so the column can show a dash instead of
+ * "Rs.0" on the majority of rows.
+ */
+const feeDiscount = (l, fee = "consultation") => {
+  const spec = ROW_FEES[fee];
+  if (!spec) return null;
+  const paid = Number(spec.paid(l)) || 0;
+  let off = Number(l[spec.details]?.discount_amount) || 0;
+  const owing = (l[spec.details]?.installments || []).some((i) => !i.paid);
+  if (off <= 0 && fee === "consultation" && !owing) {
+    const listed = Number(spec.price(l));
+    if (Number.isFinite(listed) && listed > 0 && spec.paid(l) != null) off = listed - paid;
+  }
+  off = Math.round(off * 100) / 100;
+  if (off <= 0) return null;
+  const listed = Number(spec.price(l)) > 0 ? Number(spec.price(l)) : paid + off;
+  return { off, listed, paid, pct: (off / listed) * 100 };
 };
 
 // The branch pipeline is Consultation Booked -> Consultation Visit -> Fee Collected ->
@@ -3875,7 +3888,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       ...(isFeeStage ? [
         { header: `${activeFee.label} Fee`, xlsx: 16, align: "right", money: true, get: (l) => (activeFee.paid(l) > 0 ? activeFee.paid(l) : "Not collected") },
         { header: "Mode", xlsx: 10, get: (l) => (activeFee.paid(l) > 0 ? String(activeFee.mode(l) || "").toUpperCase() : "") },
-        { header: "Discount", xlsx: 14, get: (l) => { const d = consultationDiscount(l); return d ? `Rs.${d.off.toLocaleString("en-IN")} (${d.pct.toFixed(0)}%)` : ""; } },
+        { header: "Discount", xlsx: 14, get: (l) => { const d = feeDiscount(l, activeFee.key); return d ? `Rs.${d.off.toLocaleString("en-IN")} (${d.pct.toFixed(0)}%)` : ""; } },
         { header: "Total", xlsx: 12, align: "right", money: true, get: (l) => totalPaid(l) },
       ] : []),
       ...(withStageFee ? [
@@ -7552,13 +7565,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </td>
                     )}
                     {showDiscountColumn && (() => {
-                      const d = consultationDiscount(l);
+                      const d = feeDiscount(l, activeFee.key);
                       return (
-                        <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs ${tdAlign}`}>
+                        <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs ${tdAlign}`} data-testid={`cons-discount-${activeFee.key}-${l.id}`}>
                           {d ? (
                             <span
                               className="inline-flex items-center rounded-[5px] border border-amber-200 bg-amber-50 px-2 py-0.5 align-middle font-semibold text-amber-700"
-                              title={`Listed Rs.${Number(l.package_price).toLocaleString("en-IN")}, collected Rs.${Number(l.package_paid).toLocaleString("en-IN")}`}
+                              title={`${activeFee.label} listed Rs.${d.listed.toLocaleString("en-IN")}, discount Rs.${d.off.toLocaleString("en-IN")}`}
                             >
                               Rs.{d.off.toLocaleString("en-IN")} · {d.pct.toFixed(0)}%
                             </span>
