@@ -55,6 +55,9 @@ export const StatTile = ({
   const phoneArrow = arrow === "phone";
   const deskArrow = arrow === "desk";
   const fullArrow = !!arrow && !phoneArrow;
+  // The small phone chevron: a phone-only arrow card, or a compact arrow card, whose
+  // full-size chevron steps out below sm for want of room.
+  const phoneChevron = phoneArrow || (fullArrow && compact && !deskArrow);
   // What the phone drops: the disc and icon under `compact` or a phone-only arrow.
   const phoneHidden = compact || phoneArrow ? "hidden sm:block" : "";
   const Tag = onClick ? "button" : "div";
@@ -92,7 +95,7 @@ export const StatTile = ({
       )}
       {/* The phone's own chevron. On a compact card it is a size down and tucked into the
           padding, so a nine-letter label like COMPLETED still fits on one line beside it. */}
-      {phoneArrow && !corner && (
+      {phoneChevron && !corner && (
         <ChevronRight aria-hidden className={`absolute text-slate-400 sm:hidden ${compact ? "right-1.5 top-2 h-3 w-3" : "right-2.5 top-2.5 h-3.5 w-3.5"}`} />
       )}
       {/* The right padding keeps a long label out from under the icon; the figure shrinks
@@ -109,9 +112,9 @@ export const StatTile = ({
           that same reserve plus the 30px the control is inset by below — the two move
           together or the label slides under the thing the space was kept for. */}
       <p className={`font-bold uppercase leading-tight tracking-wider text-slate-500 sm:text-[11px] ${compact ? "text-[9px] tracking-wide" : "text-[10px]"} ${
-        corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? `break-words ${phoneArrow ? "pr-3" : "pr-0"} sm:pr-9` : `break-words ${deskArrow ? "pr-0" : "pr-7"} sm:pr-9`
+        corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? `break-words ${phoneChevron ? "pr-3" : "pr-0"} sm:pr-9` : `break-words ${deskArrow ? "pr-0" : "pr-7"} sm:pr-9`
       }`}>{label}</p>
-      <p className={`mt-1 font-extrabold sm:text-2xl ${compact && !phoneArrow ? "text-base" : "text-xl"}`} style={{ color }}>{value}</p>
+      <p className={`mt-1 font-extrabold sm:text-2xl ${compact && !phoneChevron ? "text-base" : "text-xl"}`} style={{ color }}>{value}</p>
       {sub && <p className={`mt-0.5 leading-tight text-slate-400 sm:text-[10px] ${compact ? "text-[8px]" : "text-[10px]"} ${phoneArrow ? "hidden sm:block" : ""}`}>{sub}</p>}
     </Tag>
   );
