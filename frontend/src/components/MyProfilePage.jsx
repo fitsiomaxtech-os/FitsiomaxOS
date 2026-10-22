@@ -1412,12 +1412,12 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
     <div className="space-y-4" data-testid="my-profile-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className={`min-w-0 items-center gap-3 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}>
-          {/* Back as a square chevron, the month bar's own arrow. The name that sat beside
+          {/* Back as a bare chevron, no box round it. The name that sat beside
               it is gone: the header above already says whose page this is. */}
           <button
             type="button"
             onClick={onBack}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
+            className="flex h-11 w-8 shrink-0 items-center justify-center text-slate-600 hover:text-slate-900"
             aria-label="Back"
             title="Back"
             data-testid="my-profile-back"
