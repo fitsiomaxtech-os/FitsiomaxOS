@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatTile } from "@/components/ui/stat-tile";
 import { LedgerCard } from "@/components/ui/ledger-card";
+import { SummaryTile } from "@/components/ui/summary-tile";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -155,6 +156,9 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  *    the appointment as "Sat, 12 Sept - 3:15 PM" rather than stacked.
  *  - `branchColumn` — that table gains Patient Branch: a Consultant working several branches
  *    reads all of them in one list.
+ *  - `summaryCards` — the summary cards drawn as Records > Vendor Records' card (ui/summary-tile
+ *    with its arrow): sentence-case label, slate figure, chevron in the corner, the picked one
+ *    tinted in its colour. The Consultant's own board wears it. The row is desk-only anyway.
  */
 /**
  * `headChief` — the board read as Branch Admin's Sumaiya Consultations tab: the consultations
@@ -168,7 +172,7 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * as the host's grey list cards instead, and a tap opens that list on its own screen with a
  * back bar above it, like the host's stage stacks.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false }) => {
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, summaryCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   // phoneStack only: a work tab's list is open on the phone, rather than the card list.
   const [phoneListOpen, setPhoneListOpen] = useState(false);
@@ -738,6 +742,24 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                       testid={`hp-work-tab-${t.key}`}
                       corner={t.key === "all" ? allKindFilter(workTab === "all") : undefined}
                     />
+                  ) : summaryCards ? (
+                    // SummaryTile is one button, so All's filter sits beside it over the top
+                    // line rather than inside it, clear of the chevron.
+                    <div className="relative h-full">
+                      <SummaryTile
+                        label={t.label}
+                        value={n}
+                        sub={sub}
+                        arrow
+                        color={t.color}
+                        active={workTab === t.key}
+                        onClick={() => setWorkTab(t.key)}
+                        testid={`hp-work-tab-${t.key}`}
+                      />
+                      {t.key === "all" && (
+                        <div className="absolute right-10 top-3 z-10 sm:top-3.5">{allKindFilter(false)}</div>
+                      )}
+                    </div>
                   ) : (
                     <StatTile
                       label={t.label}
