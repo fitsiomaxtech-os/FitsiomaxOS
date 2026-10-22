@@ -185,7 +185,7 @@ code {
     }
 }
 
-/* Branch Admin > Consultation: the Overview tab of a patient at Fee Collected is drawn flat --
+/* Branch Admin > Consultation: the Overview tab of a patient at Consultation Visit or Fee Collected is drawn flat --
    no borders, 2px corners, and its buttons (View Details, Payment Schedule, Receipt) carry no
    icon. Round things (the step numbers and ticks) stay round. */
 .fee-flat,

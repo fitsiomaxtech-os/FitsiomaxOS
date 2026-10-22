@@ -1418,6 +1418,10 @@ const COLS_WITH_ACTION = {
   action: "w-[11%]",
 };
 
+// The stages whose popup is drawn in the Fee Collected style: a one-row header, the
+// Appointment row in the Overview, and the flat .fee-flat buttons (index.css).
+const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected"];
+
 /**
  * The four fees a patient can pay, each collected at its own point and stored separately.
  *
@@ -7805,9 +7809,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 drops under the start of its line and lines up on the left with it, rather
                 than hanging off the right edge on a row of its own. */}
             <div className="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
-              {/* Fee Collected: one row -- name, patient number, phone, no icons. The expert
-                  and the appointment's day are left to the Overview below it. */}
-              {selectedLead.consultation_stage === "Fee Collected" ? (
+              {/* Consultation Visit and Fee Collected: one row -- name, patient number, phone,
+                  no icons. The expert and the appointment's day are left to the Overview below it. */}
+              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? (
               <div className="min-w-0 flex-1 self-center">
                 <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
@@ -7949,13 +7953,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   the finding costs two lines rather than four cards, reading it first no
                   longer costs the panel its place on the screen. */}
               {detailTab === "overview" && (
-              // Fee Collected draws its Overview flat: no borders, 2px corners, and no icons
-              // on its buttons -- see .fee-flat in index.css.
-              <div className={`flex flex-col gap-3 ${selectedLead.consultation_stage === "Fee Collected" ? "fee-flat" : ""}`}>
-              {/* Fee Collected: the Appointment Card comes down out of the header onto a row
-                  of its own, drawn like Consultation Record under it, so its button sits in
-                  the same column as View Details and the fee buttons. */}
-              {selectedLead.consultation_stage === "Fee Collected" && selectedLead.appointment_date && (
+              // Consultation Visit and Fee Collected draw their Overview flat: no borders, 2px
+              // corners, and no icons on its buttons -- see .fee-flat in index.css.
+              <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""}`}>
+              {/* Consultation Visit and Fee Collected: the Appointment Card comes down out of
+                  the header onto a row of its own, drawn like Consultation Record under it, so
+                  its button sits in the same column as View Details and the fee buttons. */}
+              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) && selectedLead.appointment_date && (
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="cons-appt-record">
                   <div className="flex w-full items-center gap-2 px-4 py-2.5">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
