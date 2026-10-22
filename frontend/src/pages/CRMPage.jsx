@@ -525,10 +525,11 @@ export const CRMPage = ({ auth, onLogout }) => {
   // tabs inside it — a title claiming one master view over the lot would name the
   // smaller part of what is on screen. Physiotherapist is named for the clinician, the
   // same as Consultant. Accountant is named for the person too, asked for on 2026-09-28.
+  // Super Admin is plain "Super Admin" too, asked for on 2026-10-22.
   //
   // All of them are printed as they are written — a board title in full caps reads as
   // shouting where every other board is sentence case.
-  const isPlainTitle = isHeadPhysioRole(role) || isPhysioRole(role) || isDietRole(role) || isBranchAdminRole(role) || role === "business_dev" || role === "accountant";
+  const isPlainTitle = isHeadPhysioRole(role) || isPhysioRole(role) || isDietRole(role) || isBranchAdminRole(role) || role === "business_dev" || role === "accountant" || role === "super_admin";
   const boardTitle = isPlainTitle
     ? roleLabel
     // Sales Head gets the same title as Pre-Sales, not "Sales Head Master View" — it's the
