@@ -13,8 +13,11 @@ import { ChevronRight } from "lucide-react";
  * top-right, so a strip that wants to match the branch's other summary strips (Records >
  * Vendor Records) reads as the same card. Opt-in so the finance pages keep the 2px card
  * they were drawn with.
+ *
+ * `filled` paints the picked card solid in its colour with white text and chevron (the
+ * ledger card's pick) instead of the light tint. Opt-in for the same reason.
  */
-export const SummaryTile = ({ label, value, sub, color = "#0284c7", active = false, onClick, testid, valueClassName = "text-slate-900", arrow = false }) => (
+export const SummaryTile = ({ label, value, sub, color = "#0284c7", active = false, onClick, testid, valueClassName = "text-slate-900", arrow = false, filled = false }) => (
   <button
     type="button"
     onClick={onClick}
@@ -25,12 +28,12 @@ export const SummaryTile = ({ label, value, sub, color = "#0284c7", active = fal
         ? "shadow-[0_4px_14px_-4px_rgba(16,24,40,0.16)]"
         : "bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:bg-slate-50/60"
     }`}
-    style={active ? { borderColor: color, backgroundColor: `${color}14` } : undefined}
+    style={active ? { borderColor: color, backgroundColor: filled ? color : `${color}14` } : undefined}
   >
-    <p className={`truncate text-[11px] transition-colors sm:text-xs ${arrow ? "pr-6 sm:pr-7" : ""} ${active ? "font-semibold text-slate-900" : "font-medium text-slate-500"}`}>{label}</p>
-    <p className={`mt-1 text-base font-semibold tabular-nums tracking-tight sm:text-[18px] sm:leading-6 ${valueClassName}`}>{value}</p>
-    {sub ? <p className="mt-0.5 truncate text-[10px] leading-tight text-slate-400 sm:text-[11px]">{sub}</p> : null}
-    {arrow && <ChevronRight aria-hidden className="absolute right-3 top-3 h-3.5 w-3.5 text-slate-400 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4" />}
+    <p className={`truncate text-[11px] transition-colors sm:text-xs ${arrow ? "pr-6 sm:pr-7" : ""} ${active ? `font-semibold ${filled ? "text-white" : "text-slate-900"}` : "font-medium text-slate-500"}`}>{label}</p>
+    <p className={`mt-1 text-base font-semibold tabular-nums tracking-tight sm:text-[18px] sm:leading-6 ${active && filled ? "text-white" : valueClassName}`}>{value}</p>
+    {sub ? <p className={`mt-0.5 truncate text-[10px] leading-tight sm:text-[11px] ${active && filled ? "text-white/90" : "text-slate-400"}`}>{sub}</p> : null}
+    {arrow && <ChevronRight aria-hidden className={`absolute right-3 top-3 h-3.5 w-3.5 sm:right-3.5 sm:top-3.5 sm:h-4 sm:w-4 ${active && filled ? "text-white" : "text-slate-400"}`} />}
   </button>
 );
 

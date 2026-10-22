@@ -158,7 +158,8 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  *    reads all of them in one list.
  *  - `summaryCards` — the summary cards drawn as Records > Vendor Records' card (ui/summary-tile
  *    with its arrow): sentence-case label, slate figure, chevron in the corner, the picked one
- *    tinted in its colour. The Consultant's own board wears it. The row is desk-only anyway.
+ *    filled in its colour, and no caption under the figure. The Consultant's own board wears
+ *    it. The row is desk-only anyway.
  */
 /**
  * `headChief` — the board read as Branch Admin's Sumaiya Consultations tab: the consultations
@@ -749,15 +750,15 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                       <SummaryTile
                         label={t.label}
                         value={n}
-                        sub={sub}
                         arrow
+                        filled
                         color={t.color}
                         active={workTab === t.key}
                         onClick={() => setWorkTab(t.key)}
                         testid={`hp-work-tab-${t.key}`}
                       />
                       {t.key === "all" && (
-                        <div className="absolute right-10 top-3 z-10 sm:top-3.5">{allKindFilter(false)}</div>
+                        <div className="absolute right-10 top-3 z-10 sm:top-3.5">{allKindFilter(workTab === "all")}</div>
                       )}
                     </div>
                   ) : (
