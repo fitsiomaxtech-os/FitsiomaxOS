@@ -1413,7 +1413,8 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className={`min-w-0 items-center gap-3 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}>
           {/* Back as a bare chevron, no box round it. The name that sat beside
-              it is gone: the header above already says whose page this is. */}
+              it is gone: the header above already says whose page this is. It hops left
+              once a second -- the boards' nudge-left, on a 1s beat rather than 1.5s. */}
           <button
             type="button"
             onClick={onBack}
@@ -1422,7 +1423,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             title="Back"
             data-testid="my-profile-back"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-5 w-5 motion-safe:animate-[nudge-left_1s_ease-in-out_infinite]" />
           </button>
         </div>
         {/* Full width on a phone, where the bar is its own row. From sm up it stretches
