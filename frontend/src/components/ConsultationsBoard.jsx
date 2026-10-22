@@ -7873,9 +7873,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </div>
               </div>
               )}
-              <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-detail-close">
-                <XCircle className={selectedLead.consultation_stage === "Fee Collected" ? "h-6 w-6" : "h-4 w-4"} />
-              </button>
+              {selectedLead.consultation_stage === "Fee Collected" ? (
+                <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-black hover:bg-slate-100" data-testid="cons-detail-close">
+                  <X className="h-5 w-5" strokeWidth={3} />
+                </button>
+              ) : (
+                <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-detail-close">
+                  <XCircle className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
             {/* Sub tabs. An underline rail rather than six filled pills: the pills read as
