@@ -1537,7 +1537,7 @@ export const CRMPage = ({ auth, onLogout }) => {
           // not the branch's. Without it this fell to the branch-wide query and every
           // Consultant read every other Consultant's consultations. Operations and Branch
           // Control mount the same board with `supervising` instead and keep the branch view.
-          <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards search={hpSearch} onSearchChange={setHpSearch} roleLabel={roleLabel} onLogout={logout} />
+          <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards rowArrow search={hpSearch} onSearchChange={setHpSearch} roleLabel={roleLabel} onLogout={logout} />
         )}
 
         {showPhysioBoard && (

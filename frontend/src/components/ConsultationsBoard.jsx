@@ -1857,6 +1857,12 @@ const COLS_PLAIN_WITH_BRANCH = {
   sno: "w-[4%]", patient: "w-[17%]", branch: "w-[13%]", appt: "w-[15%]", expert: "w-[13%]", stage: "w-[14%]",
   phone: "w-[12%]", pno: "w-[12%]",
 };
+// The same with My Consultation's arrow column on the end (the Consultant's own board
+// asks for both). Must total 100.
+const COLS_PLAIN_WITH_BRANCH_ARROW = {
+  sno: "w-[4%]", patient: "w-[16%]", branch: "w-[13%]", appt: "w-[15%]", expert: "w-[12%]", stage: "w-[13%]",
+  phone: "w-[11%]", pno: "w-[11%]", arrow: "w-[5%]",
+};
 
 // Branch Admin's Consultation tab (`consultantBranchColumn`): the consultant's phone and
 // own branch after their name — the branch differs from this one when a consultant from
@@ -3682,15 +3688,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // An Action column with an arrow at the end of the row (My Consultation). Only on the
   // plain table: a row that already ends in a fee button has its action column.
   const showRowArrow = rowArrow && !showDiscountColumn && !showStageFeeAction;
-  // Patient Branch, on the plain table only — every other set is already full.
-  const showBranchColumn = branchColumn && !showFeeAction && !showDiscountColumn && !showStageFeeAction && !showRowArrow;
+  // Patient Branch, on the plain table only — every other set is already full. The arrow
+  // column can sit beside it (COLS_PLAIN_WITH_BRANCH_ARROW).
+  const showBranchColumn = branchColumn && !showFeeAction && !showDiscountColumn && !showStageFeeAction;
   // Consultant Branch, on the plain table with or without its fee button.
   const showConsultantBranch = consultantBranchColumn && !showBranchColumn && !showFeeAction && !showDiscountColumn && !showRowArrow;
   // Its Consultant Phone and Consultant Branch columns, though, are left off Consultation
   // Booked and Consultation Visit; those two lists keep the short headers all the same.
   const showConsultantContact = showConsultantBranch
     && stageFilter !== "Consultation Booked" && stageFilter !== "Consultation Visit";
-  const cols = showBranchColumn ? COLS_PLAIN_WITH_BRANCH
+  const cols = showBranchColumn ? (showRowArrow ? COLS_PLAIN_WITH_BRANCH_ARROW : COLS_PLAIN_WITH_BRANCH)
     : showConsultantContact ? (showStageFeeAction ? COLS_PLAIN_WITH_ACTION_CBRANCH : COLS_PLAIN_WITH_CBRANCH)
     : showFeeAction
     ? COLS_WITH_ACTION
@@ -7332,7 +7339,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           {/* Fee Collected is the stage where a negotiated Consultation Fee has become a
               fact, so the discount and total columns are added there alone — on every
               earlier stage there is no payment yet and they would be a row of dashes. */}
-          <table className={`w-full table-fixed text-sm ${showBranchColumn ? "min-w-[1000px]" : showConsultantContact ? (showStageFeeAction ? "min-w-[1240px]" : "min-w-[1100px]") : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
+          <table className={`w-full table-fixed text-sm ${showBranchColumn ? (showRowArrow ? "min-w-[1060px]" : "min-w-[1000px]") : showConsultantContact ? (showStageFeeAction ? "min-w-[1240px]" : "min-w-[1100px]") : showFeeAction ? "min-w-[1240px]" : showDiscountColumn ? "min-w-[1140px]" : showStageFeeAction ? "min-w-[980px]" : showRowArrow ? (oneLineRows ? "min-w-[1100px]" : "min-w-[940px]") : "min-w-[880px]"}`}>
             <thead className={`sticky top-0 z-10 bg-slate-500 uppercase text-white ${feeTable ? "text-[11px] tracking-wide" : "text-xs"}`}>
               <tr className={feeTable ? "[&>th]:truncate [&>th]:whitespace-nowrap [&>th]:px-1.5" : ""}>
                 <th className={`${cols.sno} px-3 py-2 ${thAlign} align-middle`}>S.No</th>
@@ -7716,7 +7723,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : showConsultantContact ? (showStageFeeAction ? 10 : 9) : (showStageFeeAction || showRowArrow || showBranchColumn) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
+                <tr><td colSpan={showFeeAction ? 11 : showDiscountColumn ? 10 : showConsultantContact ? (showStageFeeAction ? 10 : 9) : showBranchColumn && showRowArrow ? 9 : (showStageFeeAction || showRowArrow || showBranchColumn) ? 8 : 7} className="px-4 py-8 text-center text-sm text-slate-400">
                   {loading
                     ? "Loading…"
                     // An empty tab is not an empty stage: saying "no leads in consultations"
