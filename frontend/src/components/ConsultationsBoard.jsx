@@ -12633,7 +12633,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           {n >= 1 && left > 0 && (
                             <div className="mt-3">
                               <label className="mb-1 block text-[11px] font-medium text-slate-500">
-                                Due Date for Balance ({left} sessions, Rs.{leftAmount.toLocaleString("en-IN")}) *
+                                Due Date for Balance *
                               </label>
                               {/* Centered rather than anchored, as on the fee's own Collect
                                   popup: a calendar hanging off the field opens past the modal. */}
