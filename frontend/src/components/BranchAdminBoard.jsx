@@ -62,7 +62,7 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StageTabBar } from "@/components/ui/stage-tab";
-import { RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { OnlineTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import {
@@ -3006,7 +3006,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /></>}
+                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
                     // On the Leads pill the row's right holds only Call, WhatsApp and the
                     // bin: every row there would read "Leads" anyway. The other pills and
                     // All Stages keep the badge.
@@ -3238,6 +3238,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                     would be the part that got cut. */}
                                 <TransferredTag lead={lead} />
                                 <RescheduledTag lead={lead} className="shrink-0" />
+                                <OnlineTag lead={lead} />
                               </span>
                             </div>
                             {/* The two marks, after the name so they read as something said
@@ -4617,7 +4618,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
               <div className="min-w-0">
-                <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /></p>
+                <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /></p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {lead.patient_number && (
                     <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>

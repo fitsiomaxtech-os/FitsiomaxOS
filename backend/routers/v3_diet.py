@@ -1097,6 +1097,9 @@ async def diet_patients(coach_id: Optional[str] = None, user: V3UserOut = Depend
             # not named here simply never leaves the backend.
             "is_vip": bool(lead.get("is_vip")),
             "needs_attention": bool(lead.get("needs_attention")),
+            # Mark Online on the Physio Assign panel, so the Online tag follows the patient here.
+            "session_package_mode": lead.get("session_package_mode"),
+            "online_marked_at": lead.get("online_marked_at"),
             "total_days": len(days),
             "completed_days": completed,
             "remaining_days": len(days) - completed,

@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { ProgressionTab } from "@/components/ProgressionTab";
-import { LeadMarks } from "@/components/ui/lead-marks";
+import { LeadMarks, OnlineTag } from "@/components/ui/lead-marks";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { StatTile } from "@/components/ui/stat-tile";
 import { NotifyCard } from "@/components/ui/notify-card";
@@ -1308,7 +1308,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-800">
-                      <span className="mr-1.5 font-semibold text-slate-300">{i + 1}.</span>{p.lead_name}<LeadMarks lead={p} className="ml-1.5" />
+                      <span className="mr-1.5 font-semibold text-slate-300">{i + 1}.</span>{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /><OnlineTag lead={p} className="ml-1.5" />
                     </p>
                     <p className="truncate text-[10px] text-slate-400">
                       {p.patient_number || "—"}
@@ -1396,7 +1396,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot }) {
                             {p.lead_name?.charAt(0)?.toUpperCase() || "?"}
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate font-medium text-slate-800">{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /></p>
+                            <p className="truncate font-medium text-slate-800">{p.lead_name}<LeadMarks lead={p} className="ml-1.5" /><OnlineTag lead={p} className="ml-1.5" /></p>
                             <p className="truncate text-[11px] text-slate-400">{p.patient_number || "—"}</p>
                           </div>
                         </div>

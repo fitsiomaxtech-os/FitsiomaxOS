@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeftRight, RotateCcw, Star } from "lucide-react";
+import { AlertCircle, ArrowLeftRight, RotateCcw, Star, Video } from "lucide-react";
 
 /**
  * The two marks a branch puts on a patient by hand, shown read-only.
@@ -122,6 +122,35 @@ export const TransferredTag = ({ lead, className = "", compact = false }) => {
     >
       <ArrowLeftRight className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
       {moves.length > 1 ? `×${moves.length}` : ""}
+    </span>
+  );
+};
+
+/**
+ * "Online" — this patient's course is on the Online package.
+ *
+ * Set by Mark Online (or a Swap to Online) on the Physio Assign panel, and cleared by
+ * Unmark Online, which puts session_package_mode back to "offline". The tag reads that
+ * one field, so it shows on every list the lead appears on until it is unmarked.
+ *
+ * Violet, the colour of the Online chip on the physio card, with the same video glyph
+ * the Mark Online button carries. Renders nothing for an Offline patient.
+ */
+export const OnlineTag = ({ lead, className = "", compact = false }) => {
+  if (lead?.session_package_mode !== "online") return null;
+  const on = lead.online_marked_at ? String(lead.online_marked_at).slice(0, 10) : "";
+  const title = `Online${on ? ` — marked ${on}${lead.online_marked_by ? ` by ${lead.online_marked_by}` : ""}` : ""}`;
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-0.5 rounded-[2px] bg-violet-600 font-bold uppercase tracking-wide text-white align-middle ${
+        compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]"
+      } ${className}`}
+      title={title}
+      aria-label={title}
+      data-testid="lead-online-tag"
+    >
+      <Video className={compact ? "h-2 w-2" : "h-2.5 w-2.5"} />
+      {compact ? "" : "Online"}
     </span>
   );
 };

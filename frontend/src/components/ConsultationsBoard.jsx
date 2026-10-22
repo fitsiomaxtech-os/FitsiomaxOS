@@ -12,7 +12,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ProgressionTab } from "@/components/ProgressionTab";
-import { LeadMarks, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { LeadMarks, OnlineTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
@@ -7249,7 +7249,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   key={l.id}
                   id={l.id}
                   name={l.name}
-                  nameAddon={<><TransferredTag lead={l} className="ml-1" compact /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" compact /></>}
+                  nameAddon={<><TransferredTag lead={l} className="ml-1" compact /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" compact /><OnlineTag lead={l} className="ml-1.5" compact /></>}
                   mark={selectMode ? (
                     <input type="checkbox" checked={selectedIds.has(l.id)} readOnly className="h-4 w-4" data-testid={`cons-card-select-${l.id}`} />
                   ) : null}
@@ -7307,7 +7307,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       ) : (
                         <span className="mr-1.5 font-semibold text-slate-300">{i + 1}.</span>
                       )}
-                      {l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" />
+                      {l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /><OnlineTag lead={l} className="ml-1.5" />
                     </p>
                     <p className="truncate text-xs text-slate-500">{displayPhone(l.phone) || "—"}</p>
                   </div>
@@ -7451,7 +7451,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       className="truncate px-4 py-3 align-middle font-medium text-slate-800"
                       title={zoomedTable && leadPlanParts(l).length ? `${l.name}\n${leadPlanParts(l).join(" | ")}` : l.name}
                     >
-                      <span className="block truncate">{l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /></span>
+                      <span className="block truncate">{l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /><OnlineTag lead={l} className="ml-1.5" /></span>
                       {/* What they are going away with, under the name. Reading it meant
                           opening every row: the Stage column says where the paperwork has
                           got to, not what was decided, and those are different questions.

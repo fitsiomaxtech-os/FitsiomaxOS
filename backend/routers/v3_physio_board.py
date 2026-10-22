@@ -279,6 +279,9 @@ async def physio_patients(physio_id: Optional[str] = None, user: V3UserOut = Dep
             # not named here simply never leaves the backend.
             "is_vip": bool(lead.get("is_vip")),
             "needs_attention": bool(lead.get("needs_attention")),
+            # Mark Online on the Physio Assign panel, so the Online tag follows the patient here.
+            "session_package_mode": lead.get("session_package_mode"),
+            "online_marked_at": lead.get("online_marked_at"),
             "total_sessions": total,
             "completed_sessions": completed,
             "remaining_sessions": total - completed,
