@@ -729,9 +729,9 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
 
       {/* The tinted panel these sat in is gone — the Head Physio cards sit straight on
           the page, and boxing the same cards here made two identical controls look like
-          two different ones. The heading stays: it names the range the counts answer to. */}
+          two different ones. The range heading (Today / Overall Treatment) is gone too: the
+          date filter in the tool bar already names the range. */}
       <div className="mb-4" data-testid="physio-treatment-summary">
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">{filterValue ? filterValue.label : "Overall Treatment"}</p>
         {/* Three across at every width, phone included. It used to fold two by two below
             sm, which cost the summary a second row on the screen that has the least of it.
             The cards carry `compact` for the narrow width a phone leaves them: below sm the
