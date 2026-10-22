@@ -74,6 +74,8 @@ import { SecurityTab } from "@/components/MySecurity";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { PhotoEditor } from "@/components/ui/photo-editor";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
+import { StatTile } from "@/components/ui/stat-tile";
+import { Card, CardContent } from "@/components/ui/card";
 // The same formatters the header clock and HR's register read a day with, so an hour and
 // a half is not "1h 30m" here and "90m" three screens away.
 import { duration, hours, prettyTime } from "@/lib/clock";
@@ -164,20 +166,6 @@ const statusOf = (row) => STATUS_STYLES[row.status || row.state] || STATUS_STYLE
 
 // ---------- the small pieces ----------
 
-/** A labelled figure, as one line of a list — the same shape as the Profile screen's
- *  rows. The month's counts and its hours are both drawn with it, so they read as one
- *  summary rather than as two designs. */
-const Tile = ({ label, value, sub, tone = "text-slate-800", testid }) => (
-  <div className="flex items-center gap-2 py-3 text-sm" data-testid={testid}>
-    <dt className="w-40 shrink-0 text-slate-500">
-      {label}
-      {/* The explanatory line under a label is desktop-only; a phone keeps label and value. */}
-      {sub && <span className="hidden text-[11px] leading-tight text-slate-400 md:block">{sub}</span>}
-    </dt>
-    <dd className={`min-w-0 flex-1 font-medium ${tone}`}>{value}</dd>
-  </div>
-);
-
 /** One fact off the record: what it is called, and what it says.
  *
  *  A missing value is a dash rather than an empty space, so a half-filled record reads as
@@ -201,47 +189,100 @@ const Panel = ({ title, icon: Icon, children, className = "", testid }) => (
   </section>
 );
 
-// ---------- attendance ----------
+// ---------- attendance, on a desktop ----------
+//
+// Branch Admin's look: each group of figures is a strip of StatTile `arrow="desk"` cards —
+// the 5px-cornered card with the figure in its colour that the Zumba, Fitness and Review
+// strips wear — under a heading of its own, and the month's days are a Card holding a
+// table with the slate header those boards use. The phone keeps its own cards below.
 
-/** Today, across the top: the day as it stands right now.
- *
- *  The same six figures the header clock holds behind its pill, laid out rather than
- *  hidden — this is the screen somebody opened to look at them.
- */
-const TodayStrip = ({ row, standard, today }) => {
+// One hex per colour, for StatTile's inline styles (see ui/stat-tile on why not classes).
+const HEX = {
+  slate: "#334155",
+  sky: "#0284c7",
+  emerald: "#059669",
+  rose: "#e11d48",
+  amber: "#d97706",
+  violet: "#7c3aed",
+};
+
+// The register's chip on a desktop: the same tints as STATUS_STYLES with the border the
+// Branch Admin lists put round theirs.
+const STATUS_BORDER = {
+  present: "border-emerald-200",
+  late: "border-amber-200",
+  half_day: "border-orange-200",
+  absent: "border-rose-200",
+  leave: "border-violet-200",
+  week_off: "border-slate-200",
+  holiday: "border-sky-200",
+  working: "border-emerald-200",
+  on_break: "border-amber-200",
+  done: "border-emerald-200",
+  out: "border-slate-200",
+};
+
+const StatusChip = ({ row, className = "" }) => {
   const style = statusOf(row || {});
+  const border = STATUS_BORDER[row?.status || row?.state] || STATUS_BORDER.out;
+  return (
+    <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${border} ${style.cls} ${className}`}>
+      {style.label}
+    </span>
+  );
+};
+
+/** A heading over a strip of cards: an icon in the board's blue, the title, and whatever
+ *  belongs on the right of that line. */
+const DeskSection = ({ title, icon: Icon, aside, children, testid }) => (
+  <section data-testid={testid}>
+    <div className="mb-2 flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <Icon className="h-4 w-4 text-sky-600" />
+        {title}
+      </h3>
+      {aside}
+    </div>
+    {children}
+  </section>
+);
+
+/** Today: the day as it stands right now — when the clock went in and out, how many times,
+ *  and how long it has run. The status rides on the heading line beside the standard day. */
+const TodayStrip = ({ row, standard, today }) => {
   const when = today ? new Date(`${today}T00:00:00`) : null;
   return (
-    <section data-testid="my-attendance-today">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+    <DeskSection
+      title={
+        <>
           Today
           {when && (
-            <span className="font-medium normal-case tracking-normal text-slate-600" data-testid="my-attendance-today-date">
+            <span className="font-normal text-slate-500" data-testid="my-attendance-today-date">
               · {dayNumber(today)} · {when.toLocaleDateString("en-GB", { weekday: "long" })}
             </span>
           )}
-          <span className="hidden text-xs font-normal normal-case tracking-normal text-slate-400 md:inline">
-            (Standard: {standard?.start} – {standard?.end})
-          </span>
-        </h3>
-      </div>
-      <dl className="divide-y divide-slate-100 px-1">
-        <div className="flex items-center gap-2 py-3 text-sm" data-testid="my-attendance-today-status">
-          <dt className="w-40 shrink-0 text-slate-500">Status</dt>
-          <dd className="min-w-0 flex-1">
-            <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${style.cls}`}>{style.label}</span>
-          </dd>
+        </>
+      }
+      icon={Clock}
+      aside={
+        <div className="flex items-center gap-2">
+          {standard?.start && (
+            <span className="rounded-[5px] border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+              Standard {standard.start} – {standard.end}
+            </span>
+          )}
+          <span data-testid="my-attendance-today-status"><StatusChip row={row} /></span>
         </div>
-        <Tile
-          label="Login – Logout"
-          value={<>{prettyTime(row?.clock_in) || "—"} <span className="text-slate-300">–</span> {prettyTime(row?.clock_out) || "—"}</>}
-          testid="my-attendance-today-in-out"
-        />
-        <Tile label="Sessions" value={row?.sessions ?? 0} testid="my-attendance-today-sessions" />
-        <Tile label="On the clock" value={hours(row?.login_minutes)} tone="text-emerald-600" testid="my-attendance-today-login" />
-      </dl>
-    </section>
+      }
+      testid="my-attendance-today"
+    >
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatTile label="Login" value={prettyTime(row?.clock_in) || "—"} arrow="desk" color={HEX.emerald} testid="my-attendance-today-in" />
+        <StatTile label="Logout" value={prettyTime(row?.clock_out) || "—"} arrow="desk" color={HEX.rose} testid="my-attendance-today-out" />
+        <StatTile label="Sessions" value={row?.sessions ?? 0} arrow="desk" color={HEX.sky} testid="my-attendance-today-sessions" />
+        <StatTile label="On the clock" value={hours(row?.login_minutes)} arrow="desk" color={HEX.emerald} testid="my-attendance-today-login" />
+      </div>
+    </DeskSection>
   );
 };
 
@@ -269,87 +310,103 @@ const WORKLOAD_TILES = {
   ],
 };
 
+// text-sky-600 → HEX.sky, for the desktop's cards off the same table the phone reads.
+const toneHex = (tone) => HEX[String(tone).split("-")[1]] || HEX.slate;
+
 const TodayWorkload = ({ workload }) => {
   const tiles = WORKLOAD_TILES[workload?.kind];
   if (!tiles) return null;
   return (
-    <section data-testid="my-attendance-workload">
-      <h3 className="flex items-center gap-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Today's work</h3>
-      <dl className="divide-y divide-slate-100 px-1">
+    <DeskSection title="Today's work" icon={ClipboardList} testid="my-attendance-workload">
+      <div className={`grid grid-cols-2 gap-3 md:grid-cols-4 ${tiles.length === 5 ? "xl:grid-cols-5" : ""}`}>
         {tiles.map(([label, key, tone]) => (
-          <Tile key={key} label={label} value={workload[key] ?? 0} tone={tone} testid={`my-attendance-workload-${key}`} />
+          <StatTile key={key} label={label} value={workload[key] ?? 0} arrow="desk" color={toneHex(tone)} testid={`my-attendance-workload-${key}`} />
         ))}
-      </dl>
-    </section>
+      </div>
+    </DeskSection>
   );
 };
 
-/** The month's counts, and then its hours. Two rows because they answer two questions —
- *  how many days, and how many hours — and one row of twelve tiles answers neither. */
-const MonthSummary = ({ totals, month, today, workload }) => {
+/** The month's counts, and then its hours. Two strips because they answer two questions —
+ *  how many days, and how many hours — and one strip of twelve cards answers neither.
+ *  `todayStrip` is Today's strip, set beside the counts on a wide screen. */
+const MonthSummary = ({ totals, month, today, todayStrip, workload }) => {
   const behind = (totals?.balance_minutes || 0) < 0;
-  // Only when there is some. A "0.0h" permission tile on every month of every person who
-  // has never asked for an hour off would be a column of zeroes explaining a feature
-  // rather than a figure reporting a month.
+  // Only when there is some. A "0.0h" permission card on every month of every person who
+  // has never asked for an hour off would be a card explaining a feature rather than a
+  // figure reporting a month.
   const permission = (totals?.permission_minutes || 0) > 0;
   return (
     <>
-      <section data-testid="my-attendance-counts">
-        <h3 className="flex items-center gap-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">This month</h3>
-        <dl className="divide-y divide-slate-100 px-1">
-          <Tile label="Working days" value={totals?.working_days ?? 0} sub={monthLabel(month)} testid="my-attendance-working-days" />
-          <Tile label="Present days" value={totals?.present_days ?? 0} tone="text-sky-600" testid="my-attendance-present-days" />
-          <Tile label="Absent" value={totals?.absent_days ?? 0} tone={totals?.absent_days ? "text-rose-600" : "text-slate-800"} testid="my-attendance-absent-days" />
-          <Tile label="On leave" value={totals?.leave_days ?? 0} tone="text-violet-600" testid="my-attendance-leave-days" />
-        </dl>
-      </section>
+      <div className={`grid gap-4 ${todayStrip ? "xl:grid-cols-2" : ""}`}>
+        {todayStrip}
+        <DeskSection
+          title={<>This month <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
+          icon={CalendarDays}
+          testid="my-attendance-counts"
+        >
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatTile label="Working days" value={totals?.working_days ?? 0} arrow="desk" color={HEX.slate} testid="my-attendance-working-days" />
+            <StatTile label="Present days" value={totals?.present_days ?? 0} arrow="desk" color={HEX.sky} testid="my-attendance-present-days" />
+            <StatTile label="Absent" value={totals?.absent_days ?? 0} arrow="desk" color={totals?.absent_days ? HEX.rose : HEX.slate} testid="my-attendance-absent-days" />
+            <StatTile label="On leave" value={totals?.leave_days ?? 0} arrow="desk" color={HEX.violet} testid="my-attendance-leave-days" />
+          </div>
+        </DeskSection>
+      </div>
 
       {workload}
 
-      <section data-testid="my-attendance-hours">
-        <h3 className="flex items-center gap-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Hours — {monthLabel(month)}
-        </h3>
-        <dl className="divide-y divide-slate-100 px-1">
-          <Tile
+      <DeskSection
+        title={<>Hours <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
+        icon={Clock}
+        testid="my-attendance-hours"
+      >
+        <div className={`grid grid-cols-2 gap-3 md:grid-cols-3 ${permission ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
+          <StatTile
             label="Expected"
             value={plainHours(totals?.expected_minutes)}
             sub={`${totals?.working_days ?? 0} days × 8h`}
+            arrow="desk"
+            color={HEX.slate}
             testid="my-attendance-expected"
           />
-          <Tile label="Worked" value={plainHours(totals?.worked_minutes)} tone="text-emerald-600" sub="Actual hours" testid="my-attendance-worked" />
-          <Tile label="Extra" value={signedHours(totals?.extra_minutes)} tone="text-emerald-600" sub="Overtime" testid="my-attendance-overtime" />
-          <Tile label="On breaks" value={plainHours(totals?.break_minutes)} tone="text-amber-600" sub="Off the clock" testid="my-attendance-breaks" />
+          <StatTile label="Worked" value={plainHours(totals?.worked_minutes)} sub="Actual hours" arrow="desk" color={HEX.emerald} testid="my-attendance-worked" />
+          <StatTile label="Extra" value={signedHours(totals?.extra_minutes)} sub="Overtime" arrow="desk" color={HEX.emerald} testid="my-attendance-overtime" />
+          <StatTile label="On breaks" value={plainHours(totals?.break_minutes)} sub="Off the clock" arrow="desk" color={HEX.amber} testid="my-attendance-breaks" />
           {/* Beside the breaks, because both are time out of a working day. The
               difference is that somebody signed this one off in advance — which is also
               why it is worth seeing next to a balance it helps explain. */}
           {permission && (
-            <Tile
+            <StatTile
               label="Permission"
               value={plainHours(totals?.permission_minutes)}
-              tone="text-sky-600"
               sub={`${totals?.permission_days ?? 0} day${totals?.permission_days === 1 ? "" : "s"}, approved`}
+              arrow="desk"
+              color={HEX.sky}
               testid="my-attendance-permission"
             />
           )}
-          <Tile
+          <StatTile
             label="Expected so far"
             value={plainHours(totals?.expected_to_date_minutes)}
             sub={`Up to ${dayNumber(today)}`}
+            arrow="desk"
+            color={HEX.slate}
             testid="my-attendance-expected-to-date"
           />
           {/* Measured against the days that have happened, not against the whole month —
               the backend sends both, and a balance of −150h on the 5th would be the
               calendar talking, not the person. */}
-          <Tile
+          <StatTile
             label="Balance"
             value={signedHours(totals?.balance_minutes)}
             sub={behind ? "Behind, so far" : "In hand"}
-            tone={behind ? "text-rose-600" : "text-emerald-600"}
+            arrow="desk"
+            color={behind ? HEX.rose : HEX.emerald}
             testid="my-attendance-balance"
           />
-        </dl>
-      </section>
+        </div>
+      </DeskSection>
     </>
   );
 };
@@ -507,7 +564,7 @@ const MonthTable = ({ rows }) => {
   }
   return (
     <section data-testid="my-attendance-history">
-      <h3 className="flex items-center gap-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-100">Attendance history</h3>
+      <h3 className="flex items-center gap-2 border-b border-slate-100 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400 sm:hidden">Attendance history</h3>
 
       {/* Phone */}
       <ul className="divide-y divide-slate-100 sm:hidden">
@@ -543,68 +600,74 @@ const MonthTable = ({ rows }) => {
         })}
       </ul>
 
-      {/* Desktop */}
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full text-sm" data-testid="my-attendance-table">
-          <thead>
-            <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
-              <th className="px-4 py-2 font-semibold">Date</th>
-              <th className="px-3 py-2 font-semibold">Day</th>
-              <th className="px-3 py-2 text-center font-semibold">Sessions</th>
-              <th className="px-3 py-2 font-semibold">Login</th>
-              <th className="px-3 py-2 font-semibold">Logout</th>
-              <th className="px-3 py-2 font-semibold">On the clock</th>
-              <th className="px-3 py-2 font-semibold">Break</th>
-              <th className="px-3 py-2 font-semibold">Work hrs</th>
-              <th className="px-3 py-2 font-semibold">Balance</th>
-              <th className="px-3 py-2 font-semibold">Status</th>
-              <th className="px-4 py-2 font-semibold">Note</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {rows.map((r) => {
-              const style = statusOf(r);
-              return (
-                <tr key={r.date} className="hover:bg-slate-50/70" data-testid={`my-attendance-row-${r.date}`}>
-                  <td className="whitespace-nowrap px-4 py-2.5 font-medium text-slate-700">{dayNumber(r.date)}</td>
-                  <td className="px-3 py-2.5 text-slate-500">{r.weekday}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-slate-100 px-1 text-[11px] font-semibold text-slate-600">
-                      {r.sessions}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{prettyTime(r.clock_in) || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{prettyTime(r.clock_out) || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{hours(r.login_minutes)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-amber-600">
-                    {r.break_minutes ? duration(r.break_minutes) : "—"}
-                    {r.break_count > 1 && <span className="ml-1 text-[11px] text-slate-400">({r.break_count})</span>}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-emerald-600">{hours(r.worked_minutes)}</td>
-                  <td className={`whitespace-nowrap px-3 py-2.5 font-semibold ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                    {signedHours(r.balance_minutes)}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${style.cls}`}>{style.label}</span>
-                  </td>
-                  {/* A short day with an approved permission on it is a short day on
-                      purpose, and this column is where a day says why. The permission
-                      leads: it is the answer to the question the balance beside it
-                      raises. */}
-                  <td className="max-w-[16rem] truncate px-4 py-2.5 text-slate-400" title={[r.permission ? `Permission ${r.permission.from}–${r.permission.to}${r.permission.reason ? `: ${r.permission.reason}` : ""}` : "", r.note].filter(Boolean).join(" · ")}>
-                    {r.permission && (
-                      <span className="mr-1.5 whitespace-nowrap rounded bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700" data-testid={`my-attendance-permission-${r.date}`}>
-                        {duration(r.permission.minutes)} permission
-                      </span>
-                    )}
-                    {r.note || (r.permission ? "" : "—")}
-                  </td>
+      {/* Desktop: a Card holding the slate-headed table the Branch Admin lists use. */}
+      <Card className="hidden overflow-hidden border-slate-200 shadow-sm sm:block">
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <ClipboardList className="h-4 w-4 text-sky-600" />
+              Day by day
+            </h4>
+            <span className="text-xs text-slate-400">{rows.length} day{rows.length === 1 ? "" : "s"}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[60rem] text-left text-sm" data-testid="my-attendance-table">
+              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <tr className="whitespace-nowrap">
+                  <th className="px-4 py-2.5">Date</th>
+                  <th className="px-3 py-2.5">Day</th>
+                  <th className="px-3 py-2.5 text-center">Sessions</th>
+                  <th className="px-3 py-2.5">Login</th>
+                  <th className="px-3 py-2.5">Logout</th>
+                  <th className="px-3 py-2.5">On the clock</th>
+                  <th className="px-3 py-2.5">Break</th>
+                  <th className="px-3 py-2.5">Work hrs</th>
+                  <th className="px-3 py-2.5">Balance</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-4 py-2.5">Note</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r) => (
+                  <tr key={r.date} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`my-attendance-row-${r.date}`}>
+                    <td className="px-4 py-3 text-sm font-semibold leading-5 text-slate-800">{dayNumber(r.date)}</td>
+                    <td className="px-3 py-3 text-xs leading-5 text-slate-500">{r.weekday}</td>
+                    <td className="px-3 py-3 text-center">
+                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-[5px] border border-slate-200 bg-slate-50 px-1 text-[10px] font-bold text-slate-600">
+                        {r.sessions}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_in) || "—"}</td>
+                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_out) || "—"}</td>
+                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{hours(r.login_minutes)}</td>
+                    <td className="px-3 py-3 text-xs leading-5 text-amber-600">
+                      {r.break_minutes ? duration(r.break_minutes) : "—"}
+                      {r.break_count > 1 && <span className="ml-1 text-[11px] text-slate-400">({r.break_count})</span>}
+                    </td>
+                    <td className="px-3 py-3 text-xs font-semibold leading-5 text-emerald-700">{hours(r.worked_minutes)}</td>
+                    <td className={`px-3 py-3 text-xs font-semibold leading-5 ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                      {signedHours(r.balance_minutes)}
+                    </td>
+                    <td className="px-3 py-3"><StatusChip row={r} /></td>
+                    {/* A short day with an approved permission on it is a short day on
+                        purpose, and this column is where a day says why. The permission
+                        leads: it is the answer to the question the balance beside it
+                        raises. */}
+                    <td className="max-w-[16rem] truncate px-4 py-3 text-xs leading-5 text-slate-400" title={[r.permission ? `Permission ${r.permission.from}–${r.permission.to}${r.permission.reason ? `: ${r.permission.reason}` : ""}` : "", r.note].filter(Boolean).join(" · ")}>
+                      {r.permission && (
+                        <span className="mr-1.5 whitespace-nowrap rounded-[5px] border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-700" data-testid={`my-attendance-permission-${r.date}`}>
+                          {duration(r.permission.minutes)} permission
+                        </span>
+                      )}
+                      {r.note || (r.permission ? "" : "—")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </section>
   );
 };
@@ -682,24 +745,29 @@ const AttendanceTab = ({ view = "all" }) => {
           </button>
         </div>
       ) : (
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+      // Branch Admin's month bar: a white strip with square, bordered arrows either side
+      // of the month, as on the Outstanding board's month row.
+      <div className="flex items-center justify-between gap-2 rounded-[5px] border border-slate-200 bg-white px-2 py-2 shadow-sm">
         <button
           type="button"
           onClick={() => setMonth(shiftMonth(month, -1))}
-          className="rounded-md p-2 text-slate-500 hover:bg-slate-100"
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
           aria-label="Previous month"
           data-testid="my-attendance-prev"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold text-slate-700" data-testid="my-attendance-month">{monthLabel(month)}</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800" data-testid="my-attendance-month">
+          <CalendarDays className="h-4 w-4 text-sky-600" />
+          {monthLabel(month)}
+        </span>
         <button
           type="button"
           onClick={() => setMonth(shiftMonth(month, 1))}
           // Nothing to show past this month: the days have not happened, and a next arrow
           // that lands on an empty table is a control that only reports its own limit.
           disabled={isThisMonth}
-          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Next month"
           data-testid="my-attendance-next"
         >
@@ -728,11 +796,11 @@ const AttendanceTab = ({ view = "all" }) => {
           {view === "history" && <PhoneHours totals={data?.totals} today={data?.today} />}
           {view === "all" && (
             <>
-              {isThisMonth && <TodayStrip row={todayRow} standard={data?.standard} today={data?.today} />}
               <MonthSummary
                 totals={data?.totals}
                 month={month}
                 today={data?.today}
+                todayStrip={isThisMonth && <TodayStrip row={todayRow} standard={data?.standard} today={data?.today} />}
                 workload={isThisMonth && <TodayWorkload workload={data?.workload} />}
               />
             </>
