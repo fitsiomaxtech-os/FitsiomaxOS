@@ -1420,7 +1420,7 @@ const COLS_WITH_ACTION = {
 
 // The stages whose popup is drawn in the Fee Collected style: a one-row header, the
 // Appointment row in the Overview, and the flat .fee-flat buttons (index.css).
-const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected"];
+const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign"];
 
 /**
  * The four fees a patient can pay, each collected at its own point and stored separately.
@@ -9869,7 +9869,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const PhysioDetailBody = (
                   <div className={`grid grid-cols-1 gap-x-4 gap-y-3 ${compactDetail ? "" : "lg:grid-cols-2"}`}>
                     <div className="min-w-0 space-y-2" data-testid="cons-physio-assign-course">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Session Details</p>
                       <PanelCard testid="cons-physio-assign-summary">
                         <PanelRow
                           label="Treatment Package"
@@ -9971,19 +9970,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </div>
 
                     <div className="min-w-0 space-y-2">
-                      {/* Named for what the column holds once there is a course running, and
-                          for what it asks for while there is not: before a physio is picked
-                          there is no delivery to report and the only thing in it is the step
-                          to take. */}
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          {hasPhysioJourney && physioProgress.reassigned
-                            ? `Physio History · ${physioProgress.previous.length + (physioProgress.current ? 1 : 0)} physios`
-                            : treatmentAssigned ? "Delivered By" : "Next Step"}
-                        </p>
-                        {/* The mode the days still to come run in — what the Swap below
-                            changes. Shown wherever there is a package to run in one. */}
-                        {selectedLead.session_package_id && (
+                      {/* No heading over this column (Delivered By / Next Step / Physio
+                          History): the physio cards and the button say it. Only the mode
+                          the days still to come run in -- what the Swap below changes --
+                          shown wherever there is a package to run in one. */}
+                      {selectedLead.session_package_id && (
+                      <div className="flex items-center justify-end gap-2">
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                               courseMode === "online" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"
@@ -9992,8 +9984,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           >
                             {courseMode === "online" ? "Online" : "Offline"}
                           </span>
-                        )}
                       </div>
+                      )}
 
                       {/* Who delivered it, in the order the patient had them: every physio
                           before this one, then this one. A reassignment leaves the previous
@@ -10019,29 +10011,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </div>
                       )}
 
-                      {/* Said only for the two states that need saying: before a physio is on
-                          the course, and once every session of it is delivered. A course
-                          still running mid-way needs no line of its own — the physio card
-                          and the progress bar above already say exactly that, and repeating
-                          it back as a sentence was the one line this column showed nothing
-                          new in. */}
-                      {(!treatmentAssigned || courseDone) && (
-                        <p className="text-xs leading-relaxed text-slate-600">
-                          {/* "Collected" only when it is: unpaid, the gate note below says what
-                              is waiting, and this line used to contradict it. */}
-                          {!treatmentAssigned
-                            ? `${treatmentFeePaid ? "Treatment Fee collected. " : ""}Choose the physiotherapist who will deliver the sessions.`
-                            : "Every session of this course has been delivered."}
-                        </p>
-                      )}
-                      {/* Said before the picker is opened rather than discovered inside it:
-                          reassigning mid-course re-dates only what is left, and the branch is
-                          about to be asked for exactly that many dates. */}
-                      {treatmentAssigned && !courseDone && courseCompleted > 0 && (
-                        <p className="text-xs leading-relaxed text-violet-700" data-testid="cons-physio-reassign-note">
-                          Reassigning keeps the {courseCompleted} session{courseCompleted === 1 ? "" : "s"} already delivered with the physio who ran them — only the remaining {courseRemaining} get new dates.
-                        </p>
-                      )}
+                      {/* No helper sentences here (choose a physio / course delivered /
+                          reassigning keeps the delivered days) or fee gate note under the
+                          buttons: the button and its hover title carry it. */}
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         <Button
                           size="sm"
@@ -10072,12 +10044,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {MarkOnlineButton}
                         {OnlinePayButton}
                       </div>
-                      {!treatmentFeePaid && (
-                        <GateNote testId="cons-physio-detail-gate">
-                          Assign Physio opens once the Treatment Fee is collected — the sessions
-                          cannot go onto a physio's calendar until they are paid for.
-                        </GateNote>
-                      )}
                     </div>
                   </div>
                 );
