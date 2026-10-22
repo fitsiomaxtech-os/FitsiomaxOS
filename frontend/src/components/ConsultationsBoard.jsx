@@ -1893,6 +1893,18 @@ const COLS_PLAIN_WITH_ACTION_CBRANCH = {
   stage: "w-[11%]", phone: "w-[10%]", pno: "w-[10%]", action: "w-[10%]",
 };
 
+// The same tab on the Physio Assign pill: the patient is past the consultation by now, so
+// the row names the physio who has the course, when they were put on it and their branch,
+// in place of the appointment and the consultant's contact. With and without the fee button.
+const COLS_PHYSIO_ASSIGN = {
+  sno: "w-[4%]", patient: "w-[17%]", physio: "w-[15%]", adate: "w-[12%]", pbranch: "w-[14%]",
+  stage: "w-[13%]", phone: "w-[12%]", pno: "w-[13%]",
+};
+const COLS_PHYSIO_ASSIGN_ACTION = {
+  sno: "w-[3%]", patient: "w-[15%]", physio: "w-[14%]", adate: "w-[11%]", pbranch: "w-[13%]",
+  stage: "w-[11%]", phone: "w-[11%]", pno: "w-[11%]", action: "w-[11%]",
+};
+
 const COLS_PLAIN_WITH_ARROW = {
   sno: "w-[4%]", patient: "w-[19%]", appt: "w-[17%]", expert: "w-[14%]", stage: "w-[14%]",
   phone: "w-[13%]", pno: "w-[13%]", arrow: "w-[6%]",
@@ -3723,7 +3735,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Booked and Consultation Visit; those two lists keep the short headers all the same.
   const showConsultantContact = showConsultantBranch
     && stageFilter !== "Consultation Booked" && stageFilter !== "Consultation Visit";
+  // On Physio Assign those four columns -- Appointment, Consultant, their phone and branch --
+  // become Physio, Assign Date and Physio Branch (see COLS_PHYSIO_ASSIGN).
+  const physioAssignTable = showConsultantContact && stageFilter === "Physio Assign";
   const cols = showBranchColumn ? (showRowArrow ? COLS_PLAIN_WITH_BRANCH_ARROW : COLS_PLAIN_WITH_BRANCH)
+    : physioAssignTable ? (showStageFeeAction ? COLS_PHYSIO_ASSIGN_ACTION : COLS_PHYSIO_ASSIGN)
     : showConsultantContact ? (showStageFeeAction ? COLS_PLAIN_WITH_ACTION_CBRANCH : COLS_PLAIN_WITH_CBRANCH)
     : showFeeAction
     ? COLS_WITH_ACTION
@@ -3893,6 +3909,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       { header: "Patient No.", xlsx: 17, get: (l) => l.patient_number || "" },
       { header: "Patient Name", wrap: true, xlsx: 26, get: (l) => l.name || "" },
       { header: "Phone", xlsx: 15, get: (l) => displayPhone(l.phone) || "" },
+      // The table's Physio Assign columns -- see physioAssignTable.
+      ...(withContact && stage === "Physio Assign" ? [
+        { header: "Physio", wrap: true, xlsx: 22, get: (l) => l.assigned_physio_name || "" },
+        { header: "Assign Date", xlsx: 15, get: (l) => (l.physio_assigned_at ? dateStampFull(l.physio_assigned_at) : "") },
+        { header: "Physio Branch", wrap: true, xlsx: 20, get: (l) => branchNames[consultantBranches[l.assigned_physio_id]] || "" },
+      ] : [
       { header: "Appointment Date", xlsx: 15, get: (l) => (l.appointment_date ? dateStampFull(l.appointment_date) : "") },
       { header: "Time", xlsx: 10, get: (l) => (l.appointment_time ? to12h(l.appointment_time) : "") },
       { header: "Consultant", wrap: true, xlsx: 22, get: (l) => l.assigned_physio_name || "" },
@@ -3900,6 +3922,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         { header: "Consultant Phone", xlsx: 16, get: (l) => displayPhone(consultantPhones[l.assigned_physio_id]) || "" },
         { header: "Consultant Branch", wrap: true, xlsx: 20, get: (l) => branchNames[consultantBranches[l.assigned_physio_id]] || "" },
       ] : []),
+      ]),
       { header: "Stage", wrap: true, xlsx: 20, get: (l) => rowStageName(l) || "" },
       { header: "Plan", wrap: true, xlsx: 30, get: (l) => leadPlanParts(l).join(", ") },
       ...(isFeeStage ? [
@@ -7383,12 +7406,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     Patient Branch. */}
                 <th className={`${cols.patient} px-4 py-2 text-left align-middle`}>{showBranchColumn || showConsultantBranch ? "Name" : "Patient Name"}</th>
                 {showBranchColumn && <th className={`${cols.branch} px-4 py-2 ${thAlign} align-middle`}>Patient Branch</th>}
-                <th className={`${cols.appt} px-3 py-2 ${thAlign} align-middle`}>Appointment</th>
-                <th className={`${cols.expert} px-4 py-2 ${thAlign} align-middle`}>
-                  {showDiscountColumn || showBranchColumn || showConsultantBranch ? "Consultant" : "Consultant Name"}
-                </th>
-                {showConsultantContact && <th className={`${cols.cphone} px-4 py-2 ${thAlign} align-middle`}>Consultant Phone</th>}
-                {showConsultantContact && <th className={`${cols.cbranch} px-4 py-2 ${thAlign} align-middle`}>Consultant Branch</th>}
+                {physioAssignTable ? (
+                  <>
+                    <th className={`${cols.physio} px-4 py-2 ${thAlign} align-middle`}>Physio</th>
+                    <th className={`${cols.adate} px-4 py-2 ${thAlign} align-middle`}>Assign Date</th>
+                    <th className={`${cols.pbranch} px-4 py-2 ${thAlign} align-middle`}>Physio Branch</th>
+                  </>
+                ) : (
+                  <>
+                    <th className={`${cols.appt} px-3 py-2 ${thAlign} align-middle`}>Appointment</th>
+                    <th className={`${cols.expert} px-4 py-2 ${thAlign} align-middle`}>
+                      {showDiscountColumn || showBranchColumn || showConsultantBranch ? "Consultant" : "Consultant Name"}
+                    </th>
+                    {showConsultantContact && <th className={`${cols.cphone} px-4 py-2 ${thAlign} align-middle`}>Consultant Phone</th>}
+                    {showConsultantContact && <th className={`${cols.cbranch} px-4 py-2 ${thAlign} align-middle`}>Consultant Branch</th>}
+                  </>
+                )}
                 {/* Shortened on Fee Collected alone: that list carries three more columns than any
                     other stage, and the words the headings lose there — Consultation, Expert,
                     Applied — are the ones the column below already makes obvious. Every other
@@ -7478,6 +7511,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         column happens to run out — so the dates stack in a straight
                         edge down the column instead of breaking at a different word
                         on every row. */}
+                    {physioAssignTable ? (() => {
+                      // physio_assigned_at is UTC; dateStampFull reads it in the branch's zone.
+                      const assignedOn = l.physio_assigned_at ? dateStampFull(l.physio_assigned_at) : "";
+                      const physioBranch = branchNames[consultantBranches[l.assigned_physio_id]] || "";
+                      return (
+                        <>
+                          <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={l.assigned_physio_name || ""} data-testid={`cons-physio-${l.id}`}>
+                            {l.assigned_physio_name || "—"}
+                          </td>
+                          <td className={`truncate whitespace-nowrap px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={assignedOn} data-testid={`cons-assign-date-${l.id}`}>
+                            {assignedOn || "—"}
+                          </td>
+                          <td className={`truncate px-4 py-3 align-middle leading-5 text-slate-600 ${tdAlign}`} title={physioBranch}>
+                            {physioBranch || "—"}
+                          </td>
+                        </>
+                      );
+                    })() : (
+                    <>
                     <td className={`whitespace-nowrap px-3 py-3 align-middle text-xs ${tdAlign}`}>
                       {l.appointment_date ? (
                         <span
@@ -7537,6 +7589,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </td>
                       );
                     })()}
+                    </>
+                    )}
                     <td className={`px-4 py-3 align-middle ${tdAlign}`}>
                       <span
                         className="inline-flex max-w-full items-center gap-1 truncate rounded-[5px] px-2 py-0.5 align-middle text-xs font-semibold"
