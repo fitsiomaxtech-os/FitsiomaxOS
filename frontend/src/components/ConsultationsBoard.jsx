@@ -9470,13 +9470,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const MarkOnlineButton = (
                   <Button
                     size="sm"
-                    className={`bg-white text-sky-700 shadow-sm ring-1 ring-sky-200 hover:bg-sky-50 ${ACT_BTN}`}
+                    className={`${courseMode === "online" ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-white text-sky-700 ring-1 ring-sky-200 hover:bg-sky-50"} shadow-sm ${ACT_BTN}`}
                     onClick={() => setOnlineMenu({ canSwap: canSwapMode, canMark: canMarkMode, mode: courseMode, feePaid: treatmentFeePaid, assigned: treatmentAssigned, courseDone })}
                     data-testid="cons-mark-online-menu"
                   >
                     <Video className="mr-1 h-3.5 w-3.5" />
                     {courseMode === "online" ? "Online" : "Mark Online"}
-                    <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                    {/* Once Online, the arrow bounces (1s cycle) to point at the menu. */}
+                    <ChevronDown className={`ml-1 h-3.5 w-3.5 ${courseMode === "online" ? "animate-bounce" : ""}`} />
                   </Button>
                 );
                 // The same menu on the Treatment Fee row before the fee is collected, filled
@@ -9495,7 +9496,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const OnlinePayButton = courseMode === "online" && balancePlan ? (
                   <Button
                     size="sm"
-                    className={`bg-sky-600 text-white shadow-sm hover:bg-sky-700 ${ACT_BTN}`}
+                    className={`bg-orange-500 text-white shadow-sm hover:bg-orange-600 ${ACT_BTN}`}
                     onClick={() => openPartialCollectPopup(balancePlan.nextIdx, balancePlan.fee, null, ONLINE_COLLECT_MODES)}
                     data-testid="cons-collect-online"
                   >
