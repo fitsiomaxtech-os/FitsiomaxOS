@@ -1917,7 +1917,7 @@ const PANEL_TONES = {
 
 /** The state at the end of a panel's header band — "Both Fees Collected", "Diet Fee Due". */
 const PanelChip = ({ tone = "amber", tick = false, square = false, children }) => (
-  <span className={`flex shrink-0 items-center gap-1 ${square ? "rounded-[1px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${
+  <span className={`flex shrink-0 items-center gap-1 ${square ? "rounded-none" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${
     tone === "emerald" ? "bg-emerald-100 text-emerald-700"
       : tone === "rose" ? "bg-rose-100 text-rose-700"
       : tone === "slate" ? "bg-slate-100 text-slate-600"
@@ -1966,8 +1966,18 @@ function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, c
   );
 }
 
-/** A label/value line inside a panel's white card. */
-const PanelRow = ({ label, value, note, noteTone = "text-emerald-600", tone = "", strong = false }) => (
+/** A label/value line inside a panel's white card. `even` sets the value in a column of its
+ *  own, half the card in, with its note at the value's size, so a card of rows reads as one
+ *  table: every value starts at the same point and none is smaller than the next. */
+const PanelRow = ({ label, value, note, noteTone = "text-emerald-600", tone = "", strong = false, even = false }) => even ? (
+  <div className="grid grid-cols-2 items-baseline gap-4 px-3 py-2">
+    <dt className="min-w-0 truncate text-xs text-slate-500">{label}</dt>
+    <dd className={`min-w-0 truncate text-left text-sm font-semibold tabular-nums ${tone || "text-slate-800"}`} title={String(value)}>
+      {value}
+      {note && <span className={`ml-1 font-medium capitalize ${noteTone}`}>({note})</span>}
+    </dd>
+  </div>
+) : (
   <div className="flex items-baseline justify-between gap-4 px-3 py-2">
     <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
     <dd className={`min-w-0 truncate text-right font-semibold ${strong ? "text-[15px]" : "text-sm"} ${tone || "text-slate-800"}`} title={String(value)}>
@@ -9545,7 +9555,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   title: "Physio Assign",
                   icon: Users,
                   chip: treatmentAssigned
-                    ? { tone: "emerald", label: "Sessions In Progress", tick: true }
+                    ? { tone: "emerald", label: "Sessions In Progress", tick: true, square: true }
                     : { tone: "amber", label: "Physio Not Assigned", tick: false },
                 };
 
@@ -9883,6 +9893,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <div className="min-w-0 space-y-2" data-testid="cons-physio-assign-course">
                       <PanelCard testid="cons-physio-assign-summary">
                         <PanelRow
+                          even
                           label="Treatment Package"
                           value={`${selectedLead.session_package_name || "—"}${selectedLead.session_package_sessions ? ` · ${selectedLead.session_package_sessions} sessions` : ""}`}
                         />
@@ -9893,6 +9904,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             above), so "paid" alone cannot be read off that field; the note
                             is the live balance while one is still owed, not the mode. */}
                         <PanelRow
+                          even
                           label="Treatment Fee"
                           value={treatmentFeeTotal ? `Rs.${Number(treatmentFeeTotal).toLocaleString("en-IN")}` : "Not priced yet"}
                           note={
@@ -9914,6 +9926,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             It carries what is left rather than making the reader subtract,
                             because "4 left" is the thing the branch acts on. */}
                         <PanelRow
+                          even
                           label="Sessions Completed"
                           value={`${courseCompleted} of ${totalCourseSessions || "—"}`}
                           tone={courseCompleted > 0 ? "text-emerald-700" : ""}
@@ -9922,6 +9935,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         />
                         {selectedLead.diet_coach_name && (
                           <PanelRow
+                            even
                             label="Diet Consultation"
                             value={`${selectedLead.diet_coach_name}${selectedLead.diet_appointment_at ? ` · ${dayLabel(selectedLead.diet_appointment_at.split("T")[0])} at ${to12h(selectedLead.diet_appointment_at.split("T")[1])}` : ""}`}
                           />
@@ -10801,7 +10815,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         // is left, because that is the number somebody has to chase.
                         chip={
                           showingPhysio ? (
-                            <PanelChip tone={PHYSIO_VIEW.chip.tone} tick={PHYSIO_VIEW.chip.tick}>{PHYSIO_VIEW.chip.label}</PanelChip>
+                            <PanelChip tone={PHYSIO_VIEW.chip.tone} tick={PHYSIO_VIEW.chip.tick} square={!!PHYSIO_VIEW.chip.square}>{PHYSIO_VIEW.chip.label}</PanelChip>
                           ) : pillProgramme === "rehab" ? (
                             <PanelChip tone={feeBalances.rehab || selectedLead.rehab_fee_paid == null ? "amber" : "emerald"} tick={!feeBalances.rehab && selectedLead.rehab_fee_paid != null}>
                               {feeBalances.rehab
@@ -10938,7 +10952,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         testid="cons-stage-panel-consultation-visit"
                         flush={!detailBody}
                         chip={detailView ? (
-                          <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick}>{detailView.chip.label}</PanelChip>
+                          <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick} square={!!detailView.chip.square}>{detailView.chip.label}</PanelChip>
                         ) : consultationPaid ? (
                           <PanelChip tone="emerald" tick>Consultation Fee In</PanelChip>
                         ) : (
@@ -11065,7 +11079,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         // the tab row keeps the panel's padding.
                         flush={!detailBody}
                         chip={detailView ? (
-                          <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick}>{detailView.chip.label}</PanelChip>
+                          <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick} square={!!detailView.chip.square}>{detailView.chip.label}</PanelChip>
                         ) : partialPlan ? (
                           <PanelChip tone={partialPlan.overdue ? "rose" : "amber"} square>{partialPlan.overdue ? "Balance Overdue" : "Part-paid"}</PanelChip>
                         ) : treatmentFeePaid ? (
@@ -11204,9 +11218,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         title={detailView ? detailView.title : "Physio Assign"}
                         testid="cons-stage-panel-physio-assign"
                         chip={detailView ? (
-                          <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick}>{detailView.chip.label}</PanelChip>
+                          <PanelChip tone={detailView.chip.tone} tick={detailView.chip.tick} square={!!detailView.chip.square}>{detailView.chip.label}</PanelChip>
                         ) : assigned ? (
-                          <PanelChip tone="emerald" tick>Sessions In Progress</PanelChip>
+                          <PanelChip tone="emerald" tick square>Sessions In Progress</PanelChip>
                         ) : (
                           <PanelChip>Physio Not Assigned</PanelChip>
                         )}
