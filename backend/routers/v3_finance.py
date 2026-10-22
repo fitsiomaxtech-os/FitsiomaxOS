@@ -1,7 +1,7 @@
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from typing import Optional
@@ -3257,7 +3257,7 @@ async def mark_installment_paid(
     transaction_id = None
     # Sessions Covered Now: a Treatment Fee row carries the sessions it pays for, and the
     # desk can take fewer of them today. The row is cut in two -- the sessions paid for now
-    # at their share of the row, and the rest left owing on the same due date -- so the
+    # at their share of the row, and the rest left owing on the Due Date for Balance -- so the
     # sessions not bought stay a balance instead of going with a short amount. `split_from`
     # is what Undo puts the row back to.
     row_sessions = int(installments[idx].get("sessions") or 0)
@@ -3265,11 +3265,19 @@ async def mark_installment_paid(
         if payload.sessions_now < 1 or payload.sessions_now > row_sessions:
             raise HTTPException(status_code=400, detail=f"Sessions Covered Now has to be between 1 and {row_sessions}")
         if payload.sessions_now < row_sessions:
+            # The rest is a balance, and a balance carries the date it is due on.
+            rest_due = (payload.balance_due_date or "").strip()
+            if not rest_due:
+                raise HTTPException(status_code=400, detail="Enter a Due Date for the balance amount")
+            try:
+                date.fromisoformat(rest_due)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Due Date for Balance is not a valid date")
             whole = float(installments[idx].get("amount") or 0)
             part = round(whole * payload.sessions_now / row_sessions, 2)
             rest = {k: v for k, v in installments[idx].items() if k not in _INSTALMENT_PAYMENT_KEYS and k != "split_from"}
             installments[idx] = {**installments[idx], "amount": part, "sessions": payload.sessions_now, "split_from": {"amount": whole, "sessions": row_sessions}}
-            installments.insert(idx + 1, {**rest, "paid": False, "amount": round(whole - part, 2), "sessions": row_sessions - payload.sessions_now, "split_rest": True})
+            installments.insert(idx + 1, {**rest, "paid": False, "amount": round(whole - part, 2), "sessions": row_sessions - payload.sessions_now, "split_rest": True, "due_date": rest_due})
     # A discount agreed on this installment. It settles part of what was scheduled without
     # any money behind it, so it is held to the installment: never more than is owed, and
     # never the whole of it -- an installment let go entirely is not a collection.

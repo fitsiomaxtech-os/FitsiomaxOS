@@ -5432,6 +5432,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       fee,
       sessions_total: rowSessions,
       sessions_now: rowSessions > 0 ? String(rowSessions) : "",
+      // When the sessions left over are due, asked only once fewer than all are taken.
+      balance_due_date: "",
       // The row's full amount, which a part of its sessions is priced as a share of.
       row_amount: amount > 0 ? amount : 0,
       amount: amount > 0 ? String(amount) : "",
@@ -5611,14 +5613,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const mode = draft.payment_mode;
     const payload = { payment_mode: mode, amount };
     // Fewer sessions than the row holds: the server cuts the row in two, and the rest
-    // stays owing on the same due date.
+    // stays owing on the Due Date for Balance.
     const sessionsNow = parseInt(draft.sessions_now, 10) || 0;
     if (draft.sessions_total > 0) {
       if (sessionsNow < 1 || sessionsNow > draft.sessions_total) {
         toast.error(`Sessions Covered Now has to be between 1 and ${draft.sessions_total}`);
         return;
       }
-      if (sessionsNow < draft.sessions_total) payload.sessions_now = sessionsNow;
+      if (sessionsNow < draft.sessions_total) {
+        if (!draft.balance_due_date) {
+          toast.error("Enter a Due Date for the balance amount");
+          return;
+        }
+        payload.sessions_now = sessionsNow;
+        payload.balance_due_date = draft.balance_due_date;
+      }
     }
     const discount = round2(Math.max(0, parseFloat(draft.discount) || 0));
     if (discount > 0) {
@@ -5680,12 +5689,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       payload.fee = fee;
       const paidRes = await markInstallmentPaid(lead.id, draft.idx + 1, payload);
       // The same cut the server made when fewer sessions were paid for: this row keeps the
-      // sessions taken now, and the rest follows it as an unpaid row on the same due date.
+      // sessions taken now, and the rest follows it as an unpaid row on its Due Date for Balance.
       const rows = [...(lead[detailsField]?.installments || [])];
       if (payload.sessions_now && rows[draft.idx]) {
         const whole = Number(rows[draft.idx].amount) || draft.row_amount;
         const part = round2((whole * payload.sessions_now) / draft.sessions_total);
-        rows.splice(draft.idx + 1, 0, { ...rows[draft.idx], paid: false, amount: round2(whole - part), sessions: draft.sessions_total - payload.sessions_now, split_rest: true });
+        rows.splice(draft.idx + 1, 0, { ...rows[draft.idx], paid: false, amount: round2(whole - part), sessions: draft.sessions_total - payload.sessions_now, split_rest: true, due_date: payload.balance_due_date });
         rows[draft.idx] = { ...rows[draft.idx], sessions: payload.sessions_now };
       }
       const installments = rows.map((inst, i) =>
@@ -12577,7 +12586,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         the net payable. */}
                     {/* How many of this row's sessions are being paid for now. Fewer than
                         all prices this collection at their share of the row; the sessions
-                        left over stay owing as a row of their own on the same due date. */}
+                        left over stay owing as a row of their own, on the Due Date for
+                        Balance asked for underneath. */}
                     {partialCollectDraft.sessions_total > 0 && (() => {
                       const total = partialCollectDraft.sessions_total;
                       const n = parseInt(partialCollectDraft.sessions_now, 10) || 0;
@@ -12620,6 +12630,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 ? `Covers ${n} of ${total} sessions · ${left} sessions (Rs.${leftAmount.toLocaleString("en-IN")}) stay as balance`
                                 : `Covers all ${total} sessions`}
                           </p>
+                          {n >= 1 && left > 0 && (
+                            <div className="mt-3">
+                              <label className="mb-1 block text-[11px] font-medium text-slate-500">
+                                Due Date for Balance ({left} sessions, Rs.{leftAmount.toLocaleString("en-IN")}) *
+                              </label>
+                              {/* Centered rather than anchored, as on the fee's own Collect
+                                  popup: a calendar hanging off the field opens past the modal. */}
+                              <MilkDateInput
+                                centered
+                                title="Due Date for Balance"
+                                value={partialCollectDraft.balance_due_date}
+                                onChange={(e) => setPartialCollectDraft((d) => ({ ...d, balance_due_date: e.target.value }))}
+                                className="h-9"
+                                data-testid="cons-partial-collect-balance-due-date"
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -12828,6 +12855,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         collectingTreatmentFee ||
                         !(parseFloat(partialCollectDraft.amount) > 0) ||
                         (partialCollectDraft.sessions_total > 0 && !((parseInt(partialCollectDraft.sessions_now, 10) || 0) >= 1 && (parseInt(partialCollectDraft.sessions_now, 10) || 0) <= partialCollectDraft.sessions_total)) ||
+                        (partialCollectDraft.sessions_total > 0 && (parseInt(partialCollectDraft.sessions_now, 10) || 0) < partialCollectDraft.sessions_total && !partialCollectDraft.balance_due_date) ||
                         (partialCollectDraft.due > 0 && (parseFloat(partialCollectDraft.discount) || 0) >= partialCollectDraft.due) ||
                         (partialCollectDraft.payment_lines
                           ? (partialCollectDraft.payment_lines.some((l) => !(parseFloat(l.amount) > 0)) ||

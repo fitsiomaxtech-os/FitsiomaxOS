@@ -919,6 +919,9 @@ class V3MarkInstallmentPaidInput(BaseModel):
     # Sessions Covered Now, on a Treatment Fee row that carries sessions: fewer than the
     # row holds cuts it in two, and the sessions not paid for stay owing as their own row.
     sessions_now: Optional[int] = None
+    # When that leftover row is due (YYYY-MM-DD). Required whenever sessions_now cuts the
+    # row, so the balance it leaves has a date somebody will chase it on.
+    balance_due_date: Optional[str] = None
     discount_reason: Optional[str] = None
 
 
