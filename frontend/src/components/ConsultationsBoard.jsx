@@ -2086,6 +2086,20 @@ const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+/**
+ * Why a row whose appointment is not in the Date Filter's window is on the list anyway: the
+ * branch worked on it inside the window (see preStageFiltered). Printed under the chip,
+ * because a Today list carrying a "Wed, 21 Oct" appointment and nothing else reads as the
+ * filter being wrong. "Updated today, 10:45 am", or the day when the window is wider.
+ */
+const activityLabel = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `Updated ${day === localToday() ? "today" : apptDayLabel(day)}, ${time}`;
+};
+
 const appointmentTone = (date) => {
   const today = localToday();
   const on = String(date || "").slice(0, 10);
@@ -3421,8 +3435,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // narrowing to one stage. Every narrowing that belongs to the whole board goes in here
   // rather than onto the rows alone, which is what keeps each pill's count describing the
   // list it opens.
-  const preStageFiltered = useMemo(() => {
+  //
+  // Alongside the rows, the ones let in only by the day they were worked on rather than by
+  // their appointment, with that stamp -- the appointment cell says so under the chip.
+  const { rows: preStageFiltered, viaActivity } = useMemo(() => {
     let rows = board.leads || [];
+    const viaActivity = new Map();
     // The branch's Consultation and House Visit tabs are this one board split by where the
     // consultation happens: "only" keeps the home bookings, "exclude" keeps the rest. Null
     // (every other caller) leaves the list whole. Up here with the other board-wide
@@ -3472,7 +3490,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         // Sept" printed on it, which reads as the filter being wrong. Before the visit
         // there is no other work to find, so the appointment day is the only reading.
         if (AWAITING_VISIT.includes(l[stageField])) return false;
-        return inRange(stamp(l.updated_at));
+        if (!inRange(stamp(l.updated_at))) return false;
+        viaActivity.set(l.id, l.updated_at);
+        return true;
       });
     }
     if (search.trim()) {
@@ -3484,7 +3504,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // filters on one screen would be two answers to the same question.
     if (externalMarkFilter === "vip") rows = rows.filter((l) => l.is_vip);
     else if (externalMarkFilter === "attention") rows = rows.filter((l) => l.needs_attention);
-    return rows;
+    return { rows, viaActivity };
   }, [board.leads, dateFilter, dateScope, search, externalMarkFilter, homeVisitScope, stageField]);
 
   // "Treatments" (Head Physio's own board only) is a cross-cutting view, not a real
@@ -7234,6 +7254,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <span className="font-semibold text-slate-700">{[l.appointment_date, l.appointment_time ? to12h(l.appointment_time) : ""].filter(Boolean).join(" · ")}</span>
                         </p>
                       )}
+                      {viaActivity.has(l.id) && (
+                        <p className="text-[10px] font-semibold text-emerald-700">{activityLabel(viaActivity.get(l.id))}</p>
+                      )}
                       {l.assigned_physio_name && (
                         <p className="flex min-w-0 items-center text-[10px] text-slate-400">
                           <span className="truncate">Expert: {l.assigned_physio_name}</span>
@@ -7474,6 +7497,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           )}
                         </span>
                       ) : <span className="block text-center text-slate-400">—</span>}
+                      {viaActivity.has(l.id) && (
+                        <span className="mt-0.5 block whitespace-nowrap text-center text-[10px] font-semibold text-emerald-700" data-testid={`cons-activity-${l.id}`}>
+                          {activityLabel(viaActivity.get(l.id))}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-middle leading-5 text-slate-600" title={l.assigned_physio_name}>
                       <span className={`flex min-w-0 items-center ${feeTable ? "justify-center" : ""}`}>
