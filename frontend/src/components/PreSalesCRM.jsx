@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, RefreshCw, UserPlus, BarChart3, CalendarDays } from "lucide-react";
+import { Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1341,7 +1341,7 @@ export const PreSalesCRM = ({
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" data-testid="presales-leads-card">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+              <thead className="bg-slate-700 text-left text-[10px] uppercase tracking-wider text-white">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Lead</th>
                   <th className="px-4 py-2.5 font-semibold">Contact</th>
@@ -1467,8 +1467,8 @@ export const PreSalesCRM = ({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); setEditing(l); }} className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-sky-600" data-testid={`presales-lead-view-${l.id}`} title="View / Edit">
-                            <Eye className="h-4 w-4" />
+                          <button onClick={(e) => { e.stopPropagation(); setEditing(l); }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid={`presales-lead-view-${l.id}`} title="View / Edit">
+                            <ChevronRight className="h-4 w-4" />
                           </button>
                           {role === "super_admin" && (
                             <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(l); }} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" data-testid={`presales-lead-delete-${l.id}`} title="Delete lead">
