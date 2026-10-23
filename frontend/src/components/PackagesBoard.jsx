@@ -1613,6 +1613,7 @@ const HISTORY_ACTION_LABELS = {
   package_payment_collected: "Consultation Fee Collected",
   treatment_fee_collected: "Treatment Fee Collected",
   fee_collected: "Fee Collected",
+  pre_book_consultation_collected: "Pre Book Consultation Collected",
   follow_up_scheduled: "Follow-Up Scheduled · Pre-Sales",
   follow_up_rescheduled: "Follow-Up Rescheduled · Pre-Sales",
   branch_follow_up_scheduled: "Follow-Up Scheduled · Branch",

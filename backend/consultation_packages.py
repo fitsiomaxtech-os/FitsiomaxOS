@@ -1,4 +1,4 @@
-"""The three packages a Physiotherapy consultation is sold as, and how long each one runs.
+"""The packages a Physiotherapy consultation is sold as, and how long each one runs.
 
 The Physiotherapy consultation shelf is not named freely any more. It is one of three
 packages, and how long an appointment runs follows from which one was sold rather than from
@@ -61,6 +61,14 @@ PACKAGES: Dict[str, Dict[str, object]] = {
         # that nobody agreed to, on every consultation ever sold this way.
         "minutes": CONSULTATION_MINUTES,
         "includes_session": True,
+    },
+    # A returning patient seen again by the consultant, sold at its own (lower) price --
+    # Rs.600 at the time it was added, set on the item like every other package. The same
+    # consultation, so the same 45 minutes; Super Admin can shorten it on the item.
+    "reconsultation": {
+        "label": "Reconsultation",
+        "minutes": CONSULTATION_MINUTES,
+        "includes_session": False,
     },
 }
 

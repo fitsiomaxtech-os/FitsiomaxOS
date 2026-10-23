@@ -23,7 +23,7 @@ from constants import (
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
-    SALES_STAGE_ROLE_NOT_A_PROSPECT,
+    SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK, PRE_BOOK_PLANS,
 )
 from stage_utils import (
     branch_stage_names_for_branch, first_branch_stage_for_branch, get_first_stage_name,
@@ -591,6 +591,35 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
             "not_prospect_remarks": (payload.reminder_remarks or "").strip() or None,
         })
         reminder_note = f" · reminder call {NOT_PROSPECT_REMINDER_DAYS[payload.reminder_days].lower()} ({reminder_date})"
+    # Pre Book holds a client who will come later, so the move asks when -- the board lists
+    # that on the stage, and the desk books the real slot from it. Written field by field
+    # into the nested record, so moving a lead back onto Pre Book to change the date keeps
+    # whatever it has already paid.
+    if payload.branch_stage == await _sales_stage_for_role(SALES_STAGE_ROLE_PRE_BOOK, lead_arm):
+        if payload.pre_book_plan not in PRE_BOOK_PLANS:
+            raise HTTPException(status_code=400, detail="Choose when the client plans to come")
+        try:
+            planned = date.fromisoformat((payload.pre_book_date or "").strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Pick the planned visit date")
+        today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+        if planned < today_ist:
+            raise HTTPException(status_code=400, detail="The planned visit date cannot be in the past")
+        plan = {
+            "at": now_iso(),
+            "by": user.full_name,
+            "plan": payload.pre_book_plan,
+            "plan_label": PRE_BOOK_PLANS[payload.pre_book_plan],
+            "date": planned.isoformat(),
+            "remarks": (payload.pre_book_remarks or "").strip() or None,
+        }
+        # A dotted path cannot be written into a field that holds null, so a lead with no
+        # record yet gets the whole one.
+        if isinstance(lead.get("pre_book"), dict):
+            updates.update({f"pre_book.{k}": v for k, v in plan.items()})
+        else:
+            updates["pre_book"] = plan
+        reminder_note = f" · planned visit {PRE_BOOK_PLANS[payload.pre_book_plan].lower()} ({planned.isoformat()})"
     await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
 
     # Cancelled is where a booked consultation goes to die, and the slot it was holding has

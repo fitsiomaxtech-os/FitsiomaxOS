@@ -1694,6 +1694,9 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
         "session_package_mode": None,
         "session_mode_plan": None,
         "treatment_fee_excess": None,
+        # The planned visit and anything paid to hold it -- back at New Leads there is
+        # nothing pre-booked.
+        "pre_book": None,
         "diagnosis": None,
         "physio_diagnosis_report": None,
         "physio_diagnosis_locked": False,
@@ -1862,6 +1865,13 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
         raise HTTPException(status_code=400, detail="Pass confirm=true to proceed — this cannot be undone.")
 
     leads_result = await v3_col("leads").update_many({}, {"$set": {**LEAD_PAYMENT_RESET_FIELDS, "updated_at": now_iso()}})
+    # Pre Book money is a payment like the rest and goes with them; the planned visit it was
+    # paid against stays. Its own write because the two parts live inside a nested record,
+    # which a dotted path can only be written into where that record exists.
+    await v3_col("leads").update_many(
+        {"pre_book": {"$type": "object"}},
+        {"$set": {"pre_book.consultation": None, "pre_book.advance": None}},
+    )
     # Payment rows only. Approval state lives on these rows too, so it goes with them; the
     # rest of each patient's history (stage moves, diagnoses, remarks) is kept.
     payments_deleted = (await v3_col("lead_activity").delete_many({"action": {"$in": REVENUE_ACTIONS}})).deleted_count

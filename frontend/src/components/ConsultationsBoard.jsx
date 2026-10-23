@@ -12,11 +12,12 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ProgressionTab } from "@/components/ProgressionTab";
-import { LeadMarks, OnlineTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { advanceForLabel, preBookOf, shortDay } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
-  collectPackagePayment, collectTreatmentFee, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
+  collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
   saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
   assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
   rehabSessionsForLead,
@@ -5102,6 +5103,32 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     submitConsultationFee(payload);
   };
 
+  // Using money the client paid at Pre Book on this visit's fee (routers/v3_pre_book.py).
+  // No tender to fill in -- the money is already in, and was counted when it came -- so
+  // one press, then the fee reads paid (or part-paid, its balance owed the usual way).
+  const [applyingPreBook, setApplyingPreBook] = useState(null); // "consultation" | "advance" | null
+  async function settleFromPreBook(kind) {
+    if (!selectedLead || applyingPreBook) return;
+    setApplyingPreBook(kind);
+    try {
+      const res = kind === "consultation"
+        ? await applyPreBookConsultation(selectedLead.id)
+        : await applyPreBookAdvance(selectedLead.id);
+      const owed = Number(res.balance) || 0;
+      const left = Number(res.left_over) || 0;
+      toast.success([
+        kind === "consultation" ? "Consultation Fee settled from Pre Book" : "Pre Book advance used on the Treatment Fee",
+        owed > 0 ? `${rupees(owed)} balance to collect` : "",
+        left > 0 ? `${rupees(left)} of the advance left over` : "",
+      ].filter(Boolean).join(" · "));
+      setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => (l.id === res.lead.id ? res.lead : l)) }));
+      setSelectedLead(res.lead);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not use the Pre Book payment");
+    }
+    setApplyingPreBook(null);
+  }
+
   // Actually calls the API. Leaves the Treatment Fee section (if present)
   // untouched and open for its own button.
   async function submitConsultationFee(payload) {
@@ -7272,7 +7299,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   key={l.id}
                   id={l.id}
                   name={l.name}
-                  nameAddon={<><TransferredTag lead={l} className="ml-1" compact /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" compact /><OnlineTag lead={l} className="ml-1.5" compact /></>}
+                  nameAddon={<><TransferredTag lead={l} className="ml-1" compact /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" compact /><OnlineTag lead={l} className="ml-1.5" compact /><PreBookTag lead={l} className="ml-1.5" compact /></>}
                   mark={selectMode ? (
                     <input type="checkbox" checked={selectedIds.has(l.id)} readOnly className="h-4 w-4" data-testid={`cons-card-select-${l.id}`} />
                   ) : null}
@@ -7330,7 +7357,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       ) : (
                         <span className="mr-1.5 font-semibold text-slate-300">{i + 1}.</span>
                       )}
-                      {l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /><OnlineTag lead={l} className="ml-1.5" />
+                      {l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /><OnlineTag lead={l} className="ml-1.5" /><PreBookTag lead={l} className="ml-1.5" />
                     </p>
                     <p className="truncate text-xs text-slate-500">{displayPhone(l.phone) || "—"}</p>
                   </div>
@@ -7484,7 +7511,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       className="truncate px-4 py-3 align-middle font-medium text-slate-800"
                       title={zoomedTable && leadPlanParts(l).length ? `${l.name}\n${leadPlanParts(l).join(" | ")}` : l.name}
                     >
-                      <span className="block truncate">{l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /><OnlineTag lead={l} className="ml-1.5" /></span>
+                      <span className="block truncate">{l.name || "—"}<TransferredTag lead={l} className="ml-1" /><LeadMarks lead={l} className="ml-1.5" /><RescheduledTag lead={l} className="ml-1.5" /><OnlineTag lead={l} className="ml-1.5" /><PreBookTag lead={l} className="ml-1.5" /></span>
                       {/* What they are going away with, under the name. Reading it meant
                           opening every row: the Stage column says where the paperwork has
                           got to, not what was decided, and those are different questions.
@@ -10812,7 +10839,66 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // Numbered once, here, so every reading of this list agrees about which step
                 // a fee is.
                 const numberedFeeSteps = feeSteps.map((step, i) => ({ step, n: i + 1 }));
-                const FeeSteps = renderFeeSteps(numberedFeeSteps);
+
+                // Money paid at Pre Book that this visit can use, above the cards it settles.
+                // The cards keep their own Collect: the consultant may have sold something the
+                // Pre Book did not cover, and the desk decides which it is.
+                const pb = preBookOf(selectedLead);
+                const pbConsult = pb?.consultation?.paid && !pb.consultation.applied_at && !consultationPaid ? pb.consultation : null;
+                const pbAdvance = pb?.advance?.amount && !pb.advance.applied_at && pb.advance.for === "sessions"
+                  && decision === "consultation_treatment" && !treatmentFeePaid ? pb.advance : null;
+                const preBookStrip = (pbConsult || pbAdvance) ? (
+                  <div className="mb-3 overflow-hidden rounded-lg border border-teal-200 bg-teal-50/70" data-testid="cons-prebook-strip">
+                    <p className="border-b border-teal-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-teal-800">
+                      Paid at Pre Book{pb.date ? ` · planned ${shortDay(pb.date)}` : ""}
+                    </p>
+                    <div className="divide-y divide-teal-100">
+                      {pbConsult && (
+                        <div className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{pbConsult.name} · {rupees(pbConsult.paid)}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {pbConsult.paid < pbConsult.price ? `of ${rupees(pbConsult.price)} — the rest is collected as a balance` : "Covers the Consultation Fee"}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="shrink-0 bg-teal-600 text-white hover:bg-teal-700"
+                            disabled={!!applyingPreBook || consultationRxBlocked}
+                            title={consultationRxBlocked ? "Upload the prescription first" : undefined}
+                            onClick={() => settleFromPreBook("consultation")}
+                            data-testid="cons-prebook-use-consultation"
+                          >
+                            {applyingPreBook === "consultation" ? "Using..." : "Use on Consultation Fee"}
+                          </Button>
+                        </div>
+                      )}
+                      {pbAdvance && (
+                        <div className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">Advance · {advanceForLabel(pbAdvance)} · {rupees(pbAdvance.amount)}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {selectedLead.session_package_price != null
+                                ? `Goes on the Treatment Fee (${rupees(selectedLead.session_package_price)}); the rest is collected as a balance`
+                                : "Usable once the consultant picks the treatment package"}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="shrink-0 bg-teal-600 text-white hover:bg-teal-700"
+                            disabled={!!applyingPreBook || !consultationPaid || selectedLead.session_package_price == null}
+                            title={!consultationPaid ? "Settle the Consultation Fee first" : undefined}
+                            onClick={() => settleFromPreBook("advance")}
+                            data-testid="cons-prebook-use-advance"
+                          >
+                            {applyingPreBook === "advance" ? "Using..." : "Use on Treatment Fee"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null;
+                const FeeSteps = <>{preBookStrip}{renderFeeSteps(numberedFeeSteps)}</>;
 
                 const panel = (() => {
 

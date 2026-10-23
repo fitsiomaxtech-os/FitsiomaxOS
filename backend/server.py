@@ -6,13 +6,13 @@ import logging
 
 from database import client
 from indexes import ensure_core_indexes
-from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_zumba_package_sessions, ensure_rnr_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources
+from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_zumba_package_sessions, ensure_rnr_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_branch_pre_book_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources
 from routers.v3_google_sheets import start_auto_sync_scheduler
 from payment_reminders import start_payment_reminder_scheduler
 import lead_package_pricing
 import lead_purge
 import past_data_live
-from routers import v1, v2, v3_auth, v3_config, v3_leads, v3_branch_admin, v3_appointments, v3_sheets, v3_dashboard, v3_head_physio, v3_finance, v3_head_physio_board, v3_physio_board, v3_session_assign, v3_patient_view, v3_marketing, v3_stages, v3_hr, v3_hr_ops, v3_hr_performance, v3_clock, v3_me, v3_security, v3_lead_fields, v3_branch_mgmt, v3_google_sheets, v3_packages, v3_public_super_admin, v3_password_reset, v3_store, v3_consult_appointments, v3_reviews, v3_patient_portal, v3_testimonials, v3_recruitment, v3_diet, v3_lead_documents, v3_inventory, v3_text_presets, v3_shifts, v3_zumba, v3_rehab, v3_fitness, v3_feedback, v3_client_reviews, v3_eod_reports, v3_branch_calendar, v3_session_payment, v3_physio_absence, v3_vendors, v3_past_data, v3_team, v3_tab_activity
+from routers import v1, v2, v3_auth, v3_config, v3_leads, v3_branch_admin, v3_appointments, v3_sheets, v3_dashboard, v3_head_physio, v3_finance, v3_head_physio_board, v3_physio_board, v3_session_assign, v3_patient_view, v3_marketing, v3_stages, v3_hr, v3_hr_ops, v3_hr_performance, v3_clock, v3_me, v3_security, v3_lead_fields, v3_branch_mgmt, v3_google_sheets, v3_packages, v3_public_super_admin, v3_password_reset, v3_store, v3_consult_appointments, v3_reviews, v3_patient_portal, v3_testimonials, v3_recruitment, v3_diet, v3_lead_documents, v3_inventory, v3_text_presets, v3_shifts, v3_zumba, v3_rehab, v3_fitness, v3_feedback, v3_client_reviews, v3_eod_reports, v3_branch_calendar, v3_session_payment, v3_physio_absence, v3_vendors, v3_past_data, v3_team, v3_tab_activity, v3_pre_book
 
 app = FastAPI()
 
@@ -69,6 +69,7 @@ app.include_router(v3_hr_performance.router)
 app.include_router(v3_session_payment.router)
 app.include_router(v3_physio_absence.router)
 app.include_router(v3_past_data.router)
+app.include_router(v3_pre_book.router)
 
 UPLOAD_ROOT = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_ROOT, exist_ok=True)
@@ -118,6 +119,8 @@ async def startup_seed_data():
     # once: it has to run after the split, or the boot that first creates the online arm
     # copies an offline pipeline that does not have this stage yet.
     await ensure_branch_not_a_prospect_stage()
+    # After Not a prospect, which it positions itself behind; per arm for the same reason.
+    await ensure_branch_pre_book_stage()
     await migrate_consultation_stages()
     # After the consultation stages exist, and before the three passes below that position
     # themselves by order: this one goes in at the head of the pipeline and pushes every

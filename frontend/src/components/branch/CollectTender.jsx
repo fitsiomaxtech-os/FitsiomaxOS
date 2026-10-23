@@ -152,13 +152,15 @@ export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "bal
   );
 };
 
-/** The five mode buttons and, under them, the fields the picked one is traced by. */
-export const TenderFields = ({ draft, setDraft, testid, compact = false }) => (
+/** The five mode buttons and, under them, the fields the picked one is traced by.
+ *  `modes` narrows the buttons for a collection that cannot take every mode -- Pre Book is
+ *  money in hand, so it leaves Cheque off. */
+export const TenderFields = ({ draft, setDraft, testid, compact = false, modes = COLLECT_MODES }) => (
   <>
     <div>
       <span className={`${compact ? "mb-0.5" : "mb-1"} block text-xs font-semibold text-slate-700`}>Payment Mode</span>
       <div className="grid grid-cols-3 gap-1.5">
-        {COLLECT_MODES.map((m) => (
+        {modes.map((m) => (
           <button
             key={m.value}
             type="button"

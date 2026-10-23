@@ -627,6 +627,12 @@ class V3LeadOut(BaseModel):
     not_prospect_reminder_days: Optional[int] = None
     not_prospect_reminder_date: Optional[str] = None  # YYYY-MM-DD, IST
     not_prospect_remarks: Optional[str] = None
+    # Set when the lead is moved to Pre Book, and filled in by the Pre Book popup: when the
+    # client plans to come (plan, plan_label, date, remarks), and what they paid up front --
+    # `consultation` (a package off the catalogue) and `advance` (sessions or other), each
+    # with its own payment and, once used on the day, when it was applied to the real fee.
+    # One nested record rather than a dozen top-level fields; see routers/v3_pre_book.py.
+    pre_book: Optional[dict] = None
     created_at: str
     updated_at: str
 
@@ -1119,6 +1125,11 @@ class V3BranchStageInput(BaseModel):
     # today (15, 20, 30 or 90), and an optional note on why they were written off.
     reminder_days: Optional[int] = None
     reminder_remarks: Optional[str] = None
+    # Only read on a move to Pre Book: when the client plans to come -- one of PRE_BOOK_PLANS
+    # ("next_month", ...) and the date it works out to, which the desk may adjust.
+    pre_book_plan: Optional[str] = None
+    pre_book_date: Optional[str] = None  # YYYY-MM-DD
+    pre_book_remarks: Optional[str] = None
 
 
 class V3PortfolioScheduleInput(BaseModel):

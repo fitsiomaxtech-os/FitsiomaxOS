@@ -8,6 +8,7 @@ from constants import (
     V3_VERTICALS, V3_BRANCH_STAGES, V3_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_ADMIN_ENTRY_STAGE, BRANCH_ADMIN_RNR_STAGE,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_NOT_A_PROSPECT_STAGE,
+    BRANCH_PRE_BOOK_STAGE, SALES_STAGE_ROLE_PRE_BOOK,
     SALES_STAGE_ROLES_BY_NAME,
     SALES_STAGE_ROLE_CANCELLED,
     SALES_STAGE_ROLE_RNR,
@@ -407,6 +408,67 @@ async def ensure_branch_not_a_prospect_stage() -> None:
             "order": insert_order,
             "is_final": False,
             "role": SALES_STAGE_ROLE_NOT_A_PROSPECT,
+            "created_at": now_iso(),
+        }
+        if arm:
+            doc["arm"] = arm
+        await v3_col("pipeline_stages").insert_one(doc)
+
+
+async def ensure_branch_pre_book_stage() -> None:
+    """Give the Branch (sales) pipeline its "Pre Book" pill, right after Not a prospect.
+
+    For the client who says "book me in for next month" and pays to hold the place: the
+    branch has nowhere to put them today. Appointment wants a slot, and there is no slot
+    yet; Follow Up reads as a lead still being chased, which a client who has paid is not.
+
+    Positioned against Not a prospect, and against Appointment where a pipeline has no
+    Not a prospect to follow -- the same two neighbours the card's strip reads them beside.
+    Not is_final, for the reason Not a prospect is not: a final stage loses its pill on a
+    branch running its own leads, and this one is reached from the strip and nowhere else.
+
+    Run per arm after ensure_branch_not_a_prospect_stage, so the stage it is positioned
+    against exists. Idempotent, and a no-op until the sales stages exist.
+    """
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "sales"}, {"_id": 0, "name": 1, "order": 1, "arm": 1, "role": 1}
+    ).sort("order", 1).to_list(400)
+    if not rows:
+        return
+    by_arm = {}
+    for row in rows:
+        by_arm.setdefault(row.get("arm"), []).append(row)
+
+    for arm, arm_rows in by_arm.items():
+        if any(_sales_row_has_role(r, SALES_STAGE_ROLE_PRE_BOOK, BRANCH_PRE_BOOK_STAGE) for r in arm_rows):
+            continue
+        after = next(
+            (r for r in arm_rows
+             if _sales_row_has_role(r, SALES_STAGE_ROLE_NOT_A_PROSPECT, BRANCH_NOT_A_PROSPECT_STAGE)),
+            None,
+        ) or next(
+            (r for r in arm_rows
+             if _sales_row_has_role(r, SALES_STAGE_ROLE_APPOINTMENT, BRANCH_APPOINTMENT_STAGE)),
+            None,
+        )
+        if not after:
+            continue
+        insert_order = (after.get("order") or 0) + 1
+        arm_filter = {"arm": arm} if arm else {"arm": None}
+        await v3_col("pipeline_stages").update_many(
+            {"type": "sales", "order": {"$gte": insert_order}, **arm_filter},
+            {"$inc": {"order": 1}},
+        )
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": BRANCH_PRE_BOOK_STAGE,
+            # Teal: money in hand and a visit coming, which is neither the slate of a lead
+            # set aside beside it nor the rose of one called off.
+            "color": "#0d9488",
+            "type": "sales",
+            "order": insert_order,
+            "is_final": False,
+            "role": SALES_STAGE_ROLE_PRE_BOOK,
             "created_at": now_iso(),
         }
         if arm:

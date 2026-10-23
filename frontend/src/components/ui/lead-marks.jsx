@@ -1,4 +1,5 @@
-import { AlertCircle, ArrowLeftRight, RotateCcw, Star, Video } from "lucide-react";
+import { AlertCircle, ArrowLeftRight, CalendarClock, RotateCcw, Star, Video } from "lucide-react";
+import { preBookOf, preBookUnused, rupees, shortDay } from "@/lib/preBook";
 
 /**
  * The two marks a branch puts on a patient by hand, shown read-only.
@@ -151,6 +152,42 @@ export const OnlineTag = ({ lead, className = "", compact = false }) => {
     >
       <Video className={compact ? "h-2 w-2" : "h-2.5 w-2.5"} />
       {compact ? "" : "Online"}
+    </span>
+  );
+};
+
+/**
+ * "Pre Book" -- this client has paid ahead for a visit that has not been used up yet.
+ *
+ * Shown wherever the lead is listed while any of that money is still waiting to be used
+ * on a real fee, with the amount, because that is the thing the desk must not forget: a
+ * Consultant's list, the Consultation board and Branch Leads all say "this one has paid
+ * already". `always` draws it with no unused money too -- the Pre Book stage's own rows,
+ * where every lead is pre-booked and the planned date is the point.
+ *
+ * Teal, the stage's own colour. Renders nothing for a lead never pre-booked, like the marks
+ * above.
+ */
+export const PreBookTag = ({ lead, className = "", compact = false, always = false }) => {
+  const pb = preBookOf(lead);
+  if (!pb) return null;
+  const unused = preBookUnused(lead);
+  if (!unused && !always) return null;
+  const title = [
+    `Pre Book${pb.plan_label ? ` · ${pb.plan_label}` : ""}${pb.date ? ` (${shortDay(pb.date)})` : ""}`,
+    unused ? `${rupees(unused)} paid, not yet used` : "",
+  ].filter(Boolean).join(" — ");
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-0.5 rounded-full bg-teal-50 font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-200 align-middle ${
+        compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]"
+      } ${className}`}
+      title={title}
+      aria-label={title}
+      data-testid="lead-pre-book-tag"
+    >
+      <CalendarClock className={compact ? "h-2 w-2" : "h-2.5 w-2.5"} />
+      {compact ? (unused ? rupees(unused) : "") : <>Pre Book{unused ? ` ${rupees(unused)}` : ""}</>}
     </span>
   );
 };

@@ -47,7 +47,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  Download, FileSpreadsheet, Menu, LayoutGrid,
+  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -62,7 +62,9 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StageTabBar } from "@/components/ui/stage-tab";
-import { OnlineTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
+import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookOf, preBookPaid, rupees, shortDay, todayIso } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import {
@@ -143,6 +145,9 @@ const STAGE_ROLE_FOLLOW_UP = "follow_up";
 // counting a written-off lead under it after a consultant has moved the patient along the
 // consultation pipeline underneath (see rowStageName and matchesBranchStage).
 const STAGE_ROLE_NOT_A_PROSPECT = "not_a_prospect";
+// A client who will come later and has paid to hold the visit. The move onto it asks when
+// they plan to come, and the lead card offers the Pre Book popup on it -- both by role.
+const STAGE_ROLE_PRE_BOOK = "pre_book";
 
 // Branch Consultation's cancel stage. The Branch Leads card offers it as its Cancel pill,
 // moving consultation_stage rather than branch_stage -- see consultationCancelStage.
@@ -158,6 +163,7 @@ const STAGE_ROLE_FALLBACK_NAMES = {
   [STAGE_ROLE_PORTFOLIO]: "Portfolio",
   [STAGE_ROLE_FOLLOW_UP]: "Follow Up",
   [STAGE_ROLE_NOT_A_PROSPECT]: "Not a prospect",
+  [STAGE_ROLE_PRE_BOOK]: "Pre Book",
 };
 
 // What the Branch Leads cards read on a phone, where six full names will not sit in one
@@ -213,6 +219,7 @@ const LEAD_STAGE_ICONS = [
   ["portfolio", ClipboardList],
   ["cancel", CalendarX],
   ["prospect", UserX],
+  ["book", CalendarClock],
   ["lead", UserPlus],
 ];
 const leadStageIcon = (name) => {
@@ -722,6 +729,12 @@ const notProspectLabel = (lead) => {
   };
 };
 
+/** "Next Month · 23 Nov 2026" -- when a Pre Book client plans to come, for the export. */
+const preBookPlanLabel = (lead) => {
+  const pb = preBookOf(lead);
+  return pb ? [pb.plan_label, shortDay(pb.date)].filter(Boolean).join(" · ") : "";
+};
+
 /** The Follow Up column's heading — a clock and nothing else.
  *
  *  Icon-only because the column is only ever drawn on the Follow Up stage, where what the
@@ -899,7 +912,12 @@ export const matchesBranchStage = (lead, stage, isConsultationOnlyStage = () => 
   // that was just set on it. Named as a literal rather than by role because this function
   // is module-level and has no stage list to ask; a renamed stage loses the exemption the
   // same way Cancelled beside it would.
-  const abandoned = here === "Cancelled" || here === "Cancel" || here === "Not a prospect";
+  //
+  // Pre Book is held the same way for a different reason: it is a stop until the planned
+  // visit, and the client who books ahead for a reconsultation is often one whose earlier
+  // consultation or course is still on the record -- handedOver and finished below would
+  // drop them out of the pill the desk just put them on.
+  const abandoned = here === "Cancelled" || here === "Cancel" || here === "Not a prospect" || here === "Pre Book";
   const finished = !abandoned && isCourseComplete(lead);
   // Only the Consultation-ONLY stages hand a lead over — a name both pipelines share gets a
   // single pill backed by the sales-side field, so releasing on one would drop a lead out of
@@ -1304,7 +1322,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const finalBranchStages = useMemo(
     () => new Set(
       stages
-        .filter((s) => s.is_final || stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT))
+        .filter((s) => s.is_final || stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT) || stageHasRole(s, STAGE_ROLE_PRE_BOOK))
         .map((s) => s.name),
     ),
     [stages],
@@ -1348,7 +1366,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // On Not a prospect the Appointment column is history, so it becomes "Moved On" and the
   // Follow Up slot carries the Reminder Call the lead is parked until.
   const showNotProspectColumns = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
-  const showExtraColumn = showFollowUpColumn || showNotProspectColumns;
+  // On Pre Book the same two slots carry when the client plans to come and what they paid.
+  const showPreBookColumns = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_PRE_BOOK);
+  const showExtraColumn = showFollowUpColumn || showNotProspectColumns || showPreBookColumns;
 
   // The column widths this list is drawn at, chosen once for the header and the rows
   // together — a row that disagreed with the header about how many columns there are
@@ -1804,6 +1824,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // the date the lead arrived, which is what that tab's date range is read on.
     const followUpName = stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP);
     const notProspectName = stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
+    const preBookName = stageNameForRole(stages, STAGE_ROLE_PRE_BOOK);
     const leadsList = (stage) => {
       const name = stage?.name || "All Stages";
       const rows = stage
@@ -1811,6 +1832,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         : filteredLeads;
       const onFollowUp = !!stage && (name === followUpName || /follow\s*-?\s*up/i.test(name));
       const onNotProspect = !!stage && name === notProspectName;
+      const onPreBook = !!stage && name === preBookName;
       const slot = (x) => (x ? [x.date, x.time].filter(Boolean).join(" · ") : "");
       const columns = [
         { header: "S.No", xlsx: 7, get: (l, i) => i + 1 },
@@ -1825,6 +1847,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         ...(onNotProspect ? [
           { header: "Moved On", xlsx: 14, get: (l) => notProspectLabel(l).markedOn || "" },
           { header: "Reminder Call", xlsx: 14, get: (l) => notProspectLabel(l).reminder || "" },
+        ] : onPreBook ? [
+          { header: "Planned Visit", xlsx: 22, get: (l) => preBookPlanLabel(l) },
+          { header: "Pre Book Paid", xlsx: 14, get: (l) => (preBookOf(l) ? preBookPaid(preBookOf(l)) : "") },
         ] : [
           { header: "Appointment Date", xlsx: 15, get: (l) => (l.appointment_date ? dateStampFull(l.appointment_date) : "") },
           { header: "Time", xlsx: 10, get: (l) => (l.appointment_time ? to12h(l.appointment_time) : "") },
@@ -2984,6 +3009,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 const slot = apptSlotLabel(lead);
                 const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
+                const pbRow = showPreBookColumns ? preBookOf(lead) : null;
                 // All Stages is the whole branch at a glance, every stage mixed together, so
                 // its card says only who, their number and where they stand: the name, the
                 // phone and the stage, boxed, then a grey bin and an arrow into the lead (see
@@ -2991,7 +3017,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 // own lines and Call/WhatsApp belong to a stage's pill, where the list is
                 // being worked rather than looked over.
                 const allStages = !stageFilter;
-                const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || lead.assigned_physio_name);
+                const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || pbRow || lead.assigned_physio_name);
                 // The reference card's single row (see ui/lead-row-card). Reaching the patient
                 // is the commonest thing done from this list, so Call and WhatsApp sit on the
                 // card rather than three taps deep behind the lead popup. Anything a stage
@@ -3006,7 +3032,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
+                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /><PreBookTag lead={lead} className="ml-1.5" compact /></>}
                     // On the Leads pill the row's right holds only Call, WhatsApp and the
                     // bin: every row there would read "Leads" anyway. The other pills and
                     // All Stages keep the badge.
@@ -3053,6 +3079,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             <span className="text-slate-500">Reminder call</span>
                             <span className={`font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
                             <span className={`font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
+                          </p>
+                        )}
+                        {pbRow && (
+                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-prebook-${lead.id}`}>
+                            <CalendarClock className="h-3 w-3 text-teal-500" />
+                            <span className="font-semibold text-slate-700">{shortDay(pbRow.date)}</span>
+                            <span className="text-slate-500">{pbRow.plan_label}</span>
+                            {preBookPaid(pbRow) > 0
+                              ? <span className="font-semibold text-teal-700">{rupees(preBookPaid(pbRow))} paid</span>
+                              : <span className="font-medium text-amber-600">Not paid</span>}
                           </p>
                         )}
                         {lead.assigned_physio_name && <p className="truncate text-[10px] text-slate-400">Physio: {lead.assigned_physio_name}</p>}
@@ -3144,6 +3180,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           <th className={`${armWidths.appt} px-4 py-3`}>Moved On</th>
                           <th className={`${armWidths.followUp} px-4 py-3`} data-testid="branch-list-reminder-head">Reminder Call</th>
                         </>
+                      ) : showPreBookColumns ? (
+                        <>
+                          <th className={`${armWidths.appt} px-4 py-3`}>Planned Visit</th>
+                          <th className={`${armWidths.followUp} px-4 py-3`} data-testid="branch-list-prebook-head">Paid</th>
+                        </>
                       ) : (
                         <>
                           <th className={`${armWidths.appt} px-4 py-3`}>Appointment</th>
@@ -3174,6 +3215,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         <>
                           <th className={`${listWidths.appt} px-4 py-3`}>Moved On</th>
                           <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-reminder-head">Reminder Call</th>
+                        </>
+                      ) : showPreBookColumns ? (
+                        <>
+                          <th className={`${listWidths.appt} px-4 py-3`}>Planned Visit</th>
+                          <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-prebook-head">Paid</th>
                         </>
                       ) : (
                         <>
@@ -3239,6 +3285,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                 <TransferredTag lead={lead} />
                                 <RescheduledTag lead={lead} className="shrink-0" />
                                 <OnlineTag lead={lead} />
+                                <PreBookTag lead={lead} always={showPreBookColumns} />
                               </span>
                             </div>
                             {/* The two marks, after the name so they read as something said
@@ -3340,6 +3387,26 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                     {np.due && <span className="ml-1.5 rounded-[4px] bg-rose-50 px-1 py-px text-[10px] font-semibold text-rose-600">Due</span>}
                                   </>
                                 ) : <span className="text-slate-400">—</span>}
+                              </td>
+                            </>
+                          );
+                        })() : showPreBookColumns ? (() => {
+                          const pb = preBookOf(lead);
+                          const paid = pb ? preBookPaid(pb) : 0;
+                          return (
+                            <>
+                              <td className="truncate whitespace-nowrap px-4 py-3" title={pb?.remarks || undefined} data-testid={`branch-row-prebook-plan-${lead.id}`}>
+                                {pb ? (
+                                  <>
+                                    <span className="text-xs font-semibold text-slate-700">{shortDay(pb.date)}</span>
+                                    <span className="ml-1.5 rounded-[4px] bg-teal-50 px-1 py-px text-[10px] font-semibold text-teal-700">{pb.plan_label}</span>
+                                  </>
+                                ) : <span className="text-slate-400">—</span>}
+                              </td>
+                              <td className="truncate whitespace-nowrap px-4 py-3" data-testid={`branch-row-prebook-paid-${lead.id}`}>
+                                {paid > 0
+                                  ? <span className="text-xs font-semibold text-teal-700">{rupees(paid)}</span>
+                                  : <span className="rounded-[4px] bg-amber-50 px-1 py-px text-[10px] font-semibold text-amber-600">Not paid</span>}
                               </td>
                             </>
                           );
@@ -3719,6 +3786,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const appointmentStageName = stageNameForRole(stages, STAGE_ROLE_APPOINTMENT);
   const cancelledStageName = stageNameForRole(stages, STAGE_ROLE_CANCELLED);
   const notProspectStageName = stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
+  const preBookStageName = stageNameForRole(stages, STAGE_ROLE_PRE_BOOK);
   const inAppointmentStage = lead.branch_stage === appointmentStageName;
   // The four real stages reachable from Appointment. Reschedule is the fifth exit and is
   // not in here, because it is not a stage at all -- see the pill itself.
@@ -3731,6 +3799,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
     stageNameForRole(stages, STAGE_ROLE_RNR),
     stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP),
     notProspectStageName,
+    // A booked client who would rather come next month is moved here, not cancelled.
+    preBookStageName,
     cancelledStageName,
   ];
   // `!!name` guards the matchesBranchStage call below: a lead with no consultation_stage
@@ -3870,6 +3940,17 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // "Move to Stage" popup for Not a prospect: when to ring the patient back.
   const [notProspectDraft, setNotProspectDraft] = useState(null); // { days, remarks } | null
   const [notProspectBusy, setNotProspectBusy] = useState(false);
+
+  // "Move to Stage" popup for Pre Book: when the client plans to come.
+  const [preBookMoveDraft, setPreBookMoveDraft] = useState(null); // { stage, plan, date, remarks } | null
+  const [preBookMoveBusy, setPreBookMoveBusy] = useState(false);
+  // The Pre Book popup itself -- the money -- opened from the card on the overview.
+  const [preBookCollecting, setPreBookCollecting] = useState(false);
+  const openPreBookMove = (stage) => {
+    const pb = preBookOf(lead);
+    const plan = pb?.plan || "next_month";
+    setPreBookMoveDraft({ stage, plan, date: pb?.date && pb.date >= todayIso() ? pb.date : planDate(plan), remarks: pb?.remarks || "" });
+  };
 
   /** Who could take this exact slot, and hand it to one of them.
    *
@@ -4389,6 +4470,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
       setNotProspectDraft({ stage, days: 90, remarks: "" });
       return false;
     }
+    // Nor Pre Book: it asks when the client plans to come.
+    if (stage === preBookStageName || stages.some((s) => s.name === stage && stageHasRole(s, STAGE_ROLE_PRE_BOOK))) {
+      openPreBookMove(stage);
+      return false;
+    }
     try {
       await moveBranchStage(lead.id, { branch_stage: stage });
       toast.success(`Moved to ${stage}`);
@@ -4483,6 +4569,35 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
       setNotProspectBusy(false);
     }
   };
+
+  const submitPreBookMove = async () => {
+    if (!preBookMoveDraft?.plan) { toast.error("Choose when the client plans to come"); return; }
+    if (!preBookMoveDraft.date) { toast.error("Pick the planned visit date"); return; }
+    if (preBookMoveDraft.date < todayIso()) { toast.error("The planned visit date cannot be in the past"); return; }
+    const target = preBookMoveDraft.stage || preBookStageName;
+    try {
+      setPreBookMoveBusy(true);
+      await moveBranchStage(lead.id, {
+        branch_stage: target,
+        pre_book_plan: preBookMoveDraft.plan,
+        pre_book_date: preBookMoveDraft.date,
+        pre_book_remarks: preBookMoveDraft.remarks,
+      });
+      toast.success(`Moved to ${target}`);
+      setPreBookMoveDraft(null);
+      onMoved && onMoved(target);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Move failed");
+    } finally {
+      setPreBookMoveBusy(false);
+    }
+  };
+
+  // The Pre Book card: on the stage, and on any lead still carrying Pre Book money, since
+  // that is where the desk looks to see what was paid ahead.
+  const preBook = preBookOf(lead);
+  const onPreBookStage = lead.branch_stage === preBookStageName;
+  const showPreBookCard = onPreBookStage || !!preBook;
 
   const TABS = [
     { key: "overview", label: "Overview", color: "bg-sky-500" },
@@ -4618,7 +4733,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
               <div className="min-w-0">
-                <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /></p>
+                <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {lead.patient_number && (
                     <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
@@ -4693,6 +4808,71 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Email</span><span className="font-medium text-slate-800">{lead.email || "—"}</span></div>
                 </div>
               </div>
+
+              {/* Pre Book: when the client plans to come and what they paid to hold it. First
+                  after Contact on the stage itself, because collecting that money is what a
+                  Pre Book lead is opened for. */}
+              {showPreBookCard && (
+                <div className="overflow-hidden rounded-[3px] border border-teal-100 bg-white shadow-sm" data-testid="branch-lead-prebook">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-700">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-100 text-teal-600"><CalendarClock className="h-4 w-4" /></span>
+                      Pre Book
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {onPreBookStage && (
+                        <button
+                          type="button"
+                          onClick={() => openPreBookMove(preBookStageName)}
+                          className="rounded-[3px] border border-teal-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-50"
+                          data-testid="branch-lead-prebook-change"
+                        >
+                          Change Date
+                        </button>
+                      )}
+                      {preBook && (
+                        <button
+                          type="button"
+                          onClick={() => setPreBookCollecting(true)}
+                          className="rounded-[3px] bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-teal-700"
+                          data-testid="branch-lead-prebook-collect"
+                        >
+                          {preBook.consultation && preBook.advance ? "View" : "Collect"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2 px-4 py-3 text-sm">
+                    {preBook ? (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-medium text-slate-500">Planned visit</span>
+                          <span className="text-right font-medium text-slate-800">{shortDay(preBook.date)} <span className="text-xs text-teal-700">· {preBook.plan_label}</span></span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-medium text-slate-500">Consultation</span>
+                          <span className="text-right font-medium text-slate-800">
+                            {preBook.consultation
+                              ? <>{preBook.consultation.name} · {rupees(preBook.consultation.paid)}{preBook.consultation.paid < preBook.consultation.price ? <span className="text-xs text-amber-600"> of {rupees(preBook.consultation.price)}</span> : null}{preBook.consultation.applied_at ? <span className="text-xs text-teal-700"> · used</span> : null}</>
+                              : <span className="text-slate-400">Not paid</span>}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-medium text-slate-500">Advance</span>
+                          <span className="text-right font-medium text-slate-800">
+                            {preBook.advance
+                              ? <>{advanceForLabel(preBook.advance)} · {rupees(preBook.advance.amount)}{preBook.advance.applied_at ? <span className="text-xs text-teal-700"> · used</span> : null}</>
+                              : <span className="text-slate-400">Not paid</span>}
+                          </span>
+                        </div>
+                        {preBook.remarks && <p className="text-xs text-slate-500">{preBook.remarks}</p>}
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-500">No planned visit recorded. Use Change Date to set when the client is coming.</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Above the pipeline for the same reason the Follow-Up card is: on a lead
                   parked at RNR, how many times somebody has rung is what the popup is
@@ -4993,6 +5173,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       // when first — the backend refuses it without one.
                       if (stage === notProspectStageName || stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT)) {
                         setNotProspectDraft({ stage, days: 90, remarks: "" });
+                        return;
+                      }
+                      // Pre Book asks when the client plans to come -- the backend refuses
+                      // the move without it.
+                      if (stage === preBookStageName || stageHasRole(s, STAGE_ROLE_PRE_BOOK)) {
+                        openPreBookMove(stage);
                         return;
                       }
                       if (consultationOnly) {
@@ -6400,6 +6586,87 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             </div>
           </div>
         </div>
+      )}
+
+      {/* Pre Book — when the client plans to come (triggered from Move to Stage) */}
+      {preBookMoveDraft && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) setPreBookMoveDraft(null); }} data-testid="branch-prebook-move-modal">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 text-slate-800">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-teal-600" />
+                <div>
+                  <p className="text-base font-semibold">{preBookMoveDraft.stage || preBookStageName} — Planned Visit</p>
+                  <p className="text-[11px] text-slate-400">{lead.name}{displayPhone(lead.phone) ? ` · ${displayPhone(lead.phone)}` : ""}</p>
+                </div>
+              </div>
+              <button onClick={() => setPreBookMoveDraft(null)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid="branch-prebook-move-close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Client will come *</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {PRE_BOOK_PLANS.map((o) => (
+                    <button
+                      key={o.key}
+                      type="button"
+                      onClick={() => setPreBookMoveDraft({ ...preBookMoveDraft, plan: o.key, date: o.key === "date" ? preBookMoveDraft.date : planDate(o.key) })}
+                      className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${preBookMoveDraft.plan === o.key ? "border-teal-500 bg-teal-600 text-white" : "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
+                      data-testid={`branch-prebook-plan-${o.key}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label htmlFor="branch-prebook-date" className="mb-1.5 block text-xs font-semibold text-slate-600">Planned visit date *</label>
+                <input
+                  id="branch-prebook-date"
+                  type="date"
+                  min={todayIso()}
+                  value={preBookMoveDraft.date}
+                  onChange={(e) => setPreBookMoveDraft({ ...preBookMoveDraft, date: e.target.value })}
+                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  data-testid="branch-prebook-date"
+                />
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  The real slot is booked from Appointment when the visit comes round. Collect the Pre Book money from the lead card after the move.
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Remarks</label>
+                <textarea
+                  rows={2}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  placeholder="e.g. Wants the same consultant (optional)"
+                  value={preBookMoveDraft.remarks}
+                  onChange={(e) => setPreBookMoveDraft({ ...preBookMoveDraft, remarks: e.target.value })}
+                  data-testid="branch-prebook-remarks"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
+              <Button variant="outline" onClick={() => setPreBookMoveDraft(null)} data-testid="branch-prebook-move-cancel">Cancel</Button>
+              <Button className="bg-teal-600 text-white hover:bg-teal-700" onClick={submitPreBookMove} disabled={preBookMoveBusy} data-testid="branch-prebook-move-save">
+                {preBookMoveBusy ? "Moving..." : onPreBookStage ? "Save" : "Save & Move"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The Pre Book popup: the money. Refreshes the lead in place, so the card behind it
+          shows what was paid the moment the receipt is closed. */}
+      {preBookCollecting && (
+        <PreBookCollectDialog
+          lead={lead}
+          branchId={branchId || lead.branch_id}
+          onClose={() => setPreBookCollecting(false)}
+          onCollected={() => { onUpdate && onUpdate(); }}
+        />
       )}
 
       {/* Not a prospect — Reminder Call popup (triggered from Move to Stage) */}

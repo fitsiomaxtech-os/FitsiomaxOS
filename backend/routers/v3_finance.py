@@ -556,7 +556,50 @@ async def unapprove_transaction(
 _UNSCHEDULED_PAYMENT_FIELDS = {
     "consultation_paid": ["consultation_fee", "consultation_payment_mode"],
     "package_sold": ["package_paid", "package_payment_mode", "package_payment_details"],
+    # The part of the Pre Book record the payment wrote. If it has since been used on the
+    # real fee, _pre_book_unapply takes it back off that fee too.
+    "pre_book_consultation_collected": ["pre_book.consultation"],
+    "pre_book_advance_collected": ["pre_book.advance"],
+    "pre_book_other_advance_collected": ["pre_book.advance"],
 }
+
+
+def _pre_book_unapply(lead: dict, action: str) -> dict:
+    """What deleting a Pre Book payment does to the fee it was already used on.
+
+    Using the money wrote it onto the Consultation or Treatment Fee as that fee's first,
+    already-paid instalment (marked `pre_book`), with any rest owed as an ordinary balance.
+    With the payment gone that instalment is money nobody paid, so it reads owed again.
+    Where nothing else has been paid on the fee, the fee goes back to uncollected whole --
+    the same state deleting a fee's own payment leaves. Where the balance has since been
+    collected, that money stays and only the Pre Book part comes off.
+
+    {} when the payment was never used, or the fee has since been re-collected some other
+    way and no longer stands on it.
+    """
+    part = "consultation" if action == "pre_book_consultation_collected" else "advance"
+    rec = ((lead.get("pre_book") or {}).get(part)) or {}
+    if not rec.get("applied_at"):
+        return {}
+    cfg = FEE_SCHEDULES["consultation" if part == "consultation" else "treatment"]
+    if lead.get(cfg["mode"]) != "pre_book":
+        return {}
+    details = dict(lead.get(cfg["details"]) or {})
+    installments = list(details.get("installments") or [])
+    if not any(i.get("paid") and not i.get("pre_book") for i in installments):
+        return {cfg["paid"]: None, cfg["mode"]: None, cfg["details"]: None}
+    applied = 0.0
+    for idx, inst in enumerate(installments):
+        if inst.get("pre_book") and inst.get("paid"):
+            applied += float(inst.get("amount") or 0)
+            installments[idx] = {
+                "amount": inst.get("amount"), "due_date": inst.get("due_date"), "paid": False,
+            }
+    details["installments"] = installments
+    return {
+        cfg["details"]: details,
+        cfg["paid"]: round(max((lead.get(cfg["paid"]) or 0) - applied, 0), 2),
+    }
 
 
 def _payment_fields(row: dict) -> list:
@@ -591,6 +634,8 @@ async def _reverse_lead_payment(row: dict, user: V3UserOut, where: str = "the Ac
         return "Payment deleted"
 
     update = {f: None for f in fields}
+    if action in PRE_BOOK_ACTIONS:
+        update.update(_pre_book_unapply(lead, action))
     after = {**lead, **update}
     stage = lead.get("consultation_stage")
     has_consult = after.get("package_paid") is not None
@@ -1621,7 +1666,12 @@ async def finance_profit(
 
 # "session" = Treatment Fee (the multi-visit Session Package collected after Consultation
 # Fee); everything else collected at/around the consultation itself is "consultation".
-REVENUE_ACTIONS = ["consultation_paid", "package_sold", "package_payment_collected", "treatment_fee_collected", "diet_fee_collected", "diet_chart_fee_collected", "rehab_fee_collected", "fee_collected"]
+# The three Pre Book actions are money arriving like any other -- it is in the drawer the day
+# the client pays to hold their visit, so it is counted that day. Using it on the Consultation
+# or Treatment Fee later writes no second row (see routers/v3_pre_book.py), which is what
+# keeps the same rupee from being counted twice.
+PRE_BOOK_ACTIONS = ["pre_book_consultation_collected", "pre_book_advance_collected", "pre_book_other_advance_collected"]
+REVENUE_ACTIONS = ["consultation_paid", "package_sold", "package_payment_collected", "treatment_fee_collected", "diet_fee_collected", "diet_chart_fee_collected", "rehab_fee_collected", "fee_collected", *PRE_BOOK_ACTIONS]
 
 # The Consultation Fee itself: the actions that mean "this patient paid to be seen today".
 # Deliberately narrower than _revenue_category(...) == "consultation", which is a reporting
@@ -1640,7 +1690,9 @@ def _revenue_category(action: str) -> str:
     figure. Anything not named here is consultation, which keeps every older action
     reporting exactly where it always did.
     """
-    if action == "treatment_fee_collected":
+    # An advance taken for sessions is session money that arrived early; the Pre Book
+    # consultation and an advance for anything else stay on the consultation line.
+    if action in ("treatment_fee_collected", "pre_book_advance_collected"):
         return "session"
     # Both diet fees land on the one diet line. They are two products, but a branch
     # asking "how much did diet bring in" means the vertical, not the shelf, and splitting
@@ -1911,6 +1963,9 @@ PAYMENT_ACTION_LABELS = {
     "consultation_paid": "Consultation Fee",
     "package_sold": "Package Sold",
     "fee_collected": "Fee Collected",
+    "pre_book_consultation_collected": "Pre Book Consultation",
+    "pre_book_advance_collected": "Pre Book Advance (Sessions)",
+    "pre_book_other_advance_collected": "Pre Book Advance",
 }
 
 

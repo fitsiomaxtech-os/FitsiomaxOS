@@ -52,6 +52,7 @@ def test_consultation_plus_session_holds_only_the_consultation():
 def test_only_the_session_package_owes_a_session():
     assert cp.includes_session("only_consultation") is False
     assert cp.includes_session("consultation_plus_physio") is False
+    assert cp.includes_session("reconsultation") is False
 
 
 def test_every_package_contains_the_same_consultation():
@@ -69,10 +70,12 @@ def test_the_three_packages_and_their_labels():
         "only_consultation",
         "consultation_plus_physio",
         "consultation_plus_session",
+        "reconsultation",
     ]
     assert cp.label_of("only_consultation") == "Only Consultation"
     assert cp.label_of("consultation_plus_physio") == "Consultation + 20 mins Physio"
     assert cp.label_of("consultation_plus_session") == "Consultation + 1 Session"
+    assert cp.label_of("reconsultation") == "Reconsultation"
 
 
 def test_label_of_an_unknown_key_is_empty_not_an_error():

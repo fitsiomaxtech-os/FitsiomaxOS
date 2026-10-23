@@ -310,6 +310,8 @@ STORE_HISTORY_ACTIONS = [
     "diet_chart_fee_collected",
     "rehab_fee_collected",
     "fee_collected",
+    # A consultation package bought ahead of the visit, at Pre Book.
+    "pre_book_consultation_collected",
 ]
 
 # Subset of the above that represents money actually collected — excludes package_assigned,
@@ -323,6 +325,8 @@ PAYMENT_HISTORY_ACTIONS = [
     "diet_chart_fee_collected",
     "rehab_fee_collected",
     "fee_collected",
+    # A consultation package bought ahead of the visit, at Pre Book.
+    "pre_book_consultation_collected",
 ]
 
 # Every follow-up scheduled/rescheduled across Pre-Sales, Branch Leads, and Consultations.

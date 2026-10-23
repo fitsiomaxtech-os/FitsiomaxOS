@@ -27,6 +27,7 @@ V3_BRANCH_STAGES = [
     "Follow Up",
     "Appointment",
     "Not a prospect",
+    "Pre Book",
     "Cancelled",
 ]
 
@@ -76,6 +77,30 @@ BRANCH_APPOINTMENT_STAGE_FORMER = "Appointment Date & Time"
 # rate as cancellations rather than as bad leads.
 BRANCH_NOT_A_PROSPECT_STAGE = "Not a prospect"
 
+# Where a lead waits when the client has committed to coming later -- "book me in for next
+# month" -- and has paid to hold that place. Sits after Not a prospect, and is not final:
+# the lead is booked onto a real slot from here when the planned visit comes round.
+#
+# Its own stage rather than an early Appointment, because there is no slot yet to hold. What
+# the lead carries instead is when the client said they would come (pre_book_plan /
+# pre_book_date, asked on the move) and what they paid up front: a consultation package
+# and/or an advance, collected in the Pre Book popup and applied to the real fees on the day
+# (see routers/v3_pre_book.py).
+BRANCH_PRE_BOOK_STAGE = "Pre Book"
+
+# When the client said they would come, as the move onto Pre Book offers it. The label is
+# what the board shows; the date it works out to travels beside it and may be adjusted, so
+# "Next Month" can mean the 3rd as readily as today's date a month on. "date" is a day the
+# desk picked outright. Mirrored by PRE_BOOK_PLANS in BranchAdminBoard.jsx.
+PRE_BOOK_PLANS = {
+    "next_week": "Next Week",
+    "two_weeks": "In 2 Weeks",
+    "next_month": "Next Month",
+    "two_months": "In 2 Months",
+    "three_months": "In 3 Months",
+    "date": "On a Date",
+}
+
 # ------------------------------------------------------------------- Branch arms ("sales")
 #
 # The clinic runs two practices — one in the room, one over video — and they do not work a
@@ -119,11 +144,15 @@ SALES_STAGE_ROLE_FOLLOW_UP = "follow_up"
 # BranchAdminBoard.jsx), and to keep counting a written-off lead under it once a consultant
 # has moved the patient along the consultation pipeline underneath.
 SALES_STAGE_ROLE_NOT_A_PROSPECT = "not_a_prospect"
+# The move onto it asks when the client plans to come, and the board opens the Pre Book
+# popup on it -- both found by role, so a rename keeps them.
+SALES_STAGE_ROLE_PRE_BOOK = "pre_book"
 
 SALES_STAGE_ROLES_BY_NAME = {
     BRANCH_APPOINTMENT_STAGE: SALES_STAGE_ROLE_APPOINTMENT,
     BRANCH_CANCELLED_STAGE: SALES_STAGE_ROLE_CANCELLED,
     BRANCH_NOT_A_PROSPECT_STAGE: SALES_STAGE_ROLE_NOT_A_PROSPECT,
+    BRANCH_PRE_BOOK_STAGE: SALES_STAGE_ROLE_PRE_BOOK,
     BRANCH_ADMIN_RNR_STAGE: SALES_STAGE_ROLE_RNR,
     "Portfolio": SALES_STAGE_ROLE_PORTFOLIO,
     "Follow Up": SALES_STAGE_ROLE_FOLLOW_UP,

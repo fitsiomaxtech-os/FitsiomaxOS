@@ -18,7 +18,9 @@ import { displayPhone } from "@/lib/phone";
 // anyone picks, it is what the record says afterwards when a collection came in over more
 // than one tender. A reissued receipt reads the stored mode back, so without this line a
 // split payment printed the bare word "split" on the one row a patient checks.
-export const ALL_PAYMENT_MODE_LABELS = { cash: "Cash", upi: "UPI", card: "Card", account_transfer: "Account Transfer", cheque: "Cheque", partial: "Partial Payment", split: "Split" };
+// "pre_book" is the same kind of after-the-fact word: a fee settled from money the client
+// paid at Pre Book (see backend routers/v3_pre_book.py).
+export const ALL_PAYMENT_MODE_LABELS = { cash: "Cash", upi: "UPI", card: "Card", account_transfer: "Account Transfer", cheque: "Cheque", partial: "Partial Payment", split: "Split", pre_book: "Pre Book" };
 
 /** Whatever identifies this payment with the bank — the thing a dispute is traced by. */
 export const paymentReference = (p) => p.transfer_reference
