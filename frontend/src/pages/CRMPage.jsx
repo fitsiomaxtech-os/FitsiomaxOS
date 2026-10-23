@@ -534,8 +534,8 @@ export const CRMPage = ({ auth, onLogout }) => {
     ? roleLabel
     // Sales Head gets the same title as Pre-Sales, not "Sales Head Master View" — it's the
     // same board (PreSalesCRM, full Master View) under a second role, not a board of its own.
-    // Plain "Sales" since 2026-09-29, asked for by name.
-    : isPreSalesRole(role) ? "Sales" : `${roleLabel} Master View`;
+    // Plain "Pre Sales" since 2026-10-23, asked for by name.
+    : isPreSalesRole(role) ? "Pre Sales" : `${roleLabel} Master View`;
   const myBranch = branches.find((b) => b.id === auth.user.branch_id);
   const myBranchName = myBranch?.branch_name || "";
   const VERTICAL_LABELS = { offline_physiotherapy: "Physiotherapy", offline_fitness_gym: "Fitness", offline_fitness: "Fitness" };

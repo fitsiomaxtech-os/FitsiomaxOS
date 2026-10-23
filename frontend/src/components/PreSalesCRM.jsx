@@ -1345,6 +1345,7 @@ export const PreSalesCRM = ({
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Lead</th>
                   <th className="px-4 py-2.5 font-semibold">Contact</th>
+                  <th className="px-4 py-2.5 font-semibold">Source</th>
                   <th className="px-4 py-2.5 font-semibold">Stage</th>
                   {isSuperAdminMasterView && <th className="px-4 py-2.5 font-semibold">Handled By</th>}
                   {stageFilter === "Appointment" && <th className="px-4 py-2.5 font-semibold">Branch Admin Status</th>}
@@ -1361,7 +1362,6 @@ export const PreSalesCRM = ({
                     <tr key={l.id} onClick={() => setEditing(l)} className="cursor-pointer hover:bg-slate-50" data-testid={`presales-lead-row-${l.id}`}>
                       <td className="px-4 py-3">
                         <p className="font-medium text-slate-800">{l.name}</p>
-                        <p className="text-[11px] text-slate-400" data-testid={`presales-lead-source-${l.id}`}>{sourceLabel(l.source_tab || l.source_type)}</p>
                       </td>
                       {/* Number only. Call and WhatsApp both hand off to an app the desk
                           does not have — tel: and wa.me open a dialer and a phone client,
@@ -1371,6 +1371,9 @@ export const PreSalesCRM = ({
                       <td className="px-4 py-3 text-slate-600">
                         {displayPhone(l.phone) || "—"}
                         {l.email ? <span className="block max-w-[220px] truncate text-[11px] text-slate-400">{l.email}</span> : null}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600" data-testid={`presales-lead-source-${l.id}`}>
+                        {sourceLabel(l.source_tab || l.source_type) || "—"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-start gap-1">
@@ -1480,7 +1483,7 @@ export const PreSalesCRM = ({
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && <tr><td colSpan={(stageFilter === "Appointment" || stageFilter === "RNR" ? 7 : 6) + (isSuperAdminMasterView ? 1 : 0)} className="px-4 py-10 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={(stageFilter === "Appointment" || stageFilter === "RNR" ? 8 : 7) + (isSuperAdminMasterView ? 1 : 0)} className="px-4 py-10 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
               </tbody>
             </table>
           </div>
