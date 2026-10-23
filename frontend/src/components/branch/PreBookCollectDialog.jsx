@@ -208,19 +208,12 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       data-testid="pre-book-collect-dialog"
     >
       <div role="dialog" aria-modal="true" aria-labelledby="pre-book-collect-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between bg-teal-600 px-5 py-3.5 text-white">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-2">
-            <CalendarClock className="h-5 w-5 shrink-0" />
-            <div className="min-w-0">
-              <p id="pre-book-collect-title" className="text-base font-semibold">Pre Book</p>
-              <p className="truncate text-[11px] text-white/85">
-                {lead.name}
-                {pb.plan_label ? ` · ${pb.plan_label}` : ""}
-                {pb.date ? ` (${shortDay(pb.date)})` : ""}
-              </p>
-            </div>
+            <CalendarClock className="h-5 w-5 shrink-0 text-teal-600" />
+            <p id="pre-book-collect-title" className="text-base font-semibold text-slate-800">Pre Book</p>
           </div>
-          <button type="button" onClick={() => !saving && onClose()} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" aria-label="Close" data-testid="pre-book-collect-close">
+          <button type="button" onClick={() => !saving && onClose()} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="pre-book-collect-close">
             <X className="h-4 w-4" />
           </button>
         </div>
