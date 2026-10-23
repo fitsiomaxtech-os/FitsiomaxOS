@@ -3210,9 +3210,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       <th className={`${listWidths.source} px-4 py-3`}>Source</th>
                       {showPreBookColumns ? (
                         <>
-                          <th className="px-4 py-3">Total Advance</th>
-                          <th className={`${listWidths.appt} px-4 py-3`}>Planned Visit</th>
-                          <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-prebook-head">Status (Paid or Not)</th>
+                          <th className="w-[12%] whitespace-nowrap px-4 py-3">Total Advance</th>
+                          <th className="w-[14%] whitespace-nowrap px-4 py-3">Planned Visit</th>
+                          <th className="w-[14%] whitespace-nowrap px-4 py-3" data-testid="branch-list-prebook-head">Status (Paid or Not)</th>
                         </>
                       ) : (
                         <>
