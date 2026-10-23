@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Stethoscope, CalendarRange, Pill, Dumbbell, Activity, Plus, X, FlaskConical, Pencil, Trash2, ImagePlus, Wifi, MapPin, Clock, Eye, History, Salad, ChevronDown, RefreshCw, ClipboardList, HeartPulse, Music2, GraduationCap, Home, Truck } from "lucide-react";
+import { Stethoscope, CalendarRange, Pill, Dumbbell, Activity, Plus, X, FlaskConical, Pencil, Trash2, ImagePlus, Wifi, MapPin, Clock, Eye, History, Salad, ChevronDown, RefreshCw, ClipboardList, HeartPulse, Music2, GraduationCap, Home, Truck, CalendarClock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,9 +46,12 @@ export const TABS = [
   { key: "history", label: "History", icon: History },
 ];
 
+// Pre Book was Fitness: a shelf nothing sold from. It is now the price list the Pre Book
+// popup in Branch Leads offers (Reconsultation and the like), kept under its own category
+// so it starts empty -- any old Fitness consultations stay stored under "fitness", unshown.
 export const CONSULTATIONS_SUBTABS = [
   { key: "physiotherapy", label: "Physiotherapy", icon: Activity },
-  { key: "fitness", label: "Fitness", icon: Dumbbell },
+  { key: "pre_book", label: "Pre Book", icon: CalendarClock },
 ];
 
 // Diet Details — the two diet products, each the price one fee is collected at. The Diet
@@ -1536,7 +1539,7 @@ const ConsultationsPanel = ({ reloadToken, toolbarSlot, modeFilter = "all" }) =>
       </div>
 
       {sub === "physiotherapy" && <PhysiotherapyPanel reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
-      {sub === "fitness" && <PhysiotherapyPanel category="fitness" reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
+      {sub === "pre_book" && <PhysiotherapyPanel category="pre_book" reloadToken={reloadToken} toolbarSlot={toolbarSlot} stripSlot={stripSlot} modeFilter={modeFilter} />}
     </div>
   );
 };

@@ -4,7 +4,7 @@ import { CalendarClock, CheckCircle2, X } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { collectPreBook, listStoreItems } from "@/lib/api";
 import { loadSession } from "@/lib/session";
-import { CONSULTATION_PACKAGE_ORDER, consultationItemPrice } from "@/lib/consultationPackages";
+import { consultationItemPrice } from "@/lib/consultationPackages";
 import { COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
@@ -57,17 +57,17 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [receipts, setReceipts] = useState([]);
   const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
-  // The consultation packages, as the Consultation Fee desk lists them, with this branch's
-  // prices. Reconsultation first when there is one -- it is what Pre Book is mostly for.
+  // Services and Products > Consultations > Pre Book, with this branch's prices -- the
+  // shelf kept for this popup alone. By name, so Reconsultation and its neighbours read in
+  // the order anyone would look for them.
   useEffect(() => {
     let live = true;
-    listStoreItems(undefined, "consultation", branchId)
+    listStoreItems("pre_book", "consultation", branchId)
       .then((rows) => {
         if (!live) return;
-        const rank = (i) => (i.consultation_package === "reconsultation" ? -1 : CONSULTATION_PACKAGE_ORDER.indexOf(i.consultation_package));
         const list = (rows || [])
-          .filter((i) => i.item_type === "consultation" && CONSULTATION_PACKAGE_ORDER.includes(i.consultation_package))
-          .sort((a, b) => rank(a) - rank(b));
+          .filter((i) => i.item_type === "consultation")
+          .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         setItems({ rows: list, loading: false });
         if (list[0]) {
           setItemId(list[0].id);
@@ -245,7 +245,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
               {consultOn && (
                 <div className="space-y-2">
                   <label className="block">
-                    <span className="mb-1 block text-xs font-semibold text-slate-700">Package (Services &amp; Products)</span>
+                    <span className="mb-1 block text-xs font-semibold text-slate-700">Package (Services &amp; Products › Pre Book)</span>
                     <select
                       value={itemId}
                       onChange={(e) => pickItem(e.target.value)}
@@ -254,7 +254,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                       data-testid="pre-book-consult-item"
                     >
                       {items.loading && <option value="">Loading…</option>}
-                      {!items.loading && !items.rows.length && <option value="">No consultation packages</option>}
+                      {!items.loading && !items.rows.length && <option value="">None yet — add one under Services &amp; Products › Consultations › Pre Book</option>}
                       {items.rows.map((i) => {
                         const p = consultationItemPrice(i, mode);
                         return <option key={i.id} value={i.id}>{i.name}{p != null ? ` — ${rupees(p)}` : " — no price"}</option>;

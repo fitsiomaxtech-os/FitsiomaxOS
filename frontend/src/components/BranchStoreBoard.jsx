@@ -194,7 +194,19 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", bran
           modeFilter={modeFilter}
         />
       )}
-      {sub === "fitness" && <PlaceholderPanel label="Fitness" testid="branch-consultations-subpanel-fitness" />}
+      {/* The Pre Book price list, with this branch's own prices -- what the Pre Book popup
+          in Branch Leads offers. */}
+      {sub === "pre_book" && (
+        <BranchItemsPanel
+          key="pre_book"
+          category="pre_book"
+          itemType="consultation"
+          emptyLabel="No Pre Book consultations yet."
+          testidPrefix="branch-consultation-pre-book"
+          reloadToken={reloadToken} branchId={branchId}
+          modeFilter={modeFilter}
+        />
+      )}
     </div>
   );
 };
