@@ -3208,23 +3208,28 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       <th className={`${listWidths.patient} px-4 py-3`}>Patient</th>
                       <th className={`${listWidths.phone} px-4 py-3`}>Phone</th>
                       <th className={`${listWidths.source} px-4 py-3`}>Source</th>
-                      <th className={`${listWidths.painType} px-4 py-3`}>Pain Type</th>
-                      <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
-                      <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
-                      {showNotProspectColumns ? (
+                      {showPreBookColumns ? (
                         <>
-                          <th className={`${listWidths.appt} px-4 py-3`}>Moved On</th>
-                          <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-reminder-head">Reminder Call</th>
-                        </>
-                      ) : showPreBookColumns ? (
-                        <>
+                          <th className="px-4 py-3">Total Advance</th>
                           <th className={`${listWidths.appt} px-4 py-3`}>Planned Visit</th>
-                          <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-prebook-head">Paid</th>
+                          <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-prebook-head">Status (Paid or Not)</th>
                         </>
                       ) : (
                         <>
-                          <th className={`${listWidths.appt} px-4 py-3`}>Appointment</th>
-                          <FollowUpHeaderCell show={showFollowUpColumn} widthClass={listWidths.followUp} />
+                          <th className={`${listWidths.painType} px-4 py-3`}>Pain Type</th>
+                          <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
+                          <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
+                          {showNotProspectColumns ? (
+                            <>
+                              <th className={`${listWidths.appt} px-4 py-3`}>Moved On</th>
+                              <th className={`${listWidths.followUp} px-4 py-3`} data-testid="branch-list-reminder-head">Reminder Call</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className={`${listWidths.appt} px-4 py-3`}>Appointment</th>
+                              <FollowUpHeaderCell show={showFollowUpColumn} widthClass={listWidths.followUp} />
+                            </>
+                          )}
                         </>
                       )}
                       <th className={`${listWidths.stage} px-4 py-3`}>Stage</th>
@@ -3249,7 +3254,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             drawn. It used to read 9/8, one more than the table has ever
                             had, and a fitness arm's nine would have been a third wrong
                             answer to write down. */}
-                        <td colSpan={5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0) + (canDeleteLeads ? 1 : 0)} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
+                        <td colSpan={(showPreBookColumns ? 7 : 5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0)) + (canDeleteLeads ? 1 : 0)} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
                           No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                         </td>
                       </tr>
@@ -3362,7 +3367,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             where it has one — see formAnswer. Read from the same list the
                             toolbar filters are built from, so a column and the dropdown
                             above it cannot drift apart. */}
-                        {intakeQuestions.map((q) => {
+                        {!showPreBookColumns && intakeQuestions.map((q) => {
                           const answer = formAnswer(lead, q.question, q.fallback, q.formatFallback);
                           return (
                             <td key={q.key} className="truncate px-4 py-3 text-slate-600" title={answer || undefined}>
@@ -3370,7 +3375,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </td>
                           );
                         })}
-                        {showAssignedPhysio && (
+                        {showAssignedPhysio && !showPreBookColumns && (
                           <td className="truncate px-4 py-3 text-slate-600" title={lead.assigned_physio_name}>{lead.assigned_physio_name || <span className="text-slate-400">—</span>}</td>
                         )}
                         {showNotProspectColumns ? (() => {
@@ -3395,6 +3400,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           const paid = pb ? preBookPaid(pb) : 0;
                           return (
                             <>
+                              <td className="truncate whitespace-nowrap px-4 py-3" data-testid={`branch-row-prebook-advance-${lead.id}`}>
+                                {paid > 0
+                                  ? <span className="text-xs font-semibold text-teal-700">{rupees(paid)}</span>
+                                  : <span className="text-slate-400">—</span>}
+                              </td>
                               <td className="truncate whitespace-nowrap px-4 py-3" title={pb?.remarks || undefined} data-testid={`branch-row-prebook-plan-${lead.id}`}>
                                 {pb ? (
                                   <>
@@ -3405,7 +3415,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                               </td>
                               <td className="truncate whitespace-nowrap px-4 py-3" data-testid={`branch-row-prebook-paid-${lead.id}`}>
                                 {paid > 0
-                                  ? <span className="text-xs font-semibold text-teal-700">{rupees(paid)}</span>
+                                  ? <span className="rounded-[4px] bg-teal-50 px-1 py-px text-[10px] font-semibold text-teal-700">Paid</span>
                                   : <span className="rounded-[4px] bg-amber-50 px-1 py-px text-[10px] font-semibold text-amber-600">Not paid</span>}
                               </td>
                             </>
