@@ -4737,12 +4737,14 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             and the padding is the same 16px the tabs and cards below start at. Top-aligned
             buttons beside a centred avatar read as three things that missed each other. */}
         <div className="relative border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
-          <div className="flex items-center justify-between gap-2 sm:items-start sm:gap-3">
+          {/* One row: avatar, name, ID and stage chip side by side, the buttons on the
+              same centre line. Wraps only where a phone runs out of width. */}
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
-              <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {lead.patient_number && (
                     <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
                   )}
