@@ -3763,17 +3763,26 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // own board. This is which stages this card offers to move a lead to, not which stages
   // exist.
   //
-  // On RNR the branch's own opening ("Branch Assign") goes as well. The lead has already
-  // been taken on and rung; sending it back to the intake stage is not a move the desk
-  // makes from here. The same holds on Follow Up: the lead has been reached and given a
-  // call-back, so the intake stage is behind it. And on Appointment, where a slot is
-  // booked: it was drawn there greyed out, which only read as a move that was missing.
-  const onRnrStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_RNR);
-  const onFollowUpStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP);
-  const onAppointmentStage = lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_APPOINTMENT);
+  // The pills are where the lead can go next, not where it has been. The entry stage
+  // ("New Leads", mirrored or the branch's own) is never one -- nothing moves a lead back
+  // to intake -- and the stage the lead sits on is the header chip, not a move. Beyond
+  // that, RNR -> Follow Up -> Appointment only runs forward, and Not a prospect / Pre Book
+  // may go back to Follow Up or Appointment but never to RNR.
+  const HIDDEN_ROLES_BY_STAGE_ROLE = {
+    [STAGE_ROLE_RNR]: [STAGE_ROLE_RNR],
+    [STAGE_ROLE_FOLLOW_UP]: [STAGE_ROLE_RNR, STAGE_ROLE_FOLLOW_UP],
+    [STAGE_ROLE_APPOINTMENT]: [STAGE_ROLE_RNR, STAGE_ROLE_FOLLOW_UP, STAGE_ROLE_APPOINTMENT],
+    [STAGE_ROLE_NOT_A_PROSPECT]: [STAGE_ROLE_RNR, STAGE_ROLE_NOT_A_PROSPECT],
+    [STAGE_ROLE_PRE_BOOK]: [STAGE_ROLE_RNR, STAGE_ROLE_NOT_A_PROSPECT, STAGE_ROLE_PRE_BOOK],
+  };
+  const currentStageRole = Object.keys(HIDDEN_ROLES_BY_STAGE_ROLE)
+    .find((role) => lead.branch_stage === stageNameForRole(stages, role));
+  const hiddenRoles = HIDDEN_ROLES_BY_STAGE_ROLE[currentStageRole] || [];
   const pipelineStages = entryStages.filter((s) => (
     !stageHasRole(s, STAGE_ROLE_CANCELLED)
-    && !((onRnrStage || onFollowUpStage || onAppointmentStage) && s.name === realEntryStageName)
+    && s.name !== mirrorStageName
+    && s.name !== realEntryStageName
+    && !hiddenRoles.some((role) => stageHasRole(s, role))
   ));
   // A lead whose appointment is booked and not yet consulted. From here the branch has
   // four things it can do, and none of them is moving the patient forward: forward is the
@@ -3788,16 +3797,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const notProspectStageName = stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
   const preBookStageName = stageNameForRole(stages, STAGE_ROLE_PRE_BOOK);
   const inAppointmentStage = lead.branch_stage === appointmentStageName;
-  // The four real stages reachable from Appointment. Reschedule is the fifth exit and is
-  // not in here, because it is not a stage at all -- see the pill itself.
+  // The real stages reachable from Appointment. RNR and Follow Up are no longer among them:
+  // the pipeline above hides both once a slot is booked. Reschedule is not in here either,
+  // because it is not a stage at all -- see the pill itself.
   //
   // Not a prospect is in the list for the reason it sits where it does in the pipeline:
   // the branch usually learns there was never a client here at the point the appointment
   // is made or missed, so Appointment is the stage it has to be reachable from. Left out,
   // it would be drawn on the card and dead on every lead that could actually use it.
   const APPOINTMENT_EXITS = [
-    stageNameForRole(stages, STAGE_ROLE_RNR),
-    stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP),
     notProspectStageName,
     // A booked client who would rather come next month is moved here, not cancelled.
     preBookStageName,
