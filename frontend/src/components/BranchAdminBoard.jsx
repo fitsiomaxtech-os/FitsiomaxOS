@@ -3137,7 +3137,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 eight columns, and eight inside 760px is 95px each with the scroll region
                 around it going unused. */}
             <table className={`w-full ${intakeQuestions.length > 2 ? "min-w-[980px]" : "min-w-[760px]"} table-fixed divide-y divide-slate-200 text-sm`}>
-              <thead className="sticky top-0 z-10 bg-slate-500 text-left text-xs font-semibold uppercase tracking-wide text-white">
+              <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
                 <tr>
                   {/* Three shapes: an online arm's, and a branch's with and without
                       Assigned Physio. A lead at either entry stage hasn't had a physio
@@ -3236,7 +3236,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     </>
                   )}
                   {/* Last on every shape of the table; each shape leaves it 6%. */}
-                  {canDeleteLeads && <th className="w-[6%] px-2 py-3 text-center">Action</th>}
+                  <th className="w-[6%] px-2 py-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -3254,7 +3254,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             drawn. It used to read 9/8, one more than the table has ever
                             had, and a fitness arm's nine would have been a third wrong
                             answer to write down. */}
-                        <td colSpan={(showPreBookColumns ? 7 : 5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0)) + (canDeleteLeads ? 1 : 0)} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
+                        <td colSpan={(showPreBookColumns ? 7 : 5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
                           No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                         </td>
                       </tr>
@@ -3480,20 +3480,18 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             {rowStage ? rowStage : "—"}
                           </span>
                         </td>
-                        {canDeleteLeads && (
-                          <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); setRowDelete(lead); }}
-                              className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                              title="Delete this patient and everything of theirs"
-                              aria-label={`Delete ${lead.name || "patient"} and all their records`}
-                              data-testid={`branch-row-delete-${lead.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        )}
+                        <td className="px-2 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLead(lead)}
+                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                            title="Open patient details"
+                            aria-label={`Open details for ${lead.name || "patient"}`}
+                            data-testid={`branch-row-view-${lead.id}`}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   });
