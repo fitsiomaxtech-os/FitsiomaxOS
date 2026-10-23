@@ -6622,29 +6622,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 </div>
               </div>
               <div>
-                <label htmlFor="branch-prebook-date" className="mb-1.5 block text-xs font-semibold text-slate-600">Planned visit date *</label>
-                <input
-                  id="branch-prebook-date"
-                  type="date"
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Planned visit date *</span>
+                {/* The date filter's own calendar (amber MilkCalendar, centred), not the browser's. */}
+                <MilkDateInput
+                  centered
+                  title="Planned Visit Date"
                   min={todayIso()}
                   value={preBookMoveDraft.date}
                   onChange={(e) => setPreBookMoveDraft({ ...preBookMoveDraft, date: e.target.value })}
-                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  className="h-10 w-full"
                   data-testid="branch-prebook-date"
-                />
-                <p className="mt-1.5 text-[11px] text-slate-500">
-                  The real slot is booked from Appointment when the visit comes round. Collect the Pre Book money from the lead card after the move.
-                </p>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Remarks</label>
-                <textarea
-                  rows={2}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                  placeholder="e.g. Wants the same consultant (optional)"
-                  value={preBookMoveDraft.remarks}
-                  onChange={(e) => setPreBookMoveDraft({ ...preBookMoveDraft, remarks: e.target.value })}
-                  data-testid="branch-prebook-remarks"
                 />
               </div>
             </div>
