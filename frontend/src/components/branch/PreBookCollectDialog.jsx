@@ -208,7 +208,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       data-testid="pre-book-collect-dialog"
     >
       <div role="dialog" aria-modal="true" aria-labelledby="pre-book-collect-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-teal-600 to-emerald-600 px-5 py-3.5 text-white">
+        <div className="flex shrink-0 items-center justify-between bg-teal-600 px-5 py-3.5 text-white">
           <div className="flex min-w-0 items-center gap-2">
             <CalendarClock className="h-5 w-5 shrink-0" />
             <div className="min-w-0">
@@ -340,10 +340,6 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
 
           {!nothingLeft && (
             <>
-              <div className="flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5">
-                <span className="text-xs font-bold uppercase tracking-wide text-teal-800">Total received</span>
-                <span className="text-xl font-bold text-teal-800" data-testid="pre-book-total">{rupees(total)}</span>
-              </div>
               <div className="space-y-3">
                 <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} />
               </div>
@@ -351,6 +347,10 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                 <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="pre-book-confirm" />
                 <span>I have received <span className="font-semibold">{rupees(total)}</span> from {lead.name || "the client"}.</span>
               </label>
+              <div className="flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5">
+                <span className="text-xs font-bold uppercase tracking-wide text-teal-800">Total received</span>
+                <span className="text-xl font-bold text-teal-800" data-testid="pre-book-total">{rupees(total)}</span>
+              </div>
             </>
           )}
           {nothingLeft && (
