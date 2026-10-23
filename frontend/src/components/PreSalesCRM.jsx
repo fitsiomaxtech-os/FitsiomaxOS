@@ -387,16 +387,23 @@ const PreSalesBranchPill = ({ active, onClick, children, testid }) => (
 // that neither of the two split boards needed, since each of them only ever shows one.
 const HandledByBadge = ({ lead }) => {
   const isBranchAdmin = lead.lead_control === "branch_admin";
+  const isBoth = lead.lead_control === "both";
   return (
     <span
       className={`inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
-        isBranchAdmin ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"
+        isBoth
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : isBranchAdmin ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"
       }`}
     >
-      {isBranchAdmin ? "Branch Admin" : "Pre-Sales"}
+      {isBoth ? "Both" : isBranchAdmin ? "Branch Admin" : "Pre-Sales"}
     </span>
   );
 };
+
+// A "both" lead belongs to each desk's book, so it passes either desk's filter.
+const handledBy = (lead, desk) =>
+  desk === "branch_admin" ? lead.lead_control !== "pre_sales" : lead.lead_control !== "branch_admin";
 
 const PRESALES_ANALYTICS_DATE_PRESETS = [
   // First, because it is the widest: every other option here narrows it.
@@ -927,7 +934,7 @@ export const PreSalesCRM = ({
       // picture across every branch, so it shows both halves at once (each row tagged
       // Branch Admin or Pre-Sales) instead of picking one side the way the Pre-Sales
       // role's own board and a branch's embedded board still do.
-      setLeads(isSuperAdminMasterView ? ldList : ldList.filter((l) => (l.lead_control === "branch_admin") === branchControlled));
+      setLeads(isSuperAdminMasterView ? ldList : ldList.filter((l) => handledBy(l, branchControlled ? "branch_admin" : "pre_sales")));
       // If a lead is currently open in the detail dialog, refresh its reference
       // so saved edits show up immediately.
       setEditing((prev) => prev ? (ldList.find((l) => l.id === prev.id) || prev) : prev);
@@ -990,7 +997,7 @@ export const PreSalesCRM = ({
     // than at the source: this view is meant to hold both halves, and narrowing it is a
     // question the user asks of it, not the shape of what it fetched.
     if (showHandledByFilter && handledByFilter !== "all") {
-      rows = rows.filter((l) => (l.lead_control === "branch_admin") === (handledByFilter === "branch_admin"));
+      rows = rows.filter((l) => handledBy(l, handledByFilter));
     }
     if (dateFilter) {
       const from = dateFilter.from?.getTime();
@@ -1402,7 +1409,7 @@ export const PreSalesCRM = ({
                       {isSuperAdminMasterView && (
                         <td className="px-4 py-3" data-testid={`presales-handled-by-${l.id}`}>
                           <div className="flex"><HandledByBadge lead={l} /></div>
-                          {l.lead_control === "branch_admin" && l.branch_stage && (
+                          {l.lead_control !== "pre_sales" && l.branch_stage && (
                             <span className="mt-1 block text-[10px] text-slate-400">{l.branch_stage}</span>
                           )}
                         </td>

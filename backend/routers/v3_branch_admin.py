@@ -102,7 +102,7 @@ async def _branch_stages(branch_id: Optional[str], arm: str = SALES_ARM_OFFLINE)
     which practice. An online arm board handed the offline list would draw pills its own
     leads never stand on.
     """
-    control = await lead_control.branch_lead_control(branch_id)
+    control = lead_control.stage_mode(await lead_control.branch_lead_control(branch_id))
     rows = await v3_col("pipeline_stages").find({"type": "sales"}, {"_id": 0}).sort("order", 1).to_list(400)
     stages = [
         r for r in rows

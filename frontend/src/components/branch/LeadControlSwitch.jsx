@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Headset, Hospital } from "lucide-react";
+import { Headset, Hospital, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -23,15 +23,21 @@ import { Button } from "@/components/ui/button";
 
 export const PRE_SALES = "pre_sales";
 export const BRANCH_ADMIN = "branch_admin";
+export const BOTH = "both";
 
 const OPTIONS = [
   { value: PRE_SALES, label: "Pre Sales", icon: Headset },
+  { value: BOTH, label: "Both", icon: Users },
   { value: BRANCH_ADMIN, label: "Branch Admin", icon: Hospital },
 ];
 
 // An unset branch reads as Pre-Sales — the behaviour every branch had before this
 // existed. Mirrors normalize() in backend/lead_control.py.
-export const normalizeLeadControl = (v) => (v === BRANCH_ADMIN ? BRANCH_ADMIN : PRE_SALES);
+export const normalizeLeadControl = (v) => {
+  if (v === BRANCH_ADMIN) return BRANCH_ADMIN;
+  if (v === BOTH) return BOTH;
+  return PRE_SALES;
+};
 
 export const LeadControlSwitch = ({
   value,
@@ -95,6 +101,7 @@ export const LeadControlSwitch = ({
 
       {pending && (
         <LeadControlConfirm
+          from={current}
           next={pending}
           branchName={branchName}
           preSalesMembers={preSalesMembers}
@@ -113,32 +120,48 @@ export const LeadControlSwitch = ({
  * part people get wrong is that this moves the leads already in the pipeline, not just
  * the next import, and a dialog that does not say so is not worth showing.
  */
-const LeadControlConfirm = ({ next, branchName, preSalesMembers, onCancel, onConfirm }) => {
+const LeadControlConfirm = ({ from, next, branchName, preSalesMembers, onCancel, onConfirm }) => {
   const toBranch = next === BRANCH_ADMIN;
+  const toBoth = next === BOTH;
+  const toPreSales = next === PRE_SALES;
   const who = branchName ? `${branchName}'s` : "This branch's";
-  const Icon = toBranch ? Hospital : Headset;
-  // Only on the way back to Pre-Sales, and only where the caller supplied a list. Handing
-  // the other way assigns nobody — a branch working its own leads has no Pre-Sales rep on
-  // them — and the places that pass no list (the Edit dialog, a source card) are unchanged.
+  const Icon = toBranch ? Hospital : toBoth ? Users : Headset;
   const [assigneeId, setAssigneeId] = useState("");
-  const asksForAssignee = !toBranch && Array.isArray(preSalesMembers);
+  // Asked whenever the branch's backlog re-enters the Pre-Sales pipeline from Branch Admin
+  // control — it arrives all at once with no rep on it.
+  const reentersPreSales = toPreSales || (toBoth && from === BRANCH_ADMIN);
+  const asksForAssignee = reentersPreSales && Array.isArray(preSalesMembers);
   const noMembers = asksForAssignee && preSalesMembers.length === 0;
   const blocked = asksForAssignee && !assigneeId;
+
+  const iconBg = toBranch ? "bg-sky-100" : toBoth ? "bg-violet-100" : "bg-emerald-100";
+  const iconText = toBranch ? "text-sky-600" : toBoth ? "text-violet-600" : "text-emerald-600";
+  const btnClass = toBranch ? "bg-sky-600 hover:bg-sky-700" : toBoth ? "bg-violet-600 hover:bg-violet-700" : "bg-emerald-600 hover:bg-emerald-700";
+  const btnLabel = toBranch ? "Yes, hand over" : toBoth ? "Yes, share both" : "Yes, return to Pre-Sales";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="lead-control-confirm">
       <div className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-2xl">
         <div className="flex items-start gap-3">
-          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${toBranch ? "bg-sky-100" : "bg-emerald-100"}`}>
-            <Icon className={`h-5 w-5 ${toBranch ? "text-sky-600" : "text-emerald-600"}`} />
+          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${iconBg}`}>
+            <Icon className={`h-5 w-5 ${iconText}`} />
           </div>
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-slate-900" data-testid="lead-control-confirm-title">
-              {toBranch ? "Hand these leads to the Branch Admin?" : "Return these leads to Pre-Sales?"}
+              {toBranch
+                ? "Hand these leads to the Branch Admin?"
+                : toBoth
+                ? "Share these leads between both desks?"
+                : "Return these leads to Pre-Sales?"}
             </h3>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
               {toBranch ? (
                 <>
                   {who} leads leave the Pre-Sales pipeline — <b className="text-slate-800">the ones already in it as well as new arrivals</b> — and are worked on the branch's own Pre Sales tab instead. No Pre-Sales rep is assigned to them.
+                </>
+              ) : toBoth ? (
+                <>
+                  {who} leads will be visible to <b className="text-slate-800">both the Pre-Sales desk and the Branch Admin</b>, including the ones already in the pipeline. Both desks can work them simultaneously.
                 </>
               ) : (
                 <>
@@ -161,8 +184,6 @@ const LeadControlConfirm = ({ next, branchName, preSalesMembers, onCancel, onCon
               Hand these leads to
             </label>
             {noMembers ? (
-              // A dropdown with nothing in it reads as a bug. Say what is missing and where
-              // it is fixed, and do not pretend the switch can go ahead.
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800" data-testid="lead-control-no-members">
                 No Pre-Sales member is attached to {branchName || "this branch"} yet. Add one in HR Admin — give a Pre-Sales user this branch — then switch.
               </p>
@@ -188,10 +209,10 @@ const LeadControlConfirm = ({ next, branchName, preSalesMembers, onCancel, onCon
           <Button
             onClick={() => onConfirm(assigneeId || null)}
             disabled={blocked}
-            className={toBranch ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"}
+            className={btnClass}
             data-testid="lead-control-confirm-ok"
           >
-            {toBranch ? "Yes, hand over" : "Yes, return to Pre-Sales"}
+            {btnLabel}
           </Button>
         </div>
       </div>

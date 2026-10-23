@@ -30,8 +30,17 @@ from database import v3_col
 
 PRE_SALES = "pre_sales"
 BRANCH_ADMIN = "branch_admin"
-VALID = (PRE_SALES, BRANCH_ADMIN)
+# Both desks work the lead: it stays in the Pre-Sales pipeline with a Pre-Sales rep, and
+# the branch board runs it the Branch Admin way at the same time.
+BOTH = "both"
+VALID = (PRE_SALES, BRANCH_ADMIN, BOTH)
 DEFAULT = PRE_SALES
+
+
+def stage_mode(control: str) -> str:
+    """Which `applies_to` stage set the branch board uses. Both reuses Branch Admin's, so
+    the board has one entry stage rather than two competing ones."""
+    return BRANCH_ADMIN if control in (BRANCH_ADMIN, BOTH) else PRE_SALES
 
 
 def normalize(value: Optional[str]) -> str:

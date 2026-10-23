@@ -190,7 +190,7 @@ const Row = ({ icon, label, value }) => (
 
 // ---------- Lead Management tab ----------
 
-const LEAD_CONTROL_LABEL = { pre_sales: "Pre Sales", branch_admin: "Branch Admin" };
+const LEAD_CONTROL_LABEL = { pre_sales: "Pre Sales", branch_admin: "Branch Admin", both: "Both" };
 
 /** "2026-08-15T14:05:22+05:30" -> "15 Aug 2026, 2:05 PM". The stamp as it was written. */
 const formatChangedAt = (iso) => {
@@ -246,6 +246,8 @@ const LeadManagementTab = ({ branch, branchId, onChanged, reloadToken = 0, readO
           <p className="text-sm text-slate-600">
             {current === "branch_admin"
               ? "This branch works its own leads. They skip the Pre-Sales desk and go straight to the Branch Admin, who handles the Pre-Sales stages as well."
+              : current === "both"
+              ? "Both desks manage this branch's leads. Leads are visible to Pre-Sales and the Branch Admin at the same time."
               : "The Pre-Sales desk qualifies this branch's leads first, and hands each one over once an appointment is booked."}
           </p>
           {/* Reloads the table on change as well as the branch, so the switch just thrown
@@ -332,7 +334,13 @@ const HeaderLeadControl = ({ branch, onChanged, readOnly = false, preSalesMember
         lead_control: next,
         ...(assigneeId ? { lead_control_assignee_id: assigneeId } : {}),
       });
-      toast.success(next === "branch_admin" ? "Leads now go straight to the Branch Admin" : "Leads now start with Pre-Sales");
+      toast.success(
+        next === "branch_admin"
+          ? "Leads now go straight to the Branch Admin"
+          : next === "both"
+          ? "Leads are now shared between Pre-Sales and Branch Admin"
+          : "Leads now start with Pre-Sales"
+      );
       onChanged && onChanged();
     } catch (e) {
       setValue(prev);

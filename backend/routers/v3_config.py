@@ -499,7 +499,7 @@ async def v3_update_branch(branch_id: str, payload: V3BranchUpdate, user: V3User
     # does not end up stored on the document.
     assignee_id = updates.pop("lead_control_assignee_id", None)
     assignee = None
-    if assignee_id and updates.get("lead_control") == lead_control.PRE_SALES:
+    if assignee_id and updates.get("lead_control") in (lead_control.PRE_SALES, lead_control.BOTH):
         assignee = await v3_col("users").find_one(
             {"id": assignee_id, "role": "pre_sales", "branch_id": branch_id},
             {"_id": 0, "id": 1, "full_name": 1},

@@ -24,7 +24,7 @@ def _visible_to(stage_row: dict, control: str) -> bool:
     """A stage with no `applies_to` belongs to both modes — that is every stage that
     existed before Lead Control, so absent must read as 'shared' rather than 'hidden'."""
     applies_to = stage_row.get("applies_to")
-    return not applies_to or applies_to == control
+    return not applies_to or applies_to == lead_control.stage_mode(control)
 
 
 # ------------------------------------------------------------------- The two Branch arms

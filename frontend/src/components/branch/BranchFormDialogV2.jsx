@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { bmCreateWithExistingAdmin, updateBranch, getVerticals } from "@/lib/api";
 import { MilkDateInput, CenteredPicker } from "@/components/ui/milk-calendar";
-import { LeadControlSwitch, normalizeLeadControl, BRANCH_ADMIN } from "@/components/branch/LeadControlSwitch";
+import { LeadControlSwitch, normalizeLeadControl, BRANCH_ADMIN, BOTH } from "@/components/branch/LeadControlSwitch";
 import { serviceTypeColor, serviceTypeLabel, serviceTypeChipStyle } from "@/lib/serviceTypes";
 
 // Opening Hours, Finance Summary and CONSULTANT were tabs here. Each is reachable from
@@ -291,6 +291,8 @@ export const BranchFormDialogV2 = ({ branch, onClose, onSaved }) => {
                 <p className="mt-1.5 text-[11px] text-slate-500">
                   {form.lead_control === BRANCH_ADMIN
                     ? "This branch's leads skip the Pre-Sales pipeline and go straight to the Branch Admin. No Pre-Sales rep is assigned."
+                    : form.lead_control === BOTH
+                    ? "Both Pre-Sales and the Branch Admin manage this branch's leads at the same time."
                     : "New leads land in the Pre-Sales pipeline first and are shared out across the Pre-Sales team."}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-400">
