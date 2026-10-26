@@ -823,8 +823,8 @@ const ARM_LIST_WIDTHS = {
 // Activity Care holds the slot Review had, since Review now sits inside it.
 const BOTTOM_NAV_KEYS = ["pipeline", "branch_consultation", "activity_care", "consultations"];
 
-// The tabs that are one long list of patient rows on a phone, so they get the
-// back-to-top arrow (ScrollTopButton). The other tabs are cards, calendars and forms.
+// The tabs that are one long list of patient rows, so they get the back-to-top arrow
+// (ScrollTopButton) on phone and desktop. The other tabs are cards, calendars and forms.
 // Activity Care is here for its Review sub-tab, the list among its three.
 const LIST_VIEWS = ["pipeline", "branch_consultation", "branch_home_visit", "activity_care"];
 
@@ -3616,12 +3616,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <div className="fixed bottom-20 right-4 rounded-md bg-slate-900 px-3 py-2 text-sm text-white md:bottom-4">Loading...</div>
       )}
 
-      {/* Back-to-top arrow over the phone lists only (Branch Leads, Consultation, House
-          Visit, Activity Care for its Review) -- the screens where the user scrolls a long list of rows. Left
-          off while Loading... holds the same corner, and off when Super Admin embeds
-          this board. */}
+      {/* Back-to-top arrow over the lists, phone and desktop (Branch Leads, Consultation,
+          House Visit, Activity Care for its Review) -- the screens where the user scrolls a
+          long list of rows. On desktop the leads table scrolls inside its own box
+          (branch-list), so the arrow watches that too. Left off while Loading... holds the
+          same corner, and off when Super Admin embeds this board. */}
       {!embedded && !profileOpen && !loading && LIST_VIEWS.includes(activeView) && (
-        <ScrollTopButton data-testid="branch-scroll-top" />
+        <ScrollTopButton target='[data-testid="branch-list"]' data-testid="branch-scroll-top" />
       )}
 
       {/* Bottom nav — phones only, and only when this board owns the page (not when
