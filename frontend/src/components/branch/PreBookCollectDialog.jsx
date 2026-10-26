@@ -277,8 +277,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                     testid="pre-book-consult-amount"
                   />
                   {consultShort ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                      <span>Part payment — {rupees(consultShort)} is collected on the visit day.</span>
+                    <div className="flex text-[11px]">
                       <button
                         type="button"
                         onClick={shortToDiscount}
