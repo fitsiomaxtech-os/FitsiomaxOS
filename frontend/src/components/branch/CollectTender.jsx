@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 
 // How one collection was paid, as the Collect popups ask it: the mode, and the reference
 // each mode is traced by. Lifted out of ClientHistoryModal when the Old Client Instalment
@@ -152,23 +153,66 @@ export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "bal
   );
 };
 
+// The mode as a list that opens under its box, drawn like the Pre Book popup's Advance picker
+// rather than the browser's own select.
+const ModeDropdown = ({ value, onChange, modes, compact, testid }) => {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  // A click anywhere else closes the list.
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  const current = modes.find((m) => m.value === value);
+  return (
+    <div className="relative" ref={boxRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex ${compact ? "h-9" : "h-10"} w-full items-center justify-between rounded-md border bg-white px-3 text-sm text-slate-900 ${open ? "border-teal-400 ring-1 ring-teal-400" : "border-slate-300"}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-testid={`${testid}-mode`}
+      >
+        <span className="truncate">{current?.label || "Pick a mode"}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div role="listbox" className="absolute left-0 right-0 z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg" data-testid={`${testid}-mode-list`}>
+          {modes.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              role="option"
+              aria-selected={m.value === value}
+              onClick={() => { onChange(m.value); setOpen(false); }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-teal-50 ${m.value === value ? "font-medium text-teal-700" : "text-slate-900"}`}
+              data-testid={`${testid}-mode-${m.value}`}
+            >
+              <span className="flex-1">{m.label}</span>
+              {m.value === value && <Check className="h-4 w-4 text-teal-600" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /** The five mode buttons and, under them, the fields the picked one is traced by.
  *  `modes` narrows the buttons for a collection that cannot take every mode -- Pre Book is
  *  money in hand, so it leaves Cheque off. */
-// `dropdown` asks the mode as a select rather than a row of buttons -- the Pre Book popup's way.
+// `dropdown` asks the mode as a dropdown rather than a row of buttons -- the Pre Book popup's way.
 export const TenderFields = ({ draft, setDraft, testid, compact = false, modes = COLLECT_MODES, dropdown = false }) => (
   <>
     <div>
       <span className={`${compact ? "mb-0.5" : "mb-1"} block text-xs font-semibold text-slate-700`}>Payment Mode</span>
       {dropdown ? (
-        <select
-          value={draft.payment_mode}
-          onChange={(e) => setDraft({ payment_mode: e.target.value })}
-          className={`${compact ? "h-9" : "h-10"} w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400`}
-          data-testid={`${testid}-mode`}
-        >
-          {modes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-        </select>
+        <ModeDropdown value={draft.payment_mode} onChange={(v) => setDraft({ payment_mode: v })} modes={modes} compact={compact} testid={testid} />
       ) : (
       <div className="grid grid-cols-3 gap-1.5">
         {modes.map((m) => (
