@@ -3496,10 +3496,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         {showPreBookOption && (
                           <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             {preBookOf(lead) ? (
+                              // One width for both, so the column reads as a row of equal
+                              // buttons: orange while the advance is owed, green once it is in.
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); setRowPreBookCollect(lead); }}
-                                className="rounded-[3px] bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600"
+                                className={`w-[112px] rounded-[3px] py-1 text-center text-[11px] font-semibold text-white ${preBookOf(lead).advance ? "bg-emerald-600 hover:bg-emerald-700" : "bg-orange-500 hover:bg-orange-600"}`}
                                 data-testid={`branch-row-prebook-collect-${lead.id}`}
                               >
                                 {preBookOf(lead).advance ? "View" : "Collect Advance"}
