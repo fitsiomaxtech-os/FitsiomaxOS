@@ -174,7 +174,7 @@ const AdvanceForPicker = ({ value, onChange, manual, onManual, typed, onTyped })
           </button>
           <button type="button" onClick={() => pick({ for: "others", note: "" }, true)} className={`${row} font-medium text-teal-700`} data-testid="pre-book-advance-for-others">
             <PenLine className="h-3.5 w-3.5" />
-            <span className="flex-1">Others — type manually</span>
+            <span className="flex-1">Type manually</span>
           </button>
           {options.length > 0 && <div className="my-1 border-t border-slate-100" />}
           {options.map((o) => (editing?.id === o.id ? (
