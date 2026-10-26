@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useShownPaymentModes } from "@/lib/paymentModes";
 import { createPortal } from "react-dom";
 import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1070,7 +1071,14 @@ const UpiCollectFields = ({ draft, onChange, testPrefix }) => {
  * branch drawer today, and turning it on for every split would put a note grid under a
  * cheque schedule that has nothing to count yet.
  */
-const SplitPaymentLines = ({ lines, modes, expected, onChange, testPrefix, countCash = false }) => {
+const SplitPaymentLines = ({ lines, modes: allModes, expected, onChange, testPrefix, countCash = false }) => {
+  // Less any mode hidden in Developer Access; a line opened on one moves to the first shown.
+  const modes = useShownPaymentModes(allModes);
+  const firstShown = modes[0]?.value;
+  const strayLine = firstShown && lines.some((l) => !modes.some((m) => m.value === l.mode));
+  useEffect(() => {
+    if (strayLine) onChange(lines.map((l) => (modes.some((m) => m.value === l.mode) ? l : { ...l, mode: firstShown, reference: "", notes: {} })));
+  }, [strayLine]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = lines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
   const target = parseFloat(expected);
   const matches = Number.isFinite(target) && Math.abs(total - target) < 0.01;
@@ -15433,9 +15441,11 @@ function ChequeFields({ draft, onChange, testPrefix }) {
 }
 
 function PaymentModeSelect({ value, options, onChange, testId }) {
+  // Less any mode hidden in Developer Access (Partial Payment is a plan, not a mode, and stays).
+  const shown = useShownPaymentModes(options);
   return (
     <div className="flex flex-wrap gap-1.5" data-testid={testId}>
-      {options.map((o) => {
+      {shown.map((o) => {
         const selected = o.value === value;
         const hex = PAYMENT_MODE_COLORS[o.value] || "#64748b";
         return (

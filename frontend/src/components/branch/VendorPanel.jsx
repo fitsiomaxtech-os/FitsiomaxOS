@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useHiddenPaymentModes } from "@/lib/paymentModes";
 import {
   Plus, Search, Pencil, Trash2, Eye, History, Power, Wallet, Receipt,
   Building2, Phone, Mail, X, UserRound, Package, ChevronRight, RefreshCw,
@@ -324,6 +325,10 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
   const [busy, setBusy] = useState(false);
 
   const [draft, setDraft] = useState(null);            // the vendor form
+  // Less any mode hidden in Developer Access -- except the one a saved vendor was already
+  // paid in, which an edit has to be able to show rather than quietly change.
+  const hiddenModes = useHiddenPaymentModes();
+  const paymentModes = PAYMENT_MODES.filter((m) => !hiddenModes.includes(m.key) || m.key === draft?.payment_mode);
   const [stockDraft, setStockDraft] = useState(null);  // the stock detail form
   const [ledger, setLedger] = useState(null);          // { vendor, rows, expenses }
   const [expenseFor, setExpenseFor] = useState(null);  // { vendor, cash } -- Add Expense open
@@ -1183,7 +1188,7 @@ export const VendorPanel = ({ branchId, canEdit = true, reloadToken }) => {
                   <Field label="Payment Mode">
                     <select className={inputCls} value={draft.payment_mode} onChange={(e) => setDraft({ ...draft, payment_mode: e.target.value })} data-testid="vendor-mode">
                       <option value="">Not paid yet</option>
-                      {PAYMENT_MODES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                      {paymentModes.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                     </select>
                   </Field>
                   <Field label="Payment Date">

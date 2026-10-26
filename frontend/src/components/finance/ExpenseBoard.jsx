@@ -11,7 +11,7 @@ import {
   getBranches, getFinanceExpenses, createFinanceExpense, deleteFinanceExpense,
   approveFinanceExpense, rejectFinanceExpense, listVendors, createVendor,
 } from "@/lib/api";
-import { EXPENSE_PAYMENT_MODE_OPTIONS, PAYMENT_MODE_LABELS, PAYMENT_MODE_COLORS, orderedPaymentModeEntries } from "@/lib/paymentModes";
+import { EXPENSE_PAYMENT_MODE_OPTIONS, PAYMENT_MODE_LABELS, PAYMENT_MODE_COLORS, orderedPaymentModeEntries, useKeepModeShown, useShownPaymentModes } from "@/lib/paymentModes";
 import { PETTY_CASH_LIMIT, PETTY_CASH_REASON_REQUIRED, isPettyCash } from "@/lib/pettyCash";
 import { DENOMINATIONS, noteTotal, countedNotes, noteBreakdown, notesLabel } from "@/lib/denominations";
 import { PettyCashPanel } from "@/components/finance/PettyCashPanel";
@@ -136,6 +136,9 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(blankExpense);
+  // Less any mode hidden in Developer Access; a form opened on one moves to the first shown.
+  const expenseModes = useShownPaymentModes(EXPENSE_PAYMENT_MODE_OPTIONS);
+  useKeepModeShown(form.payment_mode, expenseModes, (mode) => setForm((f) => ({ ...f, payment_mode: mode })));
   // The cash count, kept beside the form rather than in it: the grid is keyed by the
   // note's face value and the record stores only the notes actually seen, so the two are
   // different shapes — see countedNotes.
@@ -722,7 +725,7 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
               <div>
                 <FieldLabel>Payment mode</FieldLabel>
                 <div className="flex flex-wrap gap-1.5" data-testid="finance-expense-form-mode">
-                  {EXPENSE_PAYMENT_MODE_OPTIONS.map((m) => {
+                  {expenseModes.map((m) => {
                     const selected = m === form.payment_mode;
                     const c = PAYMENT_MODE_COLORS[m];
                     return (

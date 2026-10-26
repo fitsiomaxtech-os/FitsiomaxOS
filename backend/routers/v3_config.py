@@ -1484,6 +1484,55 @@ async def v3_set_lead_source_button(
     return {"enabled": payload.enabled}
 
 
+# Payment Modes Show / Hide -- the tenders a developer has taken off every Payment Mode
+# picker in the OS. Only the choice goes: payments already taken in a hidden mode keep it,
+# and the reports still count them under it. At least one mode always stays shown.
+PAYMENT_MODE_HIDDEN_ID = "payment_mode_hidden"
+PAYMENT_MODE_KEYS = ("cash", "upi", "card", "account_transfer", "cheque")
+
+
+class PaymentModeHiddenInput(BaseModel):
+    mode: str
+    hidden: bool
+
+
+async def hidden_payment_modes() -> List[str]:
+    row = await v3_col("app_settings").find_one({"id": PAYMENT_MODE_HIDDEN_ID}, {"_id": 0})
+    return [m for m in ((row or {}).get("hidden") or []) if m in PAYMENT_MODE_KEYS]
+
+
+@router.get("/payment-mode-visibility")
+async def v3_get_payment_mode_visibility(_: V3UserOut = Depends(v3_current_user)):
+    """Read by every Collect popup, so a hidden mode is gone without anyone holding the password."""
+    return {"hidden": await hidden_payment_modes()}
+
+
+@router.get("/admin/payment-mode-visibility")
+async def v3_get_payment_mode_visibility_dev(_: V3UserOut = Depends(require_developer_password)):
+    return {"hidden": await hidden_payment_modes()}
+
+
+@router.put("/admin/payment-mode-visibility")
+async def v3_set_payment_mode_visibility(
+    payload: PaymentModeHiddenInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    if payload.mode not in PAYMENT_MODE_KEYS:
+        raise HTTPException(status_code=400, detail=f"Payment mode must be one of {', '.join(PAYMENT_MODE_KEYS)}")
+    hidden = set(await hidden_payment_modes())
+    if payload.hidden and len(hidden | {payload.mode}) >= len(PAYMENT_MODE_KEYS):
+        raise HTTPException(status_code=400, detail="At least one payment mode has to stay shown")
+    await v3_col("app_settings").update_one(
+        {"id": PAYMENT_MODE_HIDDEN_ID},
+        {
+            ("$addToSet" if payload.hidden else "$pull"): {"hidden": payload.mode},
+            "$set": {"id": PAYMENT_MODE_HIDDEN_ID, "updated_by": user.full_name, "updated_at": now_iso()},
+        },
+        upsert=True,
+    )
+    return {"hidden": await hidden_payment_modes()}
+
+
 # Theme Appearance -- the look of the whole OS, picked in Developer Access: Default, Dark,
 # or Multi (five colours set by hand). allow_user_choice puts a palette icon in the header
 # so each person can pick their own; that pick lives in their browser, not here.

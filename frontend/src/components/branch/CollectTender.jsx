@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Banknote, ChevronDown, CreditCard, FileText, Landmark, Smartphone } from "lucide-react";
+import { useShownPaymentModes } from "@/lib/paymentModes";
 
 // How one collection was paid, as the Collect popups ask it: the mode, and the reference
 // each mode is traced by. Lifted out of ClientHistoryModal when the Old Client Instalment
@@ -239,7 +240,18 @@ const ModeDropdown = ({ value, onChange, modes, compact, testid }) => {
  *  `modes` narrows the buttons for a collection that cannot take every mode -- Pre Book is
  *  money in hand, so it leaves Cheque off. */
 // `dropdown` asks the mode as a dropdown rather than a row of buttons -- the Pre Book popup's way.
-export const TenderFields = ({ draft, setDraft, testid, compact = false, modes = COLLECT_MODES, dropdown = false }) => (
+export const TenderFields = ({ draft, setDraft, testid, compact = false, modes: allModes = COLLECT_MODES, dropdown = false }) => {
+  // Less any mode hidden in Developer Access. A draft sitting on a hidden one (every popup
+  // opens on Cash) moves to the first mode still shown, so nothing is sent in a mode the
+  // desk can no longer see.
+  const modes = useShownPaymentModes(allModes);
+  const pickedShown = modes.some((m) => m.value === draft.payment_mode);
+  const firstShown = modes[0]?.value;
+  useEffect(() => {
+    if (!pickedShown && firstShown) setDraft({ payment_mode: firstShown });
+  }, [pickedShown, firstShown, setDraft]);
+
+  return (
   <>
     <div>
       <span className={`${compact ? "mb-0.5" : "mb-1"} block text-xs font-semibold text-slate-700`}>Payment Mode</span>
@@ -292,3 +304,4 @@ export const TenderFields = ({ draft, setDraft, testid, compact = false, modes =
     )}
   </>
 );
+};

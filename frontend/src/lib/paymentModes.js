@@ -1,3 +1,6 @@
+import { useEffect, useSyncExternalStore } from "react";
+import { getPaymentModeVisibility } from "@/lib/api";
+
 // The tender set every collection flow already writes into its "... via X" wording
 // (see _parse_payment_mode in v3_finance.py), plus "unknown" for the rows that carry
 // none — package_sold, and any Expense logged before payment_mode existed.
@@ -42,4 +45,66 @@ export const orderedPaymentModeEntries = (modes) => {
   const primary = ["cash", "cheque", "account_transfer", "upi"];
   const rest = PAYMENT_MODE_ORDER.filter((m) => !primary.includes(m) && (map[m] || 0) > 0);
   return [...primary, ...rest].map((mode) => [mode, map[mode] || 0]);
+};
+
+// ------------------------------------------------- Payment Modes Show / Hide
+//
+// The modes a developer has hidden in Developer Access. A hidden mode comes off every
+// Payment Mode picker; records already paid in it, the report tiles and the filters keep it.
+// Read once per page load, on the first picker drawn, and refreshed by the Developer Access
+// switches themselves when they change it.
+let hiddenModes = [];
+let loaded = false;
+const listeners = new Set();
+
+export const setHiddenPaymentModes = (list) => {
+  hiddenModes = Array.isArray(list) ? [...list] : [];
+  loaded = true;
+  listeners.forEach((fn) => fn());
+};
+
+const subscribe = (fn) => {
+  listeners.add(fn);
+  if (!loaded) {
+    loaded = true;
+    getPaymentModeVisibility().then((r) => setHiddenPaymentModes(r?.hidden)).catch(() => { loaded = false; });
+  }
+  return () => listeners.delete(fn);
+};
+
+/** The hidden modes, re-rendering the caller when they change. */
+export const useHiddenPaymentModes = () => useSyncExternalStore(subscribe, () => hiddenModes);
+
+/** `list` without the hidden modes. Items can be mode strings, or objects carrying the mode
+ *  as `value` (or `key`). Anything that is not a mode -- Partial Payment, "Nothing collected"
+ *  -- passes through. */
+export const withoutHiddenModes = (list, hidden) => (list || []).filter((m) => {
+  const mode = typeof m === "string" ? m : (m.value ?? m.key);
+  return !hidden.includes(mode);
+});
+
+/** Hook form of the two above: the list as a picker should draw it. */
+export const useShownPaymentModes = (list) => withoutHiddenModes(list, useHiddenPaymentModes());
+
+const modeOf = (m) => (typeof m === "string" ? m : (m.value ?? m.key));
+
+/** Keeps a picker off a hidden mode: when `mode` is one the developer hid (every form opens
+ *  on Cash), `setMode` is handed the first mode still shown. An empty `mode` (Not paid yet)
+ *  is left alone. */
+export const useKeepModeShown = (mode, shown, setMode) => {
+  const first = shown[0] ? modeOf(shown[0]) : null;
+  const stray = !!mode && !!first && !shown.some((m) => modeOf(m) === mode);
+  useEffect(() => {
+    if (stray) setMode(first);
+  }, [stray]); // eslint-disable-line react-hooks/exhaustive-deps
+};
+
+/** The same for a list of payment lines, each carrying its own `mode`. */
+export const useKeepLinesShown = (lines, shown, setLines) => {
+  const first = shown[0] ? modeOf(shown[0]) : null;
+  const isShown = (mode) => shown.some((m) => modeOf(m) === mode);
+  const stray = !!first && (lines || []).some((l) => l.mode && !isShown(l.mode));
+  useEffect(() => {
+    if (stray) setLines(lines.map((l) => (l.mode && !isShown(l.mode) ? { ...l, mode: first, reference: "", notes: {} } : l)));
+  }, [stray]); // eslint-disable-line react-hooks/exhaustive-deps
 };

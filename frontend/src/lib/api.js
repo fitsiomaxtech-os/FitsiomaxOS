@@ -741,6 +741,10 @@ export const getConsultationDurationRule = async (password) => (await api.get("/
 export const setConsultationDurationRule = async (password, enabled) => (await api.put("/admin/consultation-duration-rule", { enabled }, { headers: developerHeaders(password) })).data;
 export const getLeadSourceButton =async (password) => (await api.get("/admin/lead-source-visibility-button", { headers: developerHeaders(password) })).data;
 export const setLeadSourceButton = async (password, enabled) => (await api.put("/admin/lead-source-visibility-button", { enabled }, { headers: developerHeaders(password) })).data;
+// Payment Modes Show / Hide: read by every Collect popup, changed behind the password.
+export const getPaymentModeVisibility = async () => (await api.get("/payment-mode-visibility")).data;
+export const getPaymentModeVisibilityAdmin = async (password) => (await api.get("/admin/payment-mode-visibility", { headers: developerHeaders(password) })).data;
+export const setPaymentModeHidden = async (password, mode, hidden) => (await api.put("/admin/payment-mode-visibility", { mode, hidden }, { headers: developerHeaders(password) })).data;
 // Theme Appearance: read by everyone (the login screen included), changed behind the password.
 export const getAppTheme = async () => (await api.get("/app-theme")).data;
 export const getAppThemeAdmin = async (password) => (await api.get("/admin/app-theme", { headers: developerHeaders(password) })).data;

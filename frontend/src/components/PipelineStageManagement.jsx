@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Flag, GripVertical, AlertTriangle, Lock, KeyRound, Check, Palette } from "lucide-react";
+import { Plus, Pencil, Trash2, Flag, GripVertical, AlertTriangle, Lock, KeyRound, Check, Palette, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getAppThemeAdmin, setAppThemeAdmin } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getAppThemeAdmin, setAppThemeAdmin, getPaymentModeVisibilityAdmin, setPaymentModeHidden } from "@/lib/api";
+import { setHiddenPaymentModes } from "@/lib/paymentModes";
 import { ThemeAppearanceCard } from "@/components/ThemeAppearanceCard";
+
+// The five tenders the OS collects in, as the Payment Modes card lists them.
+const PAYMENT_MODE_ROWS = [
+  { mode: "cash", label: "Cash" },
+  { mode: "upi", label: "UPI" },
+  { mode: "card", label: "Card" },
+  { mode: "account_transfer", label: "Account Transfer" },
+  { mode: "cheque", label: "Cheque" },
+];
 
 const PALETTE = ["#6366f1", "#3b82f6", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
@@ -230,6 +240,10 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const [savingLeadSourceButton, setSavingLeadSourceButton] = useState(false);
   const [durationRule, setDurationRule] = useState(null);
   const [savingDurationRule, setSavingDurationRule] = useState(false);
+  // Payment Modes Show / Hide: the hidden modes, null until read; `savingMode` is the one
+  // being flipped.
+  const [hiddenModes, setHiddenModes] = useState(null);
+  const [savingMode, setSavingMode] = useState(null);
 
   // The tab being looked at, resolved once: `type` is this table's tab id, and for the
   // Branch pair it is not the same string as the pipeline's API type — both tabs are
@@ -371,7 +385,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); setHiddenModes(null); return; }
     getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
     getBeforeVerifyDeleteButton(devPassword).then((r) => setBeforeVerifyDelete(!!r.enabled)).catch(() => setBeforeVerifyDelete(null));
@@ -380,6 +394,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
     getSaConsultBranchesSetting(devPassword).then((r) => setSaBranches(!!r.enabled)).catch(() => setSaBranches(null));
     getLeadSourceButton(devPassword).then((r) => setLeadSourceButtonState(!!r.enabled)).catch(() => setLeadSourceButtonState(null));
     getConsultationDurationRule(devPassword).then((r) => setDurationRule(!!r.enabled)).catch(() => setDurationRule(null));
+    getPaymentModeVisibilityAdmin(devPassword).then((r) => setHiddenModes(r.hidden || [])).catch(() => setHiddenModes(null));
   }, [devPassword]);
 
   // One row, drawn for either half. `muted` is the only difference the half makes to a real
@@ -668,6 +683,21 @@ export const PipelineStageManagement = ({ leading = null }) => {
       resetFailed(e);
     }
     setSavingDurationRule(false);
+  };
+
+  const togglePaymentMode = async ({ mode, label }) => {
+    const hide = !hiddenModes.includes(mode);
+    setSavingMode(mode);
+    try {
+      const r = await setPaymentModeHidden(devPassword, mode, hide);
+      setHiddenModes(r.hidden || []);
+      // This screen's own pickers follow at once, without a reload.
+      setHiddenPaymentModes(r.hidden || []);
+      toast.success(hide ? `${label} is hidden from every Payment Mode` : `${label} is shown again`);
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingMode(null);
   };
 
   const handleResetAllLeads = async () => {
@@ -967,6 +997,46 @@ export const PipelineStageManagement = ({ leading = null }) => {
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {/* Which tenders the OS offers. A hidden mode comes off every Payment Mode picker --
+          Collect popups, Pre Book, Fitness, Zumba, Store, Expense. Payments already taken in
+          it, and the report tiles counting them, are untouched. */}
+      {devPassword && (
+        <Card data-testid="payment-modes-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wallet className="h-4 w-4 text-sky-600" /> Payment Modes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+              {PAYMENT_MODE_ROWS.map((row) => {
+                const shown = hiddenModes ? !hiddenModes.includes(row.mode) : null;
+                // The last mode still shown cannot be hidden: a desk with no mode to pick
+                // cannot collect at all. The server refuses it as well.
+                const lastShown = shown && hiddenModes && hiddenModes.length >= PAYMENT_MODE_ROWS.length - 1;
+                return (
+                  <label key={row.mode} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`payment-mode-${row.mode}-row`}>
+                    <span className="text-sm font-medium text-slate-800">{row.label}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className={`text-[10px] font-bold uppercase ${shown ? "text-emerald-600" : "text-slate-400"}`}>
+                        {shown === null ? "…" : savingMode === row.mode ? "Saving" : shown ? "Show" : "Hide"}
+                      </span>
+                      <Switch
+                        checked={!!shown}
+                        disabled={shown === null || !!savingMode || lastShown}
+                        onCheckedChange={() => togglePaymentMode(row)}
+                        className="data-[state=checked]:bg-emerald-600"
+                        data-testid={`payment-mode-${row.mode}-toggle`}
+                      />
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Not a danger, so not in the Danger Zone: the look of the OS, behind the same password. */}

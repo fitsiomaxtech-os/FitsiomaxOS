@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useKeepModeShown, useShownPaymentModes } from "@/lib/paymentModes";
 import {
   Plus, PackagePlus, ShoppingCart, ArrowRightLeft, Pencil, Trash2, Search, X, History,
 } from "lucide-react";
@@ -190,6 +191,9 @@ export const StoreInventoryPanel = ({ category = "tablet", branchId, reloadToken
   const [itemDraft, setItemDraft] = useState(null);    // create / edit catalogue entry
   const [addDraft, setAddDraft] = useState(null);      // stock in
   const [sellDraft, setSellDraft] = useState(null);    // counter sale
+  // Less any mode hidden in Developer Access; a sale opened on one moves to the first shown.
+  const paymentModes = useShownPaymentModes(PAYMENT_MODES);
+  useKeepModeShown(sellDraft?.payment_mode, paymentModes, (mode) => setSellDraft((d) => (d ? { ...d, payment_mode: mode } : d)));
   const [moveDraft, setMoveDraft] = useState(null);    // send to another branch
 
   const load = useCallback(async () => {
@@ -679,7 +683,7 @@ export const StoreInventoryPanel = ({ category = "tablet", branchId, reloadToken
           </Field>
           <Field label="Payment Mode">
             <select className={inputCls} value={sellDraft.payment_mode} onChange={(e) => setSellDraft({ ...sellDraft, payment_mode: e.target.value })} data-testid={tid("sell-mode")}>
-              {PAYMENT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              {paymentModes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </Field>
           <Field label="Note">

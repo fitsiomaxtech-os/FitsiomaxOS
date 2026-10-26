@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
 import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -540,6 +541,9 @@ const FieldLabel = ({ children }) => (
  * a component that owned them would have to be told which.
  */
 const PaymentLinesEditor = ({ lines, onChange, prefix, emptyNote }) => {
+  // Less any mode hidden in Developer Access.
+  const paymentModes = useShownPaymentModes(PAYMENT_MODES);
+  useKeepLinesShown(lines, paymentModes, onChange);
   const setLine = (i, patch) => onChange(lines.map((l, n) => (n === i ? { ...l, ...patch } : l)));
   // A second line starts on UPI rather than cash: somebody adding one has already taken
   // the cash part, and the common split is cash plus something else.
@@ -557,7 +561,7 @@ const PaymentLinesEditor = ({ lines, onChange, prefix, emptyNote }) => {
               <div className="min-w-[140px] flex-1">
                 <FieldLabel>Paid By</FieldLabel>
                 <FormSelect value={l.mode} onChange={(v) => setLine(i, { mode: v, notes: {}, reference: "" })} testid={`${prefix}-mode-${i}`}>
-                  {PAYMENT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {paymentModes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </FormSelect>
               </div>
               <div className="min-w-[110px] flex-1">

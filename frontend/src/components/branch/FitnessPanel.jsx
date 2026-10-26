@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
 import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1219,6 +1220,9 @@ const RenewMembershipDialog = ({ member, packages, onClose, onRenewed }) => {
   const [months, setMonths] = useState(1);
   const [lines, setLines] = useState([]);
   const [saving, setSaving] = useState(false);
+  // Less any mode hidden in Developer Access.
+  const collectModes = useShownPaymentModes(COLLECT_MODES);
+  useKeepLinesShown(lines, collectModes, setLines);
 
   const setLine = (i, patch) => setLines((prev) => prev.map((l, n) => (n === i ? { ...l, ...patch } : l)));
   const addLine = () => setLines((prev) => [...prev, prev.length === 0 ? { ...EMPTY_LINE } : { ...EMPTY_LINE, mode: "upi" }]);
@@ -1347,7 +1351,7 @@ const RenewMembershipDialog = ({ member, packages, onClose, onRenewed }) => {
                     <div className="min-w-[150px] flex-1">
                       <FieldLabel>Paid By</FieldLabel>
                       <FormSelect value={l.mode} onChange={(v) => setLine(i, { mode: v, notes: {}, reference: "" })} testid={`fitness-renew-mode-${i}`}>
-                        {COLLECT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        {collectModes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                       </FormSelect>
                     </div>
                     <div className="min-w-[120px] flex-1">
@@ -1454,6 +1458,9 @@ export const CollectPaymentDialog = ({ member, onClose, onCollected }) => {
   const [lines, setLines] = useState([{ mode: "cash", amount: "", reference: "", notes: {} }]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  // Less any mode hidden in Developer Access.
+  const collectModes = useShownPaymentModes(COLLECT_MODES);
+  useKeepLinesShown(lines, collectModes, setLines);
 
   const setLine = (i, patch) => setLines((prev) => prev.map((l, n) => (n === i ? { ...l, ...patch } : l)));
   const addLine = () => setLines((prev) => [...prev, { mode: "upi", amount: "", reference: "", notes: {} }]);
@@ -1521,7 +1528,7 @@ export const CollectPaymentDialog = ({ member, onClose, onCollected }) => {
                     onChange={(v) => setLine(i, { mode: v, notes: {} })}
                     testid={`fitness-collect-mode-${i}`}
                   >
-                    {COLLECT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    {collectModes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </FormSelect>
                 </div>
                 <div className="min-w-[120px] flex-1">
