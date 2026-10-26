@@ -2151,6 +2151,20 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         {/* The bell moved to the page header, where Super Admin's already was and where a
             person looks for it. One control, one place, rather than the same thing in two
             with only one of them findable. */}
+        {/* Settings, at the strip's right end, on Branch Leads and Consultation only. In ahead
+            of what it will open, like Consultation's tab was: the place is settled first. */}
+        {["pipeline", "branch_consultation"].includes(activeView) && (
+          <button
+            type="button"
+            onClick={() => toast.info(`${VIEW_TABS.find((t) => t.key === activeView)?.label} settings are coming soon`)}
+            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-sky-50 hover:text-sky-700"
+            title="Settings"
+            aria-label="Settings"
+            data-testid={`branch-view-tab-settings-${activeView}`}
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {profileOpen && (
