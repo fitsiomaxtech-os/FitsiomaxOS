@@ -101,8 +101,11 @@ export const manualToIso = (text) => {
  * edge, which is a worse way to lose the state than not printing it. The active styling
  * and the clear X both stay, so the control still reads as filtering, and the label is
  * back at sm and up where there is room for it.
+ *
+ * `phoneSmall` takes the trigger (and its clear X) down to 32px below sm, for a phone
+ * toolbar whose other buttons are that size.
  */
-export const DateFilterPopover = ({ value, onChange, testid = "date-filter", centered = false, placeholder = "Date Filter", iconOnly = false, large = false, phoneIconOnly = false }) => {
+export const DateFilterPopover = ({ value, onChange, testid = "date-filter", centered = false, placeholder = "Date Filter", iconOnly = false, large = false, phoneIconOnly = false, phoneSmall = false }) => {
   const [open, setOpen] = useState(false);
   const [showRange, setShowRange] = useState(false);
   const [rangeFrom, setRangeFrom] = useState("");
@@ -196,12 +199,12 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
           onClick={() => setOpen(true)}
           title={activeLabel}
           aria-label={activeLabel}
-          className={`h-10 ${iconOnly && !isActive ? "w-10 px-0" : ""} ${
-            phoneIconOnly && iconOnly && isActive ? "w-10 px-0 sm:w-auto sm:px-4" : ""
+          className={`h-10 ${phoneSmall ? "max-sm:h-8 max-sm:[&_svg]:!size-3.5" : ""} ${iconOnly && !isActive ? `w-10 px-0 ${phoneSmall ? "max-sm:w-8" : ""}` : ""} ${
+            phoneIconOnly && iconOnly && isActive ? `w-10 px-0 sm:w-auto sm:px-4 ${phoneSmall ? "max-sm:w-8" : ""}` : ""
           } ${isActive ? "rounded-r-none border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : ""}`}
           data-testid={`${testid}-btn`}
         >
-          <CalendarIcon className={`h-4 w-4 ${iconOnly && !isActive ? "" : phoneIconOnly && iconOnly ? "sm:mr-2" : "mr-2"}`} />
+          <CalendarIcon className={`h-4 w-4 ${phoneSmall ? "max-sm:h-3.5 max-sm:w-3.5" : ""} ${iconOnly && !isActive ? "" : phoneIconOnly && iconOnly ? "sm:mr-2" : "mr-2"}`} />
           {(!iconOnly || isActive) &&
             (phoneIconOnly && iconOnly ? <span className="hidden sm:inline">{activeLabel}</span> : activeLabel)}
         </Button>
@@ -209,7 +212,7 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
           <button
             type="button"
             onClick={clear}
-            className="flex h-10 items-center rounded-r-md border border-l-0 border-amber-300 bg-amber-50 px-2 text-amber-800 hover:bg-amber-100"
+            className={`flex h-10 ${phoneSmall ? "max-sm:h-8" : ""} items-center rounded-r-md border border-l-0 border-amber-300 bg-amber-50 px-2 text-amber-800 hover:bg-amber-100`}
             title="Clear date filter"
             aria-label="Clear date filter"
             data-testid={`${testid}-clear-x`}

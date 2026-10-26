@@ -14,8 +14,9 @@ import { gsAutoSyncSources, gsPull } from "@/lib/api";
  *  - onPulled: () => void  — called after a successful pull, used to refresh leads list
  *  - notConnectedHint / noSourcesHint: optional override text for the empty-state toasts
  *  - iconOnly: renders just the spinning-refresh icon, no label — same action, more compact
+ *  - phoneSmall: with iconOnly, 32px below sm to match a phone toolbar of that size
  */
-export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint, iconOnly }) => {
+export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint, iconOnly, phoneSmall }) => {
   const [busy, setBusy] = useState(false);
 
   const pullAll = async () => {
@@ -76,10 +77,10 @@ export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint,
         disabled={busy}
         title="Pull from Sheet"
         aria-label="Pull from Sheet"
-        className="h-10 w-10 shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white shadow-sm hover:bg-emerald-700"
+        className={`h-10 w-10 ${phoneSmall ? "max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5" : ""} shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white shadow-sm hover:bg-emerald-700`}
         data-testid="presales-pull-from-sheet-btn"
       >
-        <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+        <RefreshCw className={`h-4 w-4 ${phoneSmall ? "max-sm:h-3.5 max-sm:w-3.5" : ""} ${busy ? "animate-spin" : ""}`} />
       </Button>
     );
   }

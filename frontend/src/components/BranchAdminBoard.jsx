@@ -2531,19 +2531,19 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   aria-label="Close search"
                   data-testid="branch-search-close"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4 max-sm:h-3.5 max-sm:w-3.5" />
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 sm:hidden"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 sm:hidden"
                 aria-label="Search patients"
                 title="Search patients"
                 data-testid="branch-search-open"
               >
-                <Search className="h-4 w-4" />
+                <Search className="h-4 w-4 max-sm:h-3.5 max-sm:w-3.5" />
               </button>
             )}
             {/* The desk's own field. min-w-0 so it can shrink: a flex item defaults to its
@@ -2725,10 +2725,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
               title={sortOrder === "newest" ? "New to First — tap for Old to First" : "Old to First — tap for New to First"}
               aria-label={sortOrder === "newest" ? "Sort: New to First" : "Sort: Old to First"}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 sm:hidden"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 sm:hidden"
               data-testid="branch-sort-order-toggle"
             >
-              {sortOrder === "newest" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+              {sortOrder === "newest" ? <ArrowDown className="h-4 w-4 max-sm:h-3.5 max-sm:w-3.5" /> : <ArrowUp className="h-4 w-4 max-sm:h-3.5 max-sm:w-3.5" />}
             </button>
             <Select value={sortOrder} onValueChange={setSortOrder}>
               <SelectTrigger
@@ -2763,12 +2763,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   title={markFilter === "vip" ? "Showing VIP clients only — click to show all" : "Show VIP clients only"}
                   aria-label="Show VIP clients only"
                   aria-pressed={markFilter === "vip"}
-                  className={`flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${
+                  className={`flex h-10 w-10 max-sm:h-8 max-sm:w-8 items-center justify-center rounded-md border transition-colors ${
                     markFilter === "vip" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white hover:bg-amber-50"
                   }`}
                   data-testid="branch-filter-vip"
                 >
-                  <Star className={`h-4 w-4 ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
+                  <Star className={`h-4 w-4 max-sm:h-3.5 max-sm:w-3.5 ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
                 </button>
                 <button
                   type="button"
@@ -2776,12 +2776,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   title={markFilter === "attention" ? "Showing flagged patients only — click to show all" : "Show patients needing attention only"}
                   aria-label="Show patients needing attention only"
                   aria-pressed={markFilter === "attention"}
-                  className={`flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${
+                  className={`flex h-10 w-10 max-sm:h-8 max-sm:w-8 items-center justify-center rounded-md border transition-colors ${
                     markFilter === "attention" ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white hover:bg-rose-50"
                   }`}
                   data-testid="branch-filter-attention"
                 >
-                  <AlertCircle className={`h-4 w-4 ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
+                  <AlertCircle className={`h-4 w-4 max-sm:h-3.5 max-sm:w-3.5 ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
                 </button>
             </div>
             {/* The one calendar on the row, and now the only one. The range strip used to
@@ -2797,16 +2797,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 Consultation tab, where the row's own Custom was the copy that tab actually
                 used; with that gone, hiding it here would leave that tab unable to ask for
                 a range at all. */}
-            <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="branch-date-filter" centered iconOnly phoneIconOnly />
+            <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="branch-date-filter" centered iconOnly phoneIconOnly phoneSmall />
             <Button
               onClick={() => { loadBoard(); setRefreshTick((n) => n + 1); }}
               disabled={loading}
               title="Refresh"
               aria-label="Refresh"
-              className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+              className="h-10 w-10 max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
               data-testid="branch-refresh-btn"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 max-sm:h-3.5 max-sm:w-3.5 ${loading ? "animate-spin" : ""}`} />
             </Button>
             {/* Consultation tab only -- not Branch Leads, not House Visit. One button, two
                 files: a PDF to print or send, and an Excel sheet to sort and total. Either
@@ -2818,10 +2818,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     disabled={exportingConsultation}
                     title="Download this list — PDF or Excel"
                     aria-label="Download this list"
-                    className="h-10 w-10 shrink-0 bg-indigo-600 p-0 text-white hover:bg-indigo-700"
+                    className="h-10 w-10 max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5 shrink-0 bg-indigo-600 p-0 text-white hover:bg-indigo-700"
                     data-testid="branch-consultation-download"
                   >
-                    {exportingConsultation ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    {exportingConsultation ? <RefreshCw className="h-4 w-4 animate-spin max-sm:h-3.5 max-sm:w-3.5" /> : <Download className="h-4 w-4 max-sm:h-3.5 max-sm:w-3.5" />}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60" data-testid="branch-consultation-download-menu">
@@ -2857,10 +2857,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 onClick={() => setShowCreateLead(true)}
                 title="Create Lead"
                 aria-label="Create Lead"
-                className="h-10 w-10 shrink-0 bg-sky-600 p-0 hover:bg-sky-700"
+                className="h-10 w-10 max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5 shrink-0 bg-sky-600 p-0 hover:bg-sky-700"
                 data-testid="branch-create-lead-btn"
               >
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="h-4 w-4 max-sm:h-3.5 max-sm:w-3.5" />
               </Button>
             )}
             <PullFromSheetButton
@@ -2868,7 +2868,32 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               notConnectedHint="Google Sheets isn't connected yet — ask your Super Admin to connect it."
               noSourcesHint="No Google Sheet is linked to this branch yet — ask your Super Admin to tag one to this branch in Marketing Board → Lead Sources."
               iconOnly
+              phoneSmall
             />
+            {/* Below md, where the tab strip is hidden: its Settings gear at the end of this row
+                instead -- same tabs, same menu, same popup. Nine 32px squares with 4px gaps
+                are 320px against the 336 a 360px phone leaves. */}
+            {["pipeline", "branch_consultation"].includes(activeView) && (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700 sm:h-10 sm:w-10 md:hidden"
+                    title="Settings"
+                    aria-label="Settings"
+                    data-testid={`branch-toolbar-settings-${activeView}`}
+                  >
+                    <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-500 ease-out group-hover:rotate-90 group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60 duration-300 ease-out">
+                  <DropdownMenuItem onSelect={() => setUpcomingOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-upcoming">
+                    <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             </div>
           </div>
 
