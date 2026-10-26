@@ -116,10 +116,13 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       {/* The corner arrow the finance boards' summary cards carry (see ui/ledger-card), so
           Branch Admin's summary strip and Accountant Manage's own read as the same card.
           Absolutely placed so the centred label and figure underneath are not shifted by it.
-          From sm up only: a phone card is the stage and its count, nothing in the corner. */}
+          From sm up only: a phone card is the stage and its count, nothing in the corner.
+          The picked card's arrow hops right every 1.5s (tailwind.config's nudge-right), so
+          the card whose list is open stands out; the rest sit still. motion-safe: a device
+          set to reduce motion gets it still. */}
       {plain && (
         <ChevronRight
-          className={`absolute right-1.5 top-1.5 hidden h-3.5 w-3.5 sm:block sm:h-4 sm:w-4 ${active ? "text-sky-500" : "text-slate-400"}`}
+          className={`absolute right-1.5 top-1.5 hidden h-3.5 w-3.5 sm:block sm:h-4 sm:w-4 ${active ? "text-sky-500 motion-safe:animate-nudge-right" : "text-slate-400"}`}
           aria-hidden="true"
         />
       )}

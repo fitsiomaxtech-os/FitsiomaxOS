@@ -111,6 +111,16 @@ module.exports = {
   					transform: 'translateX(-5px)'
   				}
   			},
+  			// nudge-left's mirror, for the picked summary card's corner arrow: the same hop
+  			// and pause, pointing on to the list that card has opened.
+  			'nudge-right': {
+  				'0%, 40%, 100%': {
+  					transform: 'translateX(0)'
+  				},
+  				'20%': {
+  					transform: 'translateX(4px)'
+  				}
+  			},
   			// A notification dot popping up: grows from nothing past full size and settles,
   			// then sits still for the rest of a 3s beat, so it reads as a fresh alert
   			// every few seconds rather than a constant throb.
@@ -130,6 +140,7 @@ module.exports = {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'nudge-left': 'nudge-left 1.5s ease-in-out infinite',
+  			'nudge-right': 'nudge-right 1.5s ease-in-out infinite',
   			'dot-pop': 'dot-pop 3s ease-out infinite'
   		}
   	}
