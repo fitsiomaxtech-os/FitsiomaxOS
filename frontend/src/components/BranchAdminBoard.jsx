@@ -1105,6 +1105,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [consultationsSubTab, setConsultationsSubTab] = useState("head_physio");
   // Time Management's popup: the calendar profile it opens on, or null while shut.
   const [timeMgmtFor, setTimeMgmtFor] = useState(null);
+  // The tab strip's Settings gear → Upcoming Appointments popup (desk; a phone keeps it
+  // under Management > Calendar).
+  const [upcomingOpen, setUpcomingOpen] = useState(false);
   // Which tab of that popup is up. Only the Physiotherapist Calendar's gear has more than
   // Time Management's three parts: its Treatment Session Duration and Per slot sit beside
   // them, all five in one row.
@@ -2151,21 +2154,47 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         {/* The bell moved to the page header, where Super Admin's already was and where a
             person looks for it. One control, one place, rather than the same thing in two
             with only one of them findable. */}
-        {/* Settings, at the strip's right end, on Branch Leads and Consultation only. In ahead
-            of what it will open, like Consultation's tab was: the place is settled first. */}
+        {/* Settings, at the strip's right end, on Branch Leads and Consultation only. Its
+            menu holds Upcoming Appointments, moved here from Management > Calendar. Not
+            modal, for the same reason as phoneTimeGear's: it opens a popup as it shuts. */}
         {["pipeline", "branch_consultation"].includes(activeView) && (
-          <button
-            type="button"
-            onClick={() => toast.info(`${VIEW_TABS.find((t) => t.key === activeView)?.label} settings are coming soon`)}
-            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition hover:bg-sky-50 hover:text-sky-700"
-            title="Settings"
-            aria-label="Settings"
-            data-testid={`branch-view-tab-settings-${activeView}`}
-          >
-            <Settings className="h-4 w-4" />
-          </button>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition hover:bg-sky-50 hover:text-sky-700"
+                title="Settings"
+                aria-label="Settings"
+                data-testid={`branch-view-tab-settings-${activeView}`}
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem onSelect={() => setUpcomingOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-upcoming">
+                <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
+
+      {/* A plain overlay rather than a Dialog: the panel's own reschedule popup is
+          position:fixed, and a Dialog's transformed box would pin it inside itself. */}
+      {upcomingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) setUpcomingOpen(false); }} data-testid="upcoming-appointments-dialog">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+              <p className="flex items-center gap-2 text-base font-semibold text-slate-800"><Clock className="h-4 w-4 text-sky-600" />Upcoming Appointments</p>
+              <button type="button" onClick={() => setUpcomingOpen(false)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="upcoming-appointments-close"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-y-auto p-4">
+              <BranchCalendarPanel branchId={branchId} only="upcoming" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {profileOpen && (
         <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />

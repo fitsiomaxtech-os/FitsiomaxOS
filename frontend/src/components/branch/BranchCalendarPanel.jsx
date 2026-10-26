@@ -36,14 +36,16 @@ const emptyDraft = () => ({ patient_name: "", doctor_id: "", date: iso(new Date(
 // The branch Calendar reflects the working hours + holidays configured by Super Admin
 // in Branch Management, and lets the Branch Admin book / edit / cancel consultation
 // appointments between a client and a Head Physio.
-export const BranchCalendarPanel = ({ branchId }) => {
+// `only="upcoming"` is the Branch Admin tab strip's Settings gear: the Upcoming
+// Appointments list alone, with no sub-tab strip and no schedule notice.
+export const BranchCalendarPanel = ({ branchId, only }) => {
   const [branch, setBranch] = useState(null);
   const [leads, setLeads] = useState([]);
   const [appts, setAppts] = useState([]);
   const [monthDate, setMonthDate] = useState(() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d; });
   const [stripStart, setStripStart] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() - MONTH_STRIP_LEAD, 1); });
   const [loading, setLoading] = useState(false);
-  const [subTab, setSubTab] = useState("monthly");
+  const [subTab, setSubTab] = useState(only || "monthly");
 
   // Booking / edit modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -243,6 +245,7 @@ export const BranchCalendarPanel = ({ branchId }) => {
       {/* Sub-tabs */}
       {/* Three even columns on a phone, icon over label, like the MANAGEMENT strip right
           above it: wrapped as pills the three labels fell into three ragged rows. */}
+      {!only && (
       <div className="grid auto-rows-fr grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:flex-wrap sm:gap-2" data-testid="cal-subtabs">
         {/* First, because it is the setting the rest of this panel and the Consultant and
             Physiotherapist calendars obey: which days the branch works at all. */}
@@ -252,10 +255,13 @@ export const BranchCalendarPanel = ({ branchId }) => {
         <button type="button" onClick={() => setSubTab("schedule")} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:flex-row sm:gap-2 sm:px-3 sm:text-sm sm:font-medium ${subTab === "schedule" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-schedule">
           <CalendarIcon className="h-4 w-4 shrink-0" />Calendar by Booked Lists
         </button>
-        <button type="button" onClick={() => setSubTab("upcoming")} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:flex-row sm:gap-2 sm:px-3 sm:text-sm sm:font-medium ${subTab === "upcoming" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-upcoming">
+        {/* Phone only: a desk opens this list from the Settings gear at the right end of
+            the Branch Admin tab strip, which a phone doesn't have. */}
+        <button type="button" onClick={() => setSubTab("upcoming")} className={`flex min-w-0 md:hidden flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-semibold leading-tight transition sm:inline-flex sm:flex-row sm:gap-2 sm:px-3 sm:text-sm sm:font-medium ${subTab === "upcoming" ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`} data-testid="cal-subtab-upcoming">
           <Clock className="h-4 w-4 shrink-0" />Upcoming Appointments
         </button>
       </div>
+      )}
 
       {subTab === "monthly" && <BranchMonthlyCalendar branchId={branchId} />}
 
@@ -311,7 +317,7 @@ export const BranchCalendarPanel = ({ branchId }) => {
           Nothing booked in {monthLabel}.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="cal-booked-grid">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3" data-testid="cal-booked-grid">
           {bookedDays.map(({ date, items }) => {
             const d = new Date(`${date}T00:00:00`);
             const isToday = date === todayIso;
@@ -528,7 +534,7 @@ export const BranchCalendarPanel = ({ branchId }) => {
       )}
 
       {loading && <p className="text-center text-xs text-slate-400">Loading…</p>}
-      {!loading && !branch && (
+      {!loading && !branch && !only && (
         <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
           No branch schedule found. Ask a Super Admin to set working hours &amp; holidays in Branch Management.
         </p>
