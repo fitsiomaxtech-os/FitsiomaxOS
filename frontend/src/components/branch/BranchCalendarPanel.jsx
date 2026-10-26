@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calendar as CalendarIcon, CalendarDays, ChevronLeft, ChevronRight, Clock, User, X, Pencil } from "lucide-react";
+import { Calendar as CalendarIcon, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, User, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
+import { ClockTimeInput } from "@/components/ui/clock-time-input";
 import { BranchMonthlyCalendar } from "@/components/branch/BranchMonthlyCalendar";
 
 // weekly_hours is keyed mon..sun; JS getDay() is 0=Sun..6=Sat.
@@ -56,6 +57,8 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
   const [dayView, setDayView] = useState(null); // { date, items } | null
   const [dayLoading, setDayLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The Reschedule popup's CONSULTANT dropdown.
+  const [hpOpen, setHpOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!branchId) return;
@@ -196,15 +199,10 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
     setDraft({ patient_name: a.patient_name || a.lead_name || "", doctor_id: a.doctor_id, date: a.appointment_date, time: a.appointment_time, notes: a.notes || "", cancelled: false });
     setModalOpen(true);
   };
-  const closeModal = () => { setModalOpen(false); setEditingId(null); setDayInfo(null); };
+  const closeModal = () => { setModalOpen(false); setEditingId(null); setDayInfo(null); setHpOpen(false); };
 
-  // Selected Head Physio's free slots (add back the appointment's own time when editing).
+  // The consultant picked in the Reschedule popup, as that day's calendar has them.
   const selectedHP = dayInfo?.head_physios?.find((h) => h.id === draft.doctor_id) || null;
-  const availableSlots = (() => {
-    const slots = selectedHP ? [...(selectedHP.available_slots || [])] : [];
-    if (editingId && draft.time && !slots.includes(draft.time)) slots.push(draft.time);
-    return slots.sort();
-  })();
 
   const cancelAppt = async () => {
     if (!editingId) return;
@@ -226,7 +224,7 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
     if (dayInfo && !dayInfo.open) { toast.error(dayInfo.reason || "The branch is closed on this date"); return; }
     if (editingId && draft.cancelled) { await cancelAppt(); return; }
     if (!draft.doctor_id) { toast.error("Select a CONSULTANT"); return; }
-    if (!draft.time) { toast.error("Select an available time slot"); return; }
+    if (!draft.time) { toast.error("Select a time"); return; }
     setSaving(true);
     try {
       const payload = { patient_name: draft.patient_name.trim(), doctor_id: draft.doctor_id, date: draft.date, time: draft.time, notes: draft.notes };
@@ -540,26 +538,36 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
         </p>
       )}
 
-      {/* Appointment Date & Time modal — same format/flow as Branch Leads */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }} data-testid="cal-booking-modal">
-          <div className="max-h-[90vh] w-full max-w-md overflow-hidden overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-gradient-to-r from-teal-500 to-cyan-600 px-5 py-4 text-white">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" />
-                <p className="text-base font-semibold">Appointment Date &amp; Time</p>
-              </div>
-              <button onClick={closeModal} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="cal-modal-close"><X className="h-4 w-4" /></button>
+      {/* Reschedule — dressed as Filter by Date is (the cream card, the soft border, the
+          plain header and the sky accent), so the OS's popups read as one family. */}
+      {modalOpen && (() => {
+        // A consultant's free slots, counting the appointment's own time back in when it is
+        // theirs — it is the one being moved, so it is not taken.
+        const freeCountFor = (hp) => {
+          const editSelf = editingId && draft.doctor_id === hp.id && draft.time && !hp.available_slots.includes(draft.time);
+          return hp.available_slots.length + (editSelf ? 1 : 0);
+        };
+        return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }} data-testid="cal-booking-modal">
+          <div className="max-h-[90vh] w-full max-w-md overflow-hidden overflow-y-auto rounded-2xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#EFEAE0] px-4 py-3">
+              <p className="flex items-center gap-2 text-base font-bold text-slate-800">
+                <CalendarIcon className="h-4 w-4 text-sky-600" />
+                Reschedule
+              </p>
+              <button type="button" onClick={closeModal} className="rounded-full p-1.5 text-slate-400 hover:bg-[#F3EFE6] hover:text-slate-600" title="Close" aria-label="Close" data-testid="cal-modal-close"><X className="h-4 w-4" /></button>
             </div>
 
-            <div className="space-y-4 p-5">
+            <div className="space-y-4 p-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">Patient Name *</label>
-                <Input value={draft.patient_name} onChange={(e) => setDraft((p) => ({ ...p, patient_name: e.target.value }))} placeholder="Client name" data-testid="cal-modal-patient" />
+                <Input value={draft.patient_name} onChange={(e) => setDraft((p) => ({ ...p, patient_name: e.target.value }))} placeholder="Client name" className="border-[#EFEAE0] bg-white" data-testid="cal-modal-patient" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">Date *</label>
-                <MilkDateInput  value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value, doctor_id: "", time: "" }))} data-testid="cal-modal-date" />
+                {/* The consultant and time stay as they were: moving the day is the usual
+                    reschedule, and the server checks the pair against that day. */}
+                <MilkDateInput value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} data-testid="cal-modal-date" />
               </div>
 
               {dayLoading ? (
@@ -572,33 +580,56 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                 <>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-600">CONSULTANT *</label>
-                    <p className="mb-1.5 text-[11px] text-slate-400">Available times come from each CONSULTANT's calendar. Branch open {to12h(dayInfo.open_time)}–{to12h(dayInfo.close_time)}.</p>
                     {dayInfo.head_physios.length === 0 ? (
                       <p className="text-xs text-amber-600">No CONSULTANTS assigned to this branch yet — ask HR / Super Admin.</p>
                     ) : (
-                      <div className="space-y-1.5">
-                        {dayInfo.head_physios.map((hp) => {
-                          const editSelf = editingId && draft.doctor_id === hp.id && draft.time && !hp.available_slots.includes(draft.time);
-                          const freeCount = hp.available_slots.length + (editSelf ? 1 : 0);
-                          return (
-                            <button
-                              key={hp.id}
-                              type="button"
-                              onClick={() => setDraft((p) => ({ ...p, doctor_id: hp.id, time: "" }))}
-                              className={`flex w-full items-center gap-3 rounded-md border p-2.5 text-left ${draft.doctor_id === hp.id ? "border-teal-400 bg-teal-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}
-                              data-testid={`cal-modal-hp-${hp.id}`}
-                            >
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">{hp.full_name?.charAt(0) || "H"}</div>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-slate-800">{hp.full_name}</p>
-                                <p className="truncate text-[10px] text-slate-400">{hp.specialization || "CONSULTANT"}</p>
-                              </div>
-                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${freeCount > 0 ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
-                                {freeCount > 0 ? `${freeCount} slots` : "No slots"}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div data-testid="cal-modal-hp-select">
+                        {/* A dropdown that opens in place rather than in a portal: this popup
+                            is a fixed layer of its own, and a portalled menu would open
+                            underneath it. */}
+                        <button
+                          type="button"
+                          onClick={() => setHpOpen((o) => !o)}
+                          className={`flex h-10 w-full items-center gap-2 rounded-md border bg-white px-3 text-left text-sm transition-colors ${hpOpen ? "border-sky-300 ring-2 ring-sky-100" : "border-[#EFEAE0] hover:bg-[#F3EFE6]"}`}
+                          aria-expanded={hpOpen}
+                          data-testid="cal-modal-hp-trigger"
+                        >
+                          <span className={`min-w-0 flex-1 truncate ${selectedHP ? "font-medium text-slate-800" : "text-slate-400"}`}>
+                            {selectedHP ? selectedHP.full_name : "Select CONSULTANT"}
+                          </span>
+                          {selectedHP && (
+                            <span className={`shrink-0 text-xs font-semibold ${freeCountFor(selectedHP) > 0 ? "text-orange-700" : "text-slate-400"}`}>
+                              {freeCountFor(selectedHP) > 0 ? `${freeCountFor(selectedHP)} slots` : "No slots"}
+                            </span>
+                          )}
+                          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${hpOpen ? "rotate-180" : ""}`} />
+                        </button>
+                        {hpOpen && (
+                          <div className="mt-1 max-h-60 overflow-y-auto rounded-md border border-[#EFEAE0] bg-white p-1 shadow-lg" role="listbox" data-testid="cal-modal-hp-list">
+                            {dayInfo.head_physios.map((hp) => {
+                              const free = freeCountFor(hp);
+                              const on = draft.doctor_id === hp.id;
+                              return (
+                                <button
+                                  key={hp.id}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={on}
+                                  onClick={() => { setDraft((p) => ({ ...p, doctor_id: hp.id })); setHpOpen(false); }}
+                                  className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition-colors ${on ? "bg-sky-100" : "hover:bg-[#F3EFE6]"}`}
+                                  data-testid={`cal-modal-hp-${hp.id}`}
+                                >
+                                  {/* Free ones in dark orange, the rest in the list's own colour. */}
+                                  <span className={`min-w-0 flex-1 truncate ${free > 0 ? "font-semibold text-orange-700" : "text-slate-600"}`}>{hp.full_name}</span>
+                                  <span className={`shrink-0 text-xs ${free > 0 ? "font-semibold text-orange-700" : "text-slate-400"}`}>
+                                    {free > 0 ? `${free} slots` : "No slots"}
+                                  </span>
+                                  <Check className={`h-4 w-4 shrink-0 text-sky-600 ${on ? "" : "invisible"}`} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -606,23 +637,16 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                   {selectedHP && (
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600">Time *</label>
-                      {availableSlots.length === 0 ? (
-                        <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-400" data-testid="cal-modal-noslots">No available time slots for {selectedHP.full_name} on this date.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5" data-testid="cal-modal-slots">
-                          {availableSlots.map((t) => (
-                            <button
-                              key={t}
-                              type="button"
-                              onClick={() => setDraft((p) => ({ ...p, time: t }))}
-                              className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition ${draft.time === t ? "border-teal-500 bg-teal-500 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:bg-teal-50"}`}
-                              data-testid={`cal-modal-slot-${t}`}
-                            >
-                              {to12h(t)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      {/* The appointment's time, ready to change on the clock rather than as
+                          a wall of slot chips. The server turns away a time outside the
+                          branch's hours or one the consultant is already booked at. */}
+                      <ClockTimeInput
+                        value={draft.time}
+                        onChange={(e) => setDraft((p) => ({ ...p, time: e.target.value }))}
+                        title="Reschedule Time"
+                        className="h-10 w-full rounded-md border border-[#EFEAE0] bg-white px-3 text-sm hover:bg-[#F3EFE6]"
+                        data-testid="cal-modal-time"
+                      />
                     </div>
                   )}
                 </>
@@ -631,8 +655,7 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                 <label className="mb-1 block text-xs font-semibold text-slate-600">Notes</label>
                 <textarea
                   rows={3}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                  placeholder="Optional notes about the appointment..."
+                  className="w-full rounded-md border border-[#EFEAE0] bg-white px-3 py-2 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
                   value={draft.notes}
                   onChange={(e) => setDraft((p) => ({ ...p, notes: e.target.value }))}
                   data-testid="cal-modal-notes"
@@ -646,15 +669,16 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
+            <div className="flex items-center justify-end gap-2 border-t border-[#EFEAE0] px-4 py-3">
               <Button variant="outline" onClick={closeModal} disabled={saving} data-testid="cal-modal-dismiss">Cancel</Button>
-              <Button className="bg-teal-600 text-white hover:bg-teal-700" onClick={submit} disabled={saving || (dayInfo && !dayInfo.open && !(editingId && draft.cancelled))} data-testid="cal-modal-save">
+              <Button className="bg-sky-600 text-white hover:bg-sky-700" onClick={submit} disabled={saving || (dayInfo && !dayInfo.open && !(editingId && draft.cancelled))} data-testid="cal-modal-save">
                 {saving ? "Saving…" : "Confirm"}
               </Button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
