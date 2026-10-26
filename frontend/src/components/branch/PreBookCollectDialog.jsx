@@ -291,6 +291,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Escape" || receipts.length) return;
+      // An open Payment Mode menu takes the Escape itself and closes alone.
+      if (e.target?.closest?.('[role="menu"]')) return;
       e.stopPropagation();
       if (!saving) onClose();
     };

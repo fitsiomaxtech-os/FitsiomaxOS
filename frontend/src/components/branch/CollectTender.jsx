@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Banknote, ChevronDown, CreditCard, FileText, Landmark, Smartphone } from "lucide-react";
 import { useShownPaymentModes } from "@/lib/paymentModes";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // How one collection was paid, as the Collect popups ask it: the mode, and the reference
 // each mode is traced by. Lifted out of ClientHistoryModal when the Old Client Instalment
@@ -156,83 +157,55 @@ export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "bal
 
 const MODE_ICONS = { cash: Banknote, upi: Smartphone, card: CreditCard, account_transfer: Landmark, cheque: FileText };
 
-// The mode as a menu in the Windows 11 manner: a frosted panel that slides in under its box,
-// rounded rows with the mode's icon, and a dot by the one picked. Arrow keys move through it,
-// Enter picks.
+// The mode as a menu in the Windows 11 manner: a frosted panel, rounded rows with the mode's
+// icon, and a dot by the one picked. It floats on its own layer (Radix, portalled to the page,
+// as the Branch Leads stage menu is), so the popup it sits in can neither clip nor scroll it,
+// and it opens the same way: fading in, growing from 95% and sliding down out of its box. It
+// flips above the box when there is no room below. Arrow keys move through it, Enter picks.
 const ModeDropdown = ({ value, onChange, modes, compact, testid }) => {
-  const [open, setOpen] = useState(false);
-  const [hot, setHot] = useState(-1);
-  const boxRef = useRef(null);
-
-  // A click anywhere else closes the menu.
-  useEffect(() => {
-    if (!open) return undefined;
-    const away = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
-  }, [open]);
-
   const current = modes.find((m) => m.value === value);
   const CurrentIcon = MODE_ICONS[value];
-  const toggle = () => { setHot(modes.findIndex((m) => m.value === value)); setOpen((o) => !o); };
-  const pick = (v) => { onChange(v); setOpen(false); };
-  const onKey = (e) => {
-    if (!open) {
-      if (e.key === "ArrowDown") { e.preventDefault(); toggle(); }
-      return;
-    }
-    if (e.key === "ArrowDown") { e.preventDefault(); setHot((i) => (i + 1) % modes.length); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHot((i) => (i <= 0 ? modes.length - 1 : i - 1)); }
-    else if (e.key === "Enter" && hot >= 0) { e.preventDefault(); pick(modes[hot].value); }
-    else if (e.key === "Tab") setOpen(false);
-  };
-
   return (
-    <div className="relative" ref={boxRef}>
-      <button
-        type="button"
-        onClick={toggle}
-        onKeyDown={onKey}
-        className={`flex ${compact ? "h-9" : "h-10"} w-full items-center gap-2 rounded-md border bg-white px-3 text-sm text-slate-900 transition ${open ? "border-teal-400 ring-1 ring-teal-400" : "border-slate-300 hover:border-slate-400"}`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        data-testid={`${testid}-mode`}
-      >
-        {CurrentIcon && <CurrentIcon className="h-4 w-4 shrink-0 text-teal-600" />}
-        <span className="flex-1 truncate text-left">{current?.label || "Pick a mode"}</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div
-          role="listbox"
-          className="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-black/[0.06] bg-white/85 p-1 shadow-[0_8px_28px_rgba(15,23,42,0.16)] backdrop-blur-xl animate-in fade-in-0 slide-in-from-top-1 duration-150"
-          data-testid={`${testid}-mode-list`}
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`group flex ${compact ? "h-9" : "h-10"} w-full items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition hover:border-slate-400 focus-visible:border-teal-400 data-[state=open]:border-teal-400 data-[state=open]:ring-1 data-[state=open]:ring-teal-400`}
+          data-testid={`${testid}-mode`}
         >
-          {modes.map((m, i) => {
-            const Icon = MODE_ICONS[m.value];
-            const on = m.value === value;
-            return (
-              <button
-                key={m.value}
-                type="button"
-                role="option"
-                aria-selected={on}
-                onClick={() => pick(m.value)}
-                onMouseEnter={() => setHot(i)}
-                className={`flex h-9 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm text-slate-800 ${hot === i ? "bg-slate-900/[0.06]" : ""}`}
-                data-testid={`${testid}-mode-${m.value}`}
-              >
-                <span className="flex w-3 shrink-0 justify-center">
-                  {on && <span className="h-1.5 w-1.5 rounded-full bg-slate-700" />}
-                </span>
-                {Icon && <Icon className={`h-4 w-4 shrink-0 ${on ? "text-teal-600" : "text-slate-500"}`} />}
-                <span className={`flex-1 truncate ${on ? "font-medium" : ""}`}>{m.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+          {CurrentIcon && <CurrentIcon className="h-4 w-4 shrink-0 text-teal-600" />}
+          <span className="flex-1 truncate text-left">{current?.label || "Pick a mode"}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      </DropdownMenuTrigger>
+      {/* Above the Collect popups, which sit at z-[70]. */}
+      <DropdownMenuContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={8}
+        className="z-[80] w-[var(--radix-dropdown-menu-trigger-width)] rounded-lg border-black/[0.06] bg-white/85 p-1 text-slate-800 shadow-[0_8px_28px_rgba(15,23,42,0.16)] backdrop-blur-xl duration-150"
+        data-testid={`${testid}-mode-list`}
+      >
+        {modes.map((m) => {
+          const Icon = MODE_ICONS[m.value];
+          const on = m.value === value;
+          return (
+            <DropdownMenuItem
+              key={m.value}
+              onSelect={() => onChange(m.value)}
+              className="h-9 cursor-pointer gap-2.5 rounded-md px-2 text-sm text-slate-800 focus:bg-slate-900/[0.06] focus:text-slate-800"
+              data-testid={`${testid}-mode-${m.value}`}
+            >
+              <span className="flex w-3 shrink-0 justify-center">
+                {on && <span className="h-1.5 w-1.5 rounded-full bg-slate-700" />}
+              </span>
+              {Icon && <Icon className={`h-4 w-4 shrink-0 ${on ? "text-teal-600" : "text-slate-500"}`} />}
+              <span className={`flex-1 truncate ${on ? "font-medium" : ""}`}>{m.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 
