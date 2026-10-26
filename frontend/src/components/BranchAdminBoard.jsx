@@ -2157,7 +2157,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           <button
             type="button"
             onClick={() => toast.info(`${VIEW_TABS.find((t) => t.key === activeView)?.label} settings are coming soon`)}
-            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-sky-50 hover:text-sky-700"
+            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition hover:bg-sky-50 hover:text-sky-700"
             title="Settings"
             aria-label="Settings"
             data-testid={`branch-view-tab-settings-${activeView}`}
