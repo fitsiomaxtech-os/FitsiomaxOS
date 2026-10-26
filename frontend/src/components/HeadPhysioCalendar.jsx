@@ -1322,28 +1322,23 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                 )}
 
                 {/* Desk only, like the day hint below: on a phone both were guide text
-                    under a calendar that already shows a leave day struck through. */}
-                {Object.keys(leaveDays).length > 0 && (
+                    under a calendar that already shows a leave day struck through.
+                    Neither is drawn on the consultant's calendar. */}
+                {!isConsultant && Object.keys(leaveDays).length > 0 && (
                   <p className="mt-2 hidden items-center gap-1.5 text-[10px] text-slate-400 sm:flex" data-testid="calendar-leave-legend">
                     <span className="inline-block h-2.5 w-2.5 rounded border border-rose-200 bg-rose-50" />
                     Branch leave day — set in CALENDAR → MONTHLY CALENDAR
                   </p>
                 )}
 
-                {/* Not on the physio's calendar: the day's shift and what it opens are
-                    already said on the right, beside the date, so this was the same thing
-                    twice under the month. */}
-                {selectedDate && !isPhysio && (
+                {/* Not on the physio's or the consultant's calendar: the day's shift and what
+                    it opens are already said on the right, beside the date, so this was the
+                    same thing twice under the month. */}
+                {selectedDate && !isPhysio && !isConsultant && (
                   <p className="mt-4 hidden border-t border-slate-100 pt-3 text-[11px] text-slate-400 sm:block" data-testid="calendar-day-hint">
-                    {isConsultant ? (
-                      dayShiftLabel
-                        ? <>Marked available across <b>{dayShiftLabel}</b>{isOverridden ? " — set for this day only" : ""}. The exact time is agreed with the patient and typed on BRANCH LEADS → APPOINTMENT. </>
-                        : <>Marked available for the whole day. Put them on a shift in <b>TIME MANAGEMENT</b> to say which hours they actually work. </>
-                    ) : (
-                      dayShiftLabel
-                        ? <>Opened across <b>{dayShiftLabel}</b>{isOverridden ? " — set for this day only" : ""} at {slotDuration}-minute slots, per FITSIO STORE. </>
-                        : <>Whole day opened at {slotDuration}-minute slots, per FITSIO STORE. Put them on a shift in <b>TIME MANAGEMENT</b> to cut the day to their working hours. </>
-                    )}
+                    {dayShiftLabel
+                      ? <>Opened across <b>{dayShiftLabel}</b>{isOverridden ? " — set for this day only" : ""} at {slotDuration}-minute slots, per FITSIO STORE. </>
+                      : <>Whole day opened at {slotDuration}-minute slots, per FITSIO STORE. Put them on a shift in <b>TIME MANAGEMENT</b> to cut the day to their working hours. </>}
                     Pick more dates to mark several at once, or click a date again to deselect it.
                   </p>
                 )}
