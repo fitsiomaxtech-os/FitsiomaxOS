@@ -19,7 +19,7 @@ const PRE_BOOK_MODES = COLLECT_MODES.filter((m) => m.value !== "cheque");
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 const Section = ({ title, children, done }) => (
-  <div className={`rounded-xl border p-3 ${done ? "border-teal-200 bg-teal-50/60" : "border-slate-200"}`}>
+  <div className={`rounded-xl p-3 ${done ? "bg-teal-50/60" : ""}`}>
     <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
       {done && <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />}
       {title}
