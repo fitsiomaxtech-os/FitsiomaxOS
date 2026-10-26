@@ -3254,6 +3254,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   // the header above draws the same two cases, and a row that disagreed
                   // with it would slide every cell after this one a column to the left.
                   const showAssignedPhysio = !onArmBoard && !entryStageNames.includes(stageFilter);
+                  // The bin beside each row's arrow: All Stages and the entry stage (New
+                  // Leads) only, for the roles the delete endpoint accepts.
+                  const showRowDelete = canDeleteLeads && (!stageFilter || entryStageNames.includes(stageFilter));
                   if (visible.length === 0) {
                     return (
                       <tr>
@@ -3504,17 +3507,31 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             ) : <span className="text-slate-400">—</span>}
                           </td>
                         )}
-                        <td className="px-2 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedLead(lead)}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                            title="Open patient details"
-                            aria-label={`Open details for ${lead.name || "patient"}`}
-                            data-testid={`branch-row-view-${lead.id}`}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
+                        <td className="px-1 py-3 text-center">
+                          <div className="flex items-center justify-center gap-0.5">
+                            {showRowDelete && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setRowDelete(lead); }}
+                                className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                                title="Delete this patient and everything of theirs"
+                                aria-label={`Delete ${lead.name || "patient"} and all their records`}
+                                data-testid={`branch-row-delete-${lead.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLead(lead)}
+                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                              title="Open patient details"
+                              aria-label={`Open details for ${lead.name || "patient"}`}
+                              data-testid={`branch-row-view-${lead.id}`}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
