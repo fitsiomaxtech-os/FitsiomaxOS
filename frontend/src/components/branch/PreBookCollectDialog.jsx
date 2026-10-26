@@ -5,7 +5,7 @@ import { toast } from "@/components/ui/sonner";
 import { collectPreBook, listStoreItems } from "@/lib/api";
 import { loadSession } from "@/lib/session";
 import { consultationItemPrice } from "@/lib/consultationPackages";
-import { BalanceDiscount, COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
+import { COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
 import { advanceForLabel, preBookConsultOwed, preBookOf, rupees, shortDay } from "@/lib/preBook";
@@ -46,9 +46,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [consultOn, setConsultOn] = useState(!paidConsult);
   const [itemId, setItemId] = useState("");
   const [consultAmount, setConsultAmount] = useState("");
+  // Set only by "Give Rs.X as discount": the rest of a part payment, written off.
   const [consultDiscount, setConsultDiscount] = useState("");
-  // Bumped when the discount is set from outside its own boxes, so its % box is read afresh.
-  const [discountKey, setDiscountKey] = useState(0);
   const [advanceOn, setAdvanceOn] = useState(!paidAdvance);
   const [advanceFor, setAdvanceFor] = useState("sessions");
   const [advanceNote, setAdvanceNote] = useState("");
@@ -111,10 +110,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   };
 
   // The rest of a part payment, written off rather than collected on the visit day.
-  const shortToDiscount = () => {
-    setConsultDiscount(String(r2(consultOff + consultShort)));
-    setDiscountKey((k) => k + 1);
-  };
+  const shortToDiscount = () => setConsultDiscount(String(r2(consultOff + consultShort)));
 
   const submit = async () => {
     const payload = { confirmed: true };
@@ -254,8 +250,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
               {consultOn && (
                 <div className="space-y-2">
                   <label className="block">
-                    <span className="mb-1 block text-xs font-semibold text-slate-700">Package (Services &amp; Products › Pre Book)</span>
                     <select
+                      aria-label="Consultation package"
                       value={itemId}
                       onChange={(e) => pickItem(e.target.value)}
                       disabled={items.loading || !items.rows.length}
@@ -270,26 +266,14 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                       })}
                     </select>
                   </label>
-                  {price != null && (
-                    <BalanceDiscount
-                      key={`${itemId}-${discountKey}`}
-                      due={price}
-                      discount={consultDiscount}
-                      amount={consultAmount}
-                      onChange={({ discount, amount }) => {
-                        setConsultDiscount(discount);
-                        if (amount != null) setConsultAmount(amount);
-                      }}
-                      testid="pre-book-consult"
-                    />
-                  )}
                   <CollectField
                     label="Amount paid now (₹)"
                     type="number"
                     inputMode="decimal"
                     value={consultAmount}
-                    onChange={(e) => setConsultAmount(e.target.value)}
-                    placeholder={price != null ? String(r2(price - consultOff)) : "0"}
+                    // A new amount is a new part payment; its rest is owed until given as discount again.
+                    onChange={(e) => { setConsultAmount(e.target.value); setConsultDiscount(""); }}
+                    placeholder={price != null ? String(price) : "0"}
                     testid="pre-book-consult-amount"
                   />
                   {consultShort ? (
@@ -304,12 +288,20 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                         Give {rupees(consultShort)} as discount
                       </button>
                     </div>
+                  ) : consultOff > 0 && consultNow > 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <span>{rupees(consultOff)} discount — nothing left to collect on the visit day.</span>
+                      <button
+                        type="button"
+                        onClick={() => setConsultDiscount("")}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-600 hover:bg-slate-50"
+                        data-testid="pre-book-consult-discount-undo"
+                      >
+                        Undo
+                      </button>
+                    </div>
                   ) : (
-                    <p className="text-[11px] text-slate-500">
-                      {consultOff > 0 && consultNow > 0
-                        ? `${rupees(consultOff)} discount — nothing left to collect on the visit day.`
-                        : "The whole price, or less to confirm the booking (the rest on the visit day)."}
-                    </p>
+                    <p className="text-[11px] text-slate-500">The whole price, or less to confirm the booking (the rest on the visit day).</p>
                   )}
                 </div>
               )}
