@@ -45,8 +45,10 @@ export const formatSlotLabel = (hhmm) => {
  * `size="lg"` grows the day cells and the type for the popups that have room for it — the
  * default stays exactly as it was, so every existing caller is untouched. Only the cells
  * and the text scale; the month grid is still seven columns that fill their container.
+ *
+ * `className` is merged onto the card, so a caller can set its width or corners.
  */
-export const MilkCalendar = ({ value, onChange, min, accent = "amber", testid = "milk-calendar", size = "md" }) => {
+export const MilkCalendar = ({ value, onChange, min, accent = "amber", testid = "milk-calendar", size = "md", className = "" }) => {
   const lg = size === "lg";
   const today = todayIso();
   const [cursor, setCursor] = useState(() => {
@@ -66,7 +68,7 @@ export const MilkCalendar = ({ value, onChange, min, accent = "amber", testid = 
   const cellH = lg ? "h-11" : "h-8";
 
   return (
-    <div className={`rounded-xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-sm ${lg ? "p-4" : "p-3"}`} data-testid={testid}>
+    <div className={cn("rounded-xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-sm", lg ? "p-4" : "p-3", className)} data-testid={testid}>
       <div className={`flex items-center justify-between ${lg ? "mb-3" : "mb-2"}`}>
         <button type="button" onClick={() => step(-1)} className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F3EFE6]" aria-label="Previous month" data-testid={`${testid}-prev`}>
           <ChevronLeft className={lg ? "h-5 w-5" : "h-4 w-4"} />
@@ -282,15 +284,16 @@ export const MilkDateInput = ({
         </CenteredPicker>
       ) : floating ? (
         // In a portal, so the popup's card cannot clip it; over the popup (z-[60]) and
-        // under the clock dialog (z-[80]).
+        // under the clock dialog (z-[80]). 220px, a quarter wider than the grid's own
+        // ~176px, with 4px corners like the popup it sits beside.
         createPortal(
           <div
             ref={floatRef}
-            className="fixed z-[75] w-max"
+            className="fixed z-[75] w-[220px] max-w-[calc(100vw-16px)]"
             style={floatPos || { top: 0, left: 0, visibility: "hidden" }}
             data-testid={`${rest["data-testid"] || "milk-date"}-float`}
           >
-            <MilkCalendar value={value} min={min} max={max} accent={accent} onChange={pick} />
+            <MilkCalendar value={value} min={min} max={max} accent={accent} onChange={pick} className="rounded shadow-xl" />
           </div>,
           document.body,
         )
