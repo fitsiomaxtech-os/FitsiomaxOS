@@ -1151,6 +1151,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // with them rather than refusing over them. That is what it is for — a record that is
   // wrong all the way through cannot be cleared by a delete that steps around its middle.
   const [rowDelete, setRowDelete] = useState(null);
+  // The Pre Book row whose Collect Advance popup is open -- see showPreBookOption.
+  const [rowPreBookCollect, setRowPreBookCollect] = useState(null);
   // The roles that endpoint accepts (branch_admin's aliases included server-side). Anyone
   // else would only be shown a button that 403s.
   const deleteRoleAllowed = ["super_admin", "business_dev", "branch_admin", "online_physio_admin", "online_fitness_admin",
@@ -1369,6 +1371,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // On Pre Book the same two slots carry when the client plans to come and what they paid.
   const showPreBookColumns = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_PRE_BOOK);
   const showExtraColumn = showFollowUpColumn || showNotProspectColumns || showPreBookColumns;
+  // Option, between Stage and Actions: the Collect Advance button, so the money can be
+  // taken from the list without opening the patient. A branch's Pre Book table only.
+  const showPreBookOption = showPreBookColumns && !onArmBoard && !entryStageNames.includes(stageFilter);
 
   // The column widths this list is drawn at, chosen once for the header and the rows
   // together — a row that disagreed with the header about how many columns there are
@@ -3136,7 +3141,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             {/* Wider floor where the board asks more than two questions: fitness draws
                 eight columns, and eight inside 760px is 95px each with the scroll region
                 around it going unused. */}
-            <table className={`w-full ${intakeQuestions.length > 2 ? "min-w-[980px]" : "min-w-[760px]"} table-fixed divide-y divide-slate-200 text-sm`}>
+            <table className={`w-full ${intakeQuestions.length > 2 || showPreBookOption ? "min-w-[980px]" : "min-w-[760px]"} table-fixed divide-y divide-slate-200 text-sm`}>
               <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
                 <tr>
                   {/* Three shapes: an online arm's, and a branch's with and without
@@ -3210,9 +3215,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       <th className={`${listWidths.source} px-4 py-3`}>Source</th>
                       {showPreBookColumns ? (
                         <>
-                          <th className="w-[12%] whitespace-nowrap px-4 py-3">Total Advance</th>
-                          <th className="w-[14%] whitespace-nowrap px-4 py-3">Planned Visit</th>
-                          <th className="w-[14%] whitespace-nowrap px-4 py-3" data-testid="branch-list-prebook-head">Status (Paid or Not)</th>
+                          <th className="w-[11%] whitespace-nowrap px-4 py-3">Total Advance</th>
+                          <th className="w-[13%] whitespace-nowrap px-4 py-3">Planned Visit</th>
+                          <th className="w-[9%] whitespace-nowrap px-4 py-3" data-testid="branch-list-prebook-head">Status</th>
                         </>
                       ) : (
                         <>
@@ -3233,6 +3238,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         </>
                       )}
                       <th className={`${listWidths.stage} px-4 py-3`}>Stage</th>
+                      {showPreBookOption && (
+                        <th className="w-[13%] whitespace-nowrap px-4 py-3" data-testid="branch-list-prebook-option-head">Option</th>
+                      )}
                     </>
                   )}
                   {/* Last on every shape of the table; each shape leaves it 6%. */}
@@ -3254,7 +3262,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             drawn. It used to read 9/8, one more than the table has ever
                             had, and a fitness arm's nine would have been a third wrong
                             answer to write down. */}
-                        <td colSpan={(showPreBookColumns ? 7 : 5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
+                        <td colSpan={(showPreBookColumns ? 7 + (showPreBookOption ? 1 : 0) :5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
                           No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                         </td>
                       </tr>
@@ -3480,6 +3488,23 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             {rowStage ? rowStage : "—"}
                           </span>
                         </td>
+                        {/* Collect Advance, straight from the row: the same popup the
+                            patient's Pre Book card opens. View once the advance is in.
+                            stopPropagation, because the row itself opens the patient. */}
+                        {showPreBookOption && (
+                          <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            {preBookOf(lead) ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setRowPreBookCollect(lead); }}
+                                className="rounded-[3px] bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600"
+                                data-testid={`branch-row-prebook-collect-${lead.id}`}
+                              >
+                                {preBookOf(lead).advance ? "View" : "Collect Advance"}
+                              </button>
+                            ) : <span className="text-slate-400">—</span>}
+                          </td>
+                        )}
                         <td className="px-2 py-3 text-center">
                           <button
                             type="button"
@@ -3499,6 +3524,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               </tbody>
             </table>
           </div>
+
+      {/* The row's Collect Advance popup. Refreshes the list behind it, so Total Advance
+          and Status read what was paid once the receipt is closed. */}
+      {rowPreBookCollect && (
+        <PreBookCollectDialog
+          lead={rowPreBookCollect}
+          branchId={branchId || rowPreBookCollect.branch_id}
+          onClose={() => setRowPreBookCollect(null)}
+          onCollected={() => { loadBoard(); }}
+        />
+      )}
 
       {/* Lead Detail Modal */}
       {selectedLead && (
