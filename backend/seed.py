@@ -6,6 +6,7 @@ from utils import PAST_MOVE_FIELD, now_iso, derive_branch_code, generate_patient
 from security import hash_password
 from constants import (
     V3_VERTICALS, V3_BRANCH_STAGES, V3_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
+    PRESALES_LOST_STAGE,
     BRANCH_ADMIN_ENTRY_STAGE, BRANCH_ADMIN_RNR_STAGE,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_NOT_A_PROSPECT_STAGE,
     BRANCH_PRE_BOOK_STAGE, SALES_STAGE_ROLE_PRE_BOOK,
@@ -167,6 +168,68 @@ async def ensure_rnr_stage() -> None:
         "order": insert_order,
         "is_final": False,
         "created_at": now_iso(),
+    })
+
+
+_PRESALES_LOST_MIGRATION = "ensure_presales_lost_stage"
+
+
+async def ensure_presales_lost_stage() -> None:
+    """Give the Pre-Sales pipeline its Lost stage, right after Appointment.
+
+    The desk had nowhere to put a lead it has given up on. Left on New Leads, RNR or Follow
+    Up, such a lead stays in the worklist a rep opens every morning; Lost takes it out of
+    those counts and gives it a card of its own on the Pre Sales dashboard. Final, since a
+    lead stops there.
+
+    Coloured to fit the way this install draws its Pre-Sales cards. CI/CD ROOTS can give
+    every card one resting colour and each stage its own only when it is picked; a plain red
+    Lost among grey cards would be the one card that never rests. So where Appointment
+    carries a picked colour, Lost takes Appointment's resting colour and red for its own
+    states; elsewhere it is simply red. Either way Super Admin can recolour it after.
+
+    A one-shot, by its marker in `migrations`, like rename_branch_appointment_stage. A
+    Pre-Sales stage carries no role to be found again by, only its name -- and once Super
+    Admin renames or deletes this one, a pass matching on "Lost" would put it straight back
+    on the next restart. A no-op until the Pre-Sales stages exist: a fresh install seeds them
+    from V3_STAGES, Lost included.
+    """
+    if await v3_col("migrations").find_one({"name": _PRESALES_LOST_MIGRATION}):
+        return
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "pre_sales"},
+        {"_id": 0, "name": 1, "order": 1, "color": 1, "hover_color": 1, "selected_color": 1},
+    ).sort("order", 1).to_list(100)
+    if not rows:
+        return
+    inserted = False
+    if not any(r.get("name") == PRESALES_LOST_STAGE for r in rows):
+        after = next((r for r in rows if r.get("name") == "Appointment"), rows[-1])
+        insert_order = (after.get("order") or 0) + 1
+        await v3_col("pipeline_stages").update_many(
+            {"type": "pre_sales", "order": {"$gte": insert_order}},
+            {"$inc": {"order": 1}},
+        )
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": PRESALES_LOST_STAGE,
+            "color": "#ef4444",
+            "type": "pre_sales",
+            "order": insert_order,
+            "is_final": True,
+            "created_at": now_iso(),
+        }
+        if after.get("selected_color"):
+            doc["color"] = after.get("color") or "#64748b"
+            doc["selected_color"] = "#ef4444"
+            if after.get("hover_color"):
+                doc["hover_color"] = "#ef4444"
+        await v3_col("pipeline_stages").insert_one(doc)
+        inserted = True
+    await v3_col("migrations").insert_one({
+        "name": _PRESALES_LOST_MIGRATION,
+        "inserted": inserted,
+        "ran_at": now_iso(),
     })
 
 

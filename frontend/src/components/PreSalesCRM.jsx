@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, StickyNote, ArrowRight, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronUp, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import {
   listTestimonials, addTestimonial, deleteTestimonial, getDashboardOverview,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
-import { CreateLeadModal } from "@/components/CreateLeadModal";
+import { CreateLeadModal, DEPARTMENT_OPTIONS } from "@/components/CreateLeadModal";
 import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
@@ -20,7 +21,7 @@ import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
-import { callTimeStamp, callDateStamp } from "@/lib/time";
+import { callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -82,11 +83,23 @@ const WhatsAppIcon = ({ className }) => (
 
 const branchLabel = (b) => b?.branch_name || b?.name || "";
 
+/** A stored key as words: "google_sheets" reads as "Google Sheets". */
+const humanWords = (v) => String(v).replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+
 /** A lead's source as words for the line under its name — "google_sheets" reads as
  *  "Google Sheets", the way HR Admin prints a candidate's source under their name. */
-const sourceLabel = (src) => (src
-  ? String(src).replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase())
-  : "—");
+const sourceLabel = (src) => (src ? humanWords(src) : "—");
+
+/**
+ * The colour a Pre-Sales stage is known by, for the lead popup's stage pills and the
+ * table's stage chip.
+ *
+ * Its selected colour first. CI/CD ROOTS lets every KPI card rest in one grey and take its
+ * own colour only once picked, so on this board the plain colour can be the same grey for
+ * every stage — pills drawn in it would all read alike, where Branch Admin's popup shows
+ * each stage in its own. A stage with no selected colour falls back to its plain one.
+ */
+const stageInk = (stage) => stage?.selected_color || stage?.color || "#64748b";
 
 /**
  * The Assigned To column's dropdown — plain white and slate, no per-branch colours.
@@ -97,7 +110,12 @@ const sourceLabel = (src) => (src
  * The panel is position:fixed and measured off the trigger, because the leads table
  * sits in an overflow-auto wrapper that would otherwise clip an absolutely-positioned
  * one. A fixed panel can't follow what it is anchored to, so any scroll or resize
- * closes it rather than leaving it stranded beside a different row.
+ * closes it rather than leaving it stranded beside a different row — except a scroll of
+ * the list itself, which is the panel being used, not left behind.
+ *
+ * It is portalled to <body> because the table is drawn at 90% (zoom). A fixed box inside
+ * a zoomed ancestor has its top and left scaled along with it, so the panel would open a
+ * tenth short of the trigger it was measured off.
  *
  * `options` is [{ value, label }]. `resetLabel`, when given, adds a neutral first row
  * that clears the selection — that's the filter's "All Sources"; the assign column has
@@ -110,17 +128,21 @@ const BranchSelect = ({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const wrapRef = useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
-    const onDocClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    // The panel is outside wrapRef in the DOM now, so a press on it has to be checked
+    // against both — or picking a branch would close the list before the click landed.
+    const inside = (target) => [wrapRef, panelRef].some((r) => r.current && r.current.contains(target));
+    const onPointer = (e) => { if (!inside(e.target)) setOpen(false); };
     const dismiss = () => setOpen(false);
-    document.addEventListener("mousedown", onDocClick);
-    window.addEventListener("scroll", dismiss, true);
+    document.addEventListener("mousedown", onPointer);
+    window.addEventListener("scroll", onPointer, true);
     window.addEventListener("resize", dismiss);
     return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      window.removeEventListener("scroll", dismiss, true);
+      document.removeEventListener("mousedown", onPointer);
+      window.removeEventListener("scroll", onPointer, true);
       window.removeEventListener("resize", dismiss);
     };
   }, [open]);
@@ -149,7 +171,7 @@ const BranchSelect = ({
   const pick = (v) => { setOpen(false); if (v !== value) onChange(v); };
 
   return (
-    <div className="relative inline-block" ref={wrapRef}>
+    <div className="relative inline-block max-w-full" ref={wrapRef}>
       <button
         type="button"
         onClick={toggle}
@@ -160,8 +182,9 @@ const BranchSelect = ({
         <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
       </button>
 
-      {open && pos && (
+      {open && pos && createPortal(
         <div
+          ref={panelRef}
           className="fixed z-50 max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
           style={pos}
           data-testid={`${testid}-list`}
@@ -193,7 +216,8 @@ const BranchSelect = ({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -1124,6 +1148,21 @@ export const PreSalesCRM = ({
   useEffect(() => { setVisibleCount(50); }, [stageFilter, sourceFilter, modeFilter, search, dateFilter, handledByFilter]);
   const visibleLeads = filtered.slice(0, visibleCount);
 
+  // The desk table's columns and each one's share of the row. table-fixed divides the row
+  // by the stated widths, so they have to add up to the whole however many of the optional
+  // columns are drawn: each is a weight here, turned into a percentage of what is on.
+  // Stage is wide enough for its chip and a follow-up time beside it, and Branch Admin
+  // Status for branch, status and expert on the one line.
+  const tableCols = [
+    ["lead", 20], ["contact", 13], ["source", 11], ["stage", 18],
+    isSuperAdminMasterView && ["handled", 12],
+    stageFilter === "Appointment" && ["branchStatus", 24],
+    stageFilter === "RNR" && ["lastCall", 16],
+    ["created", 10], ["assigned", 15], ["actions", 6],
+  ].filter(Boolean);
+  const tableWeight = tableCols.reduce((sum, [, w]) => sum + w, 0);
+  const colWidth = Object.fromEntries(tableCols.map(([key, w]) => [key, { width: `${(w / tableWeight) * 100}%` }]));
+
   // Mobile Consultations tab — this rep's leads currently booked for a consultation.
   // Not narrowed by the Leads tab's own date filter — ConsultationsTab applies its own.
   const appointmentLeads = useMemo(
@@ -1334,62 +1373,71 @@ export const PreSalesCRM = ({
           The cards win: they carry the counts. The mobile block below keeps its own
           StageTabBar — it has no KPI row, so that one isn't a duplicate. */}
 
-      {/* Leads table — drawn the way HR Admin's candidate list is (HumanResourceBoard):
-          a grey uppercase header, plain rows split by a hairline, a bold name with a
-          faint line under it. Source moved under the name and email under the phone,
-          which is where that list puts the same two facts. */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" data-testid="presales-leads-card">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-slate-700 text-left text-[10px] uppercase tracking-wider text-white">
+      {/* Leads table — Branch Admin's Branch Leads list, piece for piece: drawn at 90%,
+          its own scroll region under a sticky header, and one line a row. What used to
+          sit on a second line under a cell — the email under the phone, the follow-up
+          time under the stage, the branch's status and expert under its name — is beside
+          it or on its hover instead. zoom scales vh with everything else, so 72vh here is
+          the same 65vh of screen the Branch Leads list takes. */}
+      <div className="w-full overflow-hidden rounded-lg border border-slate-200 bg-white" style={{ zoom: 0.9 }} data-testid="presales-leads-card">
+          <div className="max-h-[72vh] overflow-auto">
+            <table className="w-full min-w-[900px] table-fixed divide-y divide-slate-200 text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
                 <tr>
-                  <th className="px-4 py-2.5 font-semibold">Lead</th>
-                  <th className="px-4 py-2.5 font-semibold">Contact</th>
-                  <th className="px-4 py-2.5 font-semibold">Source</th>
-                  <th className="px-4 py-2.5 font-semibold">Stage</th>
-                  {isSuperAdminMasterView && <th className="px-4 py-2.5 font-semibold">Handled By</th>}
-                  {stageFilter === "Appointment" && <th className="px-4 py-2.5 font-semibold">Branch Admin Status</th>}
-                  {stageFilter === "RNR" && <th className="px-4 py-2.5 font-semibold">Last Call</th>}
-                  <th className="px-4 py-2.5 font-semibold">Created</th>
-                  <th className="px-4 py-2.5 font-semibold">Assigned To</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                  <th className="truncate px-4 py-3" style={colWidth.lead}>Lead</th>
+                  <th className="truncate px-4 py-3" style={colWidth.contact}>Contact</th>
+                  <th className="truncate px-4 py-3" style={colWidth.source}>Source</th>
+                  <th className="truncate px-4 py-3" style={colWidth.stage}>Stage</th>
+                  {isSuperAdminMasterView && <th className="truncate px-4 py-3" style={colWidth.handled}>Handled By</th>}
+                  {stageFilter === "Appointment" && <th className="truncate px-4 py-3" style={colWidth.branchStatus}>Branch Admin Status</th>}
+                  {stageFilter === "RNR" && <th className="truncate px-4 py-3" style={colWidth.lastCall}>Last Call</th>}
+                  <th className="truncate px-4 py-3" style={colWidth.created}>Created</th>
+                  <th className="truncate px-4 py-3" style={colWidth.assigned}>Assigned To</th>
+                  <th className="truncate px-2 py-3 text-center" style={colWidth.actions}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleLeads.map((l) => {
                   const stg = stages.find((s) => s.name === l.stage);
+                  const stageHex = stageInk(stg);
                   return (
-                    <tr key={l.id} onClick={() => setEditing(l)} className="cursor-pointer hover:bg-slate-50" data-testid={`presales-lead-row-${l.id}`}>
+                    <tr key={l.id} onClick={() => setEditing(l)} className="cursor-pointer transition-colors hover:bg-slate-50" data-testid={`presales-lead-row-${l.id}`}>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800">{l.name}</p>
+                        <div className="flex min-w-0 items-center gap-3" title={l.name || undefined}>
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                            {l.name?.charAt(0)?.toUpperCase() || "?"}
+                          </div>
+                          <span className="truncate font-semibold text-slate-900">{l.name}</span>
+                        </div>
                       </td>
-                      {/* Number only. Call and WhatsApp both hand off to an app the desk
-                          does not have — tel: and wa.me open a dialer and a phone client,
-                          so on a desktop they were two icons per row that either did
-                          nothing or launched the wrong thing. They stay on the phone
-                          cards, where they work. */}
-                      <td className="px-4 py-3 text-slate-600">
+                      {/* Number only, and the email on its hover. Call and WhatsApp both
+                          hand off to an app the desk does not have — tel: and wa.me open a
+                          dialer and a phone client, so on a desktop they were two icons per
+                          row that either did nothing or launched the wrong thing. They stay
+                          on the phone cards, where they work. */}
+                      <td className="truncate px-4 py-3 text-slate-600" title={[displayPhone(l.phone), l.email].filter(Boolean).join("\n") || undefined}>
                         {displayPhone(l.phone) || "—"}
-                        {l.email ? <span className="block max-w-[220px] truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-600" data-testid={`presales-lead-source-${l.id}`}>
+                      <td className="truncate px-4 py-3 text-slate-600" title={l.source_tab || l.source_type ? sourceLabel(l.source_tab || l.source_type) : undefined} data-testid={`presales-lead-source-${l.id}`}>
                         {sourceLabel(l.source_tab || l.source_type) || "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col items-start gap-1">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className="inline-flex shrink-0 whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold"
-                              style={{ color: stg?.color || "#64748b", borderColor: `${stg?.color || "#64748b"}55`, backgroundColor: `${stg?.color || "#64748b"}14` }}
-                            >
-                              {l.stage}
+                        {/* One width for every chip, so the column reads as a row of equal
+                            boxes — the Branch Leads list's stage chip. The RNR count and the
+                            follow-up time ride beside it rather than under it. */}
+                        <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                          <span
+                            title={l.stage || undefined}
+                            className="inline-block w-[118px] max-w-full shrink-0 truncate rounded-[5px] border px-2 py-0.5 text-center align-middle text-xs font-medium"
+                            style={{ background: `${stageHex}14`, color: stageHex, border: `1px solid ${stageHex}33` }}
+                          >
+                            {l.stage || "—"}
+                          </span>
+                          {l.stage === "RNR" && (l.rnr_attempts || 0) > 0 && (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700" title={`${l.rnr_attempts} unanswered call attempts`} data-testid={`presales-rnr-badge-${l.id}`}>
+                              <PhoneOff className="h-2.5 w-2.5" />×{l.rnr_attempts}
                             </span>
-                            {l.stage === "RNR" && (l.rnr_attempts || 0) > 0 && (
-                              <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700" title={`${l.rnr_attempts} unanswered call attempts`} data-testid={`presales-rnr-badge-${l.id}`}>
-                                <PhoneOff className="h-2.5 w-2.5" />×{l.rnr_attempts}
-                              </span>
-                            )}
-                          </div>
+                          )}
                           {l.stage === "Follow Up" && l.next_follow_up_at && (() => {
                             const dt = new Date(l.next_follow_up_at);
                             const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1399,7 +1447,7 @@ export const PreSalesCRM = ({
                             const isPast = dt.getTime() < Date.now();
                             const tone = isPast ? "bg-rose-50 text-rose-700 border-rose-200" : isToday ? "bg-amber-50 text-amber-700 border-amber-300" : "bg-emerald-50 text-emerald-700 border-emerald-200";
                             return (
-                              <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`} data-testid={`presales-followup-badge-${l.id}`}>
+                              <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`} data-testid={`presales-followup-badge-${l.id}`}>
                                 <Clock className="h-2.5 w-2.5" />
                                 {isToday ? "Today" : isTomorrow ? "Tomorrow" : dt.toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
                                 {" · "}
@@ -1410,25 +1458,27 @@ export const PreSalesCRM = ({
                         </div>
                       </td>
                       {isSuperAdminMasterView && (
-                        <td className="px-4 py-3" data-testid={`presales-handled-by-${l.id}`}>
-                          <div className="flex"><HandledByBadge lead={l} /></div>
-                          {l.lead_control !== "pre_sales" && l.branch_stage && (
-                            <span className="mt-1 block text-[10px] text-slate-400">{l.branch_stage}</span>
-                          )}
+                        <td className="px-4 py-3" title={l.lead_control !== "pre_sales" && l.branch_stage ? l.branch_stage : undefined} data-testid={`presales-handled-by-${l.id}`}>
+                          <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                            <span className="shrink-0"><HandledByBadge lead={l} /></span>
+                            {l.lead_control !== "pre_sales" && l.branch_stage && (
+                              <span className="min-w-0 truncate text-[10px] text-slate-400">{l.branch_stage}</span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {stageFilter === "Appointment" && (() => {
                         const { branchName, status, statusColor } = branchStatusInfo(l, branches);
+                        const expert = l.assigned_physio_name ? `Expert: ${l.assigned_physio_name}` : "Pending Expert";
+                        // Branch, status and expert on the one line, the branch name giving
+                        // way first so the status and the expert stay readable; all three
+                        // in full on hover.
                         return (
-                          <td className="px-4 py-3 text-xs">
-                            <div className="flex flex-col items-start gap-1" data-testid={`presales-branch-status-${l.id}`}>
-                              <span className="font-semibold text-slate-700">{branchName || "—"}</span>
-                              <span className={`inline-flex w-fit items-center rounded border px-1.5 text-[10px] font-semibold ${statusColor}`}>{status}</span>
-                              {l.assigned_physio_name ? (
-                                <span className="text-[10px] text-emerald-600">Expert: {l.assigned_physio_name}</span>
-                              ) : (
-                                <span className="text-[10px] text-amber-600">Pending Expert</span>
-                              )}
+                          <td className="px-4 py-3 text-xs" title={[branchName, status, expert].filter(Boolean).join(" · ")}>
+                            <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap" data-testid={`presales-branch-status-${l.id}`}>
+                              <span className="min-w-0 truncate font-semibold text-slate-700">{branchName || "—"}</span>
+                              <span className={`inline-flex shrink-0 items-center rounded border px-1.5 text-[10px] font-semibold ${statusColor}`}>{status}</span>
+                              <span className={`shrink-0 text-[10px] ${l.assigned_physio_name ? "text-emerald-600" : "text-amber-600"}`}>{expert}</span>
                             </div>
                           </td>
                         );
@@ -1436,18 +1486,18 @@ export const PreSalesCRM = ({
                       {stageFilter === "RNR" && (
                         <td className="px-4 py-3">
                           {l.rnr_last_attempt_at ? (
-                            <div className="flex flex-col items-start gap-0.5" data-testid={`presales-rnr-lastcall-${l.id}`}>
-                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                            <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap" title={`${callTimeStamp(l.rnr_last_attempt_at)} · ${callDateStamp(l.rnr_last_attempt_at)}`} data-testid={`presales-rnr-lastcall-${l.id}`}>
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
                                 <Clock className="h-2.5 w-2.5" />{callTimeStamp(l.rnr_last_attempt_at)}
                               </span>
-                              <span className="text-[10px] text-slate-400">{callDateStamp(l.rnr_last_attempt_at)}</span>
+                              <span className="shrink-0 text-[10px] text-slate-400">{callDateStamp(l.rnr_last_attempt_at)}</span>
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           )}
                         </td>
                       )}
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">{(l.created_at || "").slice(0, 10) || "—"}</td>
+                      <td className="truncate px-4 py-3 text-slate-500">{(l.created_at || "").slice(0, 10) || "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <BranchSelect
                           value={l.branch_id || ""}
@@ -1468,22 +1518,22 @@ export const PreSalesCRM = ({
                           testid={`presales-assign-branch-${l.id}`}
                         />
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); setEditing(l); }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid={`presales-lead-view-${l.id}`} title="View / Edit">
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
+                      <td className="px-1 py-3 text-center">
+                        <div className="flex items-center justify-center gap-0.5">
                           {role === "super_admin" && (
                             <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(l); }} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" data-testid={`presales-lead-delete-${l.id}`} title="Delete lead">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           )}
+                          <button onClick={(e) => { e.stopPropagation(); setEditing(l); }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid={`presales-lead-view-${l.id}`} title="View / Edit">
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && <tr><td colSpan={(stageFilter === "Appointment" || stageFilter === "RNR" ? 8 : 7) + (isSuperAdminMasterView ? 1 : 0)} className="px-4 py-10 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={tableCols.length} className="px-4 py-10 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -2061,8 +2111,8 @@ const ChipTab = ({ label, active, onClick, color, testid }) => (
 /**
  * The activity line without its "Call attempt #4 — " prefix.
  *
- * The backend writes that prefix so the entry reads on its own in the History tab and in
- * Transaction History, where nothing else says which call it was. In RNR History the badge
+ * The backend writes that prefix so the entry reads on its own in the Timeline tab and in
+ * Transaction History, where nothing else says which call it was. In RNR Record the badge
  * beside it already says ATTEMPT 4, so the prefix printed the number twice on one row.
  *
  * Stripped here rather than dropped at the source, because those other screens still need
@@ -2074,6 +2124,20 @@ const rnrDetail = (details) => {
   const stripped = text.replace(/^call attempt\s*#?\d+\s*[—–-]\s*/i, "");
   if (!stripped) return text;
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+};
+
+/** Whether a lead actually carries an answer. Explicit rather than falsiness, because 0 is
+ *  one: "months_of_pain: 0" is somebody who started hurting this month. */
+const hasValue = (v) => v !== null && v !== undefined && String(v).trim() !== "";
+
+/** "2026-08-05" -> "Wednesday, August 5", as Branch Admin's Lead Details prints a day. A
+ *  value that is not a plain calendar day — a sheet can write anything here — is shown as
+ *  it was written rather than as "Invalid Date". */
+const weekdayLabel = (d) => {
+  if (!hasValue(d)) return "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(d))
+    ? new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" })
+    : String(d);
 };
 
 // pinnedBranchId: set when the board is a single branch's, which is how a Super Admin
@@ -2098,15 +2162,19 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
     getBranches().then(setBranches).catch(() => {});
   }, []);
 
-  // Both History and RNR History read the same activity trail — RNR History is that trail
+  // Both Timeline and RNR Record read the same activity trail — RNR Record is that trail
   // filtered to the call attempts, not a second source. One fetch serves both, so the two
   // tabs can never show a different number of calls for the same lead.
+  const leadId = currentLead?.id;
+  const loadActivity = useCallback(() => {
+    if (!leadId) return;
+    setActivityLoading(true);
+    leadActivity(leadId).then(setActivity).catch(() => setActivity([])).finally(() => setActivityLoading(false));
+  }, [leadId]);
+
   useEffect(() => {
-    if ((tab === "history" || tab === "rnr") && currentLead?.id) {
-      setActivityLoading(true);
-      leadActivity(currentLead.id).then(setActivity).catch(() => setActivity([])).finally(() => setActivityLoading(false));
-    }
-  }, [tab, currentLead?.id]);
+    if (tab === "history" || tab === "rnr") loadActivity();
+  }, [tab, loadActivity]);
 
   // "rnr_attempt" is the action v3_leads writes on every +1 No Answer. Nothing else in
   // the trail records a call, so this is the whole of what the OS knows about ringing
@@ -2117,64 +2185,161 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
   const refreshAndKeep = () => { onSaved && onSaved(); };
 
+  // Logged from the RNR Status card on Overview and from the RNR Record tab alike. The
+  // trail is read again when it is on screen, so the attempt shows in the list it was
+  // logged from.
+  const logRnrAttempt = async () => {
+    const next = (currentLead.rnr_attempts || 0) + 1;
+    if (!window.confirm(`Log a No Answer for ${currentLead.name || "this client"}?\n\nThis records attempt #${next}.`)) return;
+    try {
+      const updated = await rnrAttempt(currentLead.id);
+      setCurrentLead(updated);
+      toast.success(`Attempt logged (#${updated.rnr_attempts})`);
+      onSaved && onSaved();
+      if (tab === "rnr" || tab === "history") loadActivity();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  // The follow-up form, opened on tomorrow at ten. One form, reached from the Follow Up
+  // pill, the Follow-Up card's Schedule and the Follow-Up tab.
+  const startFollowUp = () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    setFollowUpDraft({ date: tomorrow.toISOString().slice(0, 10), time: "10:00", remarks: "" });
+  };
+
+  // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
+  // lead outright — each needs a date first. Every other stage, Lost included, moves at once.
+  const moveTo = async (s) => {
+    if (s.name === "Follow Up") { startFollowUp(); return; }
+    if (s.name === "Appointment") {
+      const tmrw = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      setAppointmentDraft({ department: "physio", appointment_date: tmrw.toISOString().slice(0, 10), appointment_time: "10:00", remarks: "" });
+      return;
+    }
+    await onMoveStage(currentLead.id, s.name);
+    setCurrentLead({ ...currentLead, stage: s.name });
+  };
+
+  // Overview's cards, on the terms Branch Admin's lead popup draws them. The RNR card stays
+  // on a lead rung without an answer even after it has moved on — the attempts are why it
+  // sits where it does — but not on Appointment, where the calls are behind it.
+  const rnrCount = currentLead.rnr_attempts || 0;
+  const atRnrStage = currentLead.stage === "RNR";
+  const atAppointment = currentLead.stage === "Appointment";
+  const showRnrCard = !atAppointment && (atRnrStage || rnrCount > 0);
+  const followUps = currentLead.follow_ups || [];
+  // The follow-up the lead is actually on: newest first, skipping the rescheduled ones —
+  // the same rule the Follow-Up tab draws with.
+  const activeFollowUp = followUps.slice().reverse().find((f) => f.status !== "rescheduled") || null;
+  const showFollowUpCard = !atAppointment && (followUps.length > 0 || currentLead.stage === "Follow Up");
+  // Where the lead can be sent: every stage but New Leads, which is where leads arrive and
+  // never where one is moved to. The stage the lead is on stays, drawn as picked.
+  const moveStages = stages.filter((s) => s.name !== "New Leads");
+  const avatarFirstChar = (currentLead.name?.trim()?.charAt(0) || "?").toUpperCase();
+
+  // Who the patient is, read back off the record, on a tab of its own. Empty fields are
+  // dropped rather than drawn as dashes — a walk-in carries three of these and a sheet
+  // import fifteen. Added is last and always there, so the card is never empty.
+  const source = currentLead.source_tab || currentLead.source_type;
+  const months = currentLead.months_of_pain;
+  const leadDetailRows = [
+    ["Source", source ? sourceLabel(source) : ""],
+    ["Department", DEPARTMENT_OPTIONS.find((d) => d.value === currentLead.department)?.label || currentLead.department],
+    ["Vertical", currentLead.vertical ? humanWords(currentLead.vertical) : ""],
+    ["Alternative Phone", displayPhone(currentLead.alternative_phone)],
+    ["Age", currentLead.age],
+    ["Gender", currentLead.gender],
+    ["Occupation", currentLead.occupation],
+    ["Condition", currentLead.condition],
+    ["Months of Pain", hasValue(months) ? `${months} ${Number(months) === 1 ? "month" : "months"}` : ""],
+    ["Expected Consultation", weekdayLabel(currentLead.expected_consultation_date)],
+    ["Location", currentLead.location],
+    ["Address", currentLead.address],
+    ["City", currentLead.city],
+    ["State", currentLead.state],
+    ["Assigned To", currentLead.assigned_user_name],
+    ["Added", dateStampFull(currentLead.created_at)],
+  ].filter(([, value]) => hasValue(value));
+
+  // Branch Admin's five tabs, in its order and colours. History is Timeline and RNR History
+  // is RNR Record there; the keys stay as they were.
+  const TABS = [
+    { key: "overview", label: "Overview", color: "bg-sky-500" },
+    { key: "follow-up", label: "Follow-Up", color: "bg-amber-500" },
+    { key: "history", label: "Timeline", color: "bg-emerald-500" },
+    { key: "rnr", label: "RNR Record", color: "bg-rose-500" },
+    { key: "lead-details", label: "Lead Details", color: "bg-indigo-500" },
+  ];
+
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-2 backdrop-blur-sm sm:p-4" data-testid="presales-detail-dialog">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" data-testid="presales-detail-dialog">
       {!showEdit && (
-      // A column that is never taller than the screen, with only the middle section
-      // scrolling. It used to be an auto-height box whose body was capped at 55vh and
-      // nothing else: header, tabs, the wrapping Move to Stage row and the RNR panel came
-      // to more than the remaining 45vh on a phone or a short laptop, so the footer — the
-      // half of the dialog you act from — was pushed off the bottom with no way to reach it.
-      <div className="flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
-        {/* Plain header. The gradient was the loudest thing on the dialog and it carried
-            no meaning — the two chips beneath it are what actually say where this lead
-            came from and what stage it is at, and they read better against white. */}
-        <div className="relative shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-bold sm:h-12 sm:w-12 ${avatarColor(currentLead.name).bg} ${avatarColor(currentLead.name).fg}`}>{initials(currentLead.name)}</span>
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold leading-tight text-slate-900 sm:text-lg" data-testid="presales-detail-name">{currentLead.name}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                    {currentLead.source_tab || currentLead.source_type || "—"}
-                  </span>
-                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
-                    {currentLead.stage}
+      // Branch Admin's lead popup (Branch Leads), piece for piece, with 4px corners: a white
+      // header carrying the ID and stage chips, square pill tabs, white cards, and the stage
+      // pills as the last card on Overview rather than a footer under every tab. Never
+      // taller than the screen, and only the body scrolls, so the header and tabs stay put.
+      <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="presales-detail-card">
+        {/* One row: avatar, name, ID and stage chip, the buttons on the same centre line.
+            On a phone, two: name and buttons, then the chips under both — the wrappers are
+            display:contents there so all of it lays out on one grid. No avatar on a phone:
+            the initial only repeats the name beside it. */}
+        <div className="relative shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:flex sm:justify-between sm:gap-3">
+            <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-3">
+              <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:inline-flex sm:h-11 sm:w-11">{avatarFirstChar}</span>
+              <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+                <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-slate-900" data-testid="presales-detail-name">{currentLead.name}</p>
+                <div className="col-span-2 col-start-1 row-start-2 flex flex-wrap items-center gap-1.5">
+                  {currentLead.patient_number && (
+                    <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
+                  )}
+                  <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 sm:px-2.5" data-testid="presales-detail-stage">
+                    {currentLead.stage || "No Stage"}
                   </span>
                 </div>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1.5">
               {currentLead.source_type === "manual" && (
-                <Button size="sm" variant="outline" onClick={() => setShowEdit(true)} className="h-8" data-testid="presales-detail-edit-btn">
-                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowEdit(true)}
+                  title="Edit"
+                  aria-label="Edit"
+                  className="inline-flex items-center rounded-[5px] bg-white p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+                  data-testid="presales-detail-edit-btn"
+                >
+                  <Pencil className="h-5 w-5" />
+                </button>
               )}
               {onDeleted && (
-                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(true)} className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700" data-testid="presales-detail-delete-btn">
-                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  title="Delete"
+                  aria-label="Delete"
+                  className="inline-flex items-center rounded-[5px] bg-white p-2 text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
+                  data-testid="presales-detail-delete-btn"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
               )}
-              <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100" data-testid="presales-detail-close">
-                <X className="h-4 w-4" />
+              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="presales-detail-close">
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Pill tabs */}
-        <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
-          {[
-            { key: "overview", label: "Overview", color: "bg-sky-500" },
-            { key: "rnr", label: "RNR History", color: "bg-rose-500" },
-            { key: "history", label: "History", color: "bg-violet-500" },
-            { key: "follow-up", label: "Follow-up", color: "bg-emerald-500" },
-          ].map((t) => (
+        {/* Pill tabs, centred. On a phone each wrapped row stretches its pills to the full
+            width, so the rows end on the same edge as the cards below. */}
+        <div className="flex shrink-0 flex-wrap justify-center gap-1.5 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5" data-testid="presales-detail-tabs">
+          {TABS.map((t) => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setTab(t.key)}
-              className={`rounded-full px-3.5 py-1 text-xs font-semibold transition-all ${tab === t.key ? `${t.color} text-white shadow-sm` : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+              className={`flex-auto whitespace-nowrap rounded-[3px] px-3.5 py-1 text-center text-xs font-semibold transition-all sm:flex-none ${tab === t.key ? `${t.color} text-white shadow-sm` : "bg-white text-slate-600 hover:bg-slate-100"}`}
               data-testid={`presales-detail-tab-${t.key}`}
             >
               {t.label}
@@ -2184,314 +2349,356 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
         {/* min-h-0 as well as flex-1: without it a flex child refuses to shrink past its
             content, and the scroll would move to the page instead of staying in here. */}
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/30 p-4 sm:p-5">
+        <div className={`min-h-0 flex-1 overflow-y-auto bg-slate-50/30 ${tab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="presales-detail-content">
           {tab === "overview" && (
             <div className="space-y-3">
-              <ColorSection title="Contact Information" tone="sky" icon={<Phone className="h-4 w-4" />} collapsible defaultOpen={false}>
-                <ColorRow k="Phone" v={displayPhone(currentLead.phone)} />
-                <ColorRow k="Email" v={currentLead.email || "—"} />
-                <ColorRow k="Location" v={currentLead.location || "—"} />
-              </ColorSection>
-              <ColorSection title="Additional Details" tone="violet" icon={<FileText className="h-4 w-4" />} collapsible defaultOpen={false}>
-                <ColorRow k="Expected Consultation" v={currentLead.expected_consultation_date || "—"} />
-                <ColorRow k="Months of Pain" v={currentLead.months_of_pain ?? "—"} />
-                <ColorRow k="Age" v={currentLead.age ?? "—"} />
-                <ColorRow k="Gender" v={currentLead.gender || "—"} />
-                <ColorRow k="Occupation" v={currentLead.occupation || "—"} />
-                <ColorRow k="Department" v={currentLead.department || "—"} />
-                <ColorRow k="Vertical" v={currentLead.vertical} />
-              </ColorSection>
-              {currentLead.notes && (
-                <ColorSection title="Notes" tone="amber" icon={<StickyNote className="h-4 w-4" />}>
-                  <p className="text-sm leading-relaxed text-slate-700">{currentLead.notes}</p>
-                </ColorSection>
-              )}
-              {(currentLead.follow_ups || []).filter((f) => f.status !== "rescheduled").length > 0 && (
-                <ColorSection title="Follow-up Reminders" tone="emerald" icon={<Bell className="h-4 w-4" />}>
-                  {(currentLead.follow_ups || []).filter((f) => f.status !== "rescheduled").slice().reverse().map((f) => {
-                    const dt = new Date(`${f.date}T${f.time}:00`);
-                    const isUpcoming = dt.getTime() > Date.now();
-                    return (
-                      <div key={f.id} className={`flex items-start justify-between gap-3 rounded-lg border p-2.5 ${isUpcoming ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50"}`} data-testid={`presales-followup-row-${f.id}`}>
-                        <div className="flex items-start gap-2">
-                          <Clock className={`mt-0.5 h-4 w-4 ${isUpcoming ? "text-emerald-600" : "text-slate-400"}`} />
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800">
-                              {dt.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" })} · {f.time}
-                            </p>
-                            {f.remarks && <p className="mt-0.5 text-xs text-slate-600">{f.remarks}</p>}
-                            <p className="mt-0.5 text-[10px] text-slate-400">Set by {f.created_by || "—"}</p>
-                          </div>
-                        </div>
-                        {isUpcoming && <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">UPCOMING</span>}
-                      </div>
-                    );
-                  })}
-                </ColorSection>
-              )}
-            </div>
-          )}
-          {tab === "rnr" && (
-            <div className="space-y-3" data-testid="presales-detail-rnr">
-              {/* The standing count first — it is what decides whether this lead is still
-                  worth ringing, and it comes off the lead itself rather than the length of
-                  the list below, so a trail that predates the counter still reports right. */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Client Not Answered</p>
-                  <p className="mt-1 text-2xl font-bold text-rose-700" data-testid="presales-rnr-count">
-                    {currentLead.rnr_attempts || 0}
-                    <span className="ml-1.5 text-sm font-medium text-rose-500">
-                      {(currentLead.rnr_attempts || 0) === 1 ? "attempt" : "attempts"}
-                    </span>
-                  </p>
+              <div className="overflow-hidden rounded-[3px] border border-sky-100 bg-white shadow-sm" data-testid="presales-detail-contact">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600"><Phone className="h-4 w-4" /></span>
+                  <p className="text-xs font-bold uppercase tracking-wider text-sky-700">Contact</p>
                 </div>
-                {currentLead.rnr_last_attempt_at && (
-                  <div className="text-right">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-400">Last call</p>
-                    <p className="text-sm font-semibold text-rose-700">
-                      {callTimeStamp(currentLead.rnr_last_attempt_at)}
-                    </p>
-                    <p className="text-[11px] text-rose-400">{callDateStamp(currentLead.rnr_last_attempt_at)}</p>
+                <div className="space-y-2 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-xs font-medium text-slate-500">Phone</span>
+                    <span className="min-w-0 truncate font-medium text-slate-800">{displayPhone(currentLead.phone) || "—"}</span>
                   </div>
-                )}
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-xs font-medium text-slate-500">Email</span>
+                    <span className="min-w-0 truncate font-medium text-slate-800" title={currentLead.email || undefined}>{currentLead.email || "—"}</span>
+                  </div>
+                </div>
               </div>
 
-              {activityLoading && <p className="text-sm text-slate-400">Loading call history...</p>}
-
-              {!activityLoading && rnrRows.length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400" data-testid="presales-rnr-empty">
-                  {(currentLead.rnr_attempts || 0) > 0
-                    // The counter can be ahead of the trail for leads that were rung before
-                    // the activity log recorded it. Saying so beats showing an empty list
-                    // under a figure that insists calls were made.
-                    ? "No individual calls are logged for this lead — only the running total above."
-                    : "No calls attempted yet. Use +1 No Answer on the Overview tab when a client doesn't pick up."}
+              {/* On a lead parked at RNR, how many times somebody has rung is what the popup
+                  is opened to find out, so it sits above the pills. +1 No Answer only while
+                  the lead is actually at RNR; on one that has moved on, the card is a record. */}
+              {showRnrCard && (
+                <div className="overflow-hidden rounded-[3px] border border-rose-100 bg-white shadow-sm" data-testid="presales-detail-rnr-tracker">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-700">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600"><PhoneOff className="h-4 w-4" /></span>
+                      RNR Status
+                    </p>
+                    {rnrCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTab("rnr")}
+                        className="-mr-2 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50 sm:mr-0"
+                        data-testid="presales-detail-rnr-open"
+                      >
+                        Record
+                      </button>
+                    )}
+                  </div>
+                  <div className="px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">Client Not Answered</p>
+                        <p className="text-[11px] text-slate-500">
+                          Attempts so far: <span className="font-bold text-rose-600">{rnrCount}</span>
+                        </p>
+                        {currentLead.rnr_last_attempt_at && (
+                          <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500" data-testid="presales-detail-rnr-lastcall">
+                            <Clock className="h-3 w-3" />
+                            Last call
+                            <span className="font-bold text-slate-700">{callTimeStamp(currentLead.rnr_last_attempt_at)}</span>
+                            <span className="text-slate-400">· {callDateStamp(currentLead.rnr_last_attempt_at)}</span>
+                          </p>
+                        )}
+                      </div>
+                      {atRnrStage && (
+                        <Button
+                          size="sm"
+                          onClick={logRnrAttempt}
+                          className="h-8 w-full shrink-0 bg-rose-600 text-white hover:bg-rose-700 sm:w-auto"
+                          data-testid="presales-detail-rnr-attempt"
+                        >
+                          <PhoneOff className="mr-1 h-3.5 w-3.5" /> +1 No Answer
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {!activityLoading && rnrRows.map((a, i) => (
-                <div key={a.id} className="flex items-start gap-3 rounded-lg border border-rose-100 bg-white p-3 shadow-sm" data-testid={`presales-rnr-row-${a.id}`}>
-                  <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                    <PhoneOff className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Newest first, so attempt numbering counts down the page. */}
-                      <span className="rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-700">
-                        Attempt {rnrRows.length - i}
-                      </span>
-                      {/* callTimeStamp, not toLocaleString: it reads the clock in IST and
-                          names the band — "01:02 pm Afternoon" — the same way the panel on
-                          Overview already reports the last call. Two formatters would
-                          eventually disagree about where Afternoon ends. */}
-                      <span className="text-[11px] font-medium text-slate-600">{callTimeStamp(a.created_at)}</span>
-                      <span className="text-[11px] text-slate-400">· {callDateStamp(a.created_at)}</span>
-                    </div>
-                    {a.details && <p className="mt-1 text-sm text-slate-700">{rnrDetail(a.details)}</p>}
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      by {a.created_by || "system"}{a.created_by_role ? ` · ${a.created_by_role}` : ""}
+              {/* The next call, on a lead at Follow Up — the one line of the Follow-Up tab
+                  worth reading without changing tabs, with a link there for the rest. */}
+              {showFollowUpCard && (
+                <div className="overflow-hidden rounded-[3px] border border-amber-100 bg-white shadow-sm" data-testid="presales-detail-followup-preview">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Bell className="h-4 w-4" /></span>
+                      Follow-Up
                     </p>
+                    {(activeFollowUp || canMoveStage) && (
+                      <button
+                        type="button"
+                        onClick={() => (activeFollowUp ? setTab("follow-up") : startFollowUp())}
+                        className="-mr-2 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-50 sm:mr-0"
+                        data-testid="presales-detail-followup-preview-open"
+                      >
+                        {activeFollowUp ? "Manage" : "Schedule"}
+                      </button>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {tab !== "overview" && tab === "history" && (
-            <div className="space-y-2" data-testid="presales-detail-history">
-              {activityLoading && <p className="text-sm text-slate-400">Loading history...</p>}
-              {!activityLoading && activity.length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400" data-testid="presales-history-empty">
-                  No activity recorded yet.
+                  {activeFollowUp ? (() => {
+                    const dt = new Date(`${activeFollowUp.date}T${activeFollowUp.time}:00`);
+                    const isUpcoming = dt.getTime() > Date.now();
+                    // Everything before the one that stands, counted rather than listed:
+                    // the tab is where a history belongs.
+                    const earlier = followUps.length - 1;
+                    return (
+                      <div className="space-y-2 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-800" data-testid="presales-detail-followup-preview-when">
+                            {dt.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" })} · {activeFollowUp.time}
+                          </p>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${isUpcoming ? "bg-emerald-500" : "bg-rose-500"}`}>
+                            {isUpcoming ? "UPCOMING" : "OVERDUE"}
+                          </span>
+                        </div>
+                        {activeFollowUp.remarks && (
+                          <div className="rounded-md bg-slate-50 px-2.5 py-1.5 text-sm text-slate-700 ring-1 ring-slate-100">{activeFollowUp.remarks}</div>
+                        )}
+                        <p className="text-[11px] text-slate-400">
+                          Set by {activeFollowUp.created_by || "—"}
+                          {earlier > 0 && ` · ${earlier} earlier ${earlier === 1 ? "follow-up" : "follow-ups"}`}
+                        </p>
+                      </div>
+                    );
+                  })() : (
+                    <p className="px-4 py-3 text-sm text-slate-400">No follow-up scheduled yet.</p>
+                  )}
                 </div>
               )}
-              {!activityLoading && activity.map((a) => (
-                <div key={a.id} className="flex items-start gap-3 rounded-lg border border-violet-100 bg-white p-3 shadow-sm" data-testid={`presales-history-row-${a.id}`}>
-                  <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
-                    <Clock className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet-700">{a.action || "event"}</span>
-                      <span className="text-[11px] text-slate-400">{new Date(a.created_at).toLocaleString()}</span>
-                    </div>
-                    {a.details && <p className="mt-1 text-sm text-slate-700">{a.details}</p>}
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      by {a.created_by || "system"}{a.created_by_role ? ` · ${a.created_by_role}` : ""}
-                    </p>
+
+              {currentLead.notes && (
+                <div className="overflow-hidden rounded-[3px] border border-amber-100 bg-white shadow-sm">
+                  <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><FileText className="h-4 w-4" /></span>
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Notes</p>
+                  </div>
+                  <p className="px-4 py-3 text-sm leading-relaxed text-slate-700">{currentLead.notes}</p>
+                </div>
+              )}
+
+              {/* The stage pills, last, each in its stage's own colour and the lead's own
+                  stage filled in. Three equal columns on a phone so they sit in even rows;
+                  from sm up a centred, wrapping row of natural widths. Marketing Master View
+                  reads the funnel rather than working it, so it has none. */}
+              {canMoveStage && moveStages.length > 0 && (
+                <div className="overflow-hidden rounded-[3px] border border-violet-100 bg-white shadow-sm" data-testid="presales-detail-pipeline">
+                  <div className="grid grid-cols-3 gap-1.5 px-4 py-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-1.5 sm:px-[5px]" data-testid="presales-detail-move-stages">
+                    {moveStages.map((s) => {
+                      const active = currentLead.stage === s.name;
+                      const tint = stageInk(s);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => moveTo(s)}
+                          disabled={active}
+                          className="rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:whitespace-nowrap sm:px-3 sm:text-xs"
+                          style={active ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
+                          data-testid={`presales-detail-move-${s.name}`}
+                        >
+                          {s.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
 
           {tab === "follow-up" && (
-            <div className="space-y-2" data-testid="presales-detail-followups">
-              {(currentLead.follow_ups || []).length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400" data-testid="presales-followups-empty">
-                  {/* The instruction only makes sense on a board that has that row. */}
-                  {canMoveStage
-                    ? <>No follow-ups scheduled yet. Use <span className="font-semibold">Move to Stage → Follow Up</span> to schedule one.</>
-                    : "No follow-ups scheduled yet."}
+            <div className="space-y-4" data-testid="presales-detail-followups">
+              {/* On top, where Branch Admin's tab keeps its form — the same form the Follow Up
+                  pill opens, so a follow-up can be set without going back to Overview. */}
+              {canMoveStage && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-[3px] border border-amber-200 bg-amber-50/40 px-4 py-3" data-testid="presales-followup-schedule-bar">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700"><Bell className="h-3.5 w-3.5" /> Schedule Follow-Up</p>
+                  <Button size="sm" onClick={startFollowUp} className="h-8 shrink-0 bg-amber-600 px-4 text-white hover:bg-amber-700" data-testid="presales-followup-schedule-open">
+                    Schedule
+                  </Button>
                 </div>
               )}
-              {(currentLead.follow_ups || []).slice().reverse().map((f, idx) => {
-                const dt = new Date(`${f.date}T${f.time}:00`);
-                const isUpcoming = dt.getTime() > Date.now();
-                const isRescheduled = f.status === "rescheduled";
-                const isActive = idx === 0 && !isRescheduled;
-                return (
-                  <div
-                    key={f.id}
-                    className={`flex items-start gap-3 rounded-lg border p-3 shadow-sm ${
-                      isRescheduled ? "border-slate-200 bg-slate-50/70 opacity-70" : isUpcoming ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"
-                    }`}
-                    data-testid={`presales-followup-tab-row-${f.id}`}
-                  >
-                    <span className={`mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${isRescheduled ? "bg-slate-100 text-slate-400" : isUpcoming ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                      <Bell className="h-3.5 w-3.5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className={`text-sm font-semibold ${isRescheduled ? "text-slate-500 line-through decoration-slate-300" : "text-slate-800"}`}>
-                          {dt.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" })} · {f.time}
-                        </p>
-                        {isRescheduled && <span className="rounded-full bg-slate-300 px-2 py-0.5 text-[10px] font-bold text-white">RESCHEDULED</span>}
-                        {!isRescheduled && isUpcoming && <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">UPCOMING</span>}
-                      </div>
-                      {f.remarks && (
-                        <div className="mt-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm text-slate-700 ring-1 ring-slate-100">
-                          {f.remarks}
-                        </div>
-                      )}
-                      {isRescheduled && f.reschedule_reason && (
-                        <div className="mt-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 ring-1 ring-amber-100">
-                          <span className="font-semibold">Reschedule reason:</span> {f.reschedule_reason}
-                        </div>
-                      )}
-                      <p className="mt-1.5 text-[11px] text-slate-400">Set by {f.created_by || "—"} · {new Date(f.created_at).toLocaleString()}</p>
-                    </div>
-                    {isActive && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 flex-shrink-0 border-amber-200 text-amber-700 hover:bg-amber-50"
-                        onClick={() => setRescheduleDraft({ followupId: f.id, date: f.date, time: f.time, reason: "" })}
-                        data-testid={`presales-followup-reschedule-${f.id}`}
+              {followUps.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-400" data-testid="presales-followups-empty">No follow-ups scheduled yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {followUps.slice().reverse().map((f, idx) => {
+                    const dt = new Date(`${f.date}T${f.time}:00`);
+                    const isUpcoming = dt.getTime() > Date.now();
+                    const isRescheduled = f.status === "rescheduled";
+                    const isActive = idx === 0 && !isRescheduled;
+                    return (
+                      <div
+                        key={f.id}
+                        className={`flex items-start gap-3 rounded-[3px] border p-3 ${
+                          isRescheduled ? "border-slate-200 bg-slate-50/70 opacity-70" : isUpcoming ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"
+                        }`}
+                        data-testid={`presales-followup-tab-row-${f.id}`}
                       >
-                        Reschedule
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
+                        <span className={`mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${isRescheduled ? "bg-slate-100 text-slate-400" : isUpcoming ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                          <Bell className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className={`text-sm font-semibold ${isRescheduled ? "text-slate-500 line-through decoration-slate-300" : "text-slate-800"}`}>
+                              {dt.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" })} · {f.time}
+                            </p>
+                            {isRescheduled && <span className="rounded-full bg-slate-300 px-2 py-0.5 text-[10px] font-bold text-white">RESCHEDULED</span>}
+                            {!isRescheduled && isUpcoming && <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">UPCOMING</span>}
+                          </div>
+                          {f.remarks && (
+                            <div className="mt-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm text-slate-700 ring-1 ring-slate-100">
+                              {f.remarks}
+                            </div>
+                          )}
+                          {isRescheduled && f.reschedule_reason && (
+                            <div className="mt-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 ring-1 ring-amber-100">
+                              <span className="font-semibold">Reschedule reason:</span> {f.reschedule_reason}
+                            </div>
+                          )}
+                          <p className="mt-1.5 text-[11px] text-slate-400">Set by {f.created_by || "—"} · {new Date(f.created_at).toLocaleString()}</p>
+                        </div>
+                        {isActive && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 flex-shrink-0 border-amber-200 text-amber-700 hover:bg-amber-50"
+                            onClick={() => setRescheduleDraft({ followupId: f.id, date: f.date, time: f.time, reason: "" })}
+                            data-testid={`presales-followup-reschedule-${f.id}`}
+                          >
+                            Reschedule
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        {/* Its own scroll floor: with a long stage list the wrapping pills below can run
-            to several rows, and a footer that grows without limit would squeeze the body
-            it sits under to nothing on a short screen.
-
-            The whole bar goes when there is nothing left to put in it - a board that
-            cannot move stages and a lead that is not on RNR leaves an empty white strip
-            with a border on it, which reads as something that failed to load. */}
-        {(canMoveStage || currentLead.stage === "RNR") && (
-        <div className="max-h-[40vh] shrink-0 overflow-y-auto border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
-          {canMoveStage && (
-          <>
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-            Move to Stage
-          </p>
-          <div className="flex flex-wrap gap-2" data-testid="presales-detail-move-stages">
-            {stages.filter((s) => s.name === "New Leads" ? currentLead.stage === "New Leads" : true).map((s) => {
-              const active = currentLead.stage === s.name;
-              const handleClick = async () => {
-                if (s.name === "Follow Up") {
-                  // Open the follow-up scheduling form instead of moving immediately
-                  const today = new Date();
-                  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-                  setFollowUpDraft({
-                    date: tomorrow.toISOString().slice(0, 10),
-                    time: "10:00",
-                    remarks: "",
-                  });
-                  return;
-                }
-                if (s.name === "Appointment") {
-                  const tmrw = new Date(Date.now() + 24 * 60 * 60 * 1000);
-                  setAppointmentDraft({ department: "physio", appointment_date: tmrw.toISOString().slice(0, 10), appointment_time: "10:00", remarks: "" });
-                  return;
-                }
-                await onMoveStage(currentLead.id, s.name);
-                setCurrentLead({ ...currentLead, stage: s.name });
-              };
-              return (
-                <button
-                  key={s.id}
-                  onClick={handleClick}
-                  disabled={active}
-                  className="rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
-                  style={
-                    active
-                      ? { background: s.color, color: "#fff", boxShadow: `0 2px 8px ${s.color}40` }
-                      : { background: `${s.color}14`, color: s.color, border: `1px solid ${s.color}33` }
-                  }
-                  data-testid={`presales-detail-move-${s.name}`}
-                >
-                  {active && <CheckCircle2 className="mr-1 inline h-3 w-3" />}
-                  {s.name}
-                </button>
-              );
-            })}
-          </div>
-          </>
+          {tab === "history" && (
+            <div className="space-y-3" data-testid="presales-detail-history">
+              {activityLoading && <p className="py-8 text-center text-sm text-slate-400">Loading timeline...</p>}
+              {!activityLoading && activity.length === 0 && (
+                <p className="py-8 text-center text-sm text-slate-400" data-testid="presales-history-empty">No timeline events yet</p>
+              )}
+              {!activityLoading && activity.length > 0 && (
+                <ol className="ml-3 space-y-4 border-l-2 border-slate-200 py-1 pl-6">
+                  {activity.map((a) => (
+                    <li key={a.id} className="relative" data-testid={`presales-history-row-${a.id}`}>
+                      <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-sky-500" />
+                      <div className="rounded-[3px] border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-sm text-slate-700">{a.details || humanWords(a.action || "event")}</p>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          {a.created_by || "system"}{a.created_by_role ? ` · ${a.created_by_role}` : ""} · {new Date(a.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           )}
 
-          {currentLead.stage === "RNR" && (
-            <div className={`${canMoveStage ? "mt-3 " : ""}flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2`} data-testid="presales-detail-rnr-tracker">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
-                  <PhoneOff className="h-3.5 w-3.5" />
-                </span>
-                <div>
-                  <p className="text-xs font-semibold text-rose-700">Client Not Answered</p>
-                  <p className="text-[11px] text-rose-500">
-                    Attempts so far: <span className="font-bold">{currentLead.rnr_attempts || 0}</span>
-                  </p>
-                  {currentLead.rnr_last_attempt_at && (
-                    <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-rose-600" data-testid="presales-detail-rnr-lastcall">
-                      <Clock className="h-3 w-3" />
-                      Last call
-                      <span className="font-bold">{callTimeStamp(currentLead.rnr_last_attempt_at)}</span>
-                      <span className="text-rose-400">· {callDateStamp(currentLead.rnr_last_attempt_at)}</span>
+          {/* Every attempt, rather than the counter and the latest one the Overview card
+              carries: whether this lead is worth ringing again needs the dates and names
+              beside them, because "8 attempts" says nothing about whether they were eight
+              days apart or eight in one afternoon. */}
+          {tab === "rnr" && (
+            <div className="space-y-3" data-testid="presales-detail-rnr">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[3px] border border-rose-100 bg-white px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600"><PhoneOff className="h-4 w-4" /></span>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-rose-700">Call Attempts</p>
+                    {/* Off the lead's own counter rather than the length of the list below,
+                        so a trail that predates the counter still reports right. */}
+                    <p className="text-[11px] text-slate-500" data-testid="presales-rnr-count">
+                      {rnrCount === 0 ? "None logged yet" : `${rnrCount} logged`}
+                      {currentLead.rnr_last_attempt_at && ` · last ${callTimeStamp(currentLead.rnr_last_attempt_at)}, ${callDateStamp(currentLead.rnr_last_attempt_at)}`}
                     </p>
-                  )}
+                  </div>
+                </div>
+                {atRnrStage && (
+                  <Button
+                    size="sm"
+                    onClick={logRnrAttempt}
+                    className="h-8 bg-rose-600 text-white hover:bg-rose-700"
+                    data-testid="presales-detail-rnr-record-attempt"
+                  >
+                    <PhoneOff className="mr-1 h-3.5 w-3.5" /> +1 No Answer
+                  </Button>
+                )}
+              </div>
+
+              {activityLoading && <p className="py-8 text-center text-sm text-slate-400">Loading call history...</p>}
+
+              {!activityLoading && rnrRows.length === 0 && (
+                <p className="py-8 text-center text-sm text-slate-400" data-testid="presales-rnr-empty">
+                  {rnrCount > 0
+                    // The counter can be ahead of the trail for leads that were rung before
+                    // the activity log recorded it. Saying so beats showing an empty list
+                    // under a figure that insists calls were made.
+                    ? "No individual calls are logged for this lead — only the running total above."
+                    : "No call attempts logged yet."}
+                </p>
+              )}
+
+              {!activityLoading && rnrRows.length > 0 && (
+                <ol className="ml-3 space-y-4 border-l-2 border-rose-100 py-1 pl-6">
+                  {rnrRows.map((a, i) => (
+                    <li key={a.id} className="relative" data-testid={`presales-rnr-row-${a.id}`}>
+                      <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-rose-500" />
+                      <div className="rounded-[3px] border border-rose-100 bg-rose-50/50 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Newest first, so attempt numbering counts down the page. */}
+                          <span className="rounded-[3px] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-700 ring-1 ring-rose-100">
+                            Attempt {rnrRows.length - i}
+                          </span>
+                          {/* callTimeStamp, not toLocaleString: it reads the clock in IST and
+                              names the band — "01:02 pm Afternoon" — the same way the card on
+                              Overview reports the last call. */}
+                          <span className="text-[11px] font-medium text-slate-600">{callTimeStamp(a.created_at)}</span>
+                          <span className="text-[11px] text-slate-400">· {callDateStamp(a.created_at)}</span>
+                        </div>
+                        {a.details && <p className="mt-1 text-sm text-slate-700">{rnrDetail(a.details)}</p>}
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          by {a.created_by || "system"}{a.created_by_role ? ` · ${a.created_by_role}` : ""}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+
+          {tab === "lead-details" && (
+            <div className="space-y-3" data-testid="presales-detail-lead-details">
+              <div className="overflow-hidden rounded-[3px] border border-indigo-100 bg-white shadow-sm">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700"><IdCard className="h-4 w-4" /></span>
+                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Lead Details</p>
+                </div>
+                <div className="space-y-2 px-4 py-3">
+                  {leadDetailRows.map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-3 text-sm" data-testid={`presales-detail-row-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+                      <span className="shrink-0 text-xs font-medium text-slate-500">{label}</span>
+                      <span className="break-words text-right font-medium text-slate-800">{String(value)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <Button
-                size="sm"
-                onClick={async () => {
-                  const next = (currentLead.rnr_attempts || 0) + 1;
-                  if (!window.confirm(`Log a No Answer for ${currentLead.name || "this client"}?\n\nThis records attempt #${next}.`)) return;
-                  try {
-                    const updated = await rnrAttempt(currentLead.id);
-                    setCurrentLead(updated);
-                    toast.success(`Attempt logged (#${updated.rnr_attempts})`);
-                    onSaved && onSaved();
-                  } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
-                }}
-                className="h-8 bg-rose-600 text-white hover:bg-rose-700"
-                data-testid="presales-detail-rnr-attempt"
-              >
-                <PhoneOff className="mr-1 h-3.5 w-3.5" /> +1 No Answer
-              </Button>
             </div>
           )}
         </div>
-        )}
       </div>
       )}
 
@@ -2511,7 +2718,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4" data-testid="presales-followup-modal">
           {/* Scrolls itself rather than overflowing the viewport — date, time, a textarea
               and the footer come to more than a phone in landscape has to give. */}
-          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-[4px] bg-white shadow-2xl">
             <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
@@ -2583,7 +2790,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
       {rescheduleDraft && !showEdit && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4" data-testid="presales-reschedule-modal">
-          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-[4px] bg-white shadow-2xl">
             <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
@@ -2662,7 +2869,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
         const closeAll = () => { setAppointmentDraft(null); setAppointmentResult(null); };
         return (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4" data-testid="presales-appointment-modal">
-          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-[4px] bg-white shadow-2xl">
             <div className="flex items-center justify-between bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-4 text-white">
               <div className="flex items-center gap-2">
                 <CalendarIcon className="h-5 w-5" />
@@ -2833,44 +3040,6 @@ const Row = ({ k, v }) => (
   <div className="flex items-center justify-between text-xs">
     <span className="text-slate-500">{k}</span>
     <span className="text-slate-800">{String(v)}</span>
-  </div>
-);
-
-const TONE_MAP = {
-  sky: { bar: "bg-sky-500", iconBg: "bg-sky-100 text-sky-600", title: "text-sky-700", border: "border-sky-100" },
-  violet: { bar: "bg-violet-500", iconBg: "bg-violet-100 text-violet-600", title: "text-violet-700", border: "border-violet-100" },
-  amber: { bar: "bg-amber-500", iconBg: "bg-amber-100 text-amber-700", title: "text-amber-700", border: "border-amber-100" },
-  emerald: { bar: "bg-emerald-500", iconBg: "bg-emerald-100 text-emerald-700", title: "text-emerald-700", border: "border-emerald-100" },
-};
-
-// `collapsible` opts a section into an FAQ-style accordion (starts at `defaultOpen`,
-// toggled by tapping the header) — plain ColorSection callers keep the original
-// always-expanded card unchanged.
-const ColorSection = ({ title, tone = "sky", icon, children, collapsible = false, defaultOpen = true }) => {
-  const t = TONE_MAP[tone] || TONE_MAP.sky;
-  const [open, setOpen] = useState(defaultOpen);
-  const showContent = collapsible ? open : true;
-  return (
-    <div className={`overflow-hidden rounded-xl border bg-white shadow-sm ${t.border}`}>
-      <div
-        role={collapsible ? "button" : undefined}
-        tabIndex={collapsible ? 0 : undefined}
-        onClick={collapsible ? () => setOpen((v) => !v) : undefined}
-        className={`flex items-center gap-2 border-b border-slate-100 px-4 py-2.5 ${collapsible ? "cursor-pointer select-none" : ""}`}
-      >
-        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${t.iconBg}`}>{icon}</span>
-        <p className={`flex-1 text-xs font-bold uppercase tracking-wider ${t.title}`}>{title}</p>
-        {collapsible && (open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />)}
-      </div>
-      {showContent && <div className="space-y-2 px-4 py-3">{children}</div>}
-    </div>
-  );
-};
-
-const ColorRow = ({ k, v }) => (
-  <div className="flex items-center justify-between text-sm">
-    <span className="text-xs font-medium text-slate-500">{k}</span>
-    <span className="font-medium text-slate-800">{String(v)}</span>
   </div>
 );
 

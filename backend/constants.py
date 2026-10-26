@@ -14,11 +14,18 @@ V3_VERTICALS = [
     "offline_fitness_gym",
 ]
 
+# Where the Pre-Sales desk puts a lead it has given up on -- one that never picks up, says
+# no, or was never a real enquiry. Last, after Appointment, and final: the live stages are
+# the worklist a rep opens every morning, and this is the one a lead leaves the funnel by.
+# Pre-Sales only; the Branch pipeline has its own endings (Not a prospect, Cancelled).
+PRESALES_LOST_STAGE = "Lost"
+
 V3_STAGES = [
     "New Leads",
     "RNR",
     "Follow Up",
     "Appointment",
+    PRESALES_LOST_STAGE,
 ]
 
 V3_BRANCH_STAGES = [
