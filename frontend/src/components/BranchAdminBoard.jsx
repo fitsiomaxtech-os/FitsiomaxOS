@@ -4843,7 +4843,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         <button
                           type="button"
                           onClick={() => openPreBookMove(preBookStageName)}
-                          className="rounded-[3px] border border-teal-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-50"
+                          className="rounded-[3px] border border-orange-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-orange-600 hover:bg-orange-50"
                           data-testid="branch-lead-prebook-change"
                         >
                           Change Date
@@ -4853,7 +4853,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         <button
                           type="button"
                           onClick={() => setPreBookCollecting(true)}
-                          className="rounded-[3px] bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-teal-700"
+                          className="rounded-[3px] bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600"
                           data-testid="branch-lead-prebook-collect"
                         >
                           {preBook.consultation && preBook.advance ? "View" : "Collect"}
