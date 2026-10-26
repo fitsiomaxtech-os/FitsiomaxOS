@@ -4801,13 +4801,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             buttons beside a centred avatar read as three things that missed each other. */}
         <div className="relative border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
           {/* One row: avatar, name, ID and stage chip side by side, the buttons on the
-              same centre line. Wraps only where a phone runs out of width. */}
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <p className="text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
-                <div className="flex flex-wrap items-center gap-1.5">
+              same centre line. On a phone that is two rows instead: name and buttons on
+              the first, ID and stage on the second — the chips run under the buttons too,
+              so they sit on one line rather than stacking in the narrow gap beside them.
+              The wrappers are display:contents there so all of it lays out on one grid. */}
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:flex sm:justify-between sm:gap-3">
+            <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-3">
+              <span className="col-start-1 row-span-2 row-start-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
+              <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+                <p className="col-start-2 row-start-1 min-w-0 text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
+                <div className="col-span-2 col-start-2 row-start-2 flex flex-wrap items-center gap-1.5">
                   {lead.patient_number && (
                     <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
                   )}
@@ -4821,7 +4824,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 </div>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-1.5">
               {/* Super Admin only — the backend refuses anyone else, and the branch losing
                   the patient should not be the one deciding it. */}
               {canTransferBranch && (
