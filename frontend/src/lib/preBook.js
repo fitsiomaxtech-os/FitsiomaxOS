@@ -51,6 +51,14 @@ const num = (n) => Number(n) || 0;
 export const preBookPaid = (pb) => num(pb?.consultation?.paid) + num(pb?.advance?.amount);
 
 /**
+ * What is still owed on a Pre Book consultation: its price, less the discount agreed and what
+ * was paid. A discount is never collected; only the rest of a part payment is.
+ */
+export const preBookConsultOwed = (c) => (
+  c ? Math.max(0, Math.round((num(c.price) - num(c.discount) - num(c.paid)) * 100) / 100) : 0
+);
+
+/**
  * What this lead paid at Pre Book and has not yet had used on a real fee -- the figure worth
  * putting beside a name, since it is money the desk has to remember.
  *

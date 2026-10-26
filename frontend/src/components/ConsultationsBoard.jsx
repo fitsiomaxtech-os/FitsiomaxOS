@@ -13,7 +13,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
-import { advanceForLabel, preBookOf, shortDay } from "@/lib/preBook";
+import { advanceForLabel, preBookConsultOwed, preBookOf, shortDay } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
@@ -10858,7 +10858,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-slate-800">{pbConsult.name} · {rupees(pbConsult.paid)}</p>
                             <p className="text-[11px] text-slate-500">
-                              {pbConsult.paid < pbConsult.price ? `of ${rupees(pbConsult.price)} — the rest is collected as a balance` : "Covers the Consultation Fee"}
+                              {preBookConsultOwed(pbConsult) > 0
+                                ? `of ${rupees(pbConsult.price - (pbConsult.discount || 0))} — the rest is collected as a balance`
+                                : "Covers the Consultation Fee"}
+                              {pbConsult.discount ? ` · ${rupees(pbConsult.discount)} discount` : ""}
                             </p>
                           </div>
                           <Button

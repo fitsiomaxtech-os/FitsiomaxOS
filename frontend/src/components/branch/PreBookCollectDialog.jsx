@@ -5,10 +5,10 @@ import { toast } from "@/components/ui/sonner";
 import { collectPreBook, listStoreItems } from "@/lib/api";
 import { loadSession } from "@/lib/session";
 import { consultationItemPrice } from "@/lib/consultationPackages";
-import { COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
+import { BalanceDiscount, COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
-import { advanceForLabel, preBookOf, rupees, shortDay } from "@/lib/preBook";
+import { advanceForLabel, preBookConsultOwed, preBookOf, rupees, shortDay } from "@/lib/preBook";
 
 // Pre Book is money handed over today, so every mode that settles now and not Cheque.
 const PRE_BOOK_MODES = COLLECT_MODES.filter((m) => m.value !== "cheque");
@@ -46,6 +46,9 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [consultOn, setConsultOn] = useState(!paidConsult);
   const [itemId, setItemId] = useState("");
   const [consultAmount, setConsultAmount] = useState("");
+  const [consultDiscount, setConsultDiscount] = useState("");
+  // Bumped when the discount is set from outside its own boxes, so its % box is read afresh.
+  const [discountKey, setDiscountKey] = useState(0);
   const [advanceOn, setAdvanceOn] = useState(!paidAdvance);
   const [advanceFor, setAdvanceFor] = useState("sessions");
   const [advanceNote, setAdvanceNote] = useState("");
@@ -82,9 +85,11 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const item = items.rows.find((i) => i.id === itemId) || null;
   const price = item ? consultationItemPrice(item, mode) : null;
   const consultNow = consultOn && !paidConsult ? r2(parseFloat(consultAmount)) : 0;
+  const consultOff = consultOn && !paidConsult ? Math.max(0, r2(parseFloat(consultDiscount))) : 0;
   const advanceNow = advanceOn && !paidAdvance ? r2(parseFloat(advanceAmount)) : 0;
   const total = r2(consultNow + advanceNow);
-  const consultShort = price != null && consultNow > 0 && consultNow < price ? r2(price - consultNow) : 0;
+  // What is left for the visit day: the price, less the discount and what is paid now.
+  const consultShort = price != null && consultNow > 0 && consultNow + consultOff < price ? r2(price - consultOff - consultNow) : 0;
 
   // Escape closes this popup only, never the lead card under it.
   useEffect(() => {
@@ -102,6 +107,13 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     const next = items.rows.find((i) => i.id === id);
     const p = next ? consultationItemPrice(next, mode) : null;
     setConsultAmount(p != null ? String(p) : "");
+    setConsultDiscount("");
+  };
+
+  // The rest of a part payment, written off rather than collected on the visit day.
+  const shortToDiscount = () => {
+    setConsultDiscount(String(r2(consultOff + consultShort)));
+    setDiscountKey((k) => k + 1);
   };
 
   const submit = async () => {
@@ -109,10 +121,12 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     if (consultOn && !paidConsult) {
       if (!item) { toast.error("Pick a consultation package"); return; }
       if (price == null) { toast.error(`${item.name} has no ${mode} price in Services & Products`); return; }
+      if (consultOff >= price) { toast.error(`The discount has to be less than ${rupees(price)}`); return; }
       if (!(consultNow > 0)) { toast.error("Enter the consultation amount"); return; }
-      if (consultNow > price + 0.009) { toast.error(`More than ${item.name} costs (${rupees(price)}) — put the rest in the Advance`); return; }
+      if (consultNow + consultOff > price + 0.009) { toast.error(`More than ${item.name} costs after the discount (${rupees(price - consultOff)}) — put the rest in the Advance`); return; }
       payload.consultation_item_id = item.id;
       payload.consultation_amount = consultNow;
+      if (consultOff > 0) payload.consultation_discount = consultOff;
     }
     if (advanceOn && !paidAdvance) {
       if (!(advanceNow > 0)) { toast.error("Enter the advance amount"); return; }
@@ -166,7 +180,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
         paidFor: "Pre Book — Consultation",
         packageName: item?.name || "",
         amount: consultNow,
-        originalAmount: consultShort ? price : null,
+        discount: consultOff || null,
+        originalAmount: consultShort || consultOff ? price : null,
         balanceDue: consultShort ? `Rs.${consultShort} on the visit day` : "",
       });
     }
@@ -225,7 +240,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
               <p className="text-sm font-semibold text-slate-800">{paidConsult.name} · {rupees(paidConsult.paid)}</p>
               <p className="text-[11px] text-slate-500">
                 Paid {shortDay(paidConsult.at)}
-                {paidConsult.paid < paidConsult.price ? ` · ${rupees(paidConsult.price - paidConsult.paid)} to collect on the visit day` : ""}
+                {paidConsult.discount ? ` · ${rupees(paidConsult.discount)} discount` : ""}
+                {preBookConsultOwed(paidConsult) > 0 ? ` · ${rupees(preBookConsultOwed(paidConsult))} to collect on the visit day` : ""}
                 {paidConsult.applied_at ? " · used on the Consultation Fee" : ""}
               </p>
             </Section>
@@ -254,20 +270,47 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                       })}
                     </select>
                   </label>
+                  {price != null && (
+                    <BalanceDiscount
+                      key={`${itemId}-${discountKey}`}
+                      due={price}
+                      discount={consultDiscount}
+                      amount={consultAmount}
+                      onChange={({ discount, amount }) => {
+                        setConsultDiscount(discount);
+                        if (amount != null) setConsultAmount(amount);
+                      }}
+                      testid="pre-book-consult"
+                    />
+                  )}
                   <CollectField
                     label="Amount paid now (₹)"
                     type="number"
                     inputMode="decimal"
                     value={consultAmount}
                     onChange={(e) => setConsultAmount(e.target.value)}
-                    placeholder={price != null ? String(price) : "0"}
+                    placeholder={price != null ? String(r2(price - consultOff)) : "0"}
                     testid="pre-book-consult-amount"
                   />
-                  <p className="text-[11px] text-slate-500">
-                    {consultShort
-                      ? `Part payment — ${rupees(consultShort)} is collected on the visit day.`
-                      : "The whole price, or less to confirm the booking (the rest on the visit day)."}
-                  </p>
+                  {consultShort ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <span>Part payment — {rupees(consultShort)} is collected on the visit day.</span>
+                      <button
+                        type="button"
+                        onClick={shortToDiscount}
+                        className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 font-semibold text-amber-700 hover:bg-amber-100"
+                        data-testid="pre-book-consult-short-to-discount"
+                      >
+                        Give {rupees(consultShort)} as discount
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      {consultOff > 0 && consultNow > 0
+                        ? `${rupees(consultOff)} discount — nothing left to collect on the visit day.`
+                        : "The whole price, or less to confirm the booking (the rest on the visit day)."}
+                    </p>
+                  )}
                 </div>
               )}
             </Section>

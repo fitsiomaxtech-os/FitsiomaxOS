@@ -64,7 +64,7 @@ import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/com
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
-import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookOf, preBookPaid, rupees, shortDay, todayIso } from "@/lib/preBook";
+import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookOf, preBookPaid, rupees, shortDay, todayIso } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import {
@@ -4872,7 +4872,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                           <span className="text-xs font-medium text-slate-500">Consultation</span>
                           <span className="text-right font-medium text-slate-800">
                             {preBook.consultation
-                              ? <>{preBook.consultation.name} · {rupees(preBook.consultation.paid)}{preBook.consultation.paid < preBook.consultation.price ? <span className="text-xs text-amber-600"> of {rupees(preBook.consultation.price)}</span> : null}{preBook.consultation.applied_at ? <span className="text-xs text-teal-700"> · used</span> : null}</>
+                              ? <>{preBook.consultation.name} · {rupees(preBook.consultation.paid)}{preBookConsultOwed(preBook.consultation) > 0 ? <span className="text-xs text-amber-600"> of {rupees(preBook.consultation.price - (preBook.consultation.discount || 0))}</span> : null}{preBook.consultation.discount ? <span className="text-xs text-rose-600"> · {rupees(preBook.consultation.discount)} off</span> : null}{preBook.consultation.applied_at ? <span className="text-xs text-teal-700"> · used</span> : null}</>
                               : <span className="text-slate-400">Not paid</span>}
                           </span>
                         </div>

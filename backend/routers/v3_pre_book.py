@@ -6,7 +6,8 @@ and takes the money, in two parts that are collected and kept apart:
 
   consultation  a Consultation package off Services & Products -- usually Reconsultation --
                 and what was paid on it: the whole price, or part of it (Rs.500 to confirm
-                a booking, the rest on the day).
+                a booking, the rest on the day), less any discount the desk agreed -- which,
+                unlike the rest of a part payment, is never collected.
   advance       money towards something not priced yet: the Sessions the consultant will
                 plan, or anything else the desk names.
 
@@ -59,6 +60,9 @@ class V3PreBookCollectInput(BaseModel):
     # what was handed over for it, the whole price when left out.
     consultation_item_id: Optional[str] = None
     consultation_amount: Optional[float] = None
+    # Taken off the package price and never collected -- unlike a part payment, whose rest
+    # is owed on the visit day.
+    consultation_discount: Optional[float] = None
     # The advance part.
     advance_for: Optional[Literal["sessions", "others"]] = None
     advance_note: Optional[str] = None
@@ -149,14 +153,19 @@ async def collect_pre_book(
         if price is None:
             raise HTTPException(status_code=400, detail=f"'{item.get('name')}' has no {mode} price set. Add one in Services & Products.")
         price = _money(price)
-        amount = _money(payload.consultation_amount if payload.consultation_amount is not None else price)
+        discount = _money(payload.consultation_discount)
+        if discount < 0:
+            raise HTTPException(status_code=400, detail="Discount cannot be negative")
+        if discount >= price:
+            raise HTTPException(status_code=400, detail=f"The discount has to be less than '{item.get('name')}' costs (Rs.{_rs(price)})")
+        amount = _money(payload.consultation_amount if payload.consultation_amount is not None else price - discount)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Enter the consultation amount")
         # More than the package costs is not a consultation payment; the rest is an advance
         # and belongs in that box, where the day it is used can find it.
-        if amount > price + 0.009:
-            raise HTTPException(status_code=400, detail=f"The consultation amount is more than '{item.get('name')}' costs (Rs.{_rs(price)}) — put the rest in the Advance")
-        consult = {"item": item, "price": price, "amount": amount, "mode": mode}
+        if amount + discount > price + 0.009:
+            raise HTTPException(status_code=400, detail=f"The consultation amount is more than '{item.get('name')}' costs after the discount (Rs.{_rs(price - discount)}) — put the rest in the Advance")
+        consult = {"item": item, "price": price, "amount": amount, "discount": discount, "mode": mode}
 
     advance = None
     if payload.advance_amount:
@@ -194,7 +203,10 @@ async def collect_pre_book(
     if consult:
         txn = await generate_transaction_id(lead.get("branch_id"))
         item = consult["item"]
-        part_of = f" (of Rs.{_rs(consult['price'])})" if consult["amount"] < consult["price"] else ""
+        discount = consult["discount"]
+        part_of = f" (of Rs.{_rs(consult['price'] - discount)})" if consult["amount"] + discount < consult["price"] - 0.009 else ""
+        # Worded as every fee writes its discount (settle_fee_money), so finance reads it alike.
+        off = f" · Actual Price Rs.{_rs(consult['price'])}, Discount Rs.{_rs(discount)}" if discount > 0 else ""
         updates["pre_book.consultation"] = {
             "item_id": item["id"],
             "name": item.get("name"),
@@ -203,6 +215,7 @@ async def collect_pre_book(
             "price": consult["price"],
             "mode": consult["mode"],
             "paid": consult["amount"],
+            "discount": discount or None,
             "payment_mode": payload.payment_mode,
             "payment_details": {**mode_details, "transaction_id": txn},
             "transaction_id": txn,
@@ -215,7 +228,11 @@ async def collect_pre_book(
             "transaction_id": txn,
             "lead_id": lead_id,
             "action": CONSULTATION_ACTION,
-            "details": f"Collected Pre Book Consultation Rs.{_rs(consult['amount'])}{part_of} for package '{item.get('name')}' via {payload.payment_mode}{mode_suffix}{planned_suffix} · Txn {txn}",
+            "details": f"Collected Pre Book Consultation Rs.{_rs(consult['amount'])}{part_of} for package '{item.get('name')}' via {payload.payment_mode}{mode_suffix}{off}{planned_suffix} · Txn {txn}",
+            # The same two fields a Consultation Fee's own discount is reported from.
+            "original_amount": consult["price"] if discount > 0 else None,
+            "discount_amount": discount or None,
+            "discount_reason": "Discount" if discount > 0 else None,
             "created_by": user.full_name,
             "created_by_role": user.role,
             "created_at": now,
@@ -253,18 +270,21 @@ async def collect_pre_book(
     return {"message": "Pre Book payment collected", "transaction_ids": receipts, "lead": V3LeadOut(**updated).model_dump()}
 
 
-def _applied_details(paid: float, price: float, txn: Optional[str]) -> dict:
+def _applied_details(paid: float, price: float, txn: Optional[str], discount: float = 0) -> dict:
     """The fee's payment_details when it is settled from Pre Book money.
 
     The pre-paid amount is the first instalment, already paid -- carrying `pre_book` and the
     Pre Book payment's id under its own key, not as `transaction_id`: that key is what ties an
     instalment to a Payment Schedule collection, and Undo there must never reach a payment
-    taken at Pre Book. Whatever is left of the price is an ordinary unpaid instalment due
-    today, which every balance screen already reads and collects.
+    taken at Pre Book. Whatever is left of the price, less any discount agreed at Pre Book,
+    is an ordinary unpaid instalment due today, which every balance screen already reads and
+    collects. The discount sits where a fee's own discount does, so the fee reads it alike.
     """
     today = clinic_today()
-    balance = round(price - paid, 2)
+    balance = round(price - discount - paid, 2)
     details = {"pre_book": True, "pre_book_transaction_id": txn}
+    if discount > 0:
+        details["discount_amount"] = discount
     if balance > 0.009:
         details["installments"] = [
             {"amount": paid, "due_date": today, "paid": True, "paid_on": today,
@@ -302,6 +322,7 @@ async def apply_pre_book_consultation(
         raise HTTPException(status_code=400, detail="Upload the patient's prescription before collecting the Consultation Fee")
 
     paid, price = _money(consult["paid"]), _money(consult.get("price") or consult["paid"])
+    discount = _money(consult.get("discount"))
     now = now_iso()
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {
         "package_id": consult.get("item_id"),
@@ -312,13 +333,13 @@ async def apply_pre_book_consultation(
         "consultation_package": consult.get("consultation_package"),
         "package_paid": paid,
         "package_payment_mode": PRE_BOOK_MODE,
-        "package_payment_details": _applied_details(paid, price, consult.get("transaction_id")),
+        "package_payment_details": _applied_details(paid, price, consult.get("transaction_id"), discount),
         "consultation_stage": "Fee Collected",
         "pre_book.consultation.applied_at": now,
         "pre_book.consultation.applied_by": user.full_name,
         "updated_at": now,
     }})
-    balance = round(price - paid, 2)
+    balance = round(price - discount - paid, 2)
     # Not a payment action: the money is already counted under the Pre Book row.
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
@@ -326,6 +347,7 @@ async def apply_pre_book_consultation(
         "action": "pre_book_consultation_applied",
         "details": (
             f"Consultation Fee settled from Pre Book — {consult.get('name')}, paid {_rs(paid)} on {str(consult.get('at') or '')[:10]}"
+            + (f" · discount {_rs(discount)}" if discount > 0 else "")
             + (f" · balance {_rs(balance)} owed" if balance > 0.009 else "")
             + (f" · Pre Book Txn {consult.get('transaction_id')}" if consult.get("transaction_id") else "")
         ),
