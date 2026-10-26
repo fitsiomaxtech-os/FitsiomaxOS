@@ -3037,7 +3037,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /><PreBookTag lead={lead} className="ml-1.5" compact /></>}
+                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
                     // On the Leads pill the row's right holds only Call, WhatsApp and the
                     // bin: every row there would read "Leads" anyway. The other pills and
                     // All Stages keep the badge.
@@ -3298,7 +3298,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                 <TransferredTag lead={lead} />
                                 <RescheduledTag lead={lead} className="shrink-0" />
                                 <OnlineTag lead={lead} />
-                                <PreBookTag lead={lead} always={showPreBookColumns} />
                               </span>
                             </div>
                             {/* The two marks, after the name so they read as something said
