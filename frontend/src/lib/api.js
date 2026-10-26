@@ -1035,6 +1035,11 @@ export const collectTreatmentFee = async (leadId, payload) => (await api.post(`/
 export const collectPreBook = async (leadId, payload) => (await api.post(`/leads/${leadId}/pre-book/collect`, payload)).data;
 export const applyPreBookConsultation = async (leadId) => (await api.post(`/leads/${leadId}/pre-book/apply-consultation`)).data;
 export const applyPreBookAdvance = async (leadId) => (await api.post(`/leads/${leadId}/pre-book/apply-advance`)).data;
+// What an advance for Others is for -- the saved names the Pre Book popup offers.
+export const listPreBookAdvanceOptions = async () => (await api.get("/pre-book/advance-options")).data;
+export const addPreBookAdvanceOption = async (name) => (await api.post("/pre-book/advance-options", { name })).data;
+export const renamePreBookAdvanceOption = async (id, name) => (await api.patch(`/pre-book/advance-options/${id}`, { name })).data;
+export const deletePreBookAdvanceOption = async (id) => (await api.delete(`/pre-book/advance-options/${id}`)).data;
 // Prices a Treatment Package that has no catalogue price (Home Visit > Physiotherapy Distance):
 // the amount for one session, which the server multiplies by the package's sessions.
 export const setSessionPackageAmount = async (leadId, perSessionAmount) => (await api.post(`/leads/${leadId}/session-package-amount`, { per_session_amount: perSessionAmount })).data;

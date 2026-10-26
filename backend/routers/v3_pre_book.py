@@ -25,6 +25,7 @@ mistake this design exists to avoid.
 Deleting a Pre Book payment from finance takes it back off the fee it was used on (see
 _pre_book_unapply in v3_finance.py).
 """
+import re
 import uuid
 from typing import Literal, Optional
 
@@ -33,7 +34,7 @@ from pydantic import BaseModel
 
 import store_branch_overrides
 from database import v3_col
-from deps import v3_require_roles
+from deps import v3_current_user, v3_require_roles
 from schemas.v3 import V3UserOut, V3LeadOut
 from utils import generate_transaction_id, clinic_today, now_iso
 from routers.v3_lead_documents import has_prescription_on_file
@@ -82,6 +83,67 @@ class V3PreBookCollectInput(BaseModel):
     transfer_reference: Optional[str] = None
     # build_payment_details reads it for a cheque, which this popup does not take.
     cheque_number: Optional[str] = None
+
+
+class V3PreBookAdvanceOptionInput(BaseModel):
+    name: str
+
+
+# ---- What an advance for Others is for ------------------------------------------------
+# The names the desk has typed for an advance taken for something other than Sessions, kept
+# so the next one is picked rather than typed again. A name and nothing else, like the
+# treatment list in v3_config. One list for every branch. The advance itself stores the name
+# as its note, so renaming or deleting one here leaves advances already taken as they were.
+
+ADVANCE_OPTIONS = "pre_book_advance_options"
+ADVANCE_OPTION_ROLES = ("branch_admin", "super_admin", "business_dev")
+
+
+async def _advance_option_clash(name: str, not_id: Optional[str] = None) -> None:
+    # Case-insensitive: "Knee Brace" and "knee brace" are one thing.
+    query = {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}
+    if not_id:
+        query["id"] = {"$ne": not_id}
+    clash = await v3_col(ADVANCE_OPTIONS).find_one(query, {"_id": 0, "name": 1})
+    if clash:
+        raise HTTPException(status_code=409, detail=f"'{clash['name']}' already exists")
+
+
+@router.get("/pre-book/advance-options", response_model=list)
+async def list_advance_options(_: V3UserOut = Depends(v3_current_user)):
+    return await v3_col(ADVANCE_OPTIONS).find({}, {"_id": 0}).sort("name", 1).to_list(500)
+
+
+@router.post("/pre-book/advance-options", response_model=dict)
+async def add_advance_option(payload: V3PreBookAdvanceOptionInput, user: V3UserOut = Depends(v3_require_roles(*ADVANCE_OPTION_ROLES))):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Type what the advance is for")
+    await _advance_option_clash(name)
+    doc = {"id": str(uuid.uuid4()), "name": name, "created_at": now_iso(), "created_by": user.full_name}
+    await v3_col(ADVANCE_OPTIONS).insert_one(doc.copy())
+    return doc
+
+
+@router.patch("/pre-book/advance-options/{option_id}", response_model=dict)
+async def rename_advance_option(option_id: str, payload: V3PreBookAdvanceOptionInput, _: V3UserOut = Depends(v3_require_roles(*ADVANCE_OPTION_ROLES))):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Type what the advance is for")
+    existing = await v3_col(ADVANCE_OPTIONS).find_one({"id": option_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Option not found")
+    await _advance_option_clash(name, option_id)
+    await v3_col(ADVANCE_OPTIONS).update_one({"id": option_id}, {"$set": {"name": name}})
+    return {**existing, "name": name}
+
+
+@router.delete("/pre-book/advance-options/{option_id}", response_model=dict)
+async def delete_advance_option(option_id: str, _: V3UserOut = Depends(v3_require_roles(*ADVANCE_OPTION_ROLES))):
+    res = await v3_col(ADVANCE_OPTIONS).delete_one({"id": option_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Option not found")
+    return {"message": "Option deleted"}
 
 
 def _money(value: Optional[float]) -> float:
