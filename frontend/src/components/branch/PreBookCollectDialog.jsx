@@ -247,6 +247,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   // One Payment Mode for both parts: the client pays once.
   const [draft, setDraft] = useState({ ...emptyTender });
   const [saving, setSaving] = useState(false);
+  // Collect asks once more before the money is taken.
+  const [confirming, setConfirming] = useState(false);
   // The receipts still to show, one per transaction, after the money is in.
   const [receipts, setReceipts] = useState([]);
   const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
@@ -292,16 +294,20 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       // An open Payment Mode menu takes the Escape itself and closes alone.
       if (e.target?.closest?.('[role="menu"]')) return;
       e.stopPropagation();
-      if (!saving) onClose();
+      if (saving) return;
+      // The confirm box goes first, back to the popup.
+      if (confirming) setConfirming(false);
+      else onClose();
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [saving, onClose, receipts.length]);
+  }, [saving, confirming, onClose, receipts.length]);
 
   // The rest of a part payment, written off rather than collected on the visit day.
   const shortToDiscount = () => setConsultDiscount(String(r2(consultOff + consultShort)));
 
-  const submit = async () => {
+  // Checked twice: on Collect, before the confirm box opens, and again on its Yes.
+  const submit = async (sure = false) => {
     const payload = { confirmed: true };
     if (consultNow > 0) {
       if (!item) { toast.error("No consultation package yet — add one under Services & Products › Consultations › Pre Book"); return; }
@@ -327,6 +333,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     const advanceTender = payload.advance_amount ? tender : null;
     if (consultTender) Object.assign(payload, consultTender.payload);
     if (advanceTender) payload.advance_payment = advanceTender.payload;
+    if (!sure) { setConfirming(true); return; }
 
     setSaving(true);
     let res;
@@ -335,9 +342,11 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not collect the Pre Book payment");
       setSaving(false);
+      setConfirming(false);
       return;
     }
     setSaving(false);
+    setConfirming(false);
     toast.success(`${rupees(total)} collected for Pre Book`);
     // A name typed for Others and collected without pressing Add is kept for next time too.
     // A clash means it is on the list already, which is all this wanted.
@@ -537,12 +546,59 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
         {!nothingLeft && (
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
             <button
-              type="button" onClick={submit} disabled={saving || !(total > 0)}
+              type="button" onClick={() => submit()} disabled={saving || !(total > 0)}
               className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
               data-testid="pre-book-collect"
             >
               {saving ? "Collecting..." : `Collect ${rupees(total)}`}
             </button>
+          </div>
+        )}
+
+        {confirming && (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 p-4"
+            onClick={(e) => { if (e.target === e.currentTarget && !saving) setConfirming(false); }}
+          >
+            <div role="alertdialog" aria-modal="true" aria-labelledby="pre-book-confirm-title" className="w-full max-w-sm rounded-[5px] bg-white shadow-2xl" data-testid="pre-book-confirm-dialog">
+              <div className="border-b border-slate-200 p-5">
+                <h3 id="pre-book-confirm-title" className="text-base font-semibold text-slate-800">Collect {rupees(total)} for Pre Book?</h3>
+                <div className="mt-3 space-y-1.5 text-sm text-slate-700">
+                  {consultNow > 0 && (
+                    <div className="flex justify-between gap-3">
+                      <span>Consultation{item ? ` · ${item.name}` : ""}</span>
+                      <span className="font-semibold">{rupees(consultNow)}</span>
+                    </div>
+                  )}
+                  {advanceNow > 0 && (
+                    <div className="flex justify-between gap-3">
+                      <span>Advance · {advanceForLabel({ for: advanceFor, note: advanceNoteNow })}</span>
+                      <span className="font-semibold">{rupees(advanceNow)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-3 border-t border-slate-100 pt-1.5 text-slate-500">
+                    <span>Payment Mode</span>
+                    <span className="font-semibold text-slate-700">{ALL_PAYMENT_MODE_LABELS[draft.payment_mode] || draft.payment_mode}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 p-4">
+                <button
+                  type="button" onClick={() => setConfirming(false)} disabled={saving}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  data-testid="pre-book-confirm-back"
+                >
+                  Back
+                </button>
+                <button
+                  type="button" onClick={() => submit(true)} disabled={saving} autoFocus
+                  className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
+                  data-testid="pre-book-confirm-yes"
+                >
+                  {saving ? "Collecting..." : `Yes, collect ${rupees(total)}`}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
