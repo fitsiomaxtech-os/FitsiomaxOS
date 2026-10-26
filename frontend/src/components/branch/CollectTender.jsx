@@ -161,7 +161,8 @@ const MODE_ICONS = { cash: Banknote, upi: Smartphone, card: CreditCard, account_
 // icon, and a dot by the one picked. It floats on its own layer (Radix, portalled to the page,
 // as the Branch Leads stage menu is), so the popup it sits in can neither clip nor scroll it,
 // and it opens the same way: fading in, growing from 95% and sliding down out of its box. It
-// flips above the box when there is no room below. Arrow keys move through it, Enter picks.
+// flips above the box when there is no room below. Only as wide as its rows, as a Windows
+// menu is, rather than the width of its box. Arrow keys move through it, Enter picks.
 const ModeDropdown = ({ value, onChange, modes, compact, testid }) => {
   const current = modes.find((m) => m.value === value);
   const CurrentIcon = MODE_ICONS[value];
@@ -183,7 +184,7 @@ const ModeDropdown = ({ value, onChange, modes, compact, testid }) => {
         align="start"
         sideOffset={4}
         collisionPadding={8}
-        className="z-[80] w-[var(--radix-dropdown-menu-trigger-width)] rounded-lg border-black/[0.06] bg-white/85 p-1 text-slate-800 shadow-[0_8px_28px_rgba(15,23,42,0.16)] backdrop-blur-xl duration-150"
+        className="z-[80] w-max min-w-[11rem] rounded-lg border-black/[0.06] bg-white/85 p-1 text-slate-800 shadow-[0_8px_28px_rgba(15,23,42,0.16)] backdrop-blur-xl duration-150"
         data-testid={`${testid}-mode-list`}
       >
         {modes.map((m) => {
