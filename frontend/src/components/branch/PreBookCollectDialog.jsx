@@ -244,11 +244,14 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [advanceManual, setAdvanceManual] = useState(false);
   const [advanceTyped, setAdvanceTyped] = useState("");
   const [advanceAmount, setAdvanceAmount] = useState("");
-  const [draft, setDraft] = useState({ ...emptyTender });
+  // Each part is paid its own way, so each has its own Payment Mode.
+  const [consultDraft, setConsultDraft] = useState({ ...emptyTender });
+  const [advanceDraft, setAdvanceDraft] = useState({ ...emptyTender });
   const [saving, setSaving] = useState(false);
   // The receipts still to show, one per transaction, after the money is in.
   const [receipts, setReceipts] = useState([]);
-  const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const setConsultD = (patch) => setConsultDraft((d) => ({ ...d, ...patch }));
+  const setAdvanceD = (patch) => setAdvanceDraft((d) => ({ ...d, ...patch }));
 
   // Services and Products > Consultations > Pre Book, with this branch's prices -- the
   // shelf kept for this popup alone. By name, so Reconsultation and its neighbours read in
@@ -317,13 +320,18 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       if (advanceNoteNow) payload.advance_note = advanceNoteNow;
     }
     if (!payload.consultation_item_id && !payload.advance_amount) { toast.error("Enter the consultation, the advance, or both"); return; }
-    const tender = tenderPayload(draft);
-    if (tender.error) { toast.error(tender.error); return; }
+    // The consultation's mode goes as the top-level fields, the advance's as advance_payment.
+    const consultTender = payload.consultation_item_id ? tenderPayload(consultDraft) : null;
+    if (consultTender?.error) { toast.error(`Consultation: ${consultTender.error}`); return; }
+    const advanceTender = payload.advance_amount ? tenderPayload(advanceDraft) : null;
+    if (advanceTender?.error) { toast.error(`Advance: ${advanceTender.error}`); return; }
+    if (consultTender) Object.assign(payload, consultTender.payload);
+    if (advanceTender) payload.advance_payment = advanceTender.payload;
 
     setSaving(true);
     let res;
     try {
-      res = await collectPreBook(lead.id, { ...payload, ...tender.payload });
+      res = await collectPreBook(lead.id, payload);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not collect the Pre Book payment");
       setSaving(false);
@@ -349,16 +357,20 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       sessionsCovered: "",
       installments: [],
       discount: null,
-      modeLabel: ALL_PAYMENT_MODE_LABELS[tender.payload.payment_mode] || tender.payload.payment_mode,
-      reference: paymentReference(tender.payload),
       collectedBy: loadSession()?.user?.full_name || "Branch Admin",
-      isCash: tender.payload.payment_mode === "cash",
       cashCounted: "",
     };
+    // How one part was paid, as its receipt prints it.
+    const paidBy = (t) => ({
+      modeLabel: ALL_PAYMENT_MODE_LABELS[t.payment_mode] || t.payment_mode,
+      reference: paymentReference(t),
+      isCash: t.payment_mode === "cash",
+    });
     const out = [];
     if (res.transaction_ids?.consultation) {
       out.push({
         ...base,
+        ...paidBy(consultTender.payload),
         receiptNo: res.transaction_ids.consultation,
         paidFor: "Pre Book — Consultation",
         packageName: item?.name || "",
@@ -371,6 +383,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     if (res.transaction_ids?.advance) {
       out.push({
         ...base,
+        ...paidBy(advanceTender.payload),
         receiptNo: res.transaction_ids.advance,
         paidFor: `Pre Book — Advance (${advanceForLabel({ for: advanceFor, note: advanceNoteNow })})`,
         packageName: "",
@@ -467,6 +480,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                 ) : (
                   <p className="text-[11px] text-slate-500">The whole price, or less to confirm the booking (the rest on the visit day).</p>
                 )}
+                <TenderFields draft={consultDraft} setDraft={setConsultD} testid="pre-book-consult" modes={PRE_BOOK_MODES} dropdown />
               </div>
             </Section>
           )}
@@ -504,16 +518,12 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                     placeholder="0"
                     testid="pre-book-advance-amount"
                   />
+                  <TenderFields draft={advanceDraft} setDraft={setAdvanceD} testid="pre-book-advance" modes={PRE_BOOK_MODES} dropdown />
                 </div>
               )}
             </Section>
           )}
 
-          {!nothingLeft && (
-            <div className="space-y-3">
-              <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} dropdown />
-            </div>
-          )}
           {nothingLeft && (
             <p className="text-center text-xs text-slate-500">Both parts are paid. A wrong payment is deleted from finance and collected again.</p>
           )}

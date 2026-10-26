@@ -56,6 +56,22 @@ ADVANCE_ACTIONS = {"sessions": "pre_book_advance_collected", "others": "pre_book
 PRE_BOOK_MODE = "pre_book"
 
 
+class V3PreBookTender(BaseModel):
+    """How one part was paid -- the fields build_payment_details reads."""
+    payment_mode: Literal["cash", "upi", "card", "account_transfer"] = "cash"
+    denominations: Optional[dict] = None
+    upi_transaction_id: Optional[str] = None
+    upi_utr: Optional[str] = None
+    upi_id: Optional[str] = None
+    card_transaction_id: Optional[str] = None
+    account_number: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    transfer_reference: Optional[str] = None
+    cheque_number: Optional[str] = None
+
+
 class V3PreBookCollectInput(BaseModel):
     # The consultation part. The item is one of the Consultation packages; the amount is
     # what was handed over for it, the whole price when left out.
@@ -68,7 +84,9 @@ class V3PreBookCollectInput(BaseModel):
     advance_for: Optional[Literal["sessions", "others"]] = None
     advance_note: Optional[str] = None
     advance_amount: Optional[float] = None
-    # One payment for both parts: the client pays once, in one way.
+    # How the money was paid. Without `advance_payment` it is one payment for both parts;
+    # with it, these fields are the consultation's and the advance has its own (2026-10-26:
+    # the popup asks a Payment Mode under each part).
     payment_mode: Literal["cash", "upi", "card", "account_transfer"] = "cash"
     confirmed: bool = False
     denominations: Optional[dict] = None
@@ -83,6 +101,7 @@ class V3PreBookCollectInput(BaseModel):
     transfer_reference: Optional[str] = None
     # build_payment_details reads it for a cheque, which this popup does not take.
     cheque_number: Optional[str] = None
+    advance_payment: Optional[V3PreBookTender] = None
 
 
 class V3PreBookAdvanceOptionInput(BaseModel):
@@ -187,8 +206,13 @@ async def collect_pre_book(
     lead = await _lead_or_404(lead_id)
     rec = _record(lead)
 
-    if payload.payment_mode not in SETTLED_NOW_MODES:
-        raise HTTPException(status_code=400, detail=f"Pre Book accepts: {sorted(SETTLED_NOW_MODES)}")
+    # The consultation is paid by the top-level fields; the advance by its own when sent.
+    split = payload.advance_payment is not None
+    consult_tender = payload
+    advance_tender = payload.advance_payment or payload
+    for t in (consult_tender, advance_tender):
+        if t.payment_mode not in SETTLED_NOW_MODES:
+            raise HTTPException(status_code=400, detail=f"Pre Book accepts: {sorted(SETTLED_NOW_MODES)}")
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Please confirm the payment before submitting")
 
@@ -246,14 +270,22 @@ async def collect_pre_book(
     if not consult and not advance:
         raise HTTPException(status_code=400, detail="Enter the consultation, the advance, or both")
 
-    # One count of notes covers what was handed over for both parts, so it is checked
-    # against their total, not against either alone.
-    total = _money((consult or {}).get("amount", 0) + (advance or {}).get("amount", 0))
-    counted = _settle_cash_count(payload.denominations, total) if payload.payment_mode == "cash" else {}
-    mode_details, mode_suffix = build_payment_details(payload)
-    if counted:
-        mode_details = {**mode_details, "denominations": counted}
-        mode_suffix += f" · Counted {_notes_label(counted)}"
+    def tender_details(tender, amount: float) -> tuple:
+        counted = _settle_cash_count(tender.denominations, amount) if tender.payment_mode == "cash" else {}
+        details, suffix = build_payment_details(tender)
+        if counted:
+            details = {**details, "denominations": counted}
+            suffix += f" · Counted {_notes_label(counted)}"
+        return details, suffix
+
+    # Paid apart, each part's count of notes is checked against its own amount. Paid as one,
+    # one count covers both, so it is checked against their total, not against either alone.
+    if split:
+        consult_paid = tender_details(consult_tender, consult["amount"]) if consult else None
+        advance_paid = tender_details(advance_tender, advance["amount"]) if advance else None
+    else:
+        total = _money((consult or {}).get("amount", 0) + (advance or {}).get("amount", 0))
+        consult_paid = advance_paid = tender_details(payload, total)
 
     planned = rec.get("date") or ""
     planned_suffix = f" · planned visit {planned}" if planned else ""
@@ -264,6 +296,7 @@ async def collect_pre_book(
 
     if consult:
         txn = await generate_transaction_id(lead.get("branch_id"))
+        mode_details, mode_suffix = consult_paid
         item = consult["item"]
         discount = consult["discount"]
         part_of = f" (of Rs.{_rs(consult['price'] - discount)})" if consult["amount"] + discount < consult["price"] - 0.009 else ""
@@ -278,7 +311,7 @@ async def collect_pre_book(
             "mode": consult["mode"],
             "paid": consult["amount"],
             "discount": discount or None,
-            "payment_mode": payload.payment_mode,
+            "payment_mode": consult_tender.payment_mode,
             "payment_details": {**mode_details, "transaction_id": txn},
             "transaction_id": txn,
             "at": now,
@@ -290,7 +323,7 @@ async def collect_pre_book(
             "transaction_id": txn,
             "lead_id": lead_id,
             "action": CONSULTATION_ACTION,
-            "details": f"Collected Pre Book Consultation Rs.{_rs(consult['amount'])}{part_of} for package '{item.get('name')}' via {payload.payment_mode}{mode_suffix}{off}{planned_suffix} · Txn {txn}",
+            "details": f"Collected Pre Book Consultation Rs.{_rs(consult['amount'])}{part_of} for package '{item.get('name')}' via {consult_tender.payment_mode}{mode_suffix}{off}{planned_suffix} · Txn {txn}",
             # The same two fields a Consultation Fee's own discount is reported from.
             "original_amount": consult["price"] if discount > 0 else None,
             "discount_amount": discount or None,
@@ -303,12 +336,13 @@ async def collect_pre_book(
 
     if advance:
         txn = await generate_transaction_id(lead.get("branch_id"))
+        mode_details, mode_suffix = advance_paid
         label = ADVANCE_FOR[advance["for"]] + (f" — {advance['note']}" if advance["note"] else "")
         updates["pre_book.advance"] = {
             "for": advance["for"],
             "note": advance["note"],
             "amount": advance["amount"],
-            "payment_mode": payload.payment_mode,
+            "payment_mode": advance_tender.payment_mode,
             "payment_details": {**mode_details, "transaction_id": txn},
             "transaction_id": txn,
             "at": now,
@@ -319,7 +353,7 @@ async def collect_pre_book(
             "transaction_id": txn,
             "lead_id": lead_id,
             "action": ADVANCE_ACTIONS[advance["for"]],
-            "details": f"Collected Pre Book Advance Rs.{_rs(advance['amount'])} for {label} via {payload.payment_mode}{mode_suffix}{planned_suffix} · Txn {txn}",
+            "details": f"Collected Pre Book Advance Rs.{_rs(advance['amount'])} for {label} via {advance_tender.payment_mode}{mode_suffix}{planned_suffix} · Txn {txn}",
             "created_by": user.full_name,
             "created_by_role": user.role,
             "created_at": now,
