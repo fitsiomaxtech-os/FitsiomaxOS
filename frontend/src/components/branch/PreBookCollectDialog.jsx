@@ -323,22 +323,18 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
               </label>
               {advanceOn && (
                 <div className="space-y-2">
-                  <div>
+                  <label className="block">
                     <span className="mb-1 block text-xs font-semibold text-slate-700">Advance for</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[["sessions", "Sessions"], ["others", "Others"]].map(([key, label]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setAdvanceFor(key)}
-                          className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${advanceFor === key ? "border-teal-500 bg-teal-600 text-white" : "border-teal-200 bg-teal-50 text-teal-700"}`}
-                          data-testid={`pre-book-advance-for-${key}`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                    <select
+                      value={advanceFor}
+                      onChange={(e) => setAdvanceFor(e.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                      data-testid="pre-book-advance-for"
+                    >
+                      <option value="sessions">Sessions</option>
+                      <option value="others">Others</option>
+                    </select>
+                  </label>
                   <CollectField
                     label={advanceFor === "others" ? "What is it for? *" : "Note (optional)"}
                     value={advanceNote}
@@ -368,7 +364,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
           {!nothingLeft && (
             <>
               <div className="space-y-3">
-                <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} />
+                <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} dropdown />
               </div>
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                 <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="pre-book-confirm" />

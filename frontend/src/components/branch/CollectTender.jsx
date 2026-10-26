@@ -155,10 +155,21 @@ export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "bal
 /** The five mode buttons and, under them, the fields the picked one is traced by.
  *  `modes` narrows the buttons for a collection that cannot take every mode -- Pre Book is
  *  money in hand, so it leaves Cheque off. */
-export const TenderFields = ({ draft, setDraft, testid, compact = false, modes = COLLECT_MODES }) => (
+// `dropdown` asks the mode as a select rather than a row of buttons -- the Pre Book popup's way.
+export const TenderFields = ({ draft, setDraft, testid, compact = false, modes = COLLECT_MODES, dropdown = false }) => (
   <>
     <div>
       <span className={`${compact ? "mb-0.5" : "mb-1"} block text-xs font-semibold text-slate-700`}>Payment Mode</span>
+      {dropdown ? (
+        <select
+          value={draft.payment_mode}
+          onChange={(e) => setDraft({ payment_mode: e.target.value })}
+          className={`${compact ? "h-9" : "h-10"} w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400`}
+          data-testid={`${testid}-mode`}
+        >
+          {modes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+      ) : (
       <div className="grid grid-cols-3 gap-1.5">
         {modes.map((m) => (
           <button
@@ -172,6 +183,7 @@ export const TenderFields = ({ draft, setDraft, testid, compact = false, modes =
           </button>
         ))}
       </div>
+      )}
     </div>
 
     {draft.payment_mode === "upi" && (
