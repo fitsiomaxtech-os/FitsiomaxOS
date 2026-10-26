@@ -19,7 +19,7 @@ const PRE_BOOK_MODES = COLLECT_MODES.filter((m) => m.value !== "cheque");
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 const Section = ({ title, children, done }) => (
-  <div className={`rounded-xl p-3 ${done ? "bg-teal-50/60" : ""}`}>
+  <div className={`rounded-[5px] p-3 ${done ? "bg-teal-50/60" : ""}`}>
     <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
       {done && <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />}
       {title}
@@ -232,7 +232,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const mode = lead.appointment_mode || "offline";
 
   const [items, setItems] = useState({ rows: [], loading: true });
-  const [consultOn, setConsultOn] = useState(!paidConsult);
+  // The package is the first on the Pre Book shelf; there is no picker any more.
   const [itemId, setItemId] = useState("");
   const [consultAmount, setConsultAmount] = useState("");
   // Set only by "Give Rs.X as discount": the rest of a part payment, written off.
@@ -245,7 +245,6 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [advanceTyped, setAdvanceTyped] = useState("");
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [draft, setDraft] = useState({ ...emptyTender });
-  const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   // The receipts still to show, one per transaction, after the money is in.
   const [receipts, setReceipts] = useState([]);
@@ -275,8 +274,9 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
 
   const item = items.rows.find((i) => i.id === itemId) || null;
   const price = item ? consultationItemPrice(item, mode) : null;
-  const consultNow = consultOn && !paidConsult ? r2(parseFloat(consultAmount)) : 0;
-  const consultOff = consultOn && !paidConsult ? Math.max(0, r2(parseFloat(consultDiscount))) : 0;
+  // A blank or zero amount leaves the consultation out of this collection.
+  const consultNow = !paidConsult ? Math.max(0, r2(parseFloat(consultAmount))) : 0;
+  const consultOff = consultNow > 0 ? Math.max(0, r2(parseFloat(consultDiscount))) : 0;
   const advanceNow = advanceOn && !paidAdvance ? r2(parseFloat(advanceAmount)) : 0;
   // What an advance for Others is for: the name picked, or the one still in the text box.
   const advanceNoteNow = advanceFor === "others" ? (advanceManual ? advanceTyped : advanceNote).trim() : "";
@@ -295,24 +295,15 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     return () => document.removeEventListener("keydown", onKey, true);
   }, [saving, onClose, receipts.length]);
 
-  const pickItem = (id) => {
-    setItemId(id);
-    const next = items.rows.find((i) => i.id === id);
-    const p = next ? consultationItemPrice(next, mode) : null;
-    setConsultAmount(p != null ? String(p) : "");
-    setConsultDiscount("");
-  };
-
   // The rest of a part payment, written off rather than collected on the visit day.
   const shortToDiscount = () => setConsultDiscount(String(r2(consultOff + consultShort)));
 
   const submit = async () => {
     const payload = { confirmed: true };
-    if (consultOn && !paidConsult) {
-      if (!item) { toast.error("Pick a consultation package"); return; }
+    if (consultNow > 0) {
+      if (!item) { toast.error("No consultation package yet — add one under Services & Products › Consultations › Pre Book"); return; }
       if (price == null) { toast.error(`${item.name} has no ${mode} price in Services & Products`); return; }
       if (consultOff >= price) { toast.error(`The discount has to be less than ${rupees(price)}`); return; }
-      if (!(consultNow > 0)) { toast.error("Enter the consultation amount"); return; }
       if (consultNow + consultOff > price + 0.009) { toast.error(`More than ${item.name} costs after the discount (${rupees(price - consultOff)}) — put the rest in the Advance`); return; }
       payload.consultation_item_id = item.id;
       payload.consultation_amount = consultNow;
@@ -326,7 +317,6 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       if (advanceNoteNow) payload.advance_note = advanceNoteNow;
     }
     if (!payload.consultation_item_id && !payload.advance_amount) { toast.error("Enter the consultation, the advance, or both"); return; }
-    if (!confirmed) { toast.error(`Tick that ${rupees(total)} has been received`); return; }
     const tender = tenderPayload(draft);
     if (tender.error) { toast.error(tender.error); return; }
 
@@ -415,7 +405,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
       data-testid="pre-book-collect-dialog"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="pre-book-collect-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="pre-book-collect-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-[5px] bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-2">
             <CalendarClock className="h-5 w-5 shrink-0 text-teal-600" />
@@ -440,67 +430,44 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
             </Section>
           ) : (
             <Section title="Consultation">
-              <label className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
-                <input type="checkbox" checked={consultOn} onChange={(e) => setConsultOn(e.target.checked)} data-testid="pre-book-consult-on" />
-                Collect a consultation package
-              </label>
-              {consultOn && (
-                <div className="space-y-2">
-                  <label className="block">
-                    <select
-                      aria-label="Consultation package"
-                      value={itemId}
-                      onChange={(e) => pickItem(e.target.value)}
-                      disabled={items.loading || !items.rows.length}
-                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
-                      data-testid="pre-book-consult-item"
+              <div className="space-y-2">
+                <CollectField
+                  label="Amount paid now (₹)"
+                  type="number"
+                  inputMode="decimal"
+                  value={consultAmount}
+                  // A new amount is a new part payment; its rest is owed until given as discount again.
+                  onChange={(e) => { setConsultAmount(e.target.value); setConsultDiscount(""); }}
+                  placeholder={price != null ? String(price) : "0"}
+                  testid="pre-book-consult-amount"
+                />
+                {consultShort ? (
+                  <div className="flex text-[11px]">
+                    <button
+                      type="button"
+                      onClick={shortToDiscount}
+                      className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 font-semibold text-amber-700 hover:bg-amber-100"
+                      data-testid="pre-book-consult-short-to-discount"
                     >
-                      {items.loading && <option value="">Loading…</option>}
-                      {!items.loading && !items.rows.length && <option value="">None yet — add one under Services &amp; Products › Consultations › Pre Book</option>}
-                      {items.rows.map((i) => {
-                        const p = consultationItemPrice(i, mode);
-                        return <option key={i.id} value={i.id}>{i.name}{p != null ? ` — ${rupees(p)}` : " — no price"}</option>;
-                      })}
-                    </select>
-                  </label>
-                  <CollectField
-                    label="Amount paid now (₹)"
-                    type="number"
-                    inputMode="decimal"
-                    value={consultAmount}
-                    // A new amount is a new part payment; its rest is owed until given as discount again.
-                    onChange={(e) => { setConsultAmount(e.target.value); setConsultDiscount(""); }}
-                    placeholder={price != null ? String(price) : "0"}
-                    testid="pre-book-consult-amount"
-                  />
-                  {consultShort ? (
-                    <div className="flex text-[11px]">
-                      <button
-                        type="button"
-                        onClick={shortToDiscount}
-                        className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 font-semibold text-amber-700 hover:bg-amber-100"
-                        data-testid="pre-book-consult-short-to-discount"
-                      >
-                        Give {rupees(consultShort)} as discount
-                      </button>
-                    </div>
-                  ) : consultOff > 0 && consultNow > 0 ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                      <span>{rupees(consultOff)} discount — nothing left to collect on the visit day.</span>
-                      <button
-                        type="button"
-                        onClick={() => setConsultDiscount("")}
-                        className="rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-600 hover:bg-slate-50"
-                        data-testid="pre-book-consult-discount-undo"
-                      >
-                        Undo
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-500">The whole price, or less to confirm the booking (the rest on the visit day).</p>
-                  )}
-                </div>
-              )}
+                      Give {rupees(consultShort)} as discount
+                    </button>
+                  </div>
+                ) : consultOff > 0 && consultNow > 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <span>{rupees(consultOff)} discount — nothing left to collect on the visit day.</span>
+                    <button
+                      type="button"
+                      onClick={() => setConsultDiscount("")}
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-600 hover:bg-slate-50"
+                      data-testid="pre-book-consult-discount-undo"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">The whole price, or less to confirm the booking (the rest on the visit day).</p>
+                )}
+              </div>
             </Section>
           )}
 
@@ -543,19 +510,9 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
           )}
 
           {!nothingLeft && (
-            <>
-              <div className="space-y-3">
-                <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} dropdown />
-              </div>
-              <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} data-testid="pre-book-confirm" />
-                <span>I have received <span className="font-semibold">{rupees(total)}</span> from {lead.name || "the client"}.</span>
-              </label>
-              <div className="flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5">
-                <span className="text-xs font-bold uppercase tracking-wide text-teal-800">Total received</span>
-                <span className="text-xl font-bold text-teal-800" data-testid="pre-book-total">{rupees(total)}</span>
-              </div>
-            </>
+            <div className="space-y-3">
+              <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} dropdown />
+            </div>
           )}
           {nothingLeft && (
             <p className="text-center text-xs text-slate-500">Both parts are paid. A wrong payment is deleted from finance and collected again.</p>
