@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Calendar as CalendarIcon, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, User, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +10,12 @@ import {
   getConsultDay,
   listConsultAppointments,
   updateConsultAppointment,
-  cancelConsultAppointment,
 } from "@/lib/api";
 import { to12h } from "@/lib/time";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { ClockTimeInput } from "@/components/ui/clock-time-input";
 import { BranchMonthlyCalendar } from "@/components/branch/BranchMonthlyCalendar";
+import { clamp, useDismissOutside, useFloatingPosition } from "@/lib/use-floating";
 
 // weekly_hours is keyed mon..sun; JS getDay() is 0=Sun..6=Sat.
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -32,7 +33,7 @@ const MONTH_STRIP_LENGTH = 6;
 const MONTH_STRIP_LEAD = 3;
 
 
-const emptyDraft = () => ({ patient_name: "", doctor_id: "", date: iso(new Date()), time: "", notes: "", cancelled: false });
+const emptyDraft = () => ({ patient_name: "", doctor_id: "", date: iso(new Date()), time: "", notes: "" });
 
 // The branch Calendar reflects the working hours + holidays configured by Super Admin
 // in Branch Management, and lets the Branch Admin book / edit / cancel consultation
@@ -57,8 +58,20 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
   const [dayView, setDayView] = useState(null); // { date, items } | null
   const [dayLoading, setDayLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  // The Reschedule popup's CONSULTANT dropdown.
+  // The Reschedule popup's Consultant dropdown, floating under (or over) its field, and the
+  // popup's card, which the Date calendar floats beside.
   const [hpOpen, setHpOpen] = useState(false);
+  const hpTriggerRef = useRef(null);
+  const hpListRef = useRef(null);
+  const rescheduleCardRef = useRef(null);
+  const hpPos = useFloatingPosition(hpOpen, hpListRef, (w, h) => {
+    const gap = 8;
+    const field = hpTriggerRef.current.getBoundingClientRect();
+    let top = field.bottom + 4;
+    if (top + h > window.innerHeight - gap && field.top - h - 4 >= gap) top = field.top - h - 4;
+    return { left: field.left, width: field.width, top: clamp(top, gap, window.innerHeight - h - gap) };
+  });
+  useDismissOutside(hpOpen, [hpTriggerRef, hpListRef], () => setHpOpen(false));
 
   const load = useCallback(async () => {
     if (!branchId) return;
@@ -196,7 +209,7 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
   // or cancel it.
   const openEdit = (a) => {
     setEditingId(a.id);
-    setDraft({ patient_name: a.patient_name || a.lead_name || "", doctor_id: a.doctor_id, date: a.appointment_date, time: a.appointment_time, notes: a.notes || "", cancelled: false });
+    setDraft({ patient_name: a.patient_name || a.lead_name || "", doctor_id: a.doctor_id, date: a.appointment_date, time: a.appointment_time, notes: a.notes || "" });
     setModalOpen(true);
   };
   const closeModal = () => { setModalOpen(false); setEditingId(null); setDayInfo(null); setHpOpen(false); };
@@ -204,26 +217,11 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
   // The consultant picked in the Reschedule popup, as that day's calendar has them.
   const selectedHP = dayInfo?.head_physios?.find((h) => h.id === draft.doctor_id) || null;
 
-  const cancelAppt = async () => {
-    if (!editingId) return;
-    setSaving(true);
-    try {
-      await cancelConsultAppointment(editingId);
-      toast.success("Appointment cancelled");
-      closeModal();
-      await load();
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Could not cancel");
-    }
-    setSaving(false);
-  };
-
   const submit = async () => {
     if (!draft.patient_name.trim()) { toast.error("Enter the patient name"); return; }
     if (!draft.date) { toast.error("Pick a date"); return; }
     if (dayInfo && !dayInfo.open) { toast.error(dayInfo.reason || "The branch is closed on this date"); return; }
-    if (editingId && draft.cancelled) { await cancelAppt(); return; }
-    if (!draft.doctor_id) { toast.error("Select a CONSULTANT"); return; }
+    if (!draft.doctor_id) { toast.error("Select a Consultant"); return; }
     if (!draft.time) { toast.error("Select a time"); return; }
     setSaving(true);
     try {
@@ -549,7 +547,7 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
         };
         return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }} data-testid="cal-booking-modal">
-          <div className="max-h-[90vh] w-full max-w-md overflow-hidden overflow-y-auto rounded-2xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
+          <div ref={rescheduleCardRef} className="max-h-[90vh] w-full max-w-md overflow-hidden overflow-y-auto rounded border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#EFEAE0] px-4 py-3">
               <p className="flex items-center gap-2 text-base font-bold text-slate-800">
                 <CalendarIcon className="h-4 w-4 text-sky-600" />
@@ -566,8 +564,9 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">Date *</label>
                 {/* The consultant and time stay as they were: moving the day is the usual
-                    reschedule, and the server checks the pair against that day. */}
-                <MilkDateInput value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} data-testid="cal-modal-date" />
+                    reschedule, and the server checks the pair against that day. The
+                    calendar floats beside this card rather than inside it. */}
+                <MilkDateInput value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} besideRef={rescheduleCardRef} data-testid="cal-modal-date" />
               </div>
 
               {dayLoading ? (
@@ -579,15 +578,16 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
               ) : dayInfo && dayInfo.open ? (
                 <>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">CONSULTANT *</label>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Consultant *</label>
                     {dayInfo.head_physios.length === 0 ? (
                       <p className="text-xs text-amber-600">No CONSULTANTS assigned to this branch yet — ask HR / Super Admin.</p>
                     ) : (
                       <div data-testid="cal-modal-hp-select">
-                        {/* A dropdown that opens in place rather than in a portal: this popup
-                            is a fixed layer of its own, and a portalled menu would open
-                            underneath it. */}
+                        {/* The list floats in a portal over the popup (z-[70], above its
+                            z-[60]), so the card's scrolling neither clips it nor pushes the
+                            fields under it down. */}
                         <button
+                          ref={hpTriggerRef}
                           type="button"
                           onClick={() => setHpOpen((o) => !o)}
                           className={`flex h-10 w-full items-center gap-2 rounded-md border bg-white px-3 text-left text-sm transition-colors ${hpOpen ? "border-sky-300 ring-2 ring-sky-100" : "border-[#EFEAE0] hover:bg-[#F3EFE6]"}`}
@@ -595,7 +595,7 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                           data-testid="cal-modal-hp-trigger"
                         >
                           <span className={`min-w-0 flex-1 truncate ${selectedHP ? "font-medium text-slate-800" : "text-slate-400"}`}>
-                            {selectedHP ? selectedHP.full_name : "Select CONSULTANT"}
+                            {selectedHP ? selectedHP.full_name : "Select Consultant"}
                           </span>
                           {selectedHP && (
                             <span className={`shrink-0 text-xs font-semibold ${freeCountFor(selectedHP) > 0 ? "text-orange-700" : "text-slate-400"}`}>
@@ -604,8 +604,14 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                           )}
                           <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${hpOpen ? "rotate-180" : ""}`} />
                         </button>
-                        {hpOpen && (
-                          <div className="mt-1 max-h-60 overflow-y-auto rounded-md border border-[#EFEAE0] bg-white p-1 shadow-lg" role="listbox" data-testid="cal-modal-hp-list">
+                        {hpOpen && createPortal(
+                          <div
+                            ref={hpListRef}
+                            className="fixed z-[70] max-h-60 overflow-y-auto rounded border border-[#EFEAE0] bg-white p-1 shadow-xl"
+                            style={hpPos || { top: 0, left: 0, visibility: "hidden" }}
+                            role="listbox"
+                            data-testid="cal-modal-hp-list"
+                          >
                             {dayInfo.head_physios.map((hp) => {
                               const free = freeCountFor(hp);
                               const on = draft.doctor_id === hp.id;
@@ -628,7 +634,8 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                                 </button>
                               );
                             })}
-                          </div>
+                          </div>,
+                          document.body,
                         )}
                       </div>
                     )}
@@ -661,17 +668,10 @@ export const BranchCalendarPanel = ({ branchId, only }) => {
                   data-testid="cal-modal-notes"
                 />
               </div>
-              {editingId && (
-                <label className="flex items-center gap-2 text-sm text-slate-600">
-                  <input type="checkbox" checked={draft.cancelled} onChange={(e) => setDraft((p) => ({ ...p, cancelled: e.target.checked }))} data-testid="cal-modal-cancel-toggle" />
-                  Cancelled
-                </label>
-              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-[#EFEAE0] px-4 py-3">
-              <Button variant="outline" onClick={closeModal} disabled={saving} data-testid="cal-modal-dismiss">Cancel</Button>
-              <Button className="bg-sky-600 text-white hover:bg-sky-700" onClick={submit} disabled={saving || (dayInfo && !dayInfo.open && !(editingId && draft.cancelled))} data-testid="cal-modal-save">
+              <Button className="bg-sky-600 text-white hover:bg-sky-700" onClick={submit} disabled={saving || (dayInfo && !dayInfo.open)} data-testid="cal-modal-save">
                 {saving ? "Saving…" : "Confirm"}
               </Button>
             </div>

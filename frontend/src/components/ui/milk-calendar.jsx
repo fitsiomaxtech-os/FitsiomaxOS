@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clamp, useFloatingPosition } from "@/lib/use-floating";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -174,25 +176,52 @@ export const CenteredPicker = ({ title, onClose, testid, children }) => (
  * date sits beside other icon buttons and a labelled field reads as one more filter
  * rather than as the one control that opens a picker. The label is still carried on
  * `title`, and the chosen date colours the glyph so a filter in force is never silent.
+ *
+ * `besideRef` (a ref to a popup's card) floats the calendar outside that popup instead of
+ * hanging it off the field inside it: to the card's right where the screen has room, else
+ * its left, else (a phone) over the card under the field — always kept on screen.
  */
 export const MilkDateInput = ({
   value, onChange, min, max, disabled, className = "", accent = "amber",
   placeholder = "Select date", centered = false, title = "Select Date", iconOnly = false,
-  confirm = false, iconLeft = false, ...rest
+  confirm = false, iconLeft = false, besideRef, ...rest
 }) => {
   const [open, setOpen] = useState(false);
   // With `confirm`, a tapped day is only a draft until Confirm is pressed — a date that
   // books a patient in should not be set by a stray tap on the grid.
   const [draft, setDraft] = useState(value || "");
   const ref = useRef(null);
+  const floatRef = useRef(null);
+  const floating = !!besideRef && !centered;
 
   useEffect(() => { if (open) setDraft(value || ""); }, [open, value]);
+
+  const floatPos = useFloatingPosition(open && floating, floatRef, (w, h) => {
+    const gap = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const field = ref.current.getBoundingClientRect();
+    const card = besideRef.current?.getBoundingClientRect();
+    let left;
+    let top = field.top;
+    if (card && vw - card.right >= w + gap * 2) left = card.right + gap;
+    else if (card && card.left >= w + gap * 2) left = card.left - w - gap;
+    else {
+      left = field.left;
+      top = field.bottom + 4;
+      if (top + h > vh - gap) top = field.top - h - 4;
+    }
+    return { left: clamp(left, gap, vw - w - gap), top: clamp(top, gap, vh - h - gap) };
+  });
 
   useEffect(() => {
     // A centred dialog is dismissed by its own backdrop; a document listener here would
     // also fire for clicks inside it.
     if (!open || centered) return undefined;
-    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onDocClick = (e) => {
+      if (ref.current?.contains(e.target) || floatRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open, centered]);
@@ -251,6 +280,20 @@ export const MilkDateInput = ({
             </div>
           )}
         </CenteredPicker>
+      ) : floating ? (
+        // In a portal, so the popup's card cannot clip it; over the popup (z-[60]) and
+        // under the clock dialog (z-[80]).
+        createPortal(
+          <div
+            ref={floatRef}
+            className="fixed z-[75] w-max"
+            style={floatPos || { top: 0, left: 0, visibility: "hidden" }}
+            data-testid={`${rest["data-testid"] || "milk-date"}-float`}
+          >
+            <MilkCalendar value={value} min={min} max={max} accent={accent} onChange={pick} />
+          </div>,
+          document.body,
+        )
       ) : (
         // Right-aligned and above/below by container flow; w-max keeps the grid from being
         // squeezed by a narrow field.
