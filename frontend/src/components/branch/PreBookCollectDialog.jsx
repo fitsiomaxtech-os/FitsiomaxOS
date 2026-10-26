@@ -244,14 +244,12 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [advanceManual, setAdvanceManual] = useState(false);
   const [advanceTyped, setAdvanceTyped] = useState("");
   const [advanceAmount, setAdvanceAmount] = useState("");
-  // Each part is paid its own way, so each has its own Payment Mode.
-  const [consultDraft, setConsultDraft] = useState({ ...emptyTender });
-  const [advanceDraft, setAdvanceDraft] = useState({ ...emptyTender });
+  // One Payment Mode for both parts: the client pays once.
+  const [draft, setDraft] = useState({ ...emptyTender });
   const [saving, setSaving] = useState(false);
   // The receipts still to show, one per transaction, after the money is in.
   const [receipts, setReceipts] = useState([]);
-  const setConsultD = (patch) => setConsultDraft((d) => ({ ...d, ...patch }));
-  const setAdvanceD = (patch) => setAdvanceDraft((d) => ({ ...d, ...patch }));
+  const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
   // Services and Products > Consultations > Pre Book, with this branch's prices -- the
   // shelf kept for this popup alone. By name, so Reconsultation and its neighbours read in
@@ -322,11 +320,11 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       if (advanceNoteNow) payload.advance_note = advanceNoteNow;
     }
     if (!payload.consultation_item_id && !payload.advance_amount) { toast.error("Enter the consultation, the advance, or both"); return; }
-    // The consultation's mode goes as the top-level fields, the advance's as advance_payment.
-    const consultTender = payload.consultation_item_id ? tenderPayload(consultDraft) : null;
-    if (consultTender?.error) { toast.error(`Consultation: ${consultTender.error}`); return; }
-    const advanceTender = payload.advance_amount ? tenderPayload(advanceDraft) : null;
-    if (advanceTender?.error) { toast.error(`Advance: ${advanceTender.error}`); return; }
+    // The one mode goes as the top-level fields for the consultation and as advance_payment.
+    const tender = tenderPayload(draft);
+    if (tender.error) { toast.error(tender.error); return; }
+    const consultTender = payload.consultation_item_id ? tender : null;
+    const advanceTender = payload.advance_amount ? tender : null;
     if (consultTender) Object.assign(payload, consultTender.payload);
     if (advanceTender) payload.advance_payment = advanceTender.payload;
 
@@ -482,7 +480,6 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                 ) : (
                   <p className="text-[11px] text-slate-500">The whole price, or less to confirm the booking (the rest on the visit day).</p>
                 )}
-                <TenderFields draft={consultDraft} setDraft={setConsultD} testid="pre-book-consult" modes={PRE_BOOK_MODES} dropdown />
               </div>
             </Section>
           )}
@@ -520,10 +517,16 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                     placeholder="0"
                     testid="pre-book-advance-amount"
                   />
-                  <TenderFields draft={advanceDraft} setDraft={setAdvanceD} testid="pre-book-advance" modes={PRE_BOOK_MODES} dropdown />
                 </div>
               )}
             </Section>
+          )}
+
+          {/* ③ How the client paid, for both parts. */}
+          {!nothingLeft && (
+            <div className="px-3">
+              <TenderFields draft={draft} setDraft={setD} testid="pre-book" modes={PRE_BOOK_MODES} dropdown />
+            </div>
           )}
 
           {nothingLeft && (
@@ -531,15 +534,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
-          <button
-            type="button" onClick={onClose} disabled={saving}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:opacity-50"
-            data-testid="pre-book-cancel"
-          >
-            {nothingLeft ? "Close" : "Cancel"}
-          </button>
-          {!nothingLeft && (
+        {!nothingLeft && (
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
             <button
               type="button" onClick={submit} disabled={saving || !(total > 0)}
               className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
@@ -547,8 +543,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
             >
               {saving ? "Collecting..." : `Collect ${rupees(total)}`}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
