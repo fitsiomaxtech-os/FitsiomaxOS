@@ -2102,14 +2102,16 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" data-testid="physio-consultation-detail-modal">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl" data-testid="physio-consultation-detail-modal">
         {/* Plain white header, as the Pre-Sales detail popup uses. The day count keeps
             its emphasis by going sky on a tinted chip — on the old slate bar it was
-            carried by white-on-colour, which there is no colour left to do. */}
-        <div className="flex shrink-0 items-start justify-between gap-3 bg-white px-4 py-4 sm:px-6">
-          <div className="min-w-0">
+            carried by white-on-colour, which there is no colour left to do.
+            One row: the patient number rides beside the name rather than under it, and
+            the name gives way first on a narrow screen so the number stays readable. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-white px-4 py-3 sm:px-6" data-testid="physio-detail-header">
+          <div className="flex min-w-0 items-baseline gap-2">
             <h3 className="truncate text-lg font-bold text-slate-900">{lead.name}</h3>
-            {lead.patient_number ? <p className="truncate text-xs text-slate-500">{lead.patient_number}</p> : null}
+            {lead.patient_number ? <span className="shrink-0 whitespace-nowrap text-xs text-slate-500">· {lead.patient_number}</span> : null}
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <span className="whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-bold text-sky-700">
@@ -2522,21 +2524,6 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                 </div>
               </div>
             )}
-
-            {/* The note stays; the button that stood beside it has gone up to the tab
-                row. It describes the per-day Complete buttons in the list above, never
-                the whole-treatment one, so this is where it belongs. It no longer talks
-                about the date strip: the day that is open is the next one of the course,
-                not the one whose date happens to be picked behind the popup. */}
-            <div className="mt-4 border-t border-slate-200 pt-3">
-              <p className="text-[11px] text-slate-500">
-                Days run in order — only the day marked Opened can be completed. Finishing
-                it opens the day after it and drops the finished one to the bottom of this
-                list. Every {reviewEvery} days a CONSULTANT&apos;s review falls due — raise it
-                from the Review tab. It does not stop the days: the next one can still be
-                completed, and only Mark Treatment Complete waits for every review to be written.
-              </p>
-            </div>
           </div>
           )}
 
