@@ -12,7 +12,7 @@ from branch_calendar import is_leave
 from utils import PAST_MOVE_FIELD, now_iso, active_doctor_query, without_past_moves
 from deps import (
     v3_require_roles, v3_current_user, is_head_physio_role, consultants_serving_branch,
-    online_arm_practice, vertical_in_arm, lead_as_read_by, is_branch_admin_role,
+    online_arm_practice, vertical_in_arm, lead_as_read_by, is_branch_admin_role, is_pre_sales_role,
     works_org_wide,
 )
 from physio_scope import head_chief_lead_ids, user_branch_ids
@@ -2539,7 +2539,15 @@ def _transfer_scope_error(lead: dict, user: V3UserOut) -> Optional[str]:
 
     Phrased as the reason rather than a boolean for the same purpose as
     _transfer_block_reason above: the half worth reading is which of the two it was.
+
+    Pre-Sales got the same button on its leads table. A rep attached to a branch is held to
+    that branch, the same as their leads list is (see v3_leads); one with no branch, and
+    Sales Head's Master View, already work every branch's leads and may move any of them.
     """
+    if is_pre_sales_role(user.role):
+        if user.branch_id and lead.get("branch_id") != user.branch_id:
+            return "This lead is not at your branch. Only leads at your own branch can be transferred from here."
+        return None
     if not is_branch_admin_role(user.role):
         return None
     if not user.branch_id:
@@ -2552,7 +2560,7 @@ def _transfer_scope_error(lead: dict, user: V3UserOut) -> Optional[str]:
 @router.get("/leads/{lead_id}/transfer-eligibility")
 async def v3_transfer_eligibility(
     lead_id: str,
-    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin", "pre_sales")),
 ):
     """Whether this patient can be transferred, and what moving them would cost.
 
@@ -2691,7 +2699,7 @@ async def v3_branch_transfer_records(
 async def v3_transfer_branch(
     lead_id: str,
     payload: V3BranchTransferInput,
-    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin", "pre_sales")),
 ):
     """Move a patient to another branch.
 

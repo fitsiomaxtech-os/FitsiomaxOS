@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard } from "lucide-react";
+import { Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { CreateLeadModal, DEPARTMENT_OPTIONS } from "@/components/CreateLeadModa
 import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
+import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -899,6 +900,8 @@ export const PreSalesCRM = ({
   const [editing, setEditing] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  // The lead whose Branch Transfer dialog is open, from the table's Branch Transfer column.
+  const [transferLead, setTransferLead] = useState(null);
   const [loading, setLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
   const [activeTab, setActiveTab] = useState("leads"); // mobile bottom-nav only; desktop always shows Leads
@@ -1406,7 +1409,7 @@ export const PreSalesCRM = ({
                   {stageFilter === "Appointment" && <th className="truncate px-4 py-3" style={colWidth.branchStatus}>Branch Admin Status</th>}
                   {stageFilter === "RNR" && <th className="truncate px-4 py-3" style={colWidth.lastCall}>Last Call</th>}
                   <th className="truncate px-4 py-3" style={colWidth.created}>Created</th>
-                  <th className="truncate px-4 py-3" style={colWidth.assigned}>Assigned To</th>
+                  <th className="truncate px-4 py-3" style={colWidth.assigned}>Branch Transfer</th>
                   <th className="truncate px-2 py-3 text-center" style={colWidth.actions}>Actions</th>
                 </tr>
               </thead>
@@ -1513,6 +1516,29 @@ export const PreSalesCRM = ({
                       )}
                       <td className="truncate px-4 py-3 text-slate-500">{(l.created_at || "").slice(0, 10) || "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {/* Branch Admin's Branch Transfer, on the lead's own row: the same
+                            dialog, reason and confirm step, so a move from here is the same
+                            recorded transfer the branch would make. Marketing Master View
+                            only reads the funnel, so it gets the branch name instead.
+                            A lead with no branch yet has nothing to transfer out of, so it
+                            keeps the assign dropdown that gives it its first branch. */}
+                        {l.branch_id ? (
+                          role === "marketing_head" ? (
+                            <span className="block truncate text-xs font-semibold text-slate-700">{branchLabel(branches.find((b) => b.id === l.branch_id)) || "—"}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setTransferLead(l)}
+                              title={`Branch Transfer — now at ${branchLabel(branches.find((b) => b.id === l.branch_id)) || "this branch"}`}
+                              aria-label="Branch Transfer"
+                              className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                              data-testid={`presales-branch-transfer-${l.id}`}
+                            >
+                              <ArrowLeftRight className="h-4 w-4 shrink-0" />
+                              <span className="truncate">Transfer</span>
+                            </button>
+                          )
+                        ) : (
                         <BranchSelect
                           value={l.branch_id || ""}
                           options={branchOptions}
@@ -1531,6 +1557,7 @@ export const PreSalesCRM = ({
                           }}
                           testid={`presales-assign-branch-${l.id}`}
                         />
+                        )}
                       </td>
                       <td className="px-1 py-3 text-center">
                         <div className="flex items-center justify-center gap-0.5">
@@ -1817,6 +1844,16 @@ export const PreSalesCRM = ({
           lead={confirmDelete}
           onClose={() => setConfirmDelete(null)}
           onDeleted={() => { setConfirmDelete(null); load(); }}
+        />
+      )}
+
+      {transferLead && (
+        <LeadBranchTransferDialog
+          lead={transferLead}
+          fromBranchId={transferLead.branch_id}
+          onClose={() => setTransferLead(null)}
+          // The lead now sits at another branch, so refresh the list it came from.
+          onTransferred={() => { setTransferLead(null); load(); }}
         />
       )}
 
