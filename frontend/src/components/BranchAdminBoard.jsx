@@ -4756,8 +4756,6 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
     { key: "lead-details", label: "Lead Details", color: "bg-indigo-500" },
   ];
 
-  const avatarFirstChar = (lead.name?.trim()?.charAt(0) || "?").toUpperCase();
-
   // The follow-up the lead is actually on, for the Overview preview below. Newest first
   // and skipping the rescheduled ones, which is the same rule the Follow-Up tab draws
   // with — a booking that was moved is history, not the appointment somebody is waiting
@@ -4871,20 +4869,18 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             colours. Every chip in it had been picked to survive that background: white on
             20% white, a name with no colour of its own inheriting the band's. Those are
             set against the page now instead. */}
-        {/* On a phone the avatar, the name block and the buttons share one centre line,
-            and the padding is the same 16px the tabs and cards below start at. Top-aligned
-            buttons beside a centred avatar read as three things that missed each other. */}
-        <div className="relative border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
-          {/* One row: avatar, name, ID and stage chip side by side, the buttons on the
-              same centre line. On a phone that is two rows instead: name and buttons on
-              the first, ID and stage on the second — the chips run under the buttons too,
-              so they sit on one line rather than stacking in the narrow gap beside them.
+        {/* The name block and the buttons share one centre line, 8px above and below;
+            the side padding is the same 16px the tabs and cards below start at. */}
+        <div className="relative border-b border-slate-200 bg-white px-4 py-2 sm:px-5">
+          {/* One row: name, ID and stage chip side by side, the buttons on the same
+              centre line. On a phone that is two rows instead: name and buttons on the
+              first, ID and stage on the second — the chips run under the buttons too, so
+              they sit on one line rather than stacking in the narrow gap beside them.
               The wrappers are display:contents there so all of it lays out on one grid.
-              No avatar on a phone: the initial repeats the name beside it, and the width
-              is worth more to the name. */}
+              No avatar: the initial only repeated the name beside it, and the width is
+              worth more to the name. */}
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:flex sm:justify-between sm:gap-3">
             <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-3">
-              <span className="hidden h-9 w-9 shrink-0 sm:inline-flex items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:h-11 sm:w-11">{avatarFirstChar}</span>
               <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
                 <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
                 <div className="col-span-2 col-start-1 row-start-2 flex flex-wrap items-center gap-1.5">
