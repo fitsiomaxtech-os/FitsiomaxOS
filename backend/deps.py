@@ -268,7 +268,13 @@ def vertical_names_an_arm(vertical: str) -> bool:
 # pipeline.
 CONSULTANT_ROLES = frozenset({"consultant", "online_consultant"})
 LEGACY_CONSULTANT_ROLES = frozenset({"head_physio", "online_head_physio"})
-HEAD_PHYSIO_ROLES = CONSULTANT_ROLES | LEGACY_CONSULTANT_ROLES
+# Somebody who takes consultations AND treats — Consultant + Physiotherapist. One login,
+# both desks: it sits in HEAD_PHYSIO_ROLES and PHYSIO_ROLES alike, so every door that
+# opens for either opens for them, and they hold an expert record of each kind (one
+# branchless head_physio, one physio per branch). Each board resolves its own record by
+# profile_type, so the two never mix. See COMBINED_EXPERT_ROLES in routers/v3_hr.py.
+COMBINED_EXPERT_ROLES = frozenset({"consultant_physio"})
+HEAD_PHYSIO_ROLES = CONSULTANT_ROLES | LEGACY_CONSULTANT_ROLES | COMBINED_EXPERT_ROLES
 
 
 def is_head_physio_role(role: str) -> bool:
@@ -276,7 +282,12 @@ def is_head_physio_role(role: str) -> bool:
     return (role or "").strip().lower() in HEAD_PHYSIO_ROLES
 
 
-PHYSIO_ROLES = frozenset({"physio", "online_physio"})
+def is_combined_expert_role(role: str) -> bool:
+    """Whether a role works both the consultation desk and the Physio board."""
+    return (role or "").strip().lower() in COMBINED_EXPERT_ROLES
+
+
+PHYSIO_ROLES = frozenset({"physio", "online_physio"}) | COMBINED_EXPERT_ROLES
 
 
 def is_physio_role(role: str) -> bool:

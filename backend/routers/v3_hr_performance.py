@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from database import v3_col
 from deps import (
     v3_require_roles, is_physio_role, is_head_physio_role, is_branch_admin_role, is_pre_sales_role,
+    is_combined_expert_role,
 )
 from physio_scope import resolve_physio_doctor, resolve_consultant_doctor
 from routers.v3_client_reviews import COLLECTION as REVIEWS, split_legacy
@@ -98,6 +99,23 @@ def role_group(role: str) -> str:
     if is_pre_sales_role(role):
         return GROUP_PRE_SALES
     return GROUP_OTHER
+
+
+async def _consultant_work(user_id: str, role: str, name: str, start: str, end: str, raw_reviews: list):
+    """Completed consultations, completed reviews and consultant ratings in the period."""
+    doctor = await resolve_consultant_doctor(user_id, role)
+    ids = (doctor or {}).get("consultant_ids") or []
+    appts = await v3_col("appointments").find(
+        {"doctor_id": {"$in": ids}, "status": "completed"}, {"_id": 0, "slot_time": 1},
+    ).to_list(20000) if ids else []
+    reviews = await v3_col("reviews").find(
+        {"head_physio_id": {"$in": ids}, "status": "completed"},
+        {"_id": 0, "completed_at": 1, "review_date": 1},
+    ).to_list(20000) if ids else []
+    consults = sum(1 for a in appts if _in(a.get("slot_time"), start, end))
+    done_reviews = sum(1 for r in reviews if _in(r.get("completed_at") or r.get("review_date"), start, end))
+    ratings = await _ratings(ids, name, start, end, [r for r in raw_reviews if r.get("kind") == "consultant"])
+    return consults, done_reviews, ratings
 
 
 def _in(value: Any, start: str, end: str) -> bool:
@@ -196,22 +214,19 @@ async def staff_performance(
                 ).to_list(20000) if ids else []
                 work += sum(1 for s in done if _in(s.get("completed_at") or s.get("slot_time"), start, end))
             ratings = await _ratings(ids, name, start, end, [r for r in raw_reviews if r.get("kind") == "physio"])
+            # Consultant + Physiotherapist: listed with the Physios, and their consultation
+            # desk counted in too, so neither half of the job hides the other.
+            if is_combined_expert_role(account.get("role")):
+                sessions = work
+                consults, done_reviews, consult_ratings = await _consultant_work(user_id, account.get("role") or "", name, start, end, raw_reviews)
+                work = sessions + consults + done_reviews
+                work_sub = f"{sessions} sessions · {consults} consults · {done_reviews} reviews"
+                ratings = ratings + consult_ratings
 
         elif group == GROUP_CONSULTANT and user_id:
-            doctor = await resolve_consultant_doctor(user_id, account.get("role") or "")
-            ids = (doctor or {}).get("consultant_ids") or []
-            appts = await v3_col("appointments").find(
-                {"doctor_id": {"$in": ids}, "status": "completed"}, {"_id": 0, "slot_time": 1},
-            ).to_list(20000) if ids else []
-            reviews = await v3_col("reviews").find(
-                {"head_physio_id": {"$in": ids}, "status": "completed"},
-                {"_id": 0, "completed_at": 1, "review_date": 1},
-            ).to_list(20000) if ids else []
-            consults = sum(1 for a in appts if _in(a.get("slot_time"), start, end))
-            done_reviews = sum(1 for r in reviews if _in(r.get("completed_at") or r.get("review_date"), start, end))
+            consults, done_reviews, ratings = await _consultant_work(user_id, account.get("role") or "", name, start, end, raw_reviews)
             work = consults + done_reviews
             work_sub = f"{consults} consults · {done_reviews} reviews"
-            ratings = await _ratings(ids, name, start, end, [r for r in raw_reviews if r.get("kind") == "consultant"])
 
         elif group == GROUP_BRANCH:
             branches = [b for b in [account.get("branch_id"), *(account.get("branch_ids") or []), e.get("branch_id")] if b]

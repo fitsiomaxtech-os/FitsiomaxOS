@@ -1,7 +1,7 @@
 import re
 import uuid
 from database import db, v2_col, v3_col
-from deps import HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, is_hr_role, is_diet_role, is_zumba_role
+from deps import HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, COMBINED_EXPERT_ROLES, is_hr_role, is_diet_role, is_zumba_role
 from utils import PAST_MOVE_FIELD, now_iso, derive_branch_code, generate_patient_number, enquiry_created_at, find_enquiry_stamp
 from security import hash_password
 from constants import (
@@ -1637,11 +1637,15 @@ async def sync_head_physio_doctors() -> None:
     missing from the calendar they were hired for with nothing on screen to say why. The
     record is stamped "head_physio" whichever role it came from — see expert_profile_type."""
     linked_user_ids = set(await v3_col("doctors").distinct("user_id"))
+    # A Consultant + Physiotherapist already holds Physio records, so any record at all
+    # says nothing about whether they have their consultant one — asked by type for them.
+    consultant_user_ids = set(await v3_col("doctors").distinct("user_id", {"profile_type": "head_physio"}))
     cursor = v3_col("users").find(
         {"role": {"$in": sorted(HEAD_PHYSIO_ROLES)}, "is_active": True}, {"_id": 0}
     )
     async for user in cursor:
-        if user["id"] not in linked_user_ids:
+        has_record = user["id"] in (consultant_user_ids if user["role"] in COMBINED_EXPERT_ROLES else linked_user_ids)
+        if not has_record:
             await v3_col("doctors").insert_one({
                 "id": str(uuid.uuid4()),
                 "full_name": user["full_name"],

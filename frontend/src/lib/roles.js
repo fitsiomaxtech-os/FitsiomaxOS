@@ -50,6 +50,9 @@ export const ROLE_META = {
   // teal: the base hue says which kind of role this is, and the neighbouring one says it
   // is the online arm of it.
   online_physio: { label: "ONLINE PHYSIOTHERAPIST", classes: "border-blue-300 bg-blue-50 text-blue-700" },
+  // Both desks in one person, so it wears both: the Physio's cyan edge on the Consultant's
+  // amber. See COMBINED_EXPERT_ROLES in backend/deps.py.
+  consultant_physio: { label: "CONSULTANT + PHYSIOTHERAPIST", classes: "border-cyan-400 bg-amber-50 text-amber-700" },
   // Fixed slugs now rather than whatever was typed into Credentials — see DEFAULT_ROLES.
   nutritionist: { label: "NUTRITIONIST", classes: "border-lime-300 bg-lime-50 text-lime-700" },
   zumba: { label: "ZUMBA", classes: "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700" },

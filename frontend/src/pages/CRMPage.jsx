@@ -155,6 +155,7 @@ const ROLE_META = {
   online_head_physio: { label: "Online Consultant", icon: Stethoscope },
   physio: { label: "Physiotherapist", icon: Activity },
   online_physio: { label: "Online Physiotherapist", icon: Activity },
+  consultant_physio: { label: "Consultant + Physiotherapist", icon: Stethoscope },
   accountant: { label: "Accountant", icon: BadgeIndianRupee },
   hr_admin: { label: "HR Admin", icon: UserPlus },
   // Retired wording, rewritten by migrate_designation_roles in backend/seed.py. Kept so an
@@ -225,6 +226,11 @@ const BRANCH_ADMIN_ROLES = [
 ];
 const isBranchAdminRole = (role) => BRANCH_ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
 
+/** Consultant + Physiotherapist: one login on both boards, with a switch between them.
+ * Kept in step with COMBINED_EXPERT_ROLES in backend/deps.py. */
+const COMBINED_EXPERT_ROLES = ["consultant_physio"];
+const isCombinedExpertRole = (role) => COMBINED_EXPERT_ROLES.includes(String(role || "").trim().toLowerCase());
+
 /** Whether a role gets the Physio board.
  *
  * An Online Physio treats over video what a Physio treats on the floor — same patients,
@@ -235,7 +241,7 @@ const isBranchAdminRole = (role) => BRANCH_ADMIN_ROLES.includes(String(role || "
  * board. Kept in step with PHYSIO_ROLES in backend/deps.py — a role that passes here and
  * fails there would render the whole board and 403 every call in it.
  */
-const isPhysioRole = (role) => ["physio", "online_physio"].includes(String(role || "").trim().toLowerCase());
+const isPhysioRole = (role) => ["physio", "online_physio", ...COMBINED_EXPERT_ROLES].includes(String(role || "").trim().toLowerCase());
 
 /** Whether a role takes consultations — in the room or over video.
  *
@@ -248,7 +254,7 @@ const isPhysioRole = (role) => ["physio", "online_physio"].includes(String(role 
 const isHeadPhysioRole = (role) =>
   // The last two are retired slugs, listed for the same reason the backend still accepts
   // them: an account migrate_consultant_roles has not reached must still reach its board.
-  ["consultant", "online_consultant", "head_physio", "online_head_physio"].includes(
+  ["consultant", "online_consultant", "head_physio", "online_head_physio", ...COMBINED_EXPERT_ROLES].includes(
     String(role || "").trim().toLowerCase()
   );
 
@@ -507,6 +513,17 @@ export const CRMPage = ({ auth, onLogout }) => {
   const [showSuperAdminMenu, setShowSuperAdminMenu] = useState(false);
 
   const role = auth.user.role;
+  // Which board a Consultant + Physiotherapist is on. Remembered per login, so they come
+  // back to the desk they left; Consultation when there is nothing remembered.
+  const deskKey = `fitsiomax.desk.${auth.user.id}`;
+  const [combinedDesk, setCombinedDesk] = useState(() => {
+    try { return localStorage.getItem(deskKey) === "physio" ? "physio" : "consultant"; } catch { return "consultant"; }
+  });
+  const switchCombinedDesk = (desk) => {
+    setCombinedDesk(desk);
+    setShowProfile(false);
+    try { localStorage.setItem(deskKey, desk); } catch { /* remembered for this visit only */ }
+  };
   // A hand-created HR role can carry any slug, so fall back to the board's own name
   // rather than printing "hr_manager Master View" in the header.
   // A hand-created role's slug is not a title — "diet_manage Master View" is what the
@@ -893,8 +910,11 @@ export const CRMPage = ({ auth, onLogout }) => {
   // "Marketing Head", not "Pre Sales".
   const showMarketingHeadBoard = role === "marketing_head";
   const showBranchBoard = isBranchAdminRole(role);
-  const showHeadPhysioBoard = isHeadPhysioRole(role);
-  const showPhysioBoard = isPhysioRole(role);
+  // A Consultant + Physiotherapist passes both predicates, and is shown one board at a
+  // time — whichever desk the switch above the board is on.
+  const isCombined = isCombinedExpertRole(role);
+  const showHeadPhysioBoard = isHeadPhysioRole(role) && (!isCombined || combinedDesk === "consultant");
+  const showPhysioBoard = isPhysioRole(role) && (!isCombined || combinedDesk === "physio");
   const showDietBoard = isDietRole(role);
   const showAccountantBoard = role === "accountant";
   const showZumbaBoard = isZumbaRole(role);
@@ -1458,6 +1478,31 @@ export const CRMPage = ({ auth, onLogout }) => {
           </Suspense>
         ) : (
         <>
+
+        {isCombined && (
+          <div className="flex w-full gap-1 rounded-[4px] border border-slate-200 bg-white p-1 shadow-sm sm:w-fit" role="tablist" aria-label="Desk" data-testid="combined-desk-switch">
+            {[
+              { key: "consultant", label: "Consultation", icon: Stethoscope },
+              { key: "physio", label: "Physiotherapy", icon: Activity },
+            ].map((d) => {
+              const active = combinedDesk === d.key;
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => switchCombinedDesk(d.key)}
+                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-[4px] px-4 py-2 text-sm font-medium transition sm:flex-none ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                  data-testid={`combined-desk-${d.key}`}
+                >
+                  <d.icon className="h-4 w-4" />
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Below the nav, not around it: the tabs and the role bar stay on screen
             while a board chunk is fetched, so switching boards reads as the board

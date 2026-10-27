@@ -205,6 +205,7 @@ const MULTI_BRANCH_ROLE_LABELS = {
   online_consultant: "ONLINE CONSULTANT",
   physio: "Physio",
   online_physio: "Online Physio",
+  consultant_physio: "CONSULTANT + PHYSIO",
   // Retired, still mapped for an account migrate_consultant_roles has not reached.
   head_physio: "CONSULTANT",
   online_head_physio: "ONLINE CONSULTANT",
@@ -1295,8 +1296,8 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
                 <ViewRow label="Father's Name" value={e.father_name} />
                 <ViewRow label="Mother's Name" value={e.mother_name} />
               </ViewSection>
-              {/* Notes rides with Personal because that is the tab the Edit dialog
-                  writes it on — the read and the write stay on the same stop. */}
+              {/* Notes rides with Personal. The Edit dialog no longer asks for it, so this
+                  only shows notes written before that field came out. */}
               {e.notes && (
                 <ViewSection title="Notes">
                   <p className="whitespace-pre-wrap text-xs text-slate-700">{e.notes}</p>
@@ -1793,7 +1794,6 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <div>
             <h3 className="text-base font-semibold">{employee ? "Edit Employee" : "Add New Employee"}</h3>
-            <p className="text-xs text-slate-500">Fill in employee details across all sections below.</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="hr-emp-modal-close"><X className="h-4 w-4" /></button>
         </div>
@@ -1813,16 +1813,17 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   record you identify a person by rather than read. The hidden input is
                   driven by the buttons: a bare file input cannot be styled and prints the
                   chosen filename beside itself, which here duplicates the preview. */}
-              <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
                 <EmployeeAvatar
                   employee={{ full_name: form.full_name, photo_url: photoPreview || form.photo_url }}
-                  size={72}
+                  size={36}
                   className="ring-2 ring-white"
                 />
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-slate-600">Profile Photo</p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">JPG, PNG or WEBP · up to 5MB</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="min-w-0 text-xs font-medium text-slate-600">
+                  Profile Photo <span className="ml-1 text-[11px] font-normal text-slate-400">JPG, PNG or WEBP · up to 5MB</span>
+                </p>
+                <div className="ml-auto">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       ref={photoInputRef}
                       type="file"
@@ -1876,7 +1877,6 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               <Field label="Marital Status"><Select value={form.marital_status} onChange={(v) => set("marital_status", v)} options={["", "Single", "Married", "Divorced", "Widowed"]} testid="hr-emp-marital" /></Field>
               <Field label="Father's Name"><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} data-testid="hr-emp-father" /></Field>
               <Field label="Mother's Name"><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} data-testid="hr-emp-mother" /></Field>
-              <Field label="Notes"><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="h-20 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-notes" /></Field>
             </div>
           )}
           {tab === "employment" && (
@@ -1884,9 +1884,9 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               <Field label="Employee Code"><Input value={form.employee_code} onChange={(e) => set("employee_code", e.target.value)} placeholder="Auto-generated" data-testid="hr-emp-code" /></Field>
               <Field label="Department *"><Select value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></Field>
               <Field label="Designation *"><Select value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></Field>
-              <Field label="Joining Date"><MilkDateInput centered title="Joining Date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} data-testid="hr-emp-joining" /></Field>
-              <Field label="Reporting To"><Input value={form.reporting_to} onChange={(e) => set("reporting_to", e.target.value)} data-testid="hr-emp-reporting" /></Field>
-              <Field label="Status"><Select value={form.status} onChange={(v) => set("status", v)} options={["active", "left", "on_leave"]} testid="hr-emp-status" /></Field>
+              {/* Joining Date, Reporting To and Status are not asked here. Joining Date is
+                  stamped when the employee's login is created (create_user_account); all
+                  three still ride along in the form, so an edit saves them back unchanged. */}
               {/* None of the three is required. Work Type and Service are the two halves of
                   a branch's vertical — mode and practice — and Branch narrows on both, the
                   same split Branches & Verticals itself uses. Branch still waits for a Work
@@ -4499,12 +4499,10 @@ const LockedBranches = ({ ids, branches, testid }) => {
 
 const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
   const [employees, setEmployees] = useState([]);
-  const [branches, setBranches] = useState([]);
   const [form, setForm] = useState({ employee_id: "", full_name: "", email: "", role: "", branch_id: "", branch_ids: [], password: "", confirm: "" });
   const isMultiBranchRole = Boolean(multiBranchLabel(form.role));
   const { resolve, resolving: resolvingRole } = useDesignationRole(meta, reloadMeta);
   useEffect(() => { hrEmployees({ status: "active" }).then(setEmployees).catch((e) => console.warn("[load failed]", e?.message || e)); }, []);
-  useEffect(() => { getBranches().then(setBranches).catch((e) => console.warn("[load failed]", e?.message || e)); }, []);
 
   const resolveRoleFrom = async (label) => {
     setForm((p) => ({ ...p, role: "" }));
@@ -4581,7 +4579,7 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
           there is room to read the rest at a size closer to the page around it. */}
       <div className="max-h-[100vh] w-full max-w-md space-y-3 overflow-y-auto rounded-lg bg-white p-5 shadow-xl" style={{ zoom: 0.9 }}>
         <div className="flex items-center justify-between">
-          <div><h3 className="text-base font-semibold">Create User Account</h3><p className="text-xs text-slate-500">Create login credentials for an employee.</p></div>
+          <h3 className="text-base font-semibold">Create User Account</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="hr-create-user-close"><X className="h-4 w-4" /></button>
         </div>
         {/* Required now, and first for the same reason: it answers Name, Email, Role and
@@ -4596,9 +4594,6 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
             login carrying its own copy is how the two came to disagree. */}
         <Field label="Name"><Input placeholder="Filled from the employee" value={form.full_name} readOnly disabled className="bg-slate-50" data-testid="hr-create-user-name" /></Field>
         <Field label="Username (Email) *"><Input placeholder="user@company.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="hr-create-user-email" /></Field>
-        <Field label="Branch (optional)">
-          <LockedBranches ids={form.branch_ids} branches={branches} testid="hr-create-user-branch" />
-        </Field>
         <Field label="Password *"><PasswordInput placeholder="Min 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} testid="hr-create-user-pwd" /></Field>
         <Field label="Confirm Password *"><PasswordInput placeholder="Confirm password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} testid="hr-create-user-confirm" /></Field>
         <div className="flex gap-2 pt-2"><Button variant="outline" onClick={onClose} className="flex-1" data-testid="hr-create-user-cancel">Cancel</Button><Button onClick={submit} className="flex-1 bg-sky-600 hover:bg-sky-700" data-testid="hr-create-user-submit">Create User</Button></div>

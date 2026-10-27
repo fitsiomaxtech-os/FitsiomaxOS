@@ -6,8 +6,8 @@ import re
 import uuid
 
 from database import v3_col
-from utils import now_iso, live_branch_query
-from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES
+from utils import now_iso, clinic_today, live_branch_query
+from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, is_combined_expert_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES, COMBINED_EXPERT_ROLES
 from security import hash_password
 from email_utils import SmtpNotConfigured, send_email, smtp_status
 from schemas.v3 import V3UserOut
@@ -76,7 +76,7 @@ DEFAULT_ROLES = [
     # Admins
     "branch_admin", "online_physio_admin", "online_fitness_admin",
     # Doctors
-    "consultant", "physio", "nutritionist", "online_consultant", "online_physio", "zumba",
+    "consultant", "physio", "consultant_physio", "nutritionist", "online_consultant", "online_physio", "zumba",
 ]
 
 # The structure HR works to: every department, and the designations under it. Seeded
@@ -91,7 +91,7 @@ STRUCTURE = {
     "Admins": ["Branch Admin", "Online Physio Admin", "Online Fitness Admin"],
     "Sales Department": ["Sales Head", "Pre- Sales"],
     "Doctors ( Dr.'s )": [
-        "Consultant", "Physiotherapist", "Nutritionist",
+        "Consultant", "Physiotherapist", "Consultant + Physiotherapist", "Nutritionist",
         "Online Consultant", "Online Physiotherapist", "Zumba",
     ],
 }
@@ -142,7 +142,7 @@ def unique_designations(names) -> list:
 # A Nutrition Coach belongs to a branch and holds a calendar there, exactly like a Physio,
 # so hiring one has to create the matching `doctors` record or they log in to a board with
 # no calendar behind it and nothing explains why.
-MULTI_BRANCH_ROLES = {"physio", "online_physio", "nutrition_coach"}
+MULTI_BRANCH_ROLES = {"physio", "online_physio", "nutrition_coach", *COMBINED_EXPERT_ROLES}
 # Roles that hold ONE expert record, belonging to no branch.
 #
 # This is a statement about the shape of the record, and it used to be a statement about
@@ -156,7 +156,11 @@ MULTI_BRANCH_ROLES = {"physio", "online_physio", "nutrition_coach"}
 # Taken from the family in deps.py rather than restated, so a role added there is hired
 # correctly here without a second edit — restating it is how `consultant` came to be a role
 # nobody could be hired into as one.
-SINGLE_CALENDAR_ROLES = set(HEAD_PHYSIO_ROLES)
+#
+# Consultant + Physiotherapist is left out: their per-branch Physio records go through
+# MULTI_BRANCH_ROLES like any Physio's, and their one branchless consultant record is
+# added beside them by _ensure_consultant_record.
+SINGLE_CALENDAR_ROLES = set(HEAD_PHYSIO_ROLES) - COMBINED_EXPERT_ROLES
 
 
 def holds_calendar_per_branch(role: str) -> bool:
@@ -256,6 +260,7 @@ DESIGNATION_ROLE_ALIASES = {
     "business_development_executive": "business_dev",
     "physiotherapist": "physio",
     "online_physiotherapist": "online_physio",
+    "consultant_physiotherapist": "consultant_physio",
 }
 
 
@@ -825,6 +830,28 @@ async def create_employee(payload: EmployeeCreate, _: V3UserOut = Depends(v3_req
     return doc
 
 
+async def _ensure_consultant_record(user_id: str, full_name: str) -> None:
+    """The one branchless consultant record a Consultant + Physiotherapist holds.
+
+    Their Physio records are made per branch the way any Physio's are; this is the other
+    half, so the same person is on the Consultant Calendar and in the consultant pickers.
+    Made only when they have none, so a role change back and forth never stacks a second.
+    """
+    if await v3_col("doctors").count_documents({"user_id": user_id, "profile_type": "head_physio"}):
+        return
+    await v3_col("doctors").insert_one({
+        "id": str(uuid.uuid4()),
+        "full_name": full_name or "",
+        "profile_type": "head_physio",
+        "branch_id": None,
+        "specialization": "",
+        "slots": [],
+        "slot_details": [],
+        "user_id": user_id,
+        "created_at": now_iso(),
+    })
+
+
 async def _sync_expert_branches(user: dict, branch_ids: List[str]) -> None:
     """Make a multi-branch desk's expert records say exactly which branches they cover.
 
@@ -1261,7 +1288,7 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
     if existing:
         raise HTTPException(status_code=409, detail="Email already in use")
     if payload.employee_id:
-        emp = await v3_col("employees").find_one({"id": payload.employee_id}, {"_id": 0, "id": 1})
+        emp = await v3_col("employees").find_one({"id": payload.employee_id}, {"_id": 0, "id": 1, "joining_date": 1})
         if not emp:
             raise HTTPException(status_code=404, detail="Linked employee not found")
     user = {
@@ -1279,6 +1306,13 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
         "created_at": now_iso(),
     }
     await v3_col("users").insert_one(user.copy())
+    # The day their login is made is the day they joined. The Add Employee form stopped
+    # asking for it, so it is stamped here instead — only when blank, so a date already on
+    # the record (an older employee, or one set by Recruitment) is never moved.
+    if payload.employee_id and not emp.get("joining_date"):
+        await v3_col("employees").update_one(
+            {"id": payload.employee_id}, {"$set": {"joining_date": clinic_today(), "updated_at": now_iso()}},
+        )
     if payload.role != "super_admin" and (is_diet_role(payload.role) or is_rehab_role(payload.role)):
         # A diet or rehab role belongs to a branch and holds a calendar there, exactly
         # like a Physio. Both are stamped with their own profile_type by
@@ -1331,6 +1365,8 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
                 "user_id": user["id"],
                 "created_at": now_iso(),
             })
+    if is_combined_expert_role(payload.role):
+        await _ensure_consultant_record(user["id"], payload.full_name)
     safe = {k: v for k, v in user.items() if k != "password"}
     return safe
 
@@ -1472,6 +1508,8 @@ async def _apply_role(user_id: str, role: str) -> bool:
                     "user_id": user_id,
                     "created_at": now_iso(),
                 })
+        if is_combined_expert_role(role):
+            await _ensure_consultant_record(user_id, user.get("full_name"))
     return True
 
 
