@@ -11186,23 +11186,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <>
                             {FeeSteps}
 
-                            {/* What is still owed and when it is due, across every fee that
-                                has a balance — the cards above are what collect them. */}
-                            {allBalances && (
-                              <div className={`mt-2 rounded-lg border px-3 py-2 ${allBalances.overdue ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`} data-testid="cons-partial-balance-summary">
-                                {/* Two rows: what the owing fees came to, and what is still
-                                    owed on them. The fee row above names only the balance. */}
-                                <div className="flex items-center justify-between" data-testid="cons-partial-balance-total">
-                                  <span className="flex h-6 w-28 items-center justify-center rounded-[2px] bg-slate-100 px-2 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">Total</span>
-                                  <span className="flex h-6 w-28 items-center justify-center rounded-[2px] bg-slate-100 px-2 text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200">Rs.{Number(allBalances.quoted).toLocaleString("en-IN")}</span>
-                                </div>
-                                <div className="mt-1.5 flex items-center justify-between" data-testid="cons-partial-balance-due">
-                                  <span className={`flex h-6 w-28 items-center justify-center whitespace-nowrap rounded-[2px] px-2 text-[11px] font-semibold ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-700 ring-rose-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>Balance{allBalances.overdue ? " · Overdue" : ""}</span>
-                                  <span className={`flex h-6 w-28 items-center justify-center rounded-[2px] px-2 text-xs font-bold tabular-nums ring-1 ${allBalances.overdue ? "bg-rose-100 text-rose-800 ring-rose-200" : "bg-amber-100 text-amber-800 ring-amber-200"}`}>Rs.{Number(allBalances.total).toLocaleString("en-IN")}</span>
-                                </div>
-                              </div>
-                            )}
-
+                            {/* No Total / Balance summary under the fee cards: the part-paid
+                                row already names the balance beside Collect Balance. */}
                             {treatmentFeePaid && (
                               <>
                                 {/* The act itself lives in the view, not in the tab that opens
