@@ -15,7 +15,7 @@ import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDa
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { QuickDateFilterBar } from "@/components/QuickDateFilterBar";
+import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
@@ -879,10 +879,23 @@ export const PreSalesCRM = ({
     ["marketing_head", "super_admin", "sales_head"].includes(role) ? "all" : "New Leads"
   ));
   const [sourceFilter, setSourceFilter] = useState("");
-  // Opens on today, matching the Analytics pane. Held as the same { key, label, from, to }
-  // any pick produces, so the Today pill reads as selected on arrival rather than the board
-  // showing a filtered set with nothing on screen saying it is filtered.
-  const [dateFilter, setDateFilter] = useState(() => ({ key: "today", label: "Today", ...presalesRangeFor("today") }));
+  // The range row and the calendar are two separate controls, each with its own state, so
+  // pressing Today lights Today and leaves the calendar showing nothing of its own.
+  // The row opens on today, matching the Analytics pane, held as the same
+  // { key, label, from, to } any pick produces so the Today pill reads as selected on
+  // arrival. The calendar opens empty; null means it is not narrowing anything.
+  const [quickDate, setQuickDate] = useState(() => ({ key: "today", label: "Today", ...presalesRangeFor("today") }));
+  const [customDate, setCustomDate] = useState(null);
+  // Picking a date on the calendar sets the row back to All: the overlap of Today and
+  // Sep 01 is an empty list, and the date just picked is plainly the one being asked for.
+  // One direction only, the same as Branch Admin -- pressing a range in the row leaves the
+  // calendar as it was, and the x on the calendar clears the calendar alone.
+  const applyCustomDate = (next) => {
+    setCustomDate(next);
+    if (next) setQuickDate(null);
+  };
+  // What the list is actually narrowed to: the overlap of the two.
+  const dateFilter = useMemo(() => intersectDateFilters(quickDate, customDate), [quickDate, customDate]);
   const [editing, setEditing] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -1287,16 +1300,17 @@ export const PreSalesCRM = ({
 
           Built from the same QuickDateFilterBar that board uses rather than restyling
           this board's own pills, so the two cannot drift apart. It emits the
-          { key, label, from, to } shape dateFilter already holds, and null for All. The
-          calendar is the Custom: the ranges hide their own Custom trigger (showCustom)
-          because the icon on the right opens the same popover. */}
+          { key, label, from, to } shape quickDate holds, and null for All. The calendar
+          on the right is its own control with its own state (customDate), so a pressed
+          range never shows up in it; the ranges hide their own Custom trigger (showCustom)
+          because that icon is the custom pick. */}
       <div className="flex flex-wrap items-center gap-3" data-testid="presales-toolbar">
         <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leads by name, email, phone..." className="h-10 pl-9" data-testid="presales-search" />
         </div>
         <div className="shrink-0">
-          <QuickDateFilterBar value={dateFilter} onChange={setDateFilter} testid="presales-leads-range" inline showCustom={false} />
+          <QuickDateFilterBar value={quickDate} onChange={setQuickDate} testid="presales-leads-range" inline showCustom={false} />
         </div>
         {isSuperAdminMasterView && branchFilterInToolbar && branches.length > 0 && (
           <BranchScopeSelects
@@ -1330,7 +1344,7 @@ export const PreSalesCRM = ({
         {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
             still say what each does. Same order and colours as Branch Leads. */}
         <div className="ml-auto flex shrink-0 items-center gap-3">
-          <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="presales-date-filter" centered iconOnly />
+          <DateFilterPopover value={customDate} onChange={applyCustomDate} testid="presales-date-filter" centered iconOnly />
           <Button
             onClick={load}
             disabled={loading}
@@ -1566,7 +1580,7 @@ export const PreSalesCRM = ({
               className="h-8 min-w-0 flex-1 border-0 p-0 focus-visible:ring-0"
               data-testid="presales-mobile-search"
             />
-            <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="presales-mobile-date-filter" centered iconOnly />
+            <DateFilterPopover value={customDate} onChange={applyCustomDate} testid="presales-mobile-date-filter" centered iconOnly />
             <Button
               onClick={load}
               disabled={loading}
@@ -1667,8 +1681,8 @@ export const PreSalesCRM = ({
           <>
           {/* Same range row the desk gets, above the stage bar it narrows. */}
           <PreSalesRangePills
-            value={dateFilter}
-            onChange={setDateFilter}
+            value={quickDate}
+            onChange={setQuickDate}
             testid="presales-mobile-leads-range"
             handledBy={showHandledByFilter ? handledByFilter : undefined}
             onHandledByChange={showHandledByFilter ? setHandledByFilter : undefined}
