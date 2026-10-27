@@ -4533,9 +4533,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // ---- Collect Fee (Branch Admin) — at the Consultation Visit stage ----
   // The amount is the assigned package_price and is not Branch Admin's to retype
   // (see `lockAmount` on FeeAmountEntry) — a discount agreed in the popup is the one
-  // thing that moves it. If the Head Physio's decision was "Consultation + Treatment"
-  // and the Treatment Fee hasn't been paid yet, its draft opens alongside this one so
-  // both fees are collected together in one popup.
+  // thing that moves it. This popup takes the Consultation Fee alone: a "Consultation +
+  // Treatment" patient's Treatment Fee is taken afterwards, from the Collect beside it on
+  // the Fee Collected panel, in the Collect Treatment Fee popup of its own.
   //
   // `leadArg` is for the Consultation Fee button on the table's rows, which opens this on a
   // patient who is not selected yet: `setSelectedLead` has not landed by the time this runs,
@@ -4579,17 +4579,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             { amount: "", due_date: "" },
           ],
     });
-    if (lead.consultation_decision === "consultation_treatment" && lead.treatment_fee_paid == null) {
-      openTreatmentFeeDraft(lead);
-    }
   };
 
   // ---- Collect Treatment Fee (Branch Admin) — for "Consultation + Treatment"
   // patients only. The Treatment Package and its price are locked in from what the
-  // Head Physio already chose at Move to Admin — neither is editable here. Normally
-  // opened together with the Consultation Fee draft above; also independently
-  // reachable from the Fee Collected panel as a fallback if it wasn't collected
-  // together the first time.
+  // Head Physio already chose at Move to Admin — neither is editable here. Opened on its
+  // own, from the Treatment Fee's Collect on the Fee Collected panel, once the
+  // Consultation Fee popup has taken that fee and closed.
   // `leadArg` is for the Treatment Fee button on the Consultant tab's rows, which opens
   // this on a patient who is not selected yet: `setSelectedLead` has not landed by the time
   // this runs, so the row hands over the lead it already holds rather than reading a
@@ -4640,9 +4636,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   }
 
   // Jumps straight to the Payment Schedule view (skipping the mode-picker click)
-  // for a lead whose Partial Payment plan already exists — used by both the
-  // combined "Collect Fees" popup and the Fee Collected side panel once
-  // hasPendingInstallments is true.
+  // for a lead whose Partial Payment plan already exists — used by the Fee Collected
+  // side panel while an installment is still unpaid.
   const openPartialScheduleDraft = () => {
     openTreatmentFeeDraft();
     setTreatmentConfirmDraft({ ...BLANK_TREATMENT_TENDER, tenders: [], balance_partial: false, picking_mode: false });
@@ -4771,12 +4766,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   };
 
   const savedInstallments = selectedLead?.treatment_fee_payment_details?.installments || [];
-  // Keyed off the schedule itself, not the mode that was recorded against it — the same
-  // rule the server reads it by. A Treatment Fee collected short in cash leaves an
-  // unpaid balance row exactly like a Partial Payment plan does, and gating this on
-  // mode === "partial" ticked that patient green with the balance still owed and no way
-  // to collect it from this board.
-  const hasPendingInstallments = savedInstallments.some((i) => !i.paid);
   // A plan agreed up front names its rows First/Second/…; a schedule that exists only
   // because a collection came up short is a payment and a balance, and calling that
   // balance "Second Payment" hides what it is.
@@ -5077,8 +5066,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setApplyingPreBook(null);
   }
 
-  // Actually calls the API. Leaves the Treatment Fee section (if present)
-  // untouched and open for its own button.
+  // Actually calls the API, then closes the popup.
   async function submitConsultationFee(payload) {
     // Which package this money is for, attached here rather than in each of the five
     // branches above -- this is the one place that calls the API, so it is the one place
@@ -5110,14 +5098,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       ? (selectedLead.package_paid != null ? "Consultation Fee payment schedule updated" : "Consultation Fee payment schedule saved")
       : (selectedLead.package_paid != null ? "Consultation Fee payment updated" : "Consultation Fee collected"));
     setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => l.id === res.lead.id ? res.lead : l) }));
-    // Only the Consultation Fee closes. A Treatment Fee being collected in the same popup
-    // keeps it open, now unlocked, so it can be taken straight after; with nothing else on
-    // the popup it closes with the fee. The receipt sits above either way, on its own
-    // button, and the patient stays open behind it.
-    if (!(treatmentFeeDraft && res.lead?.treatment_fee_paid == null)) {
-      setCollectFeeDraft(null);
-      setTreatmentFeeDraft(null);
-    }
+    // The popup closes with the fee, Treatment Fee owed or not: that one is taken later,
+    // from its own Collect on the Fee Collected panel, rather than rolled on to here. The
+    // receipt sits above on its own button, and the patient stays open behind it.
+    setCollectFeeDraft(null);
     setSelectedLead(res.lead);
     showReceipt(() => makeReceipt({
       lead: selectedLead, payload,
@@ -5351,10 +5335,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     submitTreatmentFee(splitPayload);
   }
 
-  // Submits the Treatment Fee — used both from the combined popup (its own button,
-  // Consultation Fee handled separately above) and from the Fee Collected panel's
-  // standalone fallback (where collectFeeDraft is always null, so this always
-  // closes the popup on success). Pass a payload directly for Cash/UPI/Card (built
+  // Submits the Treatment Fee from the Collect Treatment Fee popup the Fee Collected
+  // panel opens, and closes it on success. Pass a payload directly for Cash/UPI/Card (built
   // above); omit it for Cheque/Partial Payment, which build their own from the
   // inline fields via buildTreatmentFeePayload.
   async function submitTreatmentFee(directPayload) {
@@ -7161,7 +7143,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         const feesAtStake = picked.reduce((sum, l) => sum + totalPaid(l), 0);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !bulkDeleting) setBulkDeleteConfirming(false); }}>
-            <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5 shadow-2xl" data-testid="cons-bulk-delete-modal">
+            <div className="w-full max-w-md space-y-3 rounded-[4px] bg-white p-5 shadow-2xl" data-testid="cons-bulk-delete-modal">
               <p className="text-sm font-semibold text-rose-700">Delete {picked.length} patient{picked.length === 1 ? "" : "s"} permanently?</p>
               <p className="text-xs text-slate-600">
                 Erases every one of them and everything on file — appointments, sessions, fees, their spot on Branch Leads, the Consultant queue and Physio's board. This cannot be undone.
@@ -7850,7 +7832,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
               At Consultation Booked (bookedDetail) it is 514 wide, and on Overview its
               content ends at about 235 tall; other tabs grow it up to the same 660 cap. */}
-          <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5 ${bookedDetail
+          <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5 ${bookedDetail
             ? "max-w-[514px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
             : compactDetail
             ? "max-w-[565px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
@@ -8333,7 +8315,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             onClick={(e) => { if (e.target === e.currentTarget) setRecordDetailsOpen(false); }}
                             data-testid="cons-case-record-details"
                           >
-                            <div className="flex max-h-[85dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5">
+                            <div className="flex max-h-[85dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5">
                               <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-5 py-3">
                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                                   <ClipboardList className="h-4 w-4" />
@@ -9288,7 +9270,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           onClick={(e) => { if (e.target === e.currentTarget) setAddonPicker(null); }}
                           data-testid="cons-decision-picker-modal"
                         >
-                          <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+                          <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-[4px] bg-white shadow-xl">
                             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
                               <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: a.tone }}>
                                 <Icon aria-hidden className="h-4 w-4" /> {a.label}
@@ -11519,10 +11501,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               )}
             </div>
 
-            {/* Collect Fee popup (Branch Admin) — Consultation Visit stage. When the
-                Head Physio's decision is "Consultation + Treatment" and the Treatment
-                Fee isn't paid yet, its section renders in this same popup, opening once
-                the Consultation Fee above it has been collected. */}
+            {/* Collect Fee popup (Branch Admin) — Consultation Visit stage. The Consultation
+                Fee alone: it closes once that is collected, and a "Consultation + Treatment"
+                patient's Treatment Fee is taken from its own Collect on the Fee Collected
+                panel, in the Collect Treatment Fee popup below. */}
             {collectFeeDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-collect-fee-modal">
                 {/* 4px corners throughout: the card and its sections here, and the inputs,
@@ -11531,16 +11513,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl [&_.rounded-lg]:!rounded-[4px] [&_.rounded-md]:!rounded-[4px]">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-slate-800">
-                      {treatmentFeeDraft ? "Collect Fees" : selectedLead.package_paid != null ? "Update Consultation Fee Payment" : "Collect Consultation Fee"}
+                      {selectedLead.package_paid != null ? "Update Consultation Fee Payment" : "Collect Consultation Fee"}
                     </p>
-                    <button onClick={() => { setCollectFeeDraft(null); setTreatmentFeeDraft(null); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-collect-fee-close"><X className="h-4 w-4" /></button>
+                    <button onClick={() => setCollectFeeDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-collect-fee-close"><X className="h-4 w-4" /></button>
                   </div>
 
                   <div className="space-y-3">
-                  {/* Collected, the Consultation Fee closes out of the popup while the
-                      Treatment Fee beside it is still to take — what stays is what is
-                      still owed. A balance on it keeps it open: that is money to take too. */}
-                  {!(selectedLead.package_paid != null && treatmentFeeDraft && !feeBalances.consultation) && (
                   <div className={`space-y-3 rounded-[4px] border p-3 ${selectedLead.package_paid != null ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}>
                     <p className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider ${selectedLead.package_paid != null ? "text-emerald-700" : "text-sky-700"}`}>
                       <Stethoscope className="h-3.5 w-3.5" /> Consultation Fee
@@ -11687,158 +11665,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </>
                     )}
                   </div>
-                  )}
-
-                  {/* Not shown at all until the Consultation Fee is in: the Treatment Fee
-                      cannot be taken before it, and a greyed box saying so is one more
-                      thing on the popup with nothing to press. */}
-                  {treatmentFeeDraft && selectedLead.package_paid != null && (
-                    <div className={`space-y-3 rounded-[4px] border p-3 ${
-                      selectedLead.treatment_fee_paid != null && !hasPendingInstallments ? "border-emerald-200 bg-emerald-50"
-                      : "border-indigo-200 bg-indigo-50/40"
-                    }`}>
-                      <p className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider ${
-                        selectedLead.treatment_fee_paid != null && !hasPendingInstallments ? "text-emerald-700"
-                        : "text-indigo-700"
-                      }`}>
-                        <Dumbbell className="h-3.5 w-3.5" /> Treatment Fee
-                      </p>
-                      {hasPendingInstallments ? (
-                        <div data-testid="cons-treatment-fee-partial-pending">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-xs text-slate-500">Treatment Fee</span>
-                            <span className="font-semibold text-slate-800">
-                              Rs.{selectedLead.session_package_price}
-                              <span className="ml-1 capitalize text-indigo-600">({isPlannedSchedule ? "partial" : selectedLead.treatment_fee_payment_mode})</span>
-                            </span>
-                          </div>
-                          {/* Names the money still owed rather than only counting rows:
-                              a balance left by a short collection is one unpaid row, and
-                              "1 of 2 collected" does not say how much is outstanding. */}
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            {isPlannedSchedule
-                              ? `${savedInstallments.filter((i) => i.paid).length} of ${savedInstallments.length} installments collected.`
-                              : `Rs.${savedInstallments.filter((i) => i.paid).reduce((sum, i) => sum + (i.amount || 0), 0)} collected · balance Rs.${savedInstallments.filter((i) => !i.paid).reduce((sum, i) => sum + (i.amount || 0), 0)} still due.`}
-                          </p>
-                          {/* A planned schedule opens the schedule; a balance left by a
-                              short collection has one row to take, so it goes straight to
-                              that row's own Collect popup — which offers every payment
-                              mode, the balance being no more tied to how the first part
-                              was paid than any other collection is. */}
-                          <Button
-                            size="sm"
-                            className="mt-2 bg-indigo-600 text-xs hover:bg-indigo-700"
-                            onClick={isPlannedSchedule
-                              ? openPartialScheduleDraft
-                              : () => openPartialCollectPopup(savedInstallments.findIndex((i) => !i.paid))}
-                            data-testid="cons-open-partial-schedule"
-                          >
-                            {isPlannedSchedule ? "View Payment Schedule" : "Collect Balance"}
-                          </Button>
-                        </div>
-                      ) : selectedLead.treatment_fee_paid != null ? (
-                        <div data-testid="cons-treatment-fee-locked">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-xs text-slate-500">Treatment Fee</span>
-                            <span className="font-semibold text-slate-800">
-                              Rs.{selectedLead.session_package_price}
-                              <span className="ml-1 capitalize text-emerald-600">({selectedLead.treatment_fee_payment_mode})</span>
-                            </span>
-                          </div>
-                          <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                            <CheckCircle2 className="h-3 w-3" /> Already Collected
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-500">Treatment Package (chosen by CONSULTANT)</label>
-                        <div className="flex h-9 items-center rounded-[4px] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700" data-testid="cons-treatment-fee-item-readonly">
-                          {selectedLead.session_package_name || "—"}{selectedLead.session_package_sessions ? ` · ${selectedLead.session_package_sessions} sessions` : ""}
-                        </div>
-                      </div>
-                      {/* A package with no catalogue price is priced here by the branch,
-                          and the fee is collected on that figure. */}
-                      {selectedLead.session_package_manual && selectedLead.visit_type !== "home" && (() => {
-                        // One session's amount, multiplied out over the package.
-                        const pkgSessions = Number(selectedLead.session_package_sessions) || 0;
-                        const savedRate = selectedLead.session_package_price != null && pkgSessions
-                          ? Math.round((selectedLead.session_package_price / pkgSessions) * 100) / 100
-                          : null;
-                        const typedRate = Number(pkgAmountDraft) || 0;
-                        return (
-                        <div className="rounded-[4px] border border-amber-200 bg-amber-50 p-2.5" data-testid="cons-treatment-fee-manual">
-                          <label className="mb-1 block text-[11px] font-semibold text-amber-800">
-                            Per Session Amount (₹){selectedLead.session_package_price != null
-                              ? ` · set at Rs.${savedRate ?? selectedLead.session_package_price}/session = Rs.${selectedLead.session_package_price}`
-                              : " · enter to continue"}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min="1"
-                              value={pkgAmountDraft}
-                              onChange={(e) => setPkgAmountDraft(e.target.value)}
-                              placeholder={savedRate != null ? String(savedRate) : "Amount for 1 session"}
-                              className="h-9 bg-white"
-                              data-testid="cons-treatment-fee-manual-amount"
-                            />
-                            <Button
-                              size="sm"
-                              className="h-9 shrink-0 bg-amber-600 text-xs text-white hover:bg-amber-700"
-                              disabled={savingPkgAmount || !(Number(pkgAmountDraft) > 0)}
-                              onClick={async () => {
-                                setSavingPkgAmount(true);
-                                try {
-                                  const res = await setSessionPackageAmount(selectedLead.id, Number(pkgAmountDraft));
-                                  takeLead(res.lead);
-                                  setPkgAmountDraft("");
-                                  toast.success("Package amount saved");
-                                } catch (err) {
-                                  toast.error(err?.response?.data?.detail || "Could not save the amount");
-                                }
-                                setSavingPkgAmount(false);
-                              }}
-                              data-testid="cons-treatment-fee-manual-save"
-                            >
-                              {savingPkgAmount ? "Saving..." : "Save"}
-                            </Button>
-                          </div>
-                          {typedRate > 0 && pkgSessions > 0 && (
-                            <p className="mt-1.5 text-[11px] font-semibold text-amber-900" data-testid="cons-treatment-fee-manual-total">
-                              Rs.{typedRate} × {pkgSessions} sessions = Rs.{Math.round(typedRate * pkgSessions * 100) / 100}
-                            </p>
-                          )}
-                        </div>
-                        );
-                      })()}
-                      {(selectedLead.visit_type === "home" || !(selectedLead.session_package_manual && selectedLead.session_package_price == null)) && (
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-500">Payment Mode</label>
-                        <PaymentModeSelect
-                          value={treatmentFeeDraft.payment_mode}
-                          options={STANDARD_PAYMENT_MODES}
-                          onChange={chooseTreatmentPaymentMode}
-                          testId="cons-treatment-fee-mode"
-                        />
-                        <p className="mt-1 text-[11px] text-slate-400">Pick a payment method to open its own Collect popup.</p>
-                      </div>
-                      )}
-                        </>
-                      )}
-                    </div>
-                  )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Collect Treatment Fee popup (Branch Admin) — fallback: only reachable on
-                its own from the Fee Collected panel if it wasn't collected together
-                with the Consultation Fee the first time. */}
+            {/* Collect Treatment Fee popup (Branch Admin) — opened from the Treatment Fee's
+                Collect on the Fee Collected panel, after the Consultation Fee popup has
+                taken that fee and closed. 4px corners throughout, as that popup has. */}
             {treatmentFeeDraft && !collectFeeDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-treatment-fee-modal">
-                <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl [&_.rounded-lg]:!rounded-[4px] [&_.rounded-md]:!rounded-[4px]">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-slate-800">{selectedLead.treatment_fee_paid != null ? "Update Treatment Fee Payment" : "Collect Treatment Fee"}</p>
                     <button onClick={() => setTreatmentFeeDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-treatment-fee-close"><X className="h-4 w-4" /></button>
@@ -11849,6 +11686,62 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       {selectedLead.session_package_name || "—"}{selectedLead.session_package_sessions ? ` · ${selectedLead.session_package_sessions} sessions` : ""}
                     </div>
                   </div>
+                  {/* A package with no catalogue price is priced here by the branch,
+                      and the fee is collected on that figure. */}
+                  {selectedLead.session_package_manual && selectedLead.visit_type !== "home" && (() => {
+                    // One session's amount, multiplied out over the package.
+                    const pkgSessions = Number(selectedLead.session_package_sessions) || 0;
+                    const savedRate = selectedLead.session_package_price != null && pkgSessions
+                      ? Math.round((selectedLead.session_package_price / pkgSessions) * 100) / 100
+                      : null;
+                    const typedRate = Number(pkgAmountDraft) || 0;
+                    return (
+                    <div className="rounded-[4px] border border-amber-200 bg-amber-50 p-2.5" data-testid="cons-treatment-fee-manual">
+                      <label className="mb-1 block text-[11px] font-semibold text-amber-800">
+                        Per Session Amount (₹){selectedLead.session_package_price != null
+                          ? ` · set at Rs.${savedRate ?? selectedLead.session_package_price}/session = Rs.${selectedLead.session_package_price}`
+                          : " · enter to continue"}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={pkgAmountDraft}
+                          onChange={(e) => setPkgAmountDraft(e.target.value)}
+                          placeholder={savedRate != null ? String(savedRate) : "Amount for 1 session"}
+                          className="h-9 bg-white"
+                          data-testid="cons-treatment-fee-manual-amount"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-9 shrink-0 bg-amber-600 text-xs text-white hover:bg-amber-700"
+                          disabled={savingPkgAmount || !(Number(pkgAmountDraft) > 0)}
+                          onClick={async () => {
+                            setSavingPkgAmount(true);
+                            try {
+                              const res = await setSessionPackageAmount(selectedLead.id, Number(pkgAmountDraft));
+                              takeLead(res.lead);
+                              setPkgAmountDraft("");
+                              toast.success("Package amount saved");
+                            } catch (err) {
+                              toast.error(err?.response?.data?.detail || "Could not save the amount");
+                            }
+                            setSavingPkgAmount(false);
+                          }}
+                          data-testid="cons-treatment-fee-manual-save"
+                        >
+                          {savingPkgAmount ? "Saving..." : "Save"}
+                        </Button>
+                      </div>
+                      {typedRate > 0 && pkgSessions > 0 && (
+                        <p className="mt-1.5 text-[11px] font-semibold text-amber-900" data-testid="cons-treatment-fee-manual-total">
+                          Rs.{typedRate} × {pkgSessions} sessions = Rs.{Math.round(typedRate * pkgSessions * 100) / 100}
+                        </p>
+                      )}
+                    </div>
+                    );
+                  })()}
+                  {(selectedLead.visit_type === "home" || !(selectedLead.session_package_manual && selectedLead.session_package_price == null)) && (
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-slate-500">Payment Mode</label>
                     <PaymentModeSelect
@@ -11859,15 +11752,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     />
                     <p className="mt-1 text-[11px] text-slate-400">Pick a payment method to open its own Collect popup.</p>
                   </div>
+                  )}
                 </div>
               </div>
             )}
 
             {/* Collect {Mode} Payment — each of the 5 Treatment Fee payment modes gets
                 its own dedicated popup here (opened by chooseTreatmentPaymentMode),
-                rather than sharing one form with a mode selector. Layered above
-                whichever of the two Treatment Fee popups (combined or standalone) is
-                currently open. */}
+                rather than sharing one form with a mode selector. Layered above the
+                Collect Treatment Fee popup. */}
             {treatmentConfirmDraft && treatmentFeeDraft && (() => {
               // When this collection only covers some sessions, the price to measure a
               // discount against is what *those* sessions cost, not the whole package's —
@@ -11890,7 +11783,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const tenderCount = treatmentTenders.length + (picking ? 0 : 1);
               return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-treatment-fee-confirm-modal">
-                  <div className="max-h-[85dvh] w-full max-w-xl space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl sm:max-h-[90vh]">
+                  <div className="max-h-[85dvh] w-full max-w-xl space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl sm:max-h-[90vh]">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         {mode === "partial"
@@ -12306,7 +12199,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 guessed. Above the Collect popup it interrupts (z-[90] > z-[70]). */}
             {treatmentBalanceChoice && treatmentFeeDraft && (
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" data-testid="cons-treatment-fee-balance-modal">
-                <div className="w-full max-w-sm space-y-3 rounded-xl bg-white p-4 shadow-2xl">
+                <div className="w-full max-w-sm space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-slate-800">Balance Amount</p>
                     <button
@@ -12386,7 +12279,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const modeLabel = INSTALLMENT_PAYMENT_MODES.find((m) => m.value === mode)?.label || "";
               return (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" data-testid="cons-partial-collect-modal">
-                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         Collect {partialCollectDraft.fee && partialCollectDraft.fee !== "treatment"
@@ -12706,7 +12599,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const settlesNow = SETTLED_NOW_MODES.includes(mode);
               return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-rehab-fee-modal">
-                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         {mode === "partial" ? "Rehab Fee Payment Schedule" : mode === "cheque" ? "Collect Rehab Fee by Cheque" : "Collect Rehab Fee"}
@@ -12870,7 +12763,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 consultation, often after treatment has started. */}
             {dietFeeDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid={`cons-${dietFeeCfg.testid}-modal`}>
-                <div className="max-h-[85vh] w-full max-w-md space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                <div className="max-h-[85vh] w-full max-w-md space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                       <Salad className="h-4 w-4 text-orange-500" />
@@ -12978,7 +12871,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const settlesNow = SETTLED_NOW_MODES.includes(mode);
               return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-diet-fee-confirm-modal">
-                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         {mode === "partial" ? `${dietFeeCfg.label} Payment Schedule` : mode === "cheque" ? `${dietFeeCfg.label} by Cheque` : `Confirm ${dietFeeCfg.label}`}
@@ -13146,7 +13039,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 booked into a time they haven't published. */}
             {showDietModal && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-3 sm:p-4" data-testid="cons-diet-modal">
-                <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                       <Salad className="h-4 w-4 text-orange-500" /> Diet Appointment
@@ -13243,7 +13136,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 days that coach has actually published can be picked. */}
             {showDietModal && showDietSlotPicker && coachPick && (
               <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-2" data-testid="cons-diet-slot-picker-modal">
-                <div className="flex h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="flex h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
                   <div className="flex flex-wrap items-center justify-between gap-2.5 bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-white sm:flex-nowrap sm:gap-3 sm:px-6 sm:py-4">
                     <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-base font-bold text-white sm:h-12 sm:w-12 sm:text-lg">
@@ -13553,7 +13446,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               let day = 1;
               return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) setFeeInspect(false); }} data-testid="cons-fee-inspect-popup">
-                  <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                         <IndianRupee className="h-4 w-4 text-sky-600" />
@@ -13696,7 +13589,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               ];
               return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) setOnlineMenu(null); }} data-testid="cons-online-menu">
-                  <div className="w-full max-w-sm space-y-3 rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="w-full max-w-sm space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                         <Video className="h-4 w-4 text-sky-600" />
@@ -13740,7 +13633,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const label = (m) => (m === "online" ? "Online" : "Offline");
               return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-swap-modal">
-                  <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-4 shadow-2xl">
+                  <div className="w-full max-w-md space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                         <ArrowLeftRight className="h-4 w-4 text-sky-600" />
@@ -13833,7 +13726,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
             {showPhysioModal && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-physio-modal">
-                <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-4 shadow-2xl">
+                <div className="w-full max-w-md space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                       {/* Cyan and the Activity mark on rehab, the same pair the Rehab panel
@@ -14026,7 +13919,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 has actually published are offered. */}
             {showPhysioModal && showSlotPicker && physioPick && (
               <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3 sm:p-6" data-testid="cons-slot-picker-modal">
-                <div className="flex h-[calc(100vh-1.5rem)] max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:h-[84vh] sm:max-h-[84vh]">
+                <div className="flex h-[calc(100vh-1.5rem)] max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:h-[84vh] sm:max-h-[84vh]">
                   {/* Wraps on a phone: the title keeps the first line with the close button
                       and the status badge drops to its own beneath. Side by side the badge
                       refuses to shrink and squeezes the name into a one-word column. */}
@@ -14489,7 +14382,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 pointed at a calendar nothing on screen is showing any more. */}
             {showPhysioModal && showSlotPicker && manageSlot && (
               <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-3 sm:p-6" data-testid="cons-slot-manage-modal">
-                <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
                   <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-[13px] font-semibold text-slate-900 sm:text-[15px]" data-testid="cons-slot-manage-title">
@@ -14718,7 +14611,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* Schedule Follow-Up popup */}
             {rehabBookDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" data-testid="cons-rehab-book-modal">
-                <div className="w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-xl">
+                <div className="w-full max-w-sm overflow-hidden rounded-[4px] bg-white shadow-xl">
                   <div className="flex items-center justify-between bg-cyan-600 px-4 py-3 text-white">
                     <p className="flex items-center gap-2 text-sm font-semibold"><HeartPulse className="h-4 w-4" /> Rehab Consultation</p>
                     <button onClick={() => setRehabBookDraft(null)} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="cons-rehab-book-close">
@@ -14777,7 +14670,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
             {followUpDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" data-testid="cons-followup-modal">
-                <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="w-full max-w-md overflow-hidden rounded-[4px] bg-white shadow-2xl">
                   <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
                     <div className="flex items-center gap-2">
                       <Bell className="h-5 w-5" />
@@ -14848,7 +14741,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 agreed with the patient, typed. */}
             {rescheduleDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" data-testid="cons-reschedule-modal">
-                <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
                   <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
                     <div className="flex min-w-0 items-center gap-2">
                       <Bell className="h-5 w-5 shrink-0" />
@@ -14958,7 +14851,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           next. z-[70] to clear the lead popup it opens above. */}
       {decisionReceipt && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4" onClick={(e) => { if (e.target === e.currentTarget) setDecisionReceipt(null); }} data-testid="cons-decision-receipt">
-          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-sm overflow-hidden rounded-[4px] bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-3 bg-emerald-600 px-4 py-3 text-white">
               <div className="flex min-w-0 items-center gap-2.5">
                 <CheckCircle2 className="h-7 w-7 shrink-0" />
