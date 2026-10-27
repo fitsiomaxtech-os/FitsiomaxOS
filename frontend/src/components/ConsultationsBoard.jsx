@@ -2701,7 +2701,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, compactTable = false, branchColumn = false, consultantBranchColumn = false, exportRef }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, squareTable = false, compactTable = false, branchColumn = false, consultantBranchColumn = false, exportRef }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -7420,7 +7420,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
       {/* Table */}
       {showDeskTable && (
-      <Card className={`overflow-hidden border-slate-200 ${mobileCards ? "hidden sm:block" : ""}`} style={zoomedTable ? { zoom: 0.9 } : undefined}>
+      <Card className={`overflow-hidden border-slate-200 ${squareTable ? "rounded-[4px]" : ""} ${mobileCards ? "hidden sm:block" : ""}`} style={zoomedTable ? { zoom: 0.9 } : undefined}>
+        {/* squareTable: 4px corners, for the Consultant's own board. */}
         {/* The rows scroll, the header does not. Capping the height here is what makes
             that possible: a sticky header sticks to its nearest scrolling ancestor, and
             with the old overflow-x-auto alone that ancestor grew with the table, so there

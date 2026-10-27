@@ -152,6 +152,8 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  *  - `ledgerCards` — the summary cards drawn as the finance boards' ledger card (Branch
  *    Admin's Zumba strip): arrow in the corner, the picked one filled in its colour.
  *  - `rowArrow` — an Action column with an arrow at the end of the consultations table.
+ *  - `squareTable` — every table on the board (Consultations, Weekly Review, House Visit,
+ *    All) with 4px corners rather than the Card's rounded-xl; the Consultant's own board.
  *  - `oneLineRows` — that table's rows on one line: the name alone, no plan under it, and
  *    the appointment as "Sat, 12 Sept - 3:15 PM" rather than stacked.
  *  - `branchColumn` — that table gains Patient Branch: a Consultant working several branches
@@ -173,7 +175,7 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * as the host's grey list cards instead, and a tap opens that list on its own screen with a
  * back bar above it, like the host's stage stacks.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, summaryCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false }) => {
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, summaryCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false, squareTable = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   // phoneStack only: a work tab's list is open on the phone, rather than the card list.
   const [phoneListOpen, setPhoneListOpen] = useState(false);
@@ -806,6 +808,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               reloadToken={refreshTick}
               // House-visit patients are worked from the House Visit tab instead.
               homeVisitScope="exclude"
+              squareTable={squareTable}
               rowArrow={rowArrow}
               oneLineRows={oneLineRows}
               branchColumn={branchColumn}
@@ -824,6 +827,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               onAutoOpened={() => setAutoOpenReview(null)}
               reloadToken={refreshTick}
               homeVisitScope="exclude"
+              squareTable={squareTable}
             />
           </div>
 
@@ -873,6 +877,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               onAutoOpened={clearHvAutoOpenLead}
               reloadToken={refreshTick}
               homeVisitScope="only"
+              squareTable={squareTable}
               rowArrow={rowArrow}
               oneLineRows={oneLineRows}
               branchColumn={branchColumn}
@@ -891,6 +896,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
               onAutoOpened={() => setHvAutoOpenReview(null)}
               reloadToken={refreshTick}
               homeVisitScope="only"
+              squareTable={squareTable}
             />
           </div>
 
@@ -976,7 +982,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                 })}
               </div>
 
-              <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
+              <div className={`hidden overflow-hidden border border-slate-200 bg-white sm:block ${squareTable ? "rounded-[4px]" : "rounded-xl"}`}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] text-sm">
                   <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">

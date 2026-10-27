@@ -146,7 +146,7 @@ const StageBadge = ({ stage }) => (
  * an overdue review that fell out of Today would sit in a list nobody opens, which is
  * exactly how a patient's week-one review gets missed.
  */
-export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, selectedDate, dateRange = null, onCountChange, onRowsChange, autoOpenReviewId, onAutoOpened, reloadToken, homeVisitScope = null }) => {
+export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, selectedDate, dateRange = null, onCountChange, onRowsChange, autoOpenReviewId, onAutoOpened, reloadToken, homeVisitScope = null, squareTable = false }) => {
   const [data, setData] = useState({ today: [], upcoming: [], overdue: [], completed: [], today_date: "" });
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState(null); // { review, head_physio_notes, head_physio_suggestions }
@@ -455,7 +455,7 @@ export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, select
             })}
           </div>
 
-          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block" data-testid="hp-review-desktop">
+          <div className={`hidden overflow-hidden border border-slate-200 bg-white sm:block ${squareTable ? "rounded-[4px]" : "rounded-xl"}`} data-testid="hp-review-desktop">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-sm">
                 <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
