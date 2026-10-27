@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Megaphone,
+  Menu,
   MoreHorizontal,
   Salad,
   Settings,
@@ -386,8 +387,11 @@ const forgetStoredSuperAdminView = () => {
   }
 };
 
-const SUPER_ADMIN_BOTTOM_KEYS = ["dashboard", "operations", "hr"];
-const SUPER_ADMIN_BOTTOM_TABS = SUPER_ADMIN_TABS.filter((t) => SUPER_ADMIN_BOTTOM_KEYS.includes(t.key));
+// The phone bar's direct stops, in the bar's own order -- Finance after HR Admin, though
+// the desk strip has it before -- so they are read off this list, not filtered out of
+// SUPER_ADMIN_TABS in its order.
+const SUPER_ADMIN_BOTTOM_KEYS = ["dashboard", "operations", "hr", "finance"];
+const SUPER_ADMIN_BOTTOM_TABS = SUPER_ADMIN_BOTTOM_KEYS.map((k) => SUPER_ADMIN_TABS.find((t) => t.key === k));
 // Everything not on the bar, with nothing held back. CI/CD ROOTS used to be excluded here
 // because Pre-Sales reaches it through its own Manage Stages button — but it is a peer tab
 // on the desktop strip, and leaving it out was the one destination a phone could not reach.
@@ -1340,11 +1344,14 @@ export const CRMPage = ({ auth, onLogout }) => {
           </div>
         )}
 
-        {/* Phone equivalent of the tab strip above: three direct destinations plus a
+        {/* Phone equivalent of the tab strip above: four direct destinations plus a
             "More" sheet for the rest — same pattern as the Physio/Branch Admin/Pre-Sales
-            bottom navs, and the same slot: glyph in a chip, its name small beneath. */}
+            bottom navs, and the same slot: glyph in a chip, its name small beneath.
+
+            Its slate at 40% (Super Admin's bar alone), with the page behind it blurred so a
+            row scrolling under it does not muddle the icons. */}
         {showSuperAdminBoard && (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] md:hidden" data-testid="super-admin-bottom-nav">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600/40 bg-slate-500/40 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" data-testid="super-admin-bottom-nav">
             <div className="flex items-stretch justify-around">
               {SUPER_ADMIN_BOTTOM_TABS.map((t) => {
                 const Icon = t.icon;
@@ -1359,10 +1366,11 @@ export const CRMPage = ({ auth, onLogout }) => {
                   />
                 );
               })}
+              {/* The menu-bar glyph (three lines) rather than the dots: More opens a menu. */}
               <BottomNavTab
                 onClick={() => setShowSuperAdminMenu((v) => !v)}
                 aria-expanded={showSuperAdminMenu}
-                icon={<MoreHorizontal className="h-6 w-6" />}
+                icon={<Menu className="h-6 w-6" />}
                 label="More"
                 active={(!showProfile && SUPER_ADMIN_MORE_TABS.some((t) => isSuperAdminTabActive(superAdminView, t.key))) || showSuperAdminMenu}
                 data-testid="super-admin-nav-more"
