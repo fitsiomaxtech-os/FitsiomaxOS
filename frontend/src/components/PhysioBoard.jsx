@@ -125,7 +125,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
   const slotFor = (key) => (activeTab === key ? toolbarSlot : null);
 
   return (
-    <div className="space-y-3 pb-20 md:pb-0" data-testid="physio-board-root">
+    <div className={`${toolbarLead ? "space-y-4" : "space-y-3"} pb-20 md:pb-0`} data-testid="physio-board-root">
       {/* Tabs on the left, the open tab's search and date filter on the right. The
           strip is desk-only — a phone gets the fixed bar at the end of this file —
           but the toolbar slot is not, so on a phone this row is just the toolbar,
@@ -136,7 +136,10 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
           than being dropped on desktop: an outstanding count is the reason to look
           at a tab you aren't already on — on the selected pill it goes white-on-indigo,
           since a slate badge on a filled tab reads as disabled. */}
-      <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 md:border-b md:border-slate-200 md:pb-2 ${activeTab === "profile" ? "hidden md:flex" : "flex"}`} data-testid="physio-view-bar">
+      {/* With a lead (Consultant + Physiotherapist), the bar is drawn exactly as the
+          Consultation board's tool bar is — white strip, p-2, no rule, 16px to what follows
+          — so the desk switch and the buttons stand still when the person changes desk. */}
+      <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 ${toolbarLead ? "bg-white p-2" : "md:border-b md:border-slate-200 md:pb-2"} ${activeTab === "profile" ? "hidden md:flex" : "flex"}`} data-testid="physio-view-bar">
       {/* `contents` without a lead, so the bar lays out exactly as it always has. */}
       <div className={toolbarLead ? "flex min-w-0 flex-wrap items-center gap-2 md:gap-4" : "contents"}>
       {toolbarLead}
@@ -170,7 +173,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
         })}
       </div>
       </div>
-        <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-2 md:pb-1.5" data-testid="physio-view-toolbar" />
+        <div ref={setToolbarSlot} className={`flex flex-wrap items-center gap-2 ${toolbarLead ? "" : "md:pb-1.5"}`} data-testid="physio-view-toolbar" />
       </div>
 
       <div style={{ display: activeTab === "treatment" ? "block" : "none" }}>
