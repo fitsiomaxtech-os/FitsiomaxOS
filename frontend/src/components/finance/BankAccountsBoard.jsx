@@ -375,11 +375,11 @@ const BankViewDialog = ({ account, onClose, onEdit }) => (
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-4 py-4 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:px-6" data-testid="finance-bank-view-footer">
         <button
           type="button"
           onClick={onClose}
-          className="h-11 rounded-lg border border-slate-200 px-6 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          className="h-10 rounded-lg border border-slate-200 px-6 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           data-testid="finance-bank-view-done"
         >
           Close
@@ -387,7 +387,7 @@ const BankViewDialog = ({ account, onClose, onEdit }) => (
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
           data-testid="finance-bank-view-edit"
         >
           <Pencil className="h-4 w-4" /> Edit
