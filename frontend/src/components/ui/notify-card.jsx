@@ -46,6 +46,10 @@ import { ChevronRight } from "lucide-react";
  *
  * `display` puts other text in the inline box than the count -- Zumba's money cards show
  * their amount there, while `count` (the customers behind it) still decides the dot.
+ *
+ * `showCount={false}` on an inline row drops the box and the dot with it: icon, label and
+ * chevron alone, for a row that opens a section rather than counting anything (HR Admin >
+ * Staff on a phone).
  */
 export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeColor, active = false, onClick, testid, showCount = true, count: badgeCount, dot = false, inline = false, display }) => {
   const count = Number(badgeCount ?? value) || 0;
@@ -70,14 +74,16 @@ export const NotifyCard = ({ label, value, icon: Icon, color = "#0284c7", badgeC
             for every box, wide enough for three digits, so 0 and 123 sit in the same shape;
             the full figure is shown (no 99+), and only a fourth digit widens it. Only the
             fill is faded (to 35%); the number stays solid, in a darker orange to read on it. */}
-        <span
-          className="inline-flex h-7 min-w-[3rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium tabular-nums text-orange-700"
-          data-testid={testid ? `${testid}-badge` : undefined}
-        >
-          {display ?? count}
-        </span>
+        {showCount && (
+          <span
+            className="inline-flex h-7 min-w-[3rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium tabular-nums text-orange-700"
+            data-testid={testid ? `${testid}-badge` : undefined}
+          >
+            {display ?? count}
+          </span>
+        )}
         <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />
-        {live && (
+        {live && showCount && (
           <span aria-hidden className="absolute right-2.5 top-2 h-2.5 w-2.5 rounded-full bg-red-500 motion-safe:animate-dot-pop" data-testid={testid ? `${testid}-dot` : undefined} />
         )}
       </button>

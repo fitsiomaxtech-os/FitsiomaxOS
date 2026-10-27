@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff, UserX, ChevronLeft, Menu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,18 +67,138 @@ const STAFF_TABS = [
   { key: "quotes", label: "Quotes", icon: Quote },
 ];
 
+/**
+ * The bar over whatever a phone row opened -- a Dashboard figure, a Staff section: the way
+ * back to the rows, the name of what is open (with its count in the rows' orange box when
+ * it has one), and a menu to jump to another without going back first. Branch Admin's
+ * Review bar, as both of those tabs wear it. Phone only.
+ *
+ * `items` are what the menu offers, as { key, label, icon, value? }. An item whose `value`
+ * is undefined has nothing to count and draws no number.
+ *
+ * Sticks just under the board header, whose height is the role's own (Branch Admin's is
+ * 61px, Super Admin's taller), so it is measured as the bar mounts rather than assumed.
+ */
+const PhoneBackBar = ({ current, items, onBack, onPick, backLabel, testid }) => {
+  const [top, setTop] = useState(0);
+  useLayoutEffect(() => {
+    setTop(document.querySelector('[data-testid="role-board-header"]')?.getBoundingClientRect().height || 0);
+  }, []);
+  return (
+    <div
+      className="sticky z-10 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:hidden"
+      style={{ top }}
+      data-testid={`${testid}-back`}
+    >
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+        aria-label={backLabel}
+        data-testid={`${testid}-back-btn`}
+      >
+        <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+        <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{current.label}</span>
+        {current.value !== undefined && (
+          <span className="inline-flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-sm font-medium tabular-nums text-orange-700">
+            {current.value}
+          </span>
+        )}
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+            aria-label="Switch"
+            data-testid={`${testid}-card-menu`}
+          >
+            <Menu aria-hidden className="h-5 w-5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="max-h-80 w-60 overflow-y-auto">
+          {items.filter((o) => o.key !== current.key).map((o) => {
+            const Icon = o.icon;
+            return (
+              <DropdownMenuItem
+                key={o.key}
+                onSelect={() => onPick(o.key)}
+                className="gap-2.5 py-2"
+                data-testid={`${testid}-card-menu-${o.key}`}
+              >
+                <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
+                {o.value !== undefined && <span className="text-xs font-semibold tabular-nums text-slate-500">{o.value}</span>}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+};
+
 const StaffTab = ({ isSuperAdmin, sub, onSubChange }) => {
   const tabs = useMemo(() => STAFF_TABS.filter((t) => !t.superAdminOnly || isSuperAdmin), [isSuperAdmin]);
+  // Phone only, as the Dashboard beside it does: the sections are a stack of rows, and a
+  // tap opens that section on a screen of its own under a back bar. From sm up nothing reads
+  // this; the desk keeps the bar and the section on one screen.
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  useStageBack(phoneOpen); // a no-op unless a board above provides the phone's Back
+  const current = tabs.find((t) => t.key === sub) || tabs[0];
+  const openSection = (key) => {
+    onSubChange(key);
+    setPhoneOpen(true);
+    window.scrollTo({ top: 0 });
+  };
+  const closeSection = () => {
+    setPhoneOpen(false);
+    window.scrollTo({ top: 0 });
+  };
   return (
     <div className="flex flex-col gap-4" data-testid="hr-staff-tab">
-      <SegmentedTabs tabs={tabs} value={sub} onChange={onSubChange} testid="hr-staff-subtab" size="sm" mobileCols={4} />
-      {sub === "attendance" && <AttendanceTab />}
-      {sub === "performance" && isSuperAdmin && <PerformancePanel />}
-      {sub === "client_reviews" && <ClientReviewsPanel physioOnly staffView />}
-      {sub === "eod_report" && isSuperAdmin && <EodReportsPanel />}
-      {sub === "payroll" && <PayrollTab />}
-      {sub === "approvals" && <ApprovalsTab />}
-      {sub === "quotes" && <QuotesTab />}
+      {phoneOpen && (
+        <PhoneBackBar
+          current={current}
+          items={tabs}
+          onBack={closeSection}
+          onPick={openSection}
+          backLabel="Back to the Staff sections"
+          testid="hr-staff-phone"
+        />
+      )}
+      {/* Phone: one row per section, the Dashboard's rows without the count box -- a
+          section is a place to go, not a figure. */}
+      {!phoneOpen && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="hr-staff-phone-cards">
+          {tabs.map((t) => (
+            <NotifyCard
+              key={t.key}
+              icon={t.icon}
+              label={t.label}
+              active={t.key === current.key}
+              onClick={() => openSection(t.key)}
+              showCount={false}
+              testid={`hr-staff-phone-card-${t.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
+      <div className="hidden sm:block">
+        <SegmentedTabs tabs={tabs} value={sub} onChange={onSubChange} testid="hr-staff-subtab" size="sm" />
+      </div>
+      {/* The open section: always on the desk; on a phone only once a row opens it. Kept
+          mounted under the rows, hidden, so its figures are already in when it is opened. */}
+      <div className={phoneOpen ? "" : "hidden sm:block"} data-testid="hr-staff-section">
+        {sub === "attendance" && <AttendanceTab />}
+        {sub === "performance" && isSuperAdmin && <PerformancePanel />}
+        {sub === "client_reviews" && <ClientReviewsPanel physioOnly staffView />}
+        {sub === "eod_report" && isSuperAdmin && <EodReportsPanel />}
+        {sub === "payroll" && <PayrollTab />}
+        {sub === "approvals" && <ApprovalsTab />}
+        {sub === "quotes" && <QuotesTab />}
+      </div>
     </div>
   );
 };
@@ -303,9 +423,6 @@ const DashboardTab = () => {
   // opens that figure's list on a screen of its own with a back bar above it. From sm up
   // nothing reads this; the desk keeps cards and list on one screen.
   const [phoneList, setPhoneList] = useState(false);
-  // Where the back bar sticks: just under the board header, whose height is the role's
-  // own (Branch Admin's is 61px, Super Admin's taller), so it is measured, not assumed.
-  const [barTop, setBarTop] = useState(0);
   useStageBack(phoneList); // a no-op unless a board above provides the phone's Back
 
   useEffect(() => {
@@ -363,7 +480,6 @@ const DashboardTab = () => {
   const openPhoneCard = (key) => {
     setSelected(key);
     setSearch("");
-    setBarTop(document.querySelector('[data-testid="role-board-header"]')?.getBoundingClientRect().height || 0);
     setPhoneList(true);
     window.scrollTo({ top: 0 });
   };
@@ -378,58 +494,17 @@ const DashboardTab = () => {
     // the other's width, and space-y would still hand the desk cards a phantom top margin
     // for the phone list sitting (undrawn) above them.
     <div className="flex flex-col gap-4" data-testid="hr-dashboard-tab">
-      {/* Phone, one figure open: the way back to the rows, the figure being read with its
-          count in the rows' orange box, and a menu to jump to another figure without going
-          back first -- Review's back bar. */}
+      {/* Phone, one figure open: the shared back bar, with the figure's count beside its
+          name. `?? 0` so a figure still loading reads 0 rather than dropping its box. */}
       {phoneList && (
-        <div
-          className="sticky z-10 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:hidden"
-          style={{ top: barTop }}
-          data-testid="hr-dashboard-phone-back"
-        >
-          <button
-            type="button"
-            onClick={closePhoneCard}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
-            aria-label="Back to the Dashboard cards"
-            data-testid="hr-dashboard-phone-back-btn"
-          >
-            <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-            <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{current.label}</span>
-            <span className="inline-flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-sm font-medium tabular-nums text-orange-700">
-              {current.value ?? 0}
-            </span>
-          </button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
-                aria-label="Switch card"
-                data-testid="hr-dashboard-phone-card-menu"
-              >
-                <Menu aria-hidden className="h-5 w-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-80 w-60 overflow-y-auto">
-              {cards.filter((o) => o.key !== current.key).map((o) => {
-                const Icon = o.icon;
-                return (
-                  <DropdownMenuItem
-                    key={o.key}
-                    onSelect={() => openPhoneCard(o.key)}
-                    className="gap-2.5 py-2"
-                    data-testid={`hr-dashboard-phone-card-menu-${o.key}`}
-                  >
-                    <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
-                    <span className="text-xs font-semibold tabular-nums text-slate-500">{o.value ?? 0}</span>
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <PhoneBackBar
+          current={{ ...current, value: current.value ?? 0 }}
+          items={cards.map((c) => ({ ...c, value: c.value ?? 0 }))}
+          onBack={closePhoneCard}
+          onPick={openPhoneCard}
+          backLabel="Back to the Dashboard cards"
+          testid="hr-dashboard-phone"
+        />
       )}
 
       {/* Phone: one list row per figure, the stage rows Branch Admin's Review, Branch Leads
