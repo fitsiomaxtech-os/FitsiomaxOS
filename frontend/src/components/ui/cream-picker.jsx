@@ -4,7 +4,7 @@ import { Check, ChevronDown } from "lucide-react";
 
 // Filter by Date's palette: the cream card and soft border for the list, and amber for
 // whatever is picked — on the rows inside, and on the trigger once it holds a value.
-const TRIGGER = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60";
+const TRIGGER = "inline-flex shrink-0 items-center gap-1.5 border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60";
 const TRIGGER_IDLE = "border-slate-200 bg-white text-slate-600 hover:bg-[#F3EFE6]";
 const TRIGGER_SET = "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100";
 const ROW = "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition";
@@ -21,11 +21,14 @@ const ROW_OFF = "text-slate-700 hover:bg-[#F3EFE6]";
  *
  * `label` is what the trigger says (the caller words it — "Manual Therapy +1"), `icon`
  * and `prefix` sit ahead of it, and `set` lights the trigger amber.
+ *
+ * `compact` takes the trigger to 30px with 4px corners, for Finance > Approvals' toolbar
+ * of 30px controls. The list it opens is unchanged.
  */
 export const CreamPicker = ({
   value, onChange, options, multiple = false, label, prefix, icon: Icon, set = false,
   disabled, title, testid = "cream-picker", align = "start", width = "w-56", emptyText = "Nothing to pick",
-  className = "",
+  className = "", compact = false,
 }) => {
   const [open, setOpen] = useState(false);
   const opts = (options || []).map((o) => (typeof o === "object" ? o : { value: o, label: String(o) }));
@@ -44,7 +47,7 @@ export const CreamPicker = ({
       <PopoverPrimitive.Trigger
         disabled={disabled}
         title={title}
-        className={`${TRIGGER} ${set ? TRIGGER_SET : TRIGGER_IDLE} ${className}`}
+        className={`${TRIGGER} ${compact ? "h-[30px] rounded-[4px]" : "h-8 rounded-md"} ${set ? TRIGGER_SET : TRIGGER_IDLE} ${className}`}
         data-testid={testid}
       >
         {Icon && <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />}

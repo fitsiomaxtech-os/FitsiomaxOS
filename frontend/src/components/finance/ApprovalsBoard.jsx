@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
-import { FilterSelect } from "@/components/ui/filter-select";
+import { CreamPicker } from "@/components/ui/cream-picker";
 import { rangeFor, toIso } from "@/lib/dateRange";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { getFinanceApprovals, getBranches, approveTransaction, unapproveTransaction, bulkApproveTransactions, deleteTransaction } from "@/lib/api";
@@ -830,8 +830,9 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           was for and how it was paid describe a collection and have nothing to say about
           an expense -- /finance/expenses does not take them -- so those two dropdowns are
           not offered against one. Every control here is 2px-cornered, like Summary's
-          cards, except the date filter's 4px. No borders, on the block's edge or on any
-          control in it -- the same flat look Summary's bars took. */}
+          cards, except the date filter's and the two dropdowns' 4px. No borders, on the
+          block's edge or on any control in it but those two dropdowns -- the same flat
+          look Summary's bars took. */}
       <div className="overflow-hidden rounded-[2px] bg-white" data-testid="finance-approvals-filters">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5" data-testid="finance-approvals-toolbar">
           <div className="flex shrink-0 items-center gap-0.5 rounded-[2px] bg-slate-50 p-[3px]" data-testid="finance-approvals-ledger">
@@ -882,35 +883,39 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
 
           {/* What it was for, and how it was paid, as two dropdowns on this same line. They
               were a second line of nine pills and six pills under the toolbar, which spent a
-              band of screen on two questions a dropdown answers in one box each. Sky, the
-              date filter's colour beside them, rather than the indigo the mode pills wore:
-              white while on All, tinted once it narrows the list. Both describe a
+              band of screen on two questions a dropdown answers in one box each. Dressed as
+              Filter by Date (CreamPicker) rather than the OS's blue <select> list: a cream
+              list, amber on the picked row, and the trigger amber once it narrows the list.
+              The only two controls on the line that keep a border, so they read as boxes to
+              open rather than as more of the buttons around them. Both describe a
               collection and neither is a question /finance/expenses can answer, so they go
               when the ledger switches to expenses rather than sitting there greyed. */}
           {ledger === "income" && (
             <div className="flex items-center gap-2" data-testid="finance-approvals-dropdowns">
-              <FilterSelect
+              <CreamPicker
                 value={category}
                 onChange={setCategory}
-                active={category !== "all"}
+                options={CATEGORIES.map(([value, label]) => ({ value, label }))}
+                label={CATEGORIES.find(([key]) => key === category)?.[1]}
+                set={category !== "all"}
                 compact
-                label="Service type"
-                className="w-32"
+                title="Service type"
+                width="w-44"
+                className="w-32 justify-between"
                 testid="finance-approvals-category-select"
-              >
-                {CATEGORIES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </FilterSelect>
-              <FilterSelect
+              />
+              <CreamPicker
                 value={paymentMode}
                 onChange={setPaymentMode}
-                active={paymentMode !== "all"}
+                options={PAYMENT_MODES.map(([value, label]) => ({ value, label }))}
+                label={PAYMENT_MODES.find(([key]) => key === paymentMode)?.[1]}
+                set={paymentMode !== "all"}
                 compact
-                label="Payment mode"
-                className="w-32"
+                title="Payment mode"
+                width="w-44"
+                className="w-32 justify-between"
                 testid="finance-approvals-payment-mode-select"
-              >
-                {PAYMENT_MODES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </FilterSelect>
+              />
             </div>
           )}
 
