@@ -98,7 +98,9 @@ const BOTTOM_TABS = [...VIEW_TABS, PROFILE_TAB];
 // `onLogout` puts Logout on My Profile's Security tab, the phone header having none.
 // `toolbarLead`: a host control set at the start of the view bar, ahead of the tabs — the
 // Consultant + Physiotherapist's desk switch, so switch, tabs and toolbar read as one row.
-export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead = null } = {}) => {
+// `squareTable`: the Treatment, House Visit, Send to Review and Patients tables with 4px
+// corners rather than rounded-xl — the Physio's own board, matching the Consultant's.
+export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead = null, squareTable = false } = {}) => {
   const [activeTab, setActiveTab] = useState("treatment");
   // Absence is marked by the physio for themselves. A desk driving somebody else's board
   // from Operations marks it from Branch Admin > Management > Physio Absence instead.
@@ -177,16 +179,16 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
       </div>
 
       <div style={{ display: activeTab === "treatment" ? "block" : "none" }}>
-        <TreatmentTab physioId={physioId} scope="exclude_home" onCountChange={setTreatmentCount} toolbarSlot={slotFor("treatment")} />
+        <TreatmentTab physioId={physioId} scope="exclude_home" onCountChange={setTreatmentCount} toolbarSlot={slotFor("treatment")} squareTable={squareTable} />
       </div>
       <div style={{ display: activeTab === "home_visit" ? "block" : "none" }}>
-        <TreatmentTab physioId={physioId} scope="home" onCountChange={setHomeVisitCount} toolbarSlot={slotFor("home_visit")} />
+        <TreatmentTab physioId={physioId} scope="home" onCountChange={setHomeVisitCount} toolbarSlot={slotFor("home_visit")} squareTable={squareTable} />
       </div>
       <div style={{ display: activeTab === "review" ? "block" : "none" }}>
-        <ReviewTab physioId={physioId} onCountChange={setReviewCount} toolbarSlot={slotFor("review")} />
+        <ReviewTab physioId={physioId} onCountChange={setReviewCount} toolbarSlot={slotFor("review")} squareTable={squareTable} />
       </div>
       <div style={{ display: activeTab === "patients" ? "block" : "none" }}>
-        <PatientsTab physioId={physioId} onCountChange={setPatientsCount} toolbarSlot={slotFor("patients")} />
+        <PatientsTab physioId={physioId} onCountChange={setPatientsCount} toolbarSlot={slotFor("patients")} squareTable={squareTable} />
       </div>
       {!physioId && activeTab === "absence" && <PhysioAbsencePanel mode="physio" />}
 
@@ -479,7 +481,7 @@ const starWeekOf = (r) => Math.floor(((r.sessionNumber || 1) - 1) / 7) + 1;
 
 const rowStars = (r) => r.lead?.star_weeks?.[`${r.track || "treatment"}:${starWeekOf(r)}`] || null;
 
-function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
+function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squareTable = false }) {
   const [leads, setLeads] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -885,7 +887,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all" }) {
             })}
           </div>
 
-          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block" data-testid="physio-treatment-list-desktop">
+          <div className={`hidden overflow-hidden border border-slate-200 bg-white sm:block ${squareTable ? "rounded-[4px]" : "rounded-xl"}`} data-testid="physio-treatment-list-desktop">
             <div className="overflow-x-auto">
               {/* 720 -> 820 for the Package column. The wrapper scrolls, so the columns keep their
                   widths on a narrow desk rather than being squeezed to fit.
@@ -1089,7 +1091,7 @@ function SendForReviewButton({ onClick, className = "", testid }) {
  * dispatches it to a named Head Physio, who writes it up. Requests / Assigned / Completed
  * follow a patient along that hand-off, and the weekly write-up hangs off the same rows.
  */
-function ReviewTab({ physioId, onCountChange, toolbarSlot }) {
+function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }) {
   const [patients, setPatients] = useState([]);
   const [threshold, setThreshold] = useState(7);
   const [loading, setLoading] = useState(false);
@@ -1376,7 +1378,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot }) {
           })}
         </div>
 
-        <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block" data-testid="physio-review-desktop">
+        <div className={`hidden overflow-hidden border border-slate-200 bg-white md:block ${squareTable ? "rounded-[4px]" : "rounded-xl"}`} data-testid="physio-review-desktop">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
@@ -2733,7 +2735,7 @@ export function CalendarPage({ physioId, onClose }) {
   );
 }
 
-function PatientsTab({ physioId, onCountChange, toolbarSlot }) {
+function PatientsTab({ physioId, onCountChange, toolbarSlot, squareTable = false }) {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -2999,7 +3001,7 @@ function PatientsTab({ physioId, onCountChange, toolbarSlot }) {
 
         {/* A table from md up, like the other lists on the board. The arrow opens the
             patient's detail in a popup; the row opens it too. */}
-        <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block" data-testid="physio-patients-table">
+        <div className={`hidden overflow-x-auto border border-slate-200 bg-white md:block ${squareTable ? "rounded-[4px]" : "rounded-xl"}`} data-testid="physio-patients-table">
           <table className="w-full min-w-[640px] text-left">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
