@@ -22,13 +22,16 @@ import { Button } from "@/components/ui/button";
  *  - branches: [{ id, branch_name, vertical }]
  *  - selectedId / onSelect: controlled selection
  *  - testid: string (optional)
+ *  - fill: the trigger stretches to the width it is given and its label truncates inside
+ *    it, rather than sizing to the label -- for a phone row it shares with another picker
+ *    (Operations).
  */
 
 // Same helper OperationsBoard.jsx, BranchManagementBoard.jsx and PreSalesCRM.jsx each
 // already carry their own copy of.
 const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 
-export const BranchFilterPopover = ({ branches = [], selectedId, onSelect, testid = "branch-filter" }) => {
+export const BranchFilterPopover = ({ branches = [], selectedId, onSelect, testid = "branch-filter", fill = false }) => {
   const [open, setOpen] = useState(false);
 
   // Offline branches first (alphabetical), online ones trail — the order the pill row
@@ -62,17 +65,17 @@ export const BranchFilterPopover = ({ branches = [], selectedId, onSelect, testi
   };
 
   return (
-    <div className="inline-flex items-center">
+    <div className={fill ? "flex w-full min-w-0 items-center" : "inline-flex items-center"}>
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
         title={activeLabel}
         aria-label={`Branch filter: ${activeLabel}`}
-        className={`h-9 gap-2 px-3 ${selected ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : ""}`}
+        className={`h-9 gap-2 px-3 ${fill ? "w-full min-w-0" : ""} ${selected ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : ""}`}
         data-testid={`${testid}-btn`}
       >
         <Building2 className="h-4 w-4" />
-        <span className="max-w-[180px] truncate">{activeLabel}</span>
+        <span className={fill ? "min-w-0 flex-1 truncate text-left" : "max-w-[180px] truncate"}>{activeLabel}</span>
         <ChevronDown className="h-4 w-4 opacity-70" />
       </Button>
 

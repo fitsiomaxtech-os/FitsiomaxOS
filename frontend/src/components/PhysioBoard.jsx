@@ -33,6 +33,7 @@ import { LeadMarks, OnlineTag } from "@/components/ui/lead-marks";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { StatTile } from "@/components/ui/stat-tile";
 import { NotifyCard } from "@/components/ui/notify-card";
+import { PhoneBackBar } from "@/components/ui/phone-back-bar";
 import { PhysioTreatmentChips } from "@/components/ui/physio-treatment-chips";
 import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
 import { MyProfilePage } from "@/components/MyProfilePage";
@@ -103,6 +104,19 @@ const BOTTOM_TABS = [...VIEW_TABS, PROFILE_TAB];
 // corners rather than rounded-xl — the Physio's own board, matching the Consultant's.
 export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead = null, squareTable = false } = {}) => {
   const [activeTab, setActiveTab] = useState("treatment");
+  // Driven by somebody else (Operations, Branch Control), the board sits under Super
+  // Admin's own bottom bar, so on a phone it draws no bar of its own: the two landed on one
+  // spot and this one covered the host's, leaving no way off the tab. Its views are the
+  // reference rows there instead, a tap opening that view on its own screen under the
+  // shared back bar -- the way HR Admin's phone reads. The desk is unchanged.
+  const supervised = !!physioId;
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const phoneRows = supervised && !phoneOpen;
+  const openView = (key) => {
+    setActiveTab(key);
+    setPhoneOpen(true);
+    window.scrollTo({ top: 0 });
+  };
   // Absence is marked by the physio for themselves. A desk driving somebody else's board
   // from Operations marks it from Branch Admin > Management > Physio Absence instead.
   const viewTabs = physioId ? VIEW_TABS.filter((t) => t.key !== "absence") : VIEW_TABS;
@@ -127,8 +141,40 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
   // every tab would stack three toolbars in the one row.
   const slotFor = (key) => (activeTab === key ? toolbarSlot : null);
 
+  const currentView = viewTabs.find((t) => t.key === activeTab) || viewTabs[0];
+
+  // Supervised: flex+gap rather than space-y, since the rows and the back bar ahead of the
+  // view bar are hidden by class on a desk and space-y would still push the bar down for
+  // them. No bottom padding either: the host pads for its own bar.
   return (
-    <div className={`${toolbarLead ? "space-y-4" : "space-y-3"} pb-20 md:pb-0`} data-testid="physio-board-root">
+    <div className={supervised ? "flex flex-col gap-3 [&>*]:min-w-0" : `${toolbarLead ? "space-y-4" : "space-y-3"} pb-20 md:pb-0`} data-testid="physio-board-root">
+      {supervised && phoneOpen && (
+        <PhoneBackBar
+          current={{ ...currentView, value: badgeFor[currentView.key] || 0 }}
+          items={viewTabs.map((t) => ({ ...t, value: badgeFor[t.key] || 0 }))}
+          onBack={() => { setPhoneOpen(false); window.scrollTo({ top: 0 }); }}
+          onPick={openView}
+          backLabel="Back to the physio's views"
+          testid="physio-supervise-phone"
+          from="md"
+        />
+      )}
+      {phoneRows && (
+        <div className="grid grid-cols-1 gap-2.5 md:hidden" data-testid="physio-phone-rows">
+          {viewTabs.map((tab) => (
+            <NotifyCard
+              key={tab.key}
+              icon={tab.icon}
+              label={tab.label}
+              value={badgeFor[tab.key] || 0}
+              active={activeTab === tab.key}
+              onClick={() => openView(tab.key)}
+              testid={`physio-phone-row-${tab.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
       {/* Tabs on the left, the open tab's search and date filter on the right. The
           strip is desk-only — a phone gets the fixed bar at the end of this file —
           but the toolbar slot is not, so on a phone this row is just the toolbar,
@@ -142,7 +188,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
       {/* With a lead (Consultant + Physiotherapist), the bar is drawn exactly as the
           Consultation board's tool bar is — white strip, p-2, no rule, 16px to what follows
           — so the desk switch and the buttons stand still when the person changes desk. */}
-      <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 ${toolbarLead ? "bg-white p-2" : "md:border-b md:border-slate-200 md:pb-2"} ${activeTab === "profile" ? "hidden md:flex" : "flex"}`} data-testid="physio-view-bar">
+      <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 ${toolbarLead ? "bg-white p-2" : "md:border-b md:border-slate-200 md:pb-2"} ${activeTab === "profile" ? "hidden md:flex" : "flex"} ${phoneRows ? "max-md:hidden" : ""}`} data-testid="physio-view-bar">
       {/* `contents` without a lead, so the bar lays out exactly as it always has. */}
       <div className={toolbarLead ? "flex min-w-0 flex-wrap items-center gap-2 md:gap-4" : "contents"}>
       {toolbarLead}
@@ -179,6 +225,10 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
         <div ref={setToolbarSlot} className={`flex flex-wrap items-center gap-2 ${toolbarLead ? "" : "md:pb-1.5"}`} data-testid="physio-view-toolbar" />
       </div>
 
+      {/* Wrapped so the rows can hide all four at once on a phone: each one's own display
+          is an inline style, which a class could not override. Still mounted under the
+          rows, so the counts on them stay live. */}
+      <div className={phoneRows ? "max-md:hidden" : ""} data-testid="physio-views">
       <div style={{ display: activeTab === "treatment" ? "block" : "none" }}>
         <TreatmentTab physioId={physioId} scope="exclude_home" onCountChange={setTreatmentCount} toolbarSlot={slotFor("treatment")} squareTable={squareTable} />
       </div>
@@ -190,6 +240,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
       </div>
       <div style={{ display: activeTab === "patients" ? "block" : "none" }}>
         <PatientsTab physioId={physioId} onCountChange={setPatientsCount} toolbarSlot={slotFor("patients")} squareTable={squareTable} />
+      </div>
       </div>
       {!physioId && activeTab === "absence" && <PhysioAbsencePanel mode="physio" />}
 
@@ -205,7 +256,9 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
       {/* Phones only. It used to render at every width, so a desk got a bar pinned
           across the bottom of the window for a switcher that belongs at the top.
           The row is drawn at 85%, this bar only — the other boards' bars keep full size.
-          zoom rather than transform: scale, so the bar's own height shrinks with it. */}
+          zoom rather than transform: scale, so the bar's own height shrinks with it.
+          Never on a supervised board: see `supervised` above. */}
+      {!supervised && (
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] md:hidden" data-testid="physio-bottom-nav">
         <div className="mx-auto flex max-w-lg items-stretch justify-around" style={{ zoom: 0.85 }}>
           {(physioId ? BOTTOM_TABS.filter((t) => t.key !== "absence") : BOTTOM_TABS).map((tab) => {
@@ -225,6 +278,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
           })}
         </div>
       </div>
+      )}
     </div>
   );
 };

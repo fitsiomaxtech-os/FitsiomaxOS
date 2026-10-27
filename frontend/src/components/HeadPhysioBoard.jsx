@@ -38,6 +38,7 @@ import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { useStageBack } from "@/components/ui/phone-back";
+import { PhoneBackBar } from "@/components/ui/phone-back-bar";
 import {
   getHPMyCalendar,
   hpRecommendPackage,
@@ -174,13 +175,22 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * put this one over the host's and left no way out of the tab. Below sm the work tabs show
  * as the host's grey list cards instead, and a tap opens that list on its own screen with a
  * back bar above it, like the host's stage stacks.
+ *
+ * `supervising` gets the same stack, for the same reason: Operations and Branch Control sit
+ * under Super Admin's own bottom bar, and this board's bar (z-50) went over it, so a
+ * Super Admin on a phone could not leave the tab. There the rows are the reference rows
+ * HR Admin's phone wears (NotifyCard inline) under the shared PhoneBackBar, so every board
+ * Operations opens on a phone reads the same way.
  */
 export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, summaryCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false, squareTable = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
-  // phoneStack only: a work tab's list is open on the phone, rather than the card list.
+  // Hosted under another board's bottom bar: Branch Admin's (phoneStack) or Super Admin's
+  // (supervising). Either way this board draws no bar of its own on a phone.
+  const stack = phoneStack || supervising;
+  // stack only: a work tab's list is open on the phone, rather than the card list.
   const [phoneListOpen, setPhoneListOpen] = useState(false);
-  const phoneCards = phoneStack && !phoneListOpen;
-  useStageBack(phoneStack && phoneListOpen); // the phone's Back closes the list -- see ui/phone-back
+  const phoneCards = stack && !phoneListOpen;
+  useStageBack(stack && phoneListOpen); // the phone's Back closes the list -- see ui/phone-back
   const withProfile = roleLabel !== undefined;
   const profileOpen = withProfile && workTab === "profile";
   const bottomTabs = withProfile ? [...VISIBLE_WORK_TABS, PROFILE_TAB] : VISIBLE_WORK_TABS;
@@ -553,16 +563,31 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
 
   return (
     // Bottom padding on phones clears the fixed bottom bar, so the last row of any list
-    // is still reachable instead of sitting underneath it. Under phoneStack the host's bar
-    // is the one on screen and the host pads for it.
+    // is still reachable instead of sitting underneath it. Hosted (phoneStack or
+    // supervising) the host's bar is the one on screen and the host pads for it.
     //
-    // flex+gap under phoneStack rather than space-y: the back bar below is the first child
+    // flex+gap when hosted rather than space-y: the back bar below is the first child
     // and display:none from sm up, and space-y would still count it and push the toolbar
     // down 16px on a desk.
-    <div className={phoneStack ? "flex flex-col gap-4 [&>*]:min-w-0" : "space-y-4 pb-20 sm:pb-0"} data-testid="head-physio-board-root">
+    <div className={stack ? "flex flex-col gap-4 [&>*]:min-w-0" : "space-y-4 pb-20 sm:pb-0"} data-testid="head-physio-board-root">
+      {/* supervising, one tab's list open: the shared back bar, the tab's count beside its
+          name and a menu to jump to another tab. */}
+      {supervising && phoneListOpen && (() => {
+        const t = VISIBLE_WORK_TABS.find((x) => x.key === workTab) || VISIBLE_WORK_TABS[0];
+        return (
+          <PhoneBackBar
+            current={{ ...t, value: tabFigure(t).n }}
+            items={VISIBLE_WORK_TABS.map((x) => ({ ...x, value: tabFigure(x).n }))}
+            onBack={() => setPhoneListOpen(false)}
+            onPick={(key) => { setWorkTab(key); window.scrollTo({ top: 0 }); }}
+            backLabel="Back to the tab cards"
+            testid="hp-supervise-phone"
+          />
+        );
+      })()}
       {/* phoneStack, one tab's list open: the tab being read, its count, and the way back
           to the cards. The host's back bar, so it sits flush under the phone header. */}
-      {phoneStack && phoneListOpen && (() => {
+      {phoneStack && !supervising && phoneListOpen && (() => {
         const t = VISIBLE_WORK_TABS.find((x) => x.key === workTab) || VISIBLE_WORK_TABS[0];
         const Icon = t.icon;
         return (
@@ -695,8 +720,9 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
         </div>
       </div>
 
-      {/* phoneStack, below sm: the work tabs as the host's grey list cards, the count on a
-          corner badge in the tab's colour. A tap opens that tab's list on its own screen.
+      {/* Hosted, below sm: the work tabs as the host's grey list cards, the count on a
+          corner badge in the tab's colour -- or, supervising, the reference rows with the
+          count in a box. A tap opens that tab's list on its own screen.
           The tool bar above stays, since its dates set what these count. */}
       {phoneCards && (
         <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="hp-phone-cards">
@@ -715,6 +741,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
                 window.scrollTo({ top: 0 });
               }}
               testid={`hp-phone-card-${t.key}`}
+              inline={supervising}
             />
           ))}
         </div>
@@ -1142,7 +1169,7 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
           patients, and this is the board's only tab row there: the summary cards are
           drawn from tablet up. Same tabs, thumb-high. */}
       {/* Same slot as the Physio board's bar: glyph in a chip, its name small beneath. */}
-      {!phoneStack && (
+      {!stack && (
       <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.06)] sm:hidden" data-testid="hp-bottom-nav">
         {bottomTabs.map((t) => {
           const Icon = t.icon;

@@ -23,6 +23,8 @@ import { to12h } from "@/lib/time";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
+import { NotifyCard } from "@/components/ui/notify-card";
+import { PhoneBackBar } from "@/components/ui/phone-back-bar";
 import { displayPhone } from "@/lib/phone";
 
 /**
@@ -118,13 +120,57 @@ export const DietBoard = ({ coachId, user, roleLabel, onLogout } = {}) => {
   const [toolbarSlot, setToolbarSlot] = useState(null);
   const slotFor = (key) => (activeTab === key ? toolbarSlot : null);
 
+  // Driven by somebody else (Operations), the board sits under Super Admin's own bottom
+  // bar, so on a phone it draws no bar of its own -- the two landed on one spot. Its views
+  // are the reference rows there instead, a tap opening that view on its own screen under
+  // the shared back bar, as the Physio board does. The desk is unchanged.
+  const supervised = !!coachId;
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const phoneRows = supervised && !phoneOpen;
+  const openView = (key) => {
+    setActiveTab(key);
+    setPhoneOpen(true);
+    window.scrollTo({ top: 0 });
+  };
+  const currentView = VIEW_TABS.find((t) => t.key === activeTab) || VIEW_TABS[0];
+
+  // Supervised: flex+gap rather than space-y, since the rows and the back bar ahead of the
+  // view bar are hidden by class on a desk and space-y would still push the bar down for
+  // them. No bottom padding either: the host pads for its own bar.
   return (
-    <div className="space-y-3 pb-20 md:pb-0" data-testid="diet-board-root">
+    <div className={supervised ? "flex flex-col gap-3 [&>*]:min-w-0" : "space-y-3 pb-20 md:pb-0"} data-testid="diet-board-root">
+      {supervised && phoneOpen && (
+        <PhoneBackBar
+          current={{ ...currentView, value: badgeFor[currentView.key] || 0 }}
+          items={VIEW_TABS.map((t) => ({ ...t, value: badgeFor[t.key] || 0 }))}
+          onBack={() => { setPhoneOpen(false); window.scrollTo({ top: 0 }); }}
+          onPick={openView}
+          backLabel="Back to the coach's views"
+          testid="diet-supervise-phone"
+          from="md"
+        />
+      )}
+      {phoneRows && (
+        <div className="grid grid-cols-1 gap-2.5 md:hidden" data-testid="diet-phone-rows">
+          {VIEW_TABS.map((tab) => (
+            <NotifyCard
+              key={tab.key}
+              icon={tab.icon}
+              label={tab.label}
+              value={badgeFor[tab.key] || 0}
+              active={activeTab === tab.key}
+              onClick={() => openView(tab.key)}
+              testid={`diet-phone-row-${tab.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
       {/* Filled-pill tabs on a rule, the same control the Human Resource Master View uses.
           This is top-level navigation between three different jobs, and a filled pill says
           "you are here" more plainly than an underline does. Kept in emerald rather than
           HR's indigo so the vertical is still identifiable at a glance. */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 md:border-b md:border-slate-200 md:pb-2" data-testid="diet-view-bar">
+      <div className={`flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 md:border-b md:border-slate-200 md:pb-2 ${phoneRows ? "max-md:hidden" : ""}`} data-testid="diet-view-bar">
         <div className="hidden flex-wrap items-center gap-2 md:flex" data-testid="diet-view-tabs">
           {VIEW_TABS.map((tab) => {
             const Icon = tab.icon;
@@ -154,18 +200,25 @@ export const DietBoard = ({ coachId, user, roleLabel, onLogout } = {}) => {
         <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-2" data-testid="diet-view-toolbar" />
       </div>
 
+      {/* Wrapped so the rows can hide both at once on a phone: each one's own display is an
+          inline style, which a class could not override. Still mounted under the rows, so
+          the counts on them stay live. */}
+      <div className={phoneRows ? "max-md:hidden" : ""} data-testid="diet-views">
       <div style={{ display: activeTab === "consultations" ? "block" : "none" }}>
         <ConsultationsTab coachId={coachId} onCountChange={setConsultCount} toolbarSlot={slotFor("consultations")} />
       </div>
       <div style={{ display: activeTab === "patients" ? "block" : "none" }}>
         <PatientsTab coachId={coachId} onCountChange={setPatientsCount} toolbarSlot={slotFor("patients")} />
       </div>
+      </div>
 
       {user && activeTab === "profile" && (
         <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setActiveTab("consultations")} onLogout={onLogout} phoneBar />
       )}
 
-      {/* Phones only — the tab strip above is desk-only. */}
+      {/* Phones only — the tab strip above is desk-only. Never on a supervised board: see
+          `supervised` above. */}
+      {!supervised && (
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] md:hidden" data-testid="diet-bottom-nav">
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
           {VIEW_TABS.map((tab) => {
@@ -193,6 +246,7 @@ export const DietBoard = ({ coachId, user, roleLabel, onLogout } = {}) => {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 };
