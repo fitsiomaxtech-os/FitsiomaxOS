@@ -1253,7 +1253,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
       onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}
       data-testid="hr-emp-view-modal"
     >
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-[720px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <EmployeeAvatar employee={e} size={44} />
@@ -1273,7 +1273,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
         {/* Same shape as the Add/Edit dialog's below — sections down the left, the open
             one down the right, at a fixed height — so the read and the write of a record
             look like one form in two moods. */}
-        <div className="flex h-[460px] max-h-[70vh] flex-col sm:flex-row">
+        <div className="flex h-[430px] max-h-[70vh] flex-col sm:flex-row">
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-view-tabs">
             {VIEW_TABS.map((t) => (
               <button
@@ -1795,7 +1795,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" data-testid="hr-emp-modal">
-      <div className="w-full max-w-3xl rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-[720px] rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <div>
             <h3 className="text-base font-semibold">{employee ? "Edit Employee" : "Add New Employee"}</h3>
@@ -1805,7 +1805,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
         {/* Sections down the left, the open one's fields down the right, one labelled row
             each — the same rows the View popup reads in. The fixed height is the tallest
             tab's (Personal), so no tab scrolls and the dialog doesn't jump between them. */}
-        <div className="flex h-[460px] max-h-[70vh] flex-col sm:flex-row">
+        <div className="flex h-[430px] max-h-[70vh] flex-col sm:flex-row">
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
             {EMP_TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
@@ -1819,7 +1819,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   file input cannot be styled and prints the chosen filename beside itself,
                   which here duplicates the preview. */}
               <FormRow label="Profile Photo">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2">
                   <EmployeeAvatar
                     employee={{ full_name: form.full_name, photo_url: photoPreview || form.photo_url }}
                     size={32}
@@ -1837,7 +1837,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                     size="sm"
                     variant="outline"
                     onClick={() => photoInputRef.current?.click()}
-                    className="h-8 text-xs"
+                    className="h-8 shrink-0 text-xs"
                     data-testid="hr-emp-photo-pick"
                   >
                     <Camera className="mr-1.5 h-3.5 w-3.5" />
@@ -1849,7 +1849,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                       size="sm"
                       variant="outline"
                       onClick={clearPhoto}
-                      className="h-8 border-rose-200 text-xs text-rose-600 hover:bg-rose-50"
+                      className="h-8 shrink-0 border-rose-200 text-xs text-rose-600 hover:bg-rose-50"
                       data-testid="hr-emp-photo-remove"
                     >
                       <ImageOff className="mr-1.5 h-3.5 w-3.5" /> Remove
@@ -1858,11 +1858,11 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   {/* Says the picture is not saved yet, because the dialog's own Save is
                       what sends it — closing here would drop it silently otherwise. */}
                   {photoFile ? (
-                    <span className="text-[11px] font-medium text-amber-600" data-testid="hr-emp-photo-pending">
+                    <span className="min-w-0 truncate text-[11px] font-medium text-amber-600" data-testid="hr-emp-photo-pending">
                       Saves with the form
                     </span>
                   ) : (
-                    <span className="text-[11px] text-slate-400">JPG, PNG or WEBP · up to 5MB</span>
+                    <span className="min-w-0 truncate text-[11px] text-slate-400" title="JPG, PNG or WEBP · up to 5MB">JPG, PNG or WEBP · up to 5MB</span>
                   )}
                 </div>
               </FormRow>
