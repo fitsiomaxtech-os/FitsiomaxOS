@@ -915,6 +915,32 @@ export const CRMPage = ({ auth, onLogout }) => {
   const isCombined = isCombinedExpertRole(role);
   const showHeadPhysioBoard = isHeadPhysioRole(role) && (!isCombined || combinedDesk === "consultant");
   const showPhysioBoard = isPhysioRole(role) && (!isCombined || combinedDesk === "physio");
+  // The switch itself, handed to whichever board is open as the start of its own tool bar,
+  // so switch, search, dates and buttons are one row rather than a row of their own.
+  const deskSwitch = isCombined ? (
+    <div className="inline-flex h-10 shrink-0 items-center gap-0.5 rounded-[4px] border border-slate-200 bg-white p-0.5" role="tablist" aria-label="Desk" data-testid="combined-desk-switch">
+      {[
+        { key: "consultant", label: "Consultation", icon: Stethoscope },
+        { key: "physio", label: "Physiotherapy", icon: Activity },
+      ].map((d) => {
+        const active = combinedDesk === d.key;
+        return (
+          <button
+            key={d.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => switchCombinedDesk(d.key)}
+            className={`inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-[3px] px-3 text-sm font-medium transition ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+            data-testid={`combined-desk-${d.key}`}
+          >
+            <d.icon className="h-4 w-4" />
+            {d.label}
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
   const showDietBoard = isDietRole(role);
   const showAccountantBoard = role === "accountant";
   const showZumbaBoard = isZumbaRole(role);
@@ -1479,31 +1505,6 @@ export const CRMPage = ({ auth, onLogout }) => {
         ) : (
         <>
 
-        {isCombined && (
-          <div className="flex w-full gap-1 rounded-[4px] border border-slate-200 bg-white p-1 shadow-sm sm:w-fit" role="tablist" aria-label="Desk" data-testid="combined-desk-switch">
-            {[
-              { key: "consultant", label: "Consultation", icon: Stethoscope },
-              { key: "physio", label: "Physiotherapy", icon: Activity },
-            ].map((d) => {
-              const active = combinedDesk === d.key;
-              return (
-                <button
-                  key={d.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => switchCombinedDesk(d.key)}
-                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-[4px] px-4 py-2 text-sm font-medium transition sm:flex-none ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-                  data-testid={`combined-desk-${d.key}`}
-                >
-                  <d.icon className="h-4 w-4" />
-                  {d.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         {/* Below the nav, not around it: the tabs and the role bar stay on screen
             while a board chunk is fetched, so switching boards reads as the board
             loading rather than the page going away. */}
@@ -1583,14 +1584,14 @@ export const CRMPage = ({ auth, onLogout }) => {
           // not the branch's. Without it this fell to the branch-wide query and every
           // Consultant read every other Consultant's consultations. Operations and Branch
           // Control mount the same board with `supervising` instead and keep the branch view.
-          <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards rowArrow search={hpSearch} onSearchChange={setHpSearch} roleLabel={roleLabel} onLogout={logout} />
+          <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards rowArrow search={hpSearch} onSearchChange={setHpSearch} roleLabel={roleLabel} onLogout={logout} toolbarLead={deskSwitch} />
         )}
 
         {showPhysioBoard && (
           // user/roleLabel are for the board's own My Profile stop — the fourth glyph on
           // the phone's bottom bar, which renders the same page this one does from the
           // header button, inside the board so the bar stays under it.
-          <PhysioBoard user={auth.user} roleLabel={roleLabel} onLogout={logout} />
+          <PhysioBoard user={auth.user} roleLabel={roleLabel} onLogout={logout} toolbarLead={deskSwitch} />
         )}
 
         {showDietBoard && (

@@ -96,7 +96,9 @@ const PROFILE_TAB = { key: "profile", label: "My Profile", icon: UserCircle };
 const BOTTOM_TABS = [...VIEW_TABS, PROFILE_TAB];
 
 // `onLogout` puts Logout on My Profile's Security tab, the phone header having none.
-export const PhysioBoard = ({ physioId, user, roleLabel, onLogout } = {}) => {
+// `toolbarLead`: a host control set at the start of the view bar, ahead of the tabs — the
+// Consultant + Physiotherapist's desk switch, so switch, tabs and toolbar read as one row.
+export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead = null } = {}) => {
   const [activeTab, setActiveTab] = useState("treatment");
   // Absence is marked by the physio for themselves. A desk driving somebody else's board
   // from Operations marks it from Branch Admin > Management > Physio Absence instead.
@@ -135,6 +137,9 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout } = {}) => {
           at a tab you aren't already on — on the selected pill it goes white-on-indigo,
           since a slate badge on a filled tab reads as disabled. */}
       <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 md:border-b md:border-slate-200 md:pb-2 ${activeTab === "profile" ? "hidden md:flex" : "flex"}`} data-testid="physio-view-bar">
+      {/* `contents` without a lead, so the bar lays out exactly as it always has. */}
+      <div className={toolbarLead ? "flex min-w-0 flex-wrap items-center gap-2 md:gap-4" : "contents"}>
+      {toolbarLead}
       <div className="hidden flex-wrap items-center gap-2 overflow-x-auto md:flex" data-testid="physio-view-tabs">
         {viewTabs.map((tab) => {
           const Icon = tab.icon;
@@ -163,6 +168,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout } = {}) => {
             </button>
           );
         })}
+      </div>
       </div>
         <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-2 md:pb-1.5" data-testid="physio-view-toolbar" />
       </div>
