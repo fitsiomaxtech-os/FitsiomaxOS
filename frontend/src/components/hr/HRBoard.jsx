@@ -1797,19 +1797,23 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="hr-emp-modal-close"><X className="h-4 w-4" /></button>
         </div>
-        <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 py-2 text-xs">
-          {EMP_TABS.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)} className={`rounded px-3 py-1 ${tab === t.key ? "bg-sky-50 text-sky-600 font-semibold" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
-          ))}
-        </div>
-        <div className="max-h-[60vh] overflow-y-auto p-5">
+        {/* Sections down the left, the open one's fields down the right, one field to a
+            row. A fixed height keeps the dialog from jumping as a short tab like ID & Docs
+            replaces a long one like Personal. */}
+        <div className="flex h-[60vh] flex-col sm:flex-row">
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
+            {EMP_TABS.map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 whitespace-nowrap rounded-md border-l-2 px-3 py-2 text-left ${tab === t.key ? "border-sky-600 bg-sky-50 font-semibold text-sky-600" : "border-transparent text-slate-600 hover:bg-white"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
+            ))}
+          </div>
+        <div className="min-w-0 flex-1 overflow-y-auto p-5">
           {tab === "personal" && (
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3">
               {/* Above the fields, and spanning them, because it is the one part of this
                   record you identify a person by rather than read. The hidden input is
                   driven by the buttons: a bare file input cannot be styled and prints the
                   chosen filename beside itself, which here duplicates the preview. */}
-              <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:col-span-3">
+              <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <EmployeeAvatar
                   employee={{ full_name: form.full_name, photo_url: photoPreview || form.photo_url }}
                   size={72}
@@ -1872,11 +1876,11 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               <Field label="Marital Status"><Select value={form.marital_status} onChange={(v) => set("marital_status", v)} options={["", "Single", "Married", "Divorced", "Widowed"]} testid="hr-emp-marital" /></Field>
               <Field label="Father's Name"><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} data-testid="hr-emp-father" /></Field>
               <Field label="Mother's Name"><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} data-testid="hr-emp-mother" /></Field>
-              <Field label="Notes" className="sm:col-span-3"><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="h-20 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-notes" /></Field>
+              <Field label="Notes"><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="h-20 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-notes" /></Field>
             </div>
           )}
           {tab === "employment" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <Field label="Employee Code"><Input value={form.employee_code} onChange={(e) => set("employee_code", e.target.value)} placeholder="Auto-generated" data-testid="hr-emp-code" /></Field>
               <Field label="Department *"><Select value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></Field>
               <Field label="Designation *"><Select value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></Field>
@@ -1965,21 +1969,21 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               which is what it is actually for here — the account is where the money goes
               and the PAN is what it is paid against, and they are filled in together. */}
           {tab === "id_docs" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <Field label="Aadhar"><Input value={form.aadhar} onChange={(e) => set("aadhar", e.target.value)} data-testid="hr-emp-aadhar" /></Field>
             </div>
           )}
           {tab === "address" && (
             <div className="grid gap-3">
               <Field label="Address"><textarea value={form.address} onChange={(e) => set("address", e.target.value)} className="h-20 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-address" /></Field>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3">
                 <Field label="Emergency Contact Name"><Input value={form.emergency_contact_name} onChange={(e) => set("emergency_contact_name", e.target.value)} data-testid="hr-emp-ec-name" /></Field>
                 <Field label="Emergency Contact Phone"><Input value={form.emergency_contact_phone} onChange={(e) => set("emergency_contact_phone", e.target.value)} data-testid="hr-emp-ec-phone" /></Field>
               </div>
             </div>
           )}
           {tab === "bank" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <Field label="Bank Name"><Input value={form.bank_name} onChange={(e) => set("bank_name", e.target.value)} data-testid="hr-emp-bank" /></Field>
               <Field label="Account Number"><Input value={form.bank_account} onChange={(e) => set("bank_account", e.target.value)} data-testid="hr-emp-account" /></Field>
               <Field label="IFSC Code"><Input value={form.ifsc} onChange={(e) => set("ifsc", e.target.value)} data-testid="hr-emp-ifsc" /></Field>
@@ -1987,13 +1991,14 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               {/* Said rather than left to be discovered: somebody who came to this tab to
                   type a salary needs telling where the salary went, not an empty space
                   where the box used to be. */}
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500 sm:col-span-2">
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
                 Salary is set in <b>Payroll Management</b>, on the employee's own salary
                 record — each figure filed with the reason for it and the month it starts,
                 so what somebody was on in any given month has an answer.
               </p>
             </div>
           )}
+        </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
           <Button variant="outline" onClick={onClose} data-testid="hr-emp-modal-cancel">Cancel</Button>
