@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
-import { ArrowLeftRight, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowLeftRight, Check, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { getBranches, getLeadTransferEligibility, transferLeadBranch } from "@/lib/api";
 import { PaymentHistory, TransferImpact, TransferReason } from "@/components/branch/BranchTransferDialog";
 import { displayPhone } from "@/lib/phone";
+import { clamp, useDismissOutside, useFloatingPosition } from "@/lib/use-floating";
 
 /**
  * Branch Transfer for the one lead whose popup it was opened from.
@@ -26,6 +28,19 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
   const [reason, setReason] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  // The Transfer to list, floating under (or over) its field the way the Reschedule popup's
+  // Consultant list does, rather than the browser's own <select> list.
+  const [listOpen, setListOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const listRef = useRef(null);
+  const listPos = useFloatingPosition(listOpen, listRef, (w, h) => {
+    const gap = 8;
+    const field = triggerRef.current.getBoundingClientRect();
+    let top = field.bottom + 4;
+    if (top + h > window.innerHeight - gap && field.top - h - 4 >= gap) top = field.top - h - 4;
+    return { left: field.left, width: field.width, top: clamp(top, gap, window.innerHeight - h - gap) };
+  });
+  useDismissOutside(listOpen, [triggerRef, listRef], () => setListOpen(false));
 
   useEffect(() => {
     let cancelled = false;
@@ -95,18 +110,54 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
           ) : !confirming ? (
             <>
               <label className="mt-4 block text-xs font-semibold text-slate-600" htmlFor="lead-branch-transfer-select">Transfer to</label>
-              <select
+              {/* The list floats in a portal over the dialog (z-[70], above its z-[60]), so
+                  the card's scrolling neither clips it nor pushes the reason field down. */}
+              <button
                 id="lead-branch-transfer-select"
-                value={toBranchId}
-                onChange={(e) => setToBranchId(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm outline-none focus:border-indigo-400"
+                ref={triggerRef}
+                type="button"
+                onClick={() => setListOpen((o) => !o)}
+                className={`mt-1 flex h-10 w-full items-center gap-2 rounded-md border bg-white px-3 text-left text-sm transition-colors ${listOpen ? "border-sky-300 ring-2 ring-sky-100" : "border-[#EFEAE0] hover:bg-[#F3EFE6]"}`}
+                aria-haspopup="listbox"
+                aria-expanded={listOpen}
                 data-testid="lead-branch-transfer-destination"
               >
-                <option value="">Choose a branch…</option>
-                {destinations.map((b) => (
-                  <option key={b.id} value={b.id}>{b.branch_name}</option>
-                ))}
-              </select>
+                <span className={`min-w-0 flex-1 truncate ${toBranch ? "font-medium text-slate-800" : "text-slate-400"}`}>
+                  {toBranch ? toBranch.branch_name : "Choose a branch…"}
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${listOpen ? "rotate-180" : ""}`} />
+              </button>
+              {listOpen && createPortal(
+                <div
+                  ref={listRef}
+                  className="fixed z-[70] max-h-60 overflow-y-auto rounded border border-[#EFEAE0] bg-white p-1 shadow-xl"
+                  style={listPos || { top: 0, left: 0, visibility: "hidden" }}
+                  role="listbox"
+                  data-testid="lead-branch-transfer-list"
+                >
+                  {destinations.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-slate-400">No other branches.</p>
+                  )}
+                  {destinations.map((b) => {
+                    const on = toBranchId === b.id;
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        role="option"
+                        aria-selected={on}
+                        onClick={() => { setToBranchId(b.id); setListOpen(false); }}
+                        className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition-colors ${on ? "bg-sky-100 font-semibold text-slate-800" : "text-slate-600 hover:bg-[#F3EFE6]"}`}
+                        data-testid={`lead-branch-transfer-option-${b.id}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{b.branch_name}</span>
+                        <Check className={`h-4 w-4 shrink-0 text-sky-600 ${on ? "" : "invisible"}`} />
+                      </button>
+                    );
+                  })}
+                </div>,
+                document.body,
+              )}
               <TransferReason value={reason} onChange={setReason} testid="lead-branch-transfer-reason" />
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
