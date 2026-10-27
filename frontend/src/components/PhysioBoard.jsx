@@ -367,7 +367,7 @@ const MILESTONE_TONES = {
 // checking both to read one story. Three tabs also give each a third more room on a phone.
 const MODAL_TABS = [
   { key: "overview", label: "Overview", short: "Overview" },
-  { key: "days", label: "Treatment Days", short: "Days" },
+  { key: "days", label: "Treatment", short: "Treatment" },
   { key: "documents", label: "Documents", short: "Docs" },
 ];
 
@@ -1912,10 +1912,18 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
         )
       : null;
     const blockedByDate = blockedByRow ? fmtDate(blockedByRow.slot_time) : null;
+    // What a finished day was treated with and what was written on it, read on the row's
+    // one line and cut off with an ellipsis there. All of it is on the hover, and View
+    // opens the full record.
+    const treatments = (s.physio_treatments || []).filter(Boolean);
+    const notes = [
+      s.jr_physio_remarks && `Treatment: ${s.jr_physio_remarks}`,
+      s.rehab_remarks && `Rehab: ${s.rehab_remarks}`,
+    ].filter(Boolean);
     return (
       <div
         key={s.id}
-        className={`flex items-center gap-3 rounded-lg border p-3 ${
+        className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
           done ? "border-emerald-200 bg-emerald-50/50"
           : awaiting ? "border-amber-200 bg-amber-50/60"
           : isOpenDay ? "border-sky-200 bg-sky-50/40"
@@ -1923,7 +1931,7 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
         }`}
         data-testid={`physio-treatment-day-${s.id}`}
       >
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
           done ? "bg-emerald-200 text-emerald-800"
           : awaiting ? "bg-amber-200 text-amber-800"
           : isOpenDay ? "bg-sky-200 text-sky-800"
@@ -1931,83 +1939,77 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
         }`}>
           {s.session_number}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-700">
+        {/* One line per day: the day, its date, its badges, then what was done on it.
+            Wraps only on a phone, where one line cannot hold it. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+          <span className="whitespace-nowrap font-semibold text-slate-700">
             {/* A rehab day says so, and carries no week: a rehab course is
                 not cut into weeks, and printing "Week 0" over one is worse
                 than printing nothing. Same wording the day list outside
                 this popup uses, so one patient reads the same either way. */}
             {s.track === "rehab" ? "Rehab " : ""}Day {s.session_number} of {s.total_sessions}
             {s.track !== "rehab" && s.week_number ? ` · Week ${s.week_number}` : ""}
-            {/* Marks the one day of the course that is open to be worked.
-                It sorts to the head of the list, but a position is not a
-                label — a day still awaiting a date from the Branch Admin
-                heads the list too and cannot be worked — so the row says
-                in words which day this is. */}
-            {isOpenDay && (
-              datePassed ? (
-                // The date came and went with nothing signed off on it. Naming
-                // it is all this screen can do — a day is worked on its own
-                // date, so putting this one back in play is a new date from the
-                // Branch Admin.
-                <span className="rounded bg-rose-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-rose-700">
-                  Overdue
-                </span>
-              ) : (
-                <span className="rounded bg-sky-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-sky-700">
-                  Opened
-                </span>
-              )
-            )}
-            {/* Sits with Opened because it is read the same way —
-                at a glance, off the title line, while scanning the list for the day to
-                work. The dates themselves go underneath. */}
-            {missed.length > 0 && (
-              <span
-                className="rounded bg-amber-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-700"
-                data-testid={`physio-day-rescheduled-${s.id}`}
-              >
-                Rescheduled{missed.length > 1 ? ` ×${missed.length}` : ""}
-              </span>
-            )}
-          </p>
-          <p className={`text-[10px] ${awaiting ? "font-semibold text-amber-700" : "text-slate-400"}`}>
+          </span>
+          <span className={`whitespace-nowrap text-[11px] ${awaiting ? "font-semibold text-amber-700" : "text-slate-400"}`}>
+            ·{" "}
             {s.slot_time
               ? fmtDate(s.slot_time)
               : awaiting
                 ? "Missed class — Branch Admin to give this day a date"
                 : "—"}
-          </p>
-          {missed.length > 0 && (
-            // Directly under the date this day now holds, because the two are one fact:
-            // the day is here because it was not attended there. Who marked each absence
-            // and whatever they wrote at the time hang off the tooltip — useful when it
-            // is read, but not what the row is for.
-            <p
-              className="mt-0.5 text-[10px] font-semibold text-amber-700"
-              title={missed
-                .map((a) => `Absent on ${fmtDate(a.date) || a.date || "an unrecorded date"}${a.marked_by ? ` — marked by ${a.marked_by}` : ""}${a.remarks ? `: ${a.remarks}` : ""}`)
-                .join("\n")}
-              data-testid={`physio-day-missed-${s.id}`}
-            >
-              Missed {missed.length > 1 ? `${missed.length} times` : "once"} — was{" "}
-              {missed.map((a) => fmtDate(a.date) || a.date).filter(Boolean).join(" · ") || "an unrecorded date"}
-            </p>
+          </span>
+          {/* Marks the one day of the course that is open to be worked.
+              It sorts to the head of the list, but a position is not a
+              label — a day still awaiting a date from the Branch Admin
+              heads the list too and cannot be worked — so the row says
+              in words which day this is. */}
+          {isOpenDay && (
+            datePassed ? (
+              // The date came and went with nothing signed off on it. Naming
+              // it is all this screen can do — a day is worked on its own
+              // date, so putting this one back in play is a new date from the
+              // Branch Admin.
+              <span className="rounded bg-rose-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-rose-700">
+                Overdue
+              </span>
+            ) : (
+              <span className="rounded bg-sky-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-sky-700">
+                Opened
+              </span>
+            )
           )}
-          {(s.physio_treatments || []).length > 0 && (
-            <div className="mt-1">
-              <PhysioTreatmentChips names={s.physio_treatments} testid={`physio-day-treatments-${s.id}`} />
-            </div>
+          {/* Sits with Opened because it is read the same way — at a glance, while
+              scanning the list for the day to work. The dates it was booked for and
+              missed, who marked each absence and what they wrote, hang off the hover:
+              the day is on this date because it was not attended on those. */}
+          {missed.length > 0 && (
+            <span
+              className="cursor-help whitespace-nowrap rounded bg-amber-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-700"
+              title={[
+                `Missed ${missed.length > 1 ? `${missed.length} times` : "once"} — was ${missed.map((a) => fmtDate(a.date) || a.date).filter(Boolean).join(" · ") || "an unrecorded date"}`,
+                ...missed.map((a) => `Absent on ${fmtDate(a.date) || a.date || "an unrecorded date"}${a.marked_by ? ` — marked by ${a.marked_by}` : ""}${a.remarks ? `: ${a.remarks}` : ""}`),
+              ].join("\n")}
+              data-testid={`physio-day-rescheduled-${s.id}`}
+            >
+              Rescheduled{missed.length > 1 ? ` ×${missed.length}` : ""}
+            </span>
           )}
           {/* Every note the day carries, each under its own name. `||`
               printed the treatment half and swallowed the rehab one, so a
               day written up with both -- which is every day signed off while
-              the popup still offered two boxes -- read as half a record. */}
-          {s.jr_physio_remarks && (
-            <p className="mt-0.5 text-[10px] text-emerald-600"><span className="font-semibold">Treatment: </span>{s.jr_physio_remarks}</p>
-          )}
-          {s.rehab_remarks && (
-            <p className="mt-0.5 text-[10px] text-emerald-600"><span className="font-semibold">Rehab: </span>{s.rehab_remarks}</p>
+              the popup still offered two boxes -- read as half a record.
+              basis-0 keeps it on the line and lets it take whatever room is
+              left, rather than a long note wrapping onto a line of its own. */}
+          {(treatments.length > 0 || notes.length > 0) && (
+            <span
+              className="min-w-[6rem] flex-1 basis-0 truncate text-[10px]"
+              title={[treatments.length > 0 && `Treated with: ${treatments.join(", ")}`, ...notes].filter(Boolean).join("\n")}
+              data-testid={`physio-day-treatments-${s.id}`}
+            >
+              {treatments.length > 0 && <span className="font-semibold text-sky-700">{treatments.join(", ")}</span>}
+              {treatments.length > 0 && notes.length > 0 && <span className="text-slate-300"> · </span>}
+              {notes.length > 0 && <span className="text-emerald-600">{notes.join(" · ")}</span>}
+            </span>
           )}
         </div>
         {done ? (
@@ -2153,11 +2155,6 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                 >
                   <span className="sm:hidden">{t.short}</span>
                   <span className="hidden sm:inline">{t.label}</span>
-                  {t.key === "days" && sessions.length > 0 && (
-                    <span className={`text-[10px] font-semibold ${tab === t.key ? "text-white/70" : "text-slate-400"}`}>
-                      {completedSessions.length}/{sessions.length}
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
@@ -2381,9 +2378,56 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
           {/* Treatment days — one row per booked session, completed in order */}
           {tab === "days" && (
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-              Treatment Days {sessions.length > 0 && <span className="text-slate-400">({completedSessions.length} of {sessions.length} complete)</span>}
-            </p>
+            {/* One row: where the course stands, how often its CONSULTANT review falls
+                due, and how many days are left. Stacked as three lines they pushed the
+                day list a third of the popup down. Wraps on a phone rather than scroll. */}
+            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5" data-testid="physio-days-header">
+              <p className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Treatment Days {sessions.length > 0 && <span className="text-slate-400">({completedSessions.length} of {sessions.length} complete)</span>}
+              </p>
+
+              {/* The physio's call; counted from the last review, so a change moves only
+                  the next one. A cover is treating somebody else's patient for the day and
+                  reads the gap rather than setting it. */}
+              {sessions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-testid="physio-review-gap">
+                  <span className="font-semibold text-slate-600">Review every</span>
+                  {coverCourse || isComplete ? (
+                    <span className="font-bold text-slate-700">{reviewEvery} days</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-flex overflow-hidden rounded-md border border-slate-200">
+                        {gapChoices.map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            disabled={savingGap}
+                            onClick={() => changeGap(g)}
+                            className={`px-2.5 py-0.5 text-[11px] font-semibold transition disabled:opacity-60 ${
+                              g === reviewEvery ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                            data-testid={`physio-review-gap-${g}`}
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </span>
+                      <span>days</span>
+                    </span>
+                  )}
+                  {nextReview && !nextReview.eligible && !allDaysDone && (
+                    <span className="text-slate-400">· next review due at day {nextReview.due_at}</span>
+                  )}
+                </div>
+              )}
+
+              {sessions.length > 0 && (
+                <p className="ml-auto flex items-center gap-1.5 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-sky-600" data-testid="physio-days-upcoming-count">
+                  <Clock className="h-3.5 w-3.5" /> Upcoming
+                  <span className="font-semibold text-slate-400">({upcomingDays.length})</span>
+                </p>
+              )}
+            </div>
 
             {paymentHold && (
               <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[11px] text-rose-800" data-testid="physio-payment-hold-banner">
@@ -2395,42 +2439,6 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                     <p className="mt-1 font-semibold text-violet-700">The client has asked the Branch Admin for more time.</p>
                   )}
                 </div>
-              </div>
-            )}
-
-            {/* How often this patient's CONSULTANT review falls due, the physio's call, and
-                when the next one is. Counted from the last review, so a change moves only
-                the next one. A cover is treating somebody else's patient for the day and
-                reads the gap rather than setting it. */}
-            {sessions.length > 0 && (
-              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-testid="physio-review-gap">
-                <span className="font-semibold text-slate-600">Review every</span>
-                {coverCourse || isComplete ? (
-                  <span className="font-bold text-slate-700">{reviewEvery} days</span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex overflow-hidden rounded-md border border-slate-200">
-                      {gapChoices.map((g) => (
-                        <button
-                          key={g}
-                          type="button"
-                          disabled={savingGap}
-                          onClick={() => changeGap(g)}
-                          className={`px-2.5 py-0.5 text-[11px] font-semibold transition disabled:opacity-60 ${
-                            g === reviewEvery ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
-                          }`}
-                          data-testid={`physio-review-gap-${g}`}
-                        >
-                          {g}
-                        </button>
-                      ))}
-                    </span>
-                    <span>days</span>
-                  </span>
-                )}
-                {nextReview && !nextReview.eligible && !allDaysDone && (
-                  <span className="text-slate-400">· next review due at day {nextReview.due_at}</span>
-                )}
               </div>
             )}
 
@@ -2488,12 +2496,8 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                     asks for something is in this half. Completed is the record underneath
                     it. The split was already in the ordering — nothing named it, so a
                     twelve-row list had to be read badge by badge to find where the record
-                    ended and the work began. */}
+                    ended and the work began. Upcoming's heading sits on the header row. */}
                 <div data-testid="physio-days-upcoming">
-                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-600">
-                    <Clock className="h-3.5 w-3.5" /> Upcoming
-                    <span className="font-semibold text-slate-400">({upcomingDays.length})</span>
-                  </p>
                   {upcomingDays.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/40 p-4 text-center text-xs text-emerald-700" data-testid="physio-days-upcoming-empty">
                       Every booked day is done.
