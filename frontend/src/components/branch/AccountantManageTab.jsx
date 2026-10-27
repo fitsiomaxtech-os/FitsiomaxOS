@@ -434,7 +434,9 @@ const PaymentModes = ({ tx }) => {
  *              off the prop on every render, so an empty one means All Branches rather
  *              than "pick your own", which is what a bare branchId would mean.
  */
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false }) => {
+// `squareTable`: every sub-tab's table (Summary, Cash / Expenses, Payment Schedule, Discount
+// Applied, Closing Balance, Close Books) with 4px corners — the Branch Admin's own login.
+export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -1214,8 +1216,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               the revenue tiles, the source table, the payment-mode row — describes money
               going out, so the whole of the income side steps aside for it rather than
               being reused with different numbers in it. */}
-          {ledger === "cash" && <div className={phoneHide(sumStep > 0)}><BranchExpensesPanel section="cash" onChanged={loadExpenseTotals} branchId={branchId} /></div>}
-          {ledger === "expenses" && <div className={phoneHide(sumStep > 0)}><BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} startDate={startDate} endDate={endDate} /></div>}
+          {ledger === "cash" && <div className={phoneHide(sumStep > 0)}><BranchExpensesPanel section="cash" onChanged={loadExpenseTotals} branchId={branchId} squareTable={squareTable} /></div>}
+          {ledger === "expenses" && <div className={phoneHide(sumStep > 0)}><BranchExpensesPanel section="expenses" onChanged={loadExpenseTotals} branchId={branchId} startDate={startDate} endDate={endDate} squareTable={squareTable} /></div>}
 
           {ledger === "income" && (
           <>
@@ -1271,7 +1273,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           </div>
 
           {!branchId && branchRows.length > 1 && (
-            <div className={`rounded-md border border-slate-200 bg-white ${phoneHide(sumStep === 2)}`} data-testid="accountant-manage-by-branch">
+            <div className={`${squareTable ? "rounded-[4px]" : "rounded-md"} border border-slate-200 bg-white ${phoneHide(sumStep === 2)}`} data-testid="accountant-manage-by-branch">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5">
                 <h3 className="text-sm font-semibold text-slate-700">Revenue by branch</h3>
                 {unplacedTotal > 0 && (
@@ -1331,6 +1333,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             onDelete={canDeleteUnverified ? deleteUnverified : undefined}
             busy={moving}
             verify={verify}
+            squareTable={squareTable}
           />
           </div>
           </>
@@ -1347,10 +1350,11 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id }, row }) : undefined}
           startDate={startDate}
           endDate={endDate}
+          squareTable={squareTable}
         />
       ) : tab === "closebooks" ? (
         // The signed-off days inside the range at the top -- see the panel.
-        <CloseBookHistoryPanel branchId={branchId} start={startDate} end={endDate} refreshKey={refreshKey} />
+        <CloseBookHistoryPanel branchId={branchId} start={startDate} end={endDate} refreshKey={refreshKey} squareTable={squareTable} />
       ) : tab === "closing" ? (
         // One evening's count when the range is a single day, the evenings read back when
         // it is longer -- see the panel. A history row opening its own evening narrows the
@@ -1361,9 +1365,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           end={endDate}
           refreshKey={refreshKey}
           onPickDay={(on) => pickDates("custom", on, on)}
+          squareTable={squareTable}
         />
       ) : (
-        <DiscountAppliedBoard rows={discountedTxns} onOpen={openDetail} verify={verify} />
+        <DiscountAppliedBoard rows={discountedTxns} onOpen={openDetail} verify={verify} squareTable={squareTable} />
       )}
       </div>
 
@@ -1464,7 +1469,7 @@ const DISCOUNT_VIEWS = [
  * away the one that was actually negotiated.
  */
 /** @param onOpen  Opens a collection's PaymentDetails -- its arrow, and a tap on its phone card. */
-const DiscountAppliedBoard = ({ rows, onOpen, verify = null }) => {
+const DiscountAppliedBoard = ({ rows, onOpen, verify = null, squareTable = false }) => {
   const [view, setView] = useState("all");
 
   // Falls back to listed = collected + discount when original_amount is missing, which is
@@ -1512,7 +1517,7 @@ const DiscountAppliedBoard = ({ rows, onOpen, verify = null }) => {
         })}
       </div>
 
-      <Card>
+      <Card className={squareTable ? "rounded-[4px]" : ""}>
         <CardContent className="p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {view === "all" ? "Discount Applied" : `${DISCOUNT_VIEWS.find((v) => v.key === view)?.label} Discounts`}
@@ -1681,7 +1686,7 @@ const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.l
  * @param verify  Whether this is the branch desk's copy, which heads the arrow's column
  *              Action rather than View -- Send and Undo are in what it opens.
  */
-const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => {
+const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null, squareTable = false }) => {
   const groups = useMemo(() => groupPaymentsByClient(rows), [rows]);
   // Keyed by group, so narrowing the list above leaves stale keys behind harmlessly
   // rather than opening the wrong client.
@@ -1699,7 +1704,7 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null }) => 
   const toggleAll = () => setOpen(allOpen ? new Set() : new Set(expandable.map((g) => g.key)));
 
   return (
-    <Card className="overflow-hidden" data-testid="accountant-manage-revenue-detail">
+    <Card className={`overflow-hidden ${squareTable ? "rounded-[4px]" : ""}`} data-testid="accountant-manage-revenue-detail">
       <CardContent className="p-0">
         {/* No title or counts bar: the table's own column header is the top of the card.
             Expand all only appears when some client actually has several payments. */}

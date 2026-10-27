@@ -2383,7 +2383,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <RecordsPanel branchId={branchId} />
       ) : activeView === "accountant_mgmt" ? (
         // phoneCards: on a phone its tabs are the same stack as Branch Leads' stages.
-        <AccountantManageTab branchId={branchId} phoneCards />
+        <AccountantManageTab branchId={branchId} phoneCards squareTable={squareTable} />
       ) : (
         <>
           {/* Stage Head Bar — Pre-Sales style sticky segmented tabs, and the same block

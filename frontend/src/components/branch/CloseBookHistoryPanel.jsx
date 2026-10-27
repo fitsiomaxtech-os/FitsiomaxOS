@@ -61,14 +61,14 @@ const Verdict = ({ book, testid }) => {
  * is what they open when the answer is no. Eight days of three-line tables would bury the
  * one day worth looking at.
  */
-const BookRow = ({ book, open, onToggle, onUndo, undoing = false }) => {
+const BookRow = ({ book, open, onToggle, onUndo, undoing = false, square = false }) => {
   const counted = book.counted || {};
   const expected = book.expected || {};
   const Chevron = open ? ChevronDown : ChevronRight;
 
   return (
     <div
-      className={`overflow-hidden rounded-lg border ${
+      className={`overflow-hidden ${square ? "rounded-[4px]" : "rounded-lg"} border ${
         book.closed && !book.matched ? "border-rose-200" : "border-slate-200"
       }`}
       data-testid={`close-book-row-${book.on}`}
@@ -185,7 +185,7 @@ const BookRow = ({ book, open, onToggle, onUndo, undoing = false }) => {
  * own totals: a history that recalculated them would quietly rewrite what people put their
  * names to as the underlying days changed.
  */
-export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshKey = 0 }) => {
+export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshKey = 0, squareTable = false }) => {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openDay, setOpenDay] = useState(null);
@@ -254,7 +254,7 @@ export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshK
         </p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={`${squareTable ? "rounded-[4px]" : "rounded-xl"} border border-slate-200 bg-white p-4 shadow-sm`}>
         {books.length > 0 && (
           <p className="mb-3 text-xs text-slate-500" data-testid="close-book-summary">
             <span className="font-semibold text-slate-700">{summary.closed}</span> closed
@@ -282,6 +282,7 @@ export const CloseBookHistoryPanel = ({ branchId, start = "", end = "", refreshK
               onToggle={() => setOpenDay((d) => (d === b.on ? null : b.on))}
               onUndo={canUndo ? () => undoClose(b.on) : undefined}
               undoing={undoing === b.on}
+              square={squareTable}
             />
           ))}
         </div>

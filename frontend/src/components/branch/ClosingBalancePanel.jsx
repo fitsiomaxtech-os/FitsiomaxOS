@@ -680,7 +680,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
  * The uncounted evenings are listed as loudly as the counted ones. A history that showed
  * only what was recorded would read as a clean month on a branch that counted twice.
  */
-const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpenDay }) => {
+const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpenDay, squareTable = false }) => {
   const [history, setHistory] = useState(null);
   // The evening whose close is being undone, while the request is out.
   const [undoing, setUndoing] = useState(null);
@@ -889,7 +889,7 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
         })}
       />
 
-      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
+      <div className={`hidden overflow-x-auto border border-slate-200 bg-white md:block ${squareTable ? "rounded-[4px]" : "rounded-xl"}`}>
         {/* Fixed proportions rather than auto widths, the same reason the expenses table
             pins its own: left to itself the browser hands a wide screen's slack to
             whichever row holds the longest note, and the dates stop lining up. */}
@@ -1057,7 +1057,7 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
  * @param onPickDay  Narrows the top filter to one day, for a row in the history that opens
  *                   its own evening -- the only window a count can be recorded in.
  */
-export const ClosingBalancePanel = ({ branchId, start = "", end = "", refreshKey = 0, onPickDay }) => {
+export const ClosingBalancePanel = ({ branchId, start = "", end = "", refreshKey = 0, onPickDay, squareTable = false }) => {
   const single = !start || !end || start === end;
   const day = start || end || todayIso();
 
@@ -1090,6 +1090,7 @@ export const ClosingBalancePanel = ({ branchId, start = "", end = "", refreshKey
         <DayCount branchId={branchId} day={day} refreshKey={refreshKey} />
       ) : (
         <ClosingBalanceHistory
+          squareTable={squareTable}
           branchId={branchId}
           start={start}
           end={end}

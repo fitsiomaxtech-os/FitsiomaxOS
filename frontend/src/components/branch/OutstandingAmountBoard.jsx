@@ -238,7 +238,7 @@ const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
  *              it by its due date, or where none is set by the day its bill was raised --
  *              the same due date the month strip above goes by.
  */
-export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld, startDate = "", endDate = "" }) => {
+export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld, startDate = "", endDate = "", squareTable = false }) => {
   const collectable = (r) => Boolean(onCollect) && !r.old_client && !r.past_data && r.balance > 0 && canCollect(r);
   // What a tap on the row opens, on the phone card and the table row alike: the client
   // popup, or for an old client -- who has no client card -- their instalment form.
@@ -308,7 +308,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
         <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" arrow color="#7c3aed" active={card === "pending"} onClick={() => pickCard("pending")} />
       </div>
 
-      <Card data-testid="accountant-manage-outstanding">
+      <Card className={squareTable ? "rounded-[4px]" : ""} data-testid="accountant-manage-outstanding">
         <CardContent className="p-0">
           {/* One toolbar, then the table, as on the Zumba tab: status and amount on the
               left, search and the buttons at the right. On a window too narrow for all

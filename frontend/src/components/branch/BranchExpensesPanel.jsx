@@ -693,8 +693,8 @@ const PileTab = ({ label, amount, count, active, onClick, testid }) => (
 
 /** The wrapper every list on this panel sits in — HR Admin's list frame exactly: one
     rounded card, the header band in slate, rows divided rather than boxed. */
-const ListFrame = ({ children, testid }) => (
-  <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block" data-testid={testid}>
+const ListFrame = ({ children, testid, square = false }) => (
+  <div className={`hidden overflow-hidden border border-slate-200 bg-white sm:block ${square ? "rounded-[4px]" : "rounded-xl"}`} data-testid={testid}>
     <div className="overflow-x-auto">{children}</div>
   </div>
 );
@@ -742,7 +742,7 @@ const DeleteBin = ({ row, onDelete, busy, testid }) => (
   </button>
 );
 
-const ExpenseList = ({ rows, loading, empty, showBranch, testid, onDelete, deletingId }) => {
+const ExpenseList = ({ rows, loading, empty, showBranch, testid, onDelete, deletingId, square = false }) => {
   if (loading) return <EmptyList testid={`${testid}-loading`}>Loading…</EmptyList>;
   if (!rows.length) return <EmptyList testid="branch-expense-empty">{empty}</EmptyList>;
 
@@ -785,7 +785,7 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid, onDelete, delet
         ))}
       </div>
 
-      <ListFrame testid={`${testid}-desktop`}>
+      <ListFrame testid={`${testid}-desktop`} square={square}>
         <table className="w-full min-w-[860px] text-sm">
           <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
             <tr>
@@ -865,7 +865,7 @@ const ExpenseList = ({ rows, loading, empty, showBranch, testid, onDelete, delet
  * sum as the Cash In Hand cards, laid sideways: what each branch took in cash, what it
  * spent and sent up, and what it should still be holding.
  */
-const CashByBranchList = ({ rows }) => {
+const CashByBranchList = ({ rows, square = false }) => {
   if (!rows.length) return <EmptyList testid="branch-cash-by-branch-empty">No branches to count.</EmptyList>;
 
   return (
@@ -890,7 +890,7 @@ const CashByBranchList = ({ rows }) => {
         ))}
       </div>
 
-      <ListFrame testid="branch-cash-by-branch-desktop">
+      <ListFrame testid="branch-cash-by-branch-desktop" square={square}>
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
             <tr>
@@ -940,7 +940,7 @@ const CashByBranchList = ({ rows }) => {
    startDate / endDate: the range the board above is read under (YYYY-MM-DD), matched
    against each expense's own date. Left off, every expense ever raised, as before. The
    drawer ignores them -- cash in hand is what the box holds now. */
-export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", startDate, endDate }) => {
+export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", startDate, endDate, squareTable = false }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   // Developer Access's expense delete switch, read back on the list.
@@ -1274,13 +1274,14 @@ export const BranchExpensesPanel = ({ onChanged, branchId, section = "all", star
                 {cashFailed ? "Could not load cash in hand — refresh to try again." : "Loading cash in hand…"}
               </EmptyList>
             ) : (
-              <CashByBranchList rows={byBranch} />
+              <CashByBranchList rows={byBranch} square={squareTable} />
             )}
           </div>
         )
       ) : (
         <>
           <ExpenseList
+            square={squareTable}
             rows={list.rows}
             loading={loading}
             empty={list.empty}
