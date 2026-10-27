@@ -5990,7 +5990,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               not by the order they are written here — inline wins wherever dvh is
               understood, and is dropped as invalid wherever it is not, leaving the class. */}
           <div
-            className={`flex max-h-[calc(100vh-2rem)] w-full ${apptDraft.step === "book" ? "max-w-5xl" : "max-w-2xl"} flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
+            className={`flex max-h-[calc(100vh-2rem)] w-full ${apptDraft.step === "book" ? "max-w-6xl" : "max-w-2xl"} flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl`}
             style={{ maxHeight: "calc(100dvh - 2rem)" }}
           >
             {/* One line, and only the word for what this is. The three steps below are
@@ -6004,7 +6004,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 {/* What the first step settled, kept in sight while the slot is picked,
                     with the way back to change it. */}
                 {apptDraft.step === "book" && (
-                  <span className="ml-1 inline-flex min-w-0 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700" data-testid="branch-appt-visit-chip">
+                  <span className="ml-1 inline-flex min-w-0 items-center gap-1.5 rounded-[4px] border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700" data-testid="branch-appt-visit-chip">
                     {apptDraft.visit_type === "home" ? <Home className="h-3.5 w-3.5 shrink-0" /> : <Building2 className="h-3.5 w-3.5 shrink-0" />}
                     <span className="truncate">
                       {apptDraft.visit_type === "home"
@@ -6272,7 +6272,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
               </div>
 
               {/* STEP 2 — Head Physio */}
-              <div className="w-full flex-shrink-0 border-b border-slate-200 p-4 sm:p-5 lg:w-[18rem] lg:border-b-0 lg:border-r lg:overflow-y-auto" data-testid="branch-appt-expert-panel">
+              <div className="w-full flex-shrink-0 border-b border-slate-200 p-4 sm:p-5 lg:w-[20rem] lg:border-b-0 lg:border-r lg:overflow-y-auto" data-testid="branch-appt-expert-panel">
                 <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">2 · CONSULTANT</p>
                 {!apptDraft.appointment_date ? (
                   <p className="rounded-lg border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-400">Pick a date first.</p>
@@ -6281,7 +6281,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 ) : apptExperts.experts.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-400">No CONSULTANT is available on this date.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {apptExperts.experts.map((doc) => {
                       const active = apptDraft.physio_id === doc.id;
                       // Available means this consultant is working the day, which is the
@@ -6300,7 +6300,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                             setApptDraft({ ...apptDraft, physio_id: doc.id, appointment_time: "", duration: null });
                             setApptTime({ h: "", m: "", ap: "AM" });
                           }}
-                          className={`flex w-full items-center gap-3 rounded-lg border p-3.5 text-left transition ${active ? "border-sky-500 bg-sky-50 shadow-sm" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-slate-50"}`}
+                          // One row of one height: face, name, and the status pinned to the
+                          // right edge, so every row in the list is the same size and the
+                          // badges line up down the column. The picked row is told by its
+                          // blue border and fill, which is why it carries no tick of its
+                          // own — a tick would take the width the name needs.
+                          className={`flex h-12 w-full items-center gap-2.5 rounded-[4px] border px-2.5 text-left transition ${active ? "border-sky-500 bg-sky-50" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-slate-50"}`}
                           data-testid={`branch-appt-expert-${doc.id}`}
                         >
                           {/* The consultant's own face where HR has one on file, their
@@ -6311,32 +6316,29 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                               photograph has no room for. */}
                           <EmployeeAvatar
                             employee={doc}
-                            size={44}
+                            size={32}
                             fallbackClassName={active ? "bg-sky-600 text-white" : "bg-sky-100 text-sky-700"}
                             className={active ? "ring-2 ring-sky-500" : ""}
                           />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-slate-800">{doc.full_name}</p>
-                            {/* Available or not, and nothing else. The count that used to
-                                sit here was a number nobody acted on: the slot grid one
-                                column over is where a time actually gets chosen, and it
-                                now shows the consultant's whole day anyway, so the tally
-                                was both duplicated and less useful than the thing it
-                                duplicated. Green reads as "go", amber as "not this one",
-                                which is the whole of the decision this column makes. */}
-                            <span
-                              className={`mt-1 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
-                                open > 0
-                                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                                  : "bg-amber-50 text-amber-700 ring-amber-200"
-                              }`}
-                              data-testid={`branch-appt-expert-open-${doc.id}`}
-                            >
-                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${open > 0 ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              {open > 0 ? "Available" : "Not available"}
-                            </span>
-                          </div>
-                          {active && <CheckCircle2 className="ml-auto h-5 w-5 shrink-0 text-sky-600" />}
+                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{doc.full_name}</p>
+                          {/* Available or not, and nothing else. The count that used to
+                              sit here was a number nobody acted on: the slot grid one
+                              column over is where a time actually gets chosen, and it
+                              now shows the consultant's whole day anyway, so the tally
+                              was both duplicated and less useful than the thing it
+                              duplicated. Green reads as "go", amber as "not this one",
+                              which is the whole of the decision this column makes. */}
+                          <span
+                            className={`inline-flex shrink-0 items-center gap-1.5 rounded-[4px] px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                              open > 0
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                : "bg-amber-50 text-amber-700 ring-amber-200"
+                            }`}
+                            data-testid={`branch-appt-expert-open-${doc.id}`}
+                          >
+                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${open > 0 ? "bg-emerald-500" : "bg-amber-500"}`} />
+                            {open > 0 ? "Available" : "Not available"}
+                          </span>
                         </button>
                       );
                     })}
@@ -6417,23 +6419,18 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   </div>
                 ) : (
                   <>
-                    {/* Available, and the hours they said they would be here. The whole of
-                        what the calendar has to say about this day, said once. */}
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" data-testid="branch-appt-available">
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        Available
-                      </span>
-                      {apptDayBlocks.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {apptDayBlocks.map(([a, b]) => (
-                            <span key={a} className="rounded-md bg-white px-2 py-1 text-xs text-emerald-800 ring-1 ring-inset ring-emerald-200">
-                              <b className="font-semibold">{apptShiftName(a)}</b> · {to12h(apptClockText(a))} – {to12h(apptClockText(b))}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    {/* The hours they said they would be here, on one row. No "Available"
+                        tag above them: the green itself says it, and the consultant column
+                        beside this one already shows the word. */}
+                    {apptDayBlocks.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-[4px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" data-testid="branch-appt-available">
+                        {apptDayBlocks.map(([a, b]) => (
+                          <span key={a} className="whitespace-nowrap">
+                            <b className="font-semibold">{apptShiftName(a)}</b> · {to12h(apptClockText(a))} – {to12h(apptClockText(b))}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* The hour itself. Three fields and not one text box, because a
                         patient is told "quarter past seven in the evening" and that is
