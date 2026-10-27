@@ -1215,8 +1215,10 @@ const ViewRow = ({ label, value }) => (
   </div>
 );
 
+// Flush with the dialog's edges — no card corners or outer border, which would only
+// double up against the sidebar's and header's own lines.
 const ViewSection = ({ title, children }) => (
-  <div className="rounded-xl border border-slate-200 p-3">
+  <div className="px-5 py-3">
     {/* Optional: the tab bar above already names the section when this card sits under
         one, and repeating it there reads as the same word twice. */}
     {title && <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</p>}
@@ -1285,9 +1287,9 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
             ))}
           </div>
 
-        <div className="min-w-0 flex-1 overflow-y-auto p-5">
+        <div className="min-w-0 flex-1 overflow-y-auto p-0">
           {tab === "personal" && (
-            <div className="space-y-3">
+            <div className="divide-y divide-slate-200">
               <ViewSection>
                 <ViewRow label="Email" value={e.email} />
                 <ViewRow label="Phone" value={displayPhone(e.phone)} />
