@@ -1196,10 +1196,12 @@ export const CRMPage = ({ auth, onLogout }) => {
               <HeaderThemePicker userId={auth.user.id} />
               {/* A Head Physio's own calendar sits beside their profile rather than in the
                   board's tab row — it's a reference, not one of the lists they work. */}
-              {showHeadPhysioBoard && (
+              {/* A Consultant + Physiotherapist keeps it on the Physiotherapy side too, where
+                  it opens their Physio calendar — the one a Physio's phone header opens. */}
+              {(showHeadPhysioBoard || (isCombined && showPhysioBoard)) && (
                 <button
                   type="button"
-                  onClick={() => setShowHPCalendar(true)}
+                  onClick={() => (showHeadPhysioBoard ? setShowHPCalendar(true) : setShowPhysioCalendar(true))}
                   className="inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-[2px] border border-slate-200 px-2 text-xs font-medium text-slate-600 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] transition-colors hover:bg-slate-50 sm:h-11 sm:px-3"
                   data-testid="hp-header-calendar-button"
                 >
