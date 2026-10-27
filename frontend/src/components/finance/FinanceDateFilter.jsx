@@ -257,8 +257,9 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
  * padding and scrolls itself if a phone leaves it short.
  *
  * `pill` is Approvals', whose row shares one toolbar with the ledger switch and filter pills
- * of its own, all at 2px corners. One group standing 8px taller than the group beside it
- * reads as a mistake rather than as a different kind of control.
+ * of its own, all 30px tall. One group standing 10px taller than the group beside it reads
+ * as a mistake rather than as a different kind of control. Borderless with 4px corners,
+ * as that toolbar is.
  *
  * `inline` is the toolbar button on a diet, for Summary, where the row shares its line with
  * five tab buttons and the two together have to fit without wrapping. It gives back its
@@ -292,9 +293,9 @@ const VARIANTS = {
   pill: {
     gap: "gap-1.5",
     scrolls: true,
-    btn: "shrink-0 whitespace-nowrap rounded-[2px] border px-3 py-1.5 text-xs font-medium transition",
-    on: "border-sky-600 bg-sky-600 text-white shadow-sm",
-    off: "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600",
+    btn: "h-[30px] shrink-0 whitespace-nowrap rounded-[4px] px-3 text-xs font-medium transition",
+    on: "bg-sky-600 text-white shadow-sm",
+    off: "bg-white text-slate-600 hover:bg-slate-50 hover:text-sky-600",
   },
 };
 

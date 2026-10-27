@@ -104,8 +104,12 @@ export const manualToIso = (text) => {
  *
  * `phoneSmall` takes the trigger (and its clear X) down to 32px below sm, for a phone
  * toolbar whose other buttons are that size.
+ *
+ * `compact` is the `centered` trigger (and its clear X) at 30px with 4px corners and no
+ * border, for Finance > Approvals' borderless toolbar of 30px pills. The dialog it opens
+ * is unchanged.
  */
-export const DateFilterPopover = ({ value, onChange, testid = "date-filter", centered = false, placeholder = "Date Filter", iconOnly = false, large = false, phoneIconOnly = false, phoneSmall = false }) => {
+export const DateFilterPopover = ({ value, onChange, testid = "date-filter", centered = false, placeholder = "Date Filter", iconOnly = false, large = false, phoneIconOnly = false, phoneSmall = false, compact = false }) => {
   const [open, setOpen] = useState(false);
   const [showRange, setShowRange] = useState(false);
   const [rangeFrom, setRangeFrom] = useState("");
@@ -199,7 +203,9 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
           onClick={() => setOpen(true)}
           title={activeLabel}
           aria-label={activeLabel}
-          className={`h-10 ${phoneSmall ? "max-sm:h-8 max-sm:[&_svg]:!size-3.5" : ""} ${iconOnly && !isActive ? `w-10 px-0 ${phoneSmall ? "max-sm:w-8" : ""}` : ""} ${
+          className={compact ? `h-[30px] rounded-[4px] border-0 py-0 text-xs shadow-none ${iconOnly && !isActive ? "w-[30px] px-0" : "px-2.5"} ${
+            isActive ? "rounded-r-none bg-amber-50 text-amber-800 hover:bg-amber-100" : "bg-white text-slate-600 hover:bg-slate-50 hover:text-sky-600"
+          }` : `h-10 ${phoneSmall ? "max-sm:h-8 max-sm:[&_svg]:!size-3.5" : ""} ${iconOnly && !isActive ? `w-10 px-0 ${phoneSmall ? "max-sm:w-8" : ""}` : ""} ${
             phoneIconOnly && iconOnly && isActive ? `w-10 px-0 sm:w-auto sm:px-4 ${phoneSmall ? "max-sm:w-8" : ""}` : ""
           } ${isActive ? "rounded-r-none border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : ""}`}
           data-testid={`${testid}-btn`}
@@ -212,7 +218,9 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
           <button
             type="button"
             onClick={clear}
-            className={`flex h-10 ${phoneSmall ? "max-sm:h-8" : ""} items-center rounded-r-md border border-l-0 border-amber-300 bg-amber-50 px-2 text-amber-800 hover:bg-amber-100`}
+            className={`flex items-center bg-amber-50 px-2 text-amber-800 hover:bg-amber-100 ${
+              compact ? "h-[30px] rounded-r-[4px]" : `h-10 ${phoneSmall ? "max-sm:h-8" : ""} rounded-r-md border border-l-0 border-amber-300`
+            }`}
             title="Clear date filter"
             aria-label="Clear date filter"
             data-testid={`${testid}-clear-x`}

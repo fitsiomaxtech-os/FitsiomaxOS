@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { FilterSelect } from "@/components/ui/filter-select";
-import { rangeFor, rangeIncomplete } from "@/lib/dateRange";
+import { rangeFor, toIso } from "@/lib/dateRange";
+import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { getFinanceApprovals, getBranches, approveTransaction, unapproveTransaction, bulkApproveTransactions, deleteTransaction } from "@/lib/api";
 import { ExpenseApprovalsPanel } from "@/components/finance/ExpenseApprovalsPanel";
 import { displayPhone } from "@/lib/phone";
@@ -106,23 +107,24 @@ const VERTICALS = [["all", "All"], ["offline", "Offline"], ["online", "Online"]]
 
 // The same six windows Summary offers, so a figure read there for Yesterday or Last Month
 // can be opened here under the same window to sign it off. This Week went for the same
-// reason Summary dropped it: the ledger is read by the day or by the month. Custom Range
-// stays last, where a preset row ends everywhere else in the OS.
-const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month", "custom"];
+// reason Summary dropped it: the ledger is read by the day or by the month. No Custom
+// Range button: an arbitrary date is the calendar icon's job, after the row.
+const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month"];
 
 /**
  * One filter pill, the size and sky of the date filter's pill variant beside it, so the
- * one toolbar line reads as one set of controls.
+ * one toolbar line reads as one set of controls. No border, like everything else on that
+ * line: 30px tall by its own height rather than by padding plus a 1px edge.
  */
 const FilterPill = ({ on, onClick, children, testId }) => (
   <button
     type="button"
     onClick={onClick}
     aria-pressed={on}
-    className={`shrink-0 rounded-[2px] border px-3 py-1.5 text-xs font-medium transition ${
+    className={`h-[30px] shrink-0 rounded-[2px] px-3 text-xs font-medium transition ${
       on
-        ? "border-sky-600 bg-sky-600 text-white shadow-sm"
-        : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
+        ? "bg-sky-600 text-white shadow-sm"
+        : "bg-white text-slate-600 hover:bg-slate-50 hover:text-sky-600"
     }`}
     data-testid={testId}
   >
@@ -696,14 +698,29 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
   // because it is the one filter that means the same thing on either side -- a day's
   // collections and a day's spending are the same day -- so it is asked once, above the
   // ledger switch, and both /finance/approvals and /finance/expenses take it from here.
+  //
+  // Two controls, each with its own state, the way Pre Sales holds them: the row of
+  // windows, and the calendar icon after it (DateFilterPopover's { key, label, from, to },
+  // null while it narrows nothing). Pressing Today lights Today and leaves the calendar
+  // alone; a date picked on the calendar sets the row back to All, since the overlap of
+  // Today and Sep 01 is an empty list and the date just picked is plainly the one being
+  // asked for. The list is read through the overlap of the two.
   const [preset, setPreset] = useState("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [startDate, endDate] = useMemo(
-    () => rangeFor(preset, customFrom, customTo),
-    [preset, customFrom, customTo],
-  );
-  const pickDates = (key, from, to) => { setPreset(key); setCustomFrom(from); setCustomTo(to); };
+  const [calendarDate, setCalendarDate] = useState(null);
+  const pickCalendar = (next) => {
+    setCalendarDate(next);
+    if (next) setPreset("all");
+  };
+  const [startDate, endDate] = useMemo(() => {
+    const [rowFrom, rowTo] = rangeFor(preset);
+    const calFrom = calendarDate?.from ? toIso(calendarDate.from) : "";
+    const calTo = calendarDate?.to ? toIso(calendarDate.to) : "";
+    // ISO dates sort as text: the later of the two starts, the earlier of the two ends.
+    return [
+      [rowFrom, calFrom].filter(Boolean).sort().pop() || "",
+      [rowTo, calTo].filter(Boolean).sort()[0] || "",
+    ];
+  }, [preset, calendarDate]);
   const [view, setView] = useState("pending"); // "pending" | "approved"
   const [ledger, setLedger] = useState("income"); // "income" | "expenses"
   const [data, setData] = useState({ transactions: [], summary: {} });
@@ -719,10 +736,6 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
   useEffect(() => { if (!controlled) getBranches().then(setBranches).catch(() => {}); }, [controlled]);
 
   const load = useCallback(async () => {
-    // A half-typed custom range would ask for everything from one date to nothing, which
-    // reads as an empty ledger rather than as an unfinished question. The list stays on
-    // what it was showing until both ends are picked -- same rule Expense's row follows.
-    if (rangeIncomplete(preset, customFrom, customTo)) return;
     setLoading(true);
     try {
       const params = { approved: view === "approved" };
@@ -739,7 +752,7 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
       setSelected(new Set());
     } catch { /* silent */ }
     setLoading(false);
-  }, [branchId, mode, category, paymentMode, startDate, endDate, preset, customFrom, customTo, view]);
+  }, [branchId, mode, category, paymentMode, startDate, endDate, view]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -817,10 +830,11 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           was for and how it was paid describe a collection and have nothing to say about
           an expense -- /finance/expenses does not take them -- so those two dropdowns are
           not offered against one. Every control here is 2px-cornered, like Summary's
-          cards. */}
-      <div className="divide-y divide-slate-100 overflow-hidden rounded-[2px] border border-slate-200 bg-white" data-testid="finance-approvals-filters">
+          cards, except the date filter's 4px. No borders, on the block's edge or on any
+          control in it -- the same flat look Summary's bars took. */}
+      <div className="overflow-hidden rounded-[2px] bg-white" data-testid="finance-approvals-filters">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5" data-testid="finance-approvals-toolbar">
-          <div className="flex shrink-0 items-center gap-0.5 rounded-[2px] border border-slate-200 bg-slate-50 p-0.5" data-testid="finance-approvals-ledger">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-[2px] bg-slate-50 p-[3px]" data-testid="finance-approvals-ledger">
             {LEDGERS.map((l) => (
               <button
                 key={l.key}
@@ -857,7 +871,7 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-8 rounded-[2px] border border-slate-200 px-2 text-xs"
+                className="h-[30px] rounded-[2px] border-0 bg-slate-50 px-2 text-xs"
                 data-testid="finance-approvals-branch"
               >
                 <option value="">All Branches</option>
@@ -901,20 +915,29 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           )}
 
           {/* The shared finance row, so this desk and the three pages beside it name their
-              windows with the same words and reach them the same way. Custom Range opens
-              the dialog rather than dropping two date fields into the block underneath.
-              The pill variant, not the toolbar button the other three carry: that one
-              stands 8px taller than the pills sharing this line. */}
-          <div className="min-w-0 sm:ml-auto">
+              windows with the same words and reach them the same way. The pill variant,
+              not the toolbar button the other three carry: that one stands 10px taller
+              than the pills sharing this line. Then the calendar icon, onto the same
+              Filter by Date dialog Pre Sales opens, for a day or a range the row does not
+              name -- its own control with its own state, see pickCalendar. */}
+          <div className="flex min-w-0 items-center gap-1.5 sm:ml-auto" data-testid="finance-approvals-dates">
             <FinanceDateFilter
               preset={preset}
-              customFrom={customFrom}
-              customTo={customTo}
-              onChange={pickDates}
+              onChange={(key) => setPreset(key)}
               presets={DATE_PRESETS}
               variant="pill"
               testid="finance-approvals-window"
             />
+            <div className="shrink-0">
+              <DateFilterPopover
+                value={calendarDate}
+                onChange={pickCalendar}
+                testid="finance-approvals-calendar"
+                centered
+                iconOnly
+                compact
+              />
+            </div>
           </div>
         </div>
       </div>
