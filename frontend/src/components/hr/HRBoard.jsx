@@ -1208,10 +1208,13 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
 
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
+// Laid out as the Edit dialog's FormRow — the same label column, then the value in a
+// box the width of the input it was typed into — so every value starts on one line and
+// the read sits field-for-field over the write.
 const ViewRow = ({ label, value }) => (
-  <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-1.5 last:border-0">
-    <span className="shrink-0 text-xs text-slate-500">{label}</span>
-    <span className="text-right text-xs font-medium text-slate-800">{value || "—"}</span>
+  <div className="flex items-start gap-3 border-b border-slate-100 py-1 last:border-0">
+    <span className="w-36 shrink-0 pt-2 text-xs text-slate-500">{label}</span>
+    <span className="min-h-8 min-w-0 flex-1 break-words rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-[7px] text-xs font-medium text-slate-800">{value || "—"}</span>
   </div>
 );
 
