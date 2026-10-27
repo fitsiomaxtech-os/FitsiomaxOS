@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff, UserX } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff, UserX, ChevronLeft, Menu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,8 @@ import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { NotifyCard } from "@/components/ui/notify-card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useStageBack } from "@/components/ui/phone-back";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { downloadCsv } from "@/lib/printable";
 import { ROLE_META, roleLabel, roleClasses, setCustomRoleClasses } from "@/lib/roles";
@@ -297,7 +299,14 @@ const DashboardTab = () => {
   const [approvals, setApprovals] = useState(null);
   const [selected, setSelected] = useState("active");
   const [search, setSearch] = useState("");
-  const listRef = useRef(null);
+  // Phone only, as Branch Admin's Review does it: the figures are a stack of rows, and a tap
+  // opens that figure's list on a screen of its own with a back bar above it. From sm up
+  // nothing reads this; the desk keeps cards and list on one screen.
+  const [phoneList, setPhoneList] = useState(false);
+  // Where the back bar sticks: just under the board header, whose height is the role's
+  // own (Branch Admin's is 61px, Super Admin's taller), so it is measured, not assumed.
+  const [barTop, setBarTop] = useState(0);
+  useStageBack(phoneList); // a no-op unless a board above provides the phone's Back
 
   useEffect(() => {
     hrDashboard().then(setData).catch(() => toast.error("Failed to load"));
@@ -349,43 +358,106 @@ const DashboardTab = () => {
     [r.full_name, r.employee_name, r.employee_code, r.email, r.phone, r.designation, r.department, r.branch_name, r.role, r.kind, r.reason]
       .some((v) => String(v || "").toLowerCase().includes(q)));
 
+  // A figure picked from the phone's rows or its back bar's menu: the same as clicking the
+  // desk's card, then its list on its own screen, read from the top.
+  const openPhoneCard = (key) => {
+    setSelected(key);
+    setSearch("");
+    setBarTop(document.querySelector('[data-testid="role-board-header"]')?.getBoundingClientRect().height || 0);
+    setPhoneList(true);
+    window.scrollTo({ top: 0 });
+  };
+  const closePhoneCard = () => {
+    setPhoneList(false);
+    setSearch("");
+    window.scrollTo({ top: 0 });
+  };
+
   return (
     // flex+gap, not space-y: the phone rows and the desk cards are each hidden by class at
     // the other's width, and space-y would still hand the desk cards a phantom top margin
     // for the phone list sitting (undrawn) above them.
     <div className="flex flex-col gap-4" data-testid="hr-dashboard-tab">
+      {/* Phone, one figure open: the way back to the rows, the figure being read with its
+          count in the rows' orange box, and a menu to jump to another figure without going
+          back first -- Review's back bar. */}
+      {phoneList && (
+        <div
+          className="sticky z-10 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:hidden"
+          style={{ top: barTop }}
+          data-testid="hr-dashboard-phone-back"
+        >
+          <button
+            type="button"
+            onClick={closePhoneCard}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
+            aria-label="Back to the Dashboard cards"
+            data-testid="hr-dashboard-phone-back-btn"
+          >
+            <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
+            <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{current.label}</span>
+            <span className="inline-flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-sm font-medium tabular-nums text-orange-700">
+              {current.value ?? 0}
+            </span>
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
+                aria-label="Switch card"
+                data-testid="hr-dashboard-phone-card-menu"
+              >
+                <Menu aria-hidden className="h-5 w-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-80 w-60 overflow-y-auto">
+              {cards.filter((o) => o.key !== current.key).map((o) => {
+                const Icon = o.icon;
+                return (
+                  <DropdownMenuItem
+                    key={o.key}
+                    onSelect={() => openPhoneCard(o.key)}
+                    className="gap-2.5 py-2"
+                    data-testid={`hr-dashboard-phone-card-menu-${o.key}`}
+                  >
+                    <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
+                    <span className="text-xs font-semibold tabular-nums text-slate-500">{o.value ?? 0}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+
       {/* Phone: one list row per figure, the stage rows Branch Admin's Review, Branch Leads
           and Consultation wear on a phone (NotifyCard inline): grey icon, label, the count
           in the orange box, chevron. These replaced five-to-a-row cards whose labels broke
-          over two lines at 9px.
-
-          A tap filters the list under them, as on the desk, and scrolls to it: at one row
-          per figure the list starts below the fold, so without the scroll a tap would look
-          like it did nothing.
+          over two lines at 9px. A tap opens that figure's list, as above.
 
           The dot is for Pending Approvals alone. NotifyCard pops it whenever `count` is
           above 0, and on every other row a count is a headcount, not somebody waiting, so
           those pass 0 for it and show their figure through `display` instead. */}
-      <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="hr-dashboard-phone-cards">
-        {cards.map((c) => (
-          <NotifyCard
-            key={c.key}
-            icon={c.icon}
-            label={c.label}
-            value={c.value ?? 0}
-            count={c.alert ? c.value ?? 0 : 0}
-            display={c.value ?? 0}
-            active={c.key === current.key}
-            onClick={() => {
-              setSelected(c.key);
-              setSearch("");
-              listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            testid={`hr-kpi-phone-${c.key}`}
-            inline
-          />
-        ))}
-      </div>
+      {!phoneList && (
+        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="hr-dashboard-phone-cards">
+          {cards.map((c) => (
+            <NotifyCard
+              key={c.key}
+              icon={c.icon}
+              label={c.label}
+              value={c.value ?? 0}
+              count={c.alert ? c.value ?? 0 : 0}
+              display={c.value ?? 0}
+              active={c.key === current.key}
+              onClick={() => openPhoneCard(c.key)}
+              testid={`hr-kpi-phone-${c.key}`}
+              inline
+            />
+          ))}
+        </div>
+      )}
 
       {/* Desk: the HR Admin Master View's summary cards -- label over count, left aligned,
           white and bordered -- in plain slate, without the per-stage colour. Selecting one
@@ -415,25 +487,27 @@ const DashboardTab = () => {
         })}
       </div>
 
-      {/* scroll-mt clears the sticky board header the phone's scroll would otherwise park
-          the search under. */}
-      <div ref={listRef} className="flex scroll-mt-24 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
-        <Search className="h-4 w-4 shrink-0 text-slate-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, code, phone or email..."
-          className="min-w-0 flex-1 border-0 p-0 text-sm outline-none placeholder:text-slate-400"
-          data-testid="hr-dashboard-search"
-        />
-        {search && (
-          <button type="button" onClick={() => setSearch("")} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Clear search">
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      {/* The search and the list: always on the desk, and on a phone only once a figure is
+          opened, as its screen. */}
+      <div className={`flex-col gap-4 ${phoneList ? "flex" : "hidden sm:flex"}`} data-testid="hr-dashboard-list-screen">
+        <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+          <Search className="h-4 w-4 shrink-0 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, code, phone or email..."
+            className="min-w-0 flex-1 border-0 p-0 text-sm outline-none placeholder:text-slate-400"
+            data-testid="hr-dashboard-search"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
-      {current.ready === null ? <p className="text-sm text-slate-500">Loading...</p> : <DashboardList kind={current.kind} rows={rows} />}
+        {current.ready === null ? <p className="text-sm text-slate-500">Loading...</p> : <DashboardList kind={current.kind} rows={rows} />}
+      </div>
     </div>
   );
 };
