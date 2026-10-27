@@ -11525,7 +11525,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 the Consultation Fee above it has been collected. */}
             {collectFeeDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-collect-fee-modal">
-                <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+                {/* 4px corners throughout: the card and its sections here, and the inputs,
+                    buttons and dropdown inside them through the two rules on the card, since
+                    those are shared components rounded the same way on every other screen. */}
+                <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl [&_.rounded-lg]:!rounded-[4px] [&_.rounded-md]:!rounded-[4px]">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-slate-800">
                       {treatmentFeeDraft ? "Collect Fees" : selectedLead.package_paid != null ? "Update Consultation Fee Payment" : "Collect Consultation Fee"}
@@ -11538,7 +11541,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       Treatment Fee beside it is still to take — what stays is what is
                       still owed. A balance on it keeps it open: that is money to take too. */}
                   {!(selectedLead.package_paid != null && treatmentFeeDraft && !feeBalances.consultation) && (
-                  <div className={`space-y-3 rounded-lg border p-3 ${selectedLead.package_paid != null ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}>
+                  <div className={`space-y-3 rounded-[4px] border p-3 ${selectedLead.package_paid != null ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}>
                     <p className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider ${selectedLead.package_paid != null ? "text-emerald-700" : "text-sky-700"}`}>
                       <Stethoscope className="h-3.5 w-3.5" /> Consultation Fee
                     </p>
@@ -11690,7 +11693,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       cannot be taken before it, and a greyed box saying so is one more
                       thing on the popup with nothing to press. */}
                   {treatmentFeeDraft && selectedLead.package_paid != null && (
-                    <div className={`space-y-3 rounded-lg border p-3 ${
+                    <div className={`space-y-3 rounded-[4px] border p-3 ${
                       selectedLead.treatment_fee_paid != null && !hasPendingInstallments ? "border-emerald-200 bg-emerald-50"
                       : "border-indigo-200 bg-indigo-50/40"
                     }`}>
@@ -11750,7 +11753,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <>
                       <div>
                         <label className="mb-1 block text-[11px] font-medium text-slate-500">Treatment Package (chosen by CONSULTANT)</label>
-                        <div className="flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700" data-testid="cons-treatment-fee-item-readonly">
+                        <div className="flex h-9 items-center rounded-[4px] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700" data-testid="cons-treatment-fee-item-readonly">
                           {selectedLead.session_package_name || "—"}{selectedLead.session_package_sessions ? ` · ${selectedLead.session_package_sessions} sessions` : ""}
                         </div>
                       </div>
@@ -11764,7 +11767,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           : null;
                         const typedRate = Number(pkgAmountDraft) || 0;
                         return (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5" data-testid="cons-treatment-fee-manual">
+                        <div className="rounded-[4px] border border-amber-200 bg-amber-50 p-2.5" data-testid="cons-treatment-fee-manual">
                           <label className="mb-1 block text-[11px] font-semibold text-amber-800">
                             Per Session Amount (₹){selectedLead.session_package_price != null
                               ? ` · set at Rs.${savedRate ?? selectedLead.session_package_price}/session = Rs.${selectedLead.session_package_price}`
