@@ -1251,7 +1251,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
       onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}
       data-testid="hr-emp-view-modal"
     >
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <EmployeeAvatar employee={e} size={44} />
@@ -1268,23 +1268,24 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
           <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="hr-emp-view-close"><X className="h-4 w-4" /></button>
         </div>
 
-        {/* Same tab-bar shape as the Add/Edit dialog's below, so the read and the write
-            of a record look like one form in two moods. The labels are fixed prose, so
-            they sit in the header band rather than the body that scrolls. */}
-        <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-slate-200 px-5 py-2 text-xs">
-          {VIEW_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`rounded px-3 py-1 ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}
-              data-testid={`hr-emp-view-tab-${t.key}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* Same shape as the Add/Edit dialog's below — sections down the left, the open
+            one down the right, at a fixed height — so the read and the write of a record
+            look like one form in two moods. */}
+        <div className="flex h-[60vh] flex-col sm:flex-row">
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-view-tabs">
+            {VIEW_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
+                data-testid={`hr-emp-view-tab-${t.key}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="min-w-0 flex-1 overflow-y-auto p-5">
           {tab === "personal" && (
             <div className="space-y-3">
               <ViewSection>
@@ -1345,6 +1346,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
               <ViewRow label="IFSC" value={e.ifsc} />
             </ViewSection>
           )}
+        </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
