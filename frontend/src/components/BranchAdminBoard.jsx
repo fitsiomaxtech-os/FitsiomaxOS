@@ -1089,7 +1089,9 @@ const writeStoredBranchView = (view) => {
 
 // `roleLabel` / `onLogout` are for the phone bar's My Profile stop, which opens the page in
 // the board's place (so the bar stays under it) with Logout on its Security tab.
-export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = null, currentUser = null, canTransferBranch = false, roleLabel = "", onLogout }) => {
+// `squareTable`: the List View table with 4px corners rather than rounded-lg — the Branch
+// Admin's own board, matching the Consultant's and the Physio's.
+export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = null, currentUser = null, canTransferBranch = false, roleLabel = "", onLogout, squareTable = false }) => {
   const [boardData, setBoardData] = useState({ leads: [], stage_counts: {}, stages: [] });
   const [consultationStages, setConsultationStages] = useState([]); // dynamic Consultation Stages, merged into the same stage bar
   const [loading, setLoading] = useState(false);
@@ -3208,7 +3210,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               under a cell -- the patient number, Pre-Sales request, Overdue, the remarks --
               is beside it or on its hover instead. zoom scales vh with everything else, so
               72vh here is the same 65vh of screen it was. */}
-          <div className="hidden w-full max-h-[72vh] overflow-auto rounded-lg border border-slate-200 bg-white md:block" style={{ zoom: 0.9 }} data-testid="branch-list">
+          <div className={`hidden w-full max-h-[72vh] overflow-auto border border-slate-200 bg-white md:block ${squareTable ? "rounded-[4px]" : "rounded-lg"}`} style={{ zoom: 0.9 }} data-testid="branch-list">
             {/* Wider floor where the board asks more than two questions: fitness draws
                 eight columns, and eight inside 760px is 95px each with the scroll region
                 around it going unused. */}

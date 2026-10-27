@@ -1578,7 +1578,7 @@ export const CRMPage = ({ auth, onLogout }) => {
         )}
 
         {showBranchBoard && (
-          <BranchAdminBoard branchId={auth?.user?.branch_id} currentUser={auth?.user} canTransferBranch roleLabel={roleLabel} onLogout={logout} />
+          <BranchAdminBoard branchId={auth?.user?.branch_id} currentUser={auth?.user} canTransferBranch roleLabel={roleLabel} onLogout={logout} squareTable />
         )}
 
         {showHeadPhysioBoard && (
