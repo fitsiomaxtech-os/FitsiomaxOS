@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, ImageOff, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1567,7 +1567,6 @@ const ManualDateInput = ({ value, onChange, placeholder = "DD-MM-YYYY", testid }
 const EMP_TABS = [
   { key: "personal", label: "Personal" },
   { key: "employment", label: "Employment" },
-  { key: "id_docs", label: "ID & Docs" },
   { key: "address", label: "Address & Emergency" },
   // Bank details and the PAN they are paid against. It used to open with two salary
   // boxes, which is not where a salary is set: a salary is a timeline of records with a
@@ -1652,6 +1651,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null); // object URL for the picked file
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
   const photoInputRef = useRef(null);
 
   // Revoked on replace and on unmount: an object URL pins the whole file in memory until
@@ -1795,7 +1795,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" data-testid="hr-emp-modal">
-      <div className="w-full max-w-[720px] rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-[720px] rounded-[4px] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <div>
             <h3 className="text-base font-semibold">{employee ? "Edit Employee" : "Add New Employee"}</h3>
@@ -1820,10 +1820,6 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   which here duplicates the preview. */}
               <FormRow label="Profile Photo">
                 <div className="flex items-center gap-2">
-                  <EmployeeAvatar
-                    employee={{ full_name: form.full_name, photo_url: photoPreview || form.photo_url }}
-                    size={32}
-                  />
                   <input
                     ref={photoInputRef}
                     type="file"
@@ -1838,31 +1834,42 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                     variant="outline"
                     onClick={() => photoInputRef.current?.click()}
                     className="h-8 shrink-0 text-xs"
+                    title="JPG, PNG or WEBP · up to 5MB"
                     data-testid="hr-emp-photo-pick"
                   >
                     <Camera className="mr-1.5 h-3.5 w-3.5" />
                     {photoPreview || form.photo_url ? "Change Photo" : "Upload Photo"}
                   </Button>
-                  {(photoPreview || form.photo_url) && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={clearPhoto}
-                      className="h-8 shrink-0 border-rose-200 text-xs text-rose-600 hover:bg-rose-50"
-                      data-testid="hr-emp-photo-remove"
-                    >
-                      <ImageOff className="mr-1.5 h-3.5 w-3.5" /> Remove
-                    </Button>
-                  )}
+                  {/* Always drawn, and greyed out until there is a photo to act on, so the
+                      row keeps one shape whether or not one has been picked yet. */}
+                  <button
+                    type="button"
+                    onClick={() => setViewingPhoto(true)}
+                    disabled={!(photoPreview || form.photo_url)}
+                    title="View photo"
+                    aria-label="View photo"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    data-testid="hr-emp-photo-view"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearPhoto}
+                    disabled={!(photoPreview || form.photo_url)}
+                    title="Remove photo"
+                    aria-label="Remove photo"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    data-testid="hr-emp-photo-remove"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                   {/* Says the picture is not saved yet, because the dialog's own Save is
                       what sends it — closing here would drop it silently otherwise. */}
-                  {photoFile ? (
+                  {photoFile && (
                     <span className="min-w-0 truncate text-[11px] font-medium text-amber-600" data-testid="hr-emp-photo-pending">
                       Saves with the form
                     </span>
-                  ) : (
-                    <span className="min-w-0 truncate text-[11px] text-slate-400" title="JPG, PNG or WEBP · up to 5MB">JPG, PNG or WEBP · up to 5MB</span>
                   )}
                 </div>
               </FormRow>
@@ -1963,21 +1970,18 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               )}
             </div>
           )}
-          {/* PAN used to be the other half of this. It sits with the bank details now,
-              which is what it is actually for here — the account is where the money goes
-              and the PAN is what it is paid against, and they are filled in together. */}
-          {tab === "id_docs" && (
-            <div className="px-5 py-1">
-              <FormRow label="Aadhar"><Input className="h-8" value={form.aadhar} onChange={(e) => set("aadhar", e.target.value)} data-testid="hr-emp-aadhar" /></FormRow>
-            </div>
-          )}
           {tab === "address" && (
             <div className="px-5 py-1">
               <FormRow label="Address"><textarea value={form.address} onChange={(e) => set("address", e.target.value)} className="h-16 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-address" /></FormRow>
               <FormRow label="Emergency Contact Name"><Input className="h-8" value={form.emergency_contact_name} onChange={(e) => set("emergency_contact_name", e.target.value)} data-testid="hr-emp-ec-name" /></FormRow>
               <FormRow label="Emergency Contact Phone"><Input className="h-8" value={form.emergency_contact_phone} onChange={(e) => set("emergency_contact_phone", e.target.value)} data-testid="hr-emp-ec-phone" /></FormRow>
+              {/* Aadhar had an ID & Docs tab to itself, one field long; it sits here with
+                  the rest of who-and-where instead. */}
+              <FormRow label="Aadhar"><Input className="h-8" value={form.aadhar} onChange={(e) => set("aadhar", e.target.value)} data-testid="hr-emp-aadhar" /></FormRow>
             </div>
           )}
+          {/* PAN sits with the bank details: the account is where the money goes and the
+              PAN is what it is paid against, and they are filled in together. */}
           {tab === "bank" && (
             <div className="px-5 py-1">
               <FormRow label="Bank Name"><Input className="h-8" value={form.bank_name} onChange={(e) => set("bank_name", e.target.value)} data-testid="hr-emp-bank" /></FormRow>
@@ -1996,6 +2000,16 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
           )}
         </div>
         </div>
+        {viewingPhoto && (photoPreview || form.photo_url) && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setViewingPhoto(false)}
+            data-testid="hr-emp-photo-viewer"
+          >
+            <button type="button" onClick={() => setViewingPhoto(false)} className="absolute right-4 top-4 rounded-full bg-white/90 p-1.5 text-slate-600 hover:bg-white" aria-label="Close photo"><X className="h-4 w-4" /></button>
+            <img src={photoPreview || form.photo_url} alt={form.full_name || "Profile photo"} className="max-h-[80vh] max-w-full rounded-[4px] bg-white object-contain shadow-xl" />
+          </div>
+        )}
         <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
           <Button variant="outline" onClick={onClose} data-testid="hr-emp-modal-cancel">Cancel</Button>
           <Button onClick={submit} disabled={uploadingPhoto} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-modal-submit">{uploadingPhoto ? "Uploading photo…" : `✓ ${employee ? "Save" : "Add Employee"}`}</Button>
