@@ -18,8 +18,11 @@ const ACCENTS = {
  *
  * The options are the caller's, as children, so a filter can carry one that is an action
  * rather than a value (the date filter's Custom Range…).
+ *
+ * `compact` is for a toolbar of 2px pills (Finance > Approvals), where a 40px rounded box
+ * would stand a third taller than everything on its line: 30px and 2px corners instead.
  */
-export const FilterSelect = ({ value, onChange, active = false, accent = "sky", label, title, className = "", testid, children }) => {
+export const FilterSelect = ({ value, onChange, active = false, accent = "sky", compact = false, label, title, className = "", testid, children }) => {
   const A = ACCENTS[accent] || ACCENTS.sky;
   return (
     <div className={`relative min-w-0 ${className}`}>
@@ -28,7 +31,7 @@ export const FilterSelect = ({ value, onChange, active = false, accent = "sky", 
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
         title={title}
-        className={`h-10 w-full appearance-none rounded-md border pl-2.5 pr-7 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${A.ring} ${
+        className={`${compact ? "h-[30px] rounded-[2px]" : "h-10 rounded-md"} w-full appearance-none border pl-2.5 pr-7 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${A.ring} ${
           active ? A.on : "border-slate-200 bg-white text-slate-700"
         }`}
         data-testid={testid}

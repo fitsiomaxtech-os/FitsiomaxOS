@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { rangeFor, rangeIncomplete } from "@/lib/dateRange";
 import { getFinanceApprovals, getBranches, approveTransaction, unapproveTransaction, bulkApproveTransactions, deleteTransaction } from "@/lib/api";
 import { ExpenseApprovalsPanel } from "@/components/finance/ExpenseApprovalsPanel";
@@ -110,43 +111,23 @@ const VERTICALS = [["all", "All"], ["offline", "Offline"], ["online", "Online"]]
 const DATE_PRESETS = ["all", "today", "yesterday", "this_month", "last_month", "custom"];
 
 /**
- * One filter pill. The three rows of these used to be written out three times with three
- * different sizes -- the vertical row at text-xs/px-3, the other two at text-sm/px-3.5 --
- * so a filter block that asks three questions of equal weight answered them in two
- * typefaces. One size now, and the accent is the only thing that varies: sky for what was
- * bought, indigo for how it was paid, which is the distinction the rows are grouped on.
+ * One filter pill, the size and sky of the date filter's pill variant beside it, so the
+ * one toolbar line reads as one set of controls.
  */
-const FilterPill = ({ on, accent = "sky", onClick, children, testId }) => (
+const FilterPill = ({ on, onClick, children, testId }) => (
   <button
     type="button"
     onClick={onClick}
     aria-pressed={on}
     className={`shrink-0 rounded-[2px] border px-3 py-1.5 text-xs font-medium transition ${
       on
-        ? accent === "indigo"
-          ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-          : "border-sky-600 bg-sky-600 text-white shadow-sm"
-        : `border-slate-200 bg-white text-slate-600 ${accent === "indigo" ? "hover:border-indigo-300 hover:text-indigo-600" : "hover:border-sky-300 hover:text-sky-600"}`
+        ? "border-sky-600 bg-sky-600 text-white shadow-sm"
+        : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
     }`}
     data-testid={testId}
   >
     {children}
   </button>
-);
-
-/**
- * A line of the filter block, holding two groups of pills pushed to opposite ends of it.
- *
- * The gap between them is what separates the two questions, which is why they are not
- * simply four bands of pills stacked: four bands cost four bands of screen above a list
- * that is the thing anybody came here to read. On a phone there is no room to push
- * anything anywhere, so the groups stack and the gap between them does the same job
- * vertically.
- */
-const FilterRow = ({ children }) => (
-  <div className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-    {children}
-  </div>
 );
 
 /** One question's worth of pills, wrapping within itself rather than into its neighbour. */
@@ -832,10 +813,11 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           ledger is being signed off, then the vertical and branch, then the window pushed
           to the far end. The ledger switch used to be a full-width bar of its own above
           this block, which spent a band of screen on two buttons and split one set of
-          questions across two boxes. What else is on the block follows the ledger: what it
+          questions across two boxes. What else is on the line follows the ledger: what it
           was for and how it was paid describe a collection and have nothing to say about
-          an expense -- /finance/expenses does not take them -- so that line is not offered
-          against one. Every control here is 2px-cornered, like Summary's cards. */}
+          an expense -- /finance/expenses does not take them -- so those two dropdowns are
+          not offered against one. Every control here is 2px-cornered, like Summary's
+          cards. */}
       <div className="divide-y divide-slate-100 overflow-hidden rounded-[2px] border border-slate-200 bg-white" data-testid="finance-approvals-filters">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5" data-testid="finance-approvals-toolbar">
           <div className="flex shrink-0 items-center gap-0.5 rounded-[2px] border border-slate-200 bg-slate-50 p-0.5" data-testid="finance-approvals-ledger">
@@ -884,6 +866,40 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
             )}
           </FilterGroup>
 
+          {/* What it was for, and how it was paid, as two dropdowns on this same line. They
+              were a second line of nine pills and six pills under the toolbar, which spent a
+              band of screen on two questions a dropdown answers in one box each. Sky, the
+              date filter's colour beside them, rather than the indigo the mode pills wore:
+              white while on All, tinted once it narrows the list. Both describe a
+              collection and neither is a question /finance/expenses can answer, so they go
+              when the ledger switches to expenses rather than sitting there greyed. */}
+          {ledger === "income" && (
+            <div className="flex items-center gap-2" data-testid="finance-approvals-dropdowns">
+              <FilterSelect
+                value={category}
+                onChange={setCategory}
+                active={category !== "all"}
+                compact
+                label="Service type"
+                className="w-32"
+                testid="finance-approvals-category-select"
+              >
+                {CATEGORIES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </FilterSelect>
+              <FilterSelect
+                value={paymentMode}
+                onChange={setPaymentMode}
+                active={paymentMode !== "all"}
+                compact
+                label="Payment mode"
+                className="w-32"
+                testid="finance-approvals-payment-mode-select"
+              >
+                {PAYMENT_MODES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </FilterSelect>
+            </div>
+          )}
+
           {/* The shared finance row, so this desk and the three pages beside it name their
               windows with the same words and reach them the same way. Custom Range opens
               the dialog rather than dropping two date fields into the block underneath.
@@ -901,43 +917,6 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
             />
           </div>
         </div>
-
-        {/* What it was for, and how it was paid. Both describe a collection and neither is
-            a question /finance/expenses can answer, so the whole line goes when the ledger
-            switches to expenses rather than sitting there greyed. */}
-        {ledger === "income" && (
-          <FilterRow>
-            <FilterGroup testId="finance-approvals-category-filter">
-              {CATEGORIES.map(([key, label]) => (
-                <FilterPill
-                  key={key}
-                  on={category === key}
-                  onClick={() => setCategory(key)}
-                  testId={`finance-approvals-category-${key}`}
-                >
-                  {label}
-                </FilterPill>
-              ))}
-            </FilterGroup>
-
-            {/* Same set Branch Admin picks from when collecting the fee in the first
-                place — not a category (what was paid for) but how, so it keeps the indigo
-                it has always had rather than reading as more of the row beside it. */}
-            <FilterGroup testId="finance-approvals-payment-mode-filter">
-              {PAYMENT_MODES.map(([key, label]) => (
-                <FilterPill
-                  key={key}
-                  accent="indigo"
-                  on={paymentMode === key}
-                  onClick={() => setPaymentMode(key)}
-                  testId={`finance-approvals-payment-mode-${key}`}
-                >
-                  {label}
-                </FilterPill>
-              ))}
-            </FilterGroup>
-          </FilterRow>
-        )}
       </div>
 
       {ledger === "expenses" && (
