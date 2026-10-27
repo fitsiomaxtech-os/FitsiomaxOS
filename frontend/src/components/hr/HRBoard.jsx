@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
+import { NotifyCard } from "@/components/ui/notify-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { downloadCsv } from "@/lib/printable";
 import { ROLE_META, roleLabel, roleClasses, setCustomRoleClasses } from "@/lib/roles";
@@ -296,6 +297,7 @@ const DashboardTab = () => {
   const [approvals, setApprovals] = useState(null);
   const [selected, setSelected] = useState("active");
   const [search, setSearch] = useState("");
+  const listRef = useRef(null);
 
   useEffect(() => {
     hrDashboard().then(setData).catch(() => toast.error("Failed to load"));
@@ -322,15 +324,18 @@ const DashboardTab = () => {
   const activeEmployees = (employees || []).filter((e) => e.status === "active");
   const activeUsers = (users || []).filter((u) => u.is_active !== false);
 
+  // `icon` is the phone row's glyph only; the desk cards carry none. `alert` marks the one
+  // figure that is work waiting on somebody, the only row whose dot should pop.
   const cards = [
-    { key: "active", label: "Active Employees", value: employees ? activeEmployees.length : k.active_employees, kind: "employees", ready: employees, rows: activeEmployees },
-    { key: "users", label: "Total Users", value: users ? activeUsers.length : k.total_users, kind: "users", ready: users, rows: activeUsers },
-    { key: "present", label: "Today Present", value: regOk ? presentRows.length : k.present_today, kind: "register", ready: register, rows: presentRows },
-    { key: "absent", label: "Today Absent", value: regOk ? absentRows.length : (k.absent_today ?? 0), kind: "register", ready: register, rows: absentRows },
-    { key: "leaves", label: "Pending Approvals", value: approvals ? approvals.length : k.pending_leaves, kind: "approvals", ready: approvals, rows: approvals || [] },
+    { key: "active", label: "Active Employees", icon: Users, value: employees ? activeEmployees.length : k.active_employees, kind: "employees", ready: employees, rows: activeEmployees },
+    { key: "users", label: "Total Users", icon: ShieldCheck, value: users ? activeUsers.length : k.total_users, kind: "users", ready: users, rows: activeUsers },
+    { key: "present", label: "Today Present", icon: UserCheck, value: regOk ? presentRows.length : k.present_today, kind: "register", ready: register, rows: presentRows },
+    { key: "absent", label: "Today Absent", icon: UserX, value: regOk ? absentRows.length : (k.absent_today ?? 0), kind: "register", ready: register, rows: absentRows },
+    { key: "leaves", label: "Pending Approvals", icon: ClipboardCheck, alert: true, value: approvals ? approvals.length : k.pending_leaves, kind: "approvals", ready: approvals, rows: approvals || [] },
     ...depts.map((d) => ({
       key: `dept-${d.name}`,
       label: d.name,
+      icon: Network,
       value: d.count,
       kind: "employees",
       ready: employees,
@@ -345,11 +350,47 @@ const DashboardTab = () => {
       .some((v) => String(v || "").toLowerCase().includes(q)));
 
   return (
-    <div className="space-y-4" data-testid="hr-dashboard-tab">
-      {/* The HR Admin Master View's summary cards -- label over count, left aligned, white
-          and bordered -- in plain slate, without the per-stage colour. Selecting one filters
-          the list under it, the way a stage does there. Five to a row on a phone. */}
-      <div className="flex flex-wrap justify-center gap-1.5 sm:grid sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-9" data-testid="hr-dashboard-cards">
+    // flex+gap, not space-y: the phone rows and the desk cards are each hidden by class at
+    // the other's width, and space-y would still hand the desk cards a phantom top margin
+    // for the phone list sitting (undrawn) above them.
+    <div className="flex flex-col gap-4" data-testid="hr-dashboard-tab">
+      {/* Phone: one list row per figure, the stage rows Branch Admin's Review, Branch Leads
+          and Consultation wear on a phone (NotifyCard inline): grey icon, label, the count
+          in the orange box, chevron. These replaced five-to-a-row cards whose labels broke
+          over two lines at 9px.
+
+          A tap filters the list under them, as on the desk, and scrolls to it: at one row
+          per figure the list starts below the fold, so without the scroll a tap would look
+          like it did nothing.
+
+          The dot is for Pending Approvals alone. NotifyCard pops it whenever `count` is
+          above 0, and on every other row a count is a headcount, not somebody waiting, so
+          those pass 0 for it and show their figure through `display` instead. */}
+      <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="hr-dashboard-phone-cards">
+        {cards.map((c) => (
+          <NotifyCard
+            key={c.key}
+            icon={c.icon}
+            label={c.label}
+            value={c.value ?? 0}
+            count={c.alert ? c.value ?? 0 : 0}
+            display={c.value ?? 0}
+            active={c.key === current.key}
+            onClick={() => {
+              setSelected(c.key);
+              setSearch("");
+              listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            testid={`hr-kpi-phone-${c.key}`}
+            inline
+          />
+        ))}
+      </div>
+
+      {/* Desk: the HR Admin Master View's summary cards -- label over count, left aligned,
+          white and bordered -- in plain slate, without the per-stage colour. Selecting one
+          filters the list under it, the way a stage does there. */}
+      <div className="hidden sm:grid sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-9" data-testid="hr-dashboard-cards">
         {cards.map((c) => {
           const active = c.key === current.key;
           return (
@@ -357,16 +398,16 @@ const DashboardTab = () => {
               key={c.key}
               type="button"
               onClick={() => { setSelected(c.key); setSearch(""); }}
-              className={`w-[calc(20%-0.3rem)] min-w-0 rounded-lg border-2 px-1 py-1.5 text-center transition hover:shadow-sm sm:w-full sm:rounded-xl sm:px-4 sm:py-3.5 sm:text-left ${
+              className={`w-full min-w-0 rounded-xl border-2 px-4 py-3.5 text-left transition hover:shadow-sm ${
                 active ? "border-slate-400 bg-slate-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
               }`}
               aria-pressed={active}
               data-testid={`hr-kpi-${c.key}`}
             >
-              <span className="block break-words text-[9px] font-medium leading-[1.15] text-slate-500 [hyphens:auto] sm:truncate sm:text-xs" title={c.label}>
+              <span className="block truncate text-xs font-medium leading-[1.15] text-slate-500" title={c.label}>
                 {c.label}
               </span>
-              <span className="mt-0.5 block text-lg font-semibold leading-tight text-slate-600 sm:mt-1 sm:text-2xl">
+              <span className="mt-1 block text-2xl font-semibold leading-tight text-slate-600">
                 {c.value ?? 0}
               </span>
             </button>
@@ -374,7 +415,9 @@ const DashboardTab = () => {
         })}
       </div>
 
-      <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+      {/* scroll-mt clears the sticky board header the phone's scroll would otherwise park
+          the search under. */}
+      <div ref={listRef} className="flex scroll-mt-24 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
         <Search className="h-4 w-4 shrink-0 text-slate-400" />
         <input
           value={search}
