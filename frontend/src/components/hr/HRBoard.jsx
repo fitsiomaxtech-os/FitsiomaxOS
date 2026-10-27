@@ -1273,7 +1273,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
         {/* Same shape as the Add/Edit dialog's below — sections down the left, the open
             one down the right, at a fixed height — so the read and the write of a record
             look like one form in two moods. */}
-        <div className="flex h-[60vh] flex-col sm:flex-row">
+        <div className="flex h-[460px] max-h-[70vh] flex-col sm:flex-row">
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-view-tabs">
             {VIEW_TABS.map((t) => (
               <button
@@ -1548,7 +1548,7 @@ const ManualDateInput = ({ value, onChange, placeholder = "DD-MM-YYYY", testid }
         placeholder={placeholder}
         inputMode="numeric"
         maxLength={10}
-        className={`h-9 w-full rounded-md border px-3 text-sm outline-none transition placeholder:text-slate-400 focus:ring-1 ${
+        className={`h-8 w-full rounded-md border px-3 text-sm outline-none transition placeholder:text-slate-400 focus:ring-1 ${
           invalid || future ? "border-rose-300 focus:border-rose-400 focus:ring-rose-300" : "border-slate-200 focus:border-sky-400 focus:ring-sky-300"
         }`}
         data-testid={testid}
@@ -1802,93 +1802,89 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="hr-emp-modal-close"><X className="h-4 w-4" /></button>
         </div>
-        {/* Sections down the left, the open one's fields down the right, one field to a
-            row. A fixed height keeps the dialog from jumping as a short tab like ID & Docs
-            replaces a long one like Personal. */}
-        <div className="flex h-[60vh] flex-col sm:flex-row">
+        {/* Sections down the left, the open one's fields down the right, one labelled row
+            each — the same rows the View popup reads in. The fixed height is the tallest
+            tab's (Personal), so no tab scrolls and the dialog doesn't jump between them. */}
+        <div className="flex h-[460px] max-h-[70vh] flex-col sm:flex-row">
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
             {EMP_TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
             ))}
           </div>
-        <div className="min-w-0 flex-1 overflow-y-auto p-5">
+        <div className="min-w-0 flex-1 overflow-y-auto p-0">
           {tab === "personal" && (
-            <div className="grid gap-3">
-              {/* Above the fields, and spanning them, because it is the one part of this
-                  record you identify a person by rather than read. The hidden input is
-                  driven by the buttons: a bare file input cannot be styled and prints the
-                  chosen filename beside itself, which here duplicates the preview. */}
-              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
-                <EmployeeAvatar
-                  employee={{ full_name: form.full_name, photo_url: photoPreview || form.photo_url }}
-                  size={36}
-                  className="ring-2 ring-white"
-                />
-                <p className="min-w-0 text-xs font-medium text-slate-600">
-                  Profile Photo <span className="ml-1 text-[11px] font-normal text-slate-400">JPG, PNG or WEBP · up to 5MB</span>
-                </p>
-                <div className="ml-auto">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(ev) => pickPhoto(ev.target.files?.[0])}
-                      data-testid="hr-emp-photo-input"
-                    />
+            <div className="px-5 py-1">
+              {/* First, because it is the one part of this record you identify a person
+                  by rather than read. The hidden input is driven by the buttons: a bare
+                  file input cannot be styled and prints the chosen filename beside itself,
+                  which here duplicates the preview. */}
+              <FormRow label="Profile Photo">
+                <div className="flex flex-wrap items-center gap-2">
+                  <EmployeeAvatar
+                    employee={{ full_name: form.full_name, photo_url: photoPreview || form.photo_url }}
+                    size={32}
+                  />
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(ev) => pickPhoto(ev.target.files?.[0])}
+                    data-testid="hr-emp-photo-input"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="h-8 text-xs"
+                    data-testid="hr-emp-photo-pick"
+                  >
+                    <Camera className="mr-1.5 h-3.5 w-3.5" />
+                    {photoPreview || form.photo_url ? "Change Photo" : "Upload Photo"}
+                  </Button>
+                  {(photoPreview || form.photo_url) && (
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => photoInputRef.current?.click()}
-                      className="h-8 text-xs"
-                      data-testid="hr-emp-photo-pick"
+                      onClick={clearPhoto}
+                      className="h-8 border-rose-200 text-xs text-rose-600 hover:bg-rose-50"
+                      data-testid="hr-emp-photo-remove"
                     >
-                      <Camera className="mr-1.5 h-3.5 w-3.5" />
-                      {photoPreview || form.photo_url ? "Change Photo" : "Upload Photo"}
+                      <ImageOff className="mr-1.5 h-3.5 w-3.5" /> Remove
                     </Button>
-                    {(photoPreview || form.photo_url) && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={clearPhoto}
-                        className="h-8 border-rose-200 text-xs text-rose-600 hover:bg-rose-50"
-                        data-testid="hr-emp-photo-remove"
-                      >
-                        <ImageOff className="mr-1.5 h-3.5 w-3.5" /> Remove
-                      </Button>
-                    )}
-                    {/* Says the picture is not saved yet, because the dialog's own Save is
-                        what sends it — closing here would drop it silently otherwise. */}
-                    {photoFile && (
-                      <span className="text-[11px] font-medium text-amber-600" data-testid="hr-emp-photo-pending">
-                        Saves with the form
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  {/* Says the picture is not saved yet, because the dialog's own Save is
+                      what sends it — closing here would drop it silently otherwise. */}
+                  {photoFile ? (
+                    <span className="text-[11px] font-medium text-amber-600" data-testid="hr-emp-photo-pending">
+                      Saves with the form
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">JPG, PNG or WEBP · up to 5MB</span>
+                  )}
                 </div>
-              </div>
-              <Field label="Full Name *"><Input value={form.full_name} onChange={(e) => set("full_name", e.target.value)} data-testid="hr-emp-name" /></Field>
-              <Field label="Email"><Input value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="hr-emp-email" /></Field>
-              <Field label="Phone"><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="hr-emp-phone" /></Field>
+              </FormRow>
+              <FormRow label="Full Name *"><Input className="h-8" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} data-testid="hr-emp-name" /></FormRow>
+              <FormRow label="Email"><Input className="h-8" value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="hr-emp-email" /></FormRow>
+              <FormRow label="Phone"><Input className="h-8" value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="hr-emp-phone" /></FormRow>
               {/* Typed, not picked. A birth date is decades back — reaching it in a
                   calendar is twenty-odd clicks through months, where typing it is eight
                   keystrokes. Joining Date keeps its picker; that one is near today. */}
-              <Field label="Date of Birth"><ManualDateInput value={form.dob} onChange={(e) => set("dob", e.target.value)} testid="hr-emp-dob" /></Field>
-              <Field label="Gender"><Select value={form.gender} onChange={(v) => set("gender", v)} options={["", "Male", "Female", "Other"]} testid="hr-emp-gender" /></Field>
-              <Field label="Blood Group"><Select value={form.blood_group} onChange={(v) => set("blood_group", v)} options={["", "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"]} testid="hr-emp-bg" /></Field>
-              <Field label="Marital Status"><Select value={form.marital_status} onChange={(v) => set("marital_status", v)} options={["", "Single", "Married", "Divorced", "Widowed"]} testid="hr-emp-marital" /></Field>
-              <Field label="Father's Name"><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} data-testid="hr-emp-father" /></Field>
-              <Field label="Mother's Name"><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} data-testid="hr-emp-mother" /></Field>
+              <FormRow label="Date of Birth"><ManualDateInput value={form.dob} onChange={(e) => set("dob", e.target.value)} testid="hr-emp-dob" /></FormRow>
+              <FormRow label="Gender"><OsSelect value={form.gender} onChange={(v) => set("gender", v)} options={["", "Male", "Female", "Other"]} testid="hr-emp-gender" /></FormRow>
+              <FormRow label="Blood Group"><OsSelect value={form.blood_group} onChange={(v) => set("blood_group", v)} options={["", "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"]} testid="hr-emp-bg" /></FormRow>
+              <FormRow label="Marital Status"><OsSelect value={form.marital_status} onChange={(v) => set("marital_status", v)} options={["", "Single", "Married", "Divorced", "Widowed"]} testid="hr-emp-marital" /></FormRow>
+              <FormRow label="Father's Name"><Input className="h-8" value={form.father_name} onChange={(e) => set("father_name", e.target.value)} data-testid="hr-emp-father" /></FormRow>
+              <FormRow label="Mother's Name"><Input className="h-8" value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} data-testid="hr-emp-mother" /></FormRow>
             </div>
           )}
           {tab === "employment" && (
-            <div className="grid gap-3">
-              <Field label="Employee Code"><Input value={form.employee_code} onChange={(e) => set("employee_code", e.target.value)} placeholder="Auto-generated" data-testid="hr-emp-code" /></Field>
-              <Field label="Department *"><OsSelect value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></Field>
-              <Field label="Designation *"><OsSelect value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></Field>
+            <div className="px-5 py-1">
+              <FormRow label="Employee Code"><Input className="h-8" value={form.employee_code} onChange={(e) => set("employee_code", e.target.value)} placeholder="Auto-generated" data-testid="hr-emp-code" /></FormRow>
+              <FormRow label="Department *"><OsSelect value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></FormRow>
+              <FormRow label="Designation *"><OsSelect value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></FormRow>
               {/* Joining Date, Reporting To and Status are not asked here. Joining Date is
                   stamped when the employee's login is created (create_user_account); all
                   three still ride along in the form, so an edit saves them back unchanged. */}
@@ -1902,7 +1898,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   commits them to. Starred and outlined because it decides whether the
                   Branch field beside it appears at all, which is worth answering
                   deliberately even though blank is allowed. */}
-              <Field label="Work Type *">
+              <FormRow label="Work Type *">
                 <OsSelect
                   value={form.work_type}
                   onChange={changeWorkType}
@@ -1916,7 +1912,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                     ? "Works online, so no branch — Service decides the arm."
                     : "Offline — works in the room, at the branch below. Blank reads the same."}
                 </p>
-              </Field>
+              </FormRow>
               {/* Required for Online and not for Offline, because it answers a different
                   question in each. Offline picks a room by name in the Branch field below.
                   Online has no such field — an online employee is not AT a branch — and
@@ -1925,7 +1921,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   it used to post them to neither, and to nothing at all: the Branch field
                   clears on the way to Online, and a cleared branch reads downstream as
                   "taken off their branch". */}
-              <Field label={isOnlineMode(form.work_type) ? "Service *" : "Service"}>
+              <FormRow label={isOnlineMode(form.work_type) ? "Service *" : "Service"}>
                 <OsSelect
                   value={form.service}
                   onChange={changeService}
@@ -1945,9 +1941,9 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                       : "Which online arm they work — Physio, Fitness, or both."}
                   </p>
                 )}
-              </Field>
+              </FormRow>
               {modeHasBranch(form.work_type) && (
-                <Field label="Branch">
+                <FormRow label="Branch">
                   {/* All Branches is offered here too, or an employee posted to every
                       branch from New Structure would open this form showing "Not picked" —
                       the stored value matching no option — and be cleared by the next save. */}
@@ -1963,7 +1959,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                     labels={{ "": "— Not picked —", [ALL_BRANCHES]: "All Branches", ...Object.fromEntries(branchOptions.map((b) => [b.id, b.branch_name])) }}
                     testid="hr-emp-branch"
                   />
-                </Field>
+                </FormRow>
               )}
             </div>
           )}
@@ -1971,29 +1967,27 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               which is what it is actually for here — the account is where the money goes
               and the PAN is what it is paid against, and they are filled in together. */}
           {tab === "id_docs" && (
-            <div className="grid gap-3">
-              <Field label="Aadhar"><Input value={form.aadhar} onChange={(e) => set("aadhar", e.target.value)} data-testid="hr-emp-aadhar" /></Field>
+            <div className="px-5 py-1">
+              <FormRow label="Aadhar"><Input className="h-8" value={form.aadhar} onChange={(e) => set("aadhar", e.target.value)} data-testid="hr-emp-aadhar" /></FormRow>
             </div>
           )}
           {tab === "address" && (
-            <div className="grid gap-3">
-              <Field label="Address"><textarea value={form.address} onChange={(e) => set("address", e.target.value)} className="h-20 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-address" /></Field>
-              <div className="grid gap-3">
-                <Field label="Emergency Contact Name"><Input value={form.emergency_contact_name} onChange={(e) => set("emergency_contact_name", e.target.value)} data-testid="hr-emp-ec-name" /></Field>
-                <Field label="Emergency Contact Phone"><Input value={form.emergency_contact_phone} onChange={(e) => set("emergency_contact_phone", e.target.value)} data-testid="hr-emp-ec-phone" /></Field>
-              </div>
+            <div className="px-5 py-1">
+              <FormRow label="Address"><textarea value={form.address} onChange={(e) => set("address", e.target.value)} className="h-16 w-full rounded-md border border-slate-200 p-2 text-sm" data-testid="hr-emp-address" /></FormRow>
+              <FormRow label="Emergency Contact Name"><Input className="h-8" value={form.emergency_contact_name} onChange={(e) => set("emergency_contact_name", e.target.value)} data-testid="hr-emp-ec-name" /></FormRow>
+              <FormRow label="Emergency Contact Phone"><Input className="h-8" value={form.emergency_contact_phone} onChange={(e) => set("emergency_contact_phone", e.target.value)} data-testid="hr-emp-ec-phone" /></FormRow>
             </div>
           )}
           {tab === "bank" && (
-            <div className="grid gap-3">
-              <Field label="Bank Name"><Input value={form.bank_name} onChange={(e) => set("bank_name", e.target.value)} data-testid="hr-emp-bank" /></Field>
-              <Field label="Account Number"><Input value={form.bank_account} onChange={(e) => set("bank_account", e.target.value)} data-testid="hr-emp-account" /></Field>
-              <Field label="IFSC Code"><Input value={form.ifsc} onChange={(e) => set("ifsc", e.target.value)} data-testid="hr-emp-ifsc" /></Field>
-              <Field label="PAN Number"><Input value={form.pan} onChange={(e) => set("pan", e.target.value)} data-testid="hr-emp-pan" /></Field>
+            <div className="px-5 py-1">
+              <FormRow label="Bank Name"><Input className="h-8" value={form.bank_name} onChange={(e) => set("bank_name", e.target.value)} data-testid="hr-emp-bank" /></FormRow>
+              <FormRow label="Account Number"><Input className="h-8" value={form.bank_account} onChange={(e) => set("bank_account", e.target.value)} data-testid="hr-emp-account" /></FormRow>
+              <FormRow label="IFSC Code"><Input className="h-8" value={form.ifsc} onChange={(e) => set("ifsc", e.target.value)} data-testid="hr-emp-ifsc" /></FormRow>
+              <FormRow label="PAN Number"><Input className="h-8" value={form.pan} onChange={(e) => set("pan", e.target.value)} data-testid="hr-emp-pan" /></FormRow>
               {/* Said rather than left to be discovered: somebody who came to this tab to
                   type a salary needs telling where the salary went, not an empty space
                   where the box used to be. */}
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+              <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
                 Salary is set in <b>Payroll Management</b>, on the employee's own salary
                 record — each figure filed with the reason for it and the month it starts,
                 so what somebody was on in any given month has an answer.
@@ -4613,6 +4607,16 @@ const Field = ({ label, children, className = "" }) => (
   </div>
 );
 
+// The Add/Edit Employee dialog's row: label on the left, field on the right, divided like
+// the View popup's ViewRow so the read and the write of a record line up. The label is
+// nudged down to sit level with a 32px control, and stays at the top beside a hint line.
+const FormRow = ({ label, children }) => (
+  <div className="flex items-start gap-3 border-b border-slate-100 py-1 last:border-0">
+    <label className="w-36 shrink-0 pt-2 text-xs text-slate-500">{label}</label>
+    <div className="min-w-0 flex-1">{children}</div>
+  </div>
+);
+
 // A password box that can be read back. Whoever sets a password here has to pass it on
 // to the person it belongs to, so being unable to check what was typed is how an account
 // gets handed over with a credential nobody can log in with.
@@ -4647,21 +4651,11 @@ const PasswordInput = ({ value, onChange, placeholder, testid }) => {
 // `labels` maps a stored value to what the reader should see, for the fields whose value
 // is a slug rather than a word — "physio" is what the record holds, "Physio" is what the
 // row says. Omitted, every option still reads as its own value, as it always did.
-// `className` is appended last, so a caller saying something about one particular field —
-// an unanswered one worth looking at — overrides the default border rather than fighting it.
-const Select = ({ value, onChange, options = [], testid, uppercase = false, labels = null, className = "" }) => (
-  <select
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    className={`h-10 w-full rounded-md border border-slate-200 px-3 text-sm${uppercase ? " uppercase" : ""}${className ? ` ${className}` : ""}`}
-    data-testid={testid}
-  >
-    {options.map((o) => <option key={o} value={o}>{(labels && labels[o]) || o || "Select"}</option>)}
-  </select>
-);
-
-// Select's props, drawn as the OS's own list rather than the browser's: the same trigger and
-// portalled list as Branch Transfer's "Transfer to". The list floats in a portal above the
+// `className` replaces the default border and background, so a caller saying something
+// about one particular field — an unanswered one worth looking at — is not fighting them.
+//
+// Drawn as the OS's own list rather than the browser's: the same trigger and portalled
+// list as Branch Transfer's "Transfer to". The list floats in a portal above the
 // dialog (z-[70] over its z-40), so the dialog's scrolling body neither clips it nor shifts
 // the fields under it. A stored value the options no longer hold reads as the first option,
 // the way the native box showed it.
@@ -4688,7 +4682,7 @@ const OsSelect = ({ value, onChange, options = [], testid, uppercase = false, la
         type="button"
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-        className={`flex h-10 w-full items-center gap-2 rounded-md border px-3 text-left text-sm transition-colors ${className || "border-slate-200 bg-white hover:bg-[#F3EFE6]"} ${open ? "ring-2 ring-sky-100" : ""}`}
+        className={`flex h-8 w-full items-center gap-2 rounded-md border px-3 text-left text-sm transition-colors ${className || "border-slate-200 bg-white hover:bg-[#F3EFE6]"} ${open ? "ring-2 ring-sky-100" : ""}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         data-testid={testid}
