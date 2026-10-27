@@ -162,7 +162,6 @@ export const TransferReason = ({ value, onChange, testid = "branch-transfer-reas
       value={value}
       onChange={(e) => onChange(e.target.value)}
       rows={2}
-      placeholder="e.g. Patient lives near T Nagar and finds Anna Nagar too far"
       className="mt-1 w-full resize-none rounded-lg border border-[#EFEAE0] bg-white/60 px-2 py-1.5 text-sm outline-none focus:border-indigo-400"
       data-testid={testid}
     />
