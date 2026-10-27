@@ -3010,6 +3010,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               homeVisitScope={onHomeVisitTab ? "only" : "exclude"}
               branchId={branchId}
               viewerRole="branch_admin"
+              // 4px corners on the Branch Admin's own login, like the List View.
+              squareTable={squareTable}
               // Same fact the calendars above are given: an arm with no room in it meets
               // its patients over video, so Assign Physio says which room and says when
               // one is missing.
