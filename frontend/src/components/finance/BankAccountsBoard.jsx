@@ -140,7 +140,7 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
           a panel centred on the viewport itself is taller than a phone screen here, and
           clips its own Save button off the bottom with no way to reach it. */}
       <div className="flex min-h-full items-center justify-center">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+      <div className="w-full max-w-2xl rounded-[4px] bg-white shadow-xl">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">
             <div className="hidden rounded-lg bg-indigo-50 p-2 sm:block">
@@ -323,18 +323,22 @@ const BankFormDialog = ({ account, branchId, branchName, branches, onClose, onSa
 const BankViewDialog = ({ account, onClose, onEdit }) => (
   <div className="fixed inset-0 z-40 overflow-y-auto bg-black/40 p-3 sm:p-4" data-testid="finance-bank-view-dialog">
     <div className="flex min-h-full items-center justify-center">
-    <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-          <div className="hidden rounded-xl bg-indigo-50 p-3 sm:block">
-            <Landmark className="h-6 w-6 text-indigo-600" />
+    <div className="w-full max-w-2xl rounded-[4px] bg-white shadow-xl">
+      {/* One row, the same height as the Add Bank popup's: the holder rides beside the
+          bank name rather than under it, and the name gives way first on a narrow screen. */}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6" data-testid="finance-bank-view-header">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="hidden shrink-0 rounded-lg bg-indigo-50 p-2 sm:block">
+            <Landmark className="h-5 w-5 text-indigo-600" />
           </div>
-          <div className="min-w-0">
-            <h3 className="truncate text-lg font-bold text-slate-900 sm:text-xl">{account.bank_name}</h3>
-            <p className="truncate text-xs text-slate-500 sm:text-sm">{account.holder_name}</p>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h3 className="truncate text-lg font-bold text-slate-900">{account.bank_name}</h3>
+            {account.holder_name ? (
+              <span className="min-w-0 truncate text-sm text-slate-500">· {account.holder_name}</span>
+            ) : null}
           </div>
         </div>
-        <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="finance-bank-view-close">
+        <button type="button" onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="finance-bank-view-close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -461,7 +465,7 @@ const Row = ({ label, value }) => (
 // a card that gets fixed once.
 const BankCard = ({ account: acc, onView, onEdit, onDelete, onToggle }) => (
   <div
-    className={`flex flex-col rounded-xl border p-4 shadow-sm transition ${
+    className={`flex flex-col rounded-[4px] border p-4 shadow-sm transition ${
       acc.is_active ? "border-slate-200 bg-white" : "border-rose-200 bg-rose-50/40"
     }`}
     data-testid={`finance-bank-card-${acc.id}`}
@@ -552,7 +556,7 @@ const BankCard = ({ account: acc, onView, onEdit, onDelete, onToggle }) => (
 // IFSC — is one click away in the View popup that already draws all of it.
 const BankListRow = ({ account: acc, onView, onEdit, onDelete, onToggle }) => (
   <div
-    className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 transition ${
+    className={`flex items-center gap-1.5 rounded-[4px] border px-2 py-1.5 transition ${
       acc.is_active ? "border-slate-200 bg-white hover:bg-slate-50" : "border-rose-200 bg-rose-50/40"
     }`}
     data-testid={`finance-bank-card-${acc.id}`}
@@ -748,12 +752,13 @@ export const BankAccountsBoard = ({ branchId, branchName, branches, onRegisterAd
   return (
     <div className="space-y-4" data-testid="finance-bank-accounts-root">
       {/* A line, not a strip: Add Bank sits in the tab row now, and a bordered band whose
-          only job was to carry it is a band of screen a phone cannot spare. */}
-      <p className="text-xs text-slate-500" data-testid="finance-bank-caption">
-        {branchId
-          ? `Bank accounts saved for ${branchName || "this branch"}.`
-          : "Every branch, and the accounts it collects into."}
-      </p>
+          only job was to carry it is a band of screen a phone cannot spare. Only under a
+          picked branch: across all of them the tiles say what the line used to. */}
+      {branchId && (
+        <p className="text-xs text-slate-500" data-testid="finance-bank-caption">
+          {`Bank accounts saved for ${branchName || "this branch"}.`}
+        </p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-16 text-sm text-slate-500">
@@ -786,7 +791,7 @@ export const BankAccountsBoard = ({ branchId, branchName, branches, onRegisterAd
           {sections.map((section) => (
             <div
               key={section.key}
-              className="flex flex-col rounded-xl border border-slate-200 bg-white p-3"
+              className="flex flex-col rounded-[4px] border border-slate-200 bg-white p-3"
               data-testid={`finance-bank-section-${section.key}`}
             >
               <div className="mb-3 flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
