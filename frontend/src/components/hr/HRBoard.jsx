@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -253,6 +253,23 @@ export const HRBoard = ({ isSuperAdmin = false }) => {
     setMeta(m);
   }).catch((e) => console.warn("[load failed]", e?.message || e)), []);
   useEffect(() => { reloadMeta(); }, [reloadMeta]);
+  // The bar answers a tap at once; the tab under it follows. Mounting a tab is the heavy
+  // part (its lists render and its fetches start), and done in the same render as the bar
+  // it held the bar's highlight back until it finished, so a tap looked ignored and then
+  // jumped. Deferred, React paints the bar first and builds the tab in the background,
+  // with the old tab dimmed meanwhile. Memoised so the bar's own render doesn't re-render
+  // the tab that is on its way out.
+  const shownTab = useDeferredValue(tab);
+  const content = useMemo(() => (
+    <>
+      {/* The Dashboard's cards filter a list of their own now rather than switching tabs. */}
+      {shownTab === "dashboard" && <DashboardTab />}
+      {shownTab === "staff" && <StaffTab isSuperAdmin={isSuperAdmin} sub={staffSub} onSubChange={setStaffSub} />}
+      {shownTab === "employees" && <EmployeesTab meta={meta} reloadMeta={reloadMeta} />}
+      {shownTab === "roles" && <RolesTab meta={meta} reloadMeta={reloadMeta} />}
+      {shownTab === "structure" && <StructureTab meta={meta} reloadMeta={reloadMeta} />}
+    </>
+  ), [shownTab, isSuperAdmin, staffSub, meta, reloadMeta]);
   // flex+gap, not space-y — the title/description block below is hidden by class on
   // mobile, not the hidden attribute, so space-y's sibling selector would still hand
   // the tab strip phantom top margin for content a phone never draws.
@@ -261,12 +278,7 @@ export const HRBoard = ({ isSuperAdmin = false }) => {
       {/* No heading. The nav tab above already reads HR Admin. */}
       {/* On a phone, the BDE Dashboard's strip: one row of icons, the open tab named. */}
       <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="hr-subtab" collapse />
-      {/* The Dashboard's cards filter a list of their own now rather than switching tabs. */}
-      {tab === "dashboard" && <DashboardTab />}
-      {tab === "staff" && <StaffTab isSuperAdmin={isSuperAdmin} sub={staffSub} onSubChange={setStaffSub} />}
-      {tab === "employees" && <EmployeesTab meta={meta} reloadMeta={reloadMeta} />}
-      {tab === "roles" && <RolesTab meta={meta} reloadMeta={reloadMeta} />}
-      {tab === "structure" && <StructureTab meta={meta} reloadMeta={reloadMeta} />}
+      <div className={`min-w-0 transition-opacity duration-150 ${shownTab !== tab ? "opacity-60" : ""}`}>{content}</div>
     </div>
   );
 };

@@ -60,7 +60,7 @@ export const SegmentedTabs = ({ tabs, value, onChange, testid = "segmented-tabs"
               aria-current={active ? "page" : undefined}
               aria-label={t.label}
               title={t.label}
-              className={`inline-flex min-w-0 flex-auto items-center justify-center whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium transition-all duration-500 ease-in-out sm:flex-1 sm:gap-1.5 sm:rounded-lg sm:px-3 sm:font-semibold sm:duration-150 ${
+              className={`inline-flex min-w-0 flex-auto items-center justify-center whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium transition-colors duration-150 sm:flex-1 sm:gap-1.5 sm:rounded-lg sm:px-3 sm:font-semibold ${
                 active
                   ? "bg-sky-50 text-sky-700 sm:bg-white sm:text-slate-900 sm:shadow-sm"
                   : "text-slate-600 hover:bg-slate-50 sm:text-slate-500 sm:hover:bg-transparent sm:hover:text-slate-800"
@@ -69,8 +69,13 @@ export const SegmentedTabs = ({ tabs, value, onChange, testid = "segmented-tabs"
             >
               {Icon && <Icon className={`h-4 w-4 shrink-0 ${active ? "sm:text-sky-600" : ""}`} />}
               {/* Width and opacity rather than display, as on the BDE strip, so the name
-                  slides open on the tab you pick and folds away on the one you left. */}
-              <span className={`overflow-hidden text-ellipsis transition-all duration-500 ease-in-out sm:ml-0 sm:max-w-none sm:opacity-100 ${active ? "ml-2 max-w-[9rem] opacity-100" : "ml-0 max-w-0 opacity-0"}`}>
+                  slides open on the tab you pick and folds away on the one you left.
+
+                  200ms and only those three properties, not BDE's 500ms transition-all: a
+                  width animation re-lays the whole row out every frame, and at half a second
+                  it was still running when the new tab's render landed on the main thread,
+                  so on a phone it stalled midway and read as stuck. */}
+              <span className={`overflow-hidden text-ellipsis transition-[max-width,margin,opacity] duration-200 ease-out sm:ml-0 sm:max-w-none sm:opacity-100 ${active ? "ml-2 max-w-[9rem] opacity-100" : "ml-0 max-w-0 opacity-0"}`}>
                 {t.short ? (
                   <>
                     <span className="sm:hidden">{t.short}</span>
