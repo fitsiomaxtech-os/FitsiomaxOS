@@ -6449,7 +6449,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                           placeholder="7"
                           value={apptTime.h}
                           onChange={(e) => setApptClock({ h: e.target.value.replace(/\D/g, "").slice(0, 2) })}
-                          className="h-12 w-16 rounded-lg border border-slate-200 text-center text-xl font-bold text-slate-800 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                          className="h-12 w-16 rounded-[4px] border border-slate-200 text-center text-xl font-bold text-slate-800 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                           data-testid="branch-appt-hour"
                         />
                         <span className="text-xl font-bold text-slate-400">:</span>
@@ -6460,10 +6460,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                           placeholder="15"
                           value={apptTime.m}
                           onChange={(e) => setApptClock({ m: e.target.value.replace(/\D/g, "").slice(0, 2) })}
-                          className="h-12 w-16 rounded-lg border border-slate-200 text-center text-xl font-bold text-slate-800 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                          className="h-12 w-16 rounded-[4px] border border-slate-200 text-center text-xl font-bold text-slate-800 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                           data-testid="branch-appt-minute"
                         />
-                        <div className="ml-1 flex overflow-hidden rounded-lg border border-slate-200">
+                        <div className="ml-1 flex overflow-hidden rounded-[4px] border border-slate-200">
                           {["AM", "PM"].map((half) => (
                             <button
                               key={half}
@@ -6527,7 +6527,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                             Consultation Duration off, four patients can share 10:25, and
                             each still needs its own pencil. Keyed on the patient for the
                             same reason — a key on the time alone folds them together. */}
-                        <ol className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                        <ol className="divide-y divide-slate-200 overflow-hidden rounded-[4px] border border-slate-200 bg-slate-50">
                           {apptSlotsForExpert.filter((x) => x.booked).map((x, i) => (
                             <li
                               key={`${x.slot_time}-${x.review_id || x.lead_id || i}`}
@@ -6556,7 +6556,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                                 <button
                                   type="button"
                                   onClick={() => openSlotEdit(x)}
-                                  className="shrink-0 rounded-md border border-slate-300 bg-white p-1.5 text-slate-500 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-600"
+                                  className="shrink-0 rounded-[4px] p-1.5 text-slate-500 transition hover:bg-sky-50 hover:text-sky-600"
                                   title={`Reschedule the ${to12h(x.time)} booking${x.lead_name ? ` — ${x.lead_name.trim()}` : ""}`}
                                   data-testid={`branch-appt-booked-edit-${i + 1}`}
                                 >
