@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History } from "lucide-react";
+import { Users, ShieldCheck, AlertTriangle, MailCheck, BarChart3, Plus, Pencil, Trash2, Eye, EyeOff, KeyRound, X, UserPlus, MoreVertical, Check, CheckCircle2, XCircle, AlertOctagon, ChevronDown, ChevronUp, ChevronRight, GripVertical, Search, Settings, Camera, Download, Network, CalendarCheck, Wallet, ClipboardCheck, ClipboardList, Quote, Star, UserCheck, TrendingUp, History, ArrowDownAZ, ArrowUpZA, Briefcase, Wifi, WifiOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -259,7 +259,8 @@ export const HRBoard = ({ isSuperAdmin = false }) => {
   return (
     <div className="flex flex-col gap-5" data-testid="hr-board">
       {/* No heading. The nav tab above already reads HR Admin. */}
-      <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="hr-subtab" mobileCols={4} />
+      {/* On a phone, the BDE Dashboard's strip: one row of icons, the open tab named. */}
+      <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="hr-subtab" collapse />
       {/* The Dashboard's cards filter a list of their own now rather than switching tabs. */}
       {tab === "dashboard" && <DashboardTab />}
       {tab === "staff" && <StaffTab isSuperAdmin={isSuperAdmin} sub={staffSub} onSubChange={setStaffSub} />}
@@ -489,7 +490,10 @@ const DashboardList = ({ kind, rows }) => {
  * closes itself back to the icon on blur, but only if it's empty — a live query never
  * disappears out from under someone.
  */
-const SearchIconInput = ({ value, onChange, placeholder = "Search...", testid }) => {
+// `compact` is for a toolbar held to one row on a phone (the Employees one): the icon is a
+// 36px square there like its neighbours, and the open field takes whatever the row has left
+// instead of a full line of its own.
+const SearchIconInput = ({ value, onChange, placeholder = "Search...", testid, compact = false }) => {
   const [open, setOpen] = useState(Boolean(value));
   const ref = useRef(null);
 
@@ -500,7 +504,7 @@ const SearchIconInput = ({ value, onChange, placeholder = "Search...", testid })
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
+        className={`flex shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-sky-300 hover:text-sky-600 ${compact ? "h-9 w-9 sm:h-10 sm:w-10" : "h-10 w-10"}`}
         title="Search"
         aria-label="Search"
         data-testid={testid}
@@ -511,7 +515,7 @@ const SearchIconInput = ({ value, onChange, placeholder = "Search...", testid })
   }
 
   return (
-    <div className="relative w-full sm:w-64">
+    <div className={`relative ${compact ? "min-w-0 flex-1 sm:w-64 sm:flex-none" : "w-full sm:w-64"}`}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <Input
         ref={ref}
@@ -734,6 +738,61 @@ const FilterOption = ({ label, selected, onSelect, testid }) => (
   </button>
 );
 
+// A filter trigger handed an `icon` is that icon alone on a phone, a 36px square, so the
+// Employees toolbar holds one row there; from sm up it is the usual labelled dropdown.
+const filterTriggerSize = (icon) => (icon
+  ? "h-9 w-9 shrink-0 justify-center px-0 sm:h-10 sm:w-56 sm:justify-between sm:gap-2 sm:px-3"
+  : "h-10 w-56 justify-between gap-2 px-3");
+
+const FilterTriggerFace = ({ icon: Icon, label, open }) => (
+  <>
+    {Icon && <Icon className="h-4 w-4 shrink-0 sm:hidden" />}
+    <span className={`truncate ${Icon ? "hidden sm:inline" : ""}`}>{label}</span>
+    <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""} ${Icon ? "hidden sm:block" : ""}`} />
+  </>
+);
+
+/** The Employees toolbar's All / Online / Offline pills, as one icon on a phone, where the
+ *  three pills alone are a third of the row. Opens the same panel the two filters beside it
+ *  do; the icon says which is set. */
+const WORK_TYPE_FILTERS = [
+  { key: "", label: "All" },
+  { key: MODE_ONLINE, label: MODE_LABELS[MODE_ONLINE] },
+  { key: MODE_OFFLINE, label: MODE_LABELS[MODE_OFFLINE] },
+];
+const WorkTypeFilterSelect = ({ value, onChange, className = "", testid }) => {
+  const [open, setOpen] = useState(false);
+  const Icon = value === MODE_OFFLINE ? WifiOff : Wifi;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title="Filter by work type"
+          aria-label="Filter by work type"
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition ${
+            value ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+          } ${className}`}
+          data-testid={testid}
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-40 p-1" data-testid={`${testid}-panel`}>
+        {WORK_TYPE_FILTERS.map((w) => (
+          <FilterOption
+            key={w.key || "all"}
+            label={w.label}
+            selected={value === w.key}
+            onSelect={() => { onChange(w.key); setOpen(false); }}
+            testid={`${testid}-${w.key || "all"}`}
+          />
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 /**
  * The designation filter.
  *
@@ -759,7 +818,7 @@ const FilterOption = ({ label, selected, onSelect, testid }) => (
  * spelling of a job the structure holds in different capitals. Reading "All Designations"
  * over a list that is filtered is the one state a filter must never show.
  */
-const DesignationFilterSelect = ({ value, onChange, options, groups, testid }) => {
+const DesignationFilterSelect = ({ value, onChange, options, groups, testid, icon }) => {
   const [open, setOpen] = useState(false);
   const sections = groups || (options?.length ? [{ department: "", designations: options }] : []);
   const pick = (next) => { onChange(next); setOpen(false); };
@@ -770,13 +829,13 @@ const DesignationFilterSelect = ({ value, onChange, options, groups, testid }) =
         <button
           type="button"
           title="Filter by designation"
-          className={`flex h-10 w-56 items-center justify-between gap-2 rounded-md border px-3 text-sm font-medium transition ${
+          aria-label={icon ? "Filter by designation" : undefined}
+          className={`flex items-center rounded-md border text-sm font-medium transition ${filterTriggerSize(icon)} ${
             value ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
           }`}
           data-testid={testid}
         >
-          <span className="truncate">{value ? titleCase(value) : "All Designations"}</span>
-          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+          <FilterTriggerFace icon={icon} label={value ? titleCase(value) : "All Designations"} open={open} />
         </button>
       </PopoverTrigger>
       {/* max-h + overflow on the list rather than the panel, so the headings scroll with
@@ -830,7 +889,7 @@ const DesignationFilterSelect = ({ value, onChange, options, groups, testid }) =
  * The list is exactly what Department & Designation configures, in that tab's own order,
  * so the two screens name the same departments in the same sequence.
  */
-const DepartmentFilterSelect = ({ value, onChange, departments, testid }) => {
+const DepartmentFilterSelect = ({ value, onChange, departments, testid, icon }) => {
   const [open, setOpen] = useState(false);
   const pick = (next) => { onChange(next); setOpen(false); };
   // Same guard the designation trigger carries: a filter can arrive set to a department
@@ -844,13 +903,13 @@ const DepartmentFilterSelect = ({ value, onChange, departments, testid }) => {
         <button
           type="button"
           title="Filter by department"
-          className={`flex h-10 w-56 items-center justify-between gap-2 rounded-md border px-3 text-sm font-medium transition ${
+          aria-label={icon ? "Filter by department" : undefined}
+          className={`flex items-center rounded-md border text-sm font-medium transition ${filterTriggerSize(icon)} ${
             value ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
           }`}
           data-testid={testid}
         >
-          <span className="truncate">{value ? titleCase(value) : "All Departments"}</span>
-          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+          <FilterTriggerFace icon={icon} label={value ? titleCase(value) : "All Departments"} open={open} />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-1" data-testid={`${testid}-panel`}>
@@ -1136,31 +1195,40 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           pushed to the far end. Department and Designation are the same pair of dropdowns
           Credentials uses — picking a department narrows the designations beside it.
           "Unassigned" is offered only when somebody actually has no department. Work Type
-          has no Both pill: somebody who works the two modes already appears under each. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="hr-emp-toolbar">
-        <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." testid="hr-emp-search" />
+          has no Both pill: somebody who works the two modes already appears under each.
+
+          On a phone it is one row that neither wraps nor scrolls: every control is a 36px
+          icon there (the three Work Type pills fold into one), and an open search takes
+          what the row has left. */}
+      <div className="flex flex-nowrap items-center gap-1 sm:flex-wrap sm:gap-2" data-testid="hr-emp-toolbar">
+        <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." testid="hr-emp-search" compact />
         <button
           type="button"
           onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
           title="Sort by name"
-          className={`h-10 shrink-0 rounded-md border px-3 text-sm font-medium transition ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+          aria-label={sortAZ === "desc" ? "Sort Z to A" : "Sort A to Z"}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-medium transition sm:h-10 sm:w-auto sm:px-3 ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
           data-testid="hr-emp-sort-az"
         >
-          {sortAZ === "desc" ? "Z → A" : "A → Z"}
+          {sortAZ === "desc" ? <ArrowUpZA className="h-4 w-4 sm:hidden" /> : <ArrowDownAZ className="h-4 w-4 sm:hidden" />}
+          <span className="hidden sm:inline">{sortAZ === "desc" ? "Z → A" : "A → Z"}</span>
         </button>
         <DepartmentFilterSelect
           value={department}
           onChange={(d) => { setDepartment(d); setDesignation(""); }}
           departments={hasUnassigned ? [...meta.departments, "Unassigned"] : meta.departments}
           testid="hr-emp-dept-filter-select"
+          icon={Network}
         />
         <DesignationFilterSelect
           value={designation}
           onChange={setDesignation}
           groups={designationGroups}
           testid="hr-emp-designation-filter-select"
+          icon={Briefcase}
         />
-        <div className="flex items-center gap-2" data-testid="hr-emp-worktype-filter">
+        <WorkTypeFilterSelect value={workType} onChange={setWorkType} className="sm:hidden" testid="hr-emp-worktype-filter-select" />
+        <div className="hidden items-center gap-2 sm:flex" data-testid="hr-emp-worktype-filter">
           <TabPill active={workType === ""} onClick={() => setWorkType("")} testid="hr-emp-worktype-filter-all">
             All
           </TabPill>
@@ -1178,12 +1246,20 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           onClick={() => setShowHistory(true)}
           title="Deleted employees"
           aria-label="Deleted employees"
-          className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-800 sm:h-10 sm:w-10"
           data-testid="hr-emp-history-btn"
         >
           <History className="h-4 w-4" />
         </button>
-        <Button onClick={() => { setEditing(null); setShowAdd(true); }} className="bg-sky-600 hover:bg-sky-700" data-testid="hr-emp-add-btn"><Plus className="h-4 w-4 mr-1" />Add Employee</Button>
+        <Button
+          onClick={() => { setEditing(null); setShowAdd(true); }}
+          title="Add Employee"
+          aria-label="Add Employee"
+          className="h-9 w-9 shrink-0 bg-sky-600 px-0 hover:bg-sky-700 sm:w-auto sm:px-4"
+          data-testid="hr-emp-add-btn"
+        >
+          <Plus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Add Employee</span>
+        </Button>
       </div>
 
       <EmployeeDirectory employees={sorted} onView={setViewing} />
