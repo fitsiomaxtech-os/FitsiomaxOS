@@ -22,6 +22,7 @@ import { ClientReviewsPanel } from "@/components/reviews/ClientReviewsPanel";
 import { EodReportsPanel } from "@/components/eod/EodReportsPanel";
 import { PerformancePanel } from "@/components/hr/PerformancePanel";
 import { displayPhone } from "@/lib/phone";
+import { clamp, useDismissOutside, useFloatingPosition } from "@/lib/use-floating";
 
 // Matches ALL_BRANCHES in backend/routers/v3_hr.py, which resolves it to a name on the way
 // out. Held in branch_id where a real branch id would go, so everything that already reads
@@ -1882,8 +1883,8 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
           {tab === "employment" && (
             <div className="grid gap-3">
               <Field label="Employee Code"><Input value={form.employee_code} onChange={(e) => set("employee_code", e.target.value)} placeholder="Auto-generated" data-testid="hr-emp-code" /></Field>
-              <Field label="Department *"><Select value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></Field>
-              <Field label="Designation *"><Select value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></Field>
+              <Field label="Department *"><OsSelect value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></Field>
+              <Field label="Designation *"><OsSelect value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></Field>
               {/* Joining Date, Reporting To and Status are not asked here. Joining Date is
                   stamped when the employee's login is created (create_user_account); all
                   three still ride along in the form, so an edit saves them back unchanged. */}
@@ -1898,7 +1899,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   Branch field beside it appears at all, which is worth answering
                   deliberately even though blank is allowed. */}
               <Field label="Work Type *">
-                <Select
+                <OsSelect
                   value={form.work_type}
                   onChange={changeWorkType}
                   options={["", ...MODE_OPTIONS]}
@@ -1921,7 +1922,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   clears on the way to Online, and a cleared branch reads downstream as
                   "taken off their branch". */}
               <Field label={isOnlineMode(form.work_type) ? "Service *" : "Service"}>
-                <Select
+                <OsSelect
                   value={form.service}
                   onChange={changeService}
                   options={["", PRACTICE_PHYSIO, PRACTICE_FITNESS, PRACTICE_BOTH]}
@@ -1943,24 +1944,21 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               </Field>
               {modeHasBranch(form.work_type) && (
                 <Field label="Branch">
-                  <select
+                  {/* All Branches is offered here too, or an employee posted to every
+                      branch from New Structure would open this form showing "Not picked" —
+                      the stored value matching no option — and be cleared by the next save. */}
+                  <OsSelect
                     value={form.branch_id}
                     // The list goes with it. The form is seeded from the record, so it
                     // carries whatever branch_ids the record held, and the server reads a
                     // posted list ahead of branch_id — picking Parrys here over a record
                     // holding [Anna Nagar] saved Anna Nagar again. Untouched, the stored
                     // list still passes through as it was.
-                    onChange={(e) => { const v = e.target.value; setForm((p) => ({ ...p, branch_id: v, branch_ids: v ? [v] : [] })); }}
-                    className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
-                    data-testid="hr-emp-branch"
-                  >
-                    <option value="">— Not picked —</option>
-                    {/* Offered here too, or an employee posted to every branch from New
-                        Structure would open this form showing "Not picked" — the stored
-                        value matching no option — and be cleared by the next save. */}
-                    <option value={ALL_BRANCHES}>All Branches</option>
-                    {branchOptions.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-                  </select>
+                    onChange={(v) => setForm((p) => ({ ...p, branch_id: v, branch_ids: v ? [v] : [] }))}
+                    options={["", ALL_BRANCHES, ...branchOptions.map((b) => b.id)]}
+                    labels={{ "": "— Not picked —", [ALL_BRANCHES]: "All Branches", ...Object.fromEntries(branchOptions.map((b) => [b.id, b.branch_name])) }}
+                    testid="hr-emp-branch"
+                  />
                 </Field>
               )}
             </div>
@@ -4657,6 +4655,77 @@ const Select = ({ value, onChange, options = [], testid, uppercase = false, labe
     {options.map((o) => <option key={o} value={o}>{(labels && labels[o]) || o || "Select"}</option>)}
   </select>
 );
+
+// Select's props, drawn as the OS's own list rather than the browser's: the same trigger and
+// portalled list as Branch Transfer's "Transfer to". The list floats in a portal above the
+// dialog (z-[70] over its z-40), so the dialog's scrolling body neither clips it nor shifts
+// the fields under it. A stored value the options no longer hold reads as the first option,
+// the way the native box showed it.
+const OsSelect = ({ value, onChange, options = [], testid, uppercase = false, labels = null, className = "" }) => {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const listRef = useRef(null);
+  const pos = useFloatingPosition(open, listRef, (w, h) => {
+    const gap = 8;
+    const field = triggerRef.current.getBoundingClientRect();
+    let top = field.bottom + 4;
+    if (top + h > window.innerHeight - gap && field.top - h - 4 >= gap) top = field.top - h - 4;
+    return { left: field.left, width: field.width, top: clamp(top, gap, window.innerHeight - h - gap) };
+  });
+  useDismissOutside(open, [triggerRef, listRef], () => setOpen(false));
+  const labelOf = (o) => (labels && labels[o]) || o || "Select";
+  const shown = options.includes(value) ? value : options[0];
+  const pick = (o) => { onChange(o); setOpen(false); };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        className={`flex h-10 w-full items-center gap-2 rounded-md border px-3 text-left text-sm transition-colors ${className || "border-slate-200 bg-white hover:bg-[#F3EFE6]"} ${open ? "ring-2 ring-sky-100" : ""}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-testid={testid}
+      >
+        <span className={`min-w-0 flex-1 truncate ${uppercase ? "uppercase" : ""} ${shown ? "font-medium text-slate-800" : "text-slate-400"}`}>
+          {labelOf(shown)}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={listRef}
+          className="fixed z-[70] max-h-60 overflow-y-auto rounded border border-[#EFEAE0] bg-white p-1 shadow-xl"
+          style={pos || { top: 0, left: 0, visibility: "hidden" }}
+          role="listbox"
+          onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+          data-testid={testid && `${testid}-list`}
+        >
+          {options.map((o) => {
+            const on = o === shown;
+            return (
+              <button
+                key={o}
+                type="button"
+                role="option"
+                aria-selected={on}
+                onClick={() => pick(o)}
+                className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition-colors ${on ? "bg-sky-100 font-semibold text-slate-800" : o ? "text-slate-600 hover:bg-[#F3EFE6]" : "text-slate-400 hover:bg-[#F3EFE6]"}`}
+                data-testid={testid && `${testid}-option-${o || "blank"}`}
+              >
+                <span className={`min-w-0 flex-1 truncate ${uppercase ? "uppercase" : ""}`}>{labelOf(o)}</span>
+                <Check className={`h-4 w-4 shrink-0 text-sky-600 ${on ? "" : "invisible"}`} />
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+};
 
 
 export default HRBoard;
