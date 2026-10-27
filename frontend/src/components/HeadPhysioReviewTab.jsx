@@ -8,10 +8,11 @@ import { LeadDocuments } from "@/components/LeadDocuments";
 import { PhysioTreatmentChips } from "@/components/ui/physio-treatment-chips";
 import { displayPhone } from "@/lib/phone";
 
-// Treatment days per review — calendar days the patient attended on, which is what the
-// treatment_days a review carries counts. Mirrors REVIEW_AFTER_DAYS in
-// backend/routers/v3_reviews.py, which is what decides when a review is raised; this only
-// decides how many days the write-up shows behind it. Move it if that one moves.
+// Days per week in the day book below — calendar days the patient attended on, which is
+// what the treatment_days a review carries counts. Also the span assumed for a review
+// raised before reviews carried their own first day (covers_from_day); the gap between
+// reviews is now the physio's to pick per patient, see review_gap_of in
+// backend/routers/v3_reviews.py.
 const REVIEW_EVERY = 7;
 
 const dmy = (d) => {
@@ -305,11 +306,17 @@ export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, select
     const dates = [...new Set(done.map((s) => String(s.slot_time).slice(0, 10)))];
     const dayOf = new Map(dates.map((d, i) => [d, i + 1]));
 
-    // The block this review was raised on: the REVIEW_EVERY days ending at the day count
-    // stored when it was raised, not the whole course.
+    // The block this review was raised on: every day since the review before it, up to the
+    // day count stored when it was raised — not the whole course. Reviews carry their first
+    // day now that the gap between them is the physio's to pick (7, 10 or 15 days, counted
+    // from the last review); one raised before that reads the REVIEW_EVERY days ending at
+    // its count, as it always did.
     const upTo = Number(draft?.review?.treatment_days) || dates.length;
-    const reviewFrom = Math.max(1, Math.min(upTo, dates.length) - REVIEW_EVERY + 1);
     const reviewTo = Math.min(upTo, dates.length);
+    const coversFrom = Number(draft?.review?.covers_from_day) || 0;
+    const reviewFrom = coversFrom
+      ? Math.max(1, Math.min(coversFrom, reviewTo))
+      : Math.max(1, reviewTo - REVIEW_EVERY + 1);
 
     const byWeek = new Map();
     for (const row of done) {
@@ -339,7 +346,7 @@ export const HeadPhysioReviewTab = ({ branchId = null, headChief = false, select
         };
       });
     return { weeks, reviewFrom, reviewTo, totalDays: dates.length };
-  }, [sessionState.sessions, draft?.review?.treatment_days]);
+  }, [sessionState.sessions, draft?.review?.treatment_days, draft?.review?.covers_from_day]);
 
   // Null until somebody opens or shuts one, so the weeks this review covers stay open by
   // default without an effect writing state the moment the popup loads its days.

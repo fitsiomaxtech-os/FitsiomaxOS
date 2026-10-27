@@ -47,6 +47,7 @@ import {
   physioPatients,
   physioPatientDetail,
   physioSessions,
+  physioSetReviewGap,
   physioCompleteSession,
   physioMarkAbsent,
   physioReviews,
@@ -295,21 +296,27 @@ const TILE = {
   request: "#db2777",
 };
 
-// Every 7th treatment day is a review milestone — reviewsSoFar counts how many the patient
-// has already passed, isReviewDay flags this one as the next. One definition because the
-// phone list and the desktop table both draw the violet from it, and two copies of the
-// arithmetic is two chances for a row to say "Review Today" in one layout and not the other.
-const reviewMarks = (r) => ({
-  reviewsSoFar: r.sessionNumber ? Math.floor(r.sessionNumber / 7) : 0,
-  isReviewDay: r.sessionNumber > 0 && r.sessionNumber % 7 === 0,
-});
-
-// How many treatment days between reviews, used only until the real interval arrives.
-// /physio/sessions now sends review_after_days off REVIEW_AFTER_DAYS in
-// backend/routers/v3_reviews.py — the constant that actually decides whether a review can
-// be raised — so this is the value the popup draws with for the moment before the fetch
-// lands, and the fallback if an older server answers without the field.
+// How many treatment days between reviews for a patient nobody has picked a gap for.
+// /physio/sessions sends the patient's own gap as review_after_days (review_gap_of in
+// backend/routers/v3_reviews.py), so this is what the popup draws with for the moment
+// before the fetch lands, and the fallback if an older server answers without the field.
 const REVIEW_EVERY = 7;
+const REVIEW_GAP_CHOICES = [7, 10, 15];
+
+// Every review-gap'th treatment day (7 unless the physio picked 10 or 15 for the patient)
+// is a review day — reviewsSoFar counts how many the patient has already passed,
+// isReviewDay flags this one as the next. A light marker read off the day number: the
+// popup and the Review tab count from the last review actually raised, which is the
+// figure to trust when a review went up late. One definition because the phone list and
+// the desktop table both draw the violet from it, and two copies of the arithmetic is two
+// chances for a row to say "Review Today" in one layout and not the other.
+const reviewMarks = (r) => {
+  const gap = r.lead?.review_gap_days || REVIEW_EVERY;
+  return {
+    reviewsSoFar: r.sessionNumber ? Math.floor(r.sessionNumber / gap) : 0,
+    isReviewDay: r.sessionNumber > 0 && r.sessionNumber % gap === 0,
+  };
+};
 
 // How one review milestone reads in the Treatment Days list. Four states, because a
 // milestone is not simply due or not: it is raised by the Physio, dispatched by the Branch
@@ -1081,11 +1088,12 @@ function SendForReviewButton({ onClick, className = "", testid }) {
 /**
  * Review — the Physio's end of the post-treatment review chain, in one place.
  *
- * A new review only becomes raisable every 7 completed sessions — 7, 14, 21, 28... —
- * not "7 or more"; a 28-session package gets exactly 4 review points. New Review shows only
- * patients who've just reached one and don't already have one in flight or covering it,
- * computed server-side (_review_eligibility in v3_reviews.py) so raising one is rejected
- * the same way if attempted outside that window.
+ * A new review becomes raisable once the patient's review gap — 7, 10 or 15 treatment
+ * days, the physio's pick — has gone by since the last review, and covers every day since
+ * it. New Review shows only patients who've reached that and don't already have one in
+ * flight, computed server-side (_review_eligibility in v3_reviews.py) so raising one is
+ * rejected the same way if attempted outside that window. A review falling due holds no
+ * day of treatment; it waits here until the physio raises it.
  *
  * Raising a review is what starts the chain: it lands with the Branch Admin, who
  * dispatches it to a named Head Physio, who writes it up. Requests / Assigned / Completed
@@ -1143,8 +1151,8 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
     setSaving(false);
   };
 
-  // Who currently holds the review. due_for_review (server-computed) means a fresh
-  // 7-day milestone is reached and nothing is blocking a new one — that's New Review.
+  // Who currently holds the review. due_for_review (server-computed) means the patient's
+  // review gap has gone by since the last one and nothing is in flight — that's New Review.
   const bucketOf = (p) => {
     if (p.review_status === "completed") return "completed";
     if (p.review_status === "sent") return "assigned";
@@ -1339,7 +1347,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
                       </span>
                       {!p.due_for_review && !p.review_status && (
                         <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                          next review on day {(Math.floor(p.treatment_days / threshold) + 1) * threshold}
+                          next review on day {p.next_review_day || (Math.floor(p.treatment_days / threshold) + 1) * threshold}
                         </span>
                       )}
                       {p.review_number > 0 && (
@@ -1420,7 +1428,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
                         </span>
                         {!p.due_for_review && !p.review_status && (
                           <span className="mt-0.5 block text-[11px] text-slate-400">
-                            next on day {(Math.floor(p.treatment_days / threshold) + 1) * threshold}
+                            next on day {p.next_review_day || (Math.floor(p.treatment_days / threshold) + 1) * threshold}
                           </span>
                         )}
                       </td>
@@ -1548,7 +1556,11 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
               <div>
                 <p className="text-lg font-bold">Send for Review</p>
                 <p className="text-xs text-white/80">
-                  {draft.patient.lead_name} · {ordinal(draft.patient.review_number)} Review · {draft.patient.treatment_days} treatment days
+                  {draft.patient.lead_name} · {ordinal(draft.patient.review_number)} Review · {!draft.patient.review_first_day
+                    ? `${draft.patient.treatment_days} treatment days`
+                    : draft.patient.review_first_day < draft.patient.treatment_days
+                      ? `days ${draft.patient.review_first_day}–${draft.patient.treatment_days}`
+                      : `day ${draft.patient.treatment_days}`}
                 </p>
               </div>
               <button onClick={() => setDraft(null)} className="rounded-lg border-2 border-orange-200 bg-orange-100 p-2 text-orange-600 hover:bg-orange-200" data-testid="physio-raise-review-close">
@@ -1597,17 +1609,20 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   const [sessions, setSessions] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [reviews, setReviews] = useState([]);
+  // This patient's review gap — 7, 10 or 15 treatment days, the physio's pick.
   const [reviewEvery, setReviewEvery] = useState(REVIEW_EVERY);
-  // The review the next day of this course is waiting on, straight off the server, and the
-  // sentence it hands back to say so. Read rather than worked out here: the milestone is
-  // decided by a count of distinct calendar dates across both courses, and a browser copy
-  // of that arithmetic is a second chance for this list to offer a day the server refuses.
-  // null when no day is held.
-  const [reviewHold, setReviewHold] = useState(null);
-  const [reviewHoldMessage, setReviewHoldMessage] = useState("");
+  const [gapChoices, setGapChoices] = useState(REVIEW_GAP_CHOICES);
+  const [savingGap, setSavingGap] = useState(false);
+  // The review this patient is due next, straight off the server: whether one can be raised
+  // now, the days it would cover, and the day the next one falls due otherwise. Read rather
+  // than worked out here: it is counted from the last review on a count of distinct
+  // calendar dates across both courses, and a browser copy of that arithmetic is a second
+  // chance for this list to call a review due that the Review tab will not raise. It holds
+  // no day — a review falling due is a reminder, not a gate.
+  const [nextReview, setNextReview] = useState(null);
   // Every paid session used with a Treatment Fee balance owing: the next treatment day waits
-  // until the balance is paid or the Branch Admin extends the due date. Off the server, the
-  // same as the review hold, and for treatment days only -- rehab has its own fee.
+  // until the balance is paid or the Branch Admin extends the due date. Off the server, and
+  // for treatment days only -- rehab has its own fee.
   const [paymentHold, setPaymentHold] = useState(null);
   const [paymentHoldMessage, setPaymentHoldMessage] = useState("");
   const [completeTarget, setCompleteTarget] = useState(null);
@@ -1631,12 +1646,12 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
       setSessions(data.sessions || []);
       setAssessments(data.assessments || []);
       setReviews(data.reviews || []);
-      // Falls back to the local constant only if an older server answers without it.
+      // Falls back to the local constants only if an older server answers without them.
       if (data.review_after_days) setReviewEvery(data.review_after_days);
-      // An older server answers without these, and no hold is the honest reading of that:
+      if (data.review_gap_choices?.length) setGapChoices(data.review_gap_choices);
+      setNextReview(data.next_review || null);
+      // An older server answers without this, and no hold is the honest reading of that:
       // the popup would otherwise wall off every day on a deploy that has not landed yet.
-      setReviewHold(data.review_hold || null);
-      setReviewHoldMessage(data.review_hold_message || "");
       setPaymentHold(data.payment_hold || null);
       setPaymentHoldMessage(data.payment_hold_message || "");
       setDayDateLock(data.day_date_lock !== false);
@@ -1647,6 +1662,21 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   }, [lead.id, physioId]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  // Counted from the last review, so a change moves only the next one; reviews already
+  // raised keep the days they cover.
+  const changeGap = async (gap) => {
+    if (gap === reviewEvery || savingGap) return;
+    setSavingGap(true);
+    try {
+      await physioSetReviewGap(lead.id, gap, physioId);
+      toast.success(`Review every ${gap} days`);
+      await loadSessions();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not change the review gap");
+    }
+    setSavingGap(false);
+  };
 
   const markComplete = async () => {
     setSubmitting(true);
@@ -1689,78 +1719,49 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   const upcomingSession = sessions.find((s) => s.status === "upcoming") || null;
   const lastCompleted = completedSessions[completedSessions.length - 1] || null;
 
-  // Every review point this patient's treatment has reached, and what became of each.
+  // Every review this patient's treatment has had, and what became of each, then the one
+  // that is due now if there is one.
   //
-  // This used to be a single number derived from the day count alone, which meant the
-  // popup could only ever say "due" — it said so about week 1 while the Head Physio's
-  // write-up of week 1 was already filed, and said nothing at all on day 8, when the day
-  // count is no longer a multiple of seven but the review is still outstanding. The
-  // records now come back with the sessions, so each milestone reports its own state.
+  // Counted from the last review rather than cut into fixed blocks: each review covers
+  // every day since the one before it, and the next falls due one review gap (7, 10 or 15
+  // days, the physio's pick) after it. So a review raised late at day 10 reads "days 1–10"
+  // and the next is due at day 17, and a review nobody raised is folded into the next one
+  // rather than left on the list as a block nobody can ever clear.
   //
-  // A milestone with no review against it is genuinely due: reaching seven days of
-  // treatment is what makes one raisable, and nothing else creates the record.
+  // The rows already on record come off the reviews themselves. The one still to raise
+  // comes off next_review from the server (_review_eligibility), which counts the days
+  // attended across both courses — the same count that decides whether the Review tab
+  // will let it be raised. None of them holds a day.
   const reviewMilestones = useMemo(() => {
-    // Calendar days attended, not completed rows. A patient on rehab and a treatment
-    // package at once is booked twice on the same morning, and counting rows made four
-    // mornings read as eight — the week-one banner appeared on their fourth day. Mirrors
-    // _completed_day_counts on the server, which is what actually lets a review be raised.
-    // A cover counts the whole course's days, not just the ones handed to them.
-    const done = coverCourse ? coverCourse.daysDone : new Set(
-      sessions
-        .filter((s) => s.status === "completed")
-        .map((s) => (s.slot_time || "").slice(0, 10))
-        .filter(Boolean)
-    ).size;
-    const reached = Math.floor(done / reviewEvery);
-    // Rank so that if a milestone somehow carries two records, the furthest-along one
-    // describes it — a completed review is the more truthful thing to show.
-    const rank = { send_to_review: 1, sent: 2, completed: 3 };
-    const byNumber = new Map();
-    for (const r of reviews) {
-      const n = r.review_number || 0;
-      if (n < 1) continue;
-      const prev = byNumber.get(n);
-      if (!prev || (rank[r.status] || 0) > (rank[prev.status] || 0)) byNumber.set(n, r);
-    }
-    // Counted off the milestones reached, then extended to cover any review already on
-    // record beyond them — a review raised at day 14 stays on the list if a day is later
-    // reopened and the count drops back under it.
-    const highest = Math.max(reached, ...[...byNumber.keys()], 0);
-    const rows = Array.from({ length: highest }, (_, i) => {
-      const number = i + 1;
+    const ordered = [...reviews].sort(
+      (a, b) => (a.review_number || 0) - (b.review_number || 0) || (a.treatment_days || 0) - (b.treatment_days || 0)
+    );
+    const rows = ordered.map((r, i) => {
+      // Reviews raised before the gap was the physio's to pick carry no first day of their
+      // own; they start the day after the one before them, as every review now does.
+      const firstDay = r.covers_from_day || (i > 0 ? (ordered[i - 1].treatment_days || 0) + 1 : 1);
       return {
-        number,
-        firstDay: (number - 1) * reviewEvery + 1,
-        lastDay: number * reviewEvery,
-        review: byNumber.get(number) || null,
-        isFinal: false,
+        number: r.review_number || i + 1,
+        firstDay,
+        lastDay: Math.max(firstDay, r.treatment_days || 0),
+        review: r,
+        isFinal: !!r.final,
       };
     });
-    // The days a course of whole weeks leaves over. Ten days reaches one milestone, at
-    // day 7, and then stops -- days 8, 9 and 10 belong to no week and had nothing to be
-    // due about, so the course finished with its last days never written up. A course
-    // shorter than a week had no milestone at all and was never reviewed once.
-    //
-    // Only once every day is done: until then those are days still being worked, and the
-    // next whole week is when to read them. Matches _review_eligibility on the server,
-    // which decides whether the review can actually be raised.
-    if (allDaysDone && done > highest * reviewEvery) {
-      const number = highest + 1;
+    if (nextReview?.eligible) {
       rows.push({
-        number,
-        firstDay: highest * reviewEvery + 1,
-        lastDay: done,
-        review: byNumber.get(number) || null,
-        isFinal: true,
+        number: nextReview.review_number || rows.length + 1,
+        firstDay: nextReview.first_day || 1,
+        lastDay: Math.max(nextReview.first_day || 1, nextReview.last_day || 0),
+        review: null,
+        isFinal: !!nextReview.final,
       });
     }
     return rows;
-  }, [sessions, reviews, reviewEvery, allDaysDone, coverCourse]);
+  }, [reviews, nextReview]);
 
-  // The milestone the course currently stands at — the closing one once every day is done,
-  // which is the row _review_eligibility puts one past the last whole week on the server.
-  // The list keeps every milestone the treatment ever reached; only the last of them is
-  // the one still being waited on.
+  // The review the course currently stands at — the one due, the one in flight, or the
+  // last one written. Only the last row can still be waited on.
   const currentMilestone = reviewMilestones[reviewMilestones.length - 1] || null;
   // Whether the Head Physio still owes this patient a review. Mirrors the check
   // physio_complete_consultation now makes, so the button says no before it is pressed
@@ -1854,7 +1855,7 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
    * Lifted out of the list so Upcoming and Completed can both draw it. Written inline in
    * the map it would have had to be written twice, and the two copies would have had to
    * agree on all of: which day is open, which is blocked by an earlier one, which is held
-   * for a review, and which is simply not due yet.
+   * for payment, and which is simply not due yet.
    */
   const dayRow = (s) => {
     const done = s.status === "completed";
@@ -1866,13 +1867,7 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
     // not the date: an absence pushes a day past the one after it until that
     // one shifts too, and comparing dates would call the order broken.
     const blockedBy = done ? null : firstOpenBefore(s);
-    // Held by a week nobody has written up yet. The server refuses the day
-    // for this reason too, so the button says it rather than letting the
-    // press come back as a red toast; it holds every day still to be worked,
-    // on either course, because the day count the milestone is read off
-    // counts both. Never the day that reaches the milestone -- that one is
-    // what makes the review raisable, and holding it would be a deadlock.
-    const heldByReview = !done && !!reviewHold;
+    // A review falling due holds no day — see reviewMilestones — so only money can.
     const heldByPayment = !done && !!paymentHold && (s.track || "treatment") === "treatment";
     // The day the course currently stands on: the lowest-numbered day of this
     // track that is still open. Day 1 until Day 1 is signed off, then Day 2,
@@ -1923,7 +1918,6 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
         className={`flex items-center gap-3 rounded-lg border p-3 ${
           done ? "border-emerald-200 bg-emerald-50/50"
           : awaiting ? "border-amber-200 bg-amber-50/60"
-          : heldByReview && isOpenDay ? "border-amber-200 bg-amber-50/40"
           : isOpenDay ? "border-sky-200 bg-sky-50/40"
           : "border-slate-200 bg-white"
         }`}
@@ -1932,7 +1926,6 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
           done ? "bg-emerald-200 text-emerald-800"
           : awaiting ? "bg-amber-200 text-amber-800"
-          : heldByReview && isOpenDay ? "bg-amber-200 text-amber-800"
           : isOpenDay ? "bg-sky-200 text-sky-800"
           : "bg-slate-100 text-slate-500"
         }`}>
@@ -1960,20 +1953,13 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                 <span className="rounded bg-rose-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-rose-700">
                   Overdue
                 </span>
-              ) : heldByReview ? (
-                // The day is next in line and still cannot be worked. Saying
-                // "Opened" over a button that refuses to open it is the one
-                // reading that helps nobody.
-                <span className="rounded bg-amber-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-700">
-                  Held for review
-                </span>
               ) : (
                 <span className="rounded bg-sky-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-sky-700">
                   Opened
                 </span>
               )
             )}
-            {/* Sits with Opened and Held for review because it is read the same way —
+            {/* Sits with Opened because it is read the same way —
                 at a glance, off the title line, while scanning the list for the day to
                 work. The dates themselves go underneath. */}
             {missed.length > 0 && (
@@ -2085,8 +2071,8 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
               <UserX className="mr-1 h-3 w-3" /> Absent
             </Button>
             {heldByPayment ? (
-              // Paid sessions used up. Said on the button, as the review hold is; the
-              // banner above the list says what is owed and who can release it.
+              // Paid sessions used up. Said on the button; the banner above the list
+              // says what is owed and who can release it.
               <Button
                 size="sm"
                 disabled
@@ -2095,21 +2081,6 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                 data-testid={`physio-day-payment-held-${s.id}`}
               >
                 <AlertCircle className="mr-1 h-3 w-3" /> Payment due
-              </Button>
-            ) : heldByReview ? (
-              // A week of treatment is read before the next one is worked.
-              // The same refusal the server makes, said on the button that
-              // would otherwise offer the day and have the press thrown
-              // back; the milestone banner above names the week and says
-              // who is holding it.
-              <Button
-                size="sm"
-                disabled
-                className="bg-amber-100 text-xs text-amber-700 hover:bg-amber-100"
-                title={reviewHoldMessage}
-                data-testid={`physio-day-review-held-${s.id}`}
-              >
-                <AlertCircle className="mr-1 h-3 w-3" /> Review due
               </Button>
             ) : (
               <Button
@@ -2345,7 +2316,7 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
 
             {reviewMilestones.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
-                No review point reached yet — the first is due after {reviewEvery} treatment days.
+                No review due yet — the first is due after {nextReview?.due_at || reviewEvery} treatment days.
               </div>
             ) : (
               <div className="space-y-2">
@@ -2368,8 +2339,8 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                           <look.Icon className="h-3.5 w-3.5 shrink-0" />
                           <span>
                             {/* Named the way the Treatment Days list names it, so the same
-                                week is not "Week 3" on one tab and something else here. */}
-                            {m.isFinal ? "Final review" : `Week ${m.number} review`} · day{m.lastDay > m.firstDay ? "s" : ""} {m.firstDay}{m.lastDay > m.firstDay ? `–${m.lastDay}` : ""}
+                                review is not "Review 3" on one tab and something else here. */}
+                            {m.isFinal ? "Final review" : `Review ${m.number}`} · day{m.lastDay > m.firstDay ? "s" : ""} {m.firstDay}{m.lastDay > m.firstDay ? `–${m.lastDay}` : ""}
                             <span className={`ml-1 font-normal ${t.soft}`}>
                               {look.line}{on ? ` · ${on}` : ""}
                             </span>
@@ -2427,14 +2398,51 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
               </div>
             )}
 
-            {/* A review is raisable every seven treatment days. Nothing said so here, so a
-                milestone was only noticed on the Review tab — which is the tab you go to
-                after finishing a day, not during. Shown where the day was just ticked off.
+            {/* How often this patient's CONSULTANT review falls due, the physio's call, and
+                when the next one is. Counted from the last review, so a change moves only
+                the next one. A cover is treating somebody else's patient for the day and
+                reads the gap rather than setting it. */}
+            {sessions.length > 0 && (
+              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-testid="physio-review-gap">
+                <span className="font-semibold text-slate-600">Review every</span>
+                {coverCourse || isComplete ? (
+                  <span className="font-bold text-slate-700">{reviewEvery} days</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex overflow-hidden rounded-md border border-slate-200">
+                      {gapChoices.map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          disabled={savingGap}
+                          onClick={() => changeGap(g)}
+                          className={`px-2.5 py-0.5 text-[11px] font-semibold transition disabled:opacity-60 ${
+                            g === reviewEvery ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                          data-testid={`physio-review-gap-${g}`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </span>
+                    <span>days</span>
+                  </span>
+                )}
+                {nextReview && !nextReview.eligible && !allDaysDone && (
+                  <span className="text-slate-400">· next review due at day {nextReview.due_at}</span>
+                )}
+              </div>
+            )}
 
-                One row per milestone, kept once it has passed rather than replaced by the
+            {/* A review falls due once the gap has gone by since the last one. Nothing said
+                so here, so it was only noticed on the Review tab — which is the tab you go to
+                after finishing a day, not during. Shown where the day was just ticked off.
+                It holds no day: the physio raises it when they choose.
+
+                One row per review, kept once it has passed rather than replaced by the
                 next: a patient twenty days in has had two reviews written about them, and
-                that they happened is part of reading their treatment. The week still
-                waiting is the only one that asks for anything. */}
+                that they happened is part of reading their treatment. The one still due is
+                the only one that asks for anything. */}
             {reviewMilestones.length > 0 && (
               <div className="mb-3 space-y-1.5" data-testid="physio-review-milestones">
                 {reviewMilestones.map((m) => {
@@ -2452,32 +2460,18 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                       <p className={`flex items-center gap-1.5 text-[11px] font-semibold ${t.text}`}>
                         <look.Icon className="h-3.5 w-3.5 shrink-0" />
                         <span>
-                          {/* A closing review covers what is left rather than a week, and
-                              may be a single day, so it is named for what it is and reads
-                              its range off the milestone instead of assuming seven. */}
-                          {m.isFinal ? "Final review" : `Week ${m.number} review`} · day{m.lastDay > m.firstDay ? "s" : ""} {m.firstDay}{m.lastDay > m.firstDay ? `–${m.lastDay}` : ""}
+                          {/* Numbered rather than called a week: the gap may be 10 or 15
+                              days, and a review raised late covers more than one. A closing
+                              review covers what is left and may be a single day, so it is
+                              named for what it is. Both read their range off the review. */}
+                          {m.isFinal ? "Final review" : `Review ${m.number}`} · day{m.lastDay > m.firstDay ? "s" : ""} {m.firstDay}{m.lastDay > m.firstDay ? `–${m.lastDay}` : ""}
                           <span className={`ml-1 font-normal ${t.soft}`}>
                             {look.line}{on ? ` · ${on}` : ""}
                           </span>
                         </span>
                       </p>
-                      <span className="flex items-center gap-1.5">
-                        {/* The one milestone actually holding the course up says so on its
-                            own row. A patient several weeks in carries several of these
-                            banners and only the last of them stops anything; without this
-                            the physio has to work out which by reading all of them. */}
-                        {reviewHold?.review_number === m.number && (
-                          <span
-                            className="rounded-md bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900"
-                            title={reviewHoldMessage}
-                            data-testid={`physio-review-hold-${m.number}`}
-                          >
-                            Days on hold
-                          </span>
-                        )}
-                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${t.badge}`}>
-                          {look.label}
-                        </span>
+                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${t.badge}`}>
+                        {look.label}
                       </span>
                     </div>
                   );
@@ -2534,9 +2528,9 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
               <p className="text-[11px] text-slate-500">
                 Days run in order — only the day marked Opened can be completed. Finishing
                 it opens the day after it and drops the finished one to the bottom of this
-                list. Every {reviewEvery} days the course stops for a CONSULTANT&apos;s review:
-                the next day stays held until that review has been written, so raise it from
-                the Review tab as soon as the week is finished.
+                list. Every {reviewEvery} days a CONSULTANT&apos;s review falls due — raise it
+                from the Review tab. It does not stop the days: the next one can still be
+                completed, and only Mark Treatment Complete waits for every review to be written.
               </p>
             </div>
           </div>

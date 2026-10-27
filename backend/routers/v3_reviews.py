@@ -1,7 +1,8 @@
 """Post-treatment Review pipeline.
 
-A patient who has been in treatment for a week is due a Head Physio review. The chain
-runs Physio -> Branch Admin -> Head Physio:
+Every few days of treatment -- the patient's review gap, 7, 10 or 15 days picked by their
+physio -- a patient is due a Head Physio review. It never holds a day of treatment; only
+closing the course waits for it. The chain runs Physio -> Branch Admin -> Head Physio:
 
     send_to_review   the Physio has raised it; it is waiting on the Branch Admin
     sent             the Branch Admin has dispatched it to a named Head Physio for a date
@@ -34,9 +35,12 @@ from physio_scope import (
 
 router = APIRouter(prefix="/api/v3")
 
-# A patient becomes due a review once they've been in treatment this many days. Days on the
-# calendar, not sessions attended -- see _completed_day_counts.
+# How many treatment days after the last review the next one falls due. Days on the
+# calendar, not sessions attended -- see _completed_day_counts. The treating physio picks
+# it per patient (lead.review_gap_days) from REVIEW_GAP_CHOICES; this is what a patient
+# nobody has picked for is on.
 REVIEW_AFTER_DAYS = 7
+REVIEW_GAP_CHOICES = (7, 10, 15)
 
 SEND_TO_REVIEW = "send_to_review"
 SENT = "sent"
@@ -77,6 +81,25 @@ async def _review_or_404(review_id: str) -> dict:
     if not rev:
         raise HTTPException(status_code=404, detail="Review not found")
     return rev
+
+
+def review_gap_of(lead: Optional[dict]) -> int:
+    """This patient's review gap: the physio's pick, or REVIEW_AFTER_DAYS until they make
+    one. Anything off the list reads as the default rather than as a gap nobody offered."""
+    gap = (lead or {}).get("review_gap_days")
+    return gap if gap in REVIEW_GAP_CHOICES else REVIEW_AFTER_DAYS
+
+
+async def _review_gaps(lead_ids: List[str]) -> dict:
+    """review_gap_of for every lead in one read."""
+    lead_ids = [lid for lid in lead_ids if lid]
+    if not lead_ids:
+        return {}
+    rows = await v3_col("leads").find(
+        {"id": {"$in": lead_ids}}, {"_id": 0, "id": 1, "review_gap_days": 1}
+    ).to_list(len(lead_ids))
+    gaps = {r["id"]: review_gap_of(r) for r in rows}
+    return {lid: gaps.get(lid, REVIEW_AFTER_DAYS) for lid in lead_ids}
 
 
 async def _treatment_days(lead_id: str) -> int:
@@ -212,9 +235,9 @@ async def leads_awaiting_review(lead_ids: List[str]) -> set:
     """Of these patients, the ones whose days are done but whose review is not.
 
     Finishing the last booked day is not finishing treatment. Every course earns a closing
-    Head Physio review -- _review_eligibility raises one past the last whole week precisely
-    so the days a seven-day rule leaves over still get read -- and until that review is
-    written the patient is mid-hand-off, not discharged. The boards were calling them
+    Head Physio review -- _review_eligibility raises one for whatever days have gone by
+    since the last review, however few, so the end of a course still gets read -- and until
+    that review is written the patient is mid-hand-off, not discharged. The boards were calling them
     Completed on the day count alone, which put a patient into the finished column while
     the Head Physio still had them on their desk, and let the Physio Master View close the
     course out from under a review it had raised itself.
@@ -249,10 +272,11 @@ async def leads_awaiting_review(lead_ids: List[str]) -> set:
     # one morning has done one day, not two, and reading it from the row counts is what
     # brought the closing review a week early.
     day_counts = await _completed_day_counts(list(finished))
+    gaps = await _review_gaps(list(finished))
 
     waiting = set()
     for lid in finished:
-        elig = _review_eligibility(by_lead.get(lid, []), day_counts.get(lid, 0), True)
+        elig = _review_eligibility(by_lead.get(lid, []), day_counts.get(lid, 0), True, gaps[lid])
         if elig["eligible"]:
             waiting.add(lid)
         elif (elig["review"] or {}).get("status") in (SEND_TO_REVIEW, SENT):
@@ -260,159 +284,82 @@ async def leads_awaiting_review(lead_ids: List[str]) -> set:
     return waiting
 
 
-async def review_hold_for_lead(lead_id: str) -> Optional[dict]:
-    """The written-up review this patient's NEXT day of treatment is waiting on, if any.
-
-    A week of treatment is read before the next one is worked. Reaching REVIEW_AFTER_DAYS
-    days is what makes a review raisable, and until a Head Physio has actually written that
-    one up the week just finished has not been read by anybody -- so the days after it are
-    held. Without this the milestone was only ever a banner: a physio could work day 8
-    through day 14 with week one still sitting on the Review tab untouched, and the review
-    that was supposed to shape those days arrived after they had all been given.
-
-    Both an unraised milestone and one in flight hold: a review on the Branch Admin's desk
-    or booked with a Head Physio is still a review nobody has written. Same test
-    leads_awaiting_review makes of a finished course, asked mid-course instead -- which is
-    why course_finished is False here. The closing review covers the days a whole-week rule
-    leaves over, and there is no next day for it to hold.
-
-    Returns None when nothing is owed -- fewer than seven days behind them, or the week
-    already reviewed -- so the caller reads it as a plain "is the next day held".
-    """
-    days = await _treatment_days(lead_id)
-    if days < REVIEW_AFTER_DAYS:
-        return None
-    existing = await v3_col("reviews").find({"lead_id": lead_id}, {"_id": 0}).to_list(200)
-    elig = _review_eligibility(existing, days, False)
-    if elig["milestone"] <= 0:
-        return None
-    status = (elig["review"] or {}).get("status")
-    if not elig["eligible"] and status not in (SEND_TO_REVIEW, SENT):
-        return None
-    return {
-        "review_number": elig["review_number"],
-        # The span of days this review covers, so the message and the button can name the
-        # week rather than telling a physio "a review" is due and leaving them to count.
-        "first_day": elig["milestone"] - REVIEW_AFTER_DAYS + 1,
-        "last_day": elig["milestone"],
-        # None when it has not been raised at all; otherwise where in the chain it stands.
-        "status": None if elig["eligible"] else status,
-    }
-
-
-def review_hold_message(hold: dict) -> str:
-    """What to tell a physio whose next day is held, named for where the review stands.
-
-    Three different things to do -- raise it, wait on the Branch Admin, wait on the
-    CONSULTANT -- so one message for all three would send two thirds of them to a tab with
-    nothing on it to press.
-    """
-    week = f"days {hold['first_day']}\u2013{hold['last_day']}"
-    if hold["status"] == SENT:
-        return (
-            f"The CONSULTANT hasn't written the week {hold['review_number']} review ({week}) yet"
-            " \u2014 the next day can be completed once it is written"
-        )
-    if hold["status"] == SEND_TO_REVIEW:
-        return (
-            f"The week {hold['review_number']} review ({week}) is raised and waiting on Branch Admin"
-            " to schedule it \u2014 the next day can be completed once the CONSULTANT has written it"
-        )
-    return (
-        f"The week {hold['review_number']} review ({week}) is due"
-        " \u2014 raise it from the Review tab and wait for the CONSULTANT to write it"
-        " before completing the next day"
-    )
-
-
 def _shape(rev: dict) -> dict:
     return {k: v for k, v in rev.items() if k != "_id"}
 
 
+def _review_order(rev: dict) -> tuple:
+    """Course order: by the day count each review was raised at, then raised_at and id so
+    two raised at the same count come out the same way every time."""
+    return ((rev.get("treatment_days") or 0), rev.get("raised_at") or "", rev.get("id") or "")
+
+
 def review_numbers_for_lead(reviews: List[dict]) -> dict:
-    """Which milestone each of a lead's reviews covers, keyed by review id.
+    """Which review of the course each one is -- 1st, 2nd, 3rd -- keyed by review id.
 
-    Taken from the day count stored when each was raised rather than from its position
-    among the reviews, because raising is allowed any time after a milestone: a review
-    raised on day 9 still covers day 7, and counting positions would name it the wrong week.
-
-    That division alone cannot separate the closing review from the week before it. A
-    ten-day course reaches one milestone at day 7 and then ends, so the review covering
-    days 8-10 is raised carrying treatment_days 10 -- which divides down to the same 1 as
-    the week before it. Both then claimed milestone 1, the day list found nothing for
-    milestone 2, and a closing review a CONSULTANT had already written up went on reading
-    "Review due" with nothing anyone could do to clear it.
-
-    A remainder cannot be the test either, because the day-9 review has one too and is not
-    a closing review. So a number an earlier review already holds moves to the next free
-    one -- which is exactly where _review_eligibility puts the closing review when it
-    raises it: one past the last whole week.
-
-    Ordered by the day count first, so each week claims its own number before a later
-    review goes looking for a free one, then by raised_at and id so the answer is stable
-    for two raised at the same count.
+    Counted in order rather than read off the day count. Reviews fall due a gap after the
+    last one (see _review_eligibility) and the gap is the physio's to pick per patient, so
+    a day count no longer says which review it is: the 2nd review of a patient on a 15-day
+    gap is raised on day 30, which a division by seven would call the 4th. A review raised
+    late, or a closing review a few days after the one before it, is simply the next one.
     """
-    out: dict = {}
-    used: set = set()
-    ordered = sorted(
-        reviews,
-        key=lambda r: ((r.get("treatment_days") or 0), r.get("raised_at") or "", r.get("id") or ""),
-    )
-    for r in ordered:
-        number = max(1, (r.get("treatment_days") or 0) // REVIEW_AFTER_DAYS)
-        while number in used:
-            number += 1
-        used.add(number)
-        out[r.get("id")] = number
-    return out
+    return {r.get("id"): i + 1 for i, r in enumerate(sorted(reviews, key=_review_order))}
 
 
-def _review_eligibility(existing_for_lead: List[dict], treatment_days: int, course_finished: bool = False) -> dict:
-    """A new review becomes raisable every REVIEW_AFTER_DAYS treatment days — 7, 14, 21,
-    28... not just "7 or more" — so a 28-day course gets exactly 4 review points, one per
-    completed week of treatment, rather than staying permanently "due" past day 7.
+def _review_eligibility(
+    existing_for_lead: List[dict], treatment_days: int, course_finished: bool = False,
+    gap: int = REVIEW_AFTER_DAYS,
+) -> dict:
+    """Whether a new review can be raised for this patient, and what it would cover.
+
+    Counted from the last review rather than in fixed blocks. A review covers every day
+    since the one before it, and the next falls due `gap` days after that -- so on a 7-day
+    gap a review raised late at day 10 covers days 1-10 and the next is due at day 17, and
+    a review nobody raised is folded into the next one instead of being left unread.
+
+    Nothing here holds a day of treatment. Reaching the gap makes a review due and the
+    physio raises it when they choose; only closing the course waits for it (see
+    leads_awaiting_review).
 
     treatment_days is a count of calendar days the patient has attended on, from
     _completed_day_counts, not a count of completed rows: two courses running side by side
     put two rows on one morning and that is still one day of treatment.
 
-    milestone: the highest 7-multiple reached so far (0 if none yet), or the final day
-    count once the course is over and its last days fall short of another whole week.
-    review_number: which review this is — 1st at day 7, 2nd at day 14, etc.
+    Once the course is over, whatever days have gone by since the last review are raisable
+    however few they are -- the closing review. Mid-course those are days still being
+    worked, and the gap is the right moment to read them.
+
+    covered: the day count the last review reached (0 when there is none).
+    due_at: the day count at which the next review falls due.
+    first_day / milestone: the span a review raised now would cover -- today's count when
+      one is raisable, otherwise the last review's.
+    review_number: which review that is -- the next one when raisable, else the one in
+      flight or the last one written (0 before the first).
     eligible: whether a *new* review can be raised right now.
-    review: the review relevant to explain the current (non-eligible) state — an open
-    one in flight, or the most recent completed one still covering this milestone.
-    None once a fresh milestone is eligible, since that old review is no longer "current".
+    final: whether that new review is the course's closing one.
+    review: the review explaining a non-eligible state -- the one in flight, or the last
+      one written. None once a new one is raisable.
     """
-    milestone = (treatment_days // REVIEW_AFTER_DAYS) * REVIEW_AFTER_DAYS
-    review_number = milestone // REVIEW_AFTER_DAYS if milestone else 0
+    ordered = sorted(existing_for_lead, key=_review_order)
+    numbers = review_numbers_for_lead(ordered)
+    covered = max((r.get("treatment_days") or 0 for r in ordered), default=0)
+    base = {"covered": covered, "due_at": covered + gap, "first_day": covered + 1, "final": False}
 
-    # The days a whole-week rule leaves out. A ten-day course reaches one milestone, at
-    # day 7, and then ends: days 8, 9 and 10 belong to no week, nothing about them was
-    # ever raisable, and the course closed with its last three days never looked at. A
-    # course shorter than a week reached no milestone at all and was never reviewed once.
-    #
-    # Only once the course is over. Mid-course, days past the last milestone are days
-    # still being worked, and the next whole week is the right moment to read them --
-    # this is the closing review, not an early one.
-    if course_finished and treatment_days > milestone:
-        milestone = treatment_days
-        review_number += 1
-
-    open_review = next((r for r in existing_for_lead if r.get("status") in (SEND_TO_REVIEW, SENT)), None)
+    # One review at a time: the next one covers from where this one stops, and until it is
+    # written nobody knows what this one said.
+    open_review = next((r for r in ordered if r.get("status") in (SEND_TO_REVIEW, SENT)), None)
     if open_review:
-        return {"milestone": milestone, "review_number": review_number, "eligible": False, "review": open_review}
+        return {**base, "milestone": open_review.get("treatment_days") or 0,
+                "review_number": numbers.get(open_review.get("id"), 0), "eligible": False, "review": open_review}
 
-    if milestone == 0:
-        return {"milestone": 0, "review_number": 0, "eligible": False, "review": None}
+    if treatment_days >= covered + gap or (course_finished and treatment_days > covered):
+        return {**base, "milestone": treatment_days, "review_number": len(ordered) + 1,
+                "eligible": True, "final": course_finished, "review": None}
 
-    completed = [r for r in existing_for_lead if r.get("status") == COMPLETED]
-    latest_completed = max(completed, key=lambda r: r.get("raised_at") or "", default=None)
-
-    if latest_completed is None or milestone > (latest_completed.get("treatment_days") or 0):
-        return {"milestone": milestone, "review_number": review_number, "eligible": True, "review": None}
-
-    return {"milestone": milestone, "review_number": review_number, "eligible": False, "review": latest_completed}
+    completed = [r for r in ordered if r.get("status") == COMPLETED]
+    last = completed[-1] if completed else None
+    return {**base, "milestone": covered, "review_number": numbers.get(last.get("id"), 0) if last else 0,
+            "eligible": False, "review": last}
 
 
 # ---------------------------------------------------------------- Physio: raise a review
@@ -467,7 +414,8 @@ async def physio_reviews(
     patients = []
     for l in leads:
         days = day_counts.get(l["id"], 0)
-        elig = _review_eligibility(by_lead.get(l["id"], []), days, l["id"] in finished)
+        gap = review_gap_of(l)
+        elig = _review_eligibility(by_lead.get(l["id"], []), days, l["id"] in finished, gap)
         rev = elig["review"]
         patients.append({
             "lead_id": l["id"],
@@ -478,12 +426,22 @@ async def physio_reviews(
             "first_session_date": await _first_session_date(l["id"]),
             "milestone": elig["milestone"],
             "review_number": elig["review_number"],
+            "review_gap_days": gap,
+            # The span a review raised now would cover, and the day count the next one falls
+            # due at -- counted from the last review, which the list cannot work out from
+            # the day count alone.
+            "review_first_day": elig["first_day"],
+            "next_review_day": elig["due_at"],
             "due_for_review": elig["eligible"],
             "review_status": rev.get("status") if rev else None,
             "review_id": rev.get("id") if rev else None,
         })
     patients.sort(key=lambda p: (-p["treatment_days"], p["lead_name"]))
-    return {"patients": patients, "reviews": [_shape(r) for r in existing], "review_after_days": REVIEW_AFTER_DAYS}
+    return {
+        "patients": patients, "reviews": [_shape(r) for r in existing],
+        # The default gap; each patient row carries its own as review_gap_days.
+        "review_after_days": REVIEW_AFTER_DAYS,
+    }
 
 
 @router.post("/physio/reviews/raise/{lead_id}")
@@ -494,9 +452,9 @@ async def physio_raise_review(
     user: V3UserOut = Depends(v3_require_roles("physio", "super_admin", "business_dev")),
 ):
     """Physio sends a patient up for review. Lands in Branch Admin > Review > Send to Review.
-    Only raisable at a fresh 7-treatment-day milestone (7, 14, 21...), counted in calendar
-    days attended rather than completed rows — mirrors the same _review_eligibility check
-    /physio/reviews uses to decide who shows under New Review."""
+    Raisable once the patient's review gap has gone by since the last review (or at the end
+    of the course), counted in calendar days attended rather than completed rows — the same
+    _review_eligibility check /physio/reviews uses to decide who shows under New Review."""
     # Enforced here as well as in the form: the Head Physio writes their review off the
     # back of these notes, so a review raised without them cannot be acted on.
     if not (payload.physio_notes or "").strip():
@@ -504,11 +462,15 @@ async def physio_raise_review(
     lead = await _lead_or_404(lead_id)
     existing_for_lead = await v3_col("reviews").find({"lead_id": lead_id}, {"_id": 0}).to_list(50)
     days = await _treatment_days(lead_id)
-    elig = _review_eligibility(existing_for_lead, days, lead_id in await _finished_course_ids([lead_id]))
+    gap = review_gap_of(lead)
+    elig = _review_eligibility(existing_for_lead, days, lead_id in await _finished_course_ids([lead_id]), gap)
     if not elig["eligible"]:
         if elig["review"] and elig["review"].get("status") in (SEND_TO_REVIEW, SENT):
             raise HTTPException(status_code=409, detail="This patient already has a review in progress")
-        raise HTTPException(status_code=400, detail=f"This patient hasn't reached a new review milestone yet (every {REVIEW_AFTER_DAYS} treatment days)")
+        raise HTTPException(
+            status_code=400,
+            detail=f"This patient isn't due a review yet — the next one is due at day {elig['due_at']} (every {gap} treatment days)",
+        )
     # The client's own star + Treatment Feedback review used to be required here. It no
     # longer is: rating a week is the client's to give or skip in the portal, and a review
     # they never gave held the Physio's hand-off to the Consultant indefinitely.
@@ -532,6 +494,11 @@ async def physio_raise_review(
         "reason": (payload.reason or "").strip(),
         "physio_notes": (payload.physio_notes or "").strip(),
         "treatment_days": days,
+        # The first day this review covers -- the day after the last one stopped. Stored
+        # rather than re-derived, so the span reads the same after a later review lands.
+        "covers_from_day": elig["first_day"],
+        "review_gap_days": gap,
+        "final": elig["final"],
         "session_package_name": lead.get("session_package_name", ""),
         "review_date": "",
         "status": SEND_TO_REVIEW,
@@ -549,7 +516,7 @@ async def physio_raise_review(
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
         "action": "review_raised",
-        "details": f"Physio raised a review after {review['treatment_days']} treatment days"
+        "details": f"Physio raised a review covering days {review['covers_from_day']}–{review['treatment_days']}"
                    + (f" · {review['reason']}" if review["reason"] else ""),
         "created_by": user.full_name,
         "created_by_role": user.role,

@@ -545,6 +545,9 @@ class V3LeadOut(BaseModel):
     assigned_physio_name: Optional[str] = None
     physio_assigned_at: Optional[str] = None
     physio_stage: Optional[str] = None  # None = "Assigned" (active), "Complete" = physio's consultation review finished
+    # Treatment days between this patient's CONSULTANT reviews (7 / 10 / 15), picked by the
+    # physio. None = the default 7 -- see review_gap_of in routers/v3_reviews.
+    review_gap_days: Optional[int] = None
     # Stamped onto the lead by _stamp_session_progress, never stored: the days live in
     # the sessions collection and are ticked off one at a time, so a count kept on the
     # lead would be a second copy of the truth, and the stale one is what a board reads.

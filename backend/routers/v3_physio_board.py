@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -11,12 +12,12 @@ from schemas.v3 import (
     V3UserOut, V3CompleteSessionInput, V3AbsentSessionInput, V3JrPhysioWeeklyInput,
     V3CreateJrPhysioInput, V3LeadOut,
 )
-# The interval that actually governs when a review can be raised. Imported rather than
-# redeclared so the Treatment Days popup marks its milestones where the reviews router
+# The rule that actually governs when a review can be raised. Imported rather than
+# redeclared so the Treatment Days popup marks its reviews where the reviews router
 # agrees they are.
 from routers.v3_reviews import (
-    REVIEW_AFTER_DAYS, review_numbers_for_lead, leads_awaiting_review,
-    review_hold_for_lead, review_hold_message, _completed_day_counts, _finished_course_ids,
+    REVIEW_GAP_CHOICES, review_gap_of, review_numbers_for_lead, leads_awaiting_review,
+    _review_eligibility, _completed_day_counts, _finished_course_ids,
 )
 # Which leads belong to a physio. In its own module because both this board and the
 # reviews router need it, and this one already imports from that one — a helper living
@@ -432,6 +433,53 @@ async def physio_complete_consultation(lead_id: str, physio_id: Optional[str] = 
     return V3LeadOut(**updated).model_dump()
 
 
+class ReviewGapInput(BaseModel):
+    gap_days: int
+
+
+@router.put("/physio/leads/{lead_id}/review-gap")
+async def physio_set_review_gap(
+    lead_id: str,
+    payload: ReviewGapInput,
+    physio_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles("physio", "super_admin", "business_dev")),
+):
+    """How many treatment days apart this patient's reviews fall -- the treating physio's
+    call, from REVIEW_GAP_CHOICES. Counted from the last review, so a change moves only the
+    next one; reviews already raised keep the days they cover."""
+    if payload.gap_days not in REVIEW_GAP_CHOICES:
+        raise HTTPException(
+            status_code=400,
+            detail="Review gap must be " + " / ".join(str(g) for g in REVIEW_GAP_CHOICES) + " days",
+        )
+    doctor = await _resolve_doctor(user, physio_id)
+    if not doctor:
+        raise HTTPException(status_code=404, detail="No physio profile found for this user")
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if not await physio_owns_lead(_ids_of(doctor), lead_id):
+        raise HTTPException(status_code=403, detail="This lead is not assigned to you")
+
+    was = review_gap_of(lead)
+    now = now_iso()
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": {
+        "review_gap_days": payload.gap_days,
+        "updated_at": now,
+    }})
+    if was != payload.gap_days:
+        await v3_col("lead_activity").insert_one({
+            "id": str(uuid.uuid4()),
+            "lead_id": lead_id,
+            "action": "review_gap_changed",
+            "details": f"Review gap set to every {payload.gap_days} treatment days (was {was})",
+            "created_by": user.full_name,
+            "created_by_role": user.role,
+            "created_at": now,
+        })
+    return {"review_gap_days": payload.gap_days}
+
+
 @router.get("/physio/sessions/{lead_id}")
 async def physio_lead_sessions(lead_id: str, physio_id: Optional[str] = None, user: V3UserOut = Depends(v3_require_roles("physio", "super_admin", "business_dev", "head_physio", "branch_admin"))):
     # A physio covering an absent colleague's patient (v3_physio_absence) sees only the
@@ -490,9 +538,11 @@ async def physio_lead_sessions(lead_id: str, physio_id: Optional[str] = None, us
             "id": r.get("id"),
             "status": r.get("status"),
             "treatment_days": r.get("treatment_days") or 0,
-            # Which milestone this covers, taken from the day count stored when it was
-            # raised rather than from its position among the reviews: raising is allowed
-            # any time after a milestone, so a review raised on day 9 still covers day 7.
+            # The first day it covers. Absent on reviews raised before the gap was the
+            # physio's to pick; the popup then starts it the day after the one before.
+            "covers_from_day": r.get("covers_from_day") or 0,
+            "final": bool(r.get("final")),
+            # Which review of the course this is -- 1st, 2nd, 3rd, in order.
             "review_number": numbers.get(r.get("id"), 1),
             "reason": r.get("reason") or "",
             "physio_notes": r.get("physio_notes") or "",
@@ -510,25 +560,35 @@ async def physio_lead_sessions(lead_id: str, physio_id: Optional[str] = None, us
     ]
     reviews.sort(key=lambda r: r["treatment_days"])
 
-    # Whether the next day of this course is held by a review nobody has written yet, and
-    # which one. Sent rather than re-derived in the popup: the day count that decides this
-    # is a count of distinct calendar dates across both courses, and a second copy of that
-    # arithmetic in the browser is a second chance for the button to offer a day the server
-    # will refuse. None when nothing is owed.
-    hold = await review_hold_for_lead(lead_id)
-    # The same for money: every paid session used with a balance owing and no extension
-    # from the Branch Admin. Treatment days only -- rehab is its own course and fee.
+    # The review this patient is due next, if one can be raised now, and when the next one
+    # falls due otherwise. Sent rather than re-derived in the popup: it is counted from the
+    # last review on a count of distinct calendar dates across both courses, and a second
+    # copy of that arithmetic in the browser is a second chance to call a review due that
+    # the Review tab will not raise. It holds no day -- it is a reminder, not a gate.
+    lead_row = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "review_gap_days": 1})
+    gap = review_gap_of(lead_row)
+    days_done = (await _completed_day_counts([lead_id])).get(lead_id, 0)
+    finished = lead_id in await _finished_course_ids([lead_id])
+    elig = _review_eligibility(review_rows, days_done, finished, gap)
+    # Every paid session used with a balance owing and no extension from the Branch Admin
+    # holds the next day. Treatment days only -- rehab is its own course and fee.
     pay_hold = await payment_hold_for_lead(lead_id)
 
-    # Sent so the popup marks milestones on the same interval the reviews router enforces,
-    # instead of carrying its own copy of the number and drifting from it.
     return {
         "sessions": sessions,
         "assessments": assessments,
         "reviews": reviews,
-        "review_after_days": REVIEW_AFTER_DAYS,
-        "review_hold": hold,
-        "review_hold_message": review_hold_message(hold) if hold else "",
+        # This patient's gap, and the ones the physio may pick from.
+        "review_after_days": gap,
+        "review_gap_choices": list(REVIEW_GAP_CHOICES),
+        "next_review": {
+            "eligible": elig["eligible"],
+            "review_number": elig["review_number"],
+            "first_day": elig["first_day"],
+            "last_day": elig["milestone"],
+            "due_at": elig["due_at"],
+            "final": elig["final"],
+        },
         "payment_hold": pay_hold,
         "payment_hold_message": payment_hold_message(pay_hold) if pay_hold else "",
         # Whether a day may be worked only on its booked date. Switched from the Danger Zone.
@@ -538,8 +598,8 @@ async def physio_lead_sessions(lead_id: str, physio_id: Optional[str] = None, us
         # review and Mark Complete on the cover's popup mid-course. The whole course's count
         # and whether it is over are sent beside them for the popup to read instead.
         "covering": bool(scope),
-        "course_days_done": (await _completed_day_counts([lead_id])).get(lead_id, 0) if scope else None,
-        "course_finished": (lead_id in await _finished_course_ids([lead_id])) if scope else None,
+        "course_days_done": days_done if scope else None,
+        "course_finished": finished if scope else None,
     }
 
 
@@ -781,21 +841,9 @@ async def physio_complete_session(
             detail=f"Day {blocking} has not been completed yet — days are completed in order",
         )
 
-    # A week of treatment is read before the next one is worked. Every seven days attended
-    # earns a CONSULTANT's review, and until that one is written up the week just finished
-    # has been seen by nobody but the physio who gave it — so the day after it waits.
-    #
-    # The popup already refuses this before the press, but the day count behind the review
-    # milestones is written here: a day completed straight through the API would move the
-    # next milestone with nothing having read the last one. Same rule leads_awaiting_review
-    # applies at the end of a course, applied at each week inside it.
-    #
-    # Day 7 itself is never held — six days are behind it and no milestone has been
-    # reached — so the week can always be finished, which is what makes the review
-    # raisable in the first place.
-    hold = await review_hold_for_lead(session["lead_id"])
-    if hold:
-        raise HTTPException(status_code=400, detail=review_hold_message(hold))
+    # A review falling due holds no day: the physio raises it when they choose and the
+    # course carries on (see _review_eligibility). Only closing the course waits for the
+    # reviews to be written -- physio_complete_consultation.
 
     # The client has had every session they paid for and the balance is still owing. The
     # day waits until it is collected, or until the Branch Admin extends the due date.
