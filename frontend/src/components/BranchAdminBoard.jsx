@@ -2376,7 +2376,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         // and the gym floor those two desks run do not exist — see runsWithoutARoom.
         <ActivityCarePanel branchId={branchId} withoutRoom={armScoped} />
       ) : activeView === "sumaiya" ? (
-        <SumaiyaConsultationsPanel branchId={branchId} />
+        <SumaiyaConsultationsPanel branchId={branchId} squareTable={squareTable} />
       ) : activeView === "store" ? (
         <FitsiomaxStorePanel branchId={branchId} />
       ) : activeView === "records" ? (
