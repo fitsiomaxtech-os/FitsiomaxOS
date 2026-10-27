@@ -2824,14 +2824,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // that has not populated it can still finish a consultation.
   const [treatmentTypes, setTreatmentTypes] = useState([]);
 
-  // Collect Fee popup (Branch Admin only) — at the Consultation Fee stage, Cash/UPI/Card only
-  const [collectFeeDraft, setCollectFeeDraft] = useState(null); // { amount, payment_mode } | null
+  // Collect Fee popup (Branch Admin only) — at the Consultation Fee stage
+  const [collectFeeDraft, setCollectFeeDraft] = useState(null); // { consultation_item_id, payment_mode, ... } | null
   const [collectingFee, setCollectingFee] = useState(false);
-  // Second-step popup — only opens if the entered amount doesn't match the assigned
-  // package price (needs an explicit "yes, that's right" confirm) and/or the chosen
-  // mode needs its own extra fields (UPI Transaction ID/UTR, Card account details).
-  // Cash at the expected amount skips this entirely and submits straight away.
-  const [packageConfirmDraft, setPackageConfirmDraft] = useState(null);
 
   // Shown after a fee is actually taken — the money has changed hands and the client is
   // standing there, so the acknowledgement has to be something that can be handed over,
@@ -3073,9 +3068,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [pkgAmountDraft, setPkgAmountDraft] = useState("");
   const [savingPkgAmount, setSavingPkgAmount] = useState(false);
   const [collectingTreatmentFee, setCollectingTreatmentFee] = useState(false);
-  // Same second-step confirm popup as packageConfirmDraft above, but for Cash/UPI/Card
-  // on the Treatment Fee. Cheque and Partial Payment keep their existing single-popup
-  // flow (locked amount, no manual override, no confirm step).
+  // The second-step Collect popup for the Treatment Fee's chosen Payment Mode.
   const [treatmentConfirmDraft, setTreatmentConfirmDraft] = useState(null);
   // The "Balance Amount" fork. Raised when the desk presses Collect with less money on
   // the popup than the sessions being bought cost -- Rs.5000 cash against a Rs.10000
@@ -4564,18 +4557,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // agreed then.
       consultation_item_id: lead.package_id || (lead.visit_type === "home" ? lead.visit_package_id || "" : ""),
       payment_mode: lead.package_payment_mode || "cash",
-      amount: lead.package_paid ?? lead.package_price ?? (lead.visit_type === "home" ? lead.visit_package_price ?? "" : ""),
-      // Typed by hand or not at all -- see FeeAmountEntry. Reloaded from what was
-      // actually agreed and recorded, never worked back out of what was collected.
-      discount: lead.package_payment_details?.discount_amount ?? "",
-      // The date already promised for a balance still outstanding, so correcting a
-      // collection doesn't make somebody re-agree a date the patient was given.
-      balance_due_date: (existing || []).find((i) => !i.paid)?.due_date || "",
-      // Cheque, and the schedule a Partial Payment is spread over -- carried here, on the
-      // fee's own draft rather than the tender's, for the same reason the Treatment Fee
-      // carries them: neither is a payment being made at the desk, so neither belongs to
-      // the tender the desk is filling in.
+      // What each method needs before the server will take it, typed on the section
+      // under the Payment Mode: the card slip's transaction id, an Account Transfer's
+      // account and reference, a cheque's bank and number. Bank Name is one box shared
+      // by the last two -- only one of them is ever on screen.
+      card_transaction_id: "",
+      account_number: "",
+      account_holder_name: "",
       bank_name: "",
+      ifsc_code: "",
+      transfer_reference: "",
       cheque_number: "",
       // A schedule already on the record is reloaded from its real rows, paid ones
       // included, so reopening this shows what is actually still owed rather than two
@@ -4839,18 +4830,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
   const consultationChosenPrice = consultationPriceForId(collectFeeDraft?.consultation_item_id);
 
-  // The Consultation Fee's own three figures, worked out the same way the Treatment
-  // Fee's are below: a discount that was typed, the money being handed over now, and
-  // whatever of the price that leaves still owed.
+  // What a Partial Payment schedule for the Consultation Fee has to add up to.
   const consultationPrice = consultationChosenPrice ?? selectedLead?.package_price ?? 0;
-  const consultationDiscountRs = Math.max(0, parseFloat(collectFeeDraft?.discount) || 0);
-  const consultationAmountNow = parseFloat(collectFeeDraft?.amount) || 0;
-  const consultationBalanceDue = round2(consultationPrice - consultationDiscountRs - consultationAmountNow);
-  const consultationHasBalance = consultationBalanceDue > 0.009;
 
-  // The Rehab Fee's and the Diet fees' three figures, worked out exactly as the
-  // Consultation Fee's above are. Each fee is one price paid once, so the whole of what
-  // is not discounted and not collected today is the balance.
+  // The Rehab Fee's and the Diet fees' three figures: a discount that was typed, the
+  // money being handed over now, and whatever of the price that leaves still owed. Each
+  // fee is one price paid once, so the whole of what is not discounted and not collected
+  // today is the balance.
   const rehabPrice = selectedLead?.rehab_package_price || 0;
   const rehabDiscountRs = Math.max(0, parseFloat(rehabFeeDraft?.discount) || 0);
   const rehabAmountNow = parseFloat(rehabFeeDraft?.amount) || 0;
@@ -4975,24 +4961,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return payload;
   };
 
-  // Clicking one of the six Payment Mode buttons opens that mode's own Collect popup —
-  // the same step the Treatment Fee has always taken, and now the step every fee takes.
-  // There used to be a "Collect Consultation Fee" button between the two, which is a
-  // click that asks nothing: the mode had already been chosen, and the popup it opened
-  // was the next thing either way.
-  //
-  // Cheque and Partial Payment keep the assigned price, so choosing one snaps the amount
-  // back to it and drops any discount that was being typed against another mode. The
-  // server will not take a discount on either, and leaving one on the screen would show a
-  // figure the collection is not going to be for.
+  // Picking a Payment Mode only chooses it. The fields that mode needs open beneath it on
+  // the same section, and the Collect button there is what takes the money -- the
+  // Consultation Fee no longer has a Collect popup of its own.
   const chooseConsultationPaymentMode = (mode) => {
-    const settlesNow = SETTLED_NOW_MODES.includes(mode);
-    setCollectFeeDraft({
-      ...collectFeeDraft,
-      payment_mode: mode,
-      ...(settlesNow ? {} : { amount: String(consultationPrice || ""), discount: "", balance_due_date: "" }),
-    });
-    setPackageConfirmDraft({ upi_id: "", upi_transaction_id: "", card_transaction_id: "", account_number: "", account_holder_name: "", bank_name: "", ifsc_code: "", transfer_reference: "", payment_lines: null, cash_notes: {} });
+    setCollectFeeDraft({ ...collectFeeDraft, payment_mode: mode });
   };
 
   // An Account Transfer records the account the money came out of and the reference it
@@ -5028,86 +5001,53 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return true;
   };
 
-  // Confirm button inside the second "Confirm Payment" popup — validates
-  // UPI/Card/Account Transfer's own fields (Cash just needed the mismatch acknowledged).
-  const confirmCollectConsultationFee = () => {
-    const amount = parseFloat(collectFeeDraft.amount);
+  // The Collect button on the Consultation Fee section. Everything the chosen method
+  // needs is filled in on that section, so what is left to ask is a plain yes -- the
+  // browser's own OK, naming the package, the fee and the method, before anything moves.
+  //
+  // The methods that settle now take the package's price in full. There is no discount
+  // or part payment on this screen, so a collection here never leaves a balance; a fee
+  // that has to be spread out is what Partial Payment is for.
+  const collectConsultationFee = () => {
     const mode = collectFeeDraft.payment_mode;
+    const price = consultationChosenPrice;
+    if (price == null) {
+      toast.error("Select the Consultation Package first");
+      return;
+    }
+    const payload = { payment_mode: mode };
 
-    // Neither of these is money on the desk, so neither takes an amount, a discount or a
-    // balance: a cheque is written for the fee and a schedule adds up to it. Handled
-    // ahead of everything below for that reason -- there is nothing to confirm about a
-    // payment that has not happened yet.
     if (mode === "cheque") {
       if (!(collectFeeDraft.bank_name || "").trim() || !(collectFeeDraft.cheque_number || "").trim()) {
         toast.error("Bank Name and Cheque Number are required");
         return;
       }
-      submitConsultationFee({
-        payment_mode: "cheque",
-        bank_name: collectFeeDraft.bank_name.trim(),
-        cheque_number: collectFeeDraft.cheque_number.trim(),
-      });
-      return;
-    }
-    if (mode === "partial") {
+      payload.bank_name = collectFeeDraft.bank_name.trim();
+      payload.cheque_number = collectFeeDraft.cheque_number.trim();
+    } else if (mode === "partial") {
       const rows = (collectFeeDraft.partial_installments || []).filter((i) => !i.paid || parseFloat(i.amount) > 0);
       if (rows.length < 2 || rows.some((i) => !(parseFloat(i.amount) > 0) || !i.due_date)) {
         toast.error("Every installment needs an amount and a due date");
         return;
       }
-      if (Math.abs(round2(rows.reduce((sum, i) => sum + parseFloat(i.amount), 0)) - consultationPrice) > 0.01) {
+      if (Math.abs(round2(rows.reduce((sum, i) => sum + parseFloat(i.amount), 0)) - price) > 0.01) {
         toast.error("Installment amounts must add up to the Consultation Fee");
         return;
       }
-      submitConsultationFee({
-        payment_mode: "partial",
-        partial_installments: rows.map((i) => ({ amount: round2(parseFloat(i.amount)), due_date: i.due_date })),
-      });
-      return;
+      payload.partial_installments = rows.map((i) => ({ amount: round2(parseFloat(i.amount)), due_date: i.due_date }));
+    } else {
+      payload.amount = price;
+      payload.confirmed = true;
+      if (mode === "card" && !attachCardDetails(payload, collectFeeDraft)) return;
+      if (BANK_DETAIL_MODES.includes(mode) && !attachBankDetails(payload, collectFeeDraft)) return;
     }
 
-    const payload = { payment_mode: mode, amount, confirmed: true };
-    // The discount that was agreed, and the date the rest is promised for. The server
-    // takes only what is sent here as a discount and schedules the rest as a balance,
-    // so a missing date is a refusal rather than a silent write-off.
-    if (consultationDiscountRs > 0) payload.discount_amount = consultationDiscountRs;
-    if (consultationHasBalance) {
-      if (!collectFeeDraft.balance_due_date) {
-        toast.error("Enter a Due Date for the balance amount");
-        return;
-      }
-      payload.balance_due_date = collectFeeDraft.balance_due_date;
-    }
-    // A split carries its own modes, so none of the single-mode detail blocks below
-    // apply. amount still rides along: the server checks the parts against it rather
-    // than trusting either on its own.
-    if (packageConfirmDraft.payment_lines) {
-      payload.payment_lines = packageConfirmDraft.payment_lines.map((l) => ({
-        mode: l.mode,
-        amount: parseFloat(l.amount),
-        reference: (l.reference || "").trim(),
-        // Only for cash, and only what was actually counted. Left off entirely when the
-        // desk skipped the count, so "did not count" stays distinguishable from
-        // "counted, and it came to nothing".
-        denominations: l.mode === "cash" ? countedNotes(l.notes) : undefined,
-      }));
-      submitConsultationFee(payload);
-      return;
-    }
-    if (mode === "cash") {
-      payload.denominations = countedNotes(packageConfirmDraft.cash_notes);
-    } else if (mode === "upi") {
-      // The transaction id is optional: sent when the desk has one, blank otherwise.
-      payload.upi_transaction_id = packageConfirmDraft.upi_transaction_id.trim();
-      // Which company UPI ID it was taken into, when the desk picked one. Sent only
-      // when it was: an empty pick means nobody said, not that it went nowhere.
-      if ((packageConfirmDraft.upi_id || "").trim()) payload.upi_id = packageConfirmDraft.upi_id.trim();
-    } else if (mode === "card") {
-      if (!attachCardDetails(payload, packageConfirmDraft)) return;
-    } else if (BANK_DETAIL_MODES.includes(mode)) {
-      if (!attachBankDetails(payload, packageConfirmDraft)) return;
-    }
+    const fee = `Rs.${Number(price).toLocaleString("en-IN")}`;
+    const pkg = consultationChosenItem?.name || selectedLead.package_name || "the consultation";
+    const question = mode === "partial"
+      ? `Save a payment schedule of ${payload.partial_installments.length} installments for the Consultation Fee of ${fee} (${pkg})?`
+      : `Collect the Consultation Fee of ${fee} by ${ALL_PAYMENT_MODE_LABELS[mode] || mode} for ${pkg}?`;
+    if (!window.confirm(question)) return;
     submitConsultationFee(payload);
   };
 
@@ -5170,11 +5110,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       ? (selectedLead.package_paid != null ? "Consultation Fee payment schedule updated" : "Consultation Fee payment schedule saved")
       : (selectedLead.package_paid != null ? "Consultation Fee payment updated" : "Consultation Fee collected"));
     setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => l.id === res.lead.id ? res.lead : l) }));
-    setPackageConfirmDraft(null);
-    // The receipt closes on its own button; the patient stays open behind it so the
-    // Treatment Fee can be taken next without reopening them.
-    setCollectFeeDraft(null);
-    setTreatmentFeeDraft(null);
+    // Only the Consultation Fee closes. A Treatment Fee being collected in the same popup
+    // keeps it open, now unlocked, so it can be taken straight after; with nothing else on
+    // the popup it closes with the fee. The receipt sits above either way, on its own
+    // button, and the patient stays open behind it.
+    if (!(treatmentFeeDraft && res.lead?.treatment_fee_paid == null)) {
+      setCollectFeeDraft(null);
+      setTreatmentFeeDraft(null);
+    }
     setSelectedLead(res.lead);
     showReceipt(() => makeReceipt({
       lead: selectedLead, payload,
@@ -11578,8 +11521,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
             {/* Collect Fee popup (Branch Admin) — Consultation Visit stage. When the
                 Head Physio's decision is "Consultation + Treatment" and the Treatment
-                Fee isn't paid yet, its section renders in this same popup so both
-                fees are collected together in one action. */}
+                Fee isn't paid yet, its section renders in this same popup, opening once
+                the Consultation Fee above it has been collected. */}
             {collectFeeDraft && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-collect-fee-modal">
                 <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
@@ -11591,6 +11534,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </div>
 
                   <div className="space-y-3">
+                  {/* Collected, the Consultation Fee closes out of the popup while the
+                      Treatment Fee beside it is still to take — what stays is what is
+                      still owed. A balance on it keeps it open: that is money to take too. */}
+                  {!(selectedLead.package_paid != null && treatmentFeeDraft && !feeBalances.consultation) && (
                   <div className={`space-y-3 rounded-lg border p-3 ${selectedLead.package_paid != null ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}>
                     <p className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider ${selectedLead.package_paid != null ? "text-emerald-700" : "text-sky-700"}`}>
                       <Stethoscope className="h-3.5 w-3.5" /> Consultation Fee
@@ -11634,19 +11581,35 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </div>
                     ) : (
                       <>
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Consultation Fee (₹)</label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={collectFeeDraft.amount}
-                            readOnly
-                            disabled
-                            className="h-9 bg-slate-50 text-slate-600"
-                            data-testid="cons-collect-fee-amount"
+                        {/* What the patient bought, and so what they owe: the fee is the
+                            package's price, shown on its option, and is not typed here. */}
+                        <div data-testid="cons-collect-fee-package-block">
+                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Consultation Package</label>
+                          <ThemedSelect
+                            value={collectFeeDraft.consultation_item_id || ""}
+                            placeholder="Select a package…"
+                            onChange={(id) => setCollectFeeDraft({ ...collectFeeDraft, consultation_item_id: id })}
+                            className="h-9 w-full text-sm"
+                            testid="cons-collect-fee-package"
+                            options={consultationPackageItems.map((i) => {
+                              const price = consultationOptionPrice(i);
+                              return {
+                                value: i.id,
+                                label: `${i.name}${price != null ? ` — Rs.${price}` : i.manual_price ? " — amount set at booking" : " — no price set"}`,
+                              };
+                            })}
                           />
-                          {selectedLead.package_price != null && (
-                            <p className="mt-1 text-[11px] text-slate-400">Assigned package price: Rs.{selectedLead.package_price} — the fee itself is not editable; a discount can be agreed in the next step, on the methods that settle at the desk.</p>
+                          {consultationChosenItem?.duration_minutes != null && (
+                            <p className="mt-1 text-[11px] text-slate-400" data-testid="cons-collect-fee-package-duration">
+                              {consultationChosenItem.duration_minutes} min appointment.
+                            </p>
+                          )}
+                          {consultationPackageItems.length === 0 && (
+                            <p className="mt-1 text-[11px] text-rose-700" data-testid="cons-collect-fee-package-empty">
+                              {homeVisitLead
+                                ? "No House Visit packages are set up yet — add them under Services & Products > Home Visit > Consultant."
+                                : "No consultation packages are set up yet — add them under Services & Products > Consultations."}
+                            </p>
                           )}
                         </div>
                         <div>
@@ -11657,30 +11620,87 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             onChange={chooseConsultationPaymentMode}
                             testId="cons-collect-fee-mode"
                           />
-                          <p className="mt-1 text-[11px] text-slate-400">Pick a payment method to open its own Collect popup.</p>
                         </div>
+
+                        {/* Only what the server will not take the method without. Cash and
+                            UPI need nothing more than the OK that Collect asks for. */}
+                        {consultationChosenPrice != null && collectFeeDraft.payment_mode === "card" && (
+                          <div>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-500">Transaction ID <span className="text-rose-500">*</span></label>
+                            <Input
+                              value={collectFeeDraft.card_transaction_id || ""}
+                              onChange={(e) => setCollectFeeDraft({ ...collectFeeDraft, card_transaction_id: e.target.value })}
+                              className="h-9"
+                              data-testid="cons-collect-fee-card-txn"
+                            />
+                          </div>
+                        )}
+                        {consultationChosenPrice != null && BANK_DETAIL_MODES.includes(collectFeeDraft.payment_mode) && (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {[
+                              ["account_number", "Account Number", "account-number"],
+                              ["account_holder_name", "Account Holder Name", "account-holder"],
+                              ["bank_name", "Bank Name", "bank-name"],
+                              ["ifsc_code", "IFSC Code", "ifsc"],
+                              ["transfer_reference", "Reference / UTR No.", "transfer-reference"],
+                            ].map(([field, label, tid]) => (
+                              <div key={field}>
+                                <label className="mb-1 block text-[11px] font-medium text-slate-500">{label} <span className="text-rose-500">*</span></label>
+                                <Input
+                                  value={collectFeeDraft[field] || ""}
+                                  onChange={(e) => setCollectFeeDraft({ ...collectFeeDraft, [field]: field === "ifsc_code" ? e.target.value.toUpperCase() : e.target.value })}
+                                  className="h-9"
+                                  data-testid={`cons-collect-fee-${tid}`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {consultationChosenPrice != null && collectFeeDraft.payment_mode === "cheque" && (
+                          <ChequeFields
+                            draft={collectFeeDraft}
+                            onChange={(patch) => setCollectFeeDraft({ ...collectFeeDraft, ...patch })}
+                            testPrefix="cons-collect-fee"
+                          />
+                        )}
+                        {consultationChosenPrice != null && collectFeeDraft.payment_mode === "partial" && (
+                          <PartialInstallmentsEditor
+                            installments={collectFeeDraft.partial_installments || []}
+                            setInstallments={(next) => setCollectFeeDraft({ ...collectFeeDraft, partial_installments: next })}
+                            totalSessions={0}
+                            totalAmount={consultationPrice}
+                            testPrefix="cons-collect-fee"
+                          />
+                        )}
+
+                        <Button
+                          className="h-9 w-full bg-sky-600 text-xs hover:bg-sky-700"
+                          onClick={collectConsultationFee}
+                          disabled={collectingFee || consultationChosenPrice == null}
+                          data-testid="cons-collect-fee-submit"
+                        >
+                          {collectingFee ? "Saving..." : collectFeeDraft.payment_mode === "partial" ? "Save Payment Schedule" : "Collect"}
+                        </Button>
                       </>
                     )}
                   </div>
+                  )}
 
-                  {treatmentFeeDraft && (
+                  {/* Not shown at all until the Consultation Fee is in: the Treatment Fee
+                      cannot be taken before it, and a greyed box saying so is one more
+                      thing on the popup with nothing to press. */}
+                  {treatmentFeeDraft && selectedLead.package_paid != null && (
                     <div className={`space-y-3 rounded-lg border p-3 ${
                       selectedLead.treatment_fee_paid != null && !hasPendingInstallments ? "border-emerald-200 bg-emerald-50"
-                      : selectedLead.package_paid == null ? "border-slate-200 bg-slate-50"
                       : "border-indigo-200 bg-indigo-50/40"
                     }`}>
                       <p className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider ${
                         selectedLead.treatment_fee_paid != null && !hasPendingInstallments ? "text-emerald-700"
-                        : selectedLead.package_paid == null ? "text-slate-400"
                         : "text-indigo-700"
                       }`}>
                         <Dumbbell className="h-3.5 w-3.5" /> Treatment Fee
                       </p>
-                      {selectedLead.package_paid == null ? (
-                        <p className="text-xs text-slate-500" data-testid="cons-treatment-fee-gated">
-                          Collect the Consultation Fee above first — Treatment Fee unlocks once it's paid.
-                        </p>
-                      ) : hasPendingInstallments ? (
+                      {hasPendingInstallments ? (
                         <div data-testid="cons-treatment-fee-partial-pending">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-xs text-slate-500">Treatment Fee</span>
@@ -11809,375 +11829,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </div>
               </div>
             )}
-
-            {/* The chosen method's own Collect popup — opened by picking a Payment Mode
-                on the popup behind it, exactly as the Treatment Fee's is. What it asks for
-                is what that method needs: an amount and a discount for the four that
-                settle at the desk, a cheque's bank and number, or the schedule a Partial
-                Payment is spread over. Layered above the main popup. */}
-            {packageConfirmDraft && collectFeeDraft && (() => {
-              // What the patient is buying decides what they owe, so nothing about the
-              // money is shown until the package is picked -- see the dropdown below.
-              const chosenPackage = consultationChosenItem;
-              const expected = consultationChosenPrice ?? selectedLead.package_price;
-              const packageChosen = expected != null;
-              const mode = collectFeeDraft.payment_mode;
-              // Cheque and Partial Payment are promises of money rather than money, so
-              // neither has an amount to move, a discount to agree, a balance to date, a
-              // drawer to count or a second tender to add. Everything that belongs to
-              // money on the desk hangs off this.
-              const settlesNow = SETTLED_NOW_MODES.includes(mode);
-              return (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-collect-fee-confirm-modal">
-                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-800">
-                        {mode === "partial" ? "Consultation Fee Payment Schedule" : mode === "cheque" ? "Collect Consultation Fee by Cheque" : "Confirm Consultation Fee Payment"}
-                      </p>
-                      <button onClick={() => setPackageConfirmDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-collect-fee-confirm-close"><X className="h-4 w-4" /></button>
-                    </div>
-
-                    {/* What the patient bought, above what they owe for it, because the
-                        second follows from the first. The consultation used to have one
-                        price and nothing to choose; three packages at three prices is a
-                        decision, and this is the desk that makes it. */}
-                    <div data-testid="cons-collect-fee-package-block">
-                      <label className="mb-1 block text-[11px] font-medium text-slate-500">Consultation Package</label>
-                      <ThemedSelect
-                        value={collectFeeDraft.consultation_item_id || ""}
-                        placeholder="Select a package…"
-                        onChange={(id) => {
-                          const price = consultationPriceForId(id);
-                          setCollectFeeDraft({
-                            ...collectFeeDraft,
-                            consultation_item_id: id,
-                            // The fee lands on the package's own price straight away, and
-                            // a discount is a thing somebody may then agree -- not
-                            // something the desk has to type before the popup will work.
-                            //
-                            // This used to clear the amount and wait for the discount box
-                            // to fill it back in, which left the whole popup half-dead
-                            // until a discount was typed: no fee to count cash against, so
-                            // no "Fill from amount"; a balance of the entire fee, so a due
-                            // date demanded for money nobody was short; and Confirm
-                            // greyed out. Typing a discount fixed all three at once, which
-                            // is how it read as "the discount is required".
-                            amount: price != null ? String(price) : "",
-                            // A discount agreed against the package being switched away
-                            // from goes with it -- it was a figure off a different price.
-                            discount: "",
-                          });
-                        }}
-                        className="h-9 w-full text-sm"
-                        testid="cons-collect-fee-package"
-                        options={[
-                          ...consultationPackageItems.map((i) => {
-                            const price = consultationOptionPrice(i);
-                            return {
-                              value: i.id,
-                              label: `${i.name}${price != null ? ` — Rs.${price}` : i.manual_price ? " — amount set at booking" : " — no price set"}`,
-                            };
-                          }),
-                          // A package already collected for whose catalogue row has since
-                          // been changed or removed. Offered so a correction can be saved
-                          // without re-picking something the patient never bought.
-                          ...(collectFeeDraft.consultation_item_id
-                            && !consultationPackageItems.some((i) => i.id === collectFeeDraft.consultation_item_id)
-                            ? [{
-                              value: collectFeeDraft.consultation_item_id,
-                              label: `${selectedLead.package_name || "Package already on this patient"}${selectedLead.package_price != null ? ` — Rs.${selectedLead.package_price}` : ""}`,
-                            }]
-                            : []),
-                        ]}
-                      />
-                      {!packageChosen && (
-                        <p className="mt-1 text-[11px] text-amber-700" data-testid="cons-collect-fee-package-hint">
-                          Pick the package the patient agreed to. The fee follows from it.
-                        </p>
-                      )}
-                      {chosenPackage?.duration_minutes != null && (
-                        <p className="mt-1 text-[11px] text-slate-400" data-testid="cons-collect-fee-package-duration">
-                          {chosenPackage.duration_minutes} min appointment.
-                        </p>
-                      )}
-                      {consultationPackageItems.length === 0 && (
-                        <p className="mt-1 text-[11px] text-rose-700" data-testid="cons-collect-fee-package-empty">
-                          {homeVisitLead
-                            ? "No House Visit packages are set up yet — add them under Services & Products > Home Visit > Consultant."
-                            : "No consultation packages are set up yet — add them under Services & Products > Consultations."}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Replaces the old bare amount box and its "differs from" warning:
-                        a discount is typed into its own boxes, and nothing else moves the
-                        fee. `lockAmount` is why the fee itself is shown rather than typed
-                        — it is the assigned price less that discount, which is not Branch
-                        Admin's to overtype, so there is no box to overtype it in. */}
-                    {packageChosen && settlesNow && (
-                      <FeeAmountEntry
-                        assignedPrice={expected}
-                        discount={collectFeeDraft.discount}
-                        amount={collectFeeDraft.amount}
-                        onChange={(patch) => setCollectFeeDraft({ ...collectFeeDraft, ...patch })}
-                        label="Consultation Fee (₹)"
-                        testPrefix="cons-collect-fee-confirm"
-                        lockAmount
-                      />
-                    )}
-
-                    {packageChosen && settlesNow && (
-                      <BalanceDueBlock
-                        balance={consultationBalanceDue}
-                        dueDate={collectFeeDraft.balance_due_date}
-                        onDueDateChange={(v) => setCollectFeeDraft({ ...collectFeeDraft, balance_due_date: v })}
-                        amount={consultationAmountNow}
-                        discount={consultationDiscountRs}
-                        testPrefix="cons-collect-fee-confirm"
-                      />
-                    )}
-
-                    {packageChosen && mode === "cheque" && (
-                      <>
-                        <LockedFeeRow
-                          label="Consultation Fee"
-                          price={expected}
-                          note="A cheque is written for the assigned fee, so there is no amount or discount to agree here."
-                          testId="cons-collect-fee-cheque-amount"
-                        />
-                        <ChequeFields
-                          draft={collectFeeDraft}
-                          onChange={(patch) => setCollectFeeDraft({ ...collectFeeDraft, ...patch })}
-                          testPrefix="cons-collect-fee"
-                        />
-                      </>
-                    )}
-
-                    {packageChosen && mode === "partial" && (
-                      <>
-                        <LockedFeeRow
-                          label="Consultation Fee"
-                          price={expected}
-                          note="The installments below have to add up to this. Scheduling collects nothing — each payment is taken on its own day, from here or from Accountant Manage."
-                          testId="cons-collect-fee-partial-total"
-                        />
-                        <PartialInstallmentsEditor
-                          installments={collectFeeDraft.partial_installments || []}
-                          setInstallments={(next) => setCollectFeeDraft({ ...collectFeeDraft, partial_installments: next })}
-                          totalSessions={0}
-                          totalAmount={consultationPrice}
-                          testPrefix="cons-collect-fee"
-                        />
-                      </>
-                    )}
-
-                    {/* Cash chosen on the popup behind this one lands here: the fee is
-                        settled above, and this is where it gets counted out. Sits under
-                        the amount because the amount is what it is counted against, and
-                        it moves while the discount is still being agreed. */}
-                    {packageChosen && !packageConfirmDraft.payment_lines && mode === "cash" && (
-                      <CashDenominations
-                        amount={collectFeeDraft.amount}
-                        notes={packageConfirmDraft.cash_notes}
-                        onChange={(cash_notes) => setPackageConfirmDraft({ ...packageConfirmDraft, cash_notes })}
-                        testPrefix="cons-collect-fee-confirm"
-                      />
-                    )}
-
-                    {packageChosen && packageConfirmDraft.payment_lines && (
-                      <>
-                        <SplitPaymentLines
-                          lines={packageConfirmDraft.payment_lines}
-                          modes={SPLIT_PAYMENT_MODES}
-                          expected={collectFeeDraft.amount}
-                          onChange={(next) => setPackageConfirmDraft({ ...packageConfirmDraft, payment_lines: next })}
-                          testPrefix="cons-collect-fee"
-                          countCash
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPackageConfirmDraft({
-                            ...packageConfirmDraft,
-                            payment_lines: [...packageConfirmDraft.payment_lines, { mode: "cash", amount: "", reference: "", notes: {} }],
-                          })}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 py-2 text-xs font-semibold text-slate-600 transition hover:border-sky-400 hover:text-sky-700"
-                          data-testid="cons-collect-fee-split-more"
-                        >
-                          <Plus className="h-3.5 w-3.5" /> Add another payment
-                        </button>
-                      </>
-                    )}
-
-                    {!packageConfirmDraft.payment_lines && mode === "upi" && (
-                      <UpiCollectFields
-                        draft={packageConfirmDraft}
-                        onChange={(patch) => setPackageConfirmDraft({ ...packageConfirmDraft, ...patch })}
-                        testPrefix="cons-collect-fee"
-                      />
-                    )}
-
-                    {/* One field, because one field is all a card swipe leaves behind:
-                        the transaction id off the terminal slip. */}
-                    {!packageConfirmDraft.payment_lines && mode === "card" && (
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-500">Transaction ID <span className="text-rose-500">*</span></label>
-                        <Input
-                          value={packageConfirmDraft.card_transaction_id}
-                          onChange={(e) => setPackageConfirmDraft({ ...packageConfirmDraft, card_transaction_id: e.target.value })}
-                          className="h-9"
-                          data-testid="cons-collect-fee-card-txn"
-                        />
-                      </div>
-                    )}
-
-                    {!packageConfirmDraft.payment_lines && BANK_DETAIL_MODES.includes(mode) && (
-                      <>
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Account Number</label>
-                          <Input
-                            value={packageConfirmDraft.account_number}
-                            onChange={(e) => setPackageConfirmDraft({ ...packageConfirmDraft, account_number: e.target.value })}
-                            className="h-9"
-                            data-testid="cons-collect-fee-account-number"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Account Holder Name</label>
-                          <Input
-                            value={packageConfirmDraft.account_holder_name}
-                            onChange={(e) => setPackageConfirmDraft({ ...packageConfirmDraft, account_holder_name: e.target.value })}
-                            className="h-9"
-                            data-testid="cons-collect-fee-account-holder"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Bank Name</label>
-                          <Input
-                            value={packageConfirmDraft.bank_name}
-                            onChange={(e) => setPackageConfirmDraft({ ...packageConfirmDraft, bank_name: e.target.value })}
-                            className="h-9"
-                            data-testid="cons-collect-fee-bank-name"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-slate-500">IFSC Code</label>
-                          <Input
-                            value={packageConfirmDraft.ifsc_code}
-                            onChange={(e) => setPackageConfirmDraft({ ...packageConfirmDraft, ifsc_code: e.target.value.toUpperCase() })}
-                            className="h-9"
-                            data-testid="cons-collect-fee-ifsc"
-                          />
-                        </div>
-                        {mode === "account_transfer" && (
-                          <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-500">Reference / UTR No.</label>
-                            <Input
-                              value={packageConfirmDraft.transfer_reference}
-                              onChange={(e) => setPackageConfirmDraft({ ...packageConfirmDraft, transfer_reference: e.target.value })}
-                              className="h-9"
-                              data-testid="cons-collect-fee-transfer-reference"
-                            />
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* Started from whatever was already chosen: the mode picked on the
-                        popup behind this one becomes the first tender, carrying the full
-                        amount, and the second opens empty for the rest. Nothing typed is
-                        thrown away by pressing it, and "Single payment" inside comes
-                        straight back.
-
-                        Last on the popup, under the card/transfer details rather than
-                        above them, because it is the way out of the single payment being
-                        filled in: the desk finishes the tender in front of it -- notes
-                        counted, UPI reference, account and IFSC -- and only then decides
-                        the rest is coming in something else. Sitting above those fields
-                        it read as a step to take before them. */}
-                    {settlesNow && !packageConfirmDraft.payment_lines && (
-                      <button
-                        type="button"
-                        onClick={() => setPackageConfirmDraft({
-                          ...packageConfirmDraft,
-                          payment_lines: [
-                            // Notes already counted, and the reference already typed,
-                            // come across with the mode they were entered under. Pressing
-                            // "Add another payment" is not a reason to make somebody count
-                            // the same drawer twice, or read the same UTR off the statement
-                            // again. Card carries nothing because this popup never asked it
-                            // for a reference of its own -- only the four bank fields, which
-                            // a split has no line to keep and drops on submit either way.
-                            { mode, amount: collectFeeDraft.amount, reference: mode === "upi" ? packageConfirmDraft.upi_transaction_id : mode === "account_transfer" ? packageConfirmDraft.transfer_reference : "", notes: mode === "cash" ? packageConfirmDraft.cash_notes : {} },
-                            { mode: mode === "cash" ? "upi" : "cash", amount: "", reference: "", notes: {} },
-                          ],
-                        })}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 py-2 text-xs font-semibold text-slate-600 transition hover:border-sky-400 hover:text-sky-700"
-                        data-testid="cons-collect-fee-split-add"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Add another payment
-                      </button>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        className="flex-1 text-xs"
-                        onClick={() => setPackageConfirmDraft(null)}
-                        disabled={collectingFee}
-                        data-testid="cons-collect-fee-confirm-cancel"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        className="flex-1 bg-sky-600 text-xs hover:bg-sky-700"
-                        onClick={confirmCollectConsultationFee}
-                        disabled={
-                          collectingFee ||
-                          // Nothing is collectable until somebody has said what is being
-                          // sold: the fee, the discount it comes off and the balance it
-                          // leaves are all measured against the package's price.
-                          !packageChosen ||
-                          // A cheque needs the two things it is traced by, and nothing else.
-                          (mode === "cheque"
-                            ? (!(collectFeeDraft.bank_name || "").trim() || !(collectFeeDraft.cheque_number || "").trim())
-                            : mode === "partial"
-                            // A schedule is refused until it is a whole one: at least two
-                            // dated installments, each worth something, together coming to
-                            // the fee. Anything less is a plan that leaves money unaccounted
-                            // for the moment it is saved.
-                            ? ((collectFeeDraft.partial_installments || []).length < 2 ||
-                               (collectFeeDraft.partial_installments || []).some((i) => !(parseFloat(i.amount) > 0) || !i.due_date) ||
-                               Math.abs(round2((collectFeeDraft.partial_installments || []).reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0)) - consultationPrice) > 0.01)
-                            : (!(parseFloat(collectFeeDraft.amount) > 0) ||
-                          // Money still owed has to be dated, and a discount bigger than
-                          // the fee it comes off is a typo rather than a gift.
-                          (consultationHasBalance && !collectFeeDraft.balance_due_date) ||
-                          consultationDiscountRs > consultationPrice ||
-                          // A split answers for itself: every part above zero, and the
-                          // parts adding up to the fee. The single-mode requirements
-                          // below are not its to satisfy.
-                          // Cash is counted before it is banked, and the count has to come
-                          // out right. Not counted, short of what is being taken, and over
-                          // it all leave a figure going into the drawer that nobody
-                          // physically checked.
-                          (packageConfirmDraft.payment_lines
-                            ? (packageConfirmDraft.payment_lines.some((l) => !(parseFloat(l.amount) > 0)) ||
-                               packageConfirmDraft.payment_lines.some((l) => l.mode === "cash" && !notesSettled(l.notes, l.amount)) ||
-                               Math.abs(packageConfirmDraft.payment_lines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0) - parseFloat(collectFeeDraft.amount)) > 0.01)
-                            : ((mode === "cash" && !notesSettled(packageConfirmDraft.cash_notes, collectFeeDraft.amount)) ||
-                               (mode === "card" && !packageConfirmDraft.card_transaction_id.trim()) ||
-                               (BANK_DETAIL_MODES.includes(mode) && (!packageConfirmDraft.account_number.trim() || !packageConfirmDraft.account_holder_name.trim() || !packageConfirmDraft.bank_name.trim() || !packageConfirmDraft.ifsc_code.trim())) ||
-                               (mode === "account_transfer" && !packageConfirmDraft.transfer_reference.trim())))))
-                        }
-                        data-testid="cons-collect-fee-confirm-submit"
-                      >
-                        {collectingFee ? "Saving..." : mode === "partial" ? "Save Payment Schedule" : "Confirm & Collect"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
 
             {/* Collect Treatment Fee popup (Branch Admin) — fallback: only reachable on
                 its own from the Fee Collected panel if it wasn't collected together
