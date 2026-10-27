@@ -1253,19 +1253,11 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
       onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}
       data-testid="hr-emp-view-modal"
     >
-      <div className="flex max-h-[90vh] w-full max-w-[720px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-5 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <EmployeeAvatar employee={e} size={44} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="truncate text-base font-semibold text-slate-900" data-testid="hr-emp-view-name">{e.full_name}</h3>
-                <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span>
-              </div>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {e.employee_code || "No code"}{e.designation ? ` · ${e.designation}` : ""}{e.department ? ` · ${e.department}` : ""}
-              </p>
-            </div>
+      <div className="flex max-h-[90vh] w-full max-w-[720px] flex-col overflow-hidden rounded-[4px] bg-white shadow-xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-3" data-testid="hr-emp-view-header">
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="truncate text-base font-semibold text-slate-900" data-testid="hr-emp-view-name">{e.full_name}</h3>
+            <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span>
           </div>
           <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="hr-emp-view-close"><X className="h-4 w-4" /></button>
         </div>
