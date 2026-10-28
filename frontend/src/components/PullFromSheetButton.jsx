@@ -15,7 +15,7 @@ import { gsAutoSyncSources, gsPull } from "@/lib/api";
  *  - notConnectedHint / noSourcesHint: optional override text for the empty-state toasts
  *  - iconOnly: renders just the spinning-refresh icon, no label — same action, more compact
  *  - phoneSmall: with iconOnly, 32px below sm to match a phone toolbar of that size
- *  - soft: with iconOnly, a borderless light-green wash with a spreadsheet icon (Pre Sales'
+ *  - soft: with iconOnly, a bordered light-green wash with a spreadsheet icon (Pre Sales'
  *    toolbar), so it no longer wears the same arrows as the Refresh button beside it
  */
 export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint, iconOnly, phoneSmall, soft }) => {
@@ -79,7 +79,7 @@ export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint,
         disabled={busy}
         title="Pull from Sheet"
         aria-label="Pull from Sheet"
-        className="h-10 w-10 shrink-0 border-0 bg-emerald-50 p-0 text-emerald-600 shadow-none hover:bg-emerald-100"
+        className="h-10 w-10 shrink-0 border border-slate-200 bg-emerald-50 p-0 text-emerald-600 shadow-none hover:bg-emerald-100"
         data-testid="presales-pull-from-sheet-btn"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}

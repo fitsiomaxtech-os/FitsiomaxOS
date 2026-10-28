@@ -1378,7 +1378,7 @@ export const PreSalesCRM = ({
         {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
             still say what each does. The order, the two marks and the calendar are white
             and bordered, uncoloured until one is switched on; the three actions after them
-            are borderless, each a light wash of its own colour. */}
+            carry the same border, each on a light wash of its own colour. */}
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <Select value={sortOrder} onValueChange={setSortOrder}>
             <SelectTrigger
@@ -1427,7 +1427,7 @@ export const PreSalesCRM = ({
             disabled={loading}
             title="Refresh"
             aria-label="Refresh"
-            className="h-10 w-10 shrink-0 border-0 bg-slate-100 p-0 text-slate-600 shadow-none hover:bg-slate-200"
+            className="h-10 w-10 shrink-0 border border-slate-200 bg-slate-100 p-0 text-slate-600 shadow-none hover:bg-slate-200"
             data-testid="presales-refresh-btn"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -1436,7 +1436,7 @@ export const PreSalesCRM = ({
             onClick={() => setShowCreate(true)}
             title="Create Lead"
             aria-label="Create Lead"
-            className="h-10 w-10 shrink-0 border-0 bg-sky-50 p-0 text-sky-600 shadow-none hover:bg-sky-100"
+            className="h-10 w-10 shrink-0 border border-slate-200 bg-sky-50 p-0 text-sky-600 shadow-none hover:bg-sky-100"
             data-testid="presales-create-lead-btn"
           >
             <UserPlus className="h-4 w-4" />
