@@ -15,9 +15,14 @@ V3_VERTICALS = [
 ]
 
 # Where the Pre-Sales desk puts a lead it has given up on -- one that never picks up, says
-# no, or was never a real enquiry. Last, after Appointment, and final: the live stages are
-# the worklist a rep opens every morning, and this is the one a lead leaves the funnel by.
-# Pre-Sales only; the Branch pipeline has its own endings (Not a prospect, Cancelled).
+# no, or was never a real enquiry. After Appointment, and final: the live stages are the
+# worklist a rep opens every morning, and this is the one a lead leaves the funnel by.
+# Named as Branch Admin's Branch Leads names it, so the Pre Sales dashboard's cards read
+# the same strip: it was "Lost" until seed.replace_presales_lost_stage renamed it.
+PRESALES_NOT_A_PROSPECT_STAGE = "Not a prospect"
+# The client who will come later and wants the visit held -- last, where Lost used to sit.
+PRESALES_PRE_BOOK_STAGE = "Pre Book"
+# The former name of PRESALES_NOT_A_PROSPECT_STAGE. Only the migration still reads it.
 PRESALES_LOST_STAGE = "Lost"
 
 V3_STAGES = [
@@ -25,7 +30,8 @@ V3_STAGES = [
     "RNR",
     "Follow Up",
     "Appointment",
-    PRESALES_LOST_STAGE,
+    PRESALES_NOT_A_PROSPECT_STAGE,
+    PRESALES_PRE_BOOK_STAGE,
 ]
 
 V3_BRANCH_STAGES = [

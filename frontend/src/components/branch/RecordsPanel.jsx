@@ -717,7 +717,7 @@ const LEAD_CARDS = [
   {
     key: "lost",
     label: "Lost",
-    match: (l) => l.stage === "Lost" || !!l.not_prospect_at || l.branch_stage === "Not a prospect" || isCancelled(l),
+    match: (l) => l.stage === "Lost" || l.stage === "Not a prospect" || !!l.not_prospect_at || l.branch_stage === "Not a prospect" || isCancelled(l),
   },
 ];
 const CARD_BY_KEY = Object.fromEntries(LEAD_CARDS.map((c) => [c.key, c]));

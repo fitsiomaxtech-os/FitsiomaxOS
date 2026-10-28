@@ -366,7 +366,8 @@ const MARKETING_HEAD_FUNNEL = [
     key: "lost",
     label: "Lost",
     color: "#ef4444",
-    match: (l) => l.stage === "Lost" || l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel",
+    // "Not a prospect" is the Pre-Sales stage Lost was renamed to (see seed.replace_presales_lost_stage).
+    match: (l) => l.stage === "Lost" || l.stage === "Not a prospect" || l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel",
   },
 ];
 
@@ -1273,7 +1274,23 @@ export const PreSalesCRM = ({
           label is sentence case: uppercase runs about a third wider and needed 13.5rem,
           which is what pushed the row onto two lines.
           Narrower windows take fewer cards per row rather than squeezing the words. */}
-      {!(masterView === "analytics" && isSuperAdminMasterView) && (
+      {/* The Pre Sales desk's own row is Branch Admin's Branch Leads strip, card for card:
+          the same StageTabBar, plain — white cards on the grey tray, the name and count
+          centred, All Stages first. The stages are the live Pre-Sales list, which now ends
+          Not a prospect, Pre Book as Branch Leads does. The master views keep their own
+          rows above, since theirs are not stages. "All" is this board's key for the whole
+          list, where the strip says null. */}
+      {!isMarketingHeadFunnel && !isSalesMasterCards ? (
+        <StageTabBar
+          stages={stages}
+          stageFilter={stageFilter === "All" ? null : stageFilter}
+          setStageFilter={(v) => setStageFilter(v === null ? "All" : v)}
+          counts={stageCounts}
+          totalCount={stageCounts.All}
+          testid="presales-kpi"
+          plain
+        />
+      ) : !(masterView === "analytics" && isSuperAdminMasterView) && (
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr))]" data-testid="presales-kpi-row">
           {kpiCardModels.map((c) => (
             <KpiCard
@@ -2259,7 +2276,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   };
 
   // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
-  // lead outright — each needs a date first. Every other stage, Lost included, moves at once.
+  // lead outright — each needs a date first. Every other stage, Not a prospect and Pre Book included, moves at once.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
     if (s.name === "Appointment") {
