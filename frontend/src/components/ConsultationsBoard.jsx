@@ -11298,8 +11298,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     onClick={openExtraDueDraft}
                                     data-testid="cons-open-add-due"
                                   >
-                                    {/* One clockwise turn a second (animate-spin: 1s linear, forever). */}
-                                    <Plus className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                    {/* Ticks like a clock: one clockwise turn, a pause, then the
+                                        next turn on the next second (tick-turn, tailwind.config.js). */}
+                                    <Plus className="mr-1 h-3.5 w-3.5 animate-tick-turn" />
                                     Add Due
                                   </Button>
                                   {OnlinePayButton}
