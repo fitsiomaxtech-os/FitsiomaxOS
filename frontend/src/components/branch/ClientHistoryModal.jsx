@@ -139,7 +139,7 @@ const FoldCard = ({ open, onToggle, title, tag, sub, amount, amountTone = "text-
       {tag}
       {sub && <span className="hidden min-w-0 truncate text-xs text-slate-600 sm:inline"><span className="mr-1.5 text-slate-300">·</span>{sub}</span>}
       <span className="ml-auto flex shrink-0 items-center gap-2 pl-1">
-        {amount && <span className={`font-mono text-sm font-bold tabular-nums ${amountTone}`}>{amount}</span>}
+        {amount && <span className={`text-sm font-bold tabular-nums ${amountTone}`}>{amount}</span>}
         {status}
       </span>
     </button>
@@ -160,7 +160,7 @@ const PaidLabel = ({ children = "Paid", tone = "text-teal-700" }) => (
  * value is dropped rather than shown blank, so what remains is all true.
  */
 const PaymentCards = ({ transactions, servicedBy }) => {
-  const [openId, setOpenId] = useState(transactions[0]?.id || null);
+  const [openId, setOpenId] = useState(null);
   if (transactions.length === 0) {
     return <p className="py-4 text-center text-sm text-slate-500">No payments yet.</p>;
   }
@@ -186,7 +186,7 @@ const PaymentCards = ({ transactions, servicedBy }) => {
             {/* The arithmetic in one line, so a discounted payment explains itself
                 rather than needing three labelled boxes to say the same thing. */}
             {off > 0 && (
-              <p className="mb-2.5 font-mono text-sm tabular-nums text-slate-600" data-testid={`client-history-tx-maths-${tx.id}`}>
+              <p className="mb-2.5 text-sm tabular-nums text-slate-600" data-testid={`client-history-tx-maths-${tx.id}`}>
                 {fmt(tx.original_amount).replace("Rs.", "")} <span className="text-slate-400">−</span>{" "}
                 <span className="text-amber-700">{fmt(off).replace("Rs.", "")}</span>
                 {pct != null && (
@@ -198,11 +198,11 @@ const PaymentCards = ({ transactions, servicedBy }) => {
               </p>
             )}
             <StatRows rows={[
-              tx.transaction_id && ["Transaction", <span key="t" className="font-mono">{tx.transaction_id}</span>],
-              !tx.transaction_id && tx.receipt_no && ["Receipt", <span key="r" className="font-mono">{tx.receipt_no}</span>],
+              tx.transaction_id && ["Transaction", <span key="t" className="tabular-nums">{tx.transaction_id}</span>],
+              !tx.transaction_id && tx.receipt_no && ["Receipt", <span key="r" className="tabular-nums">{tx.receipt_no}</span>],
               tx.collected_by && ["Collected by", tx.collected_by_role ? `${tx.collected_by} · ${formatMode(tx.collected_by_role).replace(/_/g, " ")}` : tx.collected_by],
               off > 0 && tx.discount_reason && ["Discount", tx.discount_reason],
-              detailReference(tx.details) && ["Reference", <span key="ref" className="break-all font-mono">{noHash(detailReference(tx.details))}</span>],
+              detailReference(tx.details) && ["Reference", <span key="ref" className="break-all">{noHash(detailReference(tx.details))}</span>],
               servicedBy && ["Service by", servicedBy],
               ["Paid on", when, "sm:hidden"],
             ]} />
@@ -238,10 +238,10 @@ const SessionPackageCard = ({ pd, open, onToggle }) => {
     >
       <StatRows rows={[
         count > 0 && ["Sessions", count],
-        price > 0 && ["Package price", <span key="p" className="font-mono">{fmt(price)}</span>],
-        perSession && ["Per session", <span key="s" className="font-mono">{fmt(perSession)}</span>],
-        ["Paid", <span key="pd" className="font-mono">{fmt(paid)}</span>],
-        due > 0 && ["Still due", <span key="d" className="font-mono">{fmt(due)}</span>],
+        price > 0 && ["Package price", <span key="p" className="tabular-nums">{fmt(price)}</span>],
+        perSession && ["Per session", <span key="s" className="tabular-nums">{fmt(perSession)}</span>],
+        ["Paid", <span key="pd" className="tabular-nums">{fmt(paid)}</span>],
+        due > 0 && ["Still due", <span key="d" className="tabular-nums">{fmt(due)}</span>],
       ]} />
     </FoldCard>
   );
@@ -528,7 +528,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                 {[
                   displayPhone(client.phone),
                   client.branch_name,
-                  client.patient_number && <span key="pn" className="font-mono">{client.patient_number}</span>,
+                  client.patient_number && <span key="pn" className="tabular-nums">{client.patient_number}</span>,
                 ].filter(Boolean).map((part, i) => (
                   <span key={i}>
                     {i > 0 && <span className="mx-1.5 text-slate-300">·</span>}
@@ -690,8 +690,8 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                             >
                               <StatRows rows={[
                                 ["Status", meta.label],
-                                r.excel_id && ["Sheet ID", <span key="x" className="font-mono">{r.excel_id}</span>],
-                                r.collected > 0 && ["Already collected", <span key="c" className="font-mono">{fmt(r.collected)}</span>],
+                                r.excel_id && ["Sheet ID", <span key="x" className="tabular-nums">{r.excel_id}</span>],
+                                r.collected > 0 && ["Already collected", <span key="c" className="tabular-nums">{fmt(r.collected)}</span>],
                                 r.due_date && ["Due", fmtDay(r.due_date), "sm:hidden"],
                               ]} />
                             </DueRow>
@@ -735,7 +735,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                                     ))}
                                   </span>
                                 )],
-                                s.transaction_id && ["Transaction", <span key="t" className="font-mono">{s.transaction_id}</span>],
+                                s.transaction_id && ["Transaction", <span key="t" className="tabular-nums">{s.transaction_id}</span>],
                                 s.due_date && ["Due", fmtDay(s.due_date), "sm:hidden"],
                               ]} />
                             </DueRow>
