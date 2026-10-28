@@ -154,6 +154,17 @@ async def _just_latest(collection: str, query: dict) -> Activity:
     return await _newest(collection, query), 0
 
 
+# Developer Access's switch for the dots, every branch at once. Off, the answer is empty,
+# so every tab and sub-tab goes dark at the board's next poll; nothing is read or stored.
+TAB_DOTS_SETTING_ID = "branch_tab_dots"
+
+
+async def tab_dots_enabled() -> bool:
+    """On unless a developer switched it off."""
+    row = await v3_col("app_settings").find_one({"id": TAB_DOTS_SETTING_ID}, {"_id": 0})
+    return True if not row else bool(row.get("enabled", True))
+
+
 @router.get("/branch-admin/tab-activity/{branch_id}")
 async def v3_branch_tab_activity(
     branch_id: str,
@@ -161,6 +172,8 @@ async def v3_branch_tab_activity(
 ):
     if is_branch_admin_role(user.role) and branch_id not in user_branch_ids(user):
         raise HTTPException(status_code=403, detail="Not your branch")
+    if not await tab_dots_enabled():
+        return {"enabled": False, "latest": {}, "pending": {}}
 
     sources = {
         "pipeline": lambda: _branch_leads(branch_id, user.role),
@@ -187,4 +200,4 @@ async def v3_branch_tab_activity(
             latest[key] = stamp
         if count:
             pending[key] = count
-    return {"latest": latest, "pending": pending}
+    return {"enabled": True, "latest": latest, "pending": pending}

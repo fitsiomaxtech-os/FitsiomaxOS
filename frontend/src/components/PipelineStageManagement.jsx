@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getAppThemeAdmin, setAppThemeAdmin, getPaymentModeVisibilityAdmin, setPaymentModeHidden } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getBranchTabDots, setBranchTabDots, getAppThemeAdmin, setAppThemeAdmin, getPaymentModeVisibilityAdmin, setPaymentModeHidden } from "@/lib/api";
 import { setHiddenPaymentModes } from "@/lib/paymentModes";
 import { ThemeAppearanceCard } from "@/components/ThemeAppearanceCard";
 
@@ -240,6 +240,9 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const [savingLeadSourceButton, setSavingLeadSourceButton] = useState(false);
   const [durationRule, setDurationRule] = useState(null);
   const [savingDurationRule, setSavingDurationRule] = useState(false);
+  // The red dots on Branch Admin's tabs, every branch at once. null until read.
+  const [tabDots, setTabDots] = useState(null);
+  const [savingTabDots, setSavingTabDots] = useState(false);
   // Payment Modes Show / Hide: the hidden modes, null until read; `savingMode` is the one
   // being flipped.
   const [hiddenModes, setHiddenModes] = useState(null);
@@ -385,7 +388,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); setHiddenModes(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); setTabDots(null); setHiddenModes(null); return; }
     getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
     getBeforeVerifyDeleteButton(devPassword).then((r) => setBeforeVerifyDelete(!!r.enabled)).catch(() => setBeforeVerifyDelete(null));
@@ -394,6 +397,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
     getSaConsultBranchesSetting(devPassword).then((r) => setSaBranches(!!r.enabled)).catch(() => setSaBranches(null));
     getLeadSourceButton(devPassword).then((r) => setLeadSourceButtonState(!!r.enabled)).catch(() => setLeadSourceButtonState(null));
     getConsultationDurationRule(devPassword).then((r) => setDurationRule(!!r.enabled)).catch(() => setDurationRule(null));
+    getBranchTabDots(devPassword).then((r) => setTabDots(!!r.enabled)).catch(() => setTabDots(null));
     getPaymentModeVisibilityAdmin(devPassword).then((r) => setHiddenModes(r.hidden || [])).catch(() => setHiddenModes(null));
   }, [devPassword]);
 
@@ -685,6 +689,23 @@ export const PipelineStageManagement = ({ leading = null }) => {
     setSavingDurationRule(false);
   };
 
+  const toggleTabDots = async () => {
+    const next = !tabDots;
+    const ok = window.confirm(next
+      ? "Turn the Branch Admin tabs Red Dot ON?\n\nEvery branch: a tab with something waiting in it (new leads, consultations, referrals...) shows its red dot again, within two minutes."
+      : "Turn the Branch Admin tabs Red Dot OFF?\n\nEvery branch: no red dot on any Branch Admin tab or sub-tab, within two minutes. Nothing in the tabs changes.");
+    if (!ok) return;
+    setSavingTabDots(true);
+    try {
+      const r = await setBranchTabDots(devPassword, next);
+      setTabDots(!!r.enabled);
+      toast.success(r.enabled ? "Branch Admin tabs Red Dot is ON" : "Branch Admin tabs Red Dot is OFF");
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingTabDots(false);
+  };
+
   const togglePaymentMode = async ({ mode, label }) => {
     const hide = !hiddenModes.includes(mode);
     setSavingMode(mode);
@@ -956,6 +977,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
               { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
               { key: "lead-source-button", label: "Leads Source Show / Hide Sources button", value: leadSourceButton, saving: savingLeadSourceButton, onFlip: toggleLeadSourceButton, on: "ON", off: "OFF" },
               { key: "consultation-duration-rule", label: "Consultation Duration (OFF: book many patients at the same time)", value: durationRule, saving: savingDurationRule, onFlip: toggleDurationRule, on: "ON", off: "OFF" },
+              { key: "branch-tab-dots", label: "Branch Admin tabs Red Dot", value: tabDots, saving: savingTabDots, onFlip: toggleTabDots, on: "ON", off: "OFF" },
             ].map((row) => (
               <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`${row.key}-card`}>
                 <span className="text-sm font-medium text-slate-800">{row.label}</span>

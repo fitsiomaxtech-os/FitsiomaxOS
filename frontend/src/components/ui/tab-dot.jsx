@@ -15,6 +15,9 @@ import { getBranchTabActivity } from "@/lib/api";
  * because all of this is held in memory and nowhere else. A record that lands after a dot
  * went out lights it again at once.
  *
+ * Developer Access > Branch Admin tabs Red Dot switches them off for every branch: the
+ * server then answers empty, so no tab is waiting.
+ *
  * Keys are the board's own: a top tab's view key, and `<tab>.<sub-tab>` for a sub-tab. A top
  * tab is waiting when it or any of its sub-tabs is.
  */

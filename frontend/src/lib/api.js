@@ -745,6 +745,9 @@ export const setLeadSourceHidden = async (password, source, hidden) => (await ap
 // The Danger Zone's switch for whether that tab offers the Show / Hide Sources button at all.
 export const getConsultationDurationRule = async (password) => (await api.get("/admin/consultation-duration-rule", { headers: developerHeaders(password) })).data;
 export const setConsultationDurationRule = async (password, enabled) => (await api.put("/admin/consultation-duration-rule", { enabled }, { headers: developerHeaders(password) })).data;
+// The red dots on Branch Admin's tabs. Off, /branch-admin/tab-activity answers empty.
+export const getBranchTabDots = async (password) => (await api.get("/admin/branch-tab-dots", { headers: developerHeaders(password) })).data;
+export const setBranchTabDots = async (password, enabled) => (await api.put("/admin/branch-tab-dots", { enabled }, { headers: developerHeaders(password) })).data;
 export const getLeadSourceButton =async (password) => (await api.get("/admin/lead-source-visibility-button", { headers: developerHeaders(password) })).data;
 export const setLeadSourceButton = async (password, enabled) => (await api.put("/admin/lead-source-visibility-button", { enabled }, { headers: developerHeaders(password) })).data;
 // Payment Modes Show / Hide: read by every Collect popup, changed behind the password.

@@ -26,6 +26,7 @@ from seed import create_default_lead_source, sync_lead_source_branch_name
 from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled
 from routers.v3_inventory import _add_to_stock
 from routers.v3_zumba import MASTER_SLOT_FIELD
+from routers.v3_tab_activity import TAB_DOTS_SETTING_ID, tab_dots_enabled
 from schemas.v3 import (
     V3UserOut, V3VerticalCreate, V3VerticalOut,
     V3BranchCreate, V3BranchOut, V3BranchUpdate,
@@ -1287,6 +1288,32 @@ async def v3_set_consultation_duration_rule(
         {"id": consult_duration_rule.SETTING_ID},
         {"$set": {
             "id": consult_duration_rule.SETTING_ID,
+            "enabled": payload.enabled,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"enabled": payload.enabled}
+
+
+# The red dots on Branch Admin's tabs, every branch at once -- see v3_tab_activity.
+
+
+@router.get("/admin/branch-tab-dots")
+async def v3_get_branch_tab_dots(_: V3UserOut = Depends(require_developer_password)):
+    return {"enabled": await tab_dots_enabled()}
+
+
+@router.put("/admin/branch-tab-dots")
+async def v3_set_branch_tab_dots(
+    payload: LeadDeleteButtonInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    await v3_col("app_settings").update_one(
+        {"id": TAB_DOTS_SETTING_ID},
+        {"$set": {
+            "id": TAB_DOTS_SETTING_ID,
             "enabled": payload.enabled,
             "updated_by": user.full_name,
             "updated_at": now_iso(),
