@@ -75,12 +75,16 @@ async def v3_get_leads(
 
 
 @router.post("/leads/manual", response_model=V3LeadOut)
-async def v3_manual_lead(payload: V3LeadCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "pre_sales", "branch_admin"))):
+async def v3_manual_lead(payload: V3LeadCreate, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "pre_sales", "branch_admin"))):
+    # A Pre-Sales rep assigned to a branch is read only that branch's leads (see
+    # v3_get_leads above), so a lead they file with no branch would never show on their
+    # own board. It lands in their branch instead.
+    branch_id = payload.branch_id or (user.branch_id if user.role == "pre_sales" else None)
     # A lead created directly against a branch (e.g. a walk-in added by Super Admin/Branch
     # Admin) must land on the branch's own New Lead stage too, same as sheet/Meta-imported
     # leads — otherwise it has a branch_id but no branch_stage and never shows on that board.
-    if payload.branch_id:
-        branch_stage = await first_branch_stage_for_branch(payload.branch_id, "New Appointment")
+    if branch_id:
+        branch_stage = await first_branch_stage_for_branch(branch_id, "New Appointment")
     elif vertical_names_an_arm(payload.vertical):
         # An online arm's lead has no branch and never will — the arm is not a branch record
         # — but it is worked on a board with the same stage strip, so it needs the same
@@ -91,7 +95,7 @@ async def v3_manual_lead(payload: V3LeadCreate, _: V3UserOut = Depends(v3_requir
         branch_stage = await first_branch_stage_for(lead_control.PRE_SALES, "New Appointment")
     else:
         branch_stage = None
-    patient_number = await generate_patient_number(payload.branch_id) if payload.branch_id else None
+    patient_number = await generate_patient_number(branch_id) if branch_id else None
     lead = {
         "id": str(uuid.uuid4()),
         "patient_number": patient_number,
@@ -102,7 +106,7 @@ async def v3_manual_lead(payload: V3LeadCreate, _: V3UserOut = Depends(v3_requir
         "source_tab": payload.source_tab,
         "source_type": payload.source_type,
         "stage": "New Leads",
-        "branch_id": payload.branch_id,
+        "branch_id": branch_id,
         "branch_stage": branch_stage,
         "notes": payload.notes,
         "extra_fields": payload.extra_fields or {},

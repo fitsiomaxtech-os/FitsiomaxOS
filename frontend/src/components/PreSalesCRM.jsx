@@ -1853,7 +1853,14 @@ export const PreSalesCRM = ({
         // Pinned to this board's branch when it has one. A lead created on a Branch
         // Admin's Pre Sales tab with no branch would be an unbranched lead, which always
         // belongs to Pre-Sales — it would vanish from the board that created it.
-        <CreateLeadModal onClose={() => setShowCreate(false)} onSaved={load} branchId={branchId} isSuperAdmin={isSuperAdminMasterView} />
+        // A Pre-Sales rep assigned to a branch is pinned the same way: the server reads
+        // them only that branch's leads, so a lead filed with no branch never came back.
+        <CreateLeadModal
+          onClose={() => setShowCreate(false)}
+          onSaved={load}
+          branchId={branchId || (role === "pre_sales" ? currentUser?.branch_id : null) || null}
+          isSuperAdmin={isSuperAdminMasterView}
+        />
       )}
 
       {/* Now the shared dialog, so this and Branch Admin's Delete Patient ask the same
