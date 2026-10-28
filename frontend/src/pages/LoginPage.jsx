@@ -37,8 +37,10 @@ export const LoginPage = ({ onLogin }) => {
   const [forgotOpen, setForgotOpen] = useState(false);
   // What the last Continue was refused for, shown in red under the password rather than in
   // a toast that is gone before it is read: { kind: "invalid" } for a wrong email or
-  // password (401), { kind: "locked", minutesLeft } once the fifth wrong one locks the
-  // login (429). Null until a refusal, and cleared by the next Continue.
+  // password (401), { kind: "invalid", missing: ["@", "."] } for an email without an "@" or
+  // a "." (caught here, never sent, so it costs none of the five tries), and
+  // { kind: "locked", minutesLeft } once the fifth wrong one locks the login (429). Null
+  // until a refusal, and cleared by the next Continue.
   const [loginError, setLoginError] = useState(null);
   // The second step, and null whenever there isn't one. An account with two-factor on gets
   // no token from /auth/login — it gets a challenge, and this holds it until the emailed
@@ -57,6 +59,11 @@ export const LoginPage = ({ onLogin }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const missing = ["@", "."].filter((mark) => !email.trim().includes(mark));
+    if (missing.length) {
+      setLoginError({ kind: "invalid", missing });
+      return;
+    }
     setLoading(true);
     setLoginError(null);
     try {
@@ -276,6 +283,7 @@ export const LoginPage = ({ onLogin }) => {
                     data-testid="screen1-login-error-invalid"
                   >
                     Invalid email or password
+                    {loginError.missing && ` ${loginError.missing.map((mark) => `'${mark}'`).join(" ")}`}
                   </p>
                 )}
                 {loginError?.kind === "locked" && (
