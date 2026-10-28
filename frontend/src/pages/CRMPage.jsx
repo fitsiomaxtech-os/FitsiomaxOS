@@ -975,9 +975,12 @@ export const CRMPage = ({ auth, onLogout }) => {
   // A Consultant's bar is sm:hidden where the others are md:hidden, hence two breakpoints.
   // The boards with no bar of their own get this page's phone footer (see phoneFooter below).
   const showSalesHeadBoard = role === "sales_head";
+  // The Pre Sales rep's own board, which has a bottom bar of its own with Profile on it
+  // (see PreSalesCRM), so it takes Branch Admin's phone header and loses the header logout.
+  const showPreSalesRep = showPreSalesBoard && String(role || "").trim().toLowerCase() === "pre_sales";
   const genericFooter = showBusinessDevBoard || showAccountantBoard || showSalesHeadBoard || showMarketingHeadBoard || showZumbaBoard;
   const profileInFooter = showSuperAdminBoard || showHumanResourceBoard || showHeadPhysioBoard || showDietBoard || genericFooter;
-  const logoutInProfile = profileInFooter || showPhysioBoard || showBranchBoard;
+  const logoutInProfile = profileInFooter || showPhysioBoard || showBranchBoard || showPreSalesRep;
   const profileInFooterClass = !profileInFooter ? "flex" : showHeadPhysioBoard ? "hidden sm:flex" : "hidden md:flex";
   const logoutInProfileClass = !logoutInProfile ? "" : showHeadPhysioBoard ? "hidden sm:inline-flex" : "hidden md:inline-flex";
 
@@ -1138,9 +1141,29 @@ export const CRMPage = ({ auth, onLogout }) => {
               </div>
             </div>
           )}
+          {/* Pre Sales rep, mobile only: Branch Admin's phone header -- who is signed in and
+              to which branch, the clock and the theme. Profile and Logout are on the bottom
+              bar's Profile stop. */}
+          {showPreSalesRep && (
+            <div className="flex items-center justify-between gap-2 sm:hidden" data-testid="presales-mobile-header">
+              <div className="flex min-w-0 items-center gap-2">
+                <img src={LOGO_URL} alt="Fitsiomax" className="h-9 w-9 shrink-0 rounded-lg object-contain" data-testid="presales-mobile-header-logo" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900" data-testid="presales-mobile-header-name">{auth.user.full_name}</p>
+                  <p className="truncate text-[10px] font-semibold tracking-wide text-sky-600" data-testid="presales-mobile-header-branch">
+                    {myBranchName || roleLabel}
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <ClockWidget />
+                <HeaderThemePicker userId={auth.user.id} />
+              </div>
+            </div>
+          )}
           {/* Stood down below sm wherever one of the phone headers above has taken over,
               so the two can never both be on screen. */}
-          <div className={`flex flex-wrap items-center justify-between gap-2 ${showPhysioBoard || showBranchBoard ? "hidden sm:flex" : ""}`}>
+          <div className={`flex flex-wrap items-center justify-between gap-2 ${showPhysioBoard || showBranchBoard || showPreSalesRep ? "hidden sm:flex" : ""}`}>
             <div className="flex min-w-0 items-center gap-2 sm:gap-4">
               <img src={LOGO_URL} alt="Fitsiomax" className="h-9 w-9 shrink-0 rounded-lg object-contain sm:h-14 sm:w-14" data-testid="header-left-logo" />
               <div className="min-w-0">

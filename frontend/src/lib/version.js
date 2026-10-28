@@ -9,8 +9,8 @@
 //            last moved, so every push raises it without anybody remembering to.
 //
 // The build number, date and commit come from git at build time (see craco.config.js).
-const MAJOR_FEATURE = "3.23";
-const FEATURE_STARTED_AT_BUILD = 2790; // the commit that started 3.23, shown as 3.23.1
+const MAJOR_FEATURE = "3.24";
+const FEATURE_STARTED_AT_BUILD = 2792; // the commit that started 3.24, shown as 3.24.1
 
 const BUILD_NUMBER = process.env.REACT_APP_BUILD_NUMBER || "";
 const BUILD_COMMIT = process.env.REACT_APP_BUILD_COMMIT || "";

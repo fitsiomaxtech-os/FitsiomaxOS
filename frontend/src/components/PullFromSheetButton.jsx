@@ -81,7 +81,7 @@ export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint,
         disabled={busy}
         title="Pull from Sheet"
         aria-label="Pull from Sheet"
-        className="h-10 w-10 shrink-0 border border-slate-200 bg-emerald-50 p-0 text-emerald-600 shadow-none hover:bg-emerald-100"
+        className={`h-10 w-10 ${phoneSmall ? "max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5" : ""} shrink-0 border border-slate-200 bg-emerald-50 p-0 text-emerald-600 shadow-none hover:bg-emerald-100`}
         data-testid="presales-pull-from-sheet-btn"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
