@@ -242,7 +242,8 @@ code {
 /* Fee Collected only (.fee-soft, set in the JSX): no button on the Overview is filled or casts
    a shadow -- each is its words and icon in colour on the white of its row. The footer's
    Assign Physio, Mark Online and Add Due (and Collect Online Payment beside them) share one
-   pastel violet, as does the Treatment Fee row's Mark Online. A light tint shows on hover. */
+   pastel violet, as does the Treatment Fee row's Mark Online. A light tint shows on hover.
+   The buttons alone take a 1px gray border; the rest of the Overview stays borderless. */
 .fee-flat.fee-soft [data-testid="cons-case-record-view"],
 .fee-flat.fee-soft [data-testid^="cons-fee-receipt"],
 .fee-flat.fee-soft [data-testid^="cons-fee-act-"],
@@ -255,6 +256,7 @@ code {
 .fee-flat.fee-soft [data-testid="cons-collect-online"] {
   background-color: transparent !important;
   box-shadow: none !important;
+  border: 1px solid #d1d5db !important; /* gray-300 */
 }
 .fee-flat.fee-soft [data-testid="cons-case-record-view"]:hover,
 .fee-flat.fee-soft [data-testid^="cons-fee-receipt"]:hover,
@@ -290,10 +292,10 @@ code {
 .fee-flat.fee-soft [data-testid^="cons-prebook-use-"] {
   color: #0f766e !important; /* teal-700 */
 }
-/* Inspect reads as a link under the Treatment Fee's name, flush with it. */
+/* Inspect is as wide as its word, under the Treatment Fee's name. */
 .fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"] {
   width: auto !important;
-  padding: 0 !important;
+  padding: 0 6px !important;
   justify-content: flex-start !important;
   color: #0284c7 !important; /* sky-600 */
   opacity: 1;
