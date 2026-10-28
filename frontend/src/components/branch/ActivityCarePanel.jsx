@@ -178,7 +178,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         {/* A gutter and rounded corners on a phone too. On a phone the panel's header is the
             dialog's, edge to edge with the close ✕ lowered to sit level with it; on a desk
             the panel is held below the ✕ so it does not sit on the panel's Refresh button. */}
-        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl gap-0 overflow-y-auto rounded-[5px] p-0 [&>button:last-child]:top-5 sm:gap-4 sm:rounded-lg sm:p-6 sm:pt-12 sm:[&>button:last-child]:top-4" data-testid="zumba-masters-dialog">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl gap-0 overflow-y-auto rounded-[5px] p-0 [&>button:last-child]:top-5 sm:gap-4 sm:rounded sm:p-6 sm:pt-12 sm:[&>button:last-child]:top-4" data-testid="zumba-masters-dialog">
           {/* The panel carries its own Zumba Masters heading; these are for screen readers. */}
           <DialogHeader className="sr-only">
             <DialogTitle>Zumba Masters</DialogTitle>

@@ -73,7 +73,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
       value={holder?.id || ""}
       disabled={busy}
       onChange={(e) => setClassMaster(slot, e.target.value, holder?.id || "")}
-      className={`rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60 ${className}`}
+      className={`rounded border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-violet-400 disabled:opacity-60 ${className}`}
       data-testid={testid}
     >
       <option value="">Nobody</option>
@@ -83,7 +83,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
 
   return (
     <div className="flex flex-col gap-4" data-testid="zumba-masters-panel">
-      <section className="bg-white sm:rounded-xl sm:border sm:border-slate-200">
+      <section className="bg-white sm:rounded sm:border sm:border-slate-200">
         {/* Phone: the dialog's own header, level with its close ✕ (pr-12 keeps Refresh
             clear of it). Desk: the panel's header as before. */}
         <div className="flex items-center justify-between gap-2 border-b border-slate-100 py-3 pl-4 pr-12 sm:flex-wrap sm:bg-slate-50/60 sm:p-4">
@@ -98,7 +98,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
               <p className="truncate text-[11px] text-slate-400 sm:hidden">Who takes each class</p>
             </div>
           </div>
-          <Button onClick={load} disabled={loading} className="h-8 w-8 shrink-0 rounded-[5px] bg-slate-500 p-0 text-white hover:bg-slate-600 sm:h-9 sm:w-9 sm:rounded-md" title="Refresh" aria-label="Refresh" data-testid="zumba-masters-refresh">
+          <Button onClick={load} disabled={loading} className="h-8 w-8 shrink-0 rounded-[5px] bg-slate-500 p-0 text-white hover:bg-slate-600 sm:h-9 sm:w-9 sm:rounded" title="Refresh" aria-label="Refresh" data-testid="zumba-masters-refresh">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
@@ -107,7 +107,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
           {loading ? (
             <p className="py-6 text-center text-xs text-slate-400">Loading masters…</p>
           ) : masters.length === 0 ? (
-            <p className="m-4 rounded-[5px] border border-dashed border-slate-200 py-8 sm:m-0 sm:rounded-lg text-center text-xs text-slate-400" data-testid="zumba-masters-empty">
+            <p className="m-4 rounded-[5px] border border-dashed border-slate-200 py-8 sm:m-0 sm:rounded text-center text-xs text-slate-400" data-testid="zumba-masters-empty">
               No Zumba accounts at this branch yet — add one in HR Admin, then customers are filed to a class automatically.
             </p>
           ) : (
@@ -146,7 +146,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
                 {TIME_SLOTS.map((slot) => {
                   const holder = masters.find((m) => m.time_slot === slot);
                   return (
-                    <div key={slot} className="rounded-lg border border-slate-200 p-3" data-testid={`zumba-slot-${slot}`}>
+                    <div key={slot} className="rounded border border-slate-200 p-3" data-testid={`zumba-slot-${slot}`}>
                       <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">{slot}</p>
                       {classSelect(slot, holder, "mt-2 h-9 w-full", `zumba-class-master-${slot}`)}
                       <p className="mt-1.5 text-[11px] text-slate-400">
@@ -173,7 +173,7 @@ export const ZumbaMastersPanel = ({ branchId }) => {
               {/* Phone: one edge-to-edge row each, the class they hold as a boxed tag. Desk: chips. */}
               <ul className="divide-y divide-slate-100 sm:flex sm:flex-wrap sm:gap-2 sm:divide-y-0">
                 {masters.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2.5 px-4 py-2.5 sm:gap-2 sm:rounded-lg sm:border sm:border-slate-200 sm:px-2.5 sm:py-1.5" data-testid={`zumba-master-${m.id}`}>
+                  <li key={m.id} className="flex items-center gap-2.5 px-4 py-2.5 sm:gap-2 sm:rounded sm:border sm:border-slate-200 sm:px-2.5 sm:py-1.5" data-testid={`zumba-master-${m.id}`}>
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700 sm:h-7 sm:w-7">
                       {(m.name || "?").charAt(0).toUpperCase()}
                     </span>
