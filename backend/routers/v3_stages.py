@@ -8,7 +8,7 @@ from utils import now_iso, without_past_moves
 from deps import v3_require_roles, v3_current_user, names_the_online_arm
 from constants import (
     V3_STAGES, V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
-    PRESALES_NOT_A_PROSPECT_STAGE,
+    PRESALES_NOT_A_PROSPECT_STAGE, PRESALES_LOST_STAGE,
     SALES_ARM_OFFLINE, SALES_ARM_ONLINE, SALES_ARMS,
 )
 from schemas.v3 import V3UserOut
@@ -109,7 +109,7 @@ async def _ensure_seed() -> None:
             "color": PRESALES_COLORS[idx % len(PRESALES_COLORS)],
             "type": "pre_sales",
             "order": idx,
-            "is_final": name in ("Completed", PRESALES_NOT_A_PROSPECT_STAGE),
+            "is_final": name in ("Completed", PRESALES_NOT_A_PROSPECT_STAGE, PRESALES_LOST_STAGE),
             "created_at": now_iso(),
         })
     for idx, name in enumerate(V3_BRANCH_STAGES):

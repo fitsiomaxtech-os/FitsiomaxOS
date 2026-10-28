@@ -47,7 +47,11 @@ import { ChevronRight } from "lucide-react";
 // the 5px corner), with the picked card washed sky-100 and its label and figure in sky-600
 // rather than ringed. Its figure is 17px there, 85% of the 20px it was, which the user
 // found too big. From sm up it is the plain card unchanged. See StageTabBar's phoneFlush.
-export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, borderClass = "" }) => {
+//
+// `bare` is a plain card with no tray behind it (see StageTabBar's bare), so it outlines
+// itself instead: a 1px slate border on a 4px corner, the picked one a 1px sky border in
+// place of the 2px ring. Pre Sales asked for it; Branch Leads keeps the tray.
+export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, bare = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
   const [hovered, setHovered] = useState(false);
@@ -64,7 +68,7 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       className={`relative flex flex-col items-center justify-center text-center transition-all sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
         flush ? "sm:hover:shadow-sm" : "hover:shadow-sm"
       } ${
-        flush ? "rounded-[5px] border sm:border-0" : plain ? "rounded-[5px]" : "rounded-lg"
+        flush ? "rounded-[5px] border sm:border-0" : plain && bare ? "rounded-[4px] border" : plain ? "rounded-[5px]" : "rounded-lg"
       } ${
         flush
           ? "w-full min-w-0 px-0.5 py-2.5"
@@ -76,6 +80,10 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
           ? (active
             ? "border-sky-200 bg-sky-100 text-sky-600 sm:text-sky-800 sm:shadow-md sm:ring-2 sm:ring-inset sm:ring-sky-500"
             : "border-slate-200 bg-white text-slate-600 sm:shadow-sm sm:hover:bg-slate-50")
+          : plain && bare
+            ? (active
+              ? "border-sky-500 bg-sky-100 text-sky-800 shadow-md"
+              : "border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50")
           : plain
             ? (active
               ? "bg-sky-100 text-sky-800 ring-2 ring-inset ring-sky-500 shadow-md"
@@ -158,13 +166,20 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 //
 // `className` is added to the bar itself. A wrapper div cannot hide it instead: the wrapper
 // would become the sticky bar's containing block, and the bar would stop sticking.
-export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, phoneLabels = {}, phoneRow = false, phoneFlush = false, className = "" }) => (
+//
+// `bare` is the Pre Sales desk's: the plain cards with no tray -- no grey strip, border,
+// shadow or corner around them -- each card outlined on its own instead (StageTab's bare).
+// The bar keeps the page's own slate-50 behind it and 4px above and below, so once it sticks
+// the rows scrolling underneath stay hidden without a tray showing at rest. Implies `plain`.
+export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, totalCount, testid, hideAllStages = false, plain = false, bare = false, phoneLabels = {}, phoneRow = false, phoneFlush = false, className = "" }) => (
   <div
     // The offset has to clear the sticky page header, which is two different heights:
     // 61px on a phone (py-3 + a 36px logo + border) and 89px from sm up (py-4 + 56px).
     // A flat 88px left a white band under the header on a phone once scrolled.
     className={`sticky top-[61px] z-10 sm:top-[88px] ${className} ${
-      phoneFlush
+      bare
+        ? "bg-slate-50 py-1"
+        : phoneFlush
         ? "-mx-3 -mt-4 bg-slate-50 sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:border-slate-200 sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
         : `-mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur ${
           // A plain card is white and borderless, so it can only read as its own card if
@@ -189,7 +204,7 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
         : phoneFlush
           ? "flex flex-wrap max-sm:justify-center max-sm:[&>*]:basis-[calc((100%_-_16px)/5)]"
           : "grid grid-cols-5"
-    } ${phoneFlush ? "gap-1 sm:gap-2" : plain ? "gap-2" : "gap-1"}`}>
+    } ${phoneFlush ? "gap-1 sm:gap-2" : plain || bare ? "gap-2" : "gap-1"}`}>
       {!hideAllStages && (
         <StageTab
           label="All Stages"
@@ -199,7 +214,8 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           color="#0ea5e9"
           testid={`${testid}-total`}
           gridded
-          plain={plain || phoneFlush}
+          plain={plain || phoneFlush || bare}
+          bare={bare}
           flush={phoneFlush}
         />
       )}
@@ -216,7 +232,8 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
           selectedColor={s.selected_color}
           testid={`${testid}-${s.name}`}
           gridded
-          plain={plain || phoneFlush}
+          plain={plain || phoneFlush || bare}
+          bare={bare}
           flush={phoneFlush}
         />
       ))}

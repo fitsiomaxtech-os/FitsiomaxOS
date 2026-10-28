@@ -235,8 +235,17 @@ async def replace_presales_lost_stage() -> None:
     lost = by_name.get(PRESALES_LOST_STAGE)
     prospect = by_name.get(PRESALES_NOT_A_PROSPECT_STAGE)
     if lost and prospect:
-        await v3_col("pipeline_stages").delete_many({"type": "pre_sales", "name": PRESALES_LOST_STAGE})
-    elif lost:
+        # Already the shape rename_presales_pre_book_stage ends in -- a fresh install seeds
+        # Not a prospect then Lost from V3_STAGES. Deleting Lost here would undo that.
+        await v3_col("migrations").insert_one({
+            "name": _PRESALES_LOST_REPLACED_MIGRATION,
+            "renamed_lost": False,
+            "leads_moved": 0,
+            "added_pre_book": False,
+            "ran_at": now_iso(),
+        })
+        return
+    if lost:
         await v3_col("pipeline_stages").update_many(
             {"type": "pre_sales", "name": PRESALES_LOST_STAGE},
             {"$set": {"name": PRESALES_NOT_A_PROSPECT_STAGE, "is_final": True}},
@@ -259,6 +268,64 @@ async def replace_presales_lost_stage() -> None:
         "renamed_lost": bool(lost),
         "leads_moved": moved.modified_count,
         "added_pre_book": added_pre_book,
+        "ran_at": now_iso(),
+    })
+
+
+_PRESALES_PRE_BOOK_RENAMED_MIGRATION = "rename_presales_pre_book_stage"
+# Lost's own colour once it takes over Pre Book's row: rose, so it stays apart from Not a
+# prospect's red beside it. Swapped in only where the row still wears Pre Book's teal.
+_PRESALES_LOST_COLOUR = "#e11d48"
+
+
+async def rename_presales_pre_book_stage() -> None:
+    """End the Pre-Sales pipeline Not a prospect, Lost: its Pre Book stage becomes Lost.
+
+    The Pre Sales dashboard's cards read All Stages, New Leads, RNR, Follow Up, Appointment,
+    Not a prospect, Lost. Pre Book (added by replace_presales_lost_stage) is renamed rather
+    than dropped: the row keeps its place, and every lead parked on it moves with it. Final,
+    as Lost always was -- a lead stops there. Its teal goes to rose wherever the row still
+    carries it; a colour Super Admin chose in CI/CD ROOTS stays. Pre-Sales only; the Branch
+    pipeline's own Pre Book is untouched.
+
+    A one-shot, by its marker in `migrations`, for the reason replace_presales_lost_stage
+    gives. Must run after that one, which is what adds Pre Book. A no-op until the Pre-Sales
+    stages exist: a fresh install seeds Lost from V3_STAGES.
+    """
+    if await v3_col("migrations").find_one({"name": _PRESALES_PRE_BOOK_RENAMED_MIGRATION}):
+        return
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "pre_sales"},
+        {"_id": 0, "name": 1, "order": 1, "color": 1, "hover_color": 1, "selected_color": 1},
+    ).sort("order", 1).to_list(100)
+    if not rows:
+        return
+    by_name = {r.get("name"): r for r in rows}
+    pre_book = by_name.get(PRESALES_PRE_BOOK_STAGE)
+    lost = by_name.get(PRESALES_LOST_STAGE)
+    if pre_book and lost:
+        await v3_col("pipeline_stages").delete_many({"type": "pre_sales", "name": PRESALES_PRE_BOOK_STAGE})
+    elif pre_book:
+        recolour = {
+            field: _PRESALES_LOST_COLOUR
+            for field in ("color", "hover_color", "selected_color")
+            if (pre_book.get(field) or "").lower() == "#0d9488"
+        }
+        await v3_col("pipeline_stages").update_many(
+            {"type": "pre_sales", "name": PRESALES_PRE_BOOK_STAGE},
+            {"$set": {"name": PRESALES_LOST_STAGE, "is_final": True, **recolour}},
+        )
+    elif not lost:
+        after = by_name.get(PRESALES_NOT_A_PROSPECT_STAGE) or by_name.get("Appointment") or rows[-1]
+        await _insert_presales_stage_after(after, PRESALES_LOST_STAGE, _PRESALES_LOST_COLOUR, True)
+    moved = await v3_col("leads").update_many(
+        {"stage": PRESALES_PRE_BOOK_STAGE},
+        {"$set": {"stage": PRESALES_LOST_STAGE}},
+    )
+    await v3_col("migrations").insert_one({
+        "name": _PRESALES_PRE_BOOK_RENAMED_MIGRATION,
+        "renamed_pre_book": bool(pre_book),
+        "leads_moved": moved.modified_count,
         "ran_at": now_iso(),
     })
 

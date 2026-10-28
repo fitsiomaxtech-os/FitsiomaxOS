@@ -20,10 +20,12 @@ V3_VERTICALS = [
 # Named as Branch Admin's Branch Leads names it, so the Pre Sales dashboard's cards read
 # the same strip: it was "Lost" until seed.replace_presales_lost_stage renamed it.
 PRESALES_NOT_A_PROSPECT_STAGE = "Not a prospect"
-# The client who will come later and wants the visit held -- last, where Lost used to sit.
-PRESALES_PRE_BOOK_STAGE = "Pre Book"
-# The former name of PRESALES_NOT_A_PROSPECT_STAGE. Only the migration still reads it.
+# The lead the desk has lost -- last, after Not a prospect, and final as well. Also the
+# former name of PRESALES_NOT_A_PROSPECT_STAGE, which seed.replace_presales_lost_stage reads.
 PRESALES_LOST_STAGE = "Lost"
+# What the last stage was called for a day before the user asked for Lost there instead
+# (seed.rename_presales_pre_book_stage). Only the migrations still read it.
+PRESALES_PRE_BOOK_STAGE = "Pre Book"
 
 V3_STAGES = [
     "New Leads",
@@ -31,7 +33,7 @@ V3_STAGES = [
     "Follow Up",
     "Appointment",
     PRESALES_NOT_A_PROSPECT_STAGE,
-    PRESALES_PRE_BOOK_STAGE,
+    PRESALES_LOST_STAGE,
 ]
 
 V3_BRANCH_STAGES = [

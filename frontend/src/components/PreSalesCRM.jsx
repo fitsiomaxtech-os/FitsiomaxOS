@@ -1275,11 +1275,11 @@ export const PreSalesCRM = ({
           which is what pushed the row onto two lines.
           Narrower windows take fewer cards per row rather than squeezing the words. */}
       {/* The Pre Sales desk's own row is Branch Admin's Branch Leads strip, card for card:
-          the same StageTabBar, plain — white cards on the grey tray, the name and count
-          centred, All Stages first. The stages are the live Pre-Sales list, which now ends
-          Not a prospect, Pre Book as Branch Leads does. The master views keep their own
-          rows above, since theirs are not stages. "All" is this board's key for the whole
-          list, where the strip says null. */}
+          the same StageTabBar, plain — white cards, the name and count centred, All Stages
+          first — but bare: no grey tray behind them, each card outlined 1px on a 4px corner.
+          The stages are the live Pre-Sales list, which ends Not a prospect, Lost. The master
+          views keep their own rows above, since theirs are not stages. "All" is this board's
+          key for the whole list, where the strip says null. */}
       {!isMarketingHeadFunnel && !isSalesMasterCards ? (
         <StageTabBar
           stages={stages}
@@ -1289,6 +1289,7 @@ export const PreSalesCRM = ({
           totalCount={stageCounts.All}
           testid="presales-kpi"
           plain
+          bare
         />
       ) : !(masterView === "analytics" && isSuperAdminMasterView) && (
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr))]" data-testid="presales-kpi-row">
@@ -2276,7 +2277,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   };
 
   // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
-  // lead outright — each needs a date first. Every other stage, Not a prospect and Pre Book included, moves at once.
+  // lead outright — each needs a date first. Every other stage, Not a prospect and Lost included, moves at once.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
     if (s.name === "Appointment") {
