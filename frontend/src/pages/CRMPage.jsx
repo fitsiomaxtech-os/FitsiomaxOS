@@ -1348,10 +1348,10 @@ export const CRMPage = ({ auth, onLogout }) => {
             "More" sheet for the rest — same pattern as the Physio/Branch Admin/Pre-Sales
             bottom navs, and the same slot: glyph in a chip, its name small beneath.
 
-            Its slate at 40% (Super Admin's bar alone), with the page behind it blurred so a
+            Its slate at 90% (Super Admin's bar alone), with the page behind it blurred so a
             row scrolling under it does not muddle the icons. */}
         {showSuperAdminBoard && (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600/40 bg-slate-500/40 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" data-testid="super-admin-bottom-nav">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600/90 bg-slate-500/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" data-testid="super-admin-bottom-nav">
             <div className="flex items-stretch justify-around">
               {SUPER_ADMIN_BOTTOM_TABS.map((t) => {
                 const Icon = t.icon;
