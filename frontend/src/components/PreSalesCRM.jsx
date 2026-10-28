@@ -2441,6 +2441,9 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   const [followUpDraft, setFollowUpDraft] = useState(null); // { date, time, remarks } | null
   const [rescheduleDraft, setRescheduleDraft] = useState(null); // { followupId, date, time, reason } | null
   const [bookingAppointment, setBookingAppointment] = useState(false); // the Appointment pill's PreSalesAppointmentDialog
+  // Overview's RNR Status and Follow-Up cards, which a lead at Follow Up shows shut.
+  const [rnrCardOpen, setRnrCardOpen] = useState(false);
+  const [followUpCardOpen, setFollowUpCardOpen] = useState(false);
   const [branches, setBranches] = useState([]);
   const [activity, setActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -2522,6 +2525,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   // the same rule the Follow-Up tab draws with.
   const activeFollowUp = followUps.slice().reverse().find((f) => f.status !== "rescheduled") || null;
   const showFollowUpCard = !atAppointment && (followUps.length > 0 || currentLead.stage === "Follow Up");
+  // On a lead at Follow Up the two cards are one header row each, shut until clicked open.
+  // On every other stage they stay open, as before.
+  const atFollowUpStage = currentLead.stage === "Follow Up";
+  const rnrCardShown = !atFollowUpStage || rnrCardOpen;
+  const followUpCardShown = !atFollowUpStage || followUpCardOpen;
   // Where the lead can be sent: every stage but New Leads, which is where leads arrive and
   // never where one is moved to. The stage the lead is on stays, drawn as picked.
   const moveStages = stages.filter((s) => s.name !== "New Leads");
@@ -2669,22 +2677,30 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   the lead is actually at RNR; on one that has moved on, the card is a record. */}
               {showRnrCard && (
                 <div className="overflow-hidden rounded-[3px] border border-rose-100 bg-white shadow-sm" data-testid="presales-detail-rnr-tracker">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <div
+                    className={`flex items-center justify-between gap-2 px-4 py-2.5 ${rnrCardShown ? "border-b border-slate-100" : ""} ${atFollowUpStage ? "cursor-pointer select-none" : ""}`}
+                    onClick={atFollowUpStage ? () => setRnrCardOpen((o) => !o) : undefined}
+                    data-testid="presales-detail-rnr-toggle"
+                  >
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600"><PhoneOff className="h-4 w-4" /></span>
                       RNR Status
                     </p>
-                    {rnrCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTab("rnr")}
-                        className="-mr-2 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50 sm:mr-0"
-                        data-testid="presales-detail-rnr-open"
-                      >
-                        Record
-                      </button>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {rnrCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setTab("rnr"); }}
+                          className="-mr-2 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50 sm:mr-0"
+                          data-testid="presales-detail-rnr-open"
+                        >
+                          Record
+                        </button>
+                      )}
+                      {atFollowUpStage && <ChevronDown className={`h-4 w-4 text-rose-400 transition-transform ${rnrCardOpen ? "rotate-180" : ""}`} />}
+                    </div>
                   </div>
+                  {rnrCardShown && (
                   <div className="px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -2713,6 +2729,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                       )}
                     </div>
                   </div>
+                  )}
                 </div>
               )}
 
@@ -2720,23 +2737,30 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   worth reading without changing tabs, with a link there for the rest. */}
               {showFollowUpCard && (
                 <div className="overflow-hidden rounded-[3px] border border-amber-100 bg-white shadow-sm" data-testid="presales-detail-followup-preview">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <div
+                    className={`flex items-center justify-between gap-2 px-4 py-2.5 ${followUpCardShown ? "border-b border-slate-100" : ""} ${atFollowUpStage ? "cursor-pointer select-none" : ""}`}
+                    onClick={atFollowUpStage ? () => setFollowUpCardOpen((o) => !o) : undefined}
+                    data-testid="presales-detail-followup-preview-toggle"
+                  >
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Bell className="h-4 w-4" /></span>
                       Follow-Up
                     </p>
-                    {(activeFollowUp || canMove) && (
-                      <button
-                        type="button"
-                        onClick={() => (activeFollowUp ? setTab("follow-up") : startFollowUp())}
-                        className="-mr-2 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-50 sm:mr-0"
-                        data-testid="presales-detail-followup-preview-open"
-                      >
-                        {activeFollowUp ? "Manage" : "Schedule"}
-                      </button>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {(activeFollowUp || canMove) && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); if (activeFollowUp) setTab("follow-up"); else startFollowUp(); }}
+                          className="-mr-2 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-50 sm:mr-0"
+                          data-testid="presales-detail-followup-preview-open"
+                        >
+                          {activeFollowUp ? "Manage" : "Schedule"}
+                        </button>
+                      )}
+                      {atFollowUpStage && <ChevronDown className={`h-4 w-4 text-amber-500 transition-transform ${followUpCardOpen ? "rotate-180" : ""}`} />}
+                    </div>
                   </div>
-                  {activeFollowUp ? (() => {
+                  {!followUpCardShown ? null : activeFollowUp ? (() => {
                     const dt = new Date(`${activeFollowUp.date}T${activeFollowUp.time}:00`);
                     const isUpcoming = dt.getTime() > Date.now();
                     // Everything before the one that stands, counted rather than listed:

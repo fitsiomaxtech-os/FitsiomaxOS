@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Phone,
   Mail,
   Search,
@@ -3851,6 +3852,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // has not been handed over, and an undefined name is in neither pipelines' stage list.
   const isConsultationOnlyStage = (name) => !!name && !stages.some((s) => s.name === name);
   const [activeTab, setActiveTab] = useState("overview");
+  // Overview's RNR Status and Follow-Up cards, which a lead at Follow Up shows shut.
+  const [rnrCardOpen, setRnrCardOpen] = useState(false);
+  const [followUpCardOpen, setFollowUpCardOpen] = useState(false);
   const [remarks, setRemarks] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
   // Correcting what the lead itself says, as against moving it or booking it. The tabs
@@ -4679,6 +4683,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // their own tabs.
   const showRnrCard = !inAppointmentStage && (atRnrStage || rnrCount > 0);
   const showFollowUpCard = !inAppointmentStage && (followUps.length > 0 || atFollowUpStage);
+  // On a lead at Follow Up the two cards are one header row each, shut until clicked open.
+  // On every other stage they stay open, as before.
+  const rnrCardShown = !atFollowUpStage || rnrCardOpen;
+  const followUpCardShown = !atFollowUpStage || followUpCardOpen;
   // What the lead itself says about the patient, as against what the pipeline says about
   // them. This popup could show neither: it opened on a phone number, a stage strip and
   // nothing else, so a lead somebody had filled a whole intake form for read as blank as a
@@ -4931,24 +4939,32 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   in on the pipeline itself. */}
               {showRnrCard && (
                 <div className="overflow-hidden rounded-[3px] border border-rose-100 bg-white shadow-sm" data-testid="branch-lead-rnr-status">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <div
+                    className={`flex items-center justify-between gap-2 px-4 py-2.5 ${rnrCardShown ? "border-b border-slate-100" : ""} ${atFollowUpStage ? "cursor-pointer select-none" : ""}`}
+                    onClick={atFollowUpStage ? () => setRnrCardOpen((o) => !o) : undefined}
+                    data-testid="branch-lead-rnr-status-toggle"
+                  >
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-600"><PhoneOff className="h-4 w-4" /></span>
                       RNR Status
                     </p>
-                    {/* Only where there is a record to open. With no attempt logged the
-                        tab is an empty page, and offering it reads as a promise of one. */}
-                    {rnrCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("rnr")}
-                        className="-mr-2 shrink-0 rounded-md px-2 py-1 sm:mr-0 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50"
-                        data-testid="branch-lead-rnr-status-open"
-                      >
-                        Record
-                      </button>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {/* Only where there is a record to open. With no attempt logged the
+                          tab is an empty page, and offering it reads as a promise of one. */}
+                      {rnrCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setActiveTab("rnr"); }}
+                          className="-mr-2 shrink-0 rounded-md px-2 py-1 sm:mr-0 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50"
+                          data-testid="branch-lead-rnr-status-open"
+                        >
+                          Record
+                        </button>
+                      )}
+                      {atFollowUpStage && <ChevronDown className={`h-4 w-4 text-rose-400 transition-transform ${rnrCardOpen ? "rotate-180" : ""}`} />}
+                    </div>
                   </div>
+                  {rnrCardShown && (
                   <div className="space-y-2 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -4981,6 +4997,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       )}
                     </div>
                   </div>
+                  )}
                 </div>
               )}
 
@@ -4991,21 +5008,28 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   rather than repeating the form. */}
               {showFollowUpCard && (
                 <div className="overflow-hidden rounded-[3px] border border-amber-100 bg-white shadow-sm" data-testid="branch-lead-followup-preview">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <div
+                    className={`flex items-center justify-between gap-2 px-4 py-2.5 ${followUpCardShown ? "border-b border-slate-100" : ""} ${atFollowUpStage ? "cursor-pointer select-none" : ""}`}
+                    onClick={atFollowUpStage ? () => setFollowUpCardOpen((o) => !o) : undefined}
+                    data-testid="branch-lead-followup-preview-toggle"
+                  >
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Bell className="h-4 w-4" /></span>
                       Follow-Up
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("follow-up")}
-                      className="-mr-2 shrink-0 rounded-md px-2 py-1 sm:mr-0 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-50"
-                      data-testid="branch-lead-followup-preview-open"
-                    >
-                      {activeFollowUp ? "Manage" : "Schedule"}
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveTab("follow-up"); }}
+                        className="-mr-2 shrink-0 rounded-md px-2 py-1 sm:mr-0 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-50"
+                        data-testid="branch-lead-followup-preview-open"
+                      >
+                        {activeFollowUp ? "Manage" : "Schedule"}
+                      </button>
+                      {atFollowUpStage && <ChevronDown className={`h-4 w-4 text-amber-500 transition-transform ${followUpCardOpen ? "rotate-180" : ""}`} />}
+                    </div>
                   </div>
-                  {activeFollowUp ? (() => {
+                  {!followUpCardShown ? null : activeFollowUp ? (() => {
                     const dt = new Date(`${activeFollowUp.date}T${activeFollowUp.time}:00`);
                     const isUpcoming = dt.getTime() > Date.now();
                     // Everything before the one that stands. Counted rather than listed:
