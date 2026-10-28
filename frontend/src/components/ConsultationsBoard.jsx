@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShownPaymentModes } from "@/lib/paymentModes";
-import { createPortal } from "react-dom";
 import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -2758,10 +2757,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // cards stacked above it pushed that panel most of a screen down. What the record holds
   // is named on the closed row, so nothing has to be unfolded to know what is inside.
   const [caseRecordOpen, setCaseRecordOpen] = useState(false);
-  // The same record on the narrow popup (see compactDetail) is three one-line rows, and the
-  // whole of it opens in a popup of its own — Consultation Record Details — rather than
-  // unrolling in place, so reading it never pushes the payment panel down the card.
-  const [recordDetailsOpen, setRecordDetailsOpen] = useState(false);
   // The popup's size, chosen when a patient is opened and held while they stay open. A
   // Branch Admin opening someone at Consultation Visit, Fee Collected or Physio Assign gets a
   // 565 × 660 card: the work there is the payments and the physio, and a 1024px sheet around
@@ -3180,7 +3175,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   }, [selectedLead?.id, docTick, noteRxFiled]);
   // Closed whenever a different patient is opened: a Diet card left standing would
   // otherwise read as the new patient's, with the previous one's figures still in it.
-  useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); setRecordDetailsOpen(false); }, [selectedLead?.id]);
+  useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); }, [selectedLead?.id]);
 
   // Whether one lead still owes the prescription the Consultation Fee waits on — the same
   // question the endpoint asks before it takes the money, asked of a row.
@@ -8306,15 +8301,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     },
                   ];
 
-                  // The narrow popup: three one-line rows, one under the other. Three
-                  // columns a third of 565px wide is a word or two each, and a summary that
-                  // can only show two words is not one. The whole of it — every line, the
-                  // Pre-Sales note, the plan service by service — is Consultation Record
-                  // Details, a popup of its own that every row opens.
-                  //
-                  // Closed by default — only the heading — so the payment panel sits near
-                  // the top of the card. View Details unfolds the three rows and becomes
-                  // Close, which folds them away again. Folded again for each patient.
+                  // The narrow popup: closed by default — only the heading — so the payment
+                  // panel sits near the top of the card. View Details unfolds the whole
+                  // record in place, one card under the other — Diagnosis (with the
+                  // Pre-Sales note), Treatment Summary numbered, the Plan service by service
+                  // — and becomes Close, which folds it away again. No arrow rows and no
+                  // popup of its own. Folded again for each patient.
                   //
                   // The heading is drawn the way Collect a Payment's is, tile and all, so
                   // the two sections of this card start on the same line and read as a pair.
@@ -8344,80 +8336,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             </span>
                           )}
                         </button>
-                        {caseRecordOpen && <div className="divide-y divide-slate-100 border-t border-slate-100" data-testid="cons-case-record-rows">
-                          {cells.map((c) => (
-                            <button
-                              key={c.key}
-                              type="button"
-                              onClick={() => setRecordDetailsOpen(true)}
-                              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
-                              data-testid={c.testid}
-                            >
-                              <span className="w-32 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</span>
-                              <span
-                                className={`min-w-0 flex-1 truncate text-xs ${c.value ? "font-medium text-slate-800" : "italic text-slate-400"}`}
-                                title={c.value || undefined}
-                              >
-                                {c.value || "Not written yet"}
-                              </span>
-                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                            </button>
-                          ))}
-                        </div>}
-
-                        {/* Consultation Record Details. Above the patient's card rather than
-                            in place of it, and closed back onto it — this is reading, and the
-                            payment panel underneath is where the reader goes next.
-
-                            Drawn on document.body rather than inside the card: from in here it
-                            sat in a scrolling, clipped box, and whatever page the board is
-                            mounted on decides whether a fixed layer down there still reaches
-                            the screen. */}
-                        {recordDetailsOpen && createPortal(
-                          <div
-                            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
-                            onClick={(e) => { if (e.target === e.currentTarget) setRecordDetailsOpen(false); }}
-                            data-testid="cons-case-record-details"
-                          >
-                            <div className="flex max-h-[85dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5">
-                              <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-5 py-3">
-                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                                  <ClipboardList className="h-4 w-4" />
-                                </span>
-                                <div className="min-w-0">
-                                  <h3 className="text-sm font-semibold text-slate-900">Consultation Record Details</h3>
-                                  <p className="truncate text-xs text-slate-500">
-                                    {selectedLead.name || "Lead"}
-                                    {selectedLead.patient_number ? ` · ${selectedLead.patient_number}` : ""}
-                                    {selectedLead.assigned_physio_name ? ` · ${selectedLead.assigned_physio_name}` : ""}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setRecordDetailsOpen(false)}
-                                  className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100"
-                                  aria-label="Close"
-                                  data-testid="cons-case-record-details-close"
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </button>
+                        {caseRecordOpen && (
+                          <div className="space-y-3 border-t border-slate-100 p-4" data-testid="cons-case-record-details">
+                            {cells.map((c) => (
+                              <div key={c.key} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3" data-testid={c.testid}>
+                                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</p>
+                                {c.full || <p className="text-xs italic text-slate-400">Not written yet</p>}
                               </div>
-                              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
-                                {cells.map((c) => (
-                                  <div key={c.key} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3" data-testid={`${c.testid}-full`}>
-                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</p>
-                                    {c.full || <p className="text-xs italic text-slate-400">Not written yet</p>}
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="flex shrink-0 justify-end border-t border-slate-200 px-5 py-3">
-                                <Button size="sm" variant="outline" className="text-xs" onClick={() => setRecordDetailsOpen(false)}>
-                                  Close
-                                </Button>
-                              </div>
-                            </div>
-                          </div>,
-                          document.body,
+                            ))}
+                          </div>
                         )}
                       </>
                     );
@@ -8479,7 +8406,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </>
                   );
                 })()}
-                {(isConsultant || caseRecordOpen) && (
+                {/* Not on the narrow popup: its record unrolls as the cards above. */}
+                {(isConsultant || (caseRecordOpen && !compactDetail)) && (
                   <div className={isConsultant ? "space-y-3" : "space-y-3 border-t border-slate-200 p-4"} data-testid="cons-case-record-body">
                     {/* Three columns for a reader, two for the Consultant — their Treatment
                         Summary is a tick-list to work in rather than a paragraph to read,
