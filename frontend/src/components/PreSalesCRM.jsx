@@ -1,14 +1,13 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
   getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
   getLeadDeleteEnabled,
-  listTestimonials, addTestimonial, deleteTestimonial, getDashboardOverview,
+  getDashboardOverview,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { CreateLeadModal, DEPARTMENT_OPTIONS } from "@/components/CreateLeadModal";
@@ -825,12 +824,9 @@ const PreSalesAnalyticsPanel = ({ sourceFilter, groupBranchIds, role }) => {
   );
 };
 
-// The rep's phone bar. Videos is the testimonial list that used to sit under Profile, its
-// own stop now that Profile is My Profile, the page every other desk's bar opens.
+// The rep's phone bar: the leads, and My Profile -- the page every other desk's bar opens.
 const PRESALES_TABS = [
   { key: "leads", label: "Leads", icon: Users },
-  { key: "consultations", label: "Consultations", icon: CalendarCheck },
-  { key: "videos", label: "Videos", icon: Youtube },
   { key: "profile", label: "Profile", icon: UserRound },
 ];
 
@@ -1286,13 +1282,6 @@ export const PreSalesCRM = ({
   ].filter(Boolean);
   const tableWeight = tableCols.reduce((sum, [, w]) => sum + w, 0);
   const colWidth = Object.fromEntries(tableCols.map(([key, w]) => [key, { width: `${(w / tableWeight) * 100}%` }]));
-
-  // Mobile Consultations tab — this rep's leads currently booked for a consultation.
-  // Not narrowed by the Leads tab's own date filter — ConsultationsTab applies its own.
-  const appointmentLeads = useMemo(
-    () => leads.filter((l) => l.stage === "Appointment").sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")),
-    [leads],
-  );
 
   // True when the move went through, so the popup only redraws a lead onto a stage it
   // actually reached -- a refused move (a Lost lead is locked) leaves it where it was.
@@ -2274,12 +2263,6 @@ export const PreSalesCRM = ({
         </div>
       )}
 
-      {role === "pre_sales" && activeTab === "consultations" && (
-        <ConsultationsTab leads={appointmentLeads} branches={branches} loading={loading} onOpen={setEditing} />
-      )}
-
-      {role === "pre_sales" && activeTab === "videos" && <TestimonialVideosTab />}
-
       {/* My Profile, the page Branch Admin's bar opens: attendance, details, and Logout on
           its Security tab -- the phone header carries no account menu. */}
       {role === "pre_sales" && activeTab === "profile" && (
@@ -2372,210 +2355,6 @@ export const PreSalesCRM = ({
         </nav>
       )}
       {role === "pre_sales" && !embedded && <PhoneExitConfirm phoneBack={phoneBack} />}
-    </div>
-  );
-};
-
-// ============ Mobile: Consultations tab (leads booked for a consultation) ============
-
-// Read-only milestone tracker for what happens to a lead after it's handed to a
-// branch: branch_stage carries the first two ("New Appointment" is set the instant a
-// branch is assigned; "Appointment Date & Time" is set once a specific date/time is
-// booked, and branch_stage never advances past it). The doctor finishing the visit
-// and suggesting a treatment plan is a *different* field — consultation_stage (or
-// head_consultation_stage) hits "Consultation Visit" — so it's tracked separately and
-// can be true at the same time branch_stage is still "Appointment Date & Time".
-const CONSULT_MILESTONES = [
-  { key: "new", label: "New Branch Assign", color: "#0ea5e9" },
-  { key: "booked", label: "Consultation Booked", color: "#f59e0b" },
-  { key: "completed", label: "Consultation Completed", color: "#22c55e" },
-];
-
-const consultMilestoneMatch = (l, key) => {
-  if (key === "new") return l.branch_stage === "New Appointment";
-  if (key === "booked") return l.branch_stage === "Appointment" || l.branch_stage === "Appointment Date & Time";
-  if (key === "completed") return l.consultation_stage === "Consultation Visit" || l.head_consultation_stage === "Consultation Visit";
-  return false;
-};
-
-const ConsultationsTab = ({ leads, branches, loading, onOpen }) => {
-  const [dateFilter, setDateFilter] = useState(null);
-  const [milestoneFilter, setMilestoneFilter] = useState(null);
-
-  const milestoneCounts = useMemo(() => ({
-    new: leads.filter((l) => consultMilestoneMatch(l, "new")).length,
-    booked: leads.filter((l) => consultMilestoneMatch(l, "booked")).length,
-    completed: leads.filter((l) => consultMilestoneMatch(l, "completed")).length,
-  }), [leads]);
-
-  // Filters by appointment_date (when the consultation is booked), not created_at —
-  // same field ConsultationsBoard's own date filter uses for this stage of leads.
-  const filtered = useMemo(() => {
-    let rows = leads;
-    if (dateFilter) {
-      const from = dateFilter.from?.getTime();
-      const to = dateFilter.to?.getTime();
-      rows = rows.filter((l) => {
-        if (!l.appointment_date) return false;
-        const ts = new Date(`${l.appointment_date}T00:00:00`).getTime();
-        if (!ts) return false;
-        if (from && ts < from) return false;
-        if (to && ts > to) return false;
-        return true;
-      });
-    }
-    if (milestoneFilter) rows = rows.filter((l) => consultMilestoneMatch(l, milestoneFilter));
-    return rows;
-  }, [leads, dateFilter, milestoneFilter]);
-
-  return (
-    <div className="space-y-3 md:hidden" data-testid="presales-consultations-tab">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-700">Consultations ({filtered.length})</h2>
-        <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="presales-consult-date-filter" centered iconOnly />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2" data-testid="presales-consult-milestones">
-        {CONSULT_MILESTONES.map((m) => {
-          const active = milestoneFilter === m.key;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => setMilestoneFilter(active ? null : m.key)}
-              className="rounded-xl p-2.5 text-center transition-all"
-              style={
-                active
-                  ? { background: m.color, color: "#fff", boxShadow: `0 2px 8px ${m.color}40` }
-                  : { background: `${m.color}14`, color: m.color, border: `1px solid ${m.color}33` }
-              }
-              data-testid={`presales-consult-milestone-${m.key}`}
-            >
-              <p className="text-lg font-bold leading-none">{milestoneCounts[m.key]}</p>
-              <p className="mt-1 text-[9px] font-semibold uppercase leading-tight tracking-tight">{m.label}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      {filtered.length === 0 ? (
-        <p className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-400">
-          {loading ? "Loading..." : "No consultations booked yet."}
-        </p>
-      ) : (
-        filtered.map((l) => {
-          const { branchName, status, statusColor } = branchStatusInfo(l, branches);
-          const completed = consultMilestoneMatch(l, "completed");
-          return (
-            <div
-              key={l.id}
-              onClick={() => onOpen(l)}
-              className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-              data-testid={`presales-consultation-card-${l.id}`}
-            >
-              <div className="flex items-center gap-2">
-                <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(l.name).bg} ${avatarColor(l.name).fg}`}>{initials(l.name)}</span>
-                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{l.name}</p>
-                <LeadContactIcons lead={l} />
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="text-xs font-medium text-slate-600">{branchName || "—"}</span>
-                <span className={`inline-flex items-center rounded border px-1.5 text-[10px] font-semibold ${statusColor}`}>{status}</span>
-                {l.assigned_physio_name ? (
-                  <span className="text-[10px] text-emerald-600">Expert: {l.assigned_physio_name}</span>
-                ) : (
-                  <span className="text-[10px] text-amber-600">Pending Expert</span>
-                )}
-                {completed && (
-                  <span className="inline-flex items-center gap-0.5 rounded border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-700">
-                    <CheckCircle2 className="h-2.5 w-2.5" />Treatment Suggested
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-};
-
-// ============ Mobile: Videos tab (testimonial video management) ============
-// What used to be the lower half of the rep's Profile tab. Profile is My Profile now, so
-// the list the WhatsApp testimonials link reads from has a bottom-bar stop of its own.
-
-const TestimonialVideosTab = () => {
-  const [videos, setVideos] = useState([]);
-  const [loadingVideos, setLoadingVideos] = useState(false);
-  const [url, setUrl] = useState("");
-  const [title, setTitle] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const loadVideos = useCallback(async () => {
-    setLoadingVideos(true);
-    try { setVideos(await listTestimonials()); }
-    catch { /* keep whatever was already shown */ }
-    setLoadingVideos(false);
-  }, []);
-
-  useEffect(() => { loadVideos(); }, [loadVideos]);
-
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!url.trim()) return;
-    setSaving(true);
-    try {
-      await addTestimonial({ youtube_url: url.trim(), title: title.trim() || undefined });
-      setUrl(""); setTitle("");
-      toast.success("Testimonial added");
-      loadVideos();
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Could not add — check the YouTube link");
-    }
-    setSaving(false);
-  };
-
-  const handleDelete = async (id) => {
-    try { await deleteTestimonial(id); setVideos((v) => v.filter((x) => x.id !== id)); }
-    catch { toast.error("Delete failed"); }
-  };
-
-  return (
-    <div className="space-y-4 md:hidden" data-testid="presales-videos-tab">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-1.5 text-sm">
-            <Youtube className="h-4 w-4 text-rose-500" />Testimonial Videos
-          </CardTitle>
-          <p className="text-xs text-slate-400">Shown live on the link shared with leads over WhatsApp.</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <form onSubmit={handleAdd} className="space-y-2">
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste YouTube video link" data-testid="presales-testimonial-url" />
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" data-testid="presales-testimonial-title" />
-            <Button type="submit" disabled={saving || !url.trim()} className="w-full bg-sky-600 hover:bg-sky-700" data-testid="presales-testimonial-add">
-              {saving ? "Adding..." : "Add Video"}
-            </Button>
-          </form>
-
-          <div className="space-y-2 pt-1">
-            {loadingVideos ? (
-              <p className="text-center text-xs text-slate-400">Loading...</p>
-            ) : videos.length === 0 ? (
-              <p className="text-center text-xs text-slate-400">No videos added yet.</p>
-            ) : (
-              videos.map((v) => (
-                <div key={v.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2" data-testid={`presales-testimonial-row-${v.id}`}>
-                  <span className="truncate text-xs font-medium text-slate-700">{v.title || v.video_id}</span>
-                  <button type="button" onClick={() => handleDelete(v.id)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" data-testid={`presales-testimonial-delete-${v.id}`}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
