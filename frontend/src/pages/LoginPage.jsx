@@ -145,7 +145,7 @@ export const LoginPage = ({ onLogin }) => {
       {/* pb-12 on phones keeps the card clear of the one-line footer under it. */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-12 pt-8 supports-[height:100dvh]:min-h-[100dvh] md:px-8 md:py-10">
         <Card
-          className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
+          className="w-full max-w-md rounded-[4px] border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
           data-testid="screen1-login-card"
         >
           <CardHeader className="space-y-1 pb-2 text-center">
@@ -169,7 +169,7 @@ export const LoginPage = ({ onLogin }) => {
           <CardContent>
             {challenge ? (
               <form className="space-y-4" onSubmit={handleVerify} data-testid="screen1-login-2fa-form">
-                <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="flex items-start gap-3 rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                   <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-700">Check your email</p>
@@ -189,7 +189,7 @@ export const LoginPage = ({ onLogin }) => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-sky-500 text-white hover:bg-sky-600"
+                  className="w-full rounded-[4px] bg-sky-500 text-white hover:bg-sky-600"
                   data-testid="screen1-login-2fa-submit"
                 >
                   {loading ? "Verifying..." : "Verify & sign in"}
@@ -226,7 +226,7 @@ export const LoginPage = ({ onLogin }) => {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="user@fitsiomax.com"
-                    className="border-slate-200 bg-white"
+                    className="rounded-[4px] border-slate-200 bg-white"
                     data-testid="screen1-login-email-input"
                   />
                 </div>
@@ -251,7 +251,7 @@ export const LoginPage = ({ onLogin }) => {
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder="••••••••"
-                      className="border-slate-200 bg-white pr-10"
+                      className="rounded-[4px] border-slate-200 bg-white pr-10"
                       data-testid="screen1-login-password-input"
                     />
                     <button
@@ -289,7 +289,7 @@ export const LoginPage = ({ onLogin }) => {
                     data-testid="screen1-login-error-locked"
                   >
                     <span className="text-sm font-semibold text-red-700">Access Warning</span>
-                    <span className="text-xs text-red-600">
+                    <span className="text-sm text-red-600">
                       Access restricted for {loginError.minutesLeft} minute{loginError.minutesLeft === 1 ? "" : "s"}.
                     </span>
                   </div>
@@ -298,7 +298,7 @@ export const LoginPage = ({ onLogin }) => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-sky-500 text-white hover:bg-sky-600"
+                  className="w-full rounded-[4px] bg-sky-500 text-white hover:bg-sky-600"
                   data-testid="screen1-login-submit-button"
                 >
                   {loading ? "Signing in..." : "Continue"}
