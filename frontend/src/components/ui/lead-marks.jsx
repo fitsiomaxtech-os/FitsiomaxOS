@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeftRight, CalendarClock, RotateCcw, Star, Video } from "lucide-react";
+import { AlertCircle, ArrowLeftRight, CalendarClock, RotateCcw, Star, Tag, Video } from "lucide-react";
 import { preBookOf, preBookUnused, rupees, shortDay } from "@/lib/preBook";
 
 /**
@@ -123,6 +123,33 @@ export const TransferredTag = ({ lead, className = "", compact = false }) => {
     >
       <ArrowLeftRight className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
       {moves.length > 1 ? `×${moves.length}` : ""}
+    </span>
+  );
+};
+
+/**
+ * "Pre Sales" — the Pre-Sales desk put this patient into Appointment.
+ *
+ * Drawn on Branch Leads while the patient sits in its Appointment stage, so the branch can
+ * tell the bookings the desk made from the ones it made itself. Read off the lead's own
+ * Pre-Sales stage rather than a new field: every live write of stage "Appointment" is a
+ * Pre-Sales one (its Appointment booking popup, Move to Stage, Assign Branch), so leads the
+ * desk booked before this tag existed carry it too.
+ *
+ * Icon only, in dark orange, with the words on its hover. Renders nothing for any other
+ * lead, and nothing once the patient has moved on from the Appointment stage.
+ */
+export const PreSalesTag = ({ lead, appointmentStage, className = "", compact = false }) => {
+  if (!appointmentStage || lead?.stage !== "Appointment" || lead?.branch_stage !== appointmentStage) return null;
+  const title = "Moved to Appointment by Pre Sales";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center align-middle text-orange-600 ${className}`}
+      title={title}
+      aria-label={title}
+      data-testid="lead-presales-tag"
+    >
+      <Tag className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
     </span>
   );
 };

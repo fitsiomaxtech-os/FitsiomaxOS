@@ -62,7 +62,7 @@ import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StageTabBar } from "@/components/ui/stage-tab";
-import { OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
+import { OnlineTag, PreBookTag, PreSalesTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
 import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookOf, preBookPaid, rupees, shortDay, todayIso } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
@@ -1348,6 +1348,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     [showingMirror, atBranchOpening, mirrorStage, finalBranchStages],
   );
   const entryStageNames = [mirrorStage?.name, realEntryStage?.name].filter(Boolean);
+  // Whatever Super Admin has called the Appointment stage, for the Pre Sales tag on its rows.
+  const appointmentStageName = stageNameForRole(stages, STAGE_ROLE_APPOINTMENT);
 
   /**
    * Whether the list draws its Follow Up column: the date and time of the call this
@@ -3116,7 +3118,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
+                    nameAddon={allStages ? null : <><PreSalesTag lead={lead} appointmentStage={appointmentStageName} className="ml-1" compact /><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
                     // On the Leads pill the row's right holds only Call, WhatsApp and the
                     // bin: every row there would read "Leads" anyway. The other pills and
                     // All Stages keep the badge.
@@ -3377,6 +3379,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                 {/* Outside the truncation, not inside it. A name long
                                     enough to be cut is exactly the row where the mark
                                     would be the part that got cut. */}
+                                <PreSalesTag lead={lead} appointmentStage={appointmentStageName} />
                                 <TransferredTag lead={lead} />
                                 <RescheduledTag lead={lead} className="shrink-0" />
                                 <OnlineTag lead={lead} />

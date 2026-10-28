@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity,
+  getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
   listTestimonials, addTestimonial, deleteTestimonial, getDashboardOverview,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
@@ -16,6 +16,7 @@ import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
+import { LeadMarks } from "@/components/ui/lead-marks";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -991,6 +992,24 @@ export const PreSalesCRM = ({
   useEffect(() => { load(); }, [load]);
   useEffect(() => { getBranches().then(setBranches).catch(() => {}); }, []);
 
+  // The two hand-made marks on a row, set here the way Branch Leads sets them: shown at
+  // once, only the flag that changed is sent, and put back if the server refuses. The
+  // logins the flags endpoint takes get the buttons; anyone else (Sales Head, Marketing
+  // Head) sees the marks read-only.
+  const canMarkLeads = ["pre_sales", "super_admin", "branch_admin", "business_dev"]
+    .includes(String(currentUser?.role || "").trim().toLowerCase());
+  const toggleLeadFlag = async (lead, field) => {
+    const next = !lead[field];
+    const patch = (value) => setLeads((rows) => rows.map((l) => (l.id === lead.id ? { ...l, [field]: value } : l)));
+    patch(next);
+    try {
+      await setLeadFlags(lead.id, { [field]: next });
+    } catch (err) {
+      patch(!next);
+      toast.error(err?.response?.data?.detail || "Couldn't save that mark");
+    }
+  };
+
   // The branches the group holds, and their ids. One source for three readers: the pills
   // draw from the list, the leads memo filters on the ids, and Analytics is scoped by the
   // same ids so the two panes cannot describe different populations.
@@ -1470,7 +1489,7 @@ export const PreSalesCRM = ({
           time under the stage, the branch's status and expert under its name — is beside
           it or on its hover instead. zoom scales vh with everything else, so 72vh here is
           the same 65vh of screen the Branch Leads list takes. */}
-      <div className="w-full overflow-hidden rounded-lg border border-slate-200 bg-white" style={{ zoom: 0.9 }} data-testid="presales-leads-card">
+      <div className="w-full overflow-hidden rounded-[4px] border border-slate-200 bg-white" style={{ zoom: 0.9 }} data-testid="presales-leads-card">
           <div className="max-h-[72vh] overflow-auto">
             <table className="w-full min-w-[900px] table-fixed divide-y divide-slate-200 text-sm">
               <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
@@ -1499,6 +1518,37 @@ export const PreSalesCRM = ({
                             {l.name?.charAt(0)?.toUpperCase() || "?"}
                           </div>
                           <span className="truncate font-semibold text-slate-900">{l.name}</span>
+                          {/* Faint outlines until set, so the control is in the same place on
+                              every row. stopPropagation: the row opens the lead, and marking
+                              one should not also open it. */}
+                          {canMarkLeads ? (
+                            <div className="ml-auto flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleLeadFlag(l, "is_vip"); }}
+                                title={l.is_vip ? "VIP client — click to remove" : "Mark as VIP client"}
+                                aria-label={l.is_vip ? `Remove VIP mark from ${l.name || "lead"}` : `Mark ${l.name || "lead"} as VIP`}
+                                aria-pressed={!!l.is_vip}
+                                className="rounded p-1 transition-colors hover:bg-amber-50"
+                                data-testid={`presales-vip-${l.id}`}
+                              >
+                                <Star className={`h-4 w-4 ${l.is_vip ? "fill-amber-400 text-amber-500" : "text-slate-300 hover:text-amber-400"}`} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleLeadFlag(l, "needs_attention"); }}
+                                title={l.needs_attention ? "Needs attention — click to clear" : "Flag as needing attention"}
+                                aria-label={l.needs_attention ? `Clear the attention flag on ${l.name || "lead"}` : `Flag ${l.name || "lead"} as needing attention`}
+                                aria-pressed={!!l.needs_attention}
+                                className="rounded p-1 transition-colors hover:bg-rose-50"
+                                data-testid={`presales-attention-${l.id}`}
+                              >
+                                <AlertCircle className={`h-4 w-4 ${l.needs_attention ? "fill-rose-500 text-white" : "text-slate-300 hover:text-rose-400"}`} />
+                              </button>
+                            </div>
+                          ) : (
+                            <LeadMarks lead={l} className="ml-auto" />
+                          )}
                         </div>
                       </td>
                       {/* Number only, and the email on its hover. Call and WhatsApp both
