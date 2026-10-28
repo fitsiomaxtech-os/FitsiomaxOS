@@ -247,7 +247,7 @@ code {
 .fee-flat.fee-soft [data-testid="cons-case-record-view"],
 .fee-flat.fee-soft [data-testid^="cons-fee-receipt"],
 .fee-flat.fee-soft [data-testid^="cons-fee-act-"],
-.fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"],
+.fee-flat.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]),
 .fee-flat.fee-soft [data-testid^="cons-prebook-use-"],
 .fee-flat.fee-soft [data-testid="cons-fee-mark-online"],
 .fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
@@ -293,14 +293,14 @@ code {
   color: #0f766e !important; /* teal-700 */
 }
 /* Inspect is as wide as its word, under the Treatment Fee's name. */
-.fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"] {
+.fee-flat.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]) {
   width: auto !important;
   padding: 0 6px !important;
   justify-content: flex-start !important;
   color: #0284c7 !important; /* sky-600 */
   opacity: 1;
 }
-.fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"]:hover {
+.fee-flat.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]):hover {
   text-decoration: underline;
 }
 /* ...and the rows of fees already in sit on white like the rest, not on a green tint. */

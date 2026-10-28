@@ -3257,7 +3257,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Payment Schedule. { reason, mode: "single" | "schedule", amount, due_date, installments } | null
   const [extraDueDraft, setExtraDueDraft] = useState(null);
   const [savingExtraDue, setSavingExtraDue] = useState(false);
-  // The Treatment Fee's Inspect popup: how the figure on the fee row was worked out.
+  // The Inspect popup open on a fee row, by fee: "treatment" (how the figure was worked
+  // out) or "extra" (what the Extra Amount is for and when it falls due); false when shut.
   const [feeInspect, setFeeInspect] = useState(false);
   // Set while the physio picker is Online Physio Assign: Online physios only, no re-price.
   const [onlineAssign, setOnlineAssign] = useState(false);
@@ -10431,6 +10432,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     amount: extraRows.length ? round2(extraRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)) : null,
                     note: null,
                     show: extraRows.length > 0,
+                    // Title over an Inspect button: the reason, the balance and its due
+                    // date are in the popup it opens rather than under the title.
+                    inspect: true,
                     ...balanceStep("extra", null, "Collect"),
                     ...(feeBalances.extra ? {} : { paid: true }),
                   },
@@ -10486,14 +10490,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                 // Under the Treatment Fee's title: opens the popup that shows how the fee was
                 // worked out -- the package, each run of days × its rate, and what is paid.
-                // Every Treatment Fee row carries one, paid or still owed.
-                const inspectButton = (suffix = "") => (
+                // Every Treatment Fee row carries one, paid or still owed. The Extra Amount
+                // row carries one too, in place of its reason and balance lines.
+                const inspectButton = (suffix = "", fee = "treatment") => (
                   <button
                     type="button"
-                    onClick={() => setFeeInspect(true)}
+                    onClick={() => setFeeInspect(fee)}
                     className="mt-1 flex h-[20px] w-[70px] shrink-0 items-center justify-center rounded-[2px] bg-slate-600 opacity-[0.55] text-[10px] font-medium text-white shadow-sm transition hover:bg-slate-700"
                     style={{ fontFamily: "Lexend, sans-serif" }}
-                    data-testid={`cons-fee-inspect-treatment${suffix}`}
+                    data-testid={`cons-fee-inspect-${fee}${suffix}`}
                   >
                     Inspect
                   </button>
@@ -10577,7 +10582,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.inspect ? inspectButton() : (
+                            {f.inspect ? inspectButton("", f.key) : (
                               <>
                                 {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                                 {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
@@ -10592,8 +10597,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               </p>
                             )}
                             {/* A paid row says nothing under its title -- the tick and the
-                                Receipt button already say it is in. */}
-                            {f.paid ? null : f.pending ? (
+                                Receipt button already say it is in. Nor does a row with an
+                                Inspect button: its balance is in the popup that opens. */}
+                            {f.paid || f.inspect ? null : f.pending ? (
                               <p className={`truncate text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</p>
                             ) : null}
                           </div>
@@ -10655,7 +10661,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"><span className="truncate">{f.label}</span>{longTermTag(f)}</p>
-                            {f.inspect ? inspectButton() : (
+                            {f.inspect ? inspectButton("", f.key) : (
                               <>
                                 {f.sub ? <p className="truncate text-[11px] text-slate-400" title={String(f.sub)}>{f.sub}</p> : null}
                                 {f.modeSplit ? <ModeSplitLines plan={f.modeSplit} excess={f.excess} /> : null}
@@ -10753,7 +10759,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </>
                         ) : (
                           <>
-                            {f.pending ? <span className={`text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</span> : null}
+                            {f.pending && !f.inspect ? <span className={`text-[11px] font-medium ${f.pendingTone}`}>{f.pending}</span> : null}
                             {f.key === "treatment" && !treatmentFeePaid && consultationPaid && FeeRowMarkOnlineButton}
                             <Button
                               size="sm"
@@ -13414,7 +13420,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* Inspect (Treatment Fee): how the figure on the fee row was arrived at -- the
                 package, each run of days at its mode's rate, any discount, what has been
                 paid and what is still owed, read straight off the lead. */}
-            {feeInspect && selectedLead && (() => {
+            {feeInspect === "treatment" && selectedLead && (() => {
               const L = selectedLead;
               const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN")}`;
               const sessions = Number(L.session_package_sessions) || 0;
@@ -13536,6 +13542,72 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                     <div className="flex justify-end">
                       <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setFeeInspect(false)} data-testid="cons-fee-inspect-done">Close</Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Inspect (Extra Amount): what Add Due charged the patient for, each amount and
+                the date it falls due, and where the money stands -- the reason and balance
+                lines that used to sit under the row's title. */}
+            {feeInspect === "extra" && selectedLead && (() => {
+              const rows = selectedLead.extra_fee_payment_details?.installments || [];
+              const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN")}`;
+              const sum = (list) => round2(list.reduce((s, i) => s + (Number(i.amount) || 0), 0));
+              const reasons = [...new Set(rows.map((r) => r.note).filter(Boolean))];
+              const plan = feeBalances.extra;
+              const total = sum(rows);
+              const paidIn = sum(rows.filter((r) => r.paid));
+              const balance = plan ? plan.balance : 0;
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) setFeeInspect(false); }} data-testid="cons-extra-inspect-popup">
+                  <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                        <IndianRupee className="h-4 w-4 text-sky-600" />
+                        Extra Amount · Details
+                      </p>
+                      <button onClick={() => setFeeInspect(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-extra-inspect-close"><X className="h-4 w-4" /></button>
+                    </div>
+
+                    {/* What it was charged for. */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="cons-extra-inspect-reason">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">For</p>
+                      <p className="mt-0.5 font-semibold text-slate-800">{reasons.join(", ") || "—"}</p>
+                    </div>
+
+                    {/* Each amount and the date it falls due. */}
+                    <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-extra-inspect-schedule">
+                      <p className="bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Payment Schedule</p>
+                      {rows.map((r, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                          <span className="min-w-0 text-slate-600">
+                            <span className="font-semibold text-slate-700">Payment {i + 1}</span>
+                            {r.due_date ? ` · due ${r.due_date}` : ""}
+                            {reasons.length > 1 && r.note ? ` · ${r.note}` : ""}
+                            {r.paid && r.paid_on ? ` · paid ${String(r.paid_on).slice(0, 10)}` : ""}
+                          </span>
+                          <span className="shrink-0 text-right tabular-nums">
+                            <span className="font-semibold text-slate-800">{rs(r.amount)}</span>
+                            <span className={`ml-1.5 text-[10px] font-semibold uppercase ${r.paid ? "text-emerald-600" : "text-amber-600"}`}>{r.paid ? "Paid" : "Due"}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Where the money stands. */}
+                    <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="cons-extra-inspect-money">
+                      <div className="flex justify-between gap-2"><span className="text-slate-600">Total</span><span className="font-semibold tabular-nums text-slate-800">{rs(total)}</span></div>
+                      <div className="flex justify-between gap-2"><span className="text-slate-600">Paid</span><span className="font-semibold tabular-nums text-emerald-700">{rs(paidIn)}</span></div>
+                      <div className="flex justify-between gap-2"><span className="text-slate-600">Balance</span><span className={`font-semibold tabular-nums ${balance > 0 ? (plan?.overdue ? "text-rose-600" : "text-amber-700") : "text-slate-500"}`}>{rs(balance)}</span></div>
+                      {plan?.next?.due_date && (
+                        <div className="flex justify-between gap-2"><span className="text-slate-600">Next Due</span><span className={`font-semibold tabular-nums ${plan.overdue ? "text-rose-600" : "text-slate-700"}`}>{plan.next.due_date}{plan.overdue ? " · overdue" : ""}</span></div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setFeeInspect(false)} data-testid="cons-extra-inspect-done">Close</Button>
                     </div>
                   </div>
                 </div>
