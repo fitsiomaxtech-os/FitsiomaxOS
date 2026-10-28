@@ -31,6 +31,7 @@ from google.oauth2 import id_token as google_id_token
 
 from fastapi.responses import FileResponse
 
+import login_guard
 from database import v3_col
 from routers.v3_reviews import review_numbers_for_lead
 from utils import now_iso, now_utc
@@ -854,12 +855,18 @@ async def _start_portal_session(accounts: list) -> dict:
     if not patients:
         raise HTTPException(status_code=401, detail="Invalid phone/email or password")
     by_lead = {a["lead_id"]: a for a in accounts}
+    lead_ids = [p["lead_id"] for p in patients]
+    # These patients' sessions past their twelve hours (login_guard.py) are dead anyway.
+    await v3_col("patient_portal_sessions").delete_many({
+        "$or": [{"lead_id": {"$in": lead_ids}}, {"lead_ids": {"$in": lead_ids}}],
+        "created_at": {"$lt": login_guard.expired_before()},
+    })
     token = str(uuid.uuid4())
     await v3_col("patient_portal_sessions").insert_one({
         "token": token,
         "account_id": by_lead[patients[0]["lead_id"]]["id"],
         "lead_id": patients[0]["lead_id"],
-        "lead_ids": [p["lead_id"] for p in patients],
+        "lead_ids": lead_ids,
         "created_at": now_iso(),
     })
     return {
@@ -891,10 +898,15 @@ async def patient_portal_login(payload: V3PatientPortalLogin):
     query = _login_query(payload.login or payload.email or "")
     if not query or not payload.password:
         raise HTTPException(status_code=401, detail="Invalid phone/email or password")
+    # Five wrong passwords lock this phone or email for ten minutes (login_guard.py). Keyed
+    # on the normalised login, so "98400 12345" and "+919840012345" share one count.
+    attempt_key = f"portal:{query.get('email') or query.get('phone')}"
+    await login_guard.count_try(attempt_key)
     accounts = await v3_col("patient_portal_accounts").find(query, {"_id": 0}).to_list(50)
     matched = [a for a in accounts if verify_password(payload.password, a.get("password_hash", ""))]
     if not matched:
-        raise HTTPException(status_code=401, detail="Invalid phone/email or password")
+        await login_guard.refuse(attempt_key, "Invalid phone/email or password")
+    await login_guard.clear(attempt_key)
     return await _start_portal_session(_unblocked(matched))
 
 
@@ -944,9 +956,12 @@ async def _portal_session(authorization: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization.split(" ", 1)[1].strip()
     session = await v3_col("patient_portal_sessions").find_one(
-        {"token": token}, {"_id": 0, "token": 1, "lead_id": 1, "lead_ids": 1},
+        {"token": token}, {"_id": 0, "token": 1, "lead_id": 1, "lead_ids": 1, "created_at": 1},
     )
-    if not session:
+    # Twelve hours from sign-in, in use or not -- see login_guard.py.
+    if not session or login_guard.session_expired(session):
+        if session:
+            await v3_col("patient_portal_sessions").delete_one({"token": token})
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
     return session
 

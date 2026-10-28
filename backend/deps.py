@@ -2,6 +2,7 @@ from fastapi import Depends, Header, HTTPException
 from typing import Dict, Optional
 import re
 from database import db, v2_col, v3_col
+from login_guard import session_expired
 from schemas.v1 import AuthUser
 from schemas.v2 import V2UserOut
 from schemas.v3 import V3UserOut
@@ -13,7 +14,9 @@ async def get_current_user(authorization: str = Header(...)) -> AuthUser:
 
     token = authorization.split(" ", 1)[1].strip()
     session = await db.sessions.find_one({"token": token}, {"_id": 0})
-    if not session:
+    if not session or session_expired(session):
+        if session:
+            await db.sessions.delete_one({"token": token, "user_id": session.get("user_id")})
         raise HTTPException(status_code=401, detail="Session expired. Please login again.")
 
     user_doc = await db.users.find_one(
@@ -40,7 +43,9 @@ async def v2_current_user(authorization: str = Header(...)) -> V2UserOut:
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization.split(" ", 1)[1].strip()
     session = await v2_col("sessions").find_one({"token": token}, {"_id": 0})
-    if not session:
+    if not session or session_expired(session):
+        if session:
+            await v2_col("sessions").delete_one({"token": token, "user_id": session.get("user_id")})
         raise HTTPException(status_code=401, detail="Session expired")
     user = await v2_col("users").find_one({"id": session["user_id"], "is_active": True}, {"_id": 0, "password": 0})
     if not user:
@@ -62,7 +67,11 @@ async def v3_current_user(authorization: str = Header(...)) -> V3UserOut:
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization.split(" ", 1)[1].strip()
     session = await v3_col("sessions").find_one({"token": token}, {"_id": 0})
-    if not session:
+    # Twelve hours from sign-in, in use or not -- see login_guard.py. The user_id on the
+    # delete keeps it off the treatment-session rows that share this collection.
+    if not session or session_expired(session):
+        if session:
+            await v3_col("sessions").delete_one({"token": token, "user_id": session.get("user_id")})
         raise HTTPException(status_code=401, detail="Session expired")
     user = await v3_col("users").find_one({"id": session["user_id"], "is_active": True}, {"_id": 0, "password": 0})
     if not user:

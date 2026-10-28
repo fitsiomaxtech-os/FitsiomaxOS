@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 import re
 import uuid
 
+import login_guard
 import two_factor
 from database import v3_col
 from utils import now_iso
@@ -59,6 +60,11 @@ async def _issue_session(user: dict) -> V3LoginResponse:
     """
     token = str(uuid.uuid4())
     await v3_col("sessions").insert_one({"token": token, "user_id": user["id"], "created_at": now_iso()})
+    # This account's sessions past their twelve hours (login_guard.py) are dead anyway;
+    # clearing them here keeps them from crowding the cap below.
+    await v3_col("sessions").delete_many(
+        {"user_id": user["id"], "created_at": {"$lt": login_guard.expired_before()}}
+    )
     # Signing in on a second device must NOT sign the first one out. A Head Physio moves
     # between a phone on the floor and a desk machine and expects both to stay live, and
     # a branch's shared account is used from more than one place at once.
@@ -91,12 +97,17 @@ async def v3_login(payload: V3LoginRequest):
     # Case-insensitive match: some accounts were created with mixed-case emails
     # (e.g. "Consultant@fitsiomax.clinic") before account creation normalized to lowercase.
     email = payload.email.strip()
+    # Five wrong passwords lock this email for ten minutes (login_guard.py). Counted before
+    # the lookup, so an email with no account behind it locks the same way a real one does.
+    attempt_key = f"staff:{email.lower()}"
+    await login_guard.count_try(attempt_key)
     user = await v3_col("users").find_one(
         {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}, "is_active": True},
         {"_id": 0},
     )
     if not user or not verify_password(payload.password, user.get("password", "")):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        await login_guard.refuse(attempt_key, "Invalid credentials")
+    await login_guard.clear(attempt_key)
 
     if not is_hashed(user.get("password", "")):
         await v3_col("users").update_one(

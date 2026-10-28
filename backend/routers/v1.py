@@ -5,6 +5,7 @@ import os
 import asyncio
 import warnings
 
+import login_guard
 from database import db
 from utils import now_iso, now_utc
 from security import verify_password, hash_password, is_hashed
@@ -47,12 +48,16 @@ async def root():
 
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(payload: LoginRequest):
+    # Same lock as the v3 staff login (login_guard.py), on its own count.
+    attempt_key = f"v1:{payload.email.strip().lower()}"
+    await login_guard.count_try(attempt_key)
     user_doc = await db.users.find_one(
         {"email": payload.email.lower(), "is_active": True},
         {"_id": 0},
     )
     if not user_doc or not verify_password(payload.password, user_doc.get("password", "")):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        await login_guard.refuse(attempt_key, "Invalid email or password")
+    await login_guard.clear(attempt_key)
 
     if not is_hashed(user_doc.get("password", "")):
         await db.users.update_one(

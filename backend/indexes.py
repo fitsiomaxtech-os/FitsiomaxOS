@@ -27,7 +27,8 @@ from database import v3_col
 
 logger = logging.getLogger(__name__)
 
-# (collection, keys, name). Keys are the pymongo [(field, direction)] form.
+# (collection, keys, name), or (collection, keys, name, options) for an index that needs
+# more than a name. Keys are the pymongo [(field, direction)] form.
 #
 # Each one is here because a query in this repo actually asks for it; the comment says
 # which. Compound keys are ordered equality-first, then the sort, so one index serves both
@@ -126,6 +127,10 @@ CORE_INDEXES = [
     ("patient_portal_accounts", [("email", 1)], "email"),
     ("patient_portal_accounts", [("lead_id", 1)], "lead_id"),
     ("patient_portal_sessions", [("token", 1)], "token"),
+    # Wrong-password counts -- see login_guard.py. Read by _id only; this one is the
+    # sweep. A count goes stale after ten quiet minutes, so a day on leaves nothing a sign-in
+    # still reads, and logins nobody owns do not pile up for the life of the install.
+    ("login_attempts", [("last_at", 1)], "last_at_ttl", {"expireAfterSeconds": 24 * 3600}),
     # The approval queue a branch reads on its Patients tab, and the one-open-request-per-
     # patient upsert a booking makes into it; a branch's own automatic-login mode.
     ("portal_pending", [("branch_id", 1), ("status", 1)], "branch_status"),
@@ -192,9 +197,9 @@ async def ensure_core_indexes() -> None:
     deploy user lacks) must not stop the app from starting.
     """
     built = 0
-    for collection, keys, name in CORE_INDEXES:
+    for collection, keys, name, *options in CORE_INDEXES:
         try:
-            await v3_col(collection).create_index(keys, name=name)
+            await v3_col(collection).create_index(keys, name=name, **(options[0] if options else {}))
             built += 1
         except Exception as e:
             logger.warning(f"index {collection}.{name} not built: {type(e).__name__}: {e}")

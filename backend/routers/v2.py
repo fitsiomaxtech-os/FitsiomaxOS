@@ -3,6 +3,7 @@ from typing import List, Optional, Dict
 import uuid
 import os
 
+import login_guard
 from database import v2_col
 from utils import now_iso
 from security import verify_password, hash_password, is_hashed
@@ -35,9 +36,13 @@ async def v2_root():
 
 @router.post("/auth/login", response_model=V2LoginResponse)
 async def v2_login(payload: V2LoginRequest):
+    # Same lock as the v3 staff login (login_guard.py), on its own count.
+    attempt_key = f"v2:{payload.email.strip().lower()}"
+    await login_guard.count_try(attempt_key)
     user = await v2_col("users").find_one({"email": payload.email.lower(), "is_active": True}, {"_id": 0})
     if not user or not verify_password(payload.password, user.get("password", "")):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        await login_guard.refuse(attempt_key, "Invalid credentials")
+    await login_guard.clear(attempt_key)
 
     if not is_hashed(user.get("password", "")):
         await v2_col("users").update_one(
