@@ -1953,11 +1953,13 @@ const PanelChip = ({ tone = "amber", tick = false, square = false, children }) =
 
 // `actions` sit in the header band after the chip, for a control that belongs to the
 // panel's state rather than to the row of views under it. `flush` drops the body's padding
-// so its cards run to the panel's edges; a tab row, if drawn, keeps its own.
-function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, children, testid, flush = false }) {
+// so its cards run to the panel's edges; a tab row, if drawn, keeps its own. `bare` drops
+// the header band and the tone's tint: the panel is its body alone, on white.
+function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, children, testid, flush = false, bare = false }) {
   const t = PANEL_TONES[tone] || PANEL_TONES.indigo;
   return (
-    <div className={`overflow-hidden rounded-xl border shadow-sm ring-1 ring-inset ring-white/60 ${t.shell}`} data-testid={testid}>
+    <div className={`overflow-hidden rounded-xl border shadow-sm ring-1 ring-inset ring-white/60 ${bare ? "border-slate-200 bg-white" : t.shell}`} data-testid={testid}>
+      {!bare && (
       <div className={`flex items-center justify-between gap-3 border-b px-4 py-2.5 ${t.band}`}>
         <div className="flex min-w-0 items-center gap-2">
           {Icon && (
@@ -1974,6 +1976,7 @@ function StagePanel({ tone = "indigo", icon: Icon, title, chip, actions, tabs, c
           </div>
         ) : chip}
       </div>
+      )}
       <div className={flush ? "p-0" : "p-4"}>
         {/* The controls sit above a hairline and do not move when the body under them
             changes, so the control that opened a view is the control that leaves it.
@@ -4642,14 +4645,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           ],
     });
   }
-
-  // Jumps straight to the Payment Schedule view (skipping the mode-picker click)
-  // for a lead whose Partial Payment plan already exists — used by the Fee Collected
-  // side panel while an installment is still unpaid.
-  const openPartialScheduleDraft = () => {
-    openTreatmentFeeDraft();
-    setTreatmentConfirmDraft({ ...BLANK_TREATMENT_TENDER, tenders: [], balance_partial: false, picking_mode: false });
-  };
 
   // Partial Payment is split by session count, not a raw amount — each installment's
   // amount is derived from how many of the package's sessions it covers, at the
@@ -7908,6 +7903,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
                   <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
+                  {/* Fee Collected: the Appointment Card is this eye, in pastel teal -- no
+                      border, no box -- rather than a row of its own in the Overview. */}
+                  {selectedLead.consultation_stage === "Fee Collected" && selectedLead.appointment_date && (
+                    <button
+                      type="button"
+                      onClick={openApptCard}
+                      disabled={loadingApptCard}
+                      className="shrink-0 text-teal-400 transition hover:text-teal-600 disabled:opacity-50"
+                      title="Open the appointment confirmation — print, send or download it again"
+                      aria-label="Appointment Card"
+                      data-testid="cons-open-appt-card"
+                    >
+                      <Eye className="h-5 w-5" />
+                    </button>
+                  )}
                 </h3>
               </div>
               ) : (
@@ -8044,11 +8054,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {detailTab === "overview" && (
               // Consultation Visit and Fee Collected draw their Overview flat: no borders, 2px
               // corners, and no icons on its buttons -- see .fee-flat in index.css.
-              <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""}`}>
+              // Fee Collected also draws its buttons with no fill and no shadow -- see .fee-soft.
+              <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""} ${selectedLead.consultation_stage === "Fee Collected" ? "fee-soft" : ""}`}>
               {/* Consultation Visit and Fee Collected: the Appointment Card comes down out of
                   the header onto a row of its own, drawn like Consultation Record under it, so
                   its button sits in the same column as View Details and the fee buttons. */}
-              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) && selectedLead.appointment_date && (
+              {/* Not at Fee Collected: there the Appointment Card is the eye icon in the header. */}
+              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) && selectedLead.consultation_stage !== "Fee Collected" && selectedLead.appointment_date && (
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="cons-appt-record">
                   <div className="flex w-full items-center gap-2 px-4 py-2.5">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
@@ -11191,25 +11203,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </div>
                       );
                     }
-                    // Money is taken on the cards below, each fee on its own. What is left
-                    // is the schedule behind a part-paid Treatment Fee — a view of what was
-                    // agreed, not another way to collect it — so it sits in the header band
-                    // beside the Part-paid tag it explains.
-                    const FeeActions = partialPlan ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className={`h-7 border-slate-200 bg-white/70 text-slate-600 hover:bg-white ${ACT_BTN}`}
-                        onClick={openPartialScheduleDraft}
-                        data-testid="cons-open-partial-schedule-sidebar"
-                      >
-                        <Calendar className="mr-1 h-3.5 w-3.5" />
-                        <Lbl full="Payment Schedule" short="Schedule" />
-                      </Button>
-                    ) : null;
-
                     return (
                       <StagePanel
+                        // No header band on the panel's own view -- no "Collect a Payment"
+                        // heading, Part-paid tag or Payment Schedule button: the fee rows
+                        // open straight under Consultation Record. A detail view opened from
+                        // the tab row keeps its band, which names the view.
+                        bare={!detailView}
                         /* The heading follows the work rather than the stage name. A lead
                            lands here the moment the Consultation Fee is taken, usually with
                            the Treatment Fee still to come — and the Branch Admin taking it
@@ -11232,7 +11232,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         ) : (
                           <PanelChip>Treatment Fee Due</PanelChip>
                         )}
-                        actions={FeeActions}
                         tabs={
                           <>
                             {/* Only ever the way back. On the panel's own view this tab was

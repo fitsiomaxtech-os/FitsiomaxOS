@@ -186,7 +186,7 @@ code {
 }
 
 /* Branch Admin > Consultation: the Overview tab of a patient at Consultation Visit or Fee Collected is drawn flat --
-   no borders, 2px corners, and its buttons (View Details, Payment Schedule, Receipt) carry no
+   no borders, 2px corners, and its buttons (View Details, Receipt) carry no
    icon. Round things (the step numbers and ticks) stay round. */
 .fee-flat,
 .fee-flat * {
@@ -197,19 +197,13 @@ code {
   border-radius: 2px !important;
 }
 .fee-flat [data-testid="cons-case-record-open"] > span.ml-auto svg,
-.fee-flat [data-testid="cons-open-partial-schedule-sidebar"] svg,
 .fee-flat [data-testid^="cons-fee-receipt"] svg {
   display: none !important;
 }
-/* ...and View Details and Payment Schedule are filled in their own colours, at 75% like the
-   Appointment button (set in the JSX). */
+/* ...and View Details is filled in its own colour, at 75% like the Appointment button (set
+   in the JSX). */
 .fee-flat [data-testid="cons-case-record-view"] {
   background-color: #0284c7 !important; /* sky-600 */
-  color: #fff !important;
-  opacity: 0.75;
-}
-.fee-flat [data-testid="cons-open-partial-schedule-sidebar"] {
-  background-color: #475569 !important; /* slate-600 */
   color: #fff !important;
   opacity: 0.75;
 }
@@ -217,19 +211,17 @@ code {
    the negative spread pulls it in from the sides. */
 .fee-flat [data-testid="cons-open-appt-card"],
 .fee-flat [data-testid="cons-case-record-view"],
-.fee-flat [data-testid="cons-open-partial-schedule-sidebar"],
 .fee-flat [data-testid^="cons-fee-receipt"],
 .fee-flat [data-testid^="cons-fee-act-"] {
   box-shadow: 0 4px 4px -2px rgba(0, 0, 0, 0.7) !important;
 }
-/* ...and its buttons down the right-hand side -- View Details, Payment Schedule, every
-   Receipt and Collect -- are one size and end on one edge: the fee rows take the same 16px
+/* ...and its buttons down the right-hand side -- View Details, every Receipt and
+   Collect -- are one size and end on one edge: the fee rows take the same 16px
    inset the section headings have. (Appointment Card is sized to match in the JSX.) */
 .fee-flat [data-testid^="cons-fee-step-"] {
   padding-right: 16px !important;
 }
 .fee-flat [data-testid="cons-case-record-view"],
-.fee-flat [data-testid="cons-open-partial-schedule-sidebar"],
 .fee-flat [data-testid^="cons-fee-receipt"],
 .fee-flat [data-testid^="cons-fee-act-"] {
   width: 104px !important;
@@ -241,10 +233,75 @@ code {
 }
 @media (min-width: 640px) {
   .fee-flat [data-testid="cons-case-record-view"],
-  .fee-flat [data-testid="cons-open-partial-schedule-sidebar"],
   .fee-flat [data-testid^="cons-fee-receipt"],
   .fee-flat [data-testid^="cons-fee-act-"] {
     width: 130px !important;
     min-width: 130px !important;
   }
+}
+/* Fee Collected only (.fee-soft, set in the JSX): no button on the Overview is filled or casts
+   a shadow -- each is its words and icon in colour on the white of its row. The footer's
+   Assign Physio, Mark Online and Add Due (and Collect Online Payment beside them) share one
+   pastel violet, as does the Treatment Fee row's Mark Online. A light tint shows on hover. */
+.fee-flat.fee-soft [data-testid="cons-case-record-view"],
+.fee-flat.fee-soft [data-testid^="cons-fee-receipt"],
+.fee-flat.fee-soft [data-testid^="cons-fee-act-"],
+.fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"],
+.fee-flat.fee-soft [data-testid^="cons-prebook-use-"],
+.fee-flat.fee-soft [data-testid="cons-fee-mark-online"],
+.fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
+.fee-flat.fee-soft [data-testid="cons-mark-online-menu"],
+.fee-flat.fee-soft [data-testid="cons-open-add-due"],
+.fee-flat.fee-soft [data-testid="cons-collect-online"] {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+.fee-flat.fee-soft [data-testid="cons-case-record-view"]:hover,
+.fee-flat.fee-soft [data-testid^="cons-fee-receipt"]:hover,
+.fee-flat.fee-soft [data-testid^="cons-fee-act-"]:hover,
+.fee-flat.fee-soft [data-testid^="cons-prebook-use-"]:hover {
+  background-color: #f1f5f9 !important; /* slate-100 */
+}
+.fee-flat.fee-soft [data-testid="cons-fee-mark-online"],
+.fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
+.fee-flat.fee-soft [data-testid="cons-mark-online-menu"],
+.fee-flat.fee-soft [data-testid="cons-open-add-due"],
+.fee-flat.fee-soft [data-testid="cons-collect-online"] {
+  color: #8b5cf6 !important; /* violet-500 */
+}
+.fee-flat.fee-soft [data-testid="cons-fee-mark-online"]:hover,
+.fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"]:hover,
+.fee-flat.fee-soft [data-testid="cons-mark-online-menu"]:hover,
+.fee-flat.fee-soft [data-testid="cons-open-add-due"]:hover,
+.fee-flat.fee-soft [data-testid="cons-collect-online"]:hover {
+  background-color: #f5f3ff !important; /* violet-50 */
+  color: #7c3aed !important; /* violet-600 */
+}
+/* View Details and the next fee's Collect keep their sky as the colour of their words; the
+   other Collects read in slate, and Receipt keeps its emerald (set in the JSX). */
+.fee-flat.fee-soft [data-testid^="cons-fee-act-"] {
+  color: #334155 !important; /* slate-700 */
+}
+.fee-flat.fee-soft [data-testid="cons-case-record-view"],
+.fee-flat.fee-soft [data-testid^="cons-fee-act-"].bg-sky-600 {
+  color: #0284c7 !important; /* sky-600 */
+  opacity: 1;
+}
+.fee-flat.fee-soft [data-testid^="cons-prebook-use-"] {
+  color: #0f766e !important; /* teal-700 */
+}
+/* Inspect reads as a link under the Treatment Fee's name, flush with it. */
+.fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"] {
+  width: auto !important;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+  color: #0284c7 !important; /* sky-600 */
+  opacity: 1;
+}
+.fee-flat.fee-soft [data-testid^="cons-fee-inspect-treatment"]:hover {
+  text-decoration: underline;
+}
+/* ...and the rows of fees already in sit on white like the rest, not on a green tint. */
+.fee-flat.fee-soft [data-testid^="cons-fee-step-"] {
+  background-color: #fff !important;
 }
