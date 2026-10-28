@@ -1349,7 +1349,8 @@ export const CRMPage = ({ auth, onLogout }) => {
             bottom navs, and the same slot: glyph in a chip, its name small beneath.
 
             Its slate at 90% (Super Admin's bar alone), with the page behind it blurred so a
-            row scrolling under it does not muddle the icons. */}
+            row scrolling under it does not muddle the icons. Its glyphs are 75% of the
+            other bars' (18px, the photo 21px), in the same 36px chip. */}
         {showSuperAdminBoard && (
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600/90 bg-slate-500/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" data-testid="super-admin-bottom-nav">
             <div className="flex items-stretch justify-around">
@@ -1359,7 +1360,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                   <BottomNavTab
                     key={t.key}
                     onClick={() => { setShowProfile(false); setSuperAdminView(t.key); setShowSuperAdminMenu(false); }}
-                    icon={<Icon className="h-6 w-6" />}
+                    icon={<Icon className="h-[18px] w-[18px]" />}
                     label={t.label}
                     active={!showProfile && superAdminView === t.key}
                     data-testid={`super-admin-nav-${t.key}`}
@@ -1370,7 +1371,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               <BottomNavTab
                 onClick={() => setShowSuperAdminMenu((v) => !v)}
                 aria-expanded={showSuperAdminMenu}
-                icon={<Menu className="h-6 w-6" />}
+                icon={<Menu className="h-[18px] w-[18px]" />}
                 label="More"
                 active={(!showProfile && SUPER_ADMIN_MORE_TABS.some((t) => isSuperAdminTabActive(superAdminView, t.key))) || showSuperAdminMenu}
                 data-testid="super-admin-nav-more"
@@ -1378,7 +1379,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               {/* My Profile, and Logout inside it -- the header drops both on a phone. */}
               <BottomNavTab
                 onClick={() => { setShowProfile(true); setShowSuperAdminMenu(false); }}
-                icon={<ProfileNavGlyph user={auth?.user} size={28} iconClassName="h-6 w-6" />}
+                icon={<ProfileNavGlyph user={auth?.user} size={21} iconClassName="h-[18px] w-[18px]" />}
                 label="My Profile"
                 active={showProfile}
                 data-testid="super-admin-nav-profile"
