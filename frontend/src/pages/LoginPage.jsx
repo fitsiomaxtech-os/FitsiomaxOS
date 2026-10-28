@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Mail, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -279,21 +279,19 @@ export const LoginPage = ({ onLogin }) => {
                   </p>
                 )}
                 {loginError?.kind === "locked" && (
+                  // One row of text, no icon. The minutes are what is left of the lock: 10 on
+                  // the try that set it, fewer on a try made while it still holds. flex-wrap
+                  // only lets a narrow phone drop the second half under the first.
                   <div
                     role="alert"
-                    className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2.5"
+                    className="flex flex-wrap items-baseline gap-x-2 rounded-[4px] border border-red-200 bg-red-50 px-3 py-2"
                     style={{ fontFamily: "Lexend, sans-serif" }}
                     data-testid="screen1-login-error-locked"
                   >
-                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-red-700">Access Warning</p>
-                      <p className="text-xs text-red-600">
-                        Access restricted for {LOCK_MINUTES} minutes.
-                        {loginError.minutesLeft < LOCK_MINUTES &&
-                          ` Try again in ${loginError.minutesLeft} minute${loginError.minutesLeft === 1 ? "" : "s"}.`}
-                      </p>
-                    </div>
+                    <span className="text-sm font-semibold text-red-700">Access Warning</span>
+                    <span className="text-xs text-red-600">
+                      Access restricted for {loginError.minutesLeft} minute{loginError.minutesLeft === 1 ? "" : "s"}.
+                    </span>
                   </div>
                 )}
 
