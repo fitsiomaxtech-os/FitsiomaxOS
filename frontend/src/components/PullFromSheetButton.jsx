@@ -17,8 +17,10 @@ import { gsAutoSyncSources, gsPull } from "@/lib/api";
  *  - phoneSmall: with iconOnly, 32px below sm to match a phone toolbar of that size
  *  - soft: with iconOnly, a bordered light-green wash with a spreadsheet icon (Pre Sales'
  *    toolbar), so it no longer wears the same arrows as the Refresh button beside it
+ *  - sheetIcon: with iconOnly, keeps the solid green circle but swaps the arrows for a
+ *    spreadsheet icon (a spinner while pulling) -- Branch Admin, beside its own Refresh
  */
-export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint, iconOnly, phoneSmall, soft }) => {
+export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint, iconOnly, phoneSmall, soft, sheetIcon }) => {
   const [busy, setBusy] = useState(false);
 
   const pullAll = async () => {
@@ -97,7 +99,13 @@ export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint,
         className={`h-10 w-10 ${phoneSmall ? "max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5" : ""} shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white shadow-sm hover:bg-emerald-700`}
         data-testid="presales-pull-from-sheet-btn"
       >
-        <RefreshCw className={`h-4 w-4 ${phoneSmall ? "max-sm:h-3.5 max-sm:w-3.5" : ""} ${busy ? "animate-spin" : ""}`} />
+        {sheetIcon ? (
+          busy
+            ? <Loader2 className={`h-4 w-4 ${phoneSmall ? "max-sm:h-3.5 max-sm:w-3.5" : ""} animate-spin`} />
+            : <FileSpreadsheet className={`h-4 w-4 ${phoneSmall ? "max-sm:h-3.5 max-sm:w-3.5" : ""}`} />
+        ) : (
+          <RefreshCw className={`h-4 w-4 ${phoneSmall ? "max-sm:h-3.5 max-sm:w-3.5" : ""} ${busy ? "animate-spin" : ""}`} />
+        )}
       </Button>
     );
   }

@@ -2877,6 +2877,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               noSourcesHint="No Google Sheet is linked to this branch yet — ask your Super Admin to tag one to this branch in Marketing Board → Lead Sources."
               iconOnly
               phoneSmall
+              sheetIcon
             />
             {/* Below md, where the tab strip is hidden: its Settings gear at the end of this row
                 instead -- same tabs, same menu, same popup. Nine 32px squares with 4px gaps
