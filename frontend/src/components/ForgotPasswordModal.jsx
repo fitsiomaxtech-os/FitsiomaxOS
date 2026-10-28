@@ -23,6 +23,15 @@ const INITIAL_STATE = {
   sentMessage: "",
 };
 
+// The line under the title, per step. The first step has none: the field's own label says
+// what to type.
+const DESCRIPTIONS = {
+  otp: "Enter the OTP sent to verify it's you.",
+  sent: "Check your inbox for next steps.",
+  newpassword: "Choose a new password for your account.",
+  success: "You're all set.",
+};
+
 export const ForgotPasswordModal = ({ open, onOpenChange }) => {
   const [state, setState] = useState(INITIAL_STATE);
   const [loading, setLoading] = useState(false);
@@ -99,18 +108,20 @@ export const ForgotPasswordModal = ({ open, onOpenChange }) => {
     }
   };
 
+  const description = DESCRIPTIONS[state.step];
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md" data-testid="forgot-password-modal">
+      {/* With no description, aria-describedby={undefined} tells Radix there is none to
+          link rather than letting it warn about a missing one. */}
+      <DialogContent
+        className="max-w-md sm:rounded-[4px]"
+        data-testid="forgot-password-modal"
+        {...(description ? {} : { "aria-describedby": undefined })}
+      >
         <DialogHeader>
           <DialogTitle>Reset your password</DialogTitle>
-          <DialogDescription>
-            {state.step === "identifier" && "Enter your registered email or mobile number to begin."}
-            {state.step === "otp" && "Enter the OTP sent to verify it's you."}
-            {state.step === "sent" && "Check your inbox for next steps."}
-            {state.step === "newpassword" && "Choose a new password for your account."}
-            {state.step === "success" && "You're all set."}
-          </DialogDescription>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
 
         {state.step === "identifier" && (
@@ -119,7 +130,6 @@ export const ForgotPasswordModal = ({ open, onOpenChange }) => {
               <Input
                 value={state.identifier}
                 onChange={(e) => set({ identifier: e.target.value })}
-                placeholder="you@fitsiomax.com or 9876543210"
                 data-testid="forgot-password-identifier-input"
                 autoFocus
               />
