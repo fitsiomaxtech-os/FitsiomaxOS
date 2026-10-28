@@ -724,6 +724,9 @@ export const setPhysioDayLock = async (password, locked) => (await api.put("/adm
 // `lead_delete_enabled` by everyone else — only the Danger Zone reads and writes it here.
 export const getLeadDeleteButton = async (password) => (await api.get("/admin/lead-delete-button", { headers: developerHeaders(password) })).data;
 export const setLeadDeleteButton = async (password, enabled) => (await api.put("/admin/lead-delete-button", { enabled }, { headers: developerHeaders(password) })).data;
+// The same switch read without the password, by Pre Sales -- its leads come off /leads,
+// which does not carry it the way the branch board does.
+export const getLeadDeleteEnabled = async () => (await api.get("/lead-delete-button")).data;
 // Whether the accountant's expense lists offer a Delete bin. Read back by them as
 // `delete_enabled` on /finance/expenses — only the Danger Zone reads and writes it here.
 export const getExpenseDeleteButton = async (password) => (await api.get("/admin/expense-delete-button", { headers: developerHeaders(password) })).data;

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
   getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
+  getLeadDeleteEnabled,
   listTestimonials, addTestimonial, deleteTestimonial, getDashboardOverview,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
@@ -14,6 +15,7 @@ import { CreateLeadModal, DEPARTMENT_OPTIONS } from "@/components/CreateLeadModa
 import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
+import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
 import { LeadMarks } from "@/components/ui/lead-marks";
@@ -907,6 +909,12 @@ export const PreSalesCRM = ({
   const [editing, setEditing] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  // The New Leads row's bin: the lead and everything of theirs, through Branch Leads' own
+  // typed-DELETE dialog and endpoint. Shown only while the Developer Access switch is on --
+  // false until the first read says so, since this is the one button here that cannot be
+  // taken back.
+  const [purgeLead, setPurgeLead] = useState(null);
+  const [leadDeleteEnabled, setLeadDeleteEnabled] = useState(false);
   // The lead whose Branch Transfer dialog is open, from the table's Branch Transfer column.
   const [transferLead, setTransferLead] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -959,6 +967,10 @@ export const PreSalesCRM = ({
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Read again on every refresh, so a switch flipped in Developer Access shows here on the
+    // next Refresh rather than the next sign-in. Apart from the leads: a failure hides the
+    // bin and nothing else.
+    getLeadDeleteEnabled().then((r) => setLeadDeleteEnabled(!!r?.enabled)).catch(() => setLeadDeleteEnabled(false));
     try {
       // Scoped to the branch when this board is pinned to one. The API already scopes a
       // Branch Admin to their own branch, but a Super Admin drilled into a branch is not
@@ -998,6 +1010,13 @@ export const PreSalesCRM = ({
   // Head) sees the marks read-only.
   const canMarkLeads = ["pre_sales", "super_admin", "branch_admin", "business_dev"]
     .includes(String(currentUser?.role || "").trim().toLowerCase());
+  // The bin on the New Leads rows. The logins the delete endpoint takes, the Developer
+  // Access switch, and the New Leads card -- a rep's own stage, so not on the master views,
+  // whose cards have no New Leads. The server holds Pre Sales to New Leads as well.
+  const canPurgeLeads = leadDeleteEnabled && ["pre_sales", "super_admin", "business_dev", "branch_admin", "online_physio_admin", "online_fitness_admin",
+    "branch_admin_physio", "branch_admin_fitness", "branch_admin_physio_fitness"]
+    .includes(String(currentUser?.role || "").trim().toLowerCase());
+  const showRowPurge = canPurgeLeads && !isSuperAdminMasterView && stageFilter === "New Leads";
   const toggleLeadFlag = async (lead, field) => {
     const next = !lead[field];
     const patch = (value) => setLeads((rows) => rows.map((l) => (l.id === lead.id ? { ...l, [field]: value } : l)));
@@ -1685,7 +1704,20 @@ export const PreSalesCRM = ({
                       </td>
                       <td className="px-1 py-3 text-center">
                         <div className="flex items-center justify-center gap-0.5">
-                          {role === "super_admin" && (
+                          {/* One bin a row: on New Leads it is the Branch Leads one, so a
+                              Super Admin there does not get two that do different things. */}
+                          {showRowPurge && l.stage === "New Leads" ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setPurgeLead(l); }}
+                              className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                              title="Delete this patient and everything of theirs"
+                              aria-label={`Delete ${l.name || "patient"} and all their records`}
+                              data-testid={`presales-row-purge-${l.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : role === "super_admin" && (
                             <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(l); }} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" data-testid={`presales-lead-delete-${l.id}`} title="Delete lead">
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1965,6 +1997,21 @@ export const PreSalesCRM = ({
           onSaved={load}
           branchId={branchId || (role === "pre_sales" ? currentUser?.branch_id : null) || null}
           isSuperAdmin={isSuperAdminMasterView}
+        />
+      )}
+
+      {purgeLead && (
+        <BulkDeleteLeadsModal
+          leads={[purgeLead]}
+          purge
+          onClose={() => setPurgeLead(null)}
+          onDeleted={(res) => {
+            const gone = purgeLead.id;
+            setPurgeLead(null);
+            // Off the list at once, then fetched again for the card counts.
+            if (res?.deleted > 0) setLeads((rows) => rows.filter((l) => l.id !== gone));
+            load();
+          }}
         />
       )}
 
