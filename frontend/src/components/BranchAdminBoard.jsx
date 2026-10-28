@@ -2164,14 +2164,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="group ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
+                className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
                 title="Settings"
                 aria-label="Settings"
                 data-testid={`branch-view-tab-settings-${activeView}`}
               >
-                {/* A quarter turn under the mouse, a half turn while the menu is open, and
-                    back as it shuts. Eased out, so it settles rather than stops. */}
-                <Settings className="h-4 w-4 transition-transform duration-500 ease-out group-hover:rotate-90 group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+                {/* Still: no turn on hover or while the menu is open. */}
+                <Settings className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
             {/* Slower than the shared menu's 150ms, and eased out, so it unfolds from the gear. */}
@@ -2885,12 +2884,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700 sm:h-10 sm:w-10 md:hidden"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700 sm:h-10 sm:w-10 md:hidden"
                     title="Settings"
                     aria-label="Settings"
                     data-testid={`branch-toolbar-settings-${activeView}`}
                   >
-                    <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-500 ease-out group-hover:rotate-90 group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+                    <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60 duration-300 ease-out">
