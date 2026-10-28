@@ -11298,7 +11298,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     onClick={openExtraDueDraft}
                                     data-testid="cons-open-add-due"
                                   >
-                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    {/* One clockwise turn a second (animate-spin: 1s linear, forever). */}
+                                    <Plus className="mr-1 h-3.5 w-3.5 animate-spin" />
                                     Add Due
                                   </Button>
                                   {OnlinePayButton}
