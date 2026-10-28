@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -899,6 +899,10 @@ export const PreSalesCRM = ({
   };
   // What the list is actually narrowed to: the overlap of the two.
   const dateFilter = useMemo(() => intersectDateFilters(quickDate, customDate), [quickDate, customDate]);
+  // Branch Admin's pair, the same values: which end of the list opens it (on created_at,
+  // the date the row shows), and one patient mark to narrow to -- "" | "vip" | "attention".
+  const [sortOrder, setSortOrder] = useState("newest"); // "newest" | "oldest"
+  const [markFilter, setMarkFilter] = useState("");
   const [editing, setEditing] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -1035,6 +1039,10 @@ export const PreSalesCRM = ({
     if (assignedUserId) {
       rows = rows.filter((l) => l.assigned_user_id === assignedUserId);
     }
+    // Here with the date rather than in `filtered`, so the stage cards count the marked
+    // leads too, the way Branch Admin's counts move with its marks.
+    if (markFilter === "vip") rows = rows.filter((l) => l.is_vip);
+    else if (markFilter === "attention") rows = rows.filter((l) => l.needs_attention);
     // The same complement load() splits the two boards on, applied here as a filter rather
     // than at the source: this view is meant to hold both halves, and narrowing it is a
     // question the user asks of it, not the shape of what it fetched.
@@ -1053,7 +1061,7 @@ export const PreSalesCRM = ({
       });
     }
     return rows;
-  }, [leads, sourceFilter, modeFilter, modeBranchIds, dateFilter, showHandledByFilter, handledByFilter, assignedUserId]);
+  }, [leads, sourceFilter, modeFilter, modeBranchIds, dateFilter, showHandledByFilter, handledByFilter, assignedUserId, markFilter]);
 
   const stageCounts = useMemo(() => {
     const map = { All: dateSourceFiltered.length };
@@ -1158,12 +1166,16 @@ export const PreSalesCRM = ({
       const q = search.toLowerCase();
       rows = rows.filter((l) => (l.name || "").toLowerCase().includes(q) || (l.phone || "").includes(q) || (l.email || "").toLowerCase().includes(q));
     }
-    return rows.slice().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-  }, [dateSourceFiltered, stageFilter, search, isMarketingHeadFunnel, isSalesMasterCards]);
+    return rows.slice().sort((a, b) => (
+      sortOrder === "oldest"
+        ? (a.created_at || "").localeCompare(b.created_at || "")
+        : (b.created_at || "").localeCompare(a.created_at || "")
+    ));
+  }, [dateSourceFiltered, stageFilter, search, isMarketingHeadFunnel, isSalesMasterCards, sortOrder]);
 
   // Rendering thousands of rows at once is fine on desktop but chokes mobile
   // devices, so re-page back to 50 whenever the filtered set changes.
-  useEffect(() => { setVisibleCount(50); }, [stageFilter, sourceFilter, modeFilter, search, dateFilter, handledByFilter]);
+  useEffect(() => { setVisibleCount(50); }, [stageFilter, sourceFilter, modeFilter, search, dateFilter, handledByFilter, markFilter, sortOrder]);
   const visibleLeads = filtered.slice(0, visibleCount);
 
   // The desk table's columns and each one's share of the row. table-fixed divides the row
@@ -1364,15 +1376,58 @@ export const PreSalesCRM = ({
           </Select>
         )}
         {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
-            still say what each does. Same order and colours as Branch Leads. */}
+            still say what each does. The order, the two marks and the calendar are white
+            and bordered, uncoloured until one is switched on; the three actions after them
+            are borderless, each a light wash of its own colour. */}
         <div className="ml-auto flex shrink-0 items-center gap-3">
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger
+              title="Order the list by date"
+              aria-label="Sort order"
+              className="h-10 w-[124px] shrink-0 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none transition-colors hover:bg-slate-50 focus:ring-2 focus:ring-sky-200"
+              data-testid="presales-sort-order"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200" data-testid="presales-sort-order-menu">
+              <SelectItem value="newest" className="text-xs text-slate-700">New to Old</SelectItem>
+              <SelectItem value="oldest" className="text-xs text-slate-700">Old to New</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Pressing the lit one clears it, so the same control narrows and returns. */}
+          <button
+            type="button"
+            onClick={() => setMarkFilter((m) => (m === "vip" ? "" : "vip"))}
+            title={markFilter === "vip" ? "Showing VIP clients only — click to show all" : "Show VIP clients only"}
+            aria-label="Show VIP clients only"
+            aria-pressed={markFilter === "vip"}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${
+              markFilter === "vip" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+            data-testid="presales-filter-vip"
+          >
+            <Star className={`h-4 w-4 ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMarkFilter((m) => (m === "attention" ? "" : "attention"))}
+            title={markFilter === "attention" ? "Showing flagged patients only — click to show all" : "Show patients needing attention only"}
+            aria-label="Show patients needing attention only"
+            aria-pressed={markFilter === "attention"}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${
+              markFilter === "attention" ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+            data-testid="presales-filter-attention"
+          >
+            <AlertCircle className={`h-4 w-4 ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
+          </button>
           <DateFilterPopover value={customDate} onChange={applyCustomDate} testid="presales-date-filter" centered iconOnly />
           <Button
             onClick={load}
             disabled={loading}
             title="Refresh"
             aria-label="Refresh"
-            className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+            className="h-10 w-10 shrink-0 border-0 bg-slate-100 p-0 text-slate-600 shadow-none hover:bg-slate-200"
             data-testid="presales-refresh-btn"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -1381,12 +1436,12 @@ export const PreSalesCRM = ({
             onClick={() => setShowCreate(true)}
             title="Create Lead"
             aria-label="Create Lead"
-            className="h-10 w-10 shrink-0 bg-sky-600 p-0 hover:bg-sky-700"
+            className="h-10 w-10 shrink-0 border-0 bg-sky-50 p-0 text-sky-600 shadow-none hover:bg-sky-100"
             data-testid="presales-create-lead-btn"
           >
             <UserPlus className="h-4 w-4" />
           </Button>
-          <PullFromSheetButton onPulled={load} iconOnly />
+          <PullFromSheetButton onPulled={load} iconOnly soft />
           {role === "super_admin" && (
             <Button
               variant="outline"
