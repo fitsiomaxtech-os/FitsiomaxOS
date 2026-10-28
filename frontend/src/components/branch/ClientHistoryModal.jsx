@@ -10,6 +10,9 @@ import { BalanceDiscount, CollectField, TenderFields, emptyTender, tenderPayload
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const fmtDate = (d) => (d ? (d.length > 10 ? d.slice(0, 16).replace("T", " ") : d) : "—");
 const formatMode = (mode) => (mode ? (mode === "upi" ? "UPI" : mode.charAt(0).toUpperCase() + mode.slice(1)) : "");
+/** This popup shows no "#": "Treatment Fee #1" reads "Treatment Fee 1", and so does any
+ *  activity line or label the server wrote with one. */
+const noHash = (s) => String(s ?? "").replace(/#\s*/g, "");
 
 const STATUS_STYLES = {
   done: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -40,7 +43,7 @@ const PAST_STATUS_META = {
 };
 
 const Badge = ({ meta }) => (
-  <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[11px] font-semibold ${meta.classes}`}>
+  <span className={`inline-flex items-center rounded-[4px] border px-2 py-0.5 text-[11px] font-semibold ${meta.classes}`}>
     {meta.label}
   </span>
 );
@@ -82,7 +85,7 @@ const paidReference = (s) => [
   s.card_transaction_id && `Card txn ${s.card_transaction_id}`,
   s.account_last4 && `A/C ****${s.account_last4}`,
   s.account_holder_name,
-  s.cheque_number && `Cheque #${s.cheque_number}`,
+  s.cheque_number && `Cheque ${s.cheque_number}`,
   s.bank_name,
   s.ifsc_code,
 ].filter(Boolean);
@@ -95,11 +98,13 @@ const detailReference = (details) => {
   return m ? details.slice(m.index + 1).trim() : "";
 };
 
-/** Label left, value right, hairline between — for facts that are read, not scanned. */
+/** Label left, value right, hairline between — for facts that are read, not scanned. A
+ *  row's optional third entry is its class: "sm:hidden" for a fact a wide screen already
+ *  shows on the card's own line. Such rows go last, so the hairlines stay single. */
 const StatRows = ({ rows }) => (
   <dl className="divide-y divide-slate-100 border-y border-slate-100">
-    {rows.filter(Boolean).map(([label, value]) => (
-      <div key={label} className="flex items-baseline justify-between gap-4 py-2">
+    {rows.filter(Boolean).map(([label, value, cls]) => (
+      <div key={label} className={`flex items-baseline justify-between gap-4 py-2 ${cls || ""}`}>
         <dt className="shrink-0 text-xs font-medium text-slate-500">{label}</dt>
         <dd className="min-w-0 break-words text-right text-sm text-slate-800">{value}</dd>
       </div>
@@ -112,6 +117,39 @@ const SectionTitle = ({ children, aside }) => (
     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">{children}</h4>
     {aside}
   </div>
+);
+
+/**
+ * One line of the Overview, opened for the detail behind it: the same open-and-close card
+ * for a payment, a schedule row and the session package, so the three read alike. Closed
+ * it is a single row — what, when, how much, where it stands. On a phone the "when" moves
+ * inside rather than squeezing the row, so it is still one tap away.
+ */
+const FoldCard = ({ open, onToggle, title, tag, sub, amount, amountTone = "text-slate-900", status, highlight, children, testid, toggleTestid }) => (
+  <div className={`overflow-hidden rounded-[4px] border ${highlight ? "border-rose-200 bg-rose-50/70" : "border-slate-200 bg-white"}`} data-testid={testid}>
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${highlight ? "hover:bg-rose-50" : "hover:bg-slate-50"}`}
+      data-testid={toggleTestid}
+    >
+      <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "" : "-rotate-90"}`} />
+      <span className="truncate text-sm font-semibold text-slate-800">{title}</span>
+      {tag}
+      {sub && <span className="hidden min-w-0 truncate text-xs text-slate-600 sm:inline"><span className="mr-1.5 text-slate-300">·</span>{sub}</span>}
+      <span className="ml-auto flex shrink-0 items-center gap-2 pl-1">
+        {amount && <span className={`font-mono text-sm font-bold tabular-nums ${amountTone}`}>{amount}</span>}
+        {status}
+      </span>
+    </button>
+    {open && <div className="border-t border-slate-100 px-3.5 py-3">{children}</div>}
+  </div>
+);
+
+/** A payment's status on its card — every one here has been collected. */
+const PaidLabel = ({ children = "Paid", tone = "text-teal-700" }) => (
+  <span className={`text-[11px] font-bold uppercase tracking-wide ${tone}`}>{children}</span>
 );
 
 /**
@@ -132,54 +170,43 @@ const PaymentCards = ({ transactions, servicedBy }) => {
         const open = openId === tx.id;
         const off = Number(tx.discount_amount) || 0;
         const pct = discountPct(tx);
+        const when = `${fmtDayTime(tx.date)} · ${formatMode(tx.payment_mode)}`;
         return (
-          <div key={tx.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white" data-testid={`client-history-tx-${tx.id}`}>
-            <button
-              type="button"
-              onClick={() => setOpenId(open ? null : tx.id)}
-              className="flex w-full items-start justify-between gap-3 px-3.5 py-3 text-left hover:bg-slate-50"
-              data-testid={`client-history-tx-toggle-${tx.id}`}
-            >
-              <span className="flex min-w-0 items-start gap-2">
-                <ChevronDown className={`mt-0.5 h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "" : "-rotate-90"}`} />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold capitalize text-slate-800">{tx.source}</span>
-                  <span className="block text-xs text-slate-600">{fmtDayTime(tx.date)} · {formatMode(tx.payment_mode)}</span>
-                </span>
-              </span>
-              <span className="shrink-0 text-right">
-                <span className="block font-mono text-sm font-bold tabular-nums text-slate-900">{fmt(tx.amount)}</span>
-                <span className="block text-[11px] font-bold uppercase tracking-wide text-teal-700">Paid</span>
-              </span>
-            </button>
-
-            {open && (
-              <div className="border-t border-slate-100 px-3.5 py-3">
-                {/* The arithmetic in one line, so a discounted payment explains itself
-                    rather than needing three labelled boxes to say the same thing. */}
-                {off > 0 && (
-                  <p className="mb-2.5 font-mono text-sm tabular-nums text-slate-600" data-testid={`client-history-tx-maths-${tx.id}`}>
-                    {fmt(tx.original_amount).replace("Rs.", "")} <span className="text-slate-400">−</span>{" "}
-                    <span className="text-amber-700">{fmt(off).replace("Rs.", "")}</span>
-                    {pct != null && (
-                      <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[11px] font-bold text-amber-800" data-testid={`client-history-tx-discount-pct-${tx.id}`}>{pct}%</span>
-                    )}{" "}
-                    <span className="text-slate-400">=</span>{" "}
-                    <span className="font-semibold text-slate-900">{fmt(tx.amount).replace("Rs.", "")}</span>{" "}
-                    <span className="text-slate-500">collected</span>
-                  </p>
-                )}
-                <StatRows rows={[
-                  tx.transaction_id && ["Transaction", <span key="t" className="font-mono">{tx.transaction_id}</span>],
-                  !tx.transaction_id && tx.receipt_no && ["Receipt", <span key="r" className="font-mono">{tx.receipt_no}</span>],
-                  tx.collected_by && ["Collected by", tx.collected_by_role ? `${tx.collected_by} · ${formatMode(tx.collected_by_role).replace(/_/g, " ")}` : tx.collected_by],
-                  off > 0 && tx.discount_reason && ["Discount", tx.discount_reason],
-                  detailReference(tx.details) && ["Reference", <span key="ref" className="break-all font-mono">{detailReference(tx.details)}</span>],
-                  servicedBy && ["Service by", servicedBy],
-                ]} />
-              </div>
+          <FoldCard
+            key={tx.id}
+            open={open}
+            onToggle={() => setOpenId(open ? null : tx.id)}
+            title={<span className="capitalize">{tx.source}</span>}
+            sub={when}
+            amount={fmt(tx.amount)}
+            status={<PaidLabel />}
+            testid={`client-history-tx-${tx.id}`}
+            toggleTestid={`client-history-tx-toggle-${tx.id}`}
+          >
+            {/* The arithmetic in one line, so a discounted payment explains itself
+                rather than needing three labelled boxes to say the same thing. */}
+            {off > 0 && (
+              <p className="mb-2.5 font-mono text-sm tabular-nums text-slate-600" data-testid={`client-history-tx-maths-${tx.id}`}>
+                {fmt(tx.original_amount).replace("Rs.", "")} <span className="text-slate-400">−</span>{" "}
+                <span className="text-amber-700">{fmt(off).replace("Rs.", "")}</span>
+                {pct != null && (
+                  <span className="ml-1 rounded-[4px] bg-amber-100 px-1 py-px text-[11px] font-bold text-amber-800" data-testid={`client-history-tx-discount-pct-${tx.id}`}>{pct}%</span>
+                )}{" "}
+                <span className="text-slate-400">=</span>{" "}
+                <span className="font-semibold text-slate-900">{fmt(tx.amount).replace("Rs.", "")}</span>{" "}
+                <span className="text-slate-500">collected</span>
+              </p>
             )}
-          </div>
+            <StatRows rows={[
+              tx.transaction_id && ["Transaction", <span key="t" className="font-mono">{tx.transaction_id}</span>],
+              !tx.transaction_id && tx.receipt_no && ["Receipt", <span key="r" className="font-mono">{tx.receipt_no}</span>],
+              tx.collected_by && ["Collected by", tx.collected_by_role ? `${tx.collected_by} · ${formatMode(tx.collected_by_role).replace(/_/g, " ")}` : tx.collected_by],
+              off > 0 && tx.discount_reason && ["Discount", tx.discount_reason],
+              detailReference(tx.details) && ["Reference", <span key="ref" className="break-all font-mono">{noHash(detailReference(tx.details))}</span>],
+              servicedBy && ["Service by", servicedBy],
+              ["Paid on", when, "sm:hidden"],
+            ]} />
+          </FoldCard>
         );
       })}
     </div>
@@ -189,51 +216,53 @@ const PaymentCards = ({ transactions, servicedBy }) => {
 /** The treatment course as quoted, and how much of it has been paid for, on one row.
  *  Deliberately silent on sessions *used* — attendance isn't recorded anywhere, so any
  *  "0 of 6 used" would be a claim this screen can't stand behind. */
-const SessionPackageCard = ({ pd }) => {
+const SessionPackageCard = ({ pd, open, onToggle }) => {
   const count = Number(pd.session_package_sessions) || 0;
   const price = Number(pd.session_package_price) || 0;
   const paid = Number(pd.session_paid) || 0;
+  const due = Number(pd.session_due) || 0;
   const purchased = paid > 0;
   const perSession = count > 0 && price > 0 ? Math.round(price / count) : null;
+  const quote = price > 0 ? `${fmt(price)}${perSession ? ` · ${fmt(perSession)}/session` : ""}` : null;
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5" data-testid="client-history-session-package">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-800">{count > 0 ? `${count}-session course` : "Treatment package"}</p>
-        {price > 0 && (
-          <p className="text-xs text-slate-600">
-            <span className="font-mono font-semibold text-slate-800">{fmt(price)}</span>
-            {perSession && ` · ${fmt(perSession)}/session`}
-          </p>
-        )}
-      </div>
-      <div className="shrink-0 text-right">
-        <p className={`text-[11px] font-bold uppercase tracking-wide ${purchased ? "text-teal-700" : "text-slate-500"}`}>
-          {purchased ? (pd.session_due > 0 ? "Part paid" : "Purchased") : "Not purchased"}
-        </p>
-        {purchased && <p className="font-mono text-xs font-semibold text-teal-700">{fmt(paid)} paid</p>}
-      </div>
-    </div>
+    <FoldCard
+      open={open}
+      onToggle={onToggle}
+      title={count > 0 ? `${count}-session course` : "Treatment package"}
+      sub={quote}
+      amount={purchased ? `${fmt(paid)} paid` : null}
+      amountTone="text-teal-700"
+      status={<PaidLabel tone={purchased ? "text-teal-700" : "text-slate-500"}>{purchased ? (due > 0 ? "Part paid" : "Purchased") : "Not purchased"}</PaidLabel>}
+      testid="client-history-session-package"
+      toggleTestid="client-history-session-package-toggle"
+    >
+      <StatRows rows={[
+        count > 0 && ["Sessions", count],
+        price > 0 && ["Package price", <span key="p" className="font-mono">{fmt(price)}</span>],
+        perSession && ["Per session", <span key="s" className="font-mono">{fmt(perSession)}</span>],
+        ["Paid", <span key="pd" className="font-mono">{fmt(paid)}</span>],
+        due > 0 && ["Still due", <span key="d" className="font-mono">{fmt(due)}</span>],
+      ]} />
+    </FoldCard>
   );
 };
 
 /** One thing owed — an installment on a fee's schedule, or a row of a Past Data sheet. */
-const DueRow = ({ title, sub, amount, meta, next, children, testid }) => (
-  <div className={`rounded-lg border px-3.5 py-3 ${next ? "border-rose-200 bg-rose-50/70" : "border-slate-200 bg-white"}`} data-testid={testid}>
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
-          {title}
-          {next && <span className="rounded bg-rose-600 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white">Next</span>}
-        </p>
-        {sub && <p className="mt-0.5 text-xs text-slate-600">{sub}</p>}
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="font-mono text-sm font-bold tabular-nums text-slate-900">{fmt(amount)}</p>
-        <div className="mt-1"><Badge meta={meta} /></div>
-      </div>
-    </div>
+const DueRow = ({ title, sub, amount, meta, next, open, onToggle, children, testid }) => (
+  <FoldCard
+    open={open}
+    onToggle={onToggle}
+    title={title}
+    tag={next && <span className="shrink-0 rounded-[4px] bg-rose-600 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white">Next</span>}
+    sub={sub}
+    amount={fmt(amount)}
+    status={<Badge meta={meta} />}
+    highlight={next}
+    testid={testid}
+    toggleTestid={`${testid}-toggle`}
+  >
     {children}
-  </div>
+  </FoldCard>
 );
 
 /** One of the contact row's actions. Only drawn when it can be used — a greyed "No email"
@@ -243,7 +272,7 @@ const ContactAction = ({ icon: Icon, label, onClick, className = "text-slate-700
     type="button"
     onClick={onClick}
     title={label}
-    className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold hover:bg-slate-50 ${className}`}
+    className={`inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs font-semibold hover:bg-slate-50 ${className}`}
     data-testid={testid}
   >
     <Icon className="h-4 w-4" /> {label}
@@ -251,12 +280,13 @@ const ContactAction = ({ icon: Icon, label, onClick, className = "text-slate-700
 );
 
 /** One figure of the money strip. `aside` (the balance's status badge) wraps under the
- *  figure rather than squeezing it when the tile is narrow. */
+ *  figure rather than squeezing it when the tile is narrow. Every word on a tile is Inter
+ *  at 11px — label, figure and badge alike. */
 const MoneyTile = ({ label, value, aside, tone = "text-slate-900", className = "border-slate-200 bg-white", testid }) => (
-  <div className={`min-w-0 rounded-lg border px-2.5 py-2 sm:px-3 ${className}`}>
+  <div className={`min-w-0 rounded-[4px] border px-2.5 py-2 font-['Inter',sans-serif] text-[11px] sm:px-3 ${className}`}>
     <p className="text-[11px] font-semibold uppercase text-slate-500 sm:tracking-wide">{label}</p>
     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-      <p className={`break-all font-mono text-sm font-bold tabular-nums sm:text-base ${tone}`} data-testid={testid}>{value}</p>
+      <p className={`break-all text-[11px] font-bold tabular-nums ${tone}`} data-testid={testid}>{value}</p>
       {aside}
     </div>
   </div>
@@ -312,6 +342,10 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
   const [tab, setTab] = useState("overview");
   const [recording, setRecording] = useState(false);
   const [collectDraft, setCollectDraft] = useState(null);
+  // The Overview card opened for its detail -- a schedule row, a Balance to collect row or
+  // the session package -- one at a time, as Recent payments opens them.
+  const [openRow, setOpenRow] = useState(null);
+  const toggleRow = (key) => setOpenRow((k) => (k === key ? null : key));
 
   const load = () => {
     setLoading(true);
@@ -453,18 +487,15 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
     setRecording(false);
   };
 
+  // The fee alone: "Collect Extra Amount". Collect only ever takes the next one, which the
+  // schedule below marks, so its number on the button said nothing.
   const collectLabel = collectKind === "installment"
-    ? `Collect ${pd.next_installment_label || "installment"} #${pd.next_installment_number}`
+    ? `Collect ${pd.next_installment_label || "installment"}`
     : "Collect payment";
 
   // What the Overview tab has to show. With none of it, the tab says so in one line
   // instead of drawing empty section boxes.
   const hasPackage = Boolean(pd.session_package_sessions || pd.session_package_price || pd.session_total > 0);
-  const contactFacts = [
-    client?.assigned_physio_name && ["Expert", client.assigned_physio_name],
-    client?.source && ["Source", client.source],
-    client?.email && ["Email", client.email],
-  ].filter(Boolean);
 
   return createPortal(
     <div
@@ -478,40 +509,38 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-history-name"
-        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
       >
-        {/* ---- header: who this is ---- */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 id="client-history-name" className="truncate text-lg font-bold text-slate-900" data-testid="client-history-name">{client?.name || "Loading..."}</h3>
-              {client && (
-                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLES[status]}`} data-testid="client-history-status">
-                  <span className={`h-1.5 w-1.5 rounded-full ${status === "done" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                  {status === "done" ? "Completed" : "In Progress"}
-                </span>
-              )}
-            </div>
-            {/* Identity in one line: who, where, and their file number. Each part is
-                dropped rather than shown blank when absent. */}
+        {/* ---- header: who this is, in one row at 14px — name, status, then phone,
+            branch and file number. Each part is dropped rather than shown blank when
+            absent; a phone wraps the identity under the name rather than squeezing it. ---- */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5 sm:px-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[14px] sm:flex-nowrap">
+            <h3 id="client-history-name" className="min-w-0 max-w-full truncate text-[14px] font-bold text-slate-900 sm:max-w-[45%] sm:shrink-0" data-testid="client-history-name">{client?.name || "Loading..."}</h3>
             {client && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-600" data-testid="client-history-meta">
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[14px] font-semibold leading-5 ${STATUS_STYLES[status]}`} data-testid="client-history-status">
+                <span className={`h-1.5 w-1.5 rounded-full ${status === "done" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                {status === "done" ? "Completed" : "In Progress"}
+              </span>
+            )}
+            {client && (
+              <span className="min-w-0 truncate text-[14px] text-slate-600" data-testid="client-history-meta">
                 {[
                   displayPhone(client.phone),
                   client.branch_name,
                   client.patient_number && <span key="pn" className="font-mono">{client.patient_number}</span>,
-                ].filter(Boolean).map((part, i, arr) => (
-                  <span key={i} className="flex items-center gap-2">
+                ].filter(Boolean).map((part, i) => (
+                  <span key={i}>
+                    {i > 0 && <span className="mx-1.5 text-slate-300">·</span>}
                     {part}
-                    {i < arr.length - 1 && <span className="text-slate-300">·</span>}
                   </span>
                 ))}
-              </div>
+              </span>
             )}
           </div>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close"
-            className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             data-testid="client-history-close"
           >
             <X className="h-5 w-5" />
@@ -541,7 +570,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                 <MoneyTile
                   label="Discount"
                   value={discount > 0 ? `−${fmt(discount)}` : fmt(0)}
-                  aside={solePct != null && <span className="rounded bg-amber-100 px-1 py-px text-[11px] font-bold text-amber-800">{solePct}%</span>}
+                  aside={solePct != null && <span className="rounded-[4px] bg-amber-100 px-1 py-px text-[11px] font-bold text-amber-800">{solePct}%</span>}
                   tone={discount > 0 ? "text-amber-700" : "text-slate-500"}
                 />
                 <MoneyTile label="Collected" value={fmt(collected)} tone="text-teal-700" />
@@ -556,7 +585,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   {collectKind && (
                     <button
                       type="button" onClick={openCollect} disabled={recording}
-                      className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
                       data-testid="client-history-record-payment"
                     >
                       <Wallet className="h-4 w-4" /> {recording ? "Saving..." : collectLabel}
@@ -565,7 +594,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   {feeCollect && (
                     <button
                       type="button" onClick={onCollect}
-                      className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 sm:w-auto"
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 sm:w-auto"
                       data-testid="client-history-collect-fee"
                     >
                       <Wallet className="h-4 w-4" /> Collect Consultation Fee
@@ -579,32 +608,25 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                         if (await undo.run()) load();
                       }}
                       aria-disabled={Boolean(undo.blocked)}
-                      title={undo.blocked || `Undo ${undo.label} — ${fmt(undo.amount)}`}
-                      className={`flex h-10 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-bold sm:w-auto ${
+                      title={undo.blocked || `Undo ${noHash(undo.label)} — ${fmt(undo.amount)}`}
+                      className={`flex h-10 w-full items-center justify-center gap-2 rounded-[4px] border px-4 text-sm font-bold sm:w-auto ${
                         undo.blocked
                           ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
                           : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
                       }`}
                       data-testid="client-history-undo-instalment"
                     >
-                      <Undo2 className="h-4 w-4" /> Undo {undo.label}
+                      <Undo2 className="h-4 w-4" /> Undo {noHash(undo.label)}
                     </button>
                   )}
                 </div>
               )}
 
-              {(contactFacts.length > 0 || client?.phone || client?.email) && (
-                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-100 pt-3">
-                  {contactFacts.length > 0 && (
-                    <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm">
-                      {contactFacts.map(([label, value]) => (
-                        <div key={label} className="flex min-w-0 items-baseline gap-1.5">
-                          <dt className="text-xs text-slate-500">{label}</dt>
-                          <dd className="min-w-0 break-words font-medium text-slate-800">{value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
+              {/* Reaching the client, on a phone only — the desk on a computer calls and
+                  messages from elsewhere, and this row was one more thing between the money
+                  and the record. */}
+              {(client?.phone || client?.email) && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 sm:hidden" data-testid="client-history-contact">
                   <div className="flex gap-2">
                     {client?.phone && <ContactAction icon={PhoneCall} label="Call" onClick={callClient} testid="client-history-call" />}
                     {/* On for a Past Data client too: that balance can be collected here now,
@@ -636,7 +658,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   {/* The count belongs on the tab: it says whether opening it is worth the
                       click, which the label alone never does. */}
                   {t.count != null && (
-                    <span className={`ml-1.5 rounded-full px-1.5 py-px text-xs tabular-nums ${tab === t.key ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
+                    <span className={`ml-1.5 rounded-[4px] px-1.5 py-px text-xs tabular-nums ${tab === t.key ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
                   )}
                 </button>
               ))}
@@ -652,21 +674,29 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                         Balance to collect
                       </SectionTitle>
                       <div className="space-y-2">
-                        {pastOwed.map((r, i) => (
-                          <DueRow
-                            key={r.id}
-                            title={r.service || "Past Data course"}
-                            sub={[
-                              r.due_date && `Due ${fmtDay(r.due_date)}`,
-                              r.excel_id,
-                              r.collected > 0 && `${fmt(r.collected)} already collected`,
-                            ].filter(Boolean).join(" · ")}
-                            amount={r.amount}
-                            meta={PAST_STATUS_META[r.status] || PAST_STATUS_META.partial}
-                            next={i === 0}
-                            testid={`client-history-past-owed-${r.id}`}
-                          />
-                        ))}
+                        {pastOwed.map((r, i) => {
+                          const meta = PAST_STATUS_META[r.status] || PAST_STATUS_META.partial;
+                          return (
+                            <DueRow
+                              key={r.id}
+                              title={noHash(r.service || "Past Data course")}
+                              sub={r.due_date ? `Due ${fmtDay(r.due_date)}` : null}
+                              amount={r.amount}
+                              meta={meta}
+                              next={i === 0}
+                              open={openRow === `past-${r.id}`}
+                              onToggle={() => toggleRow(`past-${r.id}`)}
+                              testid={`client-history-past-owed-${r.id}`}
+                            >
+                              <StatRows rows={[
+                                ["Status", meta.label],
+                                r.excel_id && ["Sheet ID", <span key="x" className="font-mono">{r.excel_id}</span>],
+                                r.collected > 0 && ["Already collected", <span key="c" className="font-mono">{fmt(r.collected)}</span>],
+                                r.due_date && ["Due", fmtDay(r.due_date), "sm:hidden"],
+                              ]} />
+                            </DueRow>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -677,28 +707,37 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                       <div className="space-y-2">
                         {schedule.map((s) => {
                           const isNext = s.installment_number === pd.next_installment_number && s.fee === (pd.next_installment_fee || "treatment");
+                          const key = `${s.fee || "treatment"}-${s.installment_number}`;
+                          const meta = SCHEDULE_STATUS_META[s.status] || SCHEDULE_STATUS_META.upcoming;
                           return (
                             <DueRow
-                              key={`${s.fee || "treatment"}-${s.installment_number}`}
+                              key={key}
                               // Which fee this row belongs to. Numbering restarts per fee, so
-                              // without it a client owing on two reads as "#1, #2, #1, #2".
-                              title={`${s.fee_label || "Installment"} #${s.installment_number}`}
+                              // without it a client owing on two reads as "1, 2, 1, 2".
+                              title={`${s.fee_label || "Installment"} ${s.installment_number}`}
                               sub={s.due_date ? `Due ${fmtDay(s.due_date)}` : null}
                               amount={s.amount}
-                              meta={SCHEDULE_STATUS_META[s.status] || SCHEDULE_STATUS_META.upcoming}
+                              meta={meta}
                               next={isNext}
-                              testid={`client-history-schedule-${s.fee || "treatment"}-${s.installment_number}`}
+                              open={openRow === `sched-${key}`}
+                              onToggle={() => toggleRow(`sched-${key}`)}
+                              testid={`client-history-schedule-${key}`}
                             >
-                              {/* How this one was settled, once it has been — the UTR or cheque
-                                  number is the only way to match it to a bank statement later. */}
-                              {s.payment_mode && (
-                                <div className="mt-2 flex flex-wrap items-center gap-1" data-testid={`client-history-schedule-ref-${s.fee || "treatment"}-${s.installment_number}`}>
-                                  <span className="rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{formatMode(s.payment_mode)}</span>
-                                  {paidReference(s).map((chip) => (
-                                    <span key={chip} className="rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">{chip}</span>
-                                  ))}
-                                </div>
-                              )}
+                              <StatRows rows={[
+                                ["Status", meta.label],
+                                // How this one was settled, once it has been — the UTR or cheque
+                                // number is the only way to match it to a bank statement later.
+                                s.payment_mode && ["Paid by", (
+                                  <span key="ref" className="inline-flex flex-wrap justify-end gap-1" data-testid={`client-history-schedule-ref-${key}`}>
+                                    <span className="rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{formatMode(s.payment_mode)}</span>
+                                    {paidReference(s).map((chip) => (
+                                      <span key={chip} className="rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">{chip}</span>
+                                    ))}
+                                  </span>
+                                )],
+                                s.transaction_id && ["Transaction", <span key="t" className="font-mono">{s.transaction_id}</span>],
+                                s.due_date && ["Due", fmtDay(s.due_date), "sm:hidden"],
+                              ]} />
                             </DueRow>
                           );
                         })}
@@ -709,7 +748,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   {hasPackage && (
                     <div>
                       <SectionTitle>Session Package</SectionTitle>
-                      <SessionPackageCard pd={pd} />
+                      <SessionPackageCard pd={pd} open={openRow === "package"} onToggle={() => toggleRow("package")} />
                     </div>
                   )}
 
@@ -742,7 +781,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                     <li key={ev.id} className="flex items-start gap-2.5 py-2" data-testid={`client-history-event-${ev.id}`}>
                       <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                       <div className="min-w-0">
-                        <p className="break-words text-sm text-slate-800">{ev.details}</p>
+                        <p className="break-words text-sm text-slate-800">{noHash(ev.details)}</p>
                         <p className="mt-0.5 text-xs text-slate-500">{fmtDate(ev.created_at)} · {ev.created_by}</p>
                       </div>
                     </li>
@@ -757,13 +796,13 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
             not to whichever tab happens to be open. */}
         {data && (
           <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5">
-            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none" data-testid="client-history-print">
+            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex flex-1 items-center justify-center gap-1.5 rounded-[4px] bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none" data-testid="client-history-print">
               <Printer className="h-4 w-4 shrink-0" /> Print<span className="hidden sm:inline"> receipt</span>
             </button>
-            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
+            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex flex-1 items-center justify-center gap-1.5 rounded-[4px] border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
               <FileText className="h-4 w-4 shrink-0" /> <span className="hidden sm:inline">Download </span>Invoice
             </button>
-            <button type="button" onClick={onClose} className="ml-auto hidden rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
+            <button type="button" onClick={onClose} className="ml-auto hidden rounded-[4px] border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
               Close
             </button>
           </div>
@@ -802,7 +841,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
               ) : (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                   <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
-                    {pd.next_installment_label || "Installment"} #{pd.next_installment_number}
+                    {pd.next_installment_label || "Installment"} {pd.next_installment_number}
                     {/* installments_total counts the Treatment Fee's schedule, so "of N"
                         is only true when that is the fee being collected. */}
                     {pd.next_installment_fee === "treatment" && pd.installments_total ? ` of ${pd.installments_total}` : ""}
