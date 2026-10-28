@@ -573,8 +573,8 @@ export const PipelineStageManagement = ({ leading = null }) => {
     // that the button it turns on takes the paid-for records with the patient, and that is
     // the sentence somebody should read before agreeing to it.
     const ok = window.confirm(next
-      ? "Turn the Branch Leads delete button ON?\n\nBranch Admins will get a bin icon on every lead row, and Pre Sales on its New Leads rows. It deletes the patient outright — treatment slots, collected payments, appointments, documents, portal login and all. It cannot be undone."
-      : "Turn the Branch Leads delete button OFF?\n\nThe bin icon and the select-many Delete bar disappear from Branch Leads, the bin disappears from Pre Sales' New Leads, and the server refuses the request even if one is sent. Nothing already deleted comes back.");
+      ? "Turn the Branch Leads delete button ON?\n\nBranch Admins and Pre Sales will get a bin icon on their All Stages and New Leads rows. It deletes the patient outright — treatment slots, collected payments, appointments, documents, portal login and all. It cannot be undone."
+      : "Turn the Branch Leads delete button OFF?\n\nThe bin icon and the select-many Delete bar disappear from Branch Leads, the bin disappears from Pre Sales, and the server refuses the request even if one is sent. Nothing already deleted comes back.");
     if (!ok) return;
     setSavingDeleteButton(true);
     try {
@@ -970,7 +970,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
           <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
             {[
               { key: "physio-day-lock", label: "Physio Treatment Days lock", value: dayLock, saving: savingDayLock, onFlip: toggleDayLock, on: "LOCKED", off: "UNLOCKED" },
-              { key: "lead-delete-button", label: "Branch Leads & Pre Sales (New Leads) delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
+              { key: "lead-delete-button", label: "Branch Leads & Pre Sales delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
               { key: "expense-delete-button", label: "Accountant Approvals & Branch Accountant Manage delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
               { key: "before-verify-delete-button", label: "Before Verify Transactions", value: beforeVerifyDelete, saving: savingBeforeVerifyDelete, onFlip: toggleBeforeVerifyDelete, on: "ON", off: "OFF" },
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },

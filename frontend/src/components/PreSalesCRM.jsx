@@ -909,7 +909,7 @@ export const PreSalesCRM = ({
   const [editing, setEditing] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  // The New Leads row's bin: the lead and everything of theirs, through Branch Leads' own
+  // The All Stages / New Leads row's bin: the lead and everything of theirs, through Branch Leads' own
   // typed-DELETE dialog and endpoint. Shown only while the Developer Access switch is on --
   // false until the first read says so, since this is the one button here that cannot be
   // taken back.
@@ -1010,13 +1010,14 @@ export const PreSalesCRM = ({
   // Head) sees the marks read-only.
   const canMarkLeads = ["pre_sales", "super_admin", "branch_admin", "business_dev"]
     .includes(String(currentUser?.role || "").trim().toLowerCase());
-  // The bin on the New Leads rows. The logins the delete endpoint takes, the Developer
-  // Access switch, and the New Leads card -- a rep's own stage, so not on the master views,
-  // whose cards have no New Leads. The server holds Pre Sales to New Leads as well.
+  // The bin on the All Stages and New Leads rows, the two Branch Leads draws it on. The
+  // logins the delete endpoint takes, the Developer Access switch, and a rep's own card
+  // strip -- not the master views, whose cards are not stages. The server holds Pre Sales
+  // to its own branch.
   const canPurgeLeads = leadDeleteEnabled && ["pre_sales", "super_admin", "business_dev", "branch_admin", "online_physio_admin", "online_fitness_admin",
     "branch_admin_physio", "branch_admin_fitness", "branch_admin_physio_fitness"]
     .includes(String(currentUser?.role || "").trim().toLowerCase());
-  const showRowPurge = canPurgeLeads && !isSuperAdminMasterView && stageFilter === "New Leads";
+  const showRowPurge = canPurgeLeads && !isSuperAdminMasterView && (stageFilter === "All" || stageFilter === "New Leads");
   const toggleLeadFlag = async (lead, field) => {
     const next = !lead[field];
     const patch = (value) => setLeads((rows) => rows.map((l) => (l.id === lead.id ? { ...l, [field]: value } : l)));
@@ -1328,7 +1329,7 @@ export const PreSalesCRM = ({
       {/* The Pre Sales desk's own row is Branch Admin's Branch Leads strip, card for card:
           the same StageTabBar, plain — white cards, the name and count centred, All Stages
           first — but bare: no grey tray behind them, each card outlined 1px on a 4px corner.
-          The stages are the live Pre-Sales list, which ends Not a prospect, Lost. The master
+          The stages are the live Pre-Sales list, which ends Not a prospect, Pre Book, Lost. The master
           views keep their own rows above, since theirs are not stages. "All" is this board's
           key for the whole list, where the strip says null. */}
       {!isMarketingHeadFunnel && !isSalesMasterCards ? (
@@ -1704,9 +1705,10 @@ export const PreSalesCRM = ({
                       </td>
                       <td className="px-1 py-3 text-center">
                         <div className="flex items-center justify-center gap-0.5">
-                          {/* One bin a row: on New Leads it is the Branch Leads one, so a
-                              Super Admin there does not get two that do different things. */}
-                          {showRowPurge && l.stage === "New Leads" ? (
+                          {/* One bin a row: on All Stages and New Leads it is the Branch Leads
+                              one, so a Super Admin there does not get two that do different
+                              things. */}
+                          {showRowPurge ? (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setPurgeLead(l); }}
@@ -2436,7 +2438,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   };
 
   // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
-  // lead outright — each needs a date first. Every other stage, Not a prospect and Lost included, moves at once.
+  // lead outright — each needs a date first. Every other stage, Not a prospect, Pre Book and Lost included, moves at once.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
     if (s.name === "Appointment") { setBookingAppointment(true); return; }

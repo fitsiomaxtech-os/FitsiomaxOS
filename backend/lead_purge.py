@@ -128,7 +128,7 @@ DELETE_BUTTON_SETTING_ID = "lead_delete_button"
 
 
 async def delete_button_enabled() -> bool:
-    """Is the Branch Leads (and Pre Sales New Leads) delete button offered? On unless a
-    developer switched it off."""
+    """Is the Branch Leads and Pre Sales delete button offered? On unless a developer
+    switched it off."""
     row = await v3_col("app_settings").find_one({"id": DELETE_BUTTON_SETTING_ID}, {"_id": 0})
     return True if not row else bool(row.get("enabled", True))

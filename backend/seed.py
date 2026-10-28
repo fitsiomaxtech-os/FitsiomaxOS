@@ -279,18 +279,18 @@ _PRESALES_LOST_COLOUR = "#e11d48"
 
 
 async def rename_presales_pre_book_stage() -> None:
-    """End the Pre-Sales pipeline Not a prospect, Lost: its Pre Book stage becomes Lost.
+    """End the Pre-Sales pipeline with Lost, final and rose.
 
-    The Pre Sales dashboard's cards read All Stages, New Leads, RNR, Follow Up, Appointment,
-    Not a prospect, Lost. Pre Book (added by replace_presales_lost_stage) is renamed rather
-    than dropped: the row keeps its place, and every lead parked on it moves with it. Final,
-    as Lost always was -- a lead stops there. Its teal goes to rose wherever the row still
-    carries it; a colour Super Admin chose in CI/CD ROOTS stays. Pre-Sales only; the Branch
-    pipeline's own Pre Book is untouched.
+    It first did this by renaming Pre Book (added by replace_presales_lost_stage) to Lost,
+    moving the leads parked on it along -- which is how the live install ran it on
+    2026-10-28. Pre Book is wanted again now, in front of Lost (see
+    restore_presales_pre_book_stage), so an install that has not run this yet keeps its Pre
+    Book and only gains Lost after it. Pre-Sales only; the Branch pipeline's own Pre Book is
+    untouched.
 
     A one-shot, by its marker in `migrations`, for the reason replace_presales_lost_stage
-    gives. Must run after that one, which is what adds Pre Book. A no-op until the Pre-Sales
-    stages exist: a fresh install seeds Lost from V3_STAGES.
+    gives. Must run after that one. A no-op until the Pre-Sales stages exist: a fresh
+    install seeds both from V3_STAGES.
     """
     if await v3_col("migrations").find_one({"name": _PRESALES_PRE_BOOK_RENAMED_MIGRATION}):
         return
@@ -303,29 +303,63 @@ async def rename_presales_pre_book_stage() -> None:
     by_name = {r.get("name"): r for r in rows}
     pre_book = by_name.get(PRESALES_PRE_BOOK_STAGE)
     lost = by_name.get(PRESALES_LOST_STAGE)
-    if pre_book and lost:
-        await v3_col("pipeline_stages").delete_many({"type": "pre_sales", "name": PRESALES_PRE_BOOK_STAGE})
-    elif pre_book:
-        recolour = {
-            field: _PRESALES_LOST_COLOUR
-            for field in ("color", "hover_color", "selected_color")
-            if (pre_book.get(field) or "").lower() == "#0d9488"
-        }
-        await v3_col("pipeline_stages").update_many(
-            {"type": "pre_sales", "name": PRESALES_PRE_BOOK_STAGE},
-            {"$set": {"name": PRESALES_LOST_STAGE, "is_final": True, **recolour}},
-        )
-    elif not lost:
-        after = by_name.get(PRESALES_NOT_A_PROSPECT_STAGE) or by_name.get("Appointment") or rows[-1]
+    if not lost:
+        after = pre_book or by_name.get(PRESALES_NOT_A_PROSPECT_STAGE) or by_name.get("Appointment") or rows[-1]
         await _insert_presales_stage_after(after, PRESALES_LOST_STAGE, _PRESALES_LOST_COLOUR, True)
-    moved = await v3_col("leads").update_many(
-        {"stage": PRESALES_PRE_BOOK_STAGE},
-        {"$set": {"stage": PRESALES_LOST_STAGE}},
-    )
     await v3_col("migrations").insert_one({
         "name": _PRESALES_PRE_BOOK_RENAMED_MIGRATION,
-        "renamed_pre_book": bool(pre_book),
-        "leads_moved": moved.modified_count,
+        "renamed_pre_book": False,
+        "added_lost": not lost,
+        "leads_moved": 0,
+        "ran_at": now_iso(),
+    })
+
+
+_PRESALES_PRE_BOOK_RESTORED_MIGRATION = "restore_presales_pre_book_stage"
+# Teal, as the Branch pipeline's Pre Book: a visit held and coming.
+_PRESALES_PRE_BOOK_COLOUR = "#0d9488"
+
+
+async def restore_presales_pre_book_stage() -> None:
+    """Put Pre Book back on the Pre-Sales pipeline, between Not a prospect and Lost.
+
+    The Pre Sales dashboard's cards read All Stages, New Leads, RNR, Follow Up, Appointment,
+    Not a prospect, Pre Book, Lost. rename_presales_pre_book_stage had turned Pre Book into
+    Lost the day before; Lost stays, and Pre Book comes back in front of it, teal and not
+    final -- a client who wants the visit held is still coming. No lead moves: the ones that
+    went to Lost with that rename cannot be told apart from the ones lost since. Pre-Sales
+    only; the Branch pipeline's own Pre Book is untouched.
+
+    A one-shot, by its marker, for the reason replace_presales_lost_stage gives. Must run
+    after rename_presales_pre_book_stage. A no-op until the Pre-Sales stages exist: a fresh
+    install seeds Pre Book from V3_STAGES.
+    """
+    if await v3_col("migrations").find_one({"name": _PRESALES_PRE_BOOK_RESTORED_MIGRATION}):
+        return
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "pre_sales"},
+        {"_id": 0, "name": 1, "order": 1, "color": 1, "hover_color": 1, "selected_color": 1},
+    ).sort("order", 1).to_list(100)
+    if not rows:
+        return
+    by_name = {r.get("name"): r for r in rows}
+    added = PRESALES_PRE_BOOK_STAGE not in by_name
+    if added:
+        prospect = by_name.get(PRESALES_NOT_A_PROSPECT_STAGE)
+        lost = by_name.get(PRESALES_LOST_STAGE)
+        if prospect:
+            after = prospect
+        elif lost:
+            # Straight in front of Lost: the stage before it where there is one, or Lost's
+            # own place where Lost is first.
+            idx = rows.index(lost)
+            after = rows[idx - 1] if idx > 0 else {"order": (lost.get("order") or 0) - 1}
+        else:
+            after = by_name.get("Appointment") or rows[-1]
+        await _insert_presales_stage_after(after, PRESALES_PRE_BOOK_STAGE, _PRESALES_PRE_BOOK_COLOUR, False)
+    await v3_col("migrations").insert_one({
+        "name": _PRESALES_PRE_BOOK_RESTORED_MIGRATION,
+        "added_pre_book": added,
         "ran_at": now_iso(),
     })
 

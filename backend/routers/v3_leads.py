@@ -183,9 +183,8 @@ async def v3_bulk_delete_leads(
 ):
     """Delete leads from Branch Leads — a bad import cleared out, or one patient removed.
 
-    Pre Sales reaches it too, from the bin icon on its New Leads rows, and only for leads
-    still at New Leads: a lead it has moved on is being worked by somebody, and that is
-    not a delete for the Pre-Sales desk to make.
+    Pre Sales reaches it too, from the bin icon on its All Stages and New Leads rows, held
+    to its own branch the way a Branch Admin is.
 
     Permanent, and the reason this is not simply the existing per-lead delete in a loop:
 
@@ -248,9 +247,6 @@ async def v3_bulk_delete_leads(
         # The org-wide desks reach every branch; everyone else is held to their own.
         if not works_org_wide(user.role) and lead.get("branch_id") != user.branch_id:
             blocked.append({"lead_id": lead_id, "name": lead.get("name", ""), "reason": "Belongs to another branch"})
-            continue
-        if user.role == "pre_sales" and lead.get("stage") != "New Leads":
-            blocked.append({"lead_id": lead_id, "name": lead.get("name", ""), "reason": "No longer a New Lead"})
             continue
         # Everything below is the paid-for-history refusal, which a purge is asking us
         # not to make. Branch scoping above is not optional either way.

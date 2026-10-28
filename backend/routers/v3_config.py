@@ -1252,7 +1252,7 @@ async def v3_get_lead_delete_button(_: V3UserOut = Depends(require_developer_pas
 
 # The same switch, read without the developer password by a board whose leads arrive
 # without it -- Pre Sales reads its list off /leads, which has no room for a setting, and
-# draws the same bin icon on its New Leads rows. Whether a button is shown is no secret;
+# draws the same bin icon on its All Stages and New Leads rows. Whether a button is shown is no secret;
 # the delete endpoint checks the switch again on its own.
 @router.get("/lead-delete-button")
 async def v3_read_lead_delete_button(_: V3UserOut = Depends(v3_current_user)):
