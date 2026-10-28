@@ -2496,10 +2496,13 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
   // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
   // lead outright — each needs a date first. Every other stage, Not a prospect, Pre Book and Lost included, moves at once.
-  // Lost is the one that asks first: once there, the lead's stage is locked.
+  // Lost asks first: once there, the lead's stage is locked. A new lead sent to RNR asks too.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
     if (s.name === "Appointment") { setBookingAppointment(true); return; }
+    if (s.name === "RNR" && currentLead.stage === "New Leads" && !window.confirm(
+      `Move ${currentLead.name || "this lead"} from New Leads to RNR?`,
+    )) return;
     if (s.name === "Lost" && !window.confirm(
       `Move ${currentLead.name || "this lead"} to Lost?\n\nOnce Lost, the stage is locked — this lead cannot be moved to any other stage afterwards.`,
     )) return;
