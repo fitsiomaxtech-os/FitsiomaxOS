@@ -128,7 +128,8 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
   };
 
   // One row of the list. From md up: name, start to end, the 12-hour reading, Save, delete,
-  // on one line, in that order. A phone lays it out as a grid of two rows — name and
+  // on one line, in that order, with no borders on the fields — sized to fit the 750px
+  // popup. A phone lays it out as a grid of two rows — name and
   // delete, then the two times with Save beside them — and drops the reading, which only
   // repeats the times above it; it comes back on a third row to say what is wrong.
   return (
@@ -136,7 +137,7 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
       <Input
         value={draft.name}
         onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-        className="col-start-1 row-start-1 h-8 min-w-0 text-sm font-semibold md:order-1 md:w-56 md:flex-none"
+        className="col-start-1 row-start-1 h-8 min-w-0 text-sm font-semibold md:order-1 md:w-44 md:flex-none md:border-0"
         placeholder="Shift name"
         data-testid={`shift-name-${shift.id}`}
       />
@@ -147,14 +148,14 @@ function ShiftRow({ shift, onSaved, onDeleted }) {
         <ClockTimeInput
           value={draft.start_time}
           onChange={(e) => setDraft((d) => ({ ...d, start_time: e.target.value }))}
-          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-32 md:flex-none"
+          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-28 md:flex-none md:border-0"
           data-testid={`shift-start-${shift.id}`}
         />
         <span className="shrink-0 text-xs text-slate-400">to</span>
         <ClockTimeInput
           value={draft.end_time}
           onChange={(e) => setDraft((d) => ({ ...d, end_time: e.target.value }))}
-          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-32 md:flex-none"
+          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 focus:border-violet-400 focus:outline-none md:w-28 md:flex-none md:border-0"
           data-testid={`shift-end-${shift.id}`}
         />
       </div>
@@ -510,8 +511,9 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
     // up nothing changes.
     <div className="flex flex-col gap-3 md:gap-4" data-testid="time-management-root">
       {/* The three parts as tabs, drawn as Records' underlined strip. On a phone they share
-          the width, icon over label, the longer labels wrapping onto a second line. */}
-      {!sectionProp && <div className="flex items-stretch gap-1 border-b border-slate-200" data-testid="time-management-tabs">
+          the width, icon over label, the longer labels wrapping onto a second line. From md
+          up the grey rule under the strip goes; the open tab keeps its own underline. */}
+      {!sectionProp && <div className="flex items-stretch gap-1 border-b border-slate-200 md:border-b-0" data-testid="time-management-tabs">
         {[
           { key: "shifts", label: "Shift Timings", icon: Clock },
           { key: "roster", label: "Who Works Which Shift", icon: kind.icon },
@@ -536,8 +538,10 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
 
       {/* ------------------------------------------------- The windows themselves */}
       <div className={section === "shifts" ? "" : "hidden"}>
-        <section className="rounded-xl border border-slate-200 bg-white" data-testid="shift-definitions">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-3 md:flex-wrap md:p-4">
+        {/* From md up no borders — on the card, under its header, round the list or between
+            its rows — so the shifts read as one open list in the popup. */}
+        <section className="rounded-xl border border-slate-200 bg-white md:border-0" data-testid="shift-definitions">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 p-3 md:flex-wrap md:border-b-0 md:p-4">
             <div className="min-w-0">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
                 <Clock className="h-4 w-4 shrink-0 text-violet-500" /> Shift Timings
@@ -602,7 +606,7 @@ export const TimeManagementPanel = ({ branchId, initialProfileType = "head_physi
             ) : shifts.length === 0 ? (
               <p className="py-6 text-center text-xs text-slate-400">No shifts yet — add one above.</p>
             ) : (
-              <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200" data-testid="shift-list">
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 md:divide-y-0 md:border-0" data-testid="shift-list">
                 {shifts.map((s) => (
                   <ShiftRow key={s.id} shift={s} onSaved={reloadAndAnnounce} onDeleted={reloadAndAnnounce} />
                 ))}

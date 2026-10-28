@@ -2295,7 +2295,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             {timeGear("branch-mgmt-time-settings")}
           </div>
           <Dialog open={!!timeMgmtFor} onOpenChange={(open) => { if (!open) { setTimeMgmtFor(null); setCalendarEpoch((n) => n + 1); } }}>
-            <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-6xl overflow-y-auto rounded-lg p-3 pt-11 sm:p-6 sm:pt-12" data-testid="time-management-dialog">
+            {/* 750px wide. From sm up the panel's three tabs sit on the close button's row;
+                the physio's five need that row's full width, so they stay under it, as does
+                a single picked section with no tabs to share the row. */}
+            <DialogContent className={`max-h-[90vh] w-[calc(100%-2rem)] max-w-[750px] overflow-y-auto rounded-lg p-3 pt-11 ${timeMgmtFor === "physio" || calendarSettingsPicked ? "" : "sm:pt-3"}`} data-testid="time-management-dialog">
               {/* The panel carries its own headings; these are for screen readers. */}
               <DialogHeader className="sr-only">
                 <DialogTitle>Time Management</DialogTitle>
@@ -2307,7 +2310,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               {timeMgmtFor === "physio" && !calendarSettingsPicked && (
                 // Time Management's own underlined strip, so the five read as the tabs the
                 // first three always were. On a phone they share the width, icon over label.
-                <div className="mb-3 flex items-stretch gap-1 border-b border-slate-200 md:mb-4" data-testid="calendar-settings-tabs">
+                // From md up no grey rule under the strip, and it scrolls rather than widens the
+                // 750px popup should the five ever outgrow it.
+                <div className="mb-3 flex items-stretch gap-1 overflow-x-auto border-b border-slate-200 [scrollbar-width:none] md:mb-4 md:border-b-0 [&::-webkit-scrollbar]:hidden" data-testid="calendar-settings-tabs">
                   {CALENDAR_SETTINGS_TABS.map((t) => {
                     const Icon = t.icon;
                     return (
