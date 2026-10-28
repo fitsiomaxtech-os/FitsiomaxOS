@@ -844,7 +844,7 @@ const RevenueLanes = ({ lanes, lane, onPick }) => (
           type="button"
           onClick={() => onPick(l.key)}
           aria-pressed={on}
-          className={`min-w-[8.5rem] flex-1 rounded-lg border px-3 py-2 text-left transition ${on ? accent.on : accent.off}`}
+          className={`min-w-[8.5rem] flex-1 rounded border px-3 py-2 text-left transition ${on ? accent.on : accent.off}`}
           data-testid={`zumba-revenue-lane-${l.key}`}
         >
           <p className="text-[9px] font-bold uppercase leading-none tracking-wide opacity-70">{l.label}</p>
@@ -984,14 +984,15 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
     >
       {/* overflow-hidden, or the tinted header paints its own square corners over the
           rounded ones this container draws. */}
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b bg-emerald-50/60 p-5">
-          <div className="min-w-0">
+      <div className="flex max-h-[90vh] w-full max-w-[800px] flex-col overflow-hidden rounded bg-white shadow-2xl">
+        {/* One row: the title, the figure and whose it is read as a single line. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b bg-emerald-50/60 px-5 py-3.5">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
             <h3 className="text-base font-semibold text-slate-800">Payment Done</h3>
-            <p className="mt-1 text-2xl font-extrabold leading-none text-emerald-700" data-testid="zumba-payment-done-total">
+            <p className="text-xl font-extrabold leading-none text-emerald-700" data-testid="zumba-payment-done-total">
               {rupees(collected)}
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-500">
               collected from {pluralCustomers(shown.length)}
               {/* What was clicked, kept in sight while the popup is narrowed: the figure
                   above is no longer the card's once a filter is on, and a number that has
@@ -1015,8 +1016,8 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
             on the right, the space between them is what says they are separate questions.
             The same pair the table downstairs carries, because they are the same two
             questions — asked here of the money rather than of the roll. */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-slate-100 px-5 py-2.5">
-          <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-payment-done-date-filter">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-2.5">
+          <div className="flex flex-wrap items-center gap-1" data-testid="zumba-payment-done-date-filter">
             {DATE_PRESETS.map((preset) => {
               const active = preset.key === "all" ? !dateFilter : dateFilter?.key === preset.key;
               return (
@@ -1024,7 +1025,7 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
                   key={preset.key}
                   type="button"
                   onClick={() => setDateFilter(presetFilter(preset))}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                  className={`rounded px-2 py-1.5 text-xs font-semibold transition ${active ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
                   data-testid={`zumba-payment-done-date-${preset.key}`}
                 >
                   {preset.label}
@@ -1035,7 +1036,7 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
                 are pinned from out here rather than by adding props to a control five
                 other boards share. Handed null while a preset is active, so it reads
                 "Custom" rather than echoing the pill already lit beside it. */}
-            <span className="[&_button]:h-[30px] [&_button]:rounded-md [&_button]:px-3 [&_button]:text-xs [&_button]:font-semibold [&_svg]:mr-1.5 [&_svg]:h-3.5 [&_svg]:w-3.5">
+            <span className="[&_button]:h-[30px] [&_button]:rounded [&_button]:px-2 [&_button]:text-xs [&_button]:font-semibold [&_svg]:mr-1.5 [&_svg]:h-3.5 [&_svg]:w-3.5">
               <DateFilterPopover
                 value={isPreset(dateFilter) ? null : dateFilter}
                 onChange={setDateFilter}
@@ -1045,13 +1046,13 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
               />
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-payment-done-mode-filter">
+          <div className="flex flex-wrap items-center gap-1" data-testid="zumba-payment-done-mode-filter">
             {MODE_FILTERS.map(([key, label]) => (
               <button
                 key={key || "all"}
                 type="button"
                 onClick={() => setModeFilter(key)}
-                className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+                className={`rounded border px-2 py-1.5 text-xs font-semibold transition ${
                   modeFilter === key
                     ? "border-sky-600 bg-sky-600 text-white shadow-sm"
                     : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
@@ -1078,7 +1079,7 @@ const PaymentDoneModal = ({ rows, owed, onShowDue, onClose }) => {
                 <button
                   type="button"
                   onClick={onShowDue}
-                  className="mt-3 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                  className="mt-3 inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                   data-testid="zumba-payment-done-show-due"
                 >
                   {rupees(owed.reduce((n, r) => n + amountDue(r), 0))} still owed by {pluralCustomers(owed.length)}
