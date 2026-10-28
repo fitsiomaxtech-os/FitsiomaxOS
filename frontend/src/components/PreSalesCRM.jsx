@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Calendar as CalendarIcon, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Building2, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, LogOut, Mail, Youtube, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDa
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
+import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -2221,8 +2222,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   const [currentLead, setCurrentLead] = useState(lead);
   const [followUpDraft, setFollowUpDraft] = useState(null); // { date, time, remarks } | null
   const [rescheduleDraft, setRescheduleDraft] = useState(null); // { followupId, date, time, reason } | null
-  const [appointmentDraft, setAppointmentDraft] = useState(null); // { department, appointment_date, appointment_time, remarks } | null
-  const [appointmentResult, setAppointmentResult] = useState(null); // summary shown after a successful schedule
+  const [bookingAppointment, setBookingAppointment] = useState(false); // the Appointment pill's PreSalesAppointmentDialog
   const [branches, setBranches] = useState([]);
   const [activity, setActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -2280,11 +2280,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   // lead outright — each needs a date first. Every other stage, Not a prospect and Lost included, moves at once.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
-    if (s.name === "Appointment") {
-      const tmrw = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      setAppointmentDraft({ department: "physio", appointment_date: tmrw.toISOString().slice(0, 10), appointment_time: "10:00", remarks: "" });
-      return;
-    }
+    if (s.name === "Appointment") { setBookingAppointment(true); return; }
     await onMoveStage(currentLead.id, s.name);
     setCurrentLead({ ...currentLead, stage: s.name });
   };
@@ -2931,169 +2927,18 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
         </div>
       )}
 
-      {appointmentDraft && !showEdit && (() => {
-        const myBranch = pinnedBranchId || currentUser?.branch_id;
-        const myBranchName = branches.find((b) => b.id === myBranch)?.branch_name || branches.find((b) => b.id === myBranch)?.name || "";
-        const resolvedBranchName = () => myBranchName || branches.find((b) => b.id === appointmentDraft.branch_id)?.branch_name || branches.find((b) => b.id === appointmentDraft.branch_id)?.name || "your branch";
-        const closeAll = () => { setAppointmentDraft(null); setAppointmentResult(null); };
-        return (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4" data-testid="presales-appointment-modal">
-          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-[4px] bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-4 text-white">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" />
-                <p className="text-base font-semibold">{appointmentResult ? "Moved to Branch Admin" : "Schedule Appointment"}</p>
-              </div>
-              <button onClick={closeAll} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="presales-appointment-close">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {appointmentResult ? (
-              <>
-                <div className="space-y-3 p-5">
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-700">Sent To Branch Admin</p>
-                    <dl className="space-y-1.5 text-sm">
-                      <div className="flex justify-between"><dt className="text-slate-500">Service</dt><dd className="font-semibold text-slate-800">{appointmentResult.department === "physio" ? "Physiotherapy" : "Fitness"}</dd></div>
-                      <div className="flex justify-between"><dt className="text-slate-500">Branch</dt><dd className="font-semibold text-slate-800">{appointmentResult.branchName}</dd></div>
-                      <div className="flex justify-between"><dt className="text-slate-500">Date</dt><dd className="font-semibold text-slate-800">{appointmentResult.appointment_date}</dd></div>
-                      <div className="flex justify-between"><dt className="text-slate-500">Time</dt><dd className="font-semibold text-slate-800">{appointmentResult.appointment_time}</dd></div>
-                    </dl>
-                    <p className="mt-2 border-t border-emerald-200 pt-2 text-[11px] text-emerald-700">
-                      The branch admin will see this in New Appointment and assign a Fitsiomax Expert for this date &amp; time.
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Lead Summary</p>
-                    <p className="text-sm font-semibold text-slate-800">{currentLead.name || "Unknown"}</p>
-                    <p className="text-xs text-slate-500">{displayPhone(currentLead.phone)}</p>
-                  </div>
-                  {appointmentResult.remarks && (
-                    <div className="rounded-lg border border-slate-200 p-3">
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Remarks</p>
-                      <p className="text-sm text-slate-700">{appointmentResult.remarks}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
-                  <Button className="bg-emerald-500 text-white hover:bg-emerald-600" onClick={closeAll} data-testid="presales-appointment-done">
-                    <CheckCircle2 className="mr-1 h-4 w-4" /> Done
-                  </Button>
-                </div>
-              </>
-            ) : (
-            <>
-            <div className="space-y-4 p-5">
-              <div className="space-y-3">
-                {myBranchName ? (
-                  <div className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                    <Building2 className="h-3.5 w-3.5" /> {myBranchName}
-                  </div>
-                ) : (
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-600">Select Branch *</label>
-                    <select
-                      value={appointmentDraft.branch_id || ""}
-                      onChange={(e) => setAppointmentDraft({ ...appointmentDraft, branch_id: e.target.value })}
-                      className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                      data-testid="presales-appointment-branch"
-                    >
-                      <option value="">-- choose a branch --</option>
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.id}>{b.branch_name || b.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-600">Date *</label>
-                    <MilkDateInput
-                      centered
-                      title="Appointment Date"
-                      accent="teal"
-                      value={appointmentDraft.appointment_date}
-                      min={new Date().toISOString().slice(0, 10)}
-                      onChange={(e) => setAppointmentDraft({ ...appointmentDraft, appointment_date: e.target.value })}
-                      data-testid="presales-appointment-date"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-600">Time *</label>
-                    <MilkTimeInput
-                      centered
-                      title="Appointment Time"
-                      accent="teal"
-                      value={appointmentDraft.appointment_time}
-                      onChange={(e) => setAppointmentDraft({ ...appointmentDraft, appointment_time: e.target.value })}
-                      data-testid="presales-appointment-time"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-600">Remarks</label>
-                  <textarea
-                    rows={3}
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                    placeholder="e.g. Lower back pain, 3 months"
-                    value={appointmentDraft.remarks}
-                    onChange={(e) => setAppointmentDraft({ ...appointmentDraft, remarks: e.target.value })}
-                    data-testid="presales-appointment-remarks"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
-              <Button variant="outline" onClick={closeAll} data-testid="presales-appointment-cancel">Cancel</Button>
-              <Button
-                className="bg-emerald-500 text-white hover:bg-emerald-600"
-                onClick={async () => {
-                  if (!myBranchName && !appointmentDraft.branch_id) {
-                    toast.error("Please select a branch");
-                    return;
-                  }
-                  if (!appointmentDraft.appointment_date || !appointmentDraft.appointment_time) {
-                    toast.error("Pick a date and time");
-                    return;
-                  }
-                  try {
-                    const payload = {
-                      department: appointmentDraft.department,
-                      mode: "offline",
-                      appointment_date: appointmentDraft.appointment_date,
-                      appointment_time: appointmentDraft.appointment_time,
-                      remarks: appointmentDraft.remarks,
-                    };
-                    // Sent explicitly when the board is pinned to a branch. Leaving it out
-                    // lets the API infer the branch from whoever is logged in, which is
-                    // right for a Branch Admin and wrong for a Super Admin drilled into a
-                    // branch — they have none, and the appointment would land nowhere.
-                    if (pinnedBranchId) payload.branch_id = pinnedBranchId;
-                    else if (!myBranchName) payload.branch_id = appointmentDraft.branch_id;
-                    const updated = await scheduleAppointment(currentLead.id, payload);
-                    setCurrentLead(updated);
-                    setAppointmentResult({
-                      department: appointmentDraft.department,
-                      branchName: resolvedBranchName(),
-                      appointment_date: appointmentDraft.appointment_date,
-                      appointment_time: appointmentDraft.appointment_time,
-                      remarks: appointmentDraft.remarks,
-                    });
-                    onSaved && onSaved();
-                  } catch (e) { toast.error(e?.response?.data?.detail || "Failed to schedule appointment"); }
-                }}
-                data-testid="presales-appointment-save"
-              >
-                <CheckCircle2 className="mr-1 h-4 w-4" /> Move to Branch Admin
-              </Button>
-            </div>
-            </>
-            )}
-          </div>
-        </div>
-        );
-      })()}
+      {/* The Appointment pill: where the consultation happens, then the date, CONSULTANT
+          and time -- the desk books the consultant itself now, rather than passing the
+          lead to Branch Admin with a requested time for the branch to book. */}
+      {bookingAppointment && !showEdit && (
+        <PreSalesAppointmentDialog
+          lead={currentLead}
+          branchId={pinnedBranchId || currentUser?.branch_id || ""}
+          branches={branches}
+          onClose={() => setBookingAppointment(false)}
+          onBooked={(saved) => { if (saved) setCurrentLead(saved); onSaved && onSaved(); }}
+        />
+      )}
     </div>
   );
 };

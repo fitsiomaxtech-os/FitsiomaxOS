@@ -268,7 +268,8 @@ async def list_store_items(
     branch_id: Optional[str] = None,
     # accountant: read-only, for the package and its Offline / Online price on the Old
     # Client Instalment form (Accountant Manage > Payment Schedule).
-    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "head_physio", "business_dev", "accountant")),
+    # pre_sales: read-only, for the House Visit package its Appointment booking asks for.
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "branch_admin", "head_physio", "business_dev", "accountant", "pre_sales")),
 ):
     q = {}
     if category:

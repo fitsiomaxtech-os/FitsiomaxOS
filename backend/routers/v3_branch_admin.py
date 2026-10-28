@@ -773,6 +773,12 @@ class V3BranchAppointmentInput(BaseModel):
     # Typed by the Branch Admin at booking, and only read for a package marked
     # manual_price (a Distance visit): the catalogue carries no figure for those.
     visit_package_amount: Optional[float] = None
+    # Pre Sales booking off its own lead card's Appointment pill. The same booking, plus
+    # the hand-off schedule-appointment used to make on its own: the lead goes to the
+    # Pre-Sales Appointment stage and to `branch_id` (the Pre-Sales user's own branch when
+    # left out), in the one write, so a refused booking leaves the lead where it was.
+    presales_handoff: bool = False
+    branch_id: Optional[str] = None
 
 
 # The catalogue shelf a house-visit consultation is sold from — PackagesBoard's
@@ -801,15 +807,28 @@ def _visit_package_fields(item: Optional[dict], manual_amount: Optional[float] =
 
 
 @router.post("/leads/{lead_id}/schedule-branch-appointment", response_model=V3LeadOut)
-async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointmentInput, user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev"))):
+async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointmentInput, user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "pre_sales"))):
     """Schedule appointment date/time, assign physio, add notes, then move to final stage."""
+    # Pre Sales comes in only to book its own hand-off (see presales_handoff): cancelling,
+    # handing a slot to another consultant and moving one are the branch's.
+    if is_pre_sales_role(user.role) and not payload.presales_handoff:
+        raise HTTPException(status_code=403, detail="Not allowed")
     # Read before the stages are resolved: which of the two Branch pipelines this booking
     # answers to is the lead's own arm, and there is no meaningful appointment stage to
     # validate against until we know which practice the patient belongs to.
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    arm = await sales_arm_for(branch_id=lead.get("branch_id"), vertical=lead.get("vertical"))
+    # The branch the patient is booked at. A Pre Sales hand-off names it -- the desk's own
+    # branch unless the caller picked one -- and the lead moves there with the booking.
+    branch_id = lead.get("branch_id")
+    if payload.presales_handoff:
+        branch_id = payload.branch_id or user.branch_id or branch_id
+        if not branch_id:
+            raise HTTPException(status_code=400, detail="Branch is required for offline appointments")
+        if not await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=404, detail="Branch not found")
+    arm = await sales_arm_for(branch_id=branch_id, vertical=lead.get("vertical"))
     # Resolved from the pipeline rather than compared against literals: this check used to
     # read `not in ("Appointment Date & Time", "Cancelled")`, so renaming either stage in
     # CI/CD ROOTS made every booking a 400 — the board sent the stage's real name and the
@@ -823,7 +842,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
         BRANCH_APPOINTMENT_STAGE_FORMER: appointment_stage,
         BRANCH_CANCELLED_STAGE: cancelled_stage,
     }
-    final_stage = aliases.get(payload.final_stage, payload.final_stage)
+    final_stage = appointment_stage if payload.presales_handoff else aliases.get(payload.final_stage, payload.final_stage)
     if final_stage not in (appointment_stage, cancelled_stage):
         raise HTTPException(
             status_code=400,
@@ -841,7 +860,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
             raise HTTPException(status_code=400, detail="Pick a House Visit package")
         visit_package = await store_branch_overrides.overlay_one(await v3_col("store_items").find_one(
             {"id": payload.visit_package_id, "category": HOME_VISIT_CONSULTATION_CATEGORY}, {"_id": 0}
-        ), lead.get("branch_id"))
+        ), branch_id)
         if not visit_package:
             raise HTTPException(status_code=404, detail="House Visit package not found")
         # Moving an existing booking to another slot does not ask for the amount again: the
@@ -897,7 +916,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
         clash = await consultant_slot_clash(
             payload.physio_id,
             slot_time,
-            payload.duration or await consultation_slot_minutes(lead.get("branch_id")),
+            payload.duration or await consultation_slot_minutes(branch_id),
             exclude_lead_id=lead_id,
         )
         if clash:
@@ -917,6 +936,17 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
         "branch_stage": final_stage,
         "updated_at": now_iso(),
     }
+    if payload.presales_handoff:
+        # What schedule-appointment wrote when Pre Sales only passed the lead on: its own
+        # Appointment stage, the branch, and an offline physio consultation. The branch
+        # stage is the Appointment set above, not the branch's opening one -- the consultant
+        # is already booked, so there is nothing left for Branch Admin to pick up.
+        updates.update({
+            "stage": "Appointment",
+            "appointment_mode": "offline",
+            "appointment_department": lead.get("appointment_department") or "physio",
+            "branch_id": branch_id,
+        })
     if payload.visit_type is not None:
         updates["visit_type"] = payload.visit_type
         # Written whenever a visit type is stated, so moving a house visit back to the
@@ -965,7 +995,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
             )
             duration = (detail or {}).get("duration") or 30
         appt_fields = {
-            "branch_id": lead.get("branch_id"),
+            "branch_id": branch_id,
             "doctor_id": payload.physio_id,
             "doctor_name": physio["full_name"],
             "lead_id": lead_id,
@@ -1431,7 +1461,8 @@ async def v3_available_experts(
     time: Optional[str] = None,
     lead_id: Optional[str] = None,
     review_id: Optional[str] = None,
-    _: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
+    # pre_sales: its lead card books the consultant itself (schedule-branch-appointment).
+    _: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio", "pre_sales")),
 ):
     """Head Physios at this branch who can take a consultation on the given date
     (optionally narrowed to an exact time).
@@ -1566,7 +1597,8 @@ async def v3_available_dates(
     month: str = Query(..., description="YYYY-MM"),
     lead_id: Optional[str] = None,
     review_id: Optional[str] = None,
-    _: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
+    # pre_sales: its lead card books the consultant itself (schedule-branch-appointment).
+    _: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio", "pre_sales")),
 ):
     """Every date in `month` that still has a free published Head Physio slot, and how many.
 
