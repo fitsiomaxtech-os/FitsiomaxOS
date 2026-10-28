@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Mail } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Mail, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,12 +19,27 @@ const BG_IMAGE =
 const LOGO_URL =
   "https://customer-assets.emergentagent.com/job_3d74aa9e-a241-4207-b148-2bbe29802707/artifacts/nozl77ti_Logo%20Icon.webp";
 
+// How long five wrong passwords lock a login for. The server owns the rule (LOCK_MINUTES in
+// backend/login_guard.py); this is only the figure the warning quotes.
+const LOCK_MINUTES = 10;
+
+// The 429 says "try again in N minutes"; N is what is left of the lock.
+const minutesLeftOf = (detail) => {
+  const match = /(\d+)\s*minute/.exec(detail || "");
+  return match ? Number(match[1]) : LOCK_MINUTES;
+};
+
 export const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  // What the last Continue was refused for, shown in red under the password rather than in
+  // a toast that is gone before it is read: { kind: "invalid" } for a wrong email or
+  // password (401), { kind: "locked", minutesLeft } once the fifth wrong one locks the
+  // login (429). Null until a refusal, and cleared by the next Continue.
+  const [loginError, setLoginError] = useState(null);
   // The second step, and null whenever there isn't one. An account with two-factor on gets
   // no token from /auth/login — it gets a challenge, and this holds it until the emailed
   // code comes back. The password is dropped from state the moment the challenge exists;
@@ -43,6 +58,7 @@ export const LoginPage = ({ onLogin }) => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setLoginError(null);
     try {
       const data = await apiLogin(email, password);
       if (data?.two_factor_required) {
@@ -54,7 +70,11 @@ export const LoginPage = ({ onLogin }) => {
       }
       finish(data);
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Login failed");
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      if (status === 401) setLoginError({ kind: "invalid" });
+      else if (status === 429) setLoginError({ kind: "locked", minutesLeft: minutesLeftOf(detail) });
+      else toast.error(detail || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -245,6 +265,37 @@ export const LoginPage = ({ onLogin }) => {
                     </button>
                   </div>
                 </div>
+
+                {/* Lexend, scoped to these messages; index.css already loads it. The message
+                    never says which of the two was wrong, so it gives away no account. */}
+                {loginError?.kind === "invalid" && (
+                  <p
+                    role="alert"
+                    className="text-sm font-medium text-red-600"
+                    style={{ fontFamily: "Lexend, sans-serif" }}
+                    data-testid="screen1-login-error-invalid"
+                  >
+                    Invalid email or password
+                  </p>
+                )}
+                {loginError?.kind === "locked" && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2.5"
+                    style={{ fontFamily: "Lexend, sans-serif" }}
+                    data-testid="screen1-login-error-locked"
+                  >
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-red-700">Access Warning</p>
+                      <p className="text-xs text-red-600">
+                        Access restricted for {LOCK_MINUTES} minutes.
+                        {loginError.minutesLeft < LOCK_MINUTES &&
+                          ` Try again in ${loginError.minutesLeft} minute${loginError.minutesLeft === 1 ? "" : "s"}.`}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <Button
                   type="submit"
