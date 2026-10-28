@@ -20,6 +20,7 @@ import lead_control
 import lead_purge
 import store_branch_overrides
 from constants import (
+    PRESALES_LOST_STAGE,
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
@@ -819,6 +820,10 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    # Lost is locked on the Pre-Sales side (see _refuse_if_lost in routers/v3_leads.py), and
+    # a hand-off would move the lead to Appointment.
+    if payload.presales_handoff and lead.get("stage") == PRESALES_LOST_STAGE:
+        raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
     # The branch the patient is booked at. A Pre Sales hand-off names it -- the desk's own
     # branch unless the caller picked one -- and the lead moves there with the booking.
     branch_id = lead.get("branch_id")

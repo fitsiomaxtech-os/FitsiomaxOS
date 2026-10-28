@@ -1239,9 +1239,11 @@ export const PreSalesCRM = ({
     [leads],
   );
 
+  // True when the move went through, so the popup only redraws a lead onto a stage it
+  // actually reached -- a refused move (a Lost lead is locked) leaves it where it was.
   const moveToStage = async (leadId, stageName) => {
-    try { await updateLead(leadId, { stage: stageName }); toast.success(`Moved to ${stageName}`); load(); }
-    catch (e) { toast.error(e?.response?.data?.detail || "Move failed"); }
+    try { await updateLead(leadId, { stage: stageName }); toast.success(`Moved to ${stageName}`); load(); return true; }
+    catch (e) { toast.error(e?.response?.data?.detail || "Move failed"); return false; }
   };
 
   if (PRESALES_CRM_LOCKED) {
@@ -2439,11 +2441,15 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
   // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
   // lead outright — each needs a date first. Every other stage, Not a prospect, Pre Book and Lost included, moves at once.
+  // Lost is the one that asks first: once there, the lead's stage is locked.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
     if (s.name === "Appointment") { setBookingAppointment(true); return; }
-    await onMoveStage(currentLead.id, s.name);
-    setCurrentLead({ ...currentLead, stage: s.name });
+    if (s.name === "Lost" && !window.confirm(
+      `Move ${currentLead.name || "this lead"} to Lost?\n\nOnce Lost, the stage is locked — this lead cannot be moved to any other stage afterwards.`,
+    )) return;
+    const moved = await onMoveStage(currentLead.id, s.name);
+    if (moved !== false) setCurrentLead({ ...currentLead, stage: s.name });
   };
 
   // Overview's cards, on the terms Branch Admin's lead popup draws them. The RNR card stays
@@ -2461,6 +2467,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   // Where the lead can be sent: every stage but New Leads, which is where leads arrive and
   // never where one is moved to. The stage the lead is on stays, drawn as picked.
   const moveStages = stages.filter((s) => s.name !== "New Leads");
+  // Lost is locked: the pills stay on screen with Lost filled and the rest shut, and nothing
+  // here that would move the lead (a follow-up, a reschedule) is offered. The server
+  // refuses the same moves on its own.
+  const stageLocked = currentLead.stage === "Lost";
+  const canMove = canMoveStage && !stageLocked;
   const avatarFirstChar = (currentLead.name?.trim()?.charAt(0) || "?").toUpperCase();
 
   // Who the patient is, read back off the record, on a tab of its own. Empty fields are
@@ -2656,7 +2667,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Bell className="h-4 w-4" /></span>
                       Follow-Up
                     </p>
-                    {(activeFollowUp || canMoveStage) && (
+                    {(activeFollowUp || canMove) && (
                       <button
                         type="button"
                         onClick={() => (activeFollowUp ? setTab("follow-up") : startFollowUp())}
@@ -2723,9 +2734,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                           key={s.id}
                           type="button"
                           onClick={() => moveTo(s)}
-                          disabled={active}
+                          disabled={active || stageLocked}
                           className="rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:whitespace-nowrap sm:px-3 sm:text-xs"
-                          style={active ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
+                          style={active
+                            ? { background: tint, color: "#ffffff" }
+                            : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33`, ...(stageLocked ? { opacity: 0.4 } : {}) }}
                           data-testid={`presales-detail-move-${s.name}`}
                         >
                           {s.name}
@@ -2733,6 +2746,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                       );
                     })}
                   </div>
+                  {stageLocked && (
+                    <p className="flex items-center justify-center gap-1.5 border-t border-violet-100 px-4 py-2 text-[11px] font-semibold text-rose-600" data-testid="presales-detail-stage-locked">
+                      <Lock className="h-3.5 w-3.5" /> Lost — this lead's stage is locked
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -2742,7 +2760,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
             <div className="space-y-4" data-testid="presales-detail-followups">
               {/* On top, where Branch Admin's tab keeps its form — the same form the Follow Up
                   pill opens, so a follow-up can be set without going back to Overview. */}
-              {canMoveStage && (
+              {canMove && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[3px] border border-amber-200 bg-amber-50/40 px-4 py-3" data-testid="presales-followup-schedule-bar">
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700"><Bell className="h-3.5 w-3.5" /> Schedule Follow-Up</p>
                   <Button size="sm" onClick={startFollowUp} className="h-8 shrink-0 bg-amber-600 px-4 text-white hover:bg-amber-700" data-testid="presales-followup-schedule-open">
@@ -2790,7 +2808,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                           )}
                           <p className="mt-1.5 text-[11px] text-slate-400">Set by {f.created_by || "—"} · {new Date(f.created_at).toLocaleString()}</p>
                         </div>
-                        {isActive && (
+                        {isActive && !stageLocked && (
                           <Button
                             size="sm"
                             variant="outline"

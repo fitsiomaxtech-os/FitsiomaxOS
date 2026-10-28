@@ -9,7 +9,7 @@ from deps import (
     v3_current_user, v3_require_roles, is_branch_admin_role, is_head_physio_role, is_physio_role,
     vertical_names_an_arm, lead_as_read_by, works_org_wide,
 )
-from constants import V3_STAGES
+from constants import V3_STAGES, PRESALES_LOST_STAGE
 from stage_utils import first_branch_stage_for, first_branch_stage_for_branch
 import lead_control
 import lead_purge
@@ -20,6 +20,17 @@ from schemas.v3 import (
 )
 
 router = APIRouter(prefix="/api/v3")
+
+
+def _refuse_if_lost(lead: Optional[dict]) -> None:
+    """Lost is locked: a lead the desk has marked Lost stays there.
+
+    Every route that writes the Pre-Sales `stage` asks this first, so a Lost lead cannot be
+    brought back by a follow-up, a booking or a branch hand-off any more than by its stage
+    pills. The pills ask before moving a lead to Lost for the same reason.
+    """
+    if lead and lead.get("stage") == PRESALES_LOST_STAGE:
+        raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
 
 
 @router.get("/leads")
@@ -328,8 +339,10 @@ async def v3_edit_lead(
             raise HTTPException(status_code=404, detail="Branch not found")
 
     existing = None
-    if updates.get("stage") == "Appointment" or "branch_id" in updates:
-        existing = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "id": 1, "branch_id": 1, "branch_stage": 1})
+    if "stage" in updates or "branch_id" in updates:
+        existing = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "id": 1, "branch_id": 1, "branch_stage": 1, "stage": 1})
+    if "stage" in updates and updates["stage"] != PRESALES_LOST_STAGE:
+        _refuse_if_lost(existing)
 
     # Hand-off bridge: when stage is set to "Appointment" via PUT, push lead into Branch Admin's
     # New Lead column (only if branch_stage isn't already set on the lead).
@@ -366,6 +379,7 @@ async def v3_edit_lead(
 
 @router.post("/leads/{lead_id}/qualify", response_model=V3LeadOut)
 async def v3_qualify_lead(lead_id: str, _: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
+    _refuse_if_lost(await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "stage": 1}))
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {"stage": "Follow Up", "updated_at": now_iso()}})
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
@@ -378,9 +392,10 @@ async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, _: V3User
     branch = await v3_col("branches").find_one({"id": payload.branch_id}, {"_id": 0, "id": 1})
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
-    existing_lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "patient_number": 1})
+    existing_lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "patient_number": 1, "stage": 1})
     if not existing_lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    _refuse_if_lost(existing_lead)
     new_branch_stage = await first_branch_stage_for_branch(payload.branch_id, "New Appointment")
     # branch_assigned_at: the moment it arrived, which is what lights the Branch Leads dot
     # (see v3_tab_activity) -- created_at is when Pre-Sales got it, often days earlier.
@@ -408,7 +423,8 @@ async def v3_confirm_lead(lead_id: str, user: V3UserOut = Depends(v3_require_rol
     # Read the lead's branch before writing: the entry stage it lands on depends on that
     # branch's Lead Control, and a branch_admin caller's own branch_id is not necessarily
     # the lead's when a Super Admin is the one confirming.
-    target = await v3_col("leads").find_one(filter_query, {"_id": 0, "branch_id": 1})
+    target = await v3_col("leads").find_one(filter_query, {"_id": 0, "branch_id": 1, "stage": 1})
+    _refuse_if_lost(target)
     new_branch_stage = await first_branch_stage_for_branch((target or {}).get("branch_id"), "New Appointment")
     result = await v3_col("leads").update_one(filter_query, {"$set": {"stage": "Appointment", "branch_stage": new_branch_stage, "updated_at": now_iso()}})
     if result.matched_count == 0:
@@ -428,6 +444,7 @@ async def v3_book_appointment(lead_id: str, payload: V3BookAppointmentInput, use
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    _refuse_if_lost(lead)
     slot_key = normalize_slot_time(payload.slot_time)
     doctor = await v3_col("doctors").find_one({"id": payload.doctor_id}, {"_id": 0})
     if not doctor:
@@ -527,6 +544,8 @@ async def v3_move_stage(lead_id: str, payload: V3MoveStageInput, user: V3UserOut
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    if payload.stage != PRESALES_LOST_STAGE:
+        _refuse_if_lost(lead)
     old_stage = lead.get("stage", "Unknown")
     updates = {"stage": payload.stage, "updated_at": now_iso()}
     # Hand-off bridge: when pre-sales moves a lead into "Appointment", make it visible
@@ -661,6 +680,7 @@ async def v3_schedule_appointment(lead_id: str, payload: V3AppointmentScheduleIn
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    _refuse_if_lost(lead)
     branch_name = None
     if branch_id:
         b = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "branch_name": 1, "name": 1})
@@ -714,6 +734,7 @@ async def v3_schedule_follow_up(lead_id: str, payload: V3FollowUpInput, user: V3
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    _refuse_if_lost(lead)
     entry = {
         "id": str(uuid.uuid4()),
         "date": payload.date,
@@ -752,6 +773,7 @@ async def v3_reschedule_follow_up(lead_id: str, followup_id: str, payload: V3Fol
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    _refuse_if_lost(lead)
     follow_ups = lead.get("follow_ups") or []
     old = next((f for f in follow_ups if f.get("id") == followup_id), None)
     if not old:
