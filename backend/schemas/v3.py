@@ -430,6 +430,12 @@ class V3LeadOut(BaseModel):
     rehab_fee_paid: Optional[float] = None
     rehab_fee_payment_mode: Optional[str] = None
     rehab_fee_payment_details: Optional[dict] = None
+    # Add Due: an extra amount charged on top of the fees above, on a schedule of its own
+    # (one row per amount and due date, each with the reason it was charged). Its paid
+    # figure grows only as those rows are collected -- see add_extra_due in v3_finance.
+    extra_fee_paid: Optional[float] = None
+    extra_fee_payment_mode: Optional[str] = None
+    extra_fee_payment_details: Optional[dict] = None
     # Who is delivering the Rehab course, and when they were put on it.
     #
     # Declared for exactly the reason the rehab_package_* block above says it is declared:
@@ -898,7 +904,7 @@ class V3MarkInstallmentPaidInput(BaseModel):
     # each is collected through here. Defaults to the Treatment Fee, which was the only
     # one that could have a schedule when this endpoint was written, so every existing
     # caller keeps working without sending it.
-    fee: Literal["treatment", "consultation", "rehab", "diet", "diet_chart"] = "treatment"
+    fee: Literal["treatment", "consultation", "rehab", "diet", "diet_chart", "extra"] = "treatment"
     # One installment is collected across the same desk as the fee it belongs to, so it
     # counts its cash the same way -- see V3PaymentLineInput.denominations.
     denominations: Optional[dict] = None
@@ -932,6 +938,18 @@ class V3MarkInstallmentPaidInput(BaseModel):
     # row, so the balance it leaves has a date somebody will chase it on.
     balance_due_date: Optional[str] = None
     discount_reason: Optional[str] = None
+
+
+class V3ExtraDueRowInput(BaseModel):
+    amount: float
+    due_date: str  # YYYY-MM-DD
+
+
+class V3AddExtraDueInput(BaseModel):
+    # Add Due on the Fee Collected panel: what the extra amount is for, and when it is
+    # owed -- one row for a single due, more than one for a Payment Schedule.
+    reason: str
+    installments: List[V3ExtraDueRowInput]
 
 
 class V3PortalAccountInput(BaseModel):

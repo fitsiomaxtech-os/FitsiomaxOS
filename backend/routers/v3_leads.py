@@ -161,7 +161,7 @@ class BulkDeleteLeadsInput(BaseModel):
 _PAID_ACTIONS = [
     "consultation_paid", "package_sold", "package_payment_collected",
     "treatment_fee_collected", "diet_fee_collected", "diet_chart_fee_collected",
-    "rehab_fee_collected", "fee_collected",
+    "rehab_fee_collected", "extra_fee_collected", "fee_collected",
     # Money paid to hold a Pre Book visit is revenue the day it arrives.
     "pre_book_consultation_collected", "pre_book_advance_collected", "pre_book_other_advance_collected",
 ]

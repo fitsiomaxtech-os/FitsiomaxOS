@@ -558,6 +558,10 @@ export const getRevenueOverview = async (params = {}) => (await api.get("/financ
 
 export const getClientTransactionHistory = async (leadId) => (await api.get(`/finance/client/${leadId}`)).data;
 export const markInstallmentPaid = async (leadId, installmentNumber, payload) => (await api.post(`/finance/installment/${leadId}/${installmentNumber}/mark-paid`, payload)).data;
+// Add Due: an extra amount charged to a client, owed on one date or across a Payment
+// Schedule ({ reason, installments: [{ amount, due_date }] }). Collected later through
+// markInstallmentPaid with fee "extra".
+export const addExtraDue = async (leadId, payload) => (await api.post(`/finance/extra-due/${leadId}`, payload)).data;
 // Money against a Past Data client's sheet balance, paid off oldest due first. Same payload
 // as an installment's; the amount may be anything up to the whole balance.
 export const collectPastBalance = async (leadId, payload) => (await api.post(`/finance/past-balance/${leadId}/collect`, payload)).data;

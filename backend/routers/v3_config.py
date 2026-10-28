@@ -1879,6 +1879,9 @@ LEAD_PAYMENT_RESET_FIELDS = {
     "rehab_fee_paid": None,
     "rehab_fee_payment_mode": None,
     "rehab_fee_payment_details": None,
+    "extra_fee_paid": None,
+    "extra_fee_payment_mode": None,
+    "extra_fee_payment_details": None,
     # Running totals of the above as they stood at each branch transfer. Left in place they
     # would credit the old branch with money that no longer exists anywhere else.
     "revenue_branch_splits": [],

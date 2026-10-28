@@ -18,7 +18,7 @@ import { advanceForLabel, preBookConsultOwed, preBookOf, shortDay } from "@/lib/
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
-  collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, markInstallmentPaid, savePhysioDiagnosis, unlockPhysioDiagnosis,
+  collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
   saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
   assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
   rehabSessionsForLead,
@@ -325,6 +325,8 @@ const FEE_DETAIL_FIELDS = {
   rehab: "rehab_fee_payment_details",
   diet: "diet_fee_payment_details",
   diet_chart: "diet_chart_fee_payment_details",
+  // Add Due: an extra amount on a schedule of its own -- see add_extra_due.
+  extra: "extra_fee_payment_details",
 };
 
 const FEE_LABELS = {
@@ -333,6 +335,7 @@ const FEE_LABELS = {
   rehab: "Rehab Fee",
   diet: "Diet Consultation Fee",
   diet_chart: "Diet Chart Fee",
+  extra: "Extra Amount",
 };
 
 const DIET_FEE_KINDS = {
@@ -3252,6 +3255,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // The Mark Online popup: its three ways onto Online, with what the panel knew about the
   // course when it was opened (whether it can be re-priced, its mode, whether it is paid).
   const [onlineMenu, setOnlineMenu] = useState(null);
+  // Add Due on the Fee Collected footer: an extra amount, owed on one date or across a
+  // Payment Schedule. { reason, mode: "single" | "schedule", amount, due_date, installments } | null
+  const [extraDueDraft, setExtraDueDraft] = useState(null);
+  const [savingExtraDue, setSavingExtraDue] = useState(false);
   // The Treatment Fee's Inspect popup: how the figure on the fee row was worked out.
   const [feeInspect, setFeeInspect] = useState(false);
   // Set while the physio picker is Online Physio Assign: Online physios only, no re-price.
@@ -4093,6 +4100,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setTreatmentFeeDraft(null);
     setTreatmentConfirmDraft(null);
     setTreatmentBalanceChoice(null);
+    setExtraDueDraft(null);
     setDecisionDraft({ treatment: false, diet: false, dietConsultation: false, rehab: false, fitness: false, zumba: false, item_id: "", rehab_item_id: "", zumba_item_id: "", mode: "offline", sessionsPerWeek: "", long_term_notes: {} });
     setDecisionReceipt(null);
     setEditingDecision(false);
@@ -5444,6 +5452,50 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       payment_lines: null,
       cash_notes: {},
     });
+  };
+
+  // Add Due: opens on one amount due today. Payment Schedule swaps that for two or more
+  // rows, each its own amount and date. Nothing is collected here -- the rows land on the
+  // Extra Amount card unpaid, and its Collect Balance takes them one at a time.
+  const openExtraDueDraft = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setExtraDueDraft({
+      reason: "",
+      mode: "single",
+      amount: "",
+      due_date: today,
+      installments: [{ amount: "", due_date: today }, { amount: "", due_date: "" }],
+    });
+  };
+
+  const submitExtraDue = async () => {
+    const draft = extraDueDraft;
+    if (!draft || !selectedLead) return;
+    const reason = draft.reason.trim();
+    if (!reason) {
+      toast.error("Enter what the extra amount is for");
+      return;
+    }
+    const rows = draft.mode === "schedule"
+      ? draft.installments.map((i) => ({ amount: round2(parseFloat(i.amount) || 0), due_date: i.due_date }))
+      : [{ amount: round2(parseFloat(draft.amount) || 0), due_date: draft.due_date }];
+    const bad = rows.findIndex((r) => !(r.amount > 0) || !r.due_date);
+    if (bad >= 0) {
+      toast.error(rows.length > 1 ? `Enter the amount and due date for ${partialInstallmentLabel(bad)}` : "Enter the amount and due date");
+      return;
+    }
+    setSavingExtraDue(true);
+    try {
+      const res = await addExtraDue(selectedLead.id, { reason, installments: rows });
+      const updatedLead = { ...selectedLead, ...res.fields };
+      setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => (l.id === updatedLead.id ? updatedLead : l)) }));
+      setSelectedLead(updatedLead);
+      setExtraDueDraft(null);
+      toast.success(res.message || "Extra Amount added");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not add the due");
+    }
+    setSavingExtraDue(false);
   };
 
   // Opens whichever Treatment Fee popup a lead is owed: the installment one for a part-paid
@@ -10293,6 +10345,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   longTermServices(selectedLead).map((k) => [k, String(selectedLead.long_term_notes[k] || "").trim()]),
                 );
 
+                // Every row Add Due has put on this patient, paid or not.
+                const extraRows = selectedLead.extra_fee_payment_details?.installments || [];
+
                 // Each fee is gated on the patient actually being on that programme —
                 // quoting diet or rehab to everyone would overstate what is owed.
                 const feeSteps = [
@@ -10425,6 +10480,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     longTermNote: longTermNotes.fitness,
                     act: openFitnessCollect,
                     actLabel: fitnessBusy ? "Opening..." : Number(fitnessMember?.fee_paid) > 0 ? "Collect Balance" : "Collect",
+                  },
+                  {
+                    // Add Due: amounts charged on top of the fees above, each with the reason
+                    // it was charged. Only ever a schedule, so the card is there once one is
+                    // added and its button collects the next row, as any other balance.
+                    key: "extra",
+                    label: "Extra Amount",
+                    sub: [...new Set(extraRows.map((r) => r.note).filter(Boolean))].join(", ") || null,
+                    amount: extraRows.length ? round2(extraRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)) : null,
+                    note: null,
+                    show: extraRows.length > 0,
+                    ...balanceStep("extra", null, "Collect"),
+                    ...(feeBalances.extra ? {} : { paid: true }),
                   },
                 ].filter((f) => f.show);
 
@@ -11221,6 +11289,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     Assign Physio
                                   </Button>
                                   {MarkOnlineButton}
+                                  {/* An extra amount on top of the fees, owed on one date or
+                                      on a Payment Schedule. It lands on the Extra Amount card
+                                      above, which collects it. */}
+                                  <Button
+                                    size="sm"
+                                    className={`bg-rose-600 text-white shadow-sm transition hover:bg-rose-700 hover:shadow ${ACT_BTN}`}
+                                    onClick={openExtraDueDraft}
+                                    data-testid="cons-open-add-due"
+                                  >
+                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    Add Due
+                                  </Button>
                                   {OnlinePayButton}
                                 </div>
                               </>
@@ -13527,6 +13607,101 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                     <div className="flex justify-end">
                       <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setFeeInspect(false)} data-testid="cons-fee-inspect-done">Close</Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Add Due: an extra amount charged to the patient, owed on one date or across a
+                Payment Schedule. Saved unpaid onto the Extra Amount card, which collects it. */}
+            {extraDueDraft && selectedLead && (() => {
+              const d = extraDueDraft;
+              const setD = (patch) => setExtraDueDraft((x) => ({ ...x, ...patch }));
+              const scheduleTotal = round2(d.installments.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0));
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !savingExtraDue) setExtraDueDraft(null); }} data-testid="cons-add-due-modal">
+                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                        <IndianRupee className="h-4 w-4 text-rose-600" />
+                        Add Due
+                      </p>
+                      <button onClick={() => setExtraDueDraft(null)} disabled={savingExtraDue} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-add-due-close"><X className="h-4 w-4" /></button>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-500">Reason *</label>
+                      <Input
+                        value={d.reason}
+                        onChange={(e) => setD({ reason: e.target.value })}
+                        placeholder="What is this extra amount for?"
+                        className="h-9"
+                        data-testid="cons-add-due-reason"
+                      />
+                    </div>
+                    {/* One amount on one date, or the amount split into a Payment Schedule. */}
+                    <div className="grid grid-cols-2 gap-1 rounded-[4px] bg-slate-100 p-1">
+                      {[["single", "Due Amount"], ["schedule", "Payment Schedule"]].map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setD({ mode: key })}
+                          className={`rounded-[4px] px-2 py-1.5 text-xs font-semibold transition ${d.mode === key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                          data-testid={`cons-add-due-mode-${key}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {d.mode === "single" ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="min-w-0">
+                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Amount (₹) *</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={d.amount}
+                            onChange={(e) => setD({ amount: e.target.value })}
+                            className="h-9"
+                            data-testid="cons-add-due-amount"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Due Date *</label>
+                          <MilkDateInput
+                            centered
+                            title="Due Date"
+                            value={d.due_date}
+                            onChange={(e) => setD({ due_date: e.target.value })}
+                            className="h-9"
+                            data-testid="cons-add-due-date"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* The rows are the bill: nothing to match them against, so their
+                            sum is the total rather than a figure they have to add up to. */}
+                        <PartialInstallmentsEditor
+                          installments={d.installments}
+                          setInstallments={(rows) => setD({ installments: rows })}
+                          totalSessions={0}
+                          perSessionRate={0}
+                          totalAmount={scheduleTotal}
+                          testPrefix="cons-add-due"
+                        />
+                        <p className="text-right text-xs font-semibold text-slate-700" data-testid="cons-add-due-total">
+                          Total Rs.{scheduleTotal.toLocaleString("en-IN")}
+                        </p>
+                      </>
+                    )}
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setExtraDueDraft(null)} disabled={savingExtraDue} data-testid="cons-add-due-cancel">
+                        Cancel
+                      </Button>
+                      <Button size="sm" className={`bg-rose-600 text-white hover:bg-rose-700 ${ACT_BTN}`} onClick={submitExtraDue} disabled={savingExtraDue} data-testid="cons-add-due-save">
+                        {savingExtraDue ? "Saving..." : d.mode === "schedule" ? "Save Payment Schedule" : "Add Due"}
+                      </Button>
                     </div>
                   </div>
                 </div>

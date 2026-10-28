@@ -10,7 +10,7 @@ const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFract
 
 // The revenue line each fee's money is reported on -- revenue_overview's sources -- so the
 // receipt names it the way the Summary does.
-const SOURCE_OF_FEE = { treatment: "session", consultation: "consultation", rehab: "rehab", diet: "diet", diet_chart: "diet_chart" };
+const SOURCE_OF_FEE = { treatment: "session", consultation: "consultation", rehab: "rehab", diet: "diet", diet_chart: "diet_chart", extra: "extra" };
 
 /** What a Payment Schedule row has to collect: the next instalment of a part-paid fee, or
  *  else a Consultation Fee assigned and never collected -- the two things that leave a

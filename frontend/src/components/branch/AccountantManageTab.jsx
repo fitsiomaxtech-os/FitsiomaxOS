@@ -215,6 +215,7 @@ const RECEIPT_PAID_FOR = {
   rehab: "Rehab Fee",
   diet: "Diet Fee",
   diet_chart: "Diet Chart Fee",
+  extra: "Extra Amount",
   store: "Store Purchase",
   zumba: "Zumba Registration",
   fitness: "Fitness Membership",

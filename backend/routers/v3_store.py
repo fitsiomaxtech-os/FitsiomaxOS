@@ -309,6 +309,7 @@ STORE_HISTORY_ACTIONS = [
     "diet_fee_collected",
     "diet_chart_fee_collected",
     "rehab_fee_collected",
+    "extra_fee_collected",
     "fee_collected",
     # A consultation package bought ahead of the visit, at Pre Book.
     "pre_book_consultation_collected",
@@ -324,6 +325,7 @@ PAYMENT_HISTORY_ACTIONS = [
     "diet_fee_collected",
     "diet_chart_fee_collected",
     "rehab_fee_collected",
+    "extra_fee_collected",
     "fee_collected",
     # A consultation package bought ahead of the visit, at Pre Book.
     "pre_book_consultation_collected",

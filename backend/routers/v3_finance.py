@@ -10,7 +10,7 @@ from database import v3_col
 from constants import BRANCH_BLOCKED_EXPENSE_CATEGORIES
 from physio_scope import physio_owns_lead, resolve_physio_doctor
 from deps import v3_require_roles, is_branch_admin_role, is_physio_role
-from schemas.v3 import V3UserOut, V3MarkInstallmentPaidInput
+from schemas.v3 import V3UserOut, V3MarkInstallmentPaidInput, V3AddExtraDueInput
 from stage_utils import entry_branch_stage_names
 from utils import PAST_MOVE_FIELD, clinic_today, generate_transaction_id
 # An installment is the Treatment Fee arriving in pieces, so it is counted under exactly
@@ -1671,7 +1671,7 @@ async def finance_profit(
 # or Treatment Fee later writes no second row (see routers/v3_pre_book.py), which is what
 # keeps the same rupee from being counted twice.
 PRE_BOOK_ACTIONS = ["pre_book_consultation_collected", "pre_book_advance_collected", "pre_book_other_advance_collected"]
-REVENUE_ACTIONS = ["consultation_paid", "package_sold", "package_payment_collected", "treatment_fee_collected", "diet_fee_collected", "diet_chart_fee_collected", "rehab_fee_collected", "fee_collected", *PRE_BOOK_ACTIONS]
+REVENUE_ACTIONS = ["consultation_paid", "package_sold", "package_payment_collected", "treatment_fee_collected", "diet_fee_collected", "diet_chart_fee_collected", "rehab_fee_collected", "extra_fee_collected", "fee_collected", *PRE_BOOK_ACTIONS]
 
 # The Consultation Fee itself: the actions that mean "this patient paid to be seen today".
 # Deliberately narrower than _revenue_category(...) == "consultation", which is a reporting
@@ -1950,6 +1950,16 @@ FEE_SCHEDULES = {
         "mode": "diet_chart_fee_payment_mode", "package": "diet_chart_package_name",
         "label": "Diet Chart Fee", "action": "diet_chart_fee_collected",
     },
+    # Add Due: an extra amount the branch charges on top of the fees above. It is only ever
+    # a schedule, written by add_extra_due and collected here like any other balance. Each
+    # row carries the reason it was charged (`note`); extra_fee_name is never written, so a
+    # collection's activity line names the fee by its label. That line is where revenue
+    # reads the amount and mode from (the first "Rs." and "via"), so typed text stays off it.
+    "extra": {
+        "details": "extra_fee_payment_details", "paid": "extra_fee_paid",
+        "mode": "extra_fee_payment_mode", "package": "extra_fee_name",
+        "label": "Extra Amount", "action": "extra_fee_collected",
+    },
 }
 
 
@@ -2123,7 +2133,7 @@ def _lead_outstanding_detail(lead: dict, today: str) -> dict:
     # payment still isn't — adding them wholesale would restate every existing row.
     # A balance is different: it is money the branch is owed and has to chase, so a fee
     # that left one is counted here, both halves, the same way the two above are.
-    for fee in ("rehab", "diet", "diet_chart"):
+    for fee in ("rehab", "diet", "diet_chart", "extra"):
         rows = _fee_installments(lead, fee)
         if rows:
             total_bill += sum(i.get("amount", 0) for i in rows)
@@ -3414,6 +3424,65 @@ async def mark_installment_paid(
 
     updated_details = {**details, "installments": installments}
     return {"message": "Installment marked as paid", "transaction_id": transaction_id, "balance": _lead_outstanding_balance({**lead, cfg["details"]: updated_details})}
+
+
+@router.post("/finance/extra-due/{lead_id}")
+async def add_extra_due(
+    lead_id: str,
+    payload: V3AddExtraDueInput,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """Add Due -- an extra amount charged to a patient on top of their fees, owed on one
+    date or across a Payment Schedule.
+
+    Scheduling moves no money, so nothing here reaches revenue or the drawer: the rows go
+    onto the Extra Amount fee's schedule unpaid, and each is taken later through
+    mark_installment_paid (fee "extra") -- the same Collect Balance every other balance
+    uses, so Outstanding Amount, Payment Schedule and the reminders all see it as well.
+    A second Add Due puts its rows after the first's rather than replacing them: two
+    charges on one patient stay two debts."""
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if is_branch_admin_role(user.role) and lead.get("branch_id") != user.branch_id:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Enter what the extra amount is for")
+    if not payload.installments:
+        raise HTTPException(status_code=400, detail="Add at least one amount and due date")
+    today = clinic_today()
+    rows = []
+    for n, row in enumerate(payload.installments, start=1):
+        amount = round(float(row.amount or 0), 2)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail=f"Enter the amount for row {n}")
+        due = (row.due_date or "").strip()
+        try:
+            date.fromisoformat(due)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Enter a valid due date for row {n}")
+        rows.append({"amount": amount, "due_date": due, "paid": False, "note": reason, "added_on": today, "added_by": user.full_name})
+
+    cfg = FEE_SCHEDULES["extra"]
+    details = dict(lead.get(cfg["details"]) or {})
+    details["installments"] = list(details.get("installments") or []) + rows
+    fields = {cfg["details"]: details}
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": {**fields, "updated_at": _now()}})
+
+    total = round(sum(r["amount"] for r in rows), 2)
+    when = rows[0]["due_date"] if len(rows) == 1 else f"{len(rows)} instalments, first due {rows[0]['due_date']}"
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "action": "extra_due_added",
+        "details": f"Added Extra Amount Rs.{total:g} for '{reason}' · due {when}",
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "created_at": _now(),
+    })
+    return {"message": f"Extra Amount Rs.{total:g} added", "fields": fields, "balance": _lead_outstanding_balance({**lead, **fields})}
 
 
 # ---------------------------------------------------------------------------
