@@ -4806,6 +4806,24 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         Leads it reads Leads, and the pipeline below highlights Leads too. */}
                     {headerStageName ? headerStageName : "No Stage"}
                   </span>
+                  {/* The confirmation the patient was sent, handed back: this eye, in pastel
+                      teal with no border or box, as the Consultation popup's header has it.
+                      It replaces the Appointment Details card, which is not drawn at this
+                      stage. Appointment stage only -- the endpoint answers for the live
+                      consultation alone and refuses a cancelled one. */}
+                  {inAppointmentStage && (
+                    <button
+                      type="button"
+                      onClick={openApptCard}
+                      disabled={loadingApptCard}
+                      className="shrink-0 text-teal-400 transition hover:text-teal-600 disabled:opacity-50"
+                      title="Open the appointment confirmation — print, send or download it again"
+                      aria-label="Appointment Card"
+                      data-testid="branch-lead-open-appt-card"
+                    >
+                      <Eye className="h-5 w-5" />
+                    </button>
+                  )}
                   {lead.consultation_fee && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-100">Fee Rs.{lead.consultation_fee}</span>}
                   {lead.package_amount && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">Pkg Rs.{lead.package_amount}</span>}
                 </div>
@@ -5085,40 +5103,18 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   diagnosis had been filled in, none of which booking an appointment
                   writes — so a patient with a day and a time on file had a popup that
                   never mentioned either, and the only sign of the appointment was the
-                  word in the header. */}
-              {(lead.appointment_date || lead.appointment_time || lead.appointment_department || lead.appointment_mode || lead.diagnosis) && (
+                  word in the header.
+
+                  Not at the Appointment stage itself: there the header's eye opens the
+                  confirmation sheet, which carries the day and the time, and the card
+                  only repeated it. */}
+              {!inAppointmentStage && (lead.appointment_date || lead.appointment_time || lead.appointment_department || lead.appointment_mode || lead.diagnosis) && (
                 <div className="overflow-hidden rounded-[3px] border border-blue-100 bg-white shadow-sm" data-testid="branch-lead-appointment-details">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+                  <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                     <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ClipboardList className="h-4 w-4" /></span>
                       Appointment Details
                     </p>
-                    {/* The confirmation the patient was sent, handed back. The branch's
-                        copy of it used to live exactly as long as the dialog that raised
-                        it, so a patient who lost the WhatsApp message could only be given
-                        another by rescheduling the appointment onto itself to make one.
-
-                        On this card rather than up in the header, because the sheet is
-                        about the slot printed underneath it -- somebody reaching for it is
-                        already reading this block to check the day.
-
-                        Appointment stage only. Before it there is no booking to print, and
-                        the stages after it belong to boards that hand the patient their
-                        own documents; the endpoint answers for the live consultation alone
-                        and refuses a cancelled one, which is the same line. */}
-                    {inAppointmentStage && (
-                      <button
-                        type="button"
-                        onClick={openApptCard}
-                        disabled={loadingApptCard}
-                        className="flex shrink-0 items-center gap-1 rounded-[5px] border border-teal-600 bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-60"
-                        title="Open the appointment confirmation — print, send or download it again"
-                        data-testid="branch-lead-open-appt-card"
-                      >
-                        <Eye className="h-3.5 w-3.5 shrink-0" />
-                        {loadingApptCard ? "Opening..." : "View"}
-                      </button>
-                    )}
                   </div>
                   <div className="space-y-2 px-4 py-3">
                     {lead.appointment_date && (
