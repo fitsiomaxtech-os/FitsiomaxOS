@@ -4774,9 +4774,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="branch-lead-modal-overlay">
       {/* A floating card on every size, not a full-bleed sheet on a phone. Edge to edge
           reads as a page you navigated to — there's no backdrop left to show it sits on
-          top of the list, and nothing to tap beside it to dismiss. Height is capped so
-          the darkened list stays visible above and below; the body below scrolls. */}
-      <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="branch-lead-modal">
+          top of the list, and nothing to tap beside it to dismiss. From sm up it opens at
+          590 × 450, never wider or taller than the window; the body below scrolls. */}
+      <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-[450px] sm:max-h-full sm:w-[590px] sm:max-w-full" data-testid="branch-lead-modal">
         {/* Plain header. The gradient made this the loudest thing on a screen whose
             subject is the cards underneath — the patient's name and their stage are the
             information here, and they read better on white than reversed out of three

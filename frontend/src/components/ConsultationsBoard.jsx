@@ -2763,7 +2763,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [caseRecordOpen, setCaseRecordOpen] = useState(false);
   // The popup's size, chosen when a patient is opened and held while they stay open. A
   // Branch Admin opening someone at Consultation Visit, Fee Collected or Physio Assign gets a
-  // 565 × 660 card: the work there is the payments and the physio, and a 1024px sheet around
+  // 570 × 610 card: the work there is the payments and the physio, and a 1024px sheet around
   // them was mostly white. Physio Assign's two halves stack in it (see PhysioDetailBody).
   // Cancel opens in it too, drawn the Fee Collected way (FEE_FLAT_STAGES).
   // Held rather than read off the stage live, so a fee taken or a physio assigned with the
@@ -7890,17 +7890,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               name at the top of the screen and nothing to press to reach another tab
               without scrolling back up to find the row.
 
-              The narrow card (compactDetail) is 565 wide and at most 660 tall. It ends where
-              its content does rather than holding a fixed 660, which left an empty band
-              under a short tab that read as a footer with nothing in it; it still gives way
-              to a smaller window, and only its body scrolls.
+              The narrow card (compactDetail) opens at 570 × 610 from sm up, on every tab;
+              it still gives way to a smaller window, and only its body scrolls.
 
               At Consultation Booked (bookedDetail) it is 514 wide, and on Overview its
               content ends at about 235 tall; other tabs grow it up to the same 660 cap. */}
           <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5 ${bookedDetail
             ? "max-w-[514px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
             : compactDetail
-            ? "max-w-[565px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
+            ? "max-w-[570px] sm:h-[min(610px,calc(100dvh-1rem))] sm:max-h-none"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
             {/* Two lines, each read across to its far end: who this is and the expert
                 seeing them, then how to reach them and when, with the Appointment Card at
