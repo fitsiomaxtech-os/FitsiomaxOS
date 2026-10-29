@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
   getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
-  getLeadDeleteEnabled,
+  getLeadDeleteEnabled, preSalesPreBook,
   getDashboardOverview,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
@@ -33,6 +33,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
+import { PRE_BOOK_PLANS, planDate, preBookOf, todayIso } from "@/lib/preBook";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -2442,6 +2443,8 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   const [followUpDraft, setFollowUpDraft] = useState(null); // { date, time, remarks } | null
   const [rescheduleDraft, setRescheduleDraft] = useState(null); // { followupId, date, time, reason } | null
   const [bookingAppointment, setBookingAppointment] = useState(false); // the Appointment pill's PreSalesAppointmentDialog
+  const [preBookDraft, setPreBookDraft] = useState(null); // the Pre Book pill's planned visit: { plan, date, remarks } | null
+  const [preBookBusy, setPreBookBusy] = useState(false);
   // Overview's RNR Status and Follow-Up cards, which a lead at Follow Up shows shut.
   const [rnrCardOpen, setRnrCardOpen] = useState(false);
   const [followUpCardOpen, setFollowUpCardOpen] = useState(false);
@@ -2498,11 +2501,43 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
     setFollowUpDraft({ date: tomorrow.toISOString().slice(0, 10), time: "10:00", remarks: "" });
   };
 
-  // A stage pill pressed. Follow Up and Appointment open their forms instead of moving the
-  // lead outright — each needs a date first. Every other stage, Not a prospect, Pre Book and Lost included, moves at once.
+  // The planned-visit form, opened on what the lead already carries (a lead moved back onto
+  // Pre Book to change its date), else on a month from today -- as Branch Leads opens it.
+  const startPreBook = () => {
+    const pb = preBookOf(currentLead);
+    const plan = pb?.plan || "next_month";
+    setPreBookDraft({ plan, date: pb?.date && pb.date >= todayIso() ? pb.date : planDate(plan), remarks: pb?.remarks || "" });
+  };
+
+  const submitPreBook = async () => {
+    if (!preBookDraft?.plan) { toast.error("Choose when the client plans to come"); return; }
+    if (!preBookDraft.date) { toast.error("Pick the planned visit date"); return; }
+    if (preBookDraft.date < todayIso()) { toast.error("The planned visit date cannot be in the past"); return; }
+    try {
+      setPreBookBusy(true);
+      const updated = await preSalesPreBook(currentLead.id, {
+        pre_book_plan: preBookDraft.plan,
+        pre_book_date: preBookDraft.date,
+        pre_book_remarks: preBookDraft.remarks,
+      });
+      setCurrentLead(updated);
+      setPreBookDraft(null);
+      toast.success("Moved to Pre Book");
+      onSaved && onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Move failed");
+    } finally {
+      setPreBookBusy(false);
+    }
+  };
+
+  // A stage pill pressed. Follow Up, Pre Book and Appointment open their forms instead of
+  // moving the lead outright — each needs a date first. Every other stage, Not a prospect and
+  // Lost included, moves at once.
   // Lost asks first: once there, the lead's stage is locked. A new lead sent to RNR asks too.
   const moveTo = async (s) => {
     if (s.name === "Follow Up") { startFollowUp(); return; }
+    if (s.name === "Pre Book") { startPreBook(); return; }
     if (s.name === "Appointment") { setBookingAppointment(true); return; }
     if (s.name === "RNR" && currentLead.stage === "New Leads" && !window.confirm(
       `Move ${currentLead.name || "this lead"} from New Leads to RNR?`,
@@ -3109,6 +3144,64 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                 data-testid="presales-followup-save"
               >
                 <CheckCircle2 className="mr-1 h-4 w-4" /> Save & Move to Follow Up
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The Pre Book pill: when the client plans to come, asked before the move -- the same
+          two questions Branch Leads asks, and the branch board shows the lead on its own
+          Pre Book stage with this date. */}
+      {preBookDraft && !showEdit && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4" data-testid="presales-prebook-modal">
+          <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-[4px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-gradient-to-r from-teal-500 to-emerald-500 px-5 py-4 text-white">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5" />
+                <div>
+                  <p className="text-base font-semibold">Pre Book — Planned Visit</p>
+                  <p className="text-[11px] text-white/80">{currentLead.name}{displayPhone(currentLead.phone) ? ` · ${displayPhone(currentLead.phone)}` : ""}</p>
+                </div>
+              </div>
+              <button onClick={() => setPreBookDraft(null)} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="presales-prebook-close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Client will come *</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {PRE_BOOK_PLANS.map((o) => (
+                    <button
+                      key={o.key}
+                      type="button"
+                      onClick={() => setPreBookDraft({ ...preBookDraft, plan: o.key, date: o.key === "date" ? preBookDraft.date : planDate(o.key) })}
+                      className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${preBookDraft.plan === o.key ? "border-teal-500 bg-teal-600 text-white" : "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100"}`}
+                      data-testid={`presales-prebook-plan-${o.key}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Planned visit date *</span>
+                <MilkDateInput
+                  centered
+                  title="Planned Visit Date"
+                  min={todayIso()}
+                  value={preBookDraft.date}
+                  onChange={(e) => setPreBookDraft({ ...preBookDraft, date: e.target.value })}
+                  className="h-10 w-full"
+                  data-testid="presales-prebook-date"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
+              <Button variant="outline" onClick={() => setPreBookDraft(null)} data-testid="presales-prebook-cancel">Cancel</Button>
+              <Button className="bg-teal-600 text-white hover:bg-teal-700" onClick={submitPreBook} disabled={preBookBusy} data-testid="presales-prebook-save">
+                <CheckCircle2 className="mr-1 h-4 w-4" /> {preBookBusy ? "Moving..." : "Save & Move to Pre Book"}
               </Button>
             </div>
           </div>

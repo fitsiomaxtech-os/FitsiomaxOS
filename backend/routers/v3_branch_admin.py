@@ -20,7 +20,7 @@ import lead_control
 import lead_purge
 import store_branch_overrides
 from constants import (
-    PRESALES_LOST_STAGE,
+    PRESALES_LOST_STAGE, PRESALES_PRE_BOOK_STAGE,
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
@@ -33,7 +33,7 @@ from stage_utils import (
 from schemas.v3 import (
     V3UserOut, V3LeadOut,
     V3BranchStageInput, V3CollectFeeInput, V3AssignPhysioInput, V3ConsultationStageInput,
-    V3PortfolioScheduleInput,
+    V3PortfolioScheduleInput, V3PreSalesPreBookInput,
 )
 from routers.v3_lead_documents import leads_with_prescription
 # Whose Head Physio review is still owed. Imported rather than re-derived: the rule for
@@ -561,6 +561,41 @@ async def v3_arm_board(user: V3UserOut = Depends(v3_current_user)):
         raise HTTPException(status_code=500, detail=f"arm-board error: {type(e).__name__}: {e}")
 
 
+def _planned_visit_updates(lead: dict, plan_key: Optional[str], day: Optional[str], remarks: Optional[str], user: V3UserOut):
+    """The lead fields a move onto Pre Book writes -- when the client plans to come -- and
+    the line the activity trail adds for it. Refuses a move with no plan, or a date gone by.
+
+    Shared by Branch Leads' own move and the Pre Sales desk's (v3_pre_sales_pre_book), so
+    the Pre Book card reads the same record whichever desk put the lead there. Written field
+    by field into the nested record, so moving a lead back onto Pre Book to change the date
+    keeps whatever it has already paid.
+    """
+    if plan_key not in PRE_BOOK_PLANS:
+        raise HTTPException(status_code=400, detail="Choose when the client plans to come")
+    try:
+        planned = date.fromisoformat((day or "").strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Pick the planned visit date")
+    today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+    if planned < today_ist:
+        raise HTTPException(status_code=400, detail="The planned visit date cannot be in the past")
+    plan = {
+        "at": now_iso(),
+        "by": user.full_name,
+        "plan": plan_key,
+        "plan_label": PRE_BOOK_PLANS[plan_key],
+        "date": planned.isoformat(),
+        "remarks": (remarks or "").strip() or None,
+    }
+    # A dotted path cannot be written into a field that holds null, so a lead with no
+    # record yet gets the whole one.
+    if isinstance(lead.get("pre_book"), dict):
+        updates = {f"pre_book.{k}": v for k, v in plan.items()}
+    else:
+        updates = {"pre_book": plan}
+    return updates, f" · planned visit {PRE_BOOK_PLANS[plan_key].lower()} ({planned.isoformat()})"
+
+
 @router.post("/leads/{lead_id}/branch-stage")
 async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev"))):
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
@@ -593,34 +628,12 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         })
         reminder_note = f" · reminder call {NOT_PROSPECT_REMINDER_DAYS[payload.reminder_days].lower()} ({reminder_date})"
     # Pre Book holds a client who will come later, so the move asks when -- the board lists
-    # that on the stage, and the desk books the real slot from it. Written field by field
-    # into the nested record, so moving a lead back onto Pre Book to change the date keeps
-    # whatever it has already paid.
+    # that on the stage, and the desk books the real slot from it.
     if payload.branch_stage == await _sales_stage_for_role(SALES_STAGE_ROLE_PRE_BOOK, lead_arm):
-        if payload.pre_book_plan not in PRE_BOOK_PLANS:
-            raise HTTPException(status_code=400, detail="Choose when the client plans to come")
-        try:
-            planned = date.fromisoformat((payload.pre_book_date or "").strip())
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Pick the planned visit date")
-        today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
-        if planned < today_ist:
-            raise HTTPException(status_code=400, detail="The planned visit date cannot be in the past")
-        plan = {
-            "at": now_iso(),
-            "by": user.full_name,
-            "plan": payload.pre_book_plan,
-            "plan_label": PRE_BOOK_PLANS[payload.pre_book_plan],
-            "date": planned.isoformat(),
-            "remarks": (payload.pre_book_remarks or "").strip() or None,
-        }
-        # A dotted path cannot be written into a field that holds null, so a lead with no
-        # record yet gets the whole one.
-        if isinstance(lead.get("pre_book"), dict):
-            updates.update({f"pre_book.{k}": v for k, v in plan.items()})
-        else:
-            updates["pre_book"] = plan
-        reminder_note = f" · planned visit {PRE_BOOK_PLANS[payload.pre_book_plan].lower()} ({planned.isoformat()})"
+        plan_updates, reminder_note = _planned_visit_updates(
+            lead, payload.pre_book_plan, payload.pre_book_date, payload.pre_book_remarks, user,
+        )
+        updates.update(plan_updates)
     await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
 
     # Cancelled is where a booked consultation goes to die, and the slot it was holding has
@@ -652,6 +665,52 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         "created_at": now_iso(),
     }
     await v3_col("lead_activity").insert_one(activity.copy())
+    updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    return V3LeadOut(**updated)
+
+
+@router.post("/leads/{lead_id}/pre-sales-pre-book", response_model=V3LeadOut)
+async def v3_pre_sales_pre_book(lead_id: str, payload: V3PreSalesPreBookInput, user: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
+    """The Pre Sales desk moving a lead onto its Pre Book stage.
+
+    Asks the planned visit first, as Branch Leads' own move does, and stands the lead on the
+    branch's Pre Book stage too -- the client is coming to that branch, so its board shows
+    them there with the date, not still on its opening stage. A lead with no branch yet only
+    moves on the Pre Sales side; it reaches a branch board when it is handed to one.
+    """
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    # Lost is locked on the Pre-Sales side (see _refuse_if_lost in routers/v3_leads.py).
+    if lead.get("stage") == PRESALES_LOST_STAGE:
+        raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
+    plan_updates, plan_note = _planned_visit_updates(
+        lead, payload.pre_book_plan, payload.pre_book_date, payload.pre_book_remarks, user,
+    )
+    old_stage = lead.get("stage", "Unknown")
+    updates = {"stage": PRESALES_PRE_BOOK_STAGE, "updated_at": now_iso(), **plan_updates}
+
+    # The branch's Pre Book stage, found by role so a rename keeps it. Left alone when that
+    # branch's board has no such stage, rather than stranding the lead on one it never draws.
+    branch_note = ""
+    branch_id = lead.get("branch_id")
+    if branch_id:
+        lead_arm = await sales_arm_for(branch_id=branch_id, vertical=lead.get("vertical"))
+        target = await _sales_stage_for_role(SALES_STAGE_ROLE_PRE_BOOK, lead_arm)
+        if target in await _branch_stage_names(branch_id) and lead.get("branch_stage") != target:
+            updates["branch_stage"] = target
+            branch_note = f" · Branch stage: '{lead.get('branch_stage') or 'None'}' -> '{target}'"
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
+
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "action": "stage_change",
+        "details": f"Moved from '{old_stage}' to '{PRESALES_PRE_BOOK_STAGE}'" + branch_note + plan_note,
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "created_at": now_iso(),
+    })
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 

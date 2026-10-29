@@ -1153,6 +1153,13 @@ class V3BranchStageInput(BaseModel):
     pre_book_remarks: Optional[str] = None
 
 
+class V3PreSalesPreBookInput(BaseModel):
+    # The Pre Sales desk's move onto Pre Book: the same planned visit Branch Leads asks.
+    pre_book_plan: Optional[str] = None
+    pre_book_date: Optional[str] = None  # YYYY-MM-DD
+    pre_book_remarks: Optional[str] = None
+
+
 class V3PortfolioScheduleInput(BaseModel):
     portfolio_date: str  # YYYY-MM-DD
     portfolio_time: str  # HH:MM (24h)

@@ -251,6 +251,8 @@ export const getBranchBoard = async (branchId) => (await api.get(`/branch-board/
 // nothing here for one arm's admin to point at the other's patients.
 export const getArmBoard = async () => (await api.get("/arm-board")).data;
 export const moveBranchStage = async (leadId, payload) => (await api.post(`/leads/${leadId}/branch-stage`, payload)).data;
+// Pre Sales' move onto Pre Book: the planned visit, and the branch's Pre Book stage with it.
+export const preSalesPreBook = async (leadId, payload) => (await api.post(`/leads/${leadId}/pre-sales-pre-book`, payload)).data;
 export const schedulePortfolio = async (leadId, payload) => (await api.post(`/leads/${leadId}/schedule-portfolio`, payload)).data;
 export const scheduleBranchFollowUp = async (leadId, payload) => (await api.post(`/leads/${leadId}/branch-follow-up`, payload)).data;
 export const rescheduleBranchFollowUp = async (leadId, followupId, payload) => (await api.post(`/leads/${leadId}/branch-follow-up/${followupId}/reschedule`, payload)).data;
