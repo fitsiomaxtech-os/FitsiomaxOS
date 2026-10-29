@@ -200,7 +200,7 @@ code {
 .fee-flat [data-testid^="cons-fee-receipt"] svg {
   display: none !important;
 }
-/* ...and View Details is filled in its own colour, at 75% like the Appointment button (set
+/* ...and View Details is filled in its own colour, at 75% (set
    in the JSX). */
 .fee-flat [data-testid="cons-case-record-view"] {
   background-color: #0284c7 !important; /* sky-600 */
@@ -209,7 +209,6 @@ code {
 }
 /* ...and every button down the right-hand side casts a shadow under its bottom edge only:
    the negative spread pulls it in from the sides. */
-.fee-flat [data-testid="cons-open-appt-card"],
 .fee-flat [data-testid="cons-case-record-view"],
 .fee-flat [data-testid^="cons-fee-receipt"],
 .fee-flat [data-testid^="cons-fee-act-"] {
@@ -217,7 +216,7 @@ code {
 }
 /* ...and its buttons down the right-hand side -- View Details, every Receipt and
    Collect -- are one size and end on one edge: the fee rows take the same 16px
-   inset the section headings have. (Appointment Card is sized to match in the JSX.) */
+   inset the section headings have. */
 .fee-flat [data-testid^="cons-fee-step-"] {
   padding-right: 16px !important;
 }
@@ -245,10 +244,9 @@ code {
    in colour on the white of its row, with 2px corners. The footer's Assign Physio, Mark Online
    and Add Due (and Collect Online Payment beside them) share one pastel violet, as do the
    Treatment Fee row's Mark Online and Physio Assign's Assign / Reassign Physio. Diet's buttons
-   read in orange, Rehab's in cyan, Appointment in teal. A light tint shows on hover. The
+   read in orange, Rehab's in cyan. A light tint shows on hover. The
    buttons alone take a 1px gray border; the rest of the Overview keeps its own borders, and
    the tab rows are left as they are. */
-.fee-soft [data-testid="cons-open-appt-card"],
 .fee-soft [data-testid="cons-case-record-view"],
 .fee-soft [data-testid^="cons-fee-receipt"],
 .fee-soft [data-testid^="cons-fee-act-"],
@@ -271,7 +269,6 @@ code {
   border: 1px solid #d1d5db !important; /* gray-300 */
   border-radius: 2px !important;
 }
-.fee-soft [data-testid="cons-open-appt-card"]:hover,
 .fee-soft [data-testid="cons-case-record-view"]:hover,
 .fee-soft [data-testid^="cons-fee-receipt"]:hover,
 .fee-soft [data-testid^="cons-fee-act-"]:hover,
@@ -315,10 +312,6 @@ code {
 .fee-soft [data-testid="cons-open-rehab-fee"]:hover {
   background-color: #ecfeff !important; /* cyan-50 */
   color: #0e7490 !important; /* cyan-700 */
-}
-.fee-soft [data-testid="cons-open-appt-card"] {
-  color: #0d9488 !important; /* teal-600 */
-  opacity: 1 !important;
 }
 /* Physio Assign's Collect Balance reads in the amber of the box it sits in, rose once overdue. */
 .fee-soft [data-testid="cons-physio-assign-collect-balance"] {

@@ -13,7 +13,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
-import { advanceForLabel, preBookConsultOwed, preBookOf, shortDay } from "@/lib/preBook";
+import { advanceForLabel, preBookConsultOwed, preBookOf, preBookWhen } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
@@ -1429,8 +1429,8 @@ const COLS_WITH_ACTION = {
   action: "w-[11%]",
 };
 
-// The stages whose popup is drawn in the Fee Collected style: a one-row header, the
-// Appointment row in the Overview, and the flat .fee-flat buttons (index.css).
+// The stages whose popup is drawn in the Fee Collected style: a one-row header with the
+// Appointment Card as an eye icon in it, and the flat .fee-flat buttons (index.css).
 const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign"];
 // Those stages, and the popup opened from these pills, draw their buttons the Fee Collected
 // way: no fill and no shadow, the words in colour, a 1px gray border (.fee-soft, index.css).
@@ -7902,9 +7902,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
                   <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
-                  {/* Fee Collected: the Appointment Card is this eye, in pastel teal -- no
-                      border, no box -- rather than a row of its own in the Overview. */}
-                  {selectedLead.consultation_stage === "Fee Collected" && selectedLead.appointment_date && (
+                  {/* The Appointment Card is this eye, in pastel teal -- no border, no box --
+                      rather than a row of its own in the Overview. */}
+                  {selectedLead.appointment_date && (
                     <button
                       type="button"
                       onClick={openApptCard}
@@ -7967,7 +7967,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         the lead, so nothing can be drawn without asking. Fetching for
                         every patient opened, against a card almost nobody asks for, would
                         be a request per open to save a click on the rare one. */}
-                    {selectedLead.appointment_date && selectedLead.consultation_stage !== "Fee Collected" && (
+                    {/* Opened from the Rehab or Diet pills: the same pastel teal eye the
+                        one-row header carries, rather than the labelled button. */}
+                    {selectedLead.appointment_date && FEE_SOFT_PILLS.includes(stageFilter) ? (
+                      <button
+                        type="button"
+                        onClick={openApptCard}
+                        disabled={loadingApptCard}
+                        className="shrink-0 text-teal-400 transition hover:text-teal-600 disabled:opacity-50"
+                        title="Open the appointment confirmation — print, send or download it again"
+                        aria-label="Appointment Card"
+                        data-testid="cons-open-appt-card"
+                      >
+                        <Eye className="h-5 w-5" />
+                      </button>
+                    ) : selectedLead.appointment_date && (
                       <button
                         type="button"
                         onClick={openApptCard}
@@ -8057,30 +8071,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               // no shadow, as Fee Collected does -- see .fee-soft. Fee Collected's own fee rows
               // also sit on white -- see .fee-collected.
               <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""} ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) || FEE_SOFT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" ? "fee-collected" : ""}`}>
-              {/* Consultation Visit and Fee Collected: the Appointment Card comes down out of
-                  the header onto a row of its own, drawn like Consultation Record under it, so
-                  its button sits in the same column as View Details and the fee buttons. */}
-              {/* Not at Fee Collected: there the Appointment Card is the eye icon in the header. */}
-              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) && selectedLead.consultation_stage !== "Fee Collected" && selectedLead.appointment_date && (
-                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="cons-appt-record">
-                  <div className="flex w-full items-center gap-2 px-4 py-2.5">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                      <Calendar className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-slate-600">Appointment Record</span>
-                    <button
-                      type="button"
-                      onClick={openApptCard}
-                      disabled={loadingApptCard}
-                      className="ml-auto flex h-8 w-[104px] shrink-0 items-center justify-center rounded-[2px] bg-teal-600 text-xs font-semibold text-white opacity-[0.75] transition hover:bg-teal-700 sm:w-[130px]"
-                      title="Open the appointment confirmation — print, send or download it again"
-                      data-testid="cons-open-appt-card"
-                    >
-                      {loadingApptCard ? "Opening..." : "Appointment"}
-                    </button>
-                  </div>
-                </section>
-              )}
+              {/* No Appointment Record row: the Appointment Card is the eye icon in the header. */}
               {/* The consultation as it was written up — what pre-sales heard, what the
                   Consultant diagnosed, what they wrote down as the treatment, and the plan
                   they confirmed.
@@ -10803,7 +10794,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const preBookStrip = (pbConsult || pbAdvance) ? (
                   <div className="mb-3 overflow-hidden rounded-lg border border-teal-200 bg-teal-50/70" data-testid="cons-prebook-strip">
                     <p className="border-b border-teal-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-teal-800">
-                      Paid at Pre Book{pb.date ? ` · planned ${shortDay(pb.date)}` : ""}
+                      Paid at Pre Book{pb.date ? ` · planned ${preBookWhen(pb)}` : ""}
                     </p>
                     <div className="divide-y divide-teal-100">
                       {pbConsult && (
