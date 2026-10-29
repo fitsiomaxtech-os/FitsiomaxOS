@@ -1432,6 +1432,9 @@ const COLS_WITH_ACTION = {
 // The stages whose popup is drawn in the Fee Collected style: a one-row header, the
 // Appointment row in the Overview, and the flat .fee-flat buttons (index.css).
 const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign"];
+// Those stages, and the popup opened from these pills, draw their buttons the Fee Collected
+// way: no fill and no shadow, the words in colour, a 1px gray border (.fee-soft, index.css).
+const FEE_SOFT_PILLS = ["Rehab", "Diet Consultation", "Diet Chart"];
 
 /**
  * The four fees a patient can pay, each collected at its own point and stored separately.
@@ -8050,8 +8053,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {detailTab === "overview" && (
               // Consultation Visit and Fee Collected draw their Overview flat: no borders, 2px
               // corners, and no icons on its buttons -- see .fee-flat in index.css.
-              // Fee Collected also draws its buttons with no fill and no shadow -- see .fee-soft.
-              <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""} ${selectedLead.consultation_stage === "Fee Collected" ? "fee-soft" : ""}`}>
+              // Those stages and the Rehab / Diet pills also draw their buttons with no fill and
+              // no shadow, as Fee Collected does -- see .fee-soft. Fee Collected's own fee rows
+              // also sit on white -- see .fee-collected.
+              <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""} ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) || FEE_SOFT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" ? "fee-collected" : ""}`}>
               {/* Consultation Visit and Fee Collected: the Appointment Card comes down out of
                   the header onto a row of its own, drawn like Consultation Record under it, so
                   its button sits in the same column as View Details and the fee buttons. */}

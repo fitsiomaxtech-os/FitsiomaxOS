@@ -239,71 +239,120 @@ code {
     min-width: 130px !important;
   }
 }
-/* Fee Collected only (.fee-soft, set in the JSX): no button on the Overview is filled or casts
-   a shadow -- each is its words and icon in colour on the white of its row. The footer's
-   Assign Physio, Mark Online and Add Due (and Collect Online Payment beside them) share one
-   pastel violet, as does the Treatment Fee row's Mark Online. A light tint shows on hover.
-   The buttons alone take a 1px gray border; the rest of the Overview stays borderless. */
-.fee-flat.fee-soft [data-testid="cons-case-record-view"],
-.fee-flat.fee-soft [data-testid^="cons-fee-receipt"],
-.fee-flat.fee-soft [data-testid^="cons-fee-act-"],
-.fee-flat.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]),
-.fee-flat.fee-soft [data-testid^="cons-prebook-use-"],
-.fee-flat.fee-soft [data-testid="cons-fee-mark-online"],
-.fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
-.fee-flat.fee-soft [data-testid="cons-mark-online-menu"],
-.fee-flat.fee-soft [data-testid="cons-open-add-due"],
-.fee-flat.fee-soft [data-testid="cons-collect-online"] {
+/* Fee Collected's buttons (.fee-soft, set in the JSX), drawn the same way on Consultation
+   Visit, Physio Assign and the popup opened from the Rehab, Diet Consultation and Diet Chart
+   pills: no button on the Overview is filled or casts a shadow -- each is its words and icon
+   in colour on the white of its row, with 2px corners. The footer's Assign Physio, Mark Online
+   and Add Due (and Collect Online Payment beside them) share one pastel violet, as do the
+   Treatment Fee row's Mark Online and Physio Assign's Assign / Reassign Physio. Diet's buttons
+   read in orange, Rehab's in cyan, Appointment in teal. A light tint shows on hover. The
+   buttons alone take a 1px gray border; the rest of the Overview keeps its own borders, and
+   the tab rows are left as they are. */
+.fee-soft [data-testid="cons-open-appt-card"],
+.fee-soft [data-testid="cons-case-record-view"],
+.fee-soft [data-testid^="cons-fee-receipt"],
+.fee-soft [data-testid^="cons-fee-act-"],
+.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]),
+.fee-soft [data-testid^="cons-prebook-use-"],
+.fee-soft [data-testid="cons-fee-mark-online"],
+.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
+.fee-soft [data-testid="cons-mark-online-menu"],
+.fee-soft [data-testid="cons-open-add-due"],
+.fee-soft [data-testid="cons-collect-online"],
+.fee-soft [data-testid="cons-open-physio-assign"],
+.fee-soft [data-testid="cons-reassign-physio"],
+.fee-soft [data-testid="cons-physio-assign-collect-balance"],
+.fee-soft [data-testid^="cons-diet-detail-"],
+.fee-soft [data-testid="cons-open-diet-assign"],
+.fee-soft [data-testid^="cons-rehab-detail-"],
+.fee-soft [data-testid="cons-open-rehab-fee"] {
   background-color: transparent !important;
   box-shadow: none !important;
   border: 1px solid #d1d5db !important; /* gray-300 */
+  border-radius: 2px !important;
 }
-.fee-flat.fee-soft [data-testid="cons-case-record-view"]:hover,
-.fee-flat.fee-soft [data-testid^="cons-fee-receipt"]:hover,
-.fee-flat.fee-soft [data-testid^="cons-fee-act-"]:hover,
-.fee-flat.fee-soft [data-testid^="cons-prebook-use-"]:hover {
+.fee-soft [data-testid="cons-open-appt-card"]:hover,
+.fee-soft [data-testid="cons-case-record-view"]:hover,
+.fee-soft [data-testid^="cons-fee-receipt"]:hover,
+.fee-soft [data-testid^="cons-fee-act-"]:hover,
+.fee-soft [data-testid^="cons-prebook-use-"]:hover,
+.fee-soft [data-testid="cons-physio-assign-collect-balance"]:hover {
   background-color: #f1f5f9 !important; /* slate-100 */
 }
-.fee-flat.fee-soft [data-testid="cons-fee-mark-online"],
-.fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
-.fee-flat.fee-soft [data-testid="cons-mark-online-menu"],
-.fee-flat.fee-soft [data-testid="cons-open-add-due"],
-.fee-flat.fee-soft [data-testid="cons-collect-online"] {
+.fee-soft [data-testid="cons-fee-mark-online"],
+.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"],
+.fee-soft [data-testid="cons-mark-online-menu"],
+.fee-soft [data-testid="cons-open-add-due"],
+.fee-soft [data-testid="cons-collect-online"],
+.fee-soft [data-testid="cons-open-physio-assign"],
+.fee-soft [data-testid="cons-reassign-physio"] {
   color: #8b5cf6 !important; /* violet-500 */
 }
-.fee-flat.fee-soft [data-testid="cons-fee-mark-online"]:hover,
-.fee-flat.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"]:hover,
-.fee-flat.fee-soft [data-testid="cons-mark-online-menu"]:hover,
-.fee-flat.fee-soft [data-testid="cons-open-add-due"]:hover,
-.fee-flat.fee-soft [data-testid="cons-collect-online"]:hover {
+.fee-soft [data-testid="cons-fee-mark-online"]:hover,
+.fee-soft [data-testid="cons-open-physio-assign-from-fee-collected"]:hover,
+.fee-soft [data-testid="cons-mark-online-menu"]:hover,
+.fee-soft [data-testid="cons-open-add-due"]:hover,
+.fee-soft [data-testid="cons-collect-online"]:hover,
+.fee-soft [data-testid="cons-open-physio-assign"]:hover,
+.fee-soft [data-testid="cons-reassign-physio"]:hover {
   background-color: #f5f3ff !important; /* violet-50 */
   color: #7c3aed !important; /* violet-600 */
 }
+.fee-soft [data-testid^="cons-diet-detail-"],
+.fee-soft [data-testid="cons-open-diet-assign"] {
+  color: #ea580c !important; /* orange-600 */
+}
+.fee-soft [data-testid^="cons-diet-detail-"]:hover,
+.fee-soft [data-testid="cons-open-diet-assign"]:hover {
+  background-color: #fff7ed !important; /* orange-50 */
+  color: #c2410c !important; /* orange-700 */
+}
+.fee-soft [data-testid^="cons-rehab-detail-"],
+.fee-soft [data-testid="cons-open-rehab-fee"] {
+  color: #0891b2 !important; /* cyan-600 */
+}
+.fee-soft [data-testid^="cons-rehab-detail-"]:hover,
+.fee-soft [data-testid="cons-open-rehab-fee"]:hover {
+  background-color: #ecfeff !important; /* cyan-50 */
+  color: #0e7490 !important; /* cyan-700 */
+}
+.fee-soft [data-testid="cons-open-appt-card"] {
+  color: #0d9488 !important; /* teal-600 */
+  opacity: 1 !important;
+}
+/* Physio Assign's Collect Balance reads in the amber of the box it sits in, rose once overdue. */
+.fee-soft [data-testid="cons-physio-assign-collect-balance"] {
+  color: #b45309 !important; /* amber-700 */
+}
+.fee-soft [data-testid="cons-physio-assign-collect-balance"].bg-rose-600 {
+  color: #e11d48 !important; /* rose-600 */
+}
 /* View Details and the next fee's Collect keep their sky as the colour of their words; the
    other Collects read in slate, and Receipt keeps its emerald (set in the JSX). */
-.fee-flat.fee-soft [data-testid^="cons-fee-act-"] {
+.fee-soft [data-testid^="cons-fee-act-"] {
   color: #334155 !important; /* slate-700 */
 }
-.fee-flat.fee-soft [data-testid="cons-case-record-view"],
-.fee-flat.fee-soft [data-testid^="cons-fee-act-"].bg-sky-600 {
+.fee-soft [data-testid="cons-case-record-view"],
+.fee-soft [data-testid^="cons-fee-act-"].bg-sky-600 {
   color: #0284c7 !important; /* sky-600 */
   opacity: 1;
 }
-.fee-flat.fee-soft [data-testid^="cons-prebook-use-"] {
+.fee-soft [data-testid^="cons-prebook-use-"] {
   color: #0f766e !important; /* teal-700 */
 }
 /* Inspect is as wide as its word, under the Treatment Fee's name. */
-.fee-flat.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]) {
+.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]) {
   width: auto !important;
   padding: 0 6px !important;
   justify-content: flex-start !important;
   color: #0284c7 !important; /* sky-600 */
   opacity: 1;
 }
-.fee-flat.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]):hover {
+.fee-soft :is([data-testid^="cons-fee-inspect-treatment"], [data-testid="cons-fee-inspect-extra"]):hover {
   text-decoration: underline;
 }
-/* ...and the rows of fees already in sit on white like the rest, not on a green tint. */
-.fee-flat.fee-soft [data-testid^="cons-fee-step-"] {
+/* ...and on Fee Collected alone (.fee-collected), the rows of fees already in sit on white
+   like the rest, not on a green tint. */
+.fee-collected [data-testid^="cons-fee-step-"] {
   background-color: #fff !important;
 }
