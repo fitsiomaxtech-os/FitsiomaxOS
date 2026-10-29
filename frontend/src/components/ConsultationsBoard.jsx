@@ -4569,6 +4569,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // agreed then.
       consultation_item_id: lead.package_id || (lead.visit_type === "home" ? lead.visit_package_id || "" : ""),
       payment_mode: lead.package_payment_mode || "cash",
+      // Rupees off the package, typed at the desk. Rupees only -- no percentage box.
+      discount: "",
       // What each method needs before the server will take it, typed on the section
       // under the Payment Mode: the card slip's transaction id, an Account Transfer's
       // account and reference, a cheque's bank and number. Bank Name is one box shared
@@ -4826,6 +4828,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // What a Partial Payment schedule for the Consultation Fee has to add up to.
   const consultationPrice = consultationChosenPrice ?? selectedLead?.package_price ?? 0;
 
+  // The discount on the package, and what that leaves to collect. Only the modes that
+  // settle now take one -- Cheque and Partial Payment keep the package price, as the
+  // server holds them to (settle_standard_payment).
+  const consultationDiscountable = consultationChosenPrice > 0 && SETTLED_NOW_MODES.includes(collectFeeDraft?.payment_mode);
+  const consultationDiscount = consultationDiscountable ? Math.max(0, round2(parseFloat(collectFeeDraft?.discount) || 0)) : 0;
+  const consultationNetPayable = consultationDiscountable ? round2(consultationChosenPrice - consultationDiscount) : consultationChosenPrice;
+
   // The Rehab Fee's and the Diet fees' three figures: a discount that was typed, the
   // money being handed over now, and whatever of the price that leaves still owed. Each
   // fee is one price paid once, so the whole of what is not discounted and not collected
@@ -4998,9 +5007,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // needs is filled in on that section, so what is left to ask is a plain yes -- the
   // browser's own OK, naming the package, the fee and the method, before anything moves.
   //
-  // The methods that settle now take the package's price in full. There is no discount
-  // or part payment on this screen, so a collection here never leaves a balance; a fee
-  // that has to be spread out is what Partial Payment is for.
+  // The methods that settle now take the package's price less any discount typed under
+  // the Payment Mode. There is no part payment on this screen, so a collection here never
+  // leaves a balance; a fee that has to be spread out is what Partial Payment is for.
   const collectConsultationFee = () => {
     const mode = collectFeeDraft.payment_mode;
     const price = consultationChosenPrice;
@@ -5029,17 +5038,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       }
       payload.partial_installments = rows.map((i) => ({ amount: round2(parseFloat(i.amount)), due_date: i.due_date }));
     } else {
-      payload.amount = price;
+      if (consultationDiscount >= price) {
+        toast.error(`The discount must be less than the Rs.${Number(price).toLocaleString("en-IN")} package price`);
+        return;
+      }
+      payload.amount = consultationNetPayable;
+      if (consultationDiscount > 0) payload.discount_amount = consultationDiscount;
       payload.confirmed = true;
       if (mode === "card" && !attachCardDetails(payload, collectFeeDraft)) return;
       if (BANK_DETAIL_MODES.includes(mode) && !attachBankDetails(payload, collectFeeDraft)) return;
     }
 
-    const fee = `Rs.${Number(price).toLocaleString("en-IN")}`;
+    const fee = `Rs.${Number(payload.amount ?? price).toLocaleString("en-IN")}`;
     const pkg = consultationChosenItem?.name || selectedLead.package_name || "the consultation";
+    const off = payload.discount_amount
+      ? ` (Rs.${Number(price).toLocaleString("en-IN")} less Rs.${Number(payload.discount_amount).toLocaleString("en-IN")} discount)`
+      : "";
     const question = mode === "partial"
       ? `Save a payment schedule of ${payload.partial_installments.length} installments for the Consultation Fee of ${fee} (${pkg})?`
-      : `Collect the Consultation Fee of ${fee} by ${ALL_PAYMENT_MODE_LABELS[mode] || mode} for ${pkg}?`;
+      : `Collect the Consultation Fee of ${fee}${off} by ${ALL_PAYMENT_MODE_LABELS[mode] || mode} for ${pkg}?`;
     if (!window.confirm(question)) return;
     submitConsultationFee(payload);
   };
@@ -11615,6 +11632,35 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             testId="cons-collect-fee-mode"
                           />
                         </div>
+
+                        {/* The discount on the package, in rupees only. Under the Payment
+                            Mode rather than the package, so picking Cheque or Partial Payment
+                            (which keep the package price) takes it away without moving the
+                            mode buttons out from under the click. */}
+                        {consultationDiscountable && (
+                          <div data-testid="cons-collect-fee-discount-block">
+                            <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount (₹)</label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={collectFeeDraft.discount ?? ""}
+                              onChange={(e) => setCollectFeeDraft({ ...collectFeeDraft, discount: e.target.value })}
+                              placeholder="Enter Discount Amount"
+                              className="h-9"
+                              data-testid="cons-collect-fee-discount"
+                            />
+                            {consultationDiscount > 0 && (consultationDiscount < consultationChosenPrice ? (
+                              <div className="mt-1.5 flex items-center justify-between rounded-[4px] border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800" data-testid="cons-collect-fee-net-payable">
+                                <span>Net Payable <span className="opacity-70">(Rs.{Number(consultationChosenPrice).toLocaleString("en-IN")} less Rs.{consultationDiscount.toLocaleString("en-IN")} discount)</span></span>
+                                <span className="font-semibold">Rs.{consultationNetPayable.toLocaleString("en-IN")}</span>
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-[11px] text-rose-700" data-testid="cons-collect-fee-discount-too-big">
+                                The discount must be less than the Rs.{Number(consultationChosenPrice).toLocaleString("en-IN")} package price.
+                              </p>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Only what the server will not take the method without. Cash and
                             UPI need nothing more than the OK that Collect asks for. */}
