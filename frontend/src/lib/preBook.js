@@ -6,6 +6,7 @@
  * the record the same way. The server side is backend/routers/v3_pre_book.py, and the plan
  * keys mirror PRE_BOOK_PLANS in backend/constants.py.
  */
+import { to12h } from "@/lib/time";
 
 // When the client said they would come. The date each works out to is only the starting
 // point: the desk may move it, and "On a Date" is a day picked outright.
@@ -87,6 +88,22 @@ export const rupees = (n) => `₹${num(n).toLocaleString("en-IN", { maximumFract
 export const shortDay = (day) => (day
   ? new Date(`${String(day).slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
   : "");
+
+/**
+ * The planned visit as a line reads it: "12 Nov 2026 · 10:30 AM", or "12 Nov · 10:30 AM"
+ * where room is short. The time is there once one was set -- the Pre Sales desk always sets
+ * one; a visit Branch Leads planned before times were asked has only its date.
+ */
+export const preBookWhen = (pb, { short = false } = {}) => {
+  if (!pb?.date) return "";
+  const day = short
+    ? new Date(`${String(pb.date).slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+    : shortDay(pb.date);
+  return [day, pb.time ? to12h(pb.time) : ""].filter(Boolean).join(" · ");
+};
+
+/** Whether the Pre Sales desk fixed this visit -- Branch Leads then only collects the money. */
+export const preBookFixedByPreSales = (pb) => pb?.desk === "pre_sales";
 
 /** What the advance was for, as a line reads it. */
 export const advanceForLabel = (adv) => (

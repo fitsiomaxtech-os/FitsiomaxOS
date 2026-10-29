@@ -561,14 +561,19 @@ async def v3_arm_board(user: V3UserOut = Depends(v3_current_user)):
         raise HTTPException(status_code=500, detail=f"arm-board error: {type(e).__name__}: {e}")
 
 
-def _planned_visit_updates(lead: dict, plan_key: Optional[str], day: Optional[str], remarks: Optional[str], user: V3UserOut):
+def _planned_visit_updates(
+    lead: dict, plan_key: Optional[str], day: Optional[str], at_time: Optional[str],
+    remarks: Optional[str], user: V3UserOut, desk: str,
+):
     """The lead fields a move onto Pre Book writes -- when the client plans to come -- and
-    the line the activity trail adds for it. Refuses a move with no plan, or a date gone by.
+    the line the activity trail adds for it. Refuses a move with no plan, a date gone by, or
+    a time that is not one.
 
     Shared by Branch Leads' own move and the Pre Sales desk's (v3_pre_sales_pre_book), so
-    the Pre Book card reads the same record whichever desk put the lead there. Written field
-    by field into the nested record, so moving a lead back onto Pre Book to change the date
-    keeps whatever it has already paid.
+    the Pre Book card reads the same record whichever desk put the lead there. `desk` says
+    which: a visit Pre Sales fixed is not re-dated on Branch Leads, which only takes the
+    money. Written field by field into the nested record, so moving a lead back onto Pre
+    Book to change the date keeps whatever it has already paid.
     """
     if plan_key not in PRE_BOOK_PLANS:
         raise HTTPException(status_code=400, detail="Choose when the client plans to come")
@@ -579,12 +584,21 @@ def _planned_visit_updates(lead: dict, plan_key: Optional[str], day: Optional[st
     today_ist = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
     if planned < today_ist:
         raise HTTPException(status_code=400, detail="The planned visit date cannot be in the past")
+    visit_time = None
+    if (at_time or "").strip():
+        try:
+            t = datetime.strptime(at_time.strip(), "%H:%M")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Pick the planned visit time")
+        visit_time = f"{t.hour:02d}:{t.minute:02d}"
     plan = {
         "at": now_iso(),
         "by": user.full_name,
+        "desk": desk,
         "plan": plan_key,
         "plan_label": PRE_BOOK_PLANS[plan_key],
         "date": planned.isoformat(),
+        "time": visit_time,
         "remarks": (remarks or "").strip() or None,
     }
     # A dotted path cannot be written into a field that holds null, so a lead with no
@@ -593,7 +607,8 @@ def _planned_visit_updates(lead: dict, plan_key: Optional[str], day: Optional[st
         updates = {f"pre_book.{k}": v for k, v in plan.items()}
     else:
         updates = {"pre_book": plan}
-    return updates, f" · planned visit {PRE_BOOK_PLANS[plan_key].lower()} ({planned.isoformat()})"
+    when = planned.isoformat() + (f" {visit_time}" if visit_time else "")
+    return updates, f" · planned visit {PRE_BOOK_PLANS[plan_key].lower()} ({when})"
 
 
 @router.post("/leads/{lead_id}/branch-stage")
@@ -630,8 +645,16 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
     # Pre Book holds a client who will come later, so the move asks when -- the board lists
     # that on the stage, and the desk books the real slot from it.
     if payload.branch_stage == await _sales_stage_for_role(SALES_STAGE_ROLE_PRE_BOOK, lead_arm):
+        # A visit the Pre Sales desk fixed stays as it fixed it: the branch takes the money.
+        # Checked here as well as by the missing Change Date button, since a request is not
+        # a screen.
+        held = lead.get("pre_book") if isinstance(lead.get("pre_book"), dict) else {}
+        if (is_branch_admin_role(user.role) and lead.get("branch_stage") == payload.branch_stage
+                and held.get("desk") == "pre_sales"):
+            raise HTTPException(status_code=409, detail="Pre Sales fixed this visit — the branch collects the payment only")
         plan_updates, reminder_note = _planned_visit_updates(
-            lead, payload.pre_book_plan, payload.pre_book_date, payload.pre_book_remarks, user,
+            lead, payload.pre_book_plan, payload.pre_book_date, payload.pre_book_time,
+            payload.pre_book_remarks, user, "branch",
         )
         updates.update(plan_updates)
     await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
@@ -673,10 +696,11 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
 async def v3_pre_sales_pre_book(lead_id: str, payload: V3PreSalesPreBookInput, user: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
     """The Pre Sales desk moving a lead onto its Pre Book stage.
 
-    Asks the planned visit first, as Branch Leads' own move does, and stands the lead on the
-    branch's Pre Book stage too -- the client is coming to that branch, so its board shows
-    them there with the date, not still on its opening stage. A lead with no branch yet only
-    moves on the Pre Sales side; it reaches a branch board when it is handed to one.
+    Asks the planned visit -- date and time -- first, and stands the lead on the branch's
+    Pre Book stage too: the client is coming to that branch, so its board shows them there
+    with the visit already fixed, and the branch's part is only to collect the money. A lead
+    with no branch yet only moves on the Pre Sales side; it reaches a branch board when it
+    is handed to one.
     """
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
@@ -684,8 +708,11 @@ async def v3_pre_sales_pre_book(lead_id: str, payload: V3PreSalesPreBookInput, u
     # Lost is locked on the Pre-Sales side (see _refuse_if_lost in routers/v3_leads.py).
     if lead.get("stage") == PRESALES_LOST_STAGE:
         raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
+    if not (payload.pre_book_time or "").strip():
+        raise HTTPException(status_code=400, detail="Pick the planned visit time")
     plan_updates, plan_note = _planned_visit_updates(
-        lead, payload.pre_book_plan, payload.pre_book_date, payload.pre_book_remarks, user,
+        lead, payload.pre_book_plan, payload.pre_book_date, payload.pre_book_time,
+        payload.pre_book_remarks, user, "pre_sales",
     )
     old_stage = lead.get("stage", "Unknown")
     updates = {"stage": PRESALES_PRE_BOOK_STAGE, "updated_at": now_iso(), **plan_updates}

@@ -1150,13 +1150,16 @@ class V3BranchStageInput(BaseModel):
     # ("next_month", ...) and the date it works out to, which the desk may adjust.
     pre_book_plan: Optional[str] = None
     pre_book_date: Optional[str] = None  # YYYY-MM-DD
+    pre_book_time: Optional[str] = None  # HH:MM (24h)
     pre_book_remarks: Optional[str] = None
 
 
 class V3PreSalesPreBookInput(BaseModel):
-    # The Pre Sales desk's move onto Pre Book: the same planned visit Branch Leads asks.
+    # The Pre Sales desk's move onto Pre Book: the same planned visit Branch Leads asks, and
+    # the time is required here -- the desk fixes the visit, and the branch only collects.
     pre_book_plan: Optional[str] = None
     pre_book_date: Optional[str] = None  # YYYY-MM-DD
+    pre_book_time: Optional[str] = None  # HH:MM (24h)
     pre_book_remarks: Optional[str] = None
 
 

@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowLeftRight, CalendarClock, RotateCcw, Star, Tag, Video } from "lucide-react";
-import { preBookOf, preBookUnused, rupees, shortDay } from "@/lib/preBook";
+import { preBookOf, preBookUnused, preBookWhen, rupees } from "@/lib/preBook";
 
 /**
  * The two marks a branch puts on a patient by hand, shown read-only.
@@ -201,7 +201,7 @@ export const PreBookTag = ({ lead, className = "", compact = false, always = fal
   const unused = preBookUnused(lead);
   if (!unused && !always) return null;
   const title = [
-    `Pre Book${pb.plan_label ? ` · ${pb.plan_label}` : ""}${pb.date ? ` (${shortDay(pb.date)})` : ""}`,
+    `Pre Book${pb.plan_label ? ` · ${pb.plan_label}` : ""}${pb.date ? ` (${preBookWhen(pb)})` : ""}`,
     unused ? `${rupees(unused)} paid, not yet used` : "",
   ].filter(Boolean).join(" — ");
   return (

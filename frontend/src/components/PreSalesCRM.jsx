@@ -33,7 +33,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
-import { PRE_BOOK_PLANS, planDate, preBookOf, todayIso } from "@/lib/preBook";
+import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -1664,6 +1664,14 @@ export const PreSalesCRM = ({
                               </span>
                             );
                           })()}
+                          {/* The planned visit the desk fixed, beside the chip as Follow Up's
+                              call is. */}
+                          {l.stage === "Pre Book" && preBookOf(l) && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700" title={`Planned visit · ${preBookWhen(preBookOf(l))}`} data-testid={`presales-prebook-badge-${l.id}`}>
+                              <CalendarClock className="h-2.5 w-2.5" />
+                              {preBookWhen(preBookOf(l), { short: true })}
+                            </span>
+                          )}
                         </div>
                       </td>
                       {isSuperAdminMasterView && (
@@ -1996,6 +2004,7 @@ export const PreSalesCRM = ({
                   const rnr = l.stage === "RNR" && (l.rnr_attempts || 0) > 0;
                   const fu = l.stage === "Follow Up" && l.next_follow_up_at ? new Date(l.next_follow_up_at) : null;
                   const fuOverdue = fu ? fu.getTime() < Date.now() : false;
+                  const pb = l.stage === "Pre Book" ? preBookOf(l) : null;
                   return (
                     <LeadRowCard
                       key={l.id}
@@ -2011,7 +2020,7 @@ export const PreSalesCRM = ({
                       glance={allStages}
                       arrow={!onNewLeads}
                       testid="presales-card"
-                      details={!allStages && (rnr || fu) ? (
+                      details={!allStages && (rnr || fu || pb) ? (
                         <>
                           {rnr && (
                             <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`presales-card-rnr-${l.id}`}>
@@ -2027,6 +2036,13 @@ export const PreSalesCRM = ({
                                 {fu.toLocaleDateString(undefined, { day: "2-digit", month: "short" })} · {fu.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })}
                               </span>
                               {fuOverdue && <span className="font-medium text-rose-500">Overdue</span>}
+                            </p>
+                          )}
+                          {pb && (
+                            <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`presales-card-prebook-${l.id}`}>
+                              <CalendarClock className="h-3 w-3 text-teal-500" />
+                              <span className="font-semibold text-slate-700">{preBookWhen(pb)}</span>
+                              <span className="text-slate-500">{pb.plan_label}</span>
                             </p>
                           )}
                         </>
@@ -2506,18 +2522,26 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   const startPreBook = () => {
     const pb = preBookOf(currentLead);
     const plan = pb?.plan || "next_month";
-    setPreBookDraft({ plan, date: pb?.date && pb.date >= todayIso() ? pb.date : planDate(plan), remarks: pb?.remarks || "" });
+    setPreBookDraft({
+      plan,
+      date: pb?.date && pb.date >= todayIso() ? pb.date : planDate(plan),
+      time: pb?.time || "10:00",
+      remarks: pb?.remarks || "",
+    });
   };
 
+  // Date and time both: the desk fixes the visit here, and Branch Leads only collects.
   const submitPreBook = async () => {
     if (!preBookDraft?.plan) { toast.error("Choose when the client plans to come"); return; }
     if (!preBookDraft.date) { toast.error("Pick the planned visit date"); return; }
     if (preBookDraft.date < todayIso()) { toast.error("The planned visit date cannot be in the past"); return; }
+    if (!preBookDraft.time) { toast.error("Pick the planned visit time"); return; }
     try {
       setPreBookBusy(true);
       const updated = await preSalesPreBook(currentLead.id, {
         pre_book_plan: preBookDraft.plan,
         pre_book_date: preBookDraft.date,
+        pre_book_time: preBookDraft.time,
         pre_book_remarks: preBookDraft.remarks,
       });
       setCurrentLead(updated);
@@ -2707,6 +2731,33 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   </div>
                 </div>
               </div>
+
+              {/* The visit the desk fixed on the way onto Pre Book, and whether the branch has
+                  taken the money for it yet -- collecting it is the branch's part. */}
+              {currentLead.stage === "Pre Book" && preBookOf(currentLead) && (() => {
+                const pb = preBookOf(currentLead);
+                const paid = preBookPaid(pb);
+                return (
+                  <div className="overflow-hidden rounded-[3px] border border-teal-100 bg-white shadow-sm" data-testid="presales-detail-prebook">
+                    <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-100 text-teal-600"><CalendarClock className="h-4 w-4" /></span>
+                      <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Pre Book</p>
+                    </div>
+                    <div className="space-y-2 px-4 py-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-xs font-medium text-slate-500">Planned visit</span>
+                        <span className="min-w-0 text-right font-medium text-slate-800" data-testid="presales-detail-prebook-when">{preBookWhen(pb)} <span className="text-xs text-teal-700">· {pb.plan_label}</span></span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-xs font-medium text-slate-500">Payment</span>
+                        {paid > 0
+                          ? <span className="font-semibold text-teal-700">{rupees(paid)} paid</span>
+                          : <span className="font-medium text-amber-600">Not paid</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* On a lead parked at RNR, how many times somebody has rung is what the popup
                   is opened to find out, so it sits above the pills. +1 No Answer only while
@@ -3195,6 +3246,16 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   onChange={(e) => setPreBookDraft({ ...preBookDraft, date: e.target.value })}
                   className="h-10 w-full"
                   data-testid="presales-prebook-date"
+                />
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Planned visit time *</span>
+                <MilkTimeInput
+                  centered
+                  title="Planned Visit Time"
+                  value={preBookDraft.time}
+                  onChange={(e) => setPreBookDraft({ ...preBookDraft, time: e.target.value })}
+                  data-testid="presales-prebook-time"
                 />
               </div>
             </div>

@@ -66,7 +66,7 @@ import { StageTabBar } from "@/components/ui/stage-tab";
 import { OnlineTag, PreBookTag, PreSalesTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
-import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookOf, preBookPaid, rupees, shortDay, todayIso } from "@/lib/preBook";
+import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookFixedByPreSales, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import {
@@ -730,10 +730,10 @@ const notProspectLabel = (lead) => {
   };
 };
 
-/** "Next Month · 23 Nov 2026" -- when a Pre Book client plans to come, for the export. */
+/** "Next Month · 23 Nov 2026 · 10:30 AM" -- when a Pre Book client plans to come, for the export. */
 const preBookPlanLabel = (lead) => {
   const pb = preBookOf(lead);
-  return pb ? [pb.plan_label, shortDay(pb.date)].filter(Boolean).join(" · ") : "";
+  return pb ? [pb.plan_label, preBookWhen(pb)].filter(Boolean).join(" · ") : "";
 };
 
 /** The Follow Up column's heading — a clock and nothing else.
@@ -3062,7 +3062,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         {pbRow && (
                           <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-prebook-${lead.id}`}>
                             <CalendarClock className="h-3 w-3 text-teal-500" />
-                            <span className="font-semibold text-slate-700">{shortDay(pbRow.date)}</span>
+                            <span className="font-semibold text-slate-700">{preBookWhen(pbRow)}</span>
                             <span className="text-slate-500">{pbRow.plan_label}</span>
                             {preBookPaid(pbRow) > 0
                               ? <span className="font-semibold text-teal-700">{rupees(preBookPaid(pbRow))} paid</span>
@@ -3389,10 +3389,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                                   ? <span className="text-xs font-semibold text-teal-700">{rupees(paid)}</span>
                                   : <span className="text-slate-400">—</span>}
                               </td>
-                              <td className="truncate whitespace-nowrap px-4 py-3" title={pb?.remarks || undefined} data-testid={`branch-row-prebook-plan-${lead.id}`}>
+                              <td className="truncate whitespace-nowrap px-4 py-3" title={pb ? [preBookWhen(pb), pb.plan_label, preBookFixedByPreSales(pb) ? "Fixed by Pre Sales" : "", pb.remarks].filter(Boolean).join(" · ") : undefined} data-testid={`branch-row-prebook-plan-${lead.id}`}>
                                 {pb ? (
                                   <>
-                                    <span className="text-xs font-semibold text-slate-700">{shortDay(pb.date)}</span>
+                                    <span className="text-xs font-semibold text-slate-700">{preBookWhen(pb, { short: true })}</span>
                                     <span className="ml-1.5 rounded-[4px] bg-teal-50 px-1 py-px text-[10px] font-semibold text-teal-700">{pb.plan_label}</span>
                                   </>
                                 ) : <span className="text-slate-400">—</span>}
@@ -3990,14 +3990,20 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const [notProspectBusy, setNotProspectBusy] = useState(false);
 
   // "Move to Stage" popup for Pre Book: when the client plans to come.
-  const [preBookMoveDraft, setPreBookMoveDraft] = useState(null); // { stage, plan, date, remarks } | null
+  const [preBookMoveDraft, setPreBookMoveDraft] = useState(null); // { stage, plan, date, time, remarks } | null
   const [preBookMoveBusy, setPreBookMoveBusy] = useState(false);
   // The Pre Book popup itself -- the money -- opened from the card on the overview.
   const [preBookCollecting, setPreBookCollecting] = useState(false);
   const openPreBookMove = (stage) => {
     const pb = preBookOf(lead);
     const plan = pb?.plan || "next_month";
-    setPreBookMoveDraft({ stage, plan, date: pb?.date && pb.date >= todayIso() ? pb.date : planDate(plan), remarks: pb?.remarks || "" });
+    setPreBookMoveDraft({
+      stage,
+      plan,
+      date: pb?.date && pb.date >= todayIso() ? pb.date : planDate(plan),
+      time: pb?.time || "10:00",
+      remarks: pb?.remarks || "",
+    });
   };
 
   /** Who could take this exact slot, and hand it to one of them.
@@ -4622,6 +4628,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
     if (!preBookMoveDraft?.plan) { toast.error("Choose when the client plans to come"); return; }
     if (!preBookMoveDraft.date) { toast.error("Pick the planned visit date"); return; }
     if (preBookMoveDraft.date < todayIso()) { toast.error("The planned visit date cannot be in the past"); return; }
+    if (!preBookMoveDraft.time) { toast.error("Pick the planned visit time"); return; }
     const target = preBookMoveDraft.stage || preBookStageName;
     try {
       setPreBookMoveBusy(true);
@@ -4629,6 +4636,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
         branch_stage: target,
         pre_book_plan: preBookMoveDraft.plan,
         pre_book_date: preBookMoveDraft.date,
+        pre_book_time: preBookMoveDraft.time,
         pre_book_remarks: preBookMoveDraft.remarks,
       });
       toast.success(`Moved to ${target}`);
@@ -4875,7 +4883,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       Pre Book
                     </p>
                     <div className="flex items-center gap-1.5">
-                      {onPreBookStage && (
+                      {/* Not on a visit Pre Sales fixed: the branch only collects for it. */}
+                      {onPreBookStage && !preBookFixedByPreSales(preBook) && (
                         <button
                           type="button"
                           onClick={() => openPreBookMove(preBookStageName)}
@@ -4902,7 +4911,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       <>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-xs font-medium text-slate-500">Planned visit</span>
-                          <span className="text-right font-medium text-slate-800">{shortDay(preBook.date)} <span className="text-xs text-teal-700">· {preBook.plan_label}</span></span>
+                          <span className="text-right font-medium text-slate-800" data-testid="branch-lead-prebook-when">
+                            {preBookWhen(preBook)} <span className="text-xs text-teal-700">· {preBook.plan_label}</span>
+                            {preBookFixedByPreSales(preBook) && (
+                              <span className="ml-1.5 rounded-[4px] bg-amber-50 px-1 py-px text-[10px] font-semibold text-amber-600">Pre-Sales</span>
+                            )}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-xs font-medium text-slate-500">Consultation</span>
@@ -6700,6 +6714,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   onChange={(e) => setPreBookMoveDraft({ ...preBookMoveDraft, date: e.target.value })}
                   className="h-10 w-full"
                   data-testid="branch-prebook-date"
+                />
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Planned visit time *</span>
+                <MilkTimeInput
+                  centered
+                  title="Planned Visit Time"
+                  value={preBookMoveDraft.time}
+                  onChange={(e) => setPreBookMoveDraft({ ...preBookMoveDraft, time: e.target.value })}
+                  data-testid="branch-prebook-time"
                 />
               </div>
             </div>
