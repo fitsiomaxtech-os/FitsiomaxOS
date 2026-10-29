@@ -1430,8 +1430,9 @@ const COLS_WITH_ACTION = {
 };
 
 // The stages whose popup is drawn in the Fee Collected style: a one-row header with the
-// Appointment Card as an eye icon in it, and the flat .fee-flat buttons (index.css).
-const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign"];
+// Appointment Card as an eye icon in it, and the flat .fee-flat buttons (index.css). For a
+// Branch Admin they also open in the narrow 565px card.
+const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign", "Cancel"];
 // Those stages, and the popup opened from these pills, draw their buttons the Fee Collected
 // way: no fill and no shadow, the words in colour, a 1px gray border (.fee-soft, index.css).
 const FEE_SOFT_PILLS = ["Rehab", "Diet Consultation", "Diet Chart"];
@@ -2764,6 +2765,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Branch Admin opening someone at Consultation Visit, Fee Collected or Physio Assign gets a
   // 565 × 660 card: the work there is the payments and the physio, and a 1024px sheet around
   // them was mostly white. Physio Assign's two halves stack in it (see PhysioDetailBody).
+  // Cancel opens in it too, drawn the Fee Collected way (FEE_FLAT_STAGES).
   // Held rather than read off the stage live, so a fee taken or a physio assigned with the
   // popup still up does not resize the card under the hand that just pressed the button.
   // At Consultation Booked the card is narrower still, 514 wide: all it holds is the booked
@@ -2772,7 +2774,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   if (detailFrame.id !== (selectedLead?.id ?? null)) {
     setDetailFrame({
       id: selectedLead?.id ?? null,
-      compact: !isConsultant && ["Consultation Visit", "Fee Collected", "Physio Assign"].includes(selectedLead?.consultation_stage),
+      compact: !isConsultant && FEE_FLAT_STAGES.includes(selectedLead?.consultation_stage),
       booked: !isConsultant && ["Consultation Booked", "Follow Up"].includes(selectedLead?.consultation_stage),
     });
   }
@@ -11321,11 +11323,26 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     );
                   }
 
+                  // A row like Consultation Record's, in rose. The one-row header has no room
+                  // for the booking, so the slot and the expert it was with sit under the
+                  // heading.
                   if (stage === "Cancel") {
+                    const bookedSlot = selectedLead.appointment_date
+                      ? `${apptDayLabel(selectedLead.appointment_date)}${selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}`
+                      : null;
+                    const bookedLine = [bookedSlot, selectedLead.assigned_physio_name].filter(Boolean).join(" · ");
                     return (
-                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3" data-testid="cons-stage-panel-cancelled">
-                        <p className="text-sm font-semibold text-rose-700">This consultation was cancelled.</p>
-                      </div>
+                      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="cons-stage-panel-cancelled">
+                        <div className="flex w-full items-center gap-2 px-4 py-2.5">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+                            <Ban className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold uppercase tracking-wider text-rose-700">Consultation Cancelled</p>
+                            {bookedLine && <p className="truncate text-[11px] text-slate-500" data-testid="cons-cancelled-booking">{bookedLine}</p>}
+                          </div>
+                        </div>
+                      </section>
                     );
                   }
 
