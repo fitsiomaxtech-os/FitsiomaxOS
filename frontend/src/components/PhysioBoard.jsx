@@ -32,6 +32,7 @@ import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag } from "@/components/ui/lead-marks";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { StatTile } from "@/components/ui/stat-tile";
+import { StageTab } from "@/components/ui/stage-tab";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { PhoneBackBar } from "@/components/ui/phone-back-bar";
 import { PhysioTreatmentChips } from "@/components/ui/physio-treatment-chips";
@@ -446,8 +447,11 @@ const docSize = (n) => {
  * tab — a physio opens a scan to read it against the days and the notes beside it, and a
  * tab is the one place those are not. See useDocumentPreview, which owns the blob for
  * exactly as long as the document is on screen.
+ *
+ * `flat` is the patient popup's look: 4px corners, and each document on one row with its
+ * kind, size and date beside the name rather than under it.
  */
-const DocumentsPanel = ({ leadId }) => {
+const DocumentsPanel = ({ leadId, flat = false }) => {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(null);
@@ -482,21 +486,21 @@ const DocumentsPanel = ({ leadId }) => {
         Documents {docs.length > 0 && <span className="text-slate-400">({docs.length})</span>}
       </p>
       {loading ? (
-        <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">Loading documents…</div>
+        <div className={`${flat ? "rounded-[4px]" : "rounded-lg"} border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400`}>Loading documents…</div>
       ) : docs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">No documents uploaded for this patient</div>
+        <div className={`${flat ? "rounded-[4px]" : "rounded-lg"} border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400`}>No documents uploaded for this patient</div>
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
             <div
               key={d.id}
-              className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5"
+              className={`flex items-center gap-3 border border-slate-200 bg-white ${flat ? "rounded-[4px] px-2.5 py-1.5" : "rounded-lg p-2.5"}`}
               data-testid={`physio-document-${d.id}`}
             >
               <FileText className="h-4 w-4 shrink-0 text-sky-500" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-slate-700">{d.label || d.original_name || "Document"}</p>
-                <p className="text-[10px] text-slate-400">
+              <div className={`min-w-0 flex-1 ${flat ? "flex items-baseline gap-2" : ""}`}>
+                <p className={`truncate text-xs font-medium text-slate-700 ${flat ? "min-w-0 shrink" : ""}`}>{d.label || d.original_name || "Document"}</p>
+                <p className={`text-[10px] text-slate-400 ${flat ? "shrink-0" : ""}`}>
                   {[d.kind, d.size_bytes ? docSize(d.size_bytes) : null, d.created_at ? String(d.created_at).slice(0, 10) : null]
                     .filter(Boolean).join(" · ")}
                 </p>
@@ -505,7 +509,7 @@ const DocumentsPanel = ({ leadId }) => {
                 type="button"
                 onClick={() => view(d)}
                 disabled={opening === d.id}
-                className="flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+                className={`flex shrink-0 items-center gap-1 border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50 ${flat ? "rounded-[4px]" : "rounded-md"}`}
                 data-testid={`physio-document-view-${d.id}`}
               >
                 <Eye className="h-3.5 w-3.5" /> {opening === d.id ? "Opening…" : "View"}
@@ -3150,8 +3154,33 @@ function PatientsTab({ physioId, onCountChange, toolbarSlot, squareTable = false
 
 // Popup — Sessions / Treatment / Progression / Profile. Opened from the arrow on a row
 // of the Patients table: full-screen on a phone, a centred panel from sm up.
+// The patient popup's written notes (Pre-Sales Diagnosis, the consultant's report and
+// summary) as one row each: the label and the note's opening words, opened in place for
+// the rest. Written out per tone because Tailwind only ships whole class strings it can see.
+const NOTE_TONES = {
+  slate: { box: "border-slate-200 bg-white", label: "text-slate-400", text: "text-slate-700" },
+  sky: { box: "border-sky-200 bg-sky-50", label: "text-sky-500", text: "text-sky-900" },
+  violet: { box: "border-violet-200 bg-violet-50", label: "text-violet-500", text: "text-violet-900" },
+};
+
+const NoteRow = ({ label, text, tone = "slate", open, onToggle, testid }) => {
+  const t = NOTE_TONES[tone];
+  return (
+    <div className={`overflow-hidden rounded-[4px] border ${t.box}`} data-testid={testid}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${t.label} ${open ? "" : "-rotate-90"}`} />
+        <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wide ${t.label}`}>{label}</span>
+        {!open && <span className={`min-w-0 truncate text-xs ${t.text}`}>{text}</span>}
+      </button>
+      {open && <p className={`whitespace-pre-wrap px-3 pb-3 pl-8 text-xs ${t.text}`}>{text}</p>}
+    </div>
+  );
+};
+
 export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
   const [detailTab, setDetailTab] = useState("sessions");
+  const [openNote, setOpenNote] = useState(null);
+  const toggleNote = (key) => setOpenNote((cur) => (cur === key ? null : key));
   const [lead, setLead] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [sessionFilter, setSessionFilter] = useState("all"); // all | pending | completed
@@ -3195,10 +3224,11 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
 
   // Rendered even when empty, as a dash. Dropping blank fields reflowed the grid for
   // every patient, which is the one thing a grid is for: Age under Age, City under City.
+  // One row each, label left and value right; a long address is cut short, whole on hover.
   const Row = ({ label, value }) => (
-    <div>
-      <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-xs text-slate-700">{value || <span className="text-slate-300">—</span>}</p>
+    <div className="flex items-center justify-between gap-3 rounded-[4px] border border-slate-200 bg-white px-3 py-2">
+      <p className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="min-w-0 truncate text-right text-xs text-slate-700" title={value ? String(value) : undefined}>{value || <span className="text-slate-300">—</span>}</p>
     </div>
   );
 
@@ -3220,49 +3250,49 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       data-testid="physio-patient-detail-page"
     >
-    <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden bg-slate-50 sm:h-[90vh] sm:rounded-2xl sm:shadow-2xl">
-      {/* Everything on this page hangs off one centred column of the same width. Run
-          full-bleed, the three tiles stretched the whole of a desktop monitor and nothing
-          lined up with anything above or below them. */}
-      <div className="shrink-0 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-bold text-sky-700">
-            {(patient.lead_name || "?").charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold text-slate-800">{patient.lead_name}</h2>
-            <p className="truncate text-xs text-slate-400">
-              {lead?.patient_number || ""}
-            </p>
-          </div>
-          {/* The figures the card on the list was already showing. Opening a patient
-              should not appear to change what is true about them. */}
-          {sessions.length > 0 && (
-            <div className="hidden shrink-0 text-right sm:block" data-testid="physio-patient-progress">
-              <p className="text-sm font-bold text-slate-800">
-                {completedSessions}<span className="font-normal text-slate-300"> / </span>{sessions.length}
-              </p>
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">Days done</p>
-            </div>
-          )}
-          <button type="button" onClick={onClose} title="Close" aria-label="Close" className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100" data-testid="physio-patient-back">
-            <X className="h-5 w-5" />
-          </button>
+    {/* 750 × 550 with 4px corners from sm up, never taller or wider than the window
+        leaves it; a phone keeps the whole screen. */}
+    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-50 sm:h-[550px] sm:max-h-full sm:w-[750px] sm:max-w-full sm:rounded-[4px] sm:shadow-2xl">
+      {/* One row: who, their file number, and how far through the course they are, with
+          the progress bar beside the figure rather than on a line of its own. A phone
+          drops the file number and the words, keeping the name, bar and count. */}
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-slate-200 bg-white px-4 py-2.5">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">
+          {(patient.lead_name || "?").charAt(0).toUpperCase()}
         </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-[14px]">
+          <h2 className="min-w-0 truncate text-[14px] font-bold text-slate-800">{patient.lead_name}</h2>
+          {lead?.patient_number && (
+            <span className="hidden shrink-0 text-slate-500 sm:inline">
+              <span className="mr-2 text-slate-300">·</span>
+              <span className="tabular-nums">{lead.patient_number}</span>
+            </span>
+          )}
+        </div>
+        {/* The figures the card on the list was already showing. Opening a patient
+            should not appear to change what is true about them. */}
         {sessions.length > 0 && (
-          <div className="mx-auto w-full max-w-5xl px-4 pb-3 sm:px-6">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="flex shrink-0 items-center gap-2" data-testid="physio-patient-progress">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 sm:w-28">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 transition-all"
                 style={{ width: `${Math.round((completedSessions / sessions.length) * 100)}%` }}
               />
             </div>
+            <p className="whitespace-nowrap text-xs tabular-nums text-slate-500">
+              <span className="font-bold text-slate-800">{completedSessions}</span>
+              <span className="text-slate-300"> / </span>{sessions.length}
+              <span className="hidden sm:inline"> days done</span>
+            </p>
           </div>
         )}
+        <button type="button" onClick={onClose} title="Close" aria-label="Close" className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-slate-500 transition hover:bg-slate-100" data-testid="physio-patient-back">
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       <div className="shrink-0 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-4 sm:px-6" data-testid="physio-patient-tabs">
+        <div className="flex w-full gap-1 overflow-x-auto px-4" data-testid="physio-patient-tabs">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -3280,21 +3310,24 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-5xl px-4 py-5 sm:px-6">
+        <div className="w-full px-4 py-4">
         {detailTab === "sessions" && (
           <div className="space-y-3" data-testid="physio-patient-sessions-tab">
-            <div className="grid grid-cols-3 gap-2">
-              <StatTile
-                icon={Clock} label="Pending" value={pendingSessions} color={TILE.pending}
-                onClick={() => setSessionFilter("pending")} active={sessionFilter === "pending"} testid="physio-patient-stat-pending"
+            {/* Branch Admin > Branch Leads' summary cards: white cards on a grey tray,
+                the label over the figure, the chevron in the corner, and the picked one
+                washed sky with a ring. At 4px here, as is the rest of the popup. */}
+            <div className="grid grid-cols-3 gap-2 rounded-[4px] border border-slate-200 bg-slate-100 p-1 shadow-sm">
+              <StageTab
+                label="Pending" count={pendingSessions} active={sessionFilter === "pending"}
+                onClick={() => setSessionFilter("pending")} testid="physio-patient-stat-pending" gridded plain square
               />
-              <StatTile
-                icon={CheckCircle2} label="Completed" value={completedSessions} color={TILE.done}
-                onClick={() => setSessionFilter("completed")} active={sessionFilter === "completed"} testid="physio-patient-stat-completed"
+              <StageTab
+                label="Completed" count={completedSessions} active={sessionFilter === "completed"}
+                onClick={() => setSessionFilter("completed")} testid="physio-patient-stat-completed" gridded plain square
               />
-              <StatTile
-                icon={Calendar} label="Total" value={sessions.length} color={TILE.total}
-                onClick={() => setSessionFilter("all")} active={sessionFilter === "all"} testid="physio-patient-stat-total"
+              <StageTab
+                label="Total" count={sessions.length} active={sessionFilter === "all"}
+                onClick={() => setSessionFilter("all")} testid="physio-patient-stat-total" gridded plain square
               />
             </div>
             {loading ? (
@@ -3302,19 +3335,19 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
             ) : failed.sessions ? (
               // Not "No sessions". That is a claim about the patient; this is a failure
               // to ask, and the two should never read the same.
-              <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50/50 py-10 text-center" data-testid="physio-patient-sessions-failed">
+              <div className="rounded-[4px] border border-dashed border-rose-200 bg-rose-50/50 py-10 text-center" data-testid="physio-patient-sessions-failed">
                 <p className="text-xs font-semibold text-rose-700">Couldn't load this patient's days</p>
                 <button type="button" onClick={load} className="mt-2 text-[11px] font-semibold text-rose-600 underline">Try again</button>
               </div>
             ) : visibleSessions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center">
+              <div className="rounded-[4px] border border-dashed border-slate-200 bg-white py-12 text-center">
                 <Calendar className="mx-auto h-6 w-6 text-slate-300" />
                 <p className="mt-2 text-xs text-slate-400">
                   {sessions.length === 0 ? "No days booked for this patient yet" : `Nothing ${sessionFilter} on this course`}
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {visibleSessions.map((s) => {
                   const done = s.status === "completed";
                   return (
@@ -3322,34 +3355,36 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
                       type="button"
                       key={s.id}
                       onClick={() => setViewSession(s)}
-                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${done ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-white hover:border-sky-200"}`}
+                      className={`flex w-full items-center gap-2.5 rounded-[4px] border px-3 py-2 text-left transition ${done ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-white hover:border-sky-200"}`}
                       data-testid={`physio-patient-session-${s.id}`}
                     >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-200 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${done ? "bg-emerald-200 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
                         {s.session_number}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-slate-700">
+                      {/* One line: the day, its date, then what was given and the notes,
+                          cut short at the row's end. The whole of it is one tap away. */}
+                      <p className="min-w-0 flex-1 truncate text-[10px] text-slate-400">
+                        <span className="text-xs font-medium text-slate-700">
                           {s.track === "rehab"
                             ? `Rehab Day ${s.session_number} of ${s.total_sessions}`
                             : `Session #${s.session_number}${s.week_number ? ` · Week ${s.week_number}` : ""}`}
-                        </p>
-                        <p className="text-[10px] text-slate-400">{dayDate(s.slot_time) || "—"}</p>
+                        </span>
+                        <span className="mx-1.5 text-slate-300">·</span>{dayDate(s.slot_time) || "—"}
                         {done && (s.physio_treatments || []).length > 0 && (
-                          <p className="mt-0.5 truncate text-[10px] font-medium text-sky-700" data-testid={`physio-session-treatments-${s.id}`}>
-                            {s.physio_treatments.join(" · ")}
-                          </p>
+                          <span className="font-medium text-sky-700" data-testid={`physio-session-treatments-${s.id}`}>
+                            <span className="mx-1.5 text-slate-300">·</span>{s.physio_treatments.join(" · ")}
+                          </span>
                         )}
-                        {/* Both, when both were written. Labelled only on the rehab line:
+                        {/* Both, when both were written. Labelled only on the rehab note:
                             a treatment day's note is the expected one and naming it in a
                             one-line preview costs more room than it buys. */}
                         {done && s.jr_physio_remarks && (
-                          <p className="mt-0.5 truncate text-[10px] text-emerald-600">{s.jr_physio_remarks}</p>
+                          <span className="text-emerald-600"><span className="mx-1.5 text-slate-300">·</span>{s.jr_physio_remarks}</span>
                         )}
                         {done && s.rehab_remarks && (
-                          <p className="mt-0.5 truncate text-[10px] text-emerald-600"><span className="font-semibold">Rehab: </span>{s.rehab_remarks}</p>
+                          <span className="text-emerald-600"><span className="mx-1.5 text-slate-300">·</span><span className="font-semibold">Rehab: </span>{s.rehab_remarks}</span>
                         )}
-                      </div>
+                      </p>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <SessionStars session={s} />
                         {/* Which course the day belongs to, named as the Treatment table
@@ -3370,46 +3405,46 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
         )}
 
         {detailTab === "treatment" && (
-          <div className="space-y-3" data-testid="physio-patient-treatment-tab">
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Treatment Package</p>
-              <p className="text-sm font-semibold text-slate-800">
+          <div className="space-y-2" data-testid="physio-patient-treatment-tab">
+            <div className="flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2.5">
+              <span className="w-3.5 shrink-0" aria-hidden />
+              <p className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Treatment Package</p>
+              <p className="min-w-0 truncate text-xs font-semibold text-slate-800">
                 {lead?.session_package_name || "—"}{lead?.session_package_sessions ? ` · ${lead.session_package_sessions} sessions` : ""}
               </p>
             </div>
             {lead?.diagnosis && (
-              <div className="rounded-lg border border-slate-200 p-3">
-                <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Pre-Sales Diagnosis</p>
-                <p className="whitespace-pre-wrap text-xs text-slate-700">{lead.diagnosis}</p>
-              </div>
+              <NoteRow
+                label="Pre-Sales Diagnosis" text={lead.diagnosis}
+                open={openNote === "diagnosis"} onToggle={() => toggleNote("diagnosis")} testid="physio-note-diagnosis"
+              />
             )}
             {lead?.physio_diagnosis_report && (
-              <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-                <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-sky-500">Diagnosis Report (CONSULTANT)</p>
-                <p className="whitespace-pre-wrap text-xs text-sky-900">{lead.physio_diagnosis_report}</p>
-              </div>
+              <NoteRow
+                label="Diagnosis Report (CONSULTANT)" text={lead.physio_diagnosis_report} tone="sky"
+                open={openNote === "report"} onToggle={() => toggleNote("report")} testid="physio-note-report"
+              />
             )}
             {lead?.treatment_summary && (
-              <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
-                <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-violet-500">Treatment Summary (CONSULTANT)</p>
-                <p className="whitespace-pre-wrap text-xs text-violet-900">{lead.treatment_summary}</p>
-              </div>
+              <NoteRow
+                label="Treatment Summary (CONSULTANT)" text={lead.treatment_summary} tone="violet"
+                open={openNote === "summary"} onToggle={() => toggleNote("summary")} testid="physio-note-summary"
+              />
             )}
             {/* What is on file for this patient, under the treatment it belongs to. The
                 physio reads the scans and letters while working the course, and sending
                 them to a tab of its own put the paperwork one screen away from the thing
-                it is paperwork about. */}
-            <div className="rounded-lg border border-slate-200 bg-white p-3" data-testid="physio-treatment-documents">
-              <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Documents</p>
-              <DocumentsPanel leadId={patient.lead_id} />
+                it is paperwork about. The panel heads itself, with the count. */}
+            <div className="rounded-[4px] border border-slate-200 bg-white p-3" data-testid="physio-treatment-documents">
+              <DocumentsPanel leadId={patient.lead_id} flat />
             </div>
             {lead && !lead.physio_diagnosis_report && !lead.treatment_summary && (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs text-slate-400">
+              <p className="rounded-[4px] border border-dashed border-slate-200 bg-white p-8 text-center text-xs text-slate-400">
                 No treatment details submitted by the CONSULTANT yet.
               </p>
             )}
             {!lead && (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center" data-testid="physio-patient-treatment-empty">
+              <div className="rounded-[4px] border border-dashed border-slate-200 bg-white p-8 text-center" data-testid="physio-patient-treatment-empty">
                 <p className="text-xs text-slate-400">{loading ? "Loading treatment details…" : "Couldn't load this patient's treatment details."}</p>
                 {failed.lead && !loading && (
                   <button type="button" onClick={load} className="mt-2 text-[11px] font-semibold text-sky-600 underline">Try again</button>
@@ -3421,7 +3456,7 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
 
 
         {detailTab === "profile" && !lead && (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center" data-testid="physio-patient-profile-empty">
+          <div className="rounded-[4px] border border-dashed border-slate-200 bg-white p-8 text-center" data-testid="physio-patient-profile-empty">
             <p className="text-xs text-slate-400">{loading ? "Loading profile…" : "Couldn't load this patient's profile."}</p>
             {failed.lead && !loading && (
               <button type="button" onClick={load} className="mt-2 text-[11px] font-semibold text-sky-600 underline">Try again</button>
@@ -3430,7 +3465,7 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
         )}
 
         {detailTab === "profile" && lead && (
-          <div className="grid grid-cols-1 gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="physio-patient-profile-tab">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="physio-patient-profile-tab">
             <Row label="Patient Number" value={lead.patient_number} />
             <Row label="Age" value={lead.age} />
             <Row label="Gender" value={lead.gender} />

@@ -51,7 +51,10 @@ import { ChevronRight } from "lucide-react";
 // `bare` is a plain card with no tray behind it (see StageTabBar's bare), so it outlines
 // itself instead: a 1px slate border on a 4px corner, the picked one a 1px sky border in
 // place of the 2px ring. Pre Sales asked for it; Branch Leads keeps the tray.
-export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, bare = false, borderClass = "" }) => {
+//
+// `square` is the plain card on a 4px corner in place of 5px, for a strip that sits inside
+// a popup drawn at 4px throughout (the Physio patient popup's Sessions cards).
+export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hoverColor, selectedColor, testid, gridded = false, plain = false, flush = false, bare = false, square = false, borderClass = "" }) => {
   const tint = color || "#0ea5e9";
   const picked = selectedColor || tint;
   const [hovered, setHovered] = useState(false);
@@ -68,7 +71,7 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
       className={`relative flex flex-col items-center justify-center text-center transition-all sm:min-w-0 sm:flex-1 sm:shrink sm:px-3 sm:py-2.5 ${
         flush ? "sm:hover:shadow-sm" : "hover:shadow-sm"
       } ${
-        flush ? "rounded-[5px] border sm:border-0" : plain && bare ? "rounded-[4px] border" : plain ? "rounded-[5px]" : "rounded-lg"
+        flush ? "rounded-[5px] border sm:border-0" : plain && bare ? "rounded-[4px] border" : plain ? (square ? "rounded-[4px]" : "rounded-[5px]") : "rounded-lg"
       } ${
         flush
           ? "w-full min-w-0 px-0.5 py-2.5"
