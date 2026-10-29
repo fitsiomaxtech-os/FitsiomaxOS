@@ -11473,9 +11473,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                      come from the physio delivering the course, and this tab is on the
                      Consultant's popup so somebody other than the person who filmed them
                      says they count — checking your own work makes the requirement prove
-                     nothing. So: view and verify here, upload elsewhere. */
-                  canUpload={["branch_admin", "super_admin"].includes(viewerRole)}
-                  canVerify={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
+                     nothing. So: view and verify here, upload elsewhere. The Branch Admin
+                     only reads it here: no Upload, Save Review, Verify or Close Case Sheet. */
+                  canUpload={viewerRole === "super_admin"}
+                  canVerify={["super_admin", "head_physio"].includes(viewerRole)}
                 />
               )}
 
