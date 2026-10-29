@@ -1375,7 +1375,8 @@ export const PreSalesCRM = ({
       {/* The Pre Sales desk's own row is Branch Admin's Branch Leads strip, card for card:
           the same StageTabBar, plain — white cards, the name and count centred, All Stages
           first — but bare: no grey tray behind them, each card outlined 1px on a 4px corner.
-          The stages are the live Pre-Sales list, which ends Not a prospect, Pre Book, Lost. The master
+          The stages are the live Pre-Sales list: New Leads, RNR, Follow Up, Pre Book, Appointment,
+          Not a prospect, Lost. The master
           views keep their own rows above, since theirs are not stages. "All" is this board's
           key for the whole list, where the strip says null. */}
       {!isMarketingHeadFunnel && !isSalesMasterCards ? (

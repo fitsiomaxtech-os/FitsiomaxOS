@@ -364,6 +364,47 @@ async def restore_presales_pre_book_stage() -> None:
     })
 
 
+_PRESALES_PRE_BOOK_MOVED_MIGRATION = "move_presales_pre_book_stage"
+
+
+async def move_presales_pre_book_stage() -> None:
+    """Move Pre Book up to straight after Follow Up, in front of Appointment.
+
+    The Pre Sales dashboard's cards read All Stages, New Leads, RNR, Follow Up, Pre Book,
+    Appointment, Not a prospect, Lost. Only the order changes: Pre Book keeps its id, colours
+    and leads, and every other stage keeps its place relative to the rest. Pre-Sales only.
+
+    A one-shot, by its marker, for the reason replace_presales_lost_stage gives -- Super
+    Admin can reorder the stages afterwards and this must not undo it. Must run after
+    restore_presales_pre_book_stage. A no-op until the Pre-Sales stages exist, and when
+    either stage is missing: a fresh install seeds this order from V3_STAGES.
+    """
+    if await v3_col("migrations").find_one({"name": _PRESALES_PRE_BOOK_MOVED_MIGRATION}):
+        return
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "pre_sales"}, {"_id": 0, "id": 1, "name": 1, "order": 1}
+    ).sort("order", 1).to_list(100)
+    if not rows:
+        return
+    names = [r.get("name") for r in rows]
+    moved = False
+    if PRESALES_PRE_BOOK_STAGE in names and "Follow Up" in names:
+        pre_book = rows.pop(names.index(PRESALES_PRE_BOOK_STAGE))
+        rows.insert([r.get("name") for r in rows].index("Follow Up") + 1, pre_book)
+        # Renumbered 0..n-1 rather than shifted, so rows sharing an order cannot tie again.
+        for idx, row in enumerate(rows):
+            if row.get("order") == idx:
+                continue
+            match = {"type": "pre_sales", "id": row["id"]} if row.get("id") else {"type": "pre_sales", "name": row.get("name")}
+            await v3_col("pipeline_stages").update_one(match, {"$set": {"order": idx}})
+        moved = True
+    await v3_col("migrations").insert_one({
+        "name": _PRESALES_PRE_BOOK_MOVED_MIGRATION,
+        "moved_pre_book": moved,
+        "ran_at": now_iso(),
+    })
+
+
 async def ensure_sales_stage_roles() -> None:
     """Stamp the behavioural Branch stages with the role that carries their behaviour.
 

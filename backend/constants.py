@@ -23,19 +23,20 @@ PRESALES_NOT_A_PROSPECT_STAGE = "Not a prospect"
 # The lead the desk has lost -- last, after Not a prospect, and final as well. Also the
 # former name of PRESALES_NOT_A_PROSPECT_STAGE, which seed.replace_presales_lost_stage reads.
 PRESALES_LOST_STAGE = "Lost"
-# The client who will come later and wants the visit held -- between Not a prospect and
-# Lost, and not final: they are still coming. It was the last stage for a day, then became
-# Lost (seed.rename_presales_pre_book_stage), and is back in front of Lost now
-# (seed.restore_presales_pre_book_stage).
+# The client who will come later and wants the visit held -- not final: they are still
+# coming. It was the last stage for a day, then became Lost (seed.rename_presales_pre_book_stage),
+# came back in front of Lost (seed.restore_presales_pre_book_stage), and now sits straight
+# after Follow Up (seed.move_presales_pre_book_stage).
 PRESALES_PRE_BOOK_STAGE = "Pre Book"
 
 V3_STAGES = [
     "New Leads",
     "RNR",
     "Follow Up",
+    # Straight after Follow Up, in front of Appointment (seed.move_presales_pre_book_stage).
+    PRESALES_PRE_BOOK_STAGE,
     "Appointment",
     PRESALES_NOT_A_PROSPECT_STAGE,
-    PRESALES_PRE_BOOK_STAGE,
     PRESALES_LOST_STAGE,
 ]
 
