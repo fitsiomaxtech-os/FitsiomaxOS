@@ -422,6 +422,8 @@ const MILESTONE_TONES = {
 const MODAL_TABS = [
   { key: "overview", label: "Overview", short: "Overview" },
   { key: "days", label: "Treatment", short: "Treatment" },
+  // Beside Treatment: the clips are gathered as the course runs, so it belongs with the work.
+  { key: "progression", label: "Progression", short: "Progress" },
   { key: "documents", label: "Documents", short: "Docs" },
 ];
 
@@ -2581,6 +2583,10 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
           </div>
           )}
 
+          {/* Upload, Save Review and Close Case Sheet; Verify stays with the Consultant and
+              the branch, and the server will not close until they have verified all four. */}
+          {tab === "progression" && <ProgressionTab leadId={lead.id} canUpload canClose />}
+
           {tab === "documents" && <DocumentsPanel leadId={lead.id} />}
 
         </div>
@@ -3436,9 +3442,9 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
           </div>
         )}
 
-        {/* The physio gathers the clips; verifying them and closing the case sheet is the
-            branch's or the consultant's job, which is why canVerify is not simply true.
-            The backend holds the same line — see close_case_sheet. */}
+        {/* The physio gathers the clips; verifying them is the branch's or the consultant's
+            job, which is why canVerify is not simply true. The backend holds the same line.
+            Closing the case sheet is on the patient popup's Progression tab instead. */}
         {detailTab === "progression" && (
           <ProgressionTab leadId={patient.lead_id} canUpload canVerify={false} />
         )}

@@ -35,7 +35,10 @@ const CHIP = "flex h-6 w-24 shrink-0 items-center justify-center gap-1 rounded-[
 const BTN = "flex h-8 w-32 shrink-0 items-center justify-center gap-1.5 rounded-[4px] px-0 text-xs font-medium";
 const NO_BTN = <span className="w-32 shrink-0" aria-hidden />;
 
-export function ProgressionTab({ leadId, canUpload = true, canVerify = false }) {
+// canClose follows canVerify unless a caller says otherwise. The physio's own popup closes
+// without verifying: the server still holds the close until somebody else has verified all
+// four, so the one closing never signs off their own clips.
+export function ProgressionTab({ leadId, canUpload = true, canVerify = false, canClose = canVerify }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyKind, setBusyKind] = useState(null);
@@ -144,7 +147,7 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false }) 
             ? `Closed${data.case_sheet_closed_by ? ` by ${data.case_sheet_closed_by}` : ""}`
             : `${data.completed} of ${data.total} completed`}
         </p>
-        {!closed && canVerify && (
+        {!closed && canClose && (
           <Button
             size="sm"
             disabled={!data.can_close || closing}

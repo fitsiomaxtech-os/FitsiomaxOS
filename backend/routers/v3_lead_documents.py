@@ -525,10 +525,13 @@ async def progression_status(
     }
 
 
+# The physio may close too, from their own patient popup. Closing is not verifying: the
+# check below still wants all four verified, and a physio cannot verify, so somebody else
+# has said each one counts before the physio's close goes through.
 @router.post("/leads/{lead_id}/close-case-sheet")
 async def close_case_sheet(
     lead_id: str,
-    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio", "physio")),
 ):
     """Close the case sheet, once every mandatory upload is in and verified.
 
