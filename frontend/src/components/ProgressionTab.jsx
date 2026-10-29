@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock, Lock, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Eye, Lock, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { closeCaseSheet, leadProgression, setGoogleReview, uploadLeadDocument, verifyGoogleReview, verifyLeadDocument } from "@/lib/api";
+import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
+import { closeCaseSheet, leadProgression, openLeadDocument, setGoogleReview, uploadLeadDocument, verifyGoogleReview, verifyLeadDocument } from "@/lib/api";
 
 /**
  * PROGRESSION — the proof a course of treatment actually delivered something.
@@ -22,10 +23,15 @@ import { closeCaseSheet, leadProgression, setGoogleReview, uploadLeadDocument, v
  */
 
 const STATUS = {
-  completed: { label: "Completed", icon: CheckCircle2, chip: "bg-emerald-100 text-emerald-700", ring: "border-emerald-200" },
-  uploaded: { label: "Awaiting check", icon: Clock, chip: "bg-amber-100 text-amber-700", ring: "border-amber-200" },
-  pending: { label: "Pending", icon: AlertCircle, chip: "bg-slate-100 text-slate-500", ring: "border-slate-200" },
+  completed: { label: "Completed", icon: CheckCircle2, chip: "bg-emerald-100 text-emerald-700", ring: "border-emerald-200", tone: "text-emerald-600" },
+  uploaded: { label: "Awaiting check", icon: Clock, chip: "bg-amber-100 text-amber-700", ring: "border-amber-200", tone: "text-amber-600" },
+  pending: { label: "Pending", icon: AlertCircle, chip: "bg-slate-100 text-slate-500", ring: "border-slate-200", tone: "text-slate-400" },
 };
+
+// "Uploaded" as a reader who can neither add nor verify (the Branch Admin) sees it. The
+// check is not theirs to do, so "Awaiting check" and "Not checked" only ask them a question
+// they cannot answer; they get the file and a View button instead.
+const RECEIVED = { label: "Uploaded", icon: CheckCircle2, chip: "bg-sky-100 text-sky-700", ring: "border-sky-200", tone: "text-sky-600" };
 
 // Every line on the tab is one row of the same height, with the status chip and the button
 // in fixed-width columns on the right, so the summary, the four requirements and any files
@@ -47,6 +53,9 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
   // clear the verification on every keystroke too — see setGoogleReview.
   const [reviewDraft, setReviewDraft] = useState("");
   const [reviewLoaded, setReviewLoaded] = useState(false);
+  const [opening, setOpening] = useState(null);
+  const { preview, openPreview, closePreview } = useDocumentPreview();
+  const viewOnly = !canUpload && !canVerify;
 
   const load = useCallback(async () => {
     if (!leadId) return;
@@ -78,6 +87,17 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
       toast.error(e?.response?.data?.detail || "Upload failed");
     }
     setBusyKind(null);
+  };
+
+  const view = async (doc) => {
+    setOpening(doc.id);
+    try {
+      const url = await openLeadDocument(leadId, doc.id);
+      openPreview({ url, name: doc.original_name || doc.label || "File", contentType: doc.content_type });
+    } catch {
+      toast.error("Could not open that file");
+    }
+    setOpening(null);
   };
 
   const verify = async (docId, verified) => {
@@ -168,9 +188,11 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
       </div>
 
       {(data.requirements || []).map((req) => {
-        const meta = STATUS[req.status] || STATUS.pending;
+        const meta = viewOnly && req.status === "uploaded"
+          ? { ...RECEIVED, label: req.input === "text" ? "Added" : RECEIVED.label }
+          : STATUS[req.status] || STATUS.pending;
         const Icon = meta.icon;
-        const icon = <Icon className={`h-4 w-4 shrink-0 ${req.status === "completed" ? "text-emerald-600" : req.status === "uploaded" ? "text-amber-600" : "text-slate-400"}`} />;
+        const icon = <Icon className={`h-4 w-4 shrink-0 ${meta.tone}`} />;
         const chip = <span className={`${CHIP} ${meta.chip}`}>{meta.label}</span>;
 
         // Typed, not filed: the review sits on its one row as a single-line box, with Save
@@ -266,13 +288,25 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
                 <span className="min-w-0 flex-1 truncate text-xs text-slate-600" title={d.original_name || d.label}>
                   {d.original_name || d.label || "File"}
                 </span>
-                <span
-                  className={`${CHIP} ${d.verified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                  title={d.verified && d.verified_by ? `Verified by ${d.verified_by}` : undefined}
-                >
-                  {d.verified ? "Verified" : "Not checked"}
-                </span>
-                {canVerify ? (
+                {!viewOnly && (
+                  <span
+                    className={`${CHIP} ${d.verified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                    title={d.verified && d.verified_by ? `Verified by ${d.verified_by}` : undefined}
+                  >
+                    {d.verified ? "Verified" : "Not checked"}
+                  </span>
+                )}
+                {viewOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => view(d)}
+                    disabled={opening === d.id}
+                    className={`${BTN} border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50`}
+                    data-testid={`progression-view-${d.id}`}
+                  >
+                    <Eye className="h-3.5 w-3.5" /> {opening === d.id ? "Opening…" : "View"}
+                  </button>
+                ) : canVerify ? (
                   <button
                     type="button"
                     onClick={() => verify(d.id, !d.verified)}
@@ -288,6 +322,7 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
           </div>
         );
       })}
+      <DocumentPreview preview={preview} onClose={closePreview} testid="progression-preview" />
     </div>
   );
 }

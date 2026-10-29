@@ -26,6 +26,8 @@ import { ZoomableImage, ZoomablePdf } from "@/components/ui/zoomable-view";
 const isPdf = (contentType, name) => /pdf/i.test(contentType || "") || /\.pdf$/i.test(name || "");
 const isImageDoc = (contentType, name) =>
   String(contentType || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(name || "");
+const isVideoDoc = (contentType, name) =>
+  String(contentType || "").startsWith("video/") || /\.(mp4|mov|webm|m4v)$/i.test(name || "");
 
 /**
  * Holds the document currently on screen and owns its blob URL.
@@ -37,7 +39,7 @@ const isImageDoc = (contentType, name) =>
  * reading a long report cannot have it expire underneath them.
  */
 export const useDocumentPreview = () => {
-  // { url, name, pdf, image } — null when nothing is open.
+  // { url, name, pdf, image, video } — null when nothing is open.
   const [preview, setPreview] = useState(null);
   // Mirrors preview.url so the unmount cleanup can revoke it. An effect that closed over
   // the state would be handing back whatever the url was when it last ran.
@@ -63,6 +65,7 @@ export const useDocumentPreview = () => {
         // document filed before content_type was recorded still knows what it is.
         pdf: isPdf(contentType, label),
         image: isImageDoc(contentType, label),
+        video: isVideoDoc(contentType, label),
       };
     });
   }, []);
@@ -134,6 +137,9 @@ export const DocumentPreview = ({ preview, onClose, icon: Icon = FileText, testi
             <ZoomablePdf src={preview.url} title={preview.name} testid={`${testid}-pdf`} />
           ) : preview.image ? (
             <ZoomableImage src={preview.url} alt={preview.name} testid={`${testid}-image`} />
+          ) : preview.video ? (
+            // The case sheet's progression clips are filed here as videos.
+            <video src={preview.url} controls className="h-full w-full bg-black" data-testid={`${testid}-video`} />
           ) : (
             // Anything else — a scan filed as a .doc, a spreadsheet. Saying so beats an
             // empty frame that looks like the document failed to load.
