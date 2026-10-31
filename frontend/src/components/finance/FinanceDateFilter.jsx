@@ -150,11 +150,10 @@ export const FINANCE_DATE_PRESETS = ["all", "today", "yesterday", "this_week", "
  * calendar while it stands alone, which filters to that one day.
  *
  * Custom is the one that needs more, so it closes nothing: it turns the right-hand side
- * into two typed dates over the calendar, with Apply. Typed and picked at once, because a
- * range is two dates and people usually arrive knowing which two. Keying 04082026 is
- * quicker than navigating a grid twice; the grid is there for the times you are not.
- * Whichever is used the other follows, because they are one value shown two ways rather
- * than two controls to reconcile.
+ * into two typed dates, From and To, with Apply -- and no calendar. A range is two dates
+ * and people arrive knowing which two; keying 04082026 is quicker than navigating a grid
+ * twice, and a grid under the fields made the dialog twice the height for the taps nobody
+ * needed.
  *
  * `startOn` is the side it opens on: "custom" when it was opened to set a range (Custom
  * Range in the row, the chip, the phone dropdown), "day" for the plain calendar.
@@ -164,9 +163,6 @@ const FilterByDateDialog = ({ preset, presets, from, to, startOn = "day", onPres
   const [monthOpen, setMonthOpen] = useState(false);
   const [fromText, setFromText] = useState(() => isoToManual(from));
   const [toText, setToText] = useState(() => isoToManual(to));
-  // Which end the next tap on the grid fills. Starts on From and moves itself to To, so
-  // picking a range is two taps rather than two taps and a switch between them.
-  const [editing, setEditing] = useState("from");
 
   const fromIsoVal = manualToIso(fromText);
   const toIsoVal = manualToIso(toText);
@@ -188,37 +184,23 @@ const FilterByDateDialog = ({ preset, presets, from, to, startOn = "day", onPres
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, monthOpen]);
 
-  const pickDay = (iso) => {
-    if (editing === "from") {
-      setFromText(isoToManual(iso));
-      // A new start after the end that was already there leaves a range running backwards.
-      // Dropping the end asks for it again rather than quietly applying a swapped one.
-      if (toIsoVal && iso > toIsoVal) setToText("");
-      setEditing("to");
-    } else {
-      setToText(isoToManual(iso));
-    }
-  };
-
-  // The whole box selects its end, not just the eight characters inside it — the label and
-  // the padding around it are the obvious thing to aim at when switching From to To.
-  const field = (label, text, set, bad, tid) => (
-    <div
-      onClick={() => setEditing(tid)}
-      className={`min-w-0 flex-1 cursor-text rounded-[4px] border px-2.5 py-1.5 transition ${
-        editing === tid ? "border-sky-400 bg-white ring-1 ring-sky-200" : "border-[#EFEAE0] bg-white/70"
-      }`}
-    >
-      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+  // A labelled box per end, From over To. Red while what is typed is not a date, or To
+  // falls before From, so the one at fault says so before Apply is reached for.
+  const field = (label, text, set, bad, tid, autoFocus = false) => (
+    <div>
+      <label htmlFor={`${testid}-${tid}`} className="text-xs font-medium text-slate-500">{label}</label>
       <input
+        id={`${testid}-${tid}`}
         value={text}
         onChange={(e) => set(maskDayMonthYear(e.target.value, text))}
-        onFocus={() => setEditing(tid)}
         onKeyDown={(e) => { if (e.key === "Enter" && ready) onApply(fromIsoVal, toIsoVal); }}
+        autoFocus={autoFocus}
         inputMode="numeric"
         maxLength={10}
         placeholder="DD-MM-YYYY"
-        className={`w-full bg-transparent text-sm outline-none ${bad ? "text-red-600" : "text-slate-800"}`}
+        className={`mt-1 h-10 w-full rounded-[4px] border bg-white px-3 text-sm text-slate-800 outline-none focus:ring-1 ${
+          bad ? "border-red-300 focus:border-red-400 focus:ring-red-400" : "border-[#EFEAE0] focus:border-sky-400 focus:ring-sky-200"
+        }`}
         data-testid={`${testid}-${tid}`}
       />
     </div>
@@ -272,7 +254,7 @@ const FilterByDateDialog = ({ preset, presets, from, to, startOn = "day", onPres
                 <button
                   key={key}
                   type="button"
-                  onClick={() => (key === "custom" ? (setView("custom"), setEditing("from")) : onPreset(key))}
+                  onClick={() => (key === "custom" ? setView("custom") : onPreset(key))}
                   aria-pressed={on}
                   className={railBtn(on)}
                   data-testid={`${testid}-preset-${key}`}
@@ -297,21 +279,10 @@ const FilterByDateDialog = ({ preset, presets, from, to, startOn = "day", onPres
           </div>
 
           {view === "custom" ? (
-            <div className="min-w-0 flex-1 space-y-3 p-3" data-testid={`${testid}-range-panel`}>
-              <div className="flex items-stretch gap-2">
-                {field("From", fromText, setFromText, !!fromText && !fromIsoVal, "from")}
-                {field("To", toText, setToText, (!!toText && !toIsoVal) || !orderOk, "to")}
-              </div>
-
-              {/* The grid keeps its own month as the end being filled changes, so picking a
-                  From in March leaves March open to pick the To from. */}
-              <MilkCalendar
-                value={editing === "from" ? fromIsoVal : toIsoVal}
-                min={editing === "to" ? fromIsoVal || undefined : undefined}
-                accent="sky"
-                onChange={pickDay}
-                testid={`${testid}-calendar`}
-              />
+            <div className="min-w-0 flex-1 space-y-3 p-3 sm:p-4" data-testid={`${testid}-range-panel`}>
+              <p className="text-sm font-semibold text-slate-700">Custom</p>
+              {field("From", fromText, setFromText, !!fromText && !fromIsoVal, "from", true)}
+              {field("To", toText, setToText, (!!toText && !toIsoVal) || !orderOk, "to")}
 
               {/* Says which of the two is wrong, rather than only greying Apply out. */}
               <p className="text-[11px] text-slate-400" data-testid={`${testid}-hint`}>
@@ -319,15 +290,14 @@ const FilterByDateDialog = ({ preset, presets, from, to, startOn = "day", onPres
                   ? <span className="font-semibold text-red-500">From must not be after To.</span>
                   : (fromText && !fromIsoVal) || (toText && !toIsoVal)
                     ? <span className="font-semibold text-red-500">Use DD-MM-YYYY, e.g. 04-08-2026.</span>
-                    : `Type both dates, or tap the grid to set ${editing === "from" ? "From" : "To"}.`}
+                    : "Type both dates as DD-MM-YYYY, e.g. 04-08-2026."}
               </p>
 
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={onClose} className="flex-1 rounded-[4px]" data-testid={`${testid}-cancel`}>Cancel</Button>
+              <div>
                 <Button
                   onClick={() => onApply(fromIsoVal, toIsoVal)}
                   disabled={!ready}
-                  className="flex-1 rounded-[4px] bg-sky-600 hover:bg-sky-700"
+                  className="w-full rounded-[4px] bg-sky-600 hover:bg-sky-700"
                   data-testid={`${testid}-apply`}
                 >
                   Apply
