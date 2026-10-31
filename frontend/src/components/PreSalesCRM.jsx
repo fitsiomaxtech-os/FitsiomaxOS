@@ -10,7 +10,8 @@ import {
   getDashboardOverview,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
-import { CreateLeadModal, DEPARTMENT_OPTIONS } from "@/components/CreateLeadModal";
+import { CreateLeadModal } from "@/components/CreateLeadModal";
+import { serviceTypeTitle } from "@/lib/serviceTypes";
 import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
@@ -2607,7 +2608,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   const months = currentLead.months_of_pain;
   const leadDetailRows = [
     ["Source", source ? sourceLabel(source) : ""],
-    ["Department", DEPARTMENT_OPTIONS.find((d) => d.value === currentLead.department)?.label || currentLead.department],
+    ["Department", serviceTypeTitle(currentLead.department)],
     ["Vertical", currentLead.vertical ? humanWords(currentLead.vertical) : ""],
     ["Alternative Phone", displayPhone(currentLead.alternative_phone)],
     ["Age", currentLead.age],

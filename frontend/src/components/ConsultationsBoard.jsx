@@ -34,6 +34,7 @@ import {
   rescheduleCalendarBooking, declineCalendarBooking,
   listFitness, acceptFitnessReferral,
 } from "@/lib/api";
+import { serviceTypeTitle } from "@/lib/serviceTypes";
 import { FitnessMemberDialog, CollectPaymentDialog as FitnessCollectDialog } from "@/components/branch/FitnessPanel";
 import { BalanceDiscount } from "@/components/branch/CollectTender";
 import { displayPhone, telNumber, waNumber } from "@/lib/phone";
@@ -11521,7 +11522,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       <div className="flex items-center justify-between"><span className="text-slate-500">Age</span><span className="font-medium">{selectedLead.age ?? "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">Gender</span><span className="font-medium">{selectedLead.gender || "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">Occupation</span><span className="font-medium">{selectedLead.occupation || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Department</span><span className="font-medium">{selectedLead.department || "—"}</span></div>
+                      <div className="flex items-center justify-between"><span className="text-slate-500">Department</span><span className="font-medium">{serviceTypeTitle(selectedLead.department) || "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">Condition</span><span className="font-medium">{selectedLead.condition || "—"}</span></div>
                       <div className="flex items-center justify-between"><span className="text-slate-500">Months of Pain</span><span className="font-medium">{selectedLead.months_of_pain ?? "—"}</span></div>
                     </div>

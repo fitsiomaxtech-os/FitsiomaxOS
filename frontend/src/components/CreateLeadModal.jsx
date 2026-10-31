@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import { createManualLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { loadSession } from "@/lib/session";
+import { isOnlineServiceType, serviceTypeTitle, useServiceTypes } from "@/lib/serviceTypes";
 
 // Suggestions, not a closed list: Source is typed by hand here, so a lead that came in
 // over the phone from a channel nobody has named yet can still be filed as what it was
@@ -16,15 +17,23 @@ import { loadSession } from "@/lib/session";
 // and a lead somebody is typing into this form by definition did not arrive off a sheet.
 // Exported for LeadEditModal, so correcting a source offers the same channels as filing one.
 export const SOURCE_SUGGESTIONS =["Meta", "SEO", "Referral", "Walk-In", "Website", "Instagram", "WhatsApp", "Phone Call", "Other"];
-// Exported because a board that reads a lead back has to name its Department the same way
-// the form that set it did -- a raw "offline_physio" on a detail card is the stored value
-// leaking through rather than a label.
-export const DEPARTMENT_OPTIONS = [
-  { value: "offline_physio", label: "Offline Physio" },
-  { value: "online_physio", label: "Online Physio" },
-  { value: "offline_fitness", label: "Offline Fitness" },
-  { value: "online_fitness", label: "Online Fitness" },
-];
+/**
+ * Department is a service type: the list Branch Manager > Service Type keeps, offered as
+ * it stands there, so a type added there can be given to a lead without a code change.
+ *
+ * Whatever the lead already carries is kept at the top even when the list no longer holds
+ * it -- the four this field offered before it read that list, a type since deleted, a lock
+ * set by an arm's board -- so the form never shows a filed lead as having none.
+ *
+ * Exported for LeadEditModal, so correcting a department offers what filing one did.
+ */
+export const departmentOptions = (serviceTypes, current) =>
+  (current && !serviceTypes.includes(current) ? [current, ...serviceTypes] : serviceTypes)
+    .map((name) => ({ value: name, label: serviceTypeTitle(name) }));
+
+/** Whether a lead in this department is seen at a branch. Every type but an online one is:
+ *  "Both Service" or "Multiple Services" still has a floor somebody walks onto. */
+export const departmentHasBranch = (department) => !!department && !isOnlineServiceType(department);
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 // Phone-only sizing, every class below `max-sm:` so the desktop form is untouched: controls
 // a notch shorter with 14px text, and the short fields two to a row. PHONE_WIDE marks a
@@ -72,7 +81,7 @@ const blank = {
 };
 
 /**
- * @param lockedDepartment One of DEPARTMENT_OPTIONS' values, fixing the Department instead
+ * @param lockedDepartment A service type's name, fixing the Department instead
  *   of offering it. Passed by a board that finds its own leads by the vertical this field
  *   decides — an online arm's — where leaving it open would let somebody file a lead into
  *   another arm from a board that then could not show it back to them.
@@ -98,6 +107,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
   const [extraFields, setExtraFields] = useState({});
   const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
+  const serviceTypes = useServiceTypes();
 
   useEffect(() => {
     getBranches().then(setBranches).catch((e) => console.warn("[load failed]", e?.message || e));
@@ -151,17 +161,15 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
     if (payload.age === "") payload.age = null;
     else payload.age = Number(payload.age);
     if (branchId) payload.branch_id = branchId;
-    else if (!showPicker && !["offline_physio", "offline_fitness"].includes(payload.department)) payload.branch_id = "";
+    else if (!showPicker && !departmentHasBranch(payload.department)) payload.branch_id = "";
     payload.source_type = "manual";
     // Left blank, the lead reads as "Manual" rather than as an empty channel -- the
     // dashboards group on source_tab and an empty string would be its own silent bucket.
     payload.source_tab = String(payload.source_tab || "").trim() || "Manual";
-    const VERTICAL_MAP = {
-      online_physio: "online_physiotherapy",
-      offline_fitness: "offline_fitness",
-      online_fitness: "online_fitness",
-    };
-    payload.vertical = VERTICAL_MAP[payload.department] || "offline_physiotherapy";
+    // The service type picked is the vertical, as it is a branch's: the boards and the
+    // dashboards file a lead by its vertical, and the online arms' boards find theirs by it
+    // (vertical_in_arm in backend/deps.py). Left blank, it is filed as it always was.
+    payload.vertical = payload.department || "offline_physiotherapy";
     // One request at a time: a second click while the first is still out would file the
     // same patient twice, or stack one failure toast per click.
     if (saving) return;
@@ -270,7 +278,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
                   title={lockedDepartment ? "Set by the board you are creating this lead from" : undefined}
                   onChange={(v) => set("department", v)}
                   placeholder="Select Department"
-                  options={[{ value: "", label: "Select Department" }, ...DEPARTMENT_OPTIONS]}
+                  options={[{ value: "", label: "Select Department" }, ...departmentOptions(serviceTypes, form.department)]}
                   testid="lead-create-department"
                 />
               </Field>
@@ -295,7 +303,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
               )}
             </div>
 
-            {!branchId && !showPicker && ["offline_physio", "offline_fitness"].includes(form.department) && (
+            {!branchId && !showPicker && departmentHasBranch(form.department) && (
               <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 p-3" data-testid="lead-create-branch-section">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-700">Assign to Branch</p>
                 <div className="grid gap-2 sm:grid-cols-2 max-h-44 overflow-y-auto">

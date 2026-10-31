@@ -7,23 +7,14 @@ import { ThemedSelect } from "@/components/ui/themed-select";
 import { toast } from "@/components/ui/sonner";
 import { updateLead, getBranches } from "@/lib/api";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
-import { DEPARTMENT_OPTIONS, SOURCE_SUGGESTIONS } from "@/components/CreateLeadModal";
+// departmentHasBranch is the same split CreateLeadModal makes when the lead is first filed
+// -- an edit form that disagreed with the create form about it would quietly move a
+// patient off the branch that has been seeing them.
+import { departmentHasBranch, departmentOptions, SOURCE_SUGGESTIONS } from "@/components/CreateLeadModal";
 import { displayPhone } from "@/lib/phone";
+import { useServiceTypes } from "@/lib/serviceTypes";
 
 const GENDERS = ["Male", "Female", "Other"];
-// The two departments a lead is seen at a branch for. The other two are run online and
-// carry no branch, which is the same split CreateLeadModal makes when the lead is first
-// filed -- an edit form that disagreed with the create form about this would quietly move
-// a fitness patient off the branch that has been seeing them.
-const BRANCHED_DEPARTMENTS = ["offline_physio", "offline_fitness"];
-// Kept in step with CreateLeadModal's own map. Department is the answer a human gives and
-// vertical is what the boards filter on, so changing one without the other files the lead
-// under a department it is no longer listed by.
-const VERTICAL_MAP = {
-  online_physio: "online_physiotherapy",
-  offline_fitness: "offline_fitness",
-  online_fitness: "online_fitness",
-};
 
 // An intake question's own key, made readable. These arrive as the sheet's column headers
 // -- "months_of_pain" on one, "What type of pain?" on the next -- so the ones already
@@ -84,6 +75,7 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
   const [answersTouched, setAnswersTouched] = useState(false);
   const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
+  const serviceTypes = useServiceTypes();
 
   useEffect(() => {
     if (!allowBranchChange) return;
@@ -117,16 +109,17 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
     payload.months_of_pain = payload.months_of_pain === "" ? null : Number(payload.months_of_pain);
     payload.age = payload.age === "" ? null : Number(payload.age);
     if (allowBranchChange) {
-      if (!BRANCHED_DEPARTMENTS.includes(payload.department)) payload.branch_id = null;
+      if (!departmentHasBranch(payload.department)) payload.branch_id = null;
     } else {
       // Never sent from a board that does not offer it, so a save here cannot re-post a
       // branch and undo a transfer that happened since the form was opened.
       delete payload.branch_id;
     }
-    // Only when it actually changed: every other save leaves the lead's vertical exactly as
-    // whatever filed it set, including the older spellings this map does not produce.
+    // The service type picked is the vertical, as on the create form. Only when it actually
+    // changed: every other save leaves the lead's vertical exactly as whatever filed it set,
+    // including the older spellings a sheet import or the old department list wrote.
     if (payload.department !== (lead.department || "")) {
-      payload.vertical = VERTICAL_MAP[payload.department] || "offline_physiotherapy";
+      payload.vertical = payload.department || "offline_physiotherapy";
     }
     if (answersTouched) {
       // The original spread first: extra_fields is replaced wholesale by the endpoint, and
@@ -200,7 +193,7 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
                   value={form.department}
                   onChange={(v) => set("department", v)}
                   placeholder="Select department"
-                  options={[{ value: "", label: "Select department" }, ...DEPARTMENT_OPTIONS]}
+                  options={[{ value: "", label: "Select department" }, ...departmentOptions(serviceTypes, form.department)]}
                   testid="lead-edit-department"
                 />
               </Field>
@@ -215,7 +208,7 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
             </div>
           </Section>
 
-          {allowBranchChange && BRANCHED_DEPARTMENTS.includes(form.department) && (
+          {allowBranchChange && departmentHasBranch(form.department) && (
             <div className="rounded-lg border border-sky-200 bg-sky-50 p-3" data-testid="lead-edit-branch-section">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-700">Assign to Branch</p>
               <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">

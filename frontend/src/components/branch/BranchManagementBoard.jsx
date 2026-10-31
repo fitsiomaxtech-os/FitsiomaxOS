@@ -14,7 +14,7 @@ import {
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 // Shared with the branch form's Vertical picker, so a service type is the same colour and
 // the same wording on both screens — they open a click apart from this board's toolbar.
-import { serviceTypeColor, serviceTypeLabel, serviceTypeChipStyle } from "@/lib/serviceTypes";
+import { DEFAULT_SERVICE_TYPES, serviceTypeColor, serviceTypeLabel, serviceTypeChipStyle } from "@/lib/serviceTypes";
 import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { BranchFormDialogV2 } from "@/components/branch/BranchFormDialogV2";
 import { BranchAdminBoard } from "@/components/BranchAdminBoard";
@@ -1002,13 +1002,12 @@ const ServiceTypeManager = ({ onChanged }) => {
   const fetchItems = useCallback(async () => {
     try {
       const rows = await getVerticals();
-      const defaults = ["offline_physiotherapy", "online_physiotherapy", "online_fitness", "offline_fitness_gym"];
       // `stored` separates real records from the placeholder list shown on an empty
       // database. The placeholders have no row behind them, so they have nothing to
       // delete — offering the bin there would only ever produce a 404.
       setItems(rows && rows.length
         ? rows.map((r) => ({ ...r, stored: true }))
-        : defaults.map((n) => ({ id: n, name: n, stored: false })));
+        : DEFAULT_SERVICE_TYPES.map((n) => ({ id: n, name: n, stored: false })));
     } catch (err) {
       toast.error("Failed to load service types");
     }

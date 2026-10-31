@@ -112,7 +112,8 @@ import { RecordsPanel } from "@/components/branch/RecordsPanel";
 import { SumaiyaConsultationsPanel } from "@/components/branch/SumaiyaConsultationsPanel";
 import { ActivityCarePanel } from "@/components/branch/ActivityCarePanel";
 import { MyProfilePage } from "@/components/MyProfilePage";
-import { CreateLeadModal, DEPARTMENT_OPTIONS, LEAD_DATA_FIELDS } from "@/components/CreateLeadModal";
+import { CreateLeadModal, LEAD_DATA_FIELDS } from "@/components/CreateLeadModal";
+import { serviceTypeTitle } from "@/lib/serviceTypes";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { isCourseComplete } from "@/lib/leadStage";
@@ -544,11 +545,6 @@ const armPracticeOf = (role, vertical) => {
   return null;
 };
 
-/** "offline_physio" -> "Offline Physio", and whatever it already said where the dropdown
- *  has no label for it: department is not a controlled field on an imported lead. */
-const departmentLabel = (value) =>
-  DEPARTMENT_OPTIONS.find((d) => d.value === value)?.label || value || "";
-
 /**
  * A sheet column's key, said the way a person would say it.
  *
@@ -855,15 +851,16 @@ const runsWithoutARoom = (role) => ONLINE_BRANCH_ADMIN_ROLES.includes(String(rol
 // be saved as offline physiotherapy and vanish from the board that created it. That is the
 // same disappearance this whole path is fixing, one step further along.
 //
-// Kept in step with DEPARTMENT_OPTIONS and VERTICAL_MAP in components/CreateLeadModal.jsx,
-// and through them with ONLINE_ARM_PRACTICE in backend/deps.py, which is what reads the
-// vertical back.
+// Service type names, since Department is one and the form saves it as the vertical too.
+// These two are the verticals the arms' leads have always been filed under, so a lead
+// added here still counts on the dashboards' Online Physiotherapy and Online Fitness
+// cards; vertical_in_arm in backend/deps.py is what reads them back.
 //
 // Keyed by the arm's practice rather than by the role that runs it, because the board is
 // now reached two ways -- the arm's own admin, and a Super Admin on the arm's branch tile
 // -- and only one of those has a role that names the arm. See armPracticeOf.
 const ARM_DEPARTMENT = {
-  physio: "online_physio",
+  physio: "online_physiotherapy",
   fitness: "online_fitness",
 };
 
@@ -4734,7 +4731,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   // page of dashes — which is close to how the popup already read.
   const leadDetailRows = [
     ["Source", lead.source_tab || lead.source_type],
-    ["Department", departmentLabel(lead.department)],
+    // "offline_physiotherapy" -> "Offline Physiotherapy"; free text off a sheet as it was.
+    ["Department", serviceTypeTitle(lead.department)],
     ["Alternative Phone", displayPhone(lead.alternative_phone)],
     ["Age", lead.age],
     ["Gender", lead.gender],
