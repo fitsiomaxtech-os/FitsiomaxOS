@@ -13144,17 +13144,31 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <label className="mb-1 block text-[11px] font-medium text-slate-500">{dietFeeCfg.product}</label>
                     {/* This fee's own Diet Details shelf only. Both shelves were offered
                         here before, for either fee, which is how a chart could be charged
-                        at the consultation's price. */}
-                    <select
-                      value={dietFeeDraft.item_id}
-                      onChange={(e) => setDietFeeDraft({ ...dietFeeDraft, item_id: e.target.value })}
-                      className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
-                      data-testid="cons-diet-fee-package"
-                    >
-                      {dietShelfOf(dietItems, dietFeeDraft.kind).map((it) => (
-                        <option key={it.id} value={it.id}>{it.name}</option>
-                      ))}
-                    </select>
+                        at the consultation's price.
+
+                        Themed list, not the browser's: a native <select> opens the OS's own
+                        blue menu. Dressed as the Filter by Date popup is -- cream panel, 4px
+                        corners, the chosen one in amber. z-[200] lifts it above this popup. */}
+                    <Select value={dietFeeDraft.item_id || ""} onValueChange={(v) => setDietFeeDraft({ ...dietFeeDraft, item_id: v })}>
+                      <SelectTrigger
+                        className="h-9 rounded-[4px] border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-none hover:bg-[#FDFCF8] focus:ring-1 focus:ring-amber-300 data-[state=open]:border-amber-300"
+                        data-testid="cons-diet-fee-package"
+                      >
+                        <SelectValue placeholder={`Select the ${dietFeeCfg.product}`} />
+                      </SelectTrigger>
+                      <SelectContent className="z-[200] max-h-72 rounded-[4px] border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
+                        {dietShelfOf(dietItems, dietFeeDraft.kind).map((it) => (
+                          <SelectItem
+                            key={it.id}
+                            value={it.id}
+                            className="rounded-[4px] py-2 text-sm text-slate-700 focus:bg-[#F3EFE6] focus:text-slate-800 data-[state=checked]:bg-amber-100 data-[state=checked]:font-semibold data-[state=checked]:text-amber-800"
+                            data-testid={`cons-diet-fee-package-${it.id}`}
+                          >
+                            {it.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
