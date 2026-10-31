@@ -255,15 +255,17 @@ export const PastDataImportExport = ({ leading = null }) => {
               <table className="w-full min-w-[60rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <tr className="whitespace-nowrap">
-                    <th className="w-[4%] px-3 py-2.5">S.No</th>
-                    <th className="w-[17%] px-3 py-2.5">Sheet</th>
-                    <th className="w-[7%] px-3 py-2.5">Clients</th>
-                    <th className="w-[10%] px-3 py-2.5">Total Income</th>
-                    <th className="w-[11%] px-3 py-2.5">Total Outstanding</th>
-                    <th className="w-[9%] px-3 py-2.5">Date</th>
-                    <th className="w-[13%] px-3 py-2.5">Branch</th>
-                    <th className="w-[7%] px-3 py-2.5">Status</th>
-                    <th className="px-3 py-2.5">Action</th>
+                    {/* Stretched across the card: every column has its share, Action only the
+                        room its icons take, so no blank band is left after them. */}
+                    <th className="w-[5%] px-3 py-2.5">S.No</th>
+                    <th className="w-[20%] px-3 py-2.5">Sheet</th>
+                    <th className="w-[8%] px-3 py-2.5">Clients</th>
+                    <th className="w-[11%] px-3 py-2.5">Total Income</th>
+                    <th className="w-[12%] px-3 py-2.5">Total Outstanding</th>
+                    <th className="w-[10%] px-3 py-2.5">Date</th>
+                    <th className="w-[15%] px-3 py-2.5">Branch</th>
+                    <th className="w-[10%] px-3 py-2.5">Status</th>
+                    <th className="w-[9%] px-3 py-2.5">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -280,7 +282,7 @@ export const PastDataImportExport = ({ leading = null }) => {
                       <tr key={s.id} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`import-export-row-${s.id}`}>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-400">{i + 1}</td>
                         <td className="px-3 py-3">
-                          <p className="max-w-[14rem] truncate text-sm font-semibold leading-5 text-slate-800" title={s.source_file || s.label}>{s.label}</p>
+                          <p className="max-w-[18rem] truncate text-sm font-semibold leading-5 text-slate-800" title={s.source_file || s.label}>{s.label}</p>
                         </td>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-600">{n(s.counts?.past_clients)}</td>
                         <td className="px-3 py-3">
