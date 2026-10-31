@@ -1064,6 +1064,8 @@ export const deletePreBookAdvanceOption = async (id) => (await api.delete(`/pre-
 // Prices a Treatment Package that has no catalogue price (Home Visit > Physiotherapy Distance):
 // the amount for one session, which the server multiplies by the package's sessions.
 export const setSessionPackageAmount = async (leadId, perSessionAmount) => (await api.post(`/leads/${leadId}/session-package-amount`, { per_session_amount: perSessionAmount })).data;
+// The whole package's amount, as typed on the Chennai branch's Collect Payment popup.
+export const setSessionPackageTotal = async (leadId, amount) => (await api.post(`/leads/${leadId}/session-package-amount`, { package_amount: amount })).data;
 export const assignPhysioWithSessions = async (leadId, payload) => (await api.post(`/leads/${leadId}/assign-physio-sessions`, payload)).data;
 // The Offline <-> Online swap's figures, before anything is saved. The swap itself goes in
 // through assignPhysioWithSessions with swap_mode, once the physio and days are picked.

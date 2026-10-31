@@ -1107,17 +1107,48 @@ async def collect_rehab_fee(lead_id: str, payload: V3CollectRehabFeeInput, user:
 
 class V3SessionPackageAmountInput(BaseModel):
     # The amount for ONE session. The package's price is this times its session count.
-    per_session_amount: float
+    per_session_amount: Optional[float] = None
+    # Or the whole package's amount, as typed -- the pencil on the Chennai branch's
+    # Collect Payment popup. Taken on any package, priced or not.
+    package_amount: Optional[float] = None
 
 
 @router.post("/leads/{lead_id}/session-package-amount", response_model=dict)
 async def set_session_package_amount(lead_id: str, payload: V3SessionPackageAmountInput, user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev"))):
     """The Branch Admin prices a Treatment Package that has no catalogue price (a Home
     Visit > Physiotherapy Distance package). Only before the Treatment Fee is collected:
-    after that the figure is a financial record."""
+    after that the figure is a financial record.
+
+    With `package_amount` the branch re-prices any package as a whole instead. The lead is
+    marked branch-priced like a typed one, so reprice_unpaid_leads leaves the figure alone
+    on the next restart rather than putting the catalogue rate back."""
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    if payload.package_amount is not None:
+        if lead.get("visit_type") == "home":
+            raise HTTPException(status_code=400, detail="A House Visit is priced by its per session fee")
+        if not lead.get("session_package_id"):
+            raise HTTPException(status_code=400, detail="No treatment package was selected by the CONSULTANT yet")
+        if lead.get("treatment_fee_paid") is not None:
+            raise HTTPException(status_code=400, detail="The Treatment Fee has already been collected")
+        if payload.package_amount <= 0:
+            raise HTTPException(status_code=400, detail="Enter an amount above 0")
+        amount = round(float(payload.package_amount), 2)
+        previous = lead.get("session_package_price")
+        await v3_col("leads").update_one({"id": lead_id}, {"$set": {"session_package_price": amount, "session_package_manual": True, "updated_at": _now()}})
+        await v3_col("lead_activity").insert_one({
+            "id": str(uuid.uuid4()),
+            "lead_id": lead_id,
+            "action": "session_package_amount_set",
+            "details": f"Treatment package amount edited · {lead.get('session_package_name') or 'package'} · Rs.{amount}"
+                       + (f" (was Rs.{previous})" if previous is not None else ""),
+            "created_by": user.full_name,
+            "created_by_role": user.role,
+            "created_at": _now(),
+        })
+        updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+        return {"message": "Amount saved", "lead": V3LeadOut(**updated).model_dump()}
     # Read off the package as well as the lead, so a lead saved before the lead carried
     # the mark can still be priced.
     manual = bool(lead.get("session_package_manual"))

@@ -17,7 +17,7 @@ import { advanceForLabel, preBookConsultOwed, preBookOf, preBookWhen } from "@/l
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
-  collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
+  collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, setSessionPackageTotal, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
   saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
   assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
   rehabSessionsForLead,
@@ -110,6 +110,11 @@ const PART_SESSION_MODES = ["cash", "upi", "card", "cheque", "account_transfer"]
 // at the desk today, so Cheque (which clears when it clears) and Partial Payment (a plan,
 // not a payment) are not pieces of one.
 const SPLIT_PAYMENT_MODES = STANDARD_PAYMENT_MODES.filter((m) => SETTLED_NOW_MODES.includes(m.value));
+// The branch the Treatment Fee's Collect Payment popup (package, sessions, amount and
+// discount first, then a Payment Mode dropdown) is switched on for. Every other branch
+// keeps the Collect Treatment Fee popup. Matched by name, as the branch list gives it:
+// its code (CHE) is only the first three letters and would match any "Che..." branch.
+const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
 // The per-tender half of a Collect popup: the fields that belong to the one payment being
 // entered, and nothing that belongs to the collection as a whole.
 //
@@ -2857,6 +2862,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return () => { alive = false; };
   }, []);
 
+  // Whether a lead's Treatment Fee is collected through the Chennai Collect Payment popup.
+  // Not a House Visit: its fee is priced per session on the mode popup, which this skips.
+  const chennaiCollectFor = (lead) => !!lead && lead.visit_type !== "home" && isChennaiBranch(branchNames[lead.branch_id]);
+  const chennaiCollect = chennaiCollectFor(selectedLead);
+
   /** Every fee path builds its receipt here, so they can't drift apart field by field. */
   const makeReceipt = ({ lead, payload, prefix, paidFor, packageName, assignedPrice, discount: agreedDiscount, kind = "paid", sessionsCovered, balanceDue, installments, transactionId }) => {
     const amount = payload.amount;
@@ -3074,6 +3084,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Visit > Physiotherapy Distance package), before the fee can be collected.
   const [pkgAmountDraft, setPkgAmountDraft] = useState("");
   const [savingPkgAmount, setSavingPkgAmount] = useState(false);
+  // The package amount being edited on the Chennai Collect Payment popup (the pencil),
+  // or null while it is not open.
+  const [chennaiPkgEdit, setChennaiPkgEdit] = useState(null);
   const [collectingTreatmentFee, setCollectingTreatmentFee] = useState(false);
   // The second-step Collect popup for the Treatment Fee's chosen Payment Mode.
   const [treatmentConfirmDraft, setTreatmentConfirmDraft] = useState(null);
@@ -4615,9 +4628,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const total = lead.session_package_sessions || 0;
     const rate = total ? (lead.session_package_price || 0) / total : 0;
     const existing = lead.treatment_fee_payment_details?.installments;
+    // The Chennai Collect Payment popup opens a first collection on empty boxes, so the
+    // desk types the sessions and the amount rather than accepting the whole package by
+    // default, and picks the Payment Mode last. A correction still opens on what was taken.
+    const blank = chennaiCollectFor(lead) && lead.treatment_fee_paid == null;
+    setChennaiPkgEdit(blank && lead.session_package_price == null ? "" : null);
     setTreatmentFeeDraft({
-      payment_mode: lead.treatment_fee_payment_mode || "cash",
-      amount: lead.treatment_fee_paid ?? lead.session_package_price ?? "",
+      payment_mode: blank ? "" : (lead.treatment_fee_payment_mode || "cash"),
+      amount: blank ? "" : (lead.treatment_fee_paid ?? lead.session_package_price ?? ""),
       // House Visit only: the fee for one session, typed at collection -- the amount is
       // this times the sessions being paid for. Opens on the rate already set, if any.
       per_session: lead.visit_type === "home" && lead.session_package_price != null && total
@@ -4631,7 +4649,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       cheque_number: "",
       // Cash/UPI/Card/Cheque default to covering every session (today's full
       // Collect behavior) — reducing this reveals a Due Date for the balance.
-      sessions_now: lead.session_package_sessions ?? "",
+      sessions_now: blank ? "" : (lead.session_package_sessions ?? ""),
       // The date already promised for a balance still outstanding, so correcting a
       // collection doesn't make somebody re-agree a date the patient was given.
       balance_due_date: (existing || []).find((i) => !i.paid)?.due_date || "",
@@ -4909,8 +4927,62 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const sessionsNum = raw === "" || raw == null ? (treatmentFeeTotalSessions || 1) : (parseInt(raw, 10) || 0);
     setTreatmentFeeDraft({ ...treatmentFeeDraft, per_session: value, amount: round2(Math.max(0, fee * sessionsNum - treatmentDiscount)) });
   };
+  // The Chennai Collect Payment popup's three boxes. The amount follows the sessions and
+  // the discount while it is empty or still sitting on what they come to -- an amount
+  // typed short of that is a part payment somebody chose, and stays as typed.
+  const chennaiAmountFollows = () => {
+    const amt = parseFloat(treatmentFeeDraft?.amount);
+    return !Number.isFinite(amt) || Math.abs(amt - treatmentNetPayable) < 0.01;
+  };
+  const chennaiNetFor = (sessions, discount, rate = perSessionRate) => {
+    const n = parseInt(sessions, 10) || 0;
+    if (!(n > 0)) return "";
+    return String(round2(Math.max(0, Math.round(n * rate * 100) / 100 - discount)));
+  };
+  const setChennaiSessions = (value) => {
+    const patch = { sessions_now: value };
+    if (chennaiAmountFollows()) patch.amount = chennaiNetFor(value, treatmentDiscount);
+    setTreatmentFeeDraft({ ...treatmentFeeDraft, ...patch });
+  };
+  const setChennaiDiscount = (value) => {
+    const patch = { discount: value };
+    if (chennaiAmountFollows()) patch.amount = chennaiNetFor(treatmentFeeDraft.sessions_now, Math.max(0, parseFloat(value) || 0));
+    setTreatmentFeeDraft({ ...treatmentFeeDraft, ...patch });
+  };
+
+  // The pencil's Save. The amount moves to the new price with it, unless it was typed.
+  const saveChennaiPackageAmount = async () => {
+    const total = round2(parseFloat(chennaiPkgEdit) || 0);
+    if (!(total > 0)) return;
+    setSavingPkgAmount(true);
+    try {
+      const res = await setSessionPackageTotal(selectedLead.id, total);
+      const follows = chennaiAmountFollows();
+      takeLead(res.lead);
+      if (follows && treatmentFeeTotalSessions) {
+        setTreatmentFeeDraft({ ...treatmentFeeDraft, amount: chennaiNetFor(treatmentFeeDraft.sessions_now, treatmentDiscount, total / treatmentFeeTotalSessions) });
+      }
+      setChennaiPkgEdit(null);
+      toast.success("Package amount saved");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not save the amount");
+    }
+    setSavingPkgAmount(false);
+  };
+
+  // The Payment Mode dropdown opens that mode's own Collect popup, as the buttons do on
+  // the other branches. Cheque and Partial Payment are taken at the package price (the
+  // server gives neither a discount), so a discount typed above does not go with them.
+  const chooseChennaiPaymentMode = (mode) => {
+    const patch = SETTLED_NOW_MODES.includes(mode)
+      ? {}
+      : { discount: "", amount: chennaiNetFor(treatmentFeeDraft.sessions_now, 0) };
+    setTreatmentFeeDraft({ ...treatmentFeeDraft, ...patch, payment_mode: mode });
+    setTreatmentConfirmDraft({ ...BLANK_TREATMENT_TENDER, tenders: [], balance_partial: false, picking_mode: false });
+  };
+
   // Carried on every Treatment Fee call while it is a House Visit's first collection.
-  const withHvFee = (payload) => (hvTreatment && hvPerSession > 0 ? { ...payload, per_session_fee: hvPerSession } : payload);
+  const withHvFee =(payload) => (hvTreatment && hvPerSession > 0 ? { ...payload, per_session_fee: hvPerSession } : payload);
 
   // Attaches the hand-entered discount, plus sessions_now/balance_due_date, to a
   // Cash/UPI/Card/Account Transfer/Cheque payload. The due date is required whenever
@@ -11729,10 +11801,199 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               </div>
             )}
 
+            {/* Collect Payment popup (Chennai branch) — the Treatment Fee's Collect, in the
+                order the desk works it: the package (its amount editable behind the pencil
+                while nothing is collected), the sessions, the amount, the discount, and the
+                Payment Mode last, from a dropdown. Picking a mode opens that mode's own
+                Collect popup on top, which reads these back rather than asking again. */}
+            {treatmentFeeDraft && !collectFeeDraft && chennaiCollect && (() => {
+              const totalSessions = treatmentFeeTotalSessions;
+              const priced = selectedLead.session_package_price != null;
+              const canEditPrice = selectedLead.treatment_fee_paid == null;
+              const sessionsRaw = treatmentFeeDraft.sessions_now;
+              const sessionsN = parseInt(sessionsRaw, 10) || 0;
+              const sessionsOk = !totalSessions || (sessionsN >= 1 && sessionsN <= totalSessions);
+              const amountN = parseFloat(treatmentFeeDraft.amount) || 0;
+              const overDiscount = treatmentDiscount > treatmentComputedAmount + 0.009;
+              const overpaid = amountN > treatmentNetPayable + 0.01;
+              const short = round2(treatmentNetPayable - amountN);
+              const editTotal = parseFloat(chennaiPkgEdit) || 0;
+              const ready = priced && chennaiPkgEdit === null && sessionsOk && amountN > 0 && !overDiscount && !overpaid;
+              const rs = (n) => `Rs.${round2(n).toLocaleString("en-IN")}`;
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-chennai-collect-modal">
+                  <div className="max-h-[85vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-800">{selectedLead.treatment_fee_paid != null ? "Update Payment" : "Collect Payment"}</p>
+                      <button onClick={() => { setTreatmentFeeDraft(null); setChennaiPkgEdit(null); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-chennai-collect-close"><X className="h-4 w-4" /></button>
+                    </div>
+
+                    <div className="rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-2" data-testid="cons-chennai-collect-package">
+                      <div className="flex items-center gap-2">
+                        <p className="min-w-0 flex-1 truncate text-xs text-slate-600">
+                          {selectedLead.session_package_name || "—"}{totalSessions ? ` · ${totalSessions} sessions` : ""}
+                        </p>
+                        {priced && (
+                          <span className="shrink-0 text-xs font-semibold text-slate-800" data-testid="cons-chennai-collect-package-price">{rs(selectedLead.session_package_price)}</span>
+                        )}
+                        {canEditPrice && chennaiPkgEdit === null && (
+                          <button
+                            type="button"
+                            onClick={() => setChennaiPkgEdit(priced ? String(selectedLead.session_package_price) : "")}
+                            className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-sky-700"
+                            title="Edit the package amount"
+                            aria-label="Edit the package amount"
+                            data-testid="cons-chennai-collect-package-edit"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {chennaiPkgEdit !== null && (
+                        <div className="mt-2 border-t border-slate-200 pt-2">
+                          <label className="mb-1 block text-[11px] font-medium text-slate-500">Package Amount (₹)</label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={chennaiPkgEdit}
+                              onChange={(e) => setChennaiPkgEdit(e.target.value)}
+                              placeholder="Enter Package Amount"
+                              className="h-9 rounded-[4px] bg-white"
+                              autoFocus
+                              data-testid="cons-chennai-collect-package-amount"
+                            />
+                            <Button
+                              size="sm"
+                              className="h-9 shrink-0 rounded-[4px] bg-sky-600 text-xs text-white hover:bg-sky-700"
+                              disabled={savingPkgAmount || !(editTotal > 0)}
+                              onClick={saveChennaiPackageAmount}
+                              data-testid="cons-chennai-collect-package-save"
+                            >
+                              {savingPkgAmount ? "Saving..." : "Save"}
+                            </Button>
+                            {priced && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 shrink-0 rounded-[4px] text-xs"
+                                onClick={() => setChennaiPkgEdit(null)}
+                                data-testid="cons-chennai-collect-package-cancel"
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
+                          {editTotal > 0 && totalSessions > 0 && (
+                            <p className="mt-1 text-[11px] text-slate-500">{rs(editTotal / totalSessions)} per session × {totalSessions} sessions</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {totalSessions > 0 && (
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-500">Sessions *</label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max={totalSessions}
+                          value={sessionsRaw}
+                          onChange={(e) => setChennaiSessions(e.target.value)}
+                          placeholder="Enter Session"
+                          disabled={!priced}
+                          className="h-9 rounded-[4px]"
+                          data-testid="cons-chennai-collect-sessions"
+                        />
+                        <p className={`mt-1 text-[11px] ${sessionsRaw !== "" && !sessionsOk ? "text-rose-600" : "text-slate-400"}`}>
+                          {sessionsRaw !== "" && !sessionsOk
+                            ? `Enter 1 to ${totalSessions} sessions`
+                            : `Of ${totalSessions} sessions${priced ? ` · ${rs(perSessionRate)} per session` : ""}`}
+                        </p>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-500">Amount (₹) *</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={treatmentFeeDraft.amount}
+                        onChange={(e) => setTreatmentFeeDraft({ ...treatmentFeeDraft, amount: e.target.value })}
+                        placeholder="Enter Amount"
+                        disabled={!priced}
+                        className="h-9 rounded-[4px]"
+                        data-testid="cons-chennai-collect-amount"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount (₹)</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={treatmentFeeDraft.discount}
+                        onChange={(e) => setChennaiDiscount(e.target.value)}
+                        placeholder="Enter Discount"
+                        disabled={!priced}
+                        className="h-9 rounded-[4px]"
+                        data-testid="cons-chennai-collect-discount"
+                      />
+                    </div>
+
+                    {/* What the three boxes come to, and what is wrong with them if
+                        anything is -- the dropdown below stays shut until nothing is. */}
+                    {priced && sessionsOk && sessionsN > 0 && (
+                      <div
+                        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-[4px] px-2.5 py-1.5 text-[11px] font-semibold ${
+                          overDiscount || overpaid ? "bg-rose-50 text-rose-700" : short > 0.009 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                        }`}
+                        data-testid="cons-chennai-collect-total"
+                      >
+                        <span>
+                          {sessionsN} session{sessionsN === 1 ? "" : "s"} = {rs(treatmentComputedAmount)}
+                          {treatmentDiscount > 0 && !overDiscount ? ` − ${rs(treatmentDiscount)} = ${rs(treatmentNetPayable)}` : ""}
+                        </span>
+                        <span>
+                          {overDiscount
+                            ? "Discount is more than these sessions cost"
+                            : overpaid
+                            ? `Amount is ${rs(amountN - treatmentNetPayable)} over`
+                            : amountN > 0 && short > 0.009
+                            ? `${rs(short)} left as balance`
+                            : amountN > 0
+                            ? "Full amount"
+                            : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-500">Payment Mode</label>
+                      <PaymentModeDropdown
+                        value={treatmentConfirmDraft ? treatmentFeeDraft.payment_mode : ""}
+                        options={STANDARD_PAYMENT_MODES}
+                        onChange={chooseChennaiPaymentMode}
+                        disabled={!ready}
+                        testId="cons-chennai-collect-mode"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {!priced || chennaiPkgEdit !== null
+                          ? "Save the package amount first."
+                          : ready
+                          ? `Pick a payment mode to open its Collect popup.${treatmentDiscount > 0 ? " Cheque and Partial Payment are taken without the discount." : ""}`
+                          : "Enter the sessions and the amount first."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Collect Treatment Fee popup (Branch Admin) — opened from the Treatment Fee's
                 Collect on the Fee Collected panel, after the Consultation Fee popup has
                 taken that fee and closed. 4px corners throughout, as that popup has. */}
-            {treatmentFeeDraft && !collectFeeDraft && (
+            {treatmentFeeDraft && !collectFeeDraft && !chennaiCollect && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-treatment-fee-modal">
                 <div className="max-h-[85vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl [&_.rounded-lg]:!rounded-[4px] [&_.rounded-md]:!rounded-[4px]">
                   <div className="flex items-center justify-between">
@@ -11973,7 +12234,26 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </div>
                     )}
 
-                    {!picking && mode !== "partial" && !(hvTreatment && !continuing) && (
+                    {/* Chennai: the sessions, the amount and the discount were typed on the
+                        Collect Payment popup behind this one, so they are read back here
+                        rather than asked for twice. Closing this popup is the way back to
+                        change them. */}
+                    {chennaiCollect && !picking && !continuing && mode !== "partial" && (
+                      <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-md border border-slate-200 bg-white text-center" data-testid="cons-treatment-fee-chennai-summary">
+                        {[
+                          ["Sessions", treatmentFeeTotalSessions ? `${treatmentSessionsNow} of ${treatmentFeeTotalSessions}` : "—"],
+                          ["Amount", `Rs.${treatmentTenderAmount.toLocaleString("en-IN")}`],
+                          ["Discount", `Rs.${treatmentDiscount.toLocaleString("en-IN")}`],
+                        ].map(([k, v]) => (
+                          <div key={k} className="px-2 py-1.5">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{k}</p>
+                            <p className="text-sm font-semibold text-slate-800">{v}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!picking && mode !== "partial" && !(hvTreatment && !continuing) && !(chennaiCollect && !continuing) && (
                       <div>
                         {SETTLED_NOW_MODES.includes(mode) ? (
                           continuing ? (
@@ -12025,7 +12305,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         settled once, on the first tender. A second tender is more money
                         against the same sessions, not a second purchase, so the box does
                         not come back to be re-answered. */}
-                    {!picking && !continuing && mode !== "partial" && treatmentFeeTotalSessions > 0 && (
+                    {!picking && !continuing && mode !== "partial" && treatmentFeeTotalSessions > 0 && !chennaiCollect && (
                       <div>
                         <label className="mb-1 block text-[11px] font-medium text-slate-500">Sessions Covered Now *</label>
                         <Input
@@ -15205,6 +15485,23 @@ function ChequeFields({ draft, onChange, testPrefix }) {
         />
       </div>
     </>
+  );
+}
+
+// The Payment Mode as a dropdown rather than a row of buttons, for the Chennai Collect
+// Payment popup. The same modes PaymentModeSelect offers, less any hidden in Developer Access.
+function PaymentModeDropdown({ value, options, onChange, disabled, testId }) {
+  const shown = useShownPaymentModes(options);
+  return (
+    <ThemedSelect
+      value={value}
+      onChange={(v) => v && onChange(v)}
+      options={shown}
+      placeholder="Select Payment Mode"
+      disabled={disabled}
+      className="h-9 w-full rounded-[4px] text-sm"
+      testid={testId}
+    />
   );
 }
 
