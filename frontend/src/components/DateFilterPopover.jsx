@@ -191,7 +191,10 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
     // where picking a date is the whole reason the toolbar's calendar button is there and
     // the compact dialog read as a footnote in the middle of the screen. Off by default,
     // so every other board keeps the size it has.
-    const railBtn = (on) => `min-w-0 flex-1 truncate rounded-md px-1 py-2 text-center text-[11px] transition-colors sm:w-full sm:flex-none sm:px-3 sm:text-left ${
+    //
+    // 4px corners throughout — the panel, the rail, the fields, Apply and the calendar box —
+    // to match Finance's Filter by Date.
+    const railBtn = (on) => `min-w-0 flex-1 truncate rounded-[4px] px-1 py-2 text-center text-[11px] transition-colors sm:w-full sm:flex-none sm:px-3 sm:text-left ${
       large ? "sm:py-2.5 sm:text-base" : "sm:text-sm"
     } ${
       on ? "bg-amber-100 font-semibold text-amber-800" : "text-slate-700 hover:bg-[#F3EFE6]"
@@ -235,7 +238,7 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
             onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
             data-testid={`${testid}-modal`}
           >
-            <div className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl ${
+            <div className={`max-h-[90vh] w-full overflow-y-auto rounded-[4px] border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl ${
               large ? "max-w-lg sm:max-w-3xl" : "max-w-md sm:max-w-lg"
             }`} data-testid={`${testid}-panel`}>
               <div className={`flex items-center justify-between border-b border-[#EFEAE0] ${large ? "px-5 py-4" : "px-4 py-3"}`}>
@@ -293,7 +296,7 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
                           inputMode="numeric"
                           maxLength={10}
                           placeholder="DD-MM-YYYY"
-                          className={`h-9 w-full rounded-md border bg-white px-3 text-sm outline-none focus:ring-1 ${
+                          className={`h-9 w-full rounded-[4px] border bg-white px-3 text-sm outline-none focus:ring-1 ${
                             rangeFromText && !rangeFromIso
                               ? "border-red-300 focus:border-red-400 focus:ring-red-400"
                               : "border-[#EFEAE0] focus:border-amber-400 focus:ring-amber-400"
@@ -310,7 +313,7 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
                           inputMode="numeric"
                           maxLength={10}
                           placeholder="DD-MM-YYYY"
-                          className={`h-9 w-full rounded-md border bg-white px-3 text-sm outline-none focus:ring-1 ${
+                          className={`h-9 w-full rounded-[4px] border bg-white px-3 text-sm outline-none focus:ring-1 ${
                             (rangeToText && !rangeToIso) || !manualOrderOk
                               ? "border-red-300 focus:border-red-400 focus:ring-red-400"
                               : "border-[#EFEAE0] focus:border-amber-400 focus:ring-amber-400"
@@ -326,7 +329,7 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
                             ? <span className="font-semibold text-red-500">Use DD-MM-YYYY, e.g. 04-08-2026.</span>
                             : "Type both dates as DD-MM-YYYY, e.g. 04-08-2026."}
                       </p>
-                      <Button className="w-full" onClick={applyManualRange} disabled={!manualReady} data-testid={`${testid}-range-apply`}>
+                      <Button className="w-full rounded-[4px]" onClick={applyManualRange} disabled={!manualReady} data-testid={`${testid}-range-apply`}>
                         Apply
                       </Button>
                     </div>
@@ -335,6 +338,7 @@ export const DateFilterPopover = ({ value, onChange, testid = "date-filter", cen
                       value={value?.key === "exact" ? toInputValue(value.from) : ""}
                       accent="amber"
                       size={large ? "lg" : "md"}
+                      className="rounded-[4px]"
                       onChange={(d) => applyExact(new Date(`${d}T00:00:00`))}
                       testid={`${testid}-calendar`}
                     />
