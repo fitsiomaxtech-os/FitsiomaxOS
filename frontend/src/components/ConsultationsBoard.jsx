@@ -10446,15 +10446,20 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // sold both would otherwise read one total they cannot match against
                     // either receipt, on the card whose whole job is saying what they owe.
                     //
-                    // Shown only where the chart was actually ticked, so it stays off every
-                    // patient who was referred for the consultation alone.
+                    // Listed beside the Diet Fee for every patient on the diet programme, not
+                    // only once the Nutritionist has recommended a chart: the server takes
+                    // either diet fee in whichever order the patient buys them (see
+                    // collect_diet_chart_fee), so the desk sees both products it can sell.
+                    // Until a chart is recommended or paid for it is on offer rather than
+                    // owed, so it never becomes the next fee or lights the Diet tab's dot.
                     key: "diet_chart",
                     label: "Diet Chart Fee",
                     sub: selectedLead.diet_chart_package_name,
                     amount: selectedLead.diet_chart_fee_paid != null ? selectedLead.diet_chart_fee_paid : dietChartFeeDue,
                     paid: selectedLead.diet_chart_fee_paid != null,
                     note: selectedLead.diet_chart_fee_paid != null ? selectedLead.diet_chart_fee_payment_mode : null,
-                    show: !!selectedLead.diet_chart,
+                    show: !!selectedLead.diet_chart || !!selectedLead.diet_recommended || selectedLead.diet_chart_fee_paid != null,
+                    optional: !selectedLead.diet_chart,
                     // Straight into the collect popup, as the Diet Fee card above does — the
                     // chart no longer waits on anything that the Diet tab would have to do.
                     ...balanceStep("diet_chart", () => openDietFeeDraft("chart"), "Collect"),
@@ -10528,8 +10533,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                 // The one fee that can be taken right now. Everything after the Consultation
                 // Fee waits on it — the server's rule, not a habit of this screen — so only
-                // that card gets the filled button and the rest stay quiet outlines.
-                const nextFeeStep = feeSteps.find((f) => !f.paid && (f.key === "consultation" || consultationPaid));
+                // that card gets the filled button and the rest stay quiet outlines. A fee on
+                // offer rather than owed (an unrecommended Diet Chart) is never the next one.
+                const nextFeeStep = feeSteps.find((f) => !f.paid && !f.optional && (f.key === "consultation" || consultationPaid));
 
                 // And the Consultation Fee itself waits on the prescription — the server's
                 // rule too, since collect-package-payment refuses without it.
