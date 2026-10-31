@@ -179,6 +179,11 @@ CORE_INDEXES = [
     ("past_clients", [("id", 1)], "id"),
     ("past_treatments", [("client_id", 1)], "client_id"),
     ("past_payments", [("client_id", 1)], "client_id"),
+    # Every list, total and Add Sheet's same-people check is scoped to the sheets it reads,
+    # and a branch holds a file a month and more: without these each read scans every sheet.
+    ("past_clients", [("batch_id", 1)], "batch_id"),
+    ("past_treatments", [("batch_id", 1)], "batch_id"),
+    ("past_payments", [("batch_id", 1)], "batch_id"),
     # Old clients -- see old_clients.py. The search reads one branch's; a client's balance
     # is summed from every instalment of theirs; and the finance reads take a branch's
     # instalments over a date range.

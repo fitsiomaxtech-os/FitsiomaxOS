@@ -848,7 +848,7 @@ async def _attach_twins(branch_id: str) -> int:
     them, so both sheets' payments are read against one person. Asked after every move, since
     either sheet can be the one moved second. Returns how many were attached."""
     live = [b["id"] for b in await v3_col("past_imports").find(
-        {"branch_id": branch_id, "removed_at": None, "live_move.status": "live"}, {"_id": 0, "id": 1}).to_list(200)]
+        {"branch_id": branch_id, "removed_at": None, "live_move.status": "live"}, {"_id": 0, "id": 1}).to_list(None)]
     if not live:
         return 0
     by_phone = await _moved_on_branch(branch_id)

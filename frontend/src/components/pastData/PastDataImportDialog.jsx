@@ -68,10 +68,11 @@ const FindingGroup = ({ g }) => (
  *
  * It reads any kind of sheet: the register, a branch's monthly revenue sheet, the OS Data
  * workbook (its five tabs read in one go), or any other list of people, a custom sheet. Each
- * becomes a sheet of its own on the list. A file that is already there is caught at Fetch: the
- * very same file is only added again in place of itself (to fetch other columns), and one
- * holding mostly the same people as a sheet already there (the register saved again) is
- * offered as that sheet's replacement.
+ * becomes a sheet of its own on the list, as many to a branch as it has files. A file that is
+ * already there is caught at Fetch: the very same file is only added again in place of itself
+ * (to fetch other columns), and one holding mostly the same people as a sheet already there
+ * (the register saved again, or the branch's next month) is still added as its own sheet, with
+ * replacing that sheet offered beside it.
  *
  * A new sheet is added on no branch -- Without Branch on the list -- and connected to its branch
  * from the list's branch picker. A replacement takes the replaced sheet's branch.
@@ -123,8 +124,10 @@ export const PastDataImportDialog = ({ open, onClose, onImported }) => {
       setPreview(res);
       // Fetched again with other columns: it goes in place of itself, under its own name.
       setLabel(res.same_file?.label || res.suggested_label || "");
-      // Mostly the same people as a sheet already here: replacing it is the likely intent.
-      setReplaceId(res.same_file?.id || (res.overlaps || []).find((o) => o.same_people)?.id || "");
+      // Anything else is a sheet of its own, however many people it shares with one already
+      // here: a branch's next month holds mostly last month's patients. Replace is picked by
+      // hand -- defaulted on, it took the branch's earlier sheet out with every month added.
+      setReplaceId(res.same_file?.id || "");
     } catch (e) {
       setError(e?.response?.data?.detail || "Could not fetch this file");
     } finally {
@@ -301,23 +304,24 @@ export const PastDataImportDialog = ({ open, onClose, onImported }) => {
                   {repeats.length > 0 && (
                     <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" data-testid="past-import-repeats">
                       <p className="flex items-start gap-2">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <Info className="mt-0.5 h-4 w-4 shrink-0" />
                         <span>
-                          Most of these people are already here: {repeats.map((o) => `${n(o.matched)} of ${n(o.of)} in ${o.label}`).join("; ")}.
-                          It looks like the same sheet saved again.
+                          Most of these people are also in {repeats.map((o) => `${o.label} (${n(o.matched)} of ${n(o.of)})`).join("; ")}.
+                          A branch can hold as many sheets as it has files, so this is added as a sheet of its own. Replace only if it
+                          is that sheet saved again.
                         </span>
                       </p>
                       <div className="space-y-1 pl-6">
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input type="radio" name="past-import-mode" checked={!replaceId} onChange={() => setReplaceId("")} data-testid="past-import-add-alongside" />
+                          Add as a sheet of its own
+                        </label>
                         {repeats.map((o) => (
                           <label key={o.id} className="flex cursor-pointer items-center gap-2">
                             <input type="radio" name="past-import-mode" checked={replaceId === o.id} onChange={() => setReplaceId(o.id)} data-testid={`past-import-replace-${o.id}`} />
                             Replace <b>{o.label}</b> with this file
                           </label>
                         ))}
-                        <label className="flex cursor-pointer items-center gap-2">
-                          <input type="radio" name="past-import-mode" checked={!replaceId} onChange={() => setReplaceId("")} data-testid="past-import-add-alongside" />
-                          Add as another sheet (these people will show twice)
-                        </label>
                       </div>
                     </div>
                   )}

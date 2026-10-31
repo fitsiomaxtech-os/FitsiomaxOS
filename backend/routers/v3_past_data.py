@@ -59,7 +59,6 @@ SUPER_ADMIN = "super_admin"
 # short of anything a person would upload by mistake and expect to be read.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 EXAMPLES_PER_FINDING = 8
-MAX_SHEETS = 200
 
 
 def _is_super_admin(user: V3UserOut) -> bool:
@@ -106,11 +105,13 @@ async def _live_batches(branch_id: Optional[str] = None) -> list:
     only matters for the moment between a --replace writing its new batch and removing the
     old one -- when both are on disk, and an unscoped list would show every client twice.
     A batch whose write failed half way never gets a log row, so it is never read either.
+
+    Uncapped: a branch keeps a file a month and more, and a cap dropped the oldest of them.
     """
     query = {"removed_at": None}
     if branch_id:
         query["branch_id"] = branch_id
-    return await v3_col("past_imports").find(query, {"_id": 0}).sort("imported_at", -1).to_list(MAX_SHEETS)
+    return await v3_col("past_imports").find(query, {"_id": 0}).sort("imported_at", -1).to_list(None)
 
 
 PATIENT_ID = re.compile(r"(?i)^pat\s*-?\s*(\d+)$")
@@ -187,7 +188,7 @@ async def past_data_summary(
     branch_ids = list({b.get("branch_id") for b in batches if b.get("branch_id")})
     names = {
         b["id"]: b.get("branch_name", "")
-        for b in await v3_col("branches").find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(50)
+        for b in await v3_col("branches").find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(None)
     }
     return {
         "imported": True,
@@ -298,10 +299,11 @@ async def past_data_client(client_id: str, user: V3UserOut = Depends(v3_require_
 # one more to lose.
 #
 # Each upload is a sheet of its own on the branch -- the register, a branch's revenue sheet,
-# another branch's -- listed on the tab with its own Disconnect. Uploading one that is already
-# there is caught at /preview: the very same file is refused, and one holding mostly the same
-# people (the register saved again under another name) is offered as a replacement for the
-# sheet it repeats rather than a second copy of everyone.
+# another branch's, each month's -- listed on the tab with its own Disconnect, as many to a
+# branch as it has files. Uploading one that is already there is caught at /preview: the very
+# same file is refused, and one holding mostly the same people (the register saved again, or
+# the branch's next month) is offered as a replacement for that sheet -- an offer only: it is
+# added as a sheet of its own unless the person picks the replace.
 
 
 def _sheet(batch: dict) -> dict:
@@ -376,17 +378,27 @@ def _require_adder(user: V3UserOut) -> None:
 async def _overlaps(data: past_data.PastData, existing: list) -> list:
     """The sheets already here that hold some of the same people, by phone number.
 
-    `same_people` where it is most of them: the same book saved again, or an older copy of
-    it -- which the screen offers to replace rather than add beside, since added it shows
-    everyone twice. A few shared numbers is patients who came back, and is only said.
+    `same_people` where it is most of them. That is the same book saved again -- or the same
+    branch's next month, whose patients are mostly last month's still being treated. Only the
+    person adding it knows which, so the screen offers to replace the sheet and adds it as a
+    sheet of its own unless they pick that. A few shared numbers is patients who came back,
+    and is only said.
+
+    One read for every sheet rather than one each: a branch holds a file a month and more.
     """
     new = {c["phone_normalized"] for c in data.clients if c.get("phone_normalized")}
-    found = []
-    for batch in existing if new else []:
-        old = {p for p in await v3_col("past_clients").distinct("phone_normalized", {"batch_id": batch["id"]}) if p}
-        matched = len(new & old)
-        if matched:
-            found.append({**_sheet(batch), "matched": matched, "of": len(new), "same_people": matched * 2 >= len(new)})
+    if not new or not existing:
+        return []
+    old: dict = {}
+    for row in await v3_col("past_clients").find(
+        {"batch_id": {"$in": [b["id"] for b in existing]}, "phone_normalized": {"$in": list(new)}},
+        {"_id": 0, "batch_id": 1, "phone_normalized": 1},
+    ).to_list(None):
+        old.setdefault(row["batch_id"], set()).add(row["phone_normalized"])
+    found = [
+        {**_sheet(batch), "matched": len(old[batch["id"]]), "of": len(new), "same_people": len(old[batch["id"]]) * 2 >= len(new)}
+        for batch in existing if batch["id"] in old
+    ]
     return sorted(found, key=lambda o: -o["matched"])
 
 
@@ -633,7 +645,7 @@ async def past_data_sheets(user: V3UserOut = Depends(v3_require_roles(*sorted(OR
     """Every sheet ever added, newest first: connected ones and the disconnected (archived)
     ones, which keep their log row after their data is deleted. Plus the branches a sheet can
     be connected to."""
-    rows = await v3_col("past_imports").find({}, {"_id": 0}).sort("imported_at", -1).to_list(500)
+    rows = await v3_col("past_imports").find({}, {"_id": 0}).sort("imported_at", -1).to_list(None)
     branches = await v3_col("branches").find(
         live_branch_query(), {"_id": 0, "id": 1, "branch_name": 1}).sort("branch_name", 1).to_list(500)
     names = {b["id"]: b.get("branch_name", "") for b in branches}

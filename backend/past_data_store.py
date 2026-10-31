@@ -49,11 +49,14 @@ async def find_branch(col, code: str):
 
 
 async def live_imports(col, branch_id: str = None) -> list:
-    """The imports not taken back out, oldest first -- one branch's, or every branch's."""
+    """The imports not taken back out, oldest first -- one branch's, or every branch's.
+
+    All of them: a branch holds a file a month and more. Capped at 50 once, the newest sheets
+    past the cap went unread -- never found as the same file again, never replaceable."""
     query = {"removed_at": None}
     if branch_id:
         query["branch_id"] = branch_id
-    return await col("past_imports").find(query, {"_id": 0}).sort("imported_at", 1).to_list(50)
+    return await col("past_imports").find(query, {"_id": 0}).sort("imported_at", 1).to_list(None)
 
 
 async def set_branch(col, batch_id: str, branch) -> None:
