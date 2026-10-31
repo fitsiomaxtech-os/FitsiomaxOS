@@ -17,6 +17,9 @@ import { ChevronRight } from "lucide-react";
  * disappeared, and a muted Rs.0 came out under 3:1 against the white. Still a step lighter
  * than a figure that has money in it, so the difference between the two survives.
  *
+ * The figure is 20px from sm (18px below). At 24px a lakh figure -- Rs.1,69,701 -- broke
+ * over two lines in Accountant Manage's eight-across revenue row.
+ *
  * Without onClick it is a figure to read rather than a button: no arrow, no hover.
  *
  * `corner` is a control that belongs to this card alone (My Consultation's All card picks
@@ -53,7 +56,7 @@ export const LedgerCard = ({ label, value, sub, color = "#0284c7", active = fals
         </p>
         {onClick && <ChevronRight className={`h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 ${active ? "text-white" : "text-slate-400"}`} aria-hidden="true" />}
       </div>
-      <p className={`mt-1 break-words text-xl font-bold tabular-nums sm:text-2xl ${active ? "text-white" : muted ? "text-slate-500 sm:text-slate-400" : "text-slate-900"}`}>{value}</p>
+      <p className={`mt-1 break-words text-lg font-bold tabular-nums sm:text-xl ${active ? "text-white" : muted ? "text-slate-500 sm:text-slate-400" : "text-slate-900"}`}>{value}</p>
       {sub ? (
         <p className={`mt-0.5 text-[11px] leading-tight ${active ? "text-white sm:text-white/90" : "text-slate-500 sm:text-slate-400"}`}>{sub}</p>
       ) : null}
