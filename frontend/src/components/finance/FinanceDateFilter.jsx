@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, X } from "lucide-react";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MilkCalendar } from "@/components/ui/milk-calendar";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { maskDayMonthYear, manualToIso, isoToManual } from "@/components/DateFilterPopover";
-import { DATE_PRESET_LABELS, DATE_PRESET_SHORT } from "@/lib/dateRange";
+import { DATE_PRESET_LABELS, DATE_PRESET_SHORT, fromIso, toIso } from "@/lib/dateRange";
 
 // The phone dropdown's option that opens the dialog rather than naming a window. Never the
 // select's value, so picking it fires every time -- including while a custom range is
@@ -13,6 +14,104 @@ const PICK_RANGE = "__pick";
 
 // DD-MM: a range spelt out in a select half a phone wide has no room for the years.
 const shortDay = (iso) => isoToManual(iso).slice(0, 5);
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// The first and last day of a month, both inclusive -- day 0 of the next month is the last
+// of this one, so February and the year's end come out right without saying how long either is.
+const monthRange = (y, m) => [toIso(new Date(y, m, 1)), toIso(new Date(y, m + 1, 0))];
+
+/** The month a range covers end to end, as { y, m }, or null when it is anything else. A
+ *  month picked in the dialog is held as an ordinary custom range, so this is how the
+ *  dialog and the chip recognise one again. */
+const wholeMonth = (from, to) => {
+  if (!from || !to) return null;
+  const d = fromIso(from);
+  const [first, last] = monthRange(d.getFullYear(), d.getMonth());
+  return first === from && last === to ? { y: d.getFullYear(), m: d.getMonth() } : null;
+};
+
+/** A custom range in words: "September 2026" for a whole month, one date for one day. */
+const rangeLabel = (from, to) => {
+  const month = wholeMonth(from, to);
+  if (month) return `${MONTH_NAMES[month.m]} ${month.y}`;
+  return from === to ? isoToManual(from) : `${isoToManual(from)} to ${isoToManual(to)}`;
+};
+
+// The dialog's rail, in the order Filter by Date's own dialog lists them: the day, the day
+// before, then the months, then Custom. A board's own list still decides which appear.
+const RAIL_ORDER = ["today", "yesterday", "this_week", "last_month", "this_month", "custom"];
+// "Custom" in the rail, where Month sits under it and neither needs the longer name.
+const RAIL_LABELS = { ...DATE_PRESET_LABELS, custom: "Custom" };
+
+/**
+ * Month, in the dialog's rail: a dropdown of the twelve months, a year at a time, and
+ * picking one filters to it first to last. Months still to come are greyed out, since
+ * nothing has been booked in them yet.
+ *
+ * Portalled, so the list hangs below the rail over the dialog's edge rather than being cut
+ * off by the dialog's own scroll. Its open state is the dialog's, so Esc closes the list
+ * first and the dialog only on a second press.
+ */
+const MonthMenu = ({ picked, lit, open, onOpenChange, onPick, btnClass, testid }) => {
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const [year, setYear] = useState(picked ? picked.y : thisYear);
+
+  return (
+    <PopoverPrimitive.Root
+      open={open}
+      onOpenChange={(next) => { if (next) setYear(picked ? picked.y : thisYear); onOpenChange(next); }}
+    >
+      <PopoverPrimitive.Trigger className={btnClass(lit || open)} data-testid={`${testid}-preset-month`}>
+        <span className="flex items-center justify-center gap-1 sm:justify-between">
+          Month
+          <ChevronDown className={`hidden h-3.5 w-3.5 shrink-0 opacity-60 transition sm:block ${open ? "rotate-180" : ""}`} />
+        </span>
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          className="z-[200] max-h-[var(--radix-popover-content-available-height)] w-48 overflow-y-auto rounded-[4px] border border-[#EFEAE0] bg-[#FDFCF8] p-1.5 shadow-2xl outline-none"
+          data-testid={`${testid}-month-list`}
+        >
+          <div className="mb-1 flex items-center justify-between border-b border-[#EFEAE0] pb-1.5">
+            <button type="button" onClick={() => setYear((y) => y - 1)} className="rounded-[4px] p-1 text-slate-500 hover:bg-[#F3EFE6]" aria-label="Previous year" data-testid={`${testid}-month-prev`}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <p className="text-sm font-bold text-slate-800" data-testid={`${testid}-month-year`}>{year}</p>
+            <button type="button" onClick={() => setYear((y) => y + 1)} disabled={year >= thisYear} className="rounded-[4px] p-1 text-slate-500 hover:bg-[#F3EFE6] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Next year" data-testid={`${testid}-month-next`}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          {MONTH_NAMES.map((name, m) => {
+            const on = picked && picked.y === year && picked.m === m;
+            const ahead = year > thisYear || (year === thisYear && m > now.getMonth());
+            return (
+              <button
+                key={name}
+                type="button"
+                disabled={ahead}
+                onClick={() => onPick(year, m)}
+                role="menuitemradio"
+                aria-checked={!!on}
+                className={`flex w-full items-center justify-between rounded-[4px] px-2.5 py-1.5 text-left text-sm transition ${
+                  on ? "bg-sky-100 font-semibold text-sky-700" : ahead ? "cursor-not-allowed text-slate-300" : "text-slate-700 hover:bg-[#F3EFE6]"
+                }`}
+                data-testid={`${testid}-month-${m + 1}`}
+              >
+                {name}
+                {on && <Check className="h-4 w-4 shrink-0" />}
+              </button>
+            );
+          })}
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
+  );
+};
 
 /**
  * Every window the finance book is read through, in the order they are reached for: the
@@ -32,30 +131,37 @@ const shortDay = (iso) => isoToManual(iso).slice(0, 5);
  */
 export const FINANCE_DATE_PRESETS = ["all", "today", "yesterday", "this_week", "this_month", "last_month", "custom"];
 /**
- * The whole date filter, as a dialog: the windows down the left, and the calendar and two
- * typed dates of an arbitrary range on the right.
+ * The whole date filter, as a dialog laid out as Filter by Date's own: the windows down the
+ * left, and a calendar on the right.
  *
  * It is the row's own contents rebuilt at a size worth reading, not a second filter. The
  * toolbar is where a window is changed in one tap while looking at the figures; this is
  * where you come when you are reading a calendar to decide, or when the row has shortened
  * to "Yest" and "This Mo" on a phone. Both set the same one value, so a window picked here
- * lights the same button up there.
+ * lights the same button up there. All is left off the rail: it is the row's first button
+ * and the chip's X, and a dialog opened to narrow the book has no use for widening it.
  *
  * Centred over the board rather than hanging off the button that opened it: a panel
  * anchored to a chip in a toolbar opens across the very figures it is about to filter, and
  * gets clipped by whatever scrolls underneath it.
  *
  * A preset in the rail applies on the tap and closes, because there is nothing further to
- * say about it. Custom Range is the one that needs the right-hand side, so it closes
- * nothing -- it is the heading for the panel already open beside it, lit while that range
- * is the one in force.
+ * say about it, and so does a month from Month's dropdown. So does a day tapped on the
+ * calendar while it stands alone, which filters to that one day.
  *
- * On the right, typed and picked at once, because a range is two dates and people usually
- * arrive knowing which two. Keying 04082026 is quicker than navigating a grid twice; the
- * grid is there for the times you are not. Whichever is used the other follows, because
- * they are one value shown two ways rather than two controls to reconcile.
+ * Custom is the one that needs more, so it closes nothing: it turns the right-hand side
+ * into two typed dates over the calendar, with Apply. Typed and picked at once, because a
+ * range is two dates and people usually arrive knowing which two. Keying 04082026 is
+ * quicker than navigating a grid twice; the grid is there for the times you are not.
+ * Whichever is used the other follows, because they are one value shown two ways rather
+ * than two controls to reconcile.
+ *
+ * `startOn` is the side it opens on: "custom" when it was opened to set a range (Custom
+ * Range in the row, the chip, the phone dropdown), "day" for the plain calendar.
  */
-const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onClose, phoneRail = true, testid }) => {
+const FilterByDateDialog = ({ preset, presets, from, to, startOn = "day", onPreset, onApply, onClose, phoneRail = true, testid }) => {
+  const [view, setView] = useState(startOn);
+  const [monthOpen, setMonthOpen] = useState(false);
   const [fromText, setFromText] = useState(() => isoToManual(from));
   const [toText, setToText] = useState(() => isoToManual(to));
   // Which end the next tap on the grid fills. Starts on From and moves itself to To, so
@@ -67,12 +173,20 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
   const orderOk = !fromIsoVal || !toIsoVal || fromIsoVal <= toIsoVal;
   const ready = !!fromIsoVal && !!toIsoVal && orderOk;
 
-  // Esc closes it, the way every other dismissable thing on these boards does.
+  // What is in force, read back: a whole month lights Month and ticks it in the list, one
+  // day is the day selected on the calendar.
+  const inForce = preset === "custom" && !!from && !!to;
+  const pickedMonth = inForce ? wholeMonth(from, to) : null;
+  const pickedDay = inForce && from === to ? from : "";
+  const rail = RAIL_ORDER.filter((key) => presets.includes(key));
+
+  // Esc closes it, the way every other dismissable thing on these boards does -- the month
+  // list first, while it is open, which handles its own Esc.
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => { if (e.key === "Escape" && !monthOpen) onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, monthOpen]);
 
   const pickDay = (iso) => {
     if (editing === "from") {
@@ -91,7 +205,7 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
   const field = (label, text, set, bad, tid) => (
     <div
       onClick={() => setEditing(tid)}
-      className={`min-w-0 flex-1 cursor-text rounded-lg border px-2.5 py-1.5 transition ${
+      className={`min-w-0 flex-1 cursor-text rounded-[4px] border px-2.5 py-1.5 transition ${
         editing === tid ? "border-sky-400 bg-white ring-1 ring-sky-200" : "border-[#EFEAE0] bg-white/70"
       }`}
     >
@@ -114,7 +228,7 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
   // three rows to show six windows and pushed the calendar — the thing most people opened
   // this for — below the fold; the abbreviated labels are what buy the single row, and the
   // full wording comes back from sm up where the rail has the width for it.
-  const railBtn = (on) => `min-w-0 flex-1 truncate rounded-md px-1 py-2 text-center text-[11px] font-medium transition-colors sm:w-full sm:flex-none sm:px-3 sm:py-2 sm:text-left sm:text-sm ${
+  const railBtn = (on) => `min-w-0 flex-1 truncate rounded-[4px] px-1 py-2 text-center text-[11px] font-medium transition-colors sm:w-full sm:flex-none sm:px-3 sm:py-2 sm:text-left sm:text-sm ${
     on ? "bg-sky-100 font-semibold text-sky-700" : "text-slate-700 hover:bg-[#F3EFE6]"
   }`;
 
@@ -124,7 +238,7 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       data-testid={`${testid}-modal`}
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl sm:max-w-2xl" data-testid={`${testid}-panel`}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[4px] border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl sm:max-w-lg" data-testid={`${testid}-panel`}>
         <div className="flex items-center justify-between border-b border-[#EFEAE0] px-4 py-3">
           <p className="text-sm font-bold text-slate-800">Filter by Date</p>
           <button
@@ -140,75 +254,96 @@ const FilterByDateDialog = ({ preset, presets, from, to, onPreset, onApply, onCl
         </div>
 
         <div className="flex flex-col sm:flex-row">
-          {/* The windows this board offers, in the order the toolbar offers them. flex and
-              not a one-column grid from sm up: grid rows stretch to fill the dialog, which
-              would spread six buttons down the whole height of the calendar beside them.
+          {/* The windows this board offers, then Custom and Month. flex and not a
+              one-column grid from sm up: grid rows stretch to fill the dialog, which would
+              spread six buttons down the whole height of the calendar beside them.
 
               Not on a phone opened from the dropdown (`phoneRail` false): the windows are
               the dropdown's own options, picked a tap before this opened, and six of them
-              across a phone-wide dialog clip to "This …" and "Last …". */}
+              across a phone-wide dialog clip to "This …" and "Last …". That way in opens
+              on Custom, the one side of this a phone without the rail can use. */}
           <div
-            className={`${phoneRail ? "flex" : "hidden sm:flex"} gap-1 border-b border-[#EFEAE0] p-2 sm:w-44 sm:shrink-0 sm:flex-col sm:gap-0.5 sm:border-b-0 sm:border-r sm:p-3`}
+            className={`${phoneRail ? "flex" : "hidden sm:flex"} gap-1 border-b border-[#EFEAE0] p-2 sm:w-40 sm:shrink-0 sm:flex-col sm:gap-0.5 sm:border-b-0 sm:border-r`}
             data-testid={`${testid}-presets`}
           >
-            {presets.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => (key === "custom" ? setEditing("from") : onPreset(key))}
-                aria-pressed={preset === key}
-                className={railBtn(preset === key)}
-                data-testid={`${testid}-preset-${key}`}
-              >
-                <span className="sm:hidden">{DATE_PRESET_SHORT[key]}</span>
-                <span className="hidden sm:inline">{DATE_PRESET_LABELS[key]}</span>
-              </button>
-            ))}
+            {rail.map((key) => {
+              const on = key === "custom" ? view === "custom" : view !== "custom" && preset === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => (key === "custom" ? (setView("custom"), setEditing("from")) : onPreset(key))}
+                  aria-pressed={on}
+                  className={railBtn(on)}
+                  data-testid={`${testid}-preset-${key}`}
+                >
+                  <span className="sm:hidden">{DATE_PRESET_SHORT[key]}</span>
+                  <span className="hidden sm:inline">{RAIL_LABELS[key]}</span>
+                </button>
+              );
+            })}
+            {/* Held as a custom range, so it is offered wherever Custom is. */}
+            {presets.includes("custom") && (
+              <MonthMenu
+                picked={pickedMonth}
+                lit={view !== "custom" && !!pickedMonth}
+                open={monthOpen}
+                onOpenChange={setMonthOpen}
+                onPick={(y, m) => { setMonthOpen(false); onApply(...monthRange(y, m)); }}
+                btnClass={railBtn}
+                testid={testid}
+              />
+            )}
           </div>
 
-          <div className="min-w-0 flex-1 space-y-3 p-3 sm:p-4">
-            <div className="flex items-stretch gap-2">
-              {field("From", fromText, setFromText, !!fromText && !fromIsoVal, "from")}
-              {field("To", toText, setToText, (!!toText && !toIsoVal) || !orderOk, "to")}
+          {view === "custom" ? (
+            <div className="min-w-0 flex-1 space-y-3 p-3" data-testid={`${testid}-range-panel`}>
+              <div className="flex items-stretch gap-2">
+                {field("From", fromText, setFromText, !!fromText && !fromIsoVal, "from")}
+                {field("To", toText, setToText, (!!toText && !toIsoVal) || !orderOk, "to")}
+              </div>
+
+              {/* The grid keeps its own month as the end being filled changes, so picking a
+                  From in March leaves March open to pick the To from. */}
+              <MilkCalendar
+                value={editing === "from" ? fromIsoVal : toIsoVal}
+                min={editing === "to" ? fromIsoVal || undefined : undefined}
+                accent="sky"
+                onChange={pickDay}
+                testid={`${testid}-calendar`}
+              />
+
+              {/* Says which of the two is wrong, rather than only greying Apply out. */}
+              <p className="text-[11px] text-slate-400" data-testid={`${testid}-hint`}>
+                {!orderOk
+                  ? <span className="font-semibold text-red-500">From must not be after To.</span>
+                  : (fromText && !fromIsoVal) || (toText && !toIsoVal)
+                    ? <span className="font-semibold text-red-500">Use DD-MM-YYYY, e.g. 04-08-2026.</span>
+                    : `Type both dates, or tap the grid to set ${editing === "from" ? "From" : "To"}.`}
+              </p>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onClose} className="flex-1 rounded-[4px]" data-testid={`${testid}-cancel`}>Cancel</Button>
+                <Button
+                  onClick={() => onApply(fromIsoVal, toIsoVal)}
+                  disabled={!ready}
+                  className="flex-1 rounded-[4px] bg-sky-600 hover:bg-sky-700"
+                  data-testid={`${testid}-apply`}
+                >
+                  Apply
+                </Button>
+              </div>
             </div>
-
-            {/* The grid keeps its own month as the end being filled changes, so picking a
-                From in March leaves March open to pick the To from.
-
-                `lg` because the pane it now sits in is about 460px wide. The seven columns
-                fill whatever they are given either way, so at the default size the cells
-                came out 60px across and 32px tall -- wide flat boxes with a small number
-                somewhere in them, which is a worse target than the number suggests. */}
-            <MilkCalendar
-              value={editing === "from" ? fromIsoVal : toIsoVal}
-              min={editing === "to" ? fromIsoVal || undefined : undefined}
-              accent="sky"
-              size="lg"
-              onChange={pickDay}
-              testid={`${testid}-calendar`}
-            />
-
-            {/* Says which of the two is wrong, rather than only greying Apply out. */}
-            <p className="text-[11px] text-slate-400" data-testid={`${testid}-hint`}>
-              {!orderOk
-                ? <span className="font-semibold text-red-500">From must not be after To.</span>
-                : (fromText && !fromIsoVal) || (toText && !toIsoVal)
-                  ? <span className="font-semibold text-red-500">Use DD-MM-YYYY, e.g. 04-08-2026.</span>
-                  : `Type both dates, or tap the grid to set ${editing === "from" ? "From" : "To"}.`}
-            </p>
-
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose} className="flex-1" data-testid={`${testid}-cancel`}>Cancel</Button>
-              <Button
-                onClick={() => onApply(fromIsoVal, toIsoVal)}
-                disabled={!ready}
-                className="flex-1 bg-sky-600 hover:bg-sky-700"
-                data-testid={`${testid}-apply`}
-              >
-                Apply
-              </Button>
+          ) : (
+            <div className="min-w-0 flex-1 p-3">
+              <MilkCalendar
+                value={pickedDay}
+                accent="sky"
+                onChange={(day) => onApply(day, day)}
+                testid={`${testid}-calendar`}
+              />
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -304,8 +439,13 @@ export const FinanceDateFilter = ({
   presets = FINANCE_DATE_PRESETS, variant = "toolbar", filterIcon = false,
   mobileSelect = false, testid = "finance-date",
 }) => {
+  // Closed, or the side the dialog opens on: "custom" for its two typed dates, "day" for
+  // the calendar alone.
   const [open, setOpen] = useState(false);
   const hasRange = preset === "custom" && customFrom && customTo;
+  // The calendar button reopens a range of several days on the two dates that make it up,
+  // and anything else -- nothing set, one day, a whole month -- on the calendar.
+  const iconView = hasRange && customFrom !== customTo && !wholeMonth(customFrom, customTo) ? "custom" : "day";
   const V = VARIANTS[variant] || VARIANTS.toolbar;
   const compact = variant === "pill";
   // Where the phone has the dropdown, the row and the chip are sm-and-up only.
@@ -316,10 +456,10 @@ export const FinanceDateFilter = ({
       {mobileSelect && (
         <FilterSelect
           value={preset}
-          onChange={(key) => (key === PICK_RANGE ? setOpen(true) : onChange(key, customFrom, customTo))}
+          onChange={(key) => (key === PICK_RANGE ? setOpen("custom") : onChange(key, customFrom, customTo))}
           active={preset !== "all"}
           label="Date range"
-          title={hasRange ? `${isoToManual(customFrom)} to ${isoToManual(customTo)}` : undefined}
+          title={hasRange ? rangeLabel(customFrom, customTo) : undefined}
           className="flex-1 sm:hidden"
           testid={`${testid}-select`}
         >
@@ -329,7 +469,11 @@ export const FinanceDateFilter = ({
             <option key={key} value={key}>{key === "all" ? "All Dates" : DATE_PRESET_LABELS[key]}</option>
           ))}
           {preset === "custom" && (
-            <option value="custom">{hasRange ? `${shortDay(customFrom)} – ${shortDay(customTo)}` : DATE_PRESET_LABELS.custom}</option>
+            <option value="custom">
+              {!hasRange ? DATE_PRESET_LABELS.custom
+                : customFrom === customTo || wholeMonth(customFrom, customTo) ? rangeLabel(customFrom, customTo)
+                : `${shortDay(customFrom)} – ${shortDay(customTo)}`}
+            </option>
           )}
           {presets.includes("custom") && <option value={PICK_RANGE}>Custom Range…</option>}
         </FilterSelect>
@@ -345,7 +489,7 @@ export const FinanceDateFilter = ({
           <button
             key={key}
             type="button"
-            onClick={() => (key === "custom" ? setOpen(true) : onChange(key, customFrom, customTo))}
+            onClick={() => (key === "custom" ? setOpen("custom") : onChange(key, customFrom, customTo))}
             aria-pressed={preset === key}
             className={`${V.btn} ${preset === key ? V.on : V.off}`}
             data-testid={`${testid}-preset-${key}`}
@@ -368,7 +512,7 @@ export const FinanceDateFilter = ({
         {filterIcon && (
           <button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={() => setOpen(iconView)}
             aria-label="Filter by date"
             title="Filter by date"
             className={`flex shrink-0 items-center justify-center transition ${
@@ -388,7 +532,7 @@ export const FinanceDateFilter = ({
         <span className={`${rowShown} shrink-0 items-center`} data-testid={`${testid}-chip`}>
           <button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={() => setOpen("custom")}
             className={`flex items-center gap-1.5 border border-sky-200 bg-sky-50 font-medium text-sky-700 hover:bg-sky-100 ${
               compact ? "rounded-l-[2px] py-1.5 pl-3 pr-2 text-xs" : "h-10 rounded-l-md pl-3 pr-2 text-xs sm:text-sm"
             }`}
@@ -396,9 +540,10 @@ export const FinanceDateFilter = ({
           >
             {/* Two calendars 4px apart, both onto the same dialog, read as two controls
                 with one job between them. The lit button keeps the glyph; the chip keeps
-                the dates, which is the part of it nothing else says. */}
+                the dates, which is the part of it nothing else says -- a month picked from
+                the dialog's Month as its name, "September 2026". */}
             {!filterIcon && <CalendarDays className="h-3.5 w-3.5" />}
-            {isoToManual(customFrom)} to {isoToManual(customTo)}
+            {rangeLabel(customFrom, customTo)}
           </button>
           <button
             type="button"
@@ -415,15 +560,16 @@ export const FinanceDateFilter = ({
         </span>
       )}
 
-      {/* The dialog carries the same list of windows this row does, so what is offered in
-          one place is what is offered in the other by construction rather than by two
-          boards being kept in step by hand. */}
+      {/* The dialog carries the same list of windows this row does, less All, so what is
+          offered in one place is what is offered in the other by construction rather than
+          by two boards being kept in step by hand. */}
       {open && (
         <FilterByDateDialog
           preset={preset}
           presets={presets}
           from={customFrom}
           to={customTo}
+          startOn={open}
           onPreset={(key) => { onChange(key, customFrom, customTo); setOpen(false); }}
           onClose={() => setOpen(false)}
           onApply={(f, t) => { onChange("custom", f, t); setOpen(false); }}
