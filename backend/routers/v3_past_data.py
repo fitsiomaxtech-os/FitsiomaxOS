@@ -322,6 +322,7 @@ def _sheet(batch: dict) -> dict:
         "imported_by": batch.get("imported_by", ""),
         "counts": batch.get("counts", {}),
         "paid_total": batch.get("paid_total", 0),
+        "outstanding_total": batch.get("outstanding_total", 0),
         # Set while the sheet's clients are on the branch as live leads (Move to live).
         "live_move": batch.get("live_move") or None,
         # How many columns Auto Scan left on; 0 for a sheet read whole.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, ChevronRight, Link2Off, Loader2, RefreshCw, Trash2, Undo2, Unlink, Upload } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Link2Off, Loader2, RefreshCw, Search, Trash2, Undo2, Unlink, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +11,7 @@ import { PastDataImportDialog } from "@/components/pastData/PastDataImportDialog
 import { PastDataMoveDialog } from "@/components/pastData/PastDataMoveDialog";
 import { deletePastDataArchived, getPastDataSheets, setPastDataSheetBranch } from "@/lib/api";
 import { dateStampFull } from "@/lib/time";
-import { TYPE_LABELS, layoutLabel, rs, sheetTypes, typedLayout } from "@/lib/pastData";
+import { rs } from "@/lib/pastData";
 
 const n = (v) => (v || 0).toLocaleString("en-IN");
 const clientsIn = (list) => list.reduce((sum, s) => sum + (s.counts?.past_clients || 0), 0);
@@ -59,20 +59,8 @@ const CARDS = [
   { key: "no_branch", label: "Without Branch Sheet", color: "#9333ea", ledger: "purple", pick: (s) => !s.archived && !s.branch_id },
 ];
 
-// The toolbar's pills, as the Zumba table's payment-mode pills. One per kind of data (see
-// sheetTypes): an OS Data sheet holding leads, sessions and payments shows under all three,
-// and Revenue takes in the branches' monthly revenue sheets as well.
-const TYPE_FILTERS = [["", "All"], ["register", "Register"], ["lead", "Lead"], ["sessions", "Sessions"], ["revenue", "Revenue"]];
-
 // Chips as the Zumba table draws its Status (5px corners, bold 10px).
 const chip = "inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold";
-// Off the Status chips' green, amber and red, so a Type chip is never read as a status.
-const TYPE_CHIP = {
-  register: "border-sky-200 bg-sky-50 text-sky-700",
-  lead: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  sessions: "border-teal-200 bg-teal-50 text-teal-700",
-  revenue: "border-violet-200 bg-violet-50 text-violet-700",
-};
 const STATUS_CHIP = {
   active: "border-emerald-200 bg-emerald-50 text-emerald-700",
   inactive: "border-amber-200 bg-amber-50 text-amber-700",
@@ -81,7 +69,10 @@ const STATUS_CHIP = {
 
 // The OS's slim filter dropdown, at the row buttons' height.
 const triggerClass = "h-7 w-[160px] rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 focus:ring-2 focus:ring-sky-200";
-const rowButton = "h-7 gap-1 px-2 text-[10px] font-semibold";
+// The row's actions, icon only: what each does is on its title.
+const rowButton = "h-7 w-7 p-0";
+// The toolbar's Search, Add Sheet and Refresh: plain outlined icons, as the Zumba phone toolbar's.
+const toolButton = "h-8 w-8 shrink-0 border-slate-200 bg-white p-0 text-slate-500 hover:bg-slate-50";
 
 /**
  * Settings -> Import/Export: every Past Data sheet on every branch, for Super Admin.
@@ -94,11 +85,10 @@ const rowButton = "h-7 gap-1 px-2 text-[10px] font-semibold";
  * Disconnect is the other thing: it deletes the sheet's data, and the sheet stays listed as
  * Archived until Delete takes it off.
  *
- * The list is the Branch Admin's Zumba table (branch/ZumbaPanel.jsx): a toolbar of pills and
- * search over a slate-headed table, one line per sheet.
+ * The list is the Branch Admin's Zumba table (branch/ZumbaPanel.jsx): a toolbar of Search, Add
+ * Sheet and Refresh icons over a slate-headed table, one line per sheet.
  *
- * `leading` is Settings' sub-tab switcher, on the same row as Add Sheet the way Workflow
- * Roots puts it beside Add Stage.
+ * `leading` is Settings' sub-tab switcher, on the row above the summary cards.
  */
 export const PastDataImportExport = ({ leading = null }) => {
   const [data, setData] = useState(null);
@@ -106,8 +96,10 @@ export const PastDataImportExport = ({ leading = null }) => {
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [card, setCard] = useState("all");
-  const [type, setType] = useState("");
   const [search, setSearch] = useState("");
+  // The search box, opened from its icon; its ✕ closes and clears it, so no search is left
+  // narrowing the list unseen.
+  const [searchOpen, setSearchOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [moving, setMoving] = useState(null);
   const [disconnecting, setDisconnecting] = useState(null);
@@ -162,31 +154,11 @@ export const PastDataImportExport = ({ leading = null }) => {
   const counted = Object.fromEntries(CARDS.map((c) => [c.key, sheets.filter(c.pick)]));
   const q = search.trim().toLowerCase();
   const shown = (card === "all" ? sheets.filter((s) => !s.archived) : counted[card])
-    .filter((s) => !type || sheetTypes(s).includes(type))
     .filter((s) => !q || [s.label, s.source_file, s.branch_name].some((v) => (v || "").toLowerCase().includes(q)));
 
   return (
     <div className="space-y-5" data-testid="import-export-page">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {leading}
-        <div className="flex shrink-0 items-center gap-2">
-          {data?.can_add && (
-            <Button onClick={() => setImportOpen(true)} className="bg-sky-600 hover:bg-sky-700" data-testid="import-export-add">
-              <Upload className="mr-1 h-4 w-4" />Add Sheet
-            </Button>
-          )}
-          <Button
-            onClick={refresh}
-            disabled={refreshing}
-            title="Refresh"
-            aria-label="Refresh"
-            className="h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
-            data-testid="import-export-refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-      </div>
+      {leading && <div className="flex flex-wrap items-center gap-3">{leading}</div>}
 
       {data && (
         <div className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="import-export-summary">
@@ -207,35 +179,66 @@ export const PastDataImportExport = ({ leading = null }) => {
         </div>
       )}
 
-      <Card data-testid="import-export-card">
+      <Card className="overflow-hidden rounded-[4px]" data-testid="import-export-card">
         <CardContent className="p-0">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-1.5" data-testid="import-export-type-filter">
-              {TYPE_FILTERS.map(([key, label]) => (
+          <div className="flex items-center justify-end gap-2 border-b border-slate-100 px-4 py-2.5" data-testid="import-export-toolbar">
+            {searchOpen ? (
+              <div className="relative min-w-0 flex-1 sm:max-w-xs sm:flex-none sm:basis-64">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search sheet or branch"
+                  className="h-8 pl-8 pr-8 text-xs"
+                  autoFocus
+                  data-testid="import-export-search"
+                />
                 <button
-                  key={key || "all"}
                   type="button"
-                  onClick={() => setType(key)}
-                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
-                    type === key
-                      ? "border-sky-600 bg-sky-600 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
-                  }`}
-                  data-testid={`import-export-type-${key || "all"}`}
+                  onClick={() => { setSearch(""); setSearchOpen(false); }}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100"
+                  title="Close search"
+                  aria-label="Close search"
+                  data-testid="import-export-search-close"
                 >
-                  {label}
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              ))}
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search sheet or branch"
-                className="h-8 w-48 text-xs"
-                data-testid="import-export-search"
-              />
-            </div>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => setSearchOpen(true)}
+                className={toolButton}
+                title="Search"
+                aria-label="Search"
+                data-testid="import-export-search-open"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            )}
+            {data?.can_add && (
+              <Button
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+                className={toolButton}
+                title="Add Sheet"
+                aria-label="Add Sheet"
+                data-testid="import-export-add"
+              >
+                <Upload className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={refresh}
+              disabled={refreshing}
+              className={toolButton}
+              title="Refresh"
+              aria-label="Refresh"
+              data-testid="import-export-refresh"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
           </div>
 
           {error ? (
@@ -246,14 +249,14 @@ export const PastDataImportExport = ({ leading = null }) => {
             <p className="px-4 py-12 text-center text-sm text-slate-400" data-testid="import-export-empty">No sheets.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[64rem] text-left text-sm">
+              <table className="w-full min-w-[60rem] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <tr className="whitespace-nowrap">
                     <th className="w-[4%] px-3 py-2.5">S.No</th>
-                    <th className="w-[14%] px-3 py-2.5">Sheet</th>
-                    <th className="w-[12%] px-3 py-2.5">Type</th>
-                    <th className="w-[6%] px-3 py-2.5">Clients</th>
-                    <th className="w-[9%] px-3 py-2.5">Paid</th>
+                    <th className="w-[17%] px-3 py-2.5">Sheet</th>
+                    <th className="w-[7%] px-3 py-2.5">Clients</th>
+                    <th className="w-[10%] px-3 py-2.5">Total Income</th>
+                    <th className="w-[11%] px-3 py-2.5">Total Outstanding</th>
                     <th className="w-[9%] px-3 py-2.5">Date</th>
                     <th className="w-[13%] px-3 py-2.5">Branch</th>
                     <th className="w-[7%] px-3 py-2.5">Status</th>
@@ -276,23 +279,12 @@ export const PastDataImportExport = ({ leading = null }) => {
                         <td className="px-3 py-3">
                           <p className="max-w-[14rem] truncate text-sm font-semibold leading-5 text-slate-800" title={s.source_file || s.label}>{s.label}</p>
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-1" data-testid={`import-export-types-${s.id}`}>
-                            {sheetTypes(s).map((t) => (
-                              <span
-                                key={t}
-                                className={`${chip} ${TYPE_CHIP[t]}`}
-                                title={t === "sessions" && s.layout === "os" ? `${n(s.sessions_count)} sessions · ${n(s.reviews_count)} reviews` : undefined}
-                                data-testid={`import-export-type-${t}-${s.id}`}
-                              >
-                                {typedLayout(s.layout) ? TYPE_LABELS[t] : layoutLabel(s.layout)}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-600">{n(s.counts?.past_clients)}</td>
                         <td className="px-3 py-3">
-                          <p className="text-xs font-semibold leading-5 text-emerald-700">{rs(s.paid_total)}</p>
+                          <p className="text-xs font-semibold leading-5 text-emerald-700" data-testid={`import-export-income-${s.id}`}>{rs(s.paid_total)}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="text-xs font-semibold leading-5 text-amber-700" data-testid={`import-export-outstanding-${s.id}`}>{rs(s.outstanding_total)}</p>
                         </td>
                         <td className="px-3 py-3 text-xs leading-5 text-slate-600">{dateStampFull(s.archived ? s.removed_at : s.imported_at) || "—"}</td>
                         <td className="px-3 py-3">
@@ -336,9 +328,11 @@ export const PastDataImportExport = ({ leading = null }) => {
                                   variant="outline"
                                   className={`${rowButton} border-rose-300 text-rose-700 hover:bg-rose-50`}
                                   onClick={() => setDeleting(s)}
+                                  title="Delete"
+                                  aria-label="Delete"
                                   data-testid={`import-export-delete-${s.id}`}
                                 >
-                                  <Trash2 className="h-3 w-3" />Delete
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               ) : (
                                 <>
@@ -348,9 +342,11 @@ export const PastDataImportExport = ({ leading = null }) => {
                                       variant="outline"
                                       className={`${rowButton} border-slate-300 text-slate-700 hover:bg-slate-50`}
                                       onClick={() => setMoving({ sheet: s, mode: "back" })}
+                                      title="Return Back"
+                                      aria-label="Return Back"
                                       data-testid={`import-export-return-${s.id}`}
                                     >
-                                      <Undo2 className="h-3 w-3" />Return Back
+                                      <Undo2 className="h-3.5 w-3.5" />
                                     </Button>
                                   ) : s.branch_id ? (
                                     <Button
@@ -358,9 +354,11 @@ export const PastDataImportExport = ({ leading = null }) => {
                                       variant="outline"
                                       className={`${rowButton} border-emerald-300 text-emerald-700 hover:bg-emerald-50`}
                                       onClick={() => setMoving({ sheet: s, mode: "move" })}
+                                      title="Move to Live"
+                                      aria-label="Move to Live"
                                       data-testid={`import-export-move-${s.id}`}
                                     >
-                                      <ArrowUpRight className="h-3 w-3" />Move to Live
+                                      <ArrowUpRight className="h-3.5 w-3.5" />
                                     </Button>
                                   ) : null}
                                   {s.branch_id && !liveMove && (
@@ -370,9 +368,11 @@ export const PastDataImportExport = ({ leading = null }) => {
                                       className={`${rowButton} border-amber-300 text-amber-700 hover:bg-amber-50`}
                                       onClick={() => setBranch(s, "")}
                                       disabled={busy}
+                                      title="Disconnect Branch"
+                                      aria-label="Disconnect Branch"
                                       data-testid={`import-export-unbranch-${s.id}`}
                                     >
-                                      <Link2Off className="h-3 w-3" />Disconnect Branch
+                                      <Link2Off className="h-3.5 w-3.5" />
                                     </Button>
                                   )}
                                   <Button
@@ -380,9 +380,11 @@ export const PastDataImportExport = ({ leading = null }) => {
                                     variant="outline"
                                     className={`${rowButton} border-rose-300 text-rose-700 hover:bg-rose-50`}
                                     onClick={() => setDisconnecting(s)}
+                                    title="Disconnect"
+                                    aria-label="Disconnect"
                                     data-testid={`import-export-disconnect-${s.id}`}
                                   >
-                                    <Unlink className="h-3 w-3" />Disconnect
+                                    <Unlink className="h-3.5 w-3.5" />
                                   </Button>
                                 </>
                               )}
