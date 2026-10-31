@@ -22,6 +22,7 @@ import { ClosingBalancePanel } from "@/components/branch/ClosingBalancePanel";
 import { CloseBookHistoryPanel } from "@/components/branch/CloseBookHistoryPanel";
 import { OldClientInstalmentDialog } from "@/components/branch/OldClientInstalmentDialog";
 import { ScheduleCollectDialog, collectWhat } from "@/components/branch/ScheduleCollectDialog";
+import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { loadSession } from "@/lib/session";
 import { displayPhone } from "@/lib/phone";
 
@@ -437,7 +438,9 @@ const PaymentModes = ({ tx }) => {
  */
 // `squareTable`: every sub-tab's table (Summary, Cash / Expenses, Payment Schedule, Discount
 // Applied, Closing Balance, Close Books) with 4px corners — the Branch Admin's own login.
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false }) => {
+// `canDeleteClients`: Branch Admin's board hands down its Branch Leads bin rule -- the role
+// and the Danger Zone switch -- so Payment Schedule's bin is offered exactly where that one is.
+export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false, canDeleteClients = false }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -505,6 +508,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   const [oldClientForm, setOldClientForm] = useState(null);
   // The Payment Schedule row whose due money is being collected, while its popup is open.
   const [collectRow, setCollectRow] = useState(null);
+  // The Payment Schedule row whose client is being deleted, while the typed-DELETE dialog is
+  // open. The same purge as Branch Leads' bin: the patient goes with their payments.
+  const [deleteRow, setDeleteRow] = useState(null);
   // A Consultation Fee being collected on the Consultations board's own popups, mounted
   // over this tab: { row, n, opened }. `n` remounts it per Collect; `opened` stops it
   // reopening the fee each time its list reloads behind the patient.
@@ -1349,6 +1355,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           canCollect={canCollectRow}
           onNewOld={canRecordOld ? () => setOldClientForm({}) : undefined}
           onCollectOld={canRecordOld ? (row) => setOldClientForm({ startWith: { id: row.old_client_id, phone: row.phone, branch_id: row.branch_id }, row }) : undefined}
+          onDelete={canDeleteClients ? setDeleteRow : undefined}
           startDate={startDate}
           endDate={endDate}
           squareTable={squareTable}
@@ -1417,6 +1424,20 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             // date, and the receipt is what comes next.
             setViewingLeadId(null);
             afterCollect(`${fmt(tx.gross)} collected from ${tx.client_name}`, tx);
+          }}
+        />
+      )}
+      {deleteRow && (
+        <BulkDeleteLeadsModal
+          leads={[{ id: deleteRow.lead_id, name: deleteRow.client_name, phone: deleteRow.phone }]}
+          purge
+          onClose={() => setDeleteRow(null)}
+          // Reloaded whatever came back: the row leaves the list, and the money the client
+          // paid leaves Summary's figures and the drawer's with them.
+          onDeleted={() => {
+            setDeleteRow(null);
+            load();
+            loadExpenseTotals();
           }}
         />
       )}
