@@ -2707,6 +2707,27 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             >
               <RefreshCw className={`h-4 w-4 max-sm:h-3.5 max-sm:w-3.5 ${loading ? "animate-spin" : ""}`} />
             </Button>
+            {/* Consultation tab only, between Refresh and Download, asked for on 2026-10-31:
+                a walk-in or a call at the desk while this tab is open had to be added by
+                switching to Branch Leads first. The same Add New Lead form as Branch Leads'
+                own button further along, which stays hidden here so the row has one. The
+                lead lands in Branch Leads, not in this list -- it reaches Consultation once
+                it is booked, as every lead does.
+
+                From sm up. A tenth 32px square would push a 360px phone's row off the edge
+                (see the toolbar's note), so on a phone the form opens from the Settings
+                gear at the end of the row instead. */}
+            {activeView === "branch_consultation" && (
+              <Button
+                onClick={() => setShowCreateLead(true)}
+                title="Add New Lead"
+                aria-label="Add New Lead"
+                className="hidden h-10 w-10 shrink-0 bg-sky-600 p-0 hover:bg-sky-700 sm:inline-flex"
+                data-testid="branch-consultation-add-lead-btn"
+              >
+                <UserPlus className="h-4 w-4" />
+              </Button>
+            )}
             {/* Consultation tab only -- not Branch Leads, not House Visit. One button, two
                 files: a PDF to print or send, and an Excel sheet to sort and total. Either
                 holds the open stage's list as the table shows it. */}
@@ -2791,6 +2812,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
                   </DropdownMenuItem>
+                  {/* The phone's copy of the Consultation tab's Add New Lead -- the row's
+                      own button waits for sm (see its note). */}
+                  {activeView === "branch_consultation" && (
+                    <DropdownMenuItem onSelect={() => setShowCreateLead(true)} className="gap-2.5 py-2 sm:hidden" data-testid="branch-toolbar-settings-menu-add-lead">
+                      <UserPlus aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Add New Lead</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
