@@ -485,7 +485,9 @@ export const FinanceDateFilter = ({
       <div className={`${rowShown} flex-nowrap items-center ${V.gap} ${
         V.scrolls ? "min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "shrink-0"
       }`}>
-        {presets.map((key) => (
+        {/* Custom Range is left off the row where the calendar button closes it: both open
+            the one dialog, which has Custom (and Month) in its own rail. */}
+        {presets.filter((key) => !(filterIcon && key === "custom")).map((key) => (
           <button
             key={key}
             type="button"
@@ -499,9 +501,10 @@ export const FinanceDateFilter = ({
           </button>
         ))}
 
-        {/* The same dialog Custom Range opens, as a square at the end of the row. It is
+        {/* The same dialog Custom Range opens, as a square at the end of the row, and in
+            Custom Range's place: a row with this button does not carry that one. It is
             there so the row ends on something that reads as a control rather than as the
-            last of six windows, and so the date filter is still one recognisable target
+            last of five windows, and so the date filter is still one recognisable target
             on a narrow screen where the words have shortened to "Yest" and "This Mo".
 
             It is the one thing in the row that lights for a state rather than for a
