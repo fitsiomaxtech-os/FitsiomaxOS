@@ -23,8 +23,11 @@ import { displayPhone } from "@/lib/phone";
  *
  * Its own file so Pre Sales can use it too: its New Leads rows carry the same bin icon,
  * on the same Developer Access switch, and ask the same question.
+ *
+ * `remove(ids, confirm, purge)` swaps in another delete that answers in bulkDeleteLeads'
+ * shape -- Payment Schedule's old client rows, which have no lead, ask this same question.
  */
-export function BulkDeleteLeadsModal({ leads, onClose, onDeleted, purge = false }) {
+export function BulkDeleteLeadsModal({ leads, onClose, onDeleted, purge = false, remove = bulkDeleteLeads }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const armed = typed.trim().toUpperCase() === "DELETE";
@@ -33,7 +36,7 @@ export function BulkDeleteLeadsModal({ leads, onClose, onDeleted, purge = false 
     if (!armed) return;
     setBusy(true);
     try {
-      const res = await bulkDeleteLeads(leads.map((l) => l.id), typed.trim().toUpperCase(), purge);
+      const res = await remove(leads.map((l) => l.id), typed.trim().toUpperCase(), purge);
       const blocked = res.blocked || [];
       if (res.deleted > 0) toast.success(`${res.deleted} patient${res.deleted > 1 ? "s" : ""} deleted`);
       // Kept apart from the success line: the ones that survived are the point of the

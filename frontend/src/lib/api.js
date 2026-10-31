@@ -572,6 +572,9 @@ export const collectPastBalance = async (leadId, payload) => (await api.post(`/f
 // name or phone, so money for a course the OS already has goes to that client instead.
 export const searchOldClients = async (params = {}) => (await api.get("/finance/old-clients", { params })).data;
 export const recordOldClientPayment = async (payload) => (await api.post("/finance/old-clients/payments", payload)).data;
+// Payment Schedule's bin on an old client's row: the client and every instalment of theirs,
+// for good. Answers in bulkDeleteLeads' shape, so BulkDeleteLeadsModal can confirm it.
+export const deleteOldClient = async (oldClientId, confirm) => (await api.post(`/finance/old-clients/${oldClientId}/delete`, { confirm })).data;
 
 // Whose consultant book the board will show, and whether it belongs to the caller. My
 // Consultation reads it so it can never present somebody else's appointments as your own.

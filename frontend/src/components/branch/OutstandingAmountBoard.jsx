@@ -234,16 +234,16 @@ const rowKey = (r) => r.lead_id || `old-${r.old_client_id}`;
  *              balance has no client card to open, so this is that row's one action; left
  *              out where the desk may not take the money, and the row offers none.
  * @param onNewOld  Opens the same form empty, for an old client not on this list yet.
- * @param onDelete  Deletes the client a row belongs to, outright -- Branch Leads' bin. Only
- *              on a row with a lead behind it: an old client has none for it to delete.
- *              Left out where the desk may not delete patients, and no row offers it.
+ * @param onDelete  Deletes the client a row belongs to, outright -- Branch Leads' bin; for an
+ *              old client, their old client record and its instalments. Left out where the
+ *              desk may not delete patients, and no row offers it.
  * @param startDate/endDate  Accountant Manage's date range, both empty on All. A row is in
  *              it by its due date, or where none is set by the day its bill was raised --
  *              the same due date the month strip above goes by.
  */
 export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = () => true, onCollectOld, onNewOld, onDelete, startDate = "", endDate = "", squareTable = false }) => {
   const collectable = (r) => Boolean(onCollect) && !r.old_client && !r.past_data && r.balance > 0 && canCollect(r);
-  const deletable = (r) => Boolean(onDelete) && Boolean(r.lead_id);
+  const deletable = (r) => Boolean(onDelete) && Boolean(r.old_client ? r.old_client_id : r.lead_id);
   // What a tap on the row opens, on the phone card and the table row alike: the client
   // popup, or for an old client -- who has no client card -- their instalment form.
   const openRow = (r) => (r.old_client
@@ -431,7 +431,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                         title="Delete this patient and everything of theirs"
                         aria-label={`Delete ${r.client_name || "patient"} and all their records`}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                        data-testid={`outstanding-delete-card-${r.lead_id}`}
+                        data-testid={`outstanding-delete-card-${rowKey(r)}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -532,7 +532,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                           {/* Opens the client popup, where the payment history and the
                               WhatsApp reminder live, with Branch Leads' bin before it where
                               the desk may delete patients. An old client has no client card,
-                              so theirs has nothing here but the Collect beside it. */}
+                              so theirs has only the bin here, and the Collect beside it. */}
                           <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {(!r.old_client && onView) || deletable(r) ? (
                               <div className="flex items-center justify-center gap-0.5">
@@ -543,7 +543,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
                                     onClick={() => onDelete(r)}
                                     title="Delete this patient and everything of theirs"
                                     aria-label={`Delete ${r.client_name || "patient"} and all their records`}
-                                    data-testid={`outstanding-delete-${r.lead_id}`}
+                                    data-testid={`outstanding-delete-${rowKey(r)}`}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>

@@ -13,7 +13,7 @@ import { FilterSelect } from "@/components/ui/filter-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { useStageBack } from "@/components/ui/phone-back";
 import { rangeFor, todayIso } from "@/lib/dateRange";
-import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction } from "@/lib/api";
+import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction, deleteOldClient } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { receiptFromTransaction } from "@/lib/receipt";
@@ -1429,8 +1429,10 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       )}
       {deleteRow && (
         <BulkDeleteLeadsModal
-          leads={[{ id: deleteRow.lead_id, name: deleteRow.client_name, phone: deleteRow.phone }]}
+          leads={[{ id: deleteRow.old_client ? deleteRow.old_client_id : deleteRow.lead_id, name: deleteRow.client_name, phone: deleteRow.phone }]}
           purge
+          // An old client has no lead: theirs is the old client record and its instalments.
+          remove={deleteRow.old_client ? ([id], confirm) => deleteOldClient(id, confirm) : undefined}
           onClose={() => setDeleteRow(null)}
           // Reloaded whatever came back: the row leaves the list, and the money the client
           // paid leaves Summary's figures and the drawer's with them.

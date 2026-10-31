@@ -9,7 +9,7 @@ from typing import Optional
 from database import v3_col
 from constants import BRANCH_BLOCKED_EXPENSE_CATEGORIES
 from physio_scope import physio_owns_lead, resolve_physio_doctor
-from deps import v3_require_roles, is_branch_admin_role, is_physio_role
+from deps import v3_require_roles, is_branch_admin_role, is_physio_role, works_org_wide
 from schemas.v3 import V3UserOut, V3MarkInstallmentPaidInput, V3AddExtraDueInput
 from stage_utils import entry_branch_stage_names
 from utils import PAST_MOVE_FIELD, clinic_today, generate_transaction_id
@@ -18,6 +18,7 @@ from utils import PAST_MOVE_FIELD, clinic_today, generate_transaction_id
 # v3_zumba.py already each carry their own copy of this counter; a fourth would be a
 # fourth place for the note list and the must-agree rule to drift apart.
 from routers.v3_packages import _notes_label, _settle_cash_count, _denomination_total
+import lead_purge
 import old_clients
 import past_data_live
 
@@ -4079,6 +4080,45 @@ async def record_old_client_payment(
         "transaction": _old_client_txn_row(pay, client, history, branch["branch_name"]),
         "old_client": old_clients.summary(client, history, today, branch["branch_name"]),
     }
+
+
+class DeleteOldClientInput(BaseModel):
+    confirm: str
+
+
+@router.post("/finance/old-clients/{old_client_id}/delete")
+async def delete_old_client(
+    old_client_id: str,
+    payload: DeleteOldClientInput,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """Payment Schedule's bin on an old client's row: the old client and every instalment
+    taken from them, gone for good -- what Branch Leads' bin does to a lead, for the one
+    kind of client on that list with no lead to send it.
+
+    Asked the same way and on the same terms: the Danger Zone switch that offers that bin,
+    the typed DELETE, and a Branch Admin held to their own branch. The instalments go
+    whatever stage they are at, approved ones included, as a purged lead's collected
+    payments do -- so the money leaves revenue, the drawer and the approvals with them.
+
+    Answered in bulk-delete's shape, so the one confirm dialog reads both.
+    """
+    # Checked here and not only by hiding the bin, as bulk-delete checks it.
+    if not await lead_purge.delete_button_enabled():
+        raise HTTPException(status_code=403, detail="Deleting patients is switched off for this install")
+    if (payload.confirm or "").strip().upper() != "DELETE":
+        raise HTTPException(status_code=400, detail="Type DELETE to confirm")
+    client = await v3_col("old_clients").find_one({"id": old_client_id}, {"_id": 0, "id": 1, "branch_id": 1})
+    if not client:
+        raise HTTPException(status_code=404, detail="Old client not found")
+    if not works_org_wide(user.role) and client.get("branch_id") != user.branch_id:
+        raise HTTPException(status_code=403, detail="Belongs to another branch")
+    # The instalments first: stopped between the two, the client is still listed with more
+    # owed, and a second press finishes it -- rather than money left counted in revenue
+    # against a client nobody can find any more.
+    await v3_col("old_client_payments").delete_many({"old_client_id": old_client_id})
+    await v3_col("old_clients").delete_one({"id": old_client_id})
+    return {"deleted": 1, "deleted_ids": [old_client_id], "blocked": [], "requested": 1}
 
 
 # ---------------------------------------------------------------------------
