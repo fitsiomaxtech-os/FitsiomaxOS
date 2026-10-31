@@ -11319,13 +11319,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                       above, which collects it. */}
                                   <Button
                                     size="sm"
-                                    className={`bg-rose-600 text-white shadow-sm transition hover:bg-rose-700 hover:shadow ${ACT_BTN}`}
+                                    className={`group bg-rose-600 text-white shadow-sm transition hover:bg-rose-700 hover:shadow ${ACT_BTN}`}
                                     onClick={openExtraDueDraft}
                                     data-testid="cons-open-add-due"
                                   >
-                                    {/* Ticks like a clock: one clockwise turn, a pause, then the
-                                        next turn on the next second (tick-turn, tailwind.config.js). */}
-                                    <Plus className="mr-1 h-3.5 w-3.5 animate-tick-turn" />
+                                    {/* Still until the pointer is on the button, then a quarter
+                                        turn clockwise -- 90 degrees, not a full spin -- and back
+                                        when it leaves. */}
+                                    <Plus className="mr-1 h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:rotate-90 group-active:rotate-90" />
                                     Add Due
                                   </Button>
                                   {OnlinePayButton}

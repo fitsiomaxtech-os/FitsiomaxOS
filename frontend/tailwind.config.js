@@ -134,17 +134,6 @@ module.exports = {
   				'14%, 100%': {
   					transform: 'scale(1)'
   				}
-  			},
-  			// A clock's tick: one clockwise turn in the first half of the second, then
-  			// still for the other half, so it turns once a second rather than spinning
-  			// without a pause. On the + of Add Due.
-  			'tick-turn': {
-  				'0%': {
-  					transform: 'rotate(0deg)'
-  				},
-  				'50%, 100%': {
-  					transform: 'rotate(360deg)'
-  				}
   			}
   		},
   		animation: {
@@ -152,8 +141,7 @@ module.exports = {
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'nudge-left': 'nudge-left 1.5s ease-in-out infinite',
   			'nudge-right': 'nudge-right 1.5s ease-in-out infinite',
-  			'dot-pop': 'dot-pop 3s ease-out infinite',
-  			'tick-turn': 'tick-turn 1s ease-in-out infinite'
+  			'dot-pop': 'dot-pop 3s ease-out infinite'
   		}
   	}
   },
