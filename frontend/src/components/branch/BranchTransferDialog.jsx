@@ -39,13 +39,13 @@ const MODE_LABELS = {
  * A row attributed to some other branch is not an error: it is a payment taken before an
  * earlier transfer, and it stays with whoever collected it.
  */
-export const PaymentHistory = ({ rows, currentBranchName }) => {
+export const PaymentHistory = ({ rows, currentBranchName, square = false }) => {
   const [open, setOpen] = useState(false);
   const list = rows || [];
   const total = list.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
   return (
-    <div className="mt-3 rounded-xl border border-[#EFEAE0] bg-white/60" data-testid="branch-transfer-payments">
+    <div className={`mt-3 border border-[#EFEAE0] bg-white/60 ${square ? "rounded-[4px]" : "rounded-xl"}`} data-testid="branch-transfer-payments">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -115,11 +115,11 @@ export const PaymentHistory = ({ rows, currentBranchName }) => {
  * both transfer dialogs so the Branch Admin's popup and Super Admin's desk warn about the
  * same things in the same words.
  */
-export const TransferImpact = ({ eligibility, fromBranchName, testid = "branch-transfer-impact" }) => {
+export const TransferImpact = ({ eligibility, fromBranchName, testid = "branch-transfer-impact", square = false }) => {
   const e = eligibility || {};
   const booking = e.consultation_booking;
   return (
-    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid={testid}>
+    <div className={`mt-3 border border-amber-200 bg-amber-50 p-3 ${square ? "rounded-[4px]" : "rounded-lg"}`} data-testid={testid}>
       <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">What this move does</p>
       <ul className="mt-1.5 space-y-1 text-xs text-amber-800">
         <li>
@@ -151,7 +151,7 @@ export const TransferImpact = ({ eligibility, fromBranchName, testid = "branch-t
 };
 
 /** The reason, required — both branches read it on the Branch Transfer Record. */
-export const TransferReason = ({ value, onChange, testid = "branch-transfer-reason" }) => (
+export const TransferReason = ({ value, onChange, testid = "branch-transfer-reason", square = false }) => (
   <>
     <label className="mt-3 block text-xs font-semibold text-slate-600" htmlFor={testid}>
       Reason <span className="text-rose-500">*</span>
@@ -162,7 +162,7 @@ export const TransferReason = ({ value, onChange, testid = "branch-transfer-reas
       value={value}
       onChange={(e) => onChange(e.target.value)}
       rows={2}
-      className="mt-1 w-full resize-none rounded-lg border border-[#EFEAE0] bg-white/60 px-2 py-1.5 text-sm outline-none focus:border-indigo-400"
+      className={`mt-1 w-full resize-none border border-[#EFEAE0] bg-white/60 px-2 py-1.5 text-sm outline-none focus:border-indigo-400 ${square ? "rounded-[4px]" : "rounded-lg"}`}
       data-testid={testid}
     />
   </>

@@ -79,7 +79,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
       onClick={(e) => { if (e.target === e.currentTarget && !transferring) onClose(); }}
       data-testid="lead-branch-transfer-dialog"
     >
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-white shadow-2xl ring-1 ring-slate-200">
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <h3 className="inline-flex items-center gap-2 text-base font-semibold text-slate-800">
             <ArrowLeftRight className="h-4 w-4 text-indigo-600" /> Branch Transfer
@@ -100,11 +100,11 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
             <p className="py-6 text-center text-sm text-slate-400">Loading…</p>
           ) : !eligibility.can_transfer ? (
             <>
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-relaxed text-rose-700" data-testid="lead-branch-transfer-blocked">
+              <p className="mt-3 rounded-[4px] border border-rose-200 bg-rose-50 p-3 text-xs leading-relaxed text-rose-700" data-testid="lead-branch-transfer-blocked">
                 {eligibility.blocked_reason}
               </p>
               <div className="mt-4 flex justify-end">
-                <Button variant="outline" onClick={onClose}>Close</Button>
+                <Button variant="outline" className="rounded-[4px]" onClick={onClose}>Close</Button>
               </div>
             </>
           ) : !confirming ? (
@@ -117,7 +117,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
                 ref={triggerRef}
                 type="button"
                 onClick={() => setListOpen((o) => !o)}
-                className={`mt-1 flex h-10 w-full items-center gap-2 rounded-md border bg-white px-3 text-left text-sm transition-colors ${listOpen ? "border-sky-300 ring-2 ring-sky-100" : "border-[#EFEAE0] hover:bg-[#F3EFE6]"}`}
+                className={`mt-1 flex h-10 w-full items-center gap-2 rounded-[4px] border bg-white px-3 text-left text-sm transition-colors ${listOpen ? "border-sky-300 ring-2 ring-sky-100" : "border-[#EFEAE0] hover:bg-[#F3EFE6]"}`}
                 aria-haspopup="listbox"
                 aria-expanded={listOpen}
                 data-testid="lead-branch-transfer-destination"
@@ -130,7 +130,7 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
               {listOpen && createPortal(
                 <div
                   ref={listRef}
-                  className="fixed z-[70] max-h-60 overflow-y-auto rounded border border-[#EFEAE0] bg-white p-1 shadow-xl"
+                  className="fixed z-[70] max-h-60 overflow-y-auto rounded-[4px] border border-[#EFEAE0] bg-white p-1 shadow-xl"
                   style={listPos || { top: 0, left: 0, visibility: "hidden" }}
                   role="listbox"
                   data-testid="lead-branch-transfer-list"
@@ -158,11 +158,11 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
                 </div>,
                 document.body,
               )}
-              <TransferReason value={reason} onChange={setReason} testid="lead-branch-transfer-reason" />
+              <TransferReason value={reason} onChange={setReason} testid="lead-branch-transfer-reason" square />
               <div className="mt-5 flex justify-end gap-2">
-                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button variant="outline" className="rounded-[4px]" onClick={onClose}>Cancel</Button>
                 <Button
-                  className="bg-indigo-600 text-white hover:bg-indigo-700"
+                  className="rounded-[4px] bg-indigo-600 text-white hover:bg-indigo-700"
                   disabled={!toBranchId || !reason.trim()}
                   onClick={() => setConfirming(true)}
                   data-testid="lead-branch-transfer-next"
@@ -177,14 +177,14 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
                 Transfer <b>{lead.name}</b> from <b>{fromBranch?.branch_name || "this branch"}</b> to <b>{toBranch?.branch_name}</b>?
               </p>
               <p className="mt-1 text-xs text-slate-500">Reason: {reason.trim()}</p>
-              <TransferImpact eligibility={eligibility} fromBranchName={fromBranch?.branch_name} testid="lead-branch-transfer-impact" />
-              <PaymentHistory rows={eligibility.payment_history} currentBranchName={fromBranch?.branch_name} />
+              <TransferImpact eligibility={eligibility} fromBranchName={fromBranch?.branch_name} testid="lead-branch-transfer-impact" square />
+              <PaymentHistory rows={eligibility.payment_history} currentBranchName={fromBranch?.branch_name} square />
               <div className="mt-5 flex justify-end gap-2">
-                <Button variant="outline" disabled={transferring} onClick={() => setConfirming(false)} data-testid="lead-branch-transfer-back">
+                <Button variant="outline" className="rounded-[4px]" disabled={transferring} onClick={() => setConfirming(false)} data-testid="lead-branch-transfer-back">
                   Back
                 </Button>
                 <Button
-                  className="bg-indigo-600 text-white hover:bg-indigo-700"
+                  className="rounded-[4px] bg-indigo-600 text-white hover:bg-indigo-700"
                   disabled={transferring}
                   onClick={submit}
                   data-testid="lead-branch-transfer-submit"
