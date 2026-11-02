@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -326,6 +326,18 @@ const branchStatusInfo = (lead, branches) => {
  */
 const BRANCH_APPOINTMENT_STAGES = ["Appointment", "New Appointment", "Appointment Date & Time"];
 const isBranchAppointment = (l) => BRANCH_APPOINTMENT_STAGES.includes(l.branch_stage);
+
+/**
+ * Branch Admin > Consultation's Consultation Visit, as one more summary card after Lost.
+ *
+ * Not a Pre-Sales stage: it reads the lead's consultation_stage, so the desk can see which of
+ * its appointments actually walked in. Shaped like a stage so the card rows draw it with the
+ * rest, but it never reaches the detail dialog's stage pills -- nobody moves a lead there
+ * from Pre Sales.
+ */
+const CONSULTATION_VISIT_STAGE = "Consultation Visit";
+const CONSULTATION_VISIT_CARD = { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: "#14b8a6" };
+const isConsultationVisit = (l) => l.consultation_stage === CONSULTATION_VISIT_STAGE;
 
 /**
  * The Sales Master View's cards: five counts, then the two revenue figures.
@@ -836,7 +848,7 @@ const PRESALES_TABS = [
 
 // The rep's phone summary cards in a fixed order, whatever order the stages come back in.
 // A stage not named here (one added later) goes after these.
-const PHONE_STAGE_ORDER = ["new leads", "rnr", "follow up", "pre book", "appointment", "not a prospect", "lost"];
+const PHONE_STAGE_ORDER = ["new leads", "rnr", "follow up", "pre book", "appointment", "not a prospect", "lost", "consultation visit"];
 const phoneStageRank = (name) => {
   const i = PHONE_STAGE_ORDER.indexOf(String(name || "").trim().toLowerCase());
   return i === -1 ? PHONE_STAGE_ORDER.length : i;
@@ -921,6 +933,7 @@ const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
 const PHONE_CARD_HEX = "#64748b";
 const notifyHex = (color) => (/^#[0-9a-f]{6}$/i.test(color || "") ? color : "#64748b");
 const PRESALES_STAGE_ICONS = [
+  ["consultation", Stethoscope],
   ["rnr", PhoneOff],
   ["follow", Bell],
   ["appointment", CalendarCheck],
@@ -1276,8 +1289,13 @@ export const PreSalesCRM = ({
     const map = { All: dateSourceFiltered.length };
     stages.forEach((s) => { map[s.name] = 0; });
     dateSourceFiltered.forEach((l) => { if (map[l.stage] != null) map[l.stage] += 1; });
+    map[CONSULTATION_VISIT_STAGE] = dateSourceFiltered.filter(isConsultationVisit).length;
     return map;
   }, [dateSourceFiltered, stages]);
+
+  // The summary cards' list: the live stages, then Consultation Visit after Lost. Only the
+  // card rows read this -- a lead's chip and the stage pills still go by `stages`.
+  const cardStages = useMemo(() => [...stages, CONSULTATION_VISIT_CARD], [stages]);
 
   // Marketing Head's own bucket counts — same idea as stageCounts, against
   // MARKETING_HEAD_FUNNEL's match functions instead of a live stage-name equality.
@@ -1368,6 +1386,8 @@ export const PreSalesCRM = ({
         if (card?.amount) rows = rows.filter((l) => card.amount(l) > 0);
         else if (card?.match) rows = rows.filter(card.match);
       }
+    } else if (stageFilter === CONSULTATION_VISIT_STAGE) {
+      rows = rows.filter(isConsultationVisit);
     } else if (stageFilter !== "All") {
       rows = rows.filter((l) => l.stage === stageFilter);
     }
@@ -1392,10 +1412,11 @@ export const PreSalesCRM = ({
   // columns are drawn: each is a weight here, turned into a percentage of what is on.
   // Stage is wide enough for its chip and a follow-up time beside it, and Branch Admin
   // Status for branch, status and expert on the one line.
+  const onAppointmentTab = stageFilter === "Appointment";
   const tableCols = [
     ["lead", 20], ["contact", 13], ["source", 11], ["stage", 18],
     isSuperAdminMasterView && ["handled", 12],
-    stageFilter === "Appointment" && ["branchStatus", 24],
+    onAppointmentTab && ["branchStatus", 24],
     stageFilter === "RNR" && ["lastCall", 16],
     ["created", 10], ["assigned", 15], ["actions", 6],
   ].filter(Boolean);
@@ -1495,12 +1516,12 @@ export const PreSalesCRM = ({
           the same StageTabBar, plain — white cards, the name and count centred, All Stages
           first — but bare: no grey tray behind them, each card outlined 1px on a 4px corner.
           The stages are the live Pre-Sales list: New Leads, RNR, Follow Up, Pre Book, Appointment,
-          Not a prospect, Lost. The master
+          Not a prospect, Lost -- then Branch Admin's Consultation Visit. The master
           views keep their own rows above, since theirs are not stages. "All" is this board's
           key for the whole list, where the strip says null. */}
       {!isMarketingHeadFunnel && !isSalesMasterCards ? (
         <StageTabBar
-          stages={stages}
+          stages={cardStages}
           stageFilter={stageFilter === "All" ? null : stageFilter}
           setStageFilter={(v) => setStageFilter(v === null ? "All" : v)}
           counts={stageCounts}
@@ -1682,13 +1703,16 @@ export const PreSalesCRM = ({
                 <tr>
                   <th className="truncate px-4 py-3" style={colWidth.lead}>Lead</th>
                   <th className="truncate px-4 py-3" style={colWidth.contact}>Contact</th>
-                  <th className="truncate px-4 py-3" style={colWidth.source}>Source</th>
+                  {/* The Appointment list swaps Source for when the visit is booked -- the
+                      one thing a desk reading that list is after -- and drops "Branch" from
+                      the two headers it shortens. */}
+                  <th className="truncate px-4 py-3" style={colWidth.source}>{onAppointmentTab ? "Appointment At" : "Source"}</th>
                   <th className="truncate px-4 py-3" style={colWidth.stage}>Stage</th>
                   {isSuperAdminMasterView && <th className="truncate px-4 py-3" style={colWidth.handled}>Handled By</th>}
-                  {stageFilter === "Appointment" && <th className="truncate px-4 py-3" style={colWidth.branchStatus}>Branch Admin Status</th>}
+                  {onAppointmentTab && <th className="truncate px-4 py-3" style={colWidth.branchStatus}>Status</th>}
                   {stageFilter === "RNR" && <th className="truncate px-4 py-3" style={colWidth.lastCall}>Last Call</th>}
                   <th className="truncate px-4 py-3" style={colWidth.created}>Created</th>
-                  <th className="truncate px-4 py-3" style={colWidth.assigned}>Branch Transfer</th>
+                  <th className="truncate px-4 py-3" style={colWidth.assigned}>{onAppointmentTab ? "Transfer" : "Branch Transfer"}</th>
                   <th className="truncate px-2 py-3 text-center" style={colWidth.actions}>Actions</th>
                 </tr>
               </thead>
@@ -1745,9 +1769,15 @@ export const PreSalesCRM = ({
                       <td className="truncate px-4 py-3 text-slate-600" title={[displayPhone(l.phone), l.email].filter(Boolean).join("\n") || undefined}>
                         {displayPhone(l.phone) || "—"}
                       </td>
-                      <td className="truncate px-4 py-3 text-slate-600" title={l.source_tab || l.source_type ? sourceLabel(l.source_tab || l.source_type) : undefined} data-testid={`presales-lead-source-${l.id}`}>
-                        {sourceLabel(l.source_tab || l.source_type) || "—"}
-                      </td>
+                      {onAppointmentTab ? (
+                        <td className="truncate px-4 py-3 text-slate-600" title={preBookWhen({ date: l.appointment_date, time: l.appointment_time }) || undefined} data-testid={`presales-appointment-at-${l.id}`}>
+                          {preBookWhen({ date: l.appointment_date, time: l.appointment_time }, { short: true }) || "—"}
+                        </td>
+                      ) : (
+                        <td className="truncate px-4 py-3 text-slate-600" title={l.source_tab || l.source_type ? sourceLabel(l.source_tab || l.source_type) : undefined} data-testid={`presales-lead-source-${l.id}`}>
+                          {sourceLabel(l.source_tab || l.source_type) || "—"}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         {/* One width for every chip, so the column reads as a row of equal
                             boxes — the Branch Leads list's stage chip. The RNR count and the
@@ -1802,7 +1832,7 @@ export const PreSalesCRM = ({
                           </div>
                         </td>
                       )}
-                      {stageFilter === "Appointment" && (() => {
+                      {onAppointmentTab && (() => {
                         const { branchName, status, statusColor } = branchStatusInfo(l, branches);
                         const expert = l.assigned_physio_name ? `Expert: ${l.assigned_physio_name}` : "Pending Expert";
                         // Branch, status and expert on the one line, the branch name giving
@@ -2013,8 +2043,8 @@ export const PreSalesCRM = ({
               )}
             </div>
 
-            {/* The eight summary cards, two across in a fixed order: All Stages and New
-                Leads, RNR and Follow Up, Pre Book and Appointment, Not a prospect and Lost.
+            {/* The nine summary cards, three across in a fixed order: All Stages, New Leads,
+                RNR, Follow Up, Pre Book, Appointment, Not a prospect, Lost, Consultation Visit.
                 Every card the same height. A tap narrows the list below and scrolls to it;
                 the open stage tapped again goes back to All. */}
             <div className="grid auto-rows-fr grid-cols-3 gap-2" data-testid="presales-phone-grid">
@@ -2026,7 +2056,7 @@ export const PreSalesCRM = ({
                 onClick={() => pickPhoneStage("All")}
                 testid="presales-phone-card-all-stages"
               />
-              {[...stages].sort((a, b) => phoneStageRank(a.name) - phoneStageRank(b.name)).map((st) => (
+              {[...cardStages].sort((a, b) => phoneStageRank(a.name) - phoneStageRank(b.name)).map((st) => (
                 <PhoneStageTile
                   key={st.id}
                   icon={presalesStageIcon(st.name)}
@@ -2125,10 +2155,10 @@ export const PreSalesCRM = ({
                 the cards above it, with the stage's count and a menu of the others -- and
                 the leads as the shared list rows. */}
             {phoneStageList && (() => {
-              const open = stageFilter === "All" ? null : stages.find((st) => st.name === stageFilter);
+              const open = stageFilter === "All" ? null : cardStages.find((st) => st.name === stageFilter);
               const hex = open ? notifyHex(stageInk(open)) : "#0ea5e9";
               const count = stageFilter === "All" ? stageCounts.All : (stageCounts[stageFilter] || 0);
-              const others = stages.filter((st) => st.name !== stageFilter);
+              const others = cardStages.filter((st) => st.name !== stageFilter);
               return (
                 <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2" data-testid="presales-phone-back">
                   <button
@@ -2281,7 +2311,7 @@ export const PreSalesCRM = ({
                   testid="presales-phone-card-all-stages"
                   inline
                 />
-                {stages.map((st) => (
+                {cardStages.map((st) => (
                   <NotifyCard
                     key={st.id}
                     icon={presalesStageIcon(st.name)}
@@ -2518,7 +2548,7 @@ export const PreSalesCRM = ({
             </div>
           ) : (
             <StageTabBar
-              stages={stages}
+              stages={cardStages}
               stageFilter={stageFilter === "All" ? null : stageFilter}
               setStageFilter={(v) => setStageFilter(v === null ? "All" : v)}
               counts={stageCounts}
