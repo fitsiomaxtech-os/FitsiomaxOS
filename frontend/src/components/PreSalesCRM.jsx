@@ -1143,17 +1143,9 @@ export const PreSalesCRM = ({
   // listed on the same screen under them. A board embedded in Branch Admin keeps the
   // stacked cards above.
   const phoneGrid = phoneCards && role === "pre_sales" && !embedded;
-  const phoneListRef = useRef(null);
+  // A card tap only narrows the list; the page stays where it is.
   const pickPhoneStage = (key) => {
-    const next = stageFilter === key && key !== "All" ? "All" : key;
-    setStageFilter(next);
-    // All Stages stays where it is: it is the whole list, not a stage to jump into.
-    if (next === "All") return;
-    // After the list has re-rendered for the new stage: scrolling in the same tick starts
-    // from the old list's height, and the smooth scroll gets cut short when it changes.
-    window.setTimeout(() => {
-      phoneListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
+    setStageFilter(stageFilter === key && key !== "All" ? "All" : key);
   };
   // The back-to-top arrow, shown once the rep has scrolled a screen's worth down.
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -2070,8 +2062,8 @@ export const PreSalesCRM = ({
             </div>
 
             {/* The list, with no title over it: the lit summary card already says which
-                stage this is and how many. A card tap scrolls here. */}
-            <div ref={phoneListRef} className="scroll-mt-20 space-y-2.5 pt-1" data-testid="presales-phone-list">
+                stage this is and how many. */}
+            <div className="space-y-2.5 pt-1" data-testid="presales-phone-list">
               {visibleLeads.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="presales-phone-list-empty">
                   {loading ? "Loading..." : `No leads ${stageFilter === "All" ? "in this range" : `in "${stageFilter}"`}.`}
