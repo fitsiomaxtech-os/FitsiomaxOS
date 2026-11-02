@@ -26,7 +26,7 @@ import { PhoneExitConfirm, usePhoneBackState, useStageBack } from "@/components/
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
+import { QuickDateFilterBar, QUICK_DATE_PRESETS, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
@@ -826,11 +826,86 @@ const PreSalesAnalyticsPanel = ({ sourceFilter, groupBranchIds, role }) => {
   );
 };
 
-// The rep's phone bar: the leads, and My Profile -- the page every other desk's bar opens.
+// The rep's phone bar: the leads, the follow-up calls due, and My Profile -- the page
+// every other desk's bar opens.
 const PRESALES_TABS = [
   { key: "leads", label: "Leads", icon: Users },
+  { key: "followups", label: "Follow Ups", icon: Bell },
   { key: "profile", label: "Profile", icon: UserRound },
 ];
+
+// The rep's phone range rows, drawn to the wireframe: four across, then three, the last
+// of the three the calendar's Custom.
+const PHONE_RANGE_ROW_1 = ["all", "today", "yesterday", "this_week"];
+const PHONE_RANGE_ROW_2 = ["this_month", "last_90"];
+const PHONE_RANGE_PILL = "h-10 w-full truncate rounded-md px-1 text-xs font-medium transition";
+const phoneRangeTone = (on) => (on ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 active:bg-slate-50");
+
+/**
+ * One stage in the rep's phone grid, two to a row: the stage's glyph and its count on top,
+ * the name under them. The count box and the red waiting dot are the inline NotifyCard's,
+ * so the grid and the All Stages row under it read as one set.
+ */
+const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={`relative flex min-h-[78px] w-full flex-col justify-between gap-2 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 p-[11px]" : "border border-slate-200 p-3"}`}
+    data-testid={testid}
+  >
+    <span className="flex items-center justify-between gap-2">
+      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500 opacity-70" />
+      <span className="inline-flex h-7 min-w-[2.5rem] items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium tabular-nums text-orange-700" data-testid={`${testid}-badge`}>
+        {count}
+      </span>
+    </span>
+    <span className="truncate text-xs font-medium text-slate-900 opacity-75">{label}</span>
+    {count > 0 && (
+      <span aria-hidden className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white motion-safe:animate-dot-pop" />
+    )}
+  </button>
+);
+
+/**
+ * A lead on the rep's phone, drawn to the wireframe: the avatar, the name with its number
+ * and source under it, and on the right the stage over Call and WhatsApp. A tap anywhere
+ * else opens the lead.
+ */
+const PhoneLeadCard = ({ lead, stageHex, details = null, onOpen, testid }) => (
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={onOpen}
+    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
+    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition active:bg-slate-50"
+    data-testid={`${testid}-${lead.id}`}
+  >
+    <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarColor(lead.name).bg} ${avatarColor(lead.name).fg}`}>
+      {initials(lead.name)}
+    </span>
+    <div className="min-w-0 flex-1">
+      <p className="flex min-w-0 items-center text-sm font-semibold text-slate-900">
+        <span className="truncate">{lead.name || "—"}</span>
+        <LeadMarks lead={lead} className="ml-1" />
+      </p>
+      <p className="mt-0.5 truncate text-[11px] text-slate-500">
+        {[displayPhone(lead.phone), (lead.source_tab || lead.source_type) && sourceLabel(lead.source_tab || lead.source_type)].filter(Boolean).join(" · ") || "—"}
+      </p>
+      {details && <div className="mt-1 space-y-0.5">{details}</div>}
+    </div>
+    <div className="flex shrink-0 flex-col items-end gap-2">
+      <span
+        className="max-w-[96px] truncate rounded-[5px] border px-2 py-0.5 text-[10px] font-medium"
+        style={{ background: `${stageHex}14`, color: stageHex, borderColor: `${stageHex}33` }}
+        title={lead.stage || undefined}
+      >
+        {lead.stage || "—"}
+      </span>
+      <LeadContactIcons lead={lead} />
+    </div>
+  </div>
+);
 
 // The rep's phone stage cards, drawn Branch Leads' way (see PHONE_CARD_HEX, notifyHex and
 // leadStageIcon in BranchAdminBoard): every card the one grey, the stage's own colour only
@@ -1056,6 +1131,46 @@ export const PreSalesCRM = ({
   // Phone, the rep's own board: Branch Leads' phone screen. The master views keep theirs.
   const phoneCards = !isMarketingHeadFunnel && !isSalesMasterCards;
   const openPhoneStage = (key) => { setStageFilter(key); setPhoneStageList(true); window.scrollTo({ top: 0 }); };
+  // The Pre Sales rep's own page on a phone takes the wireframe layout: the stages as a
+  // two-across grid with All Stages under it, the ranges four-and-three, and the leads
+  // listed on the same screen under them. A board embedded in Branch Admin keeps the
+  // stacked cards above.
+  const phoneGrid = phoneCards && role === "pre_sales" && !embedded;
+  const phoneListRef = useRef(null);
+  const pickPhoneStage = (key) => {
+    setStageFilter((cur) => (cur === key && key !== "All" ? "All" : key));
+    phoneListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  // The Follow Ups tab: every lead in Follow Up with a call booked, soonest first, split
+  // into overdue, later today, and after today. Read off the whole book, not the range
+  // picked on Leads -- a call is due whenever the lead came in.
+  const followUps = useMemo(() => {
+    const now = Date.now();
+    const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
+    const rows = leads
+      .filter((l) => l.next_follow_up_at && /follow/i.test(l.stage || ""))
+      .map((l) => ({ lead: l, at: new Date(l.next_follow_up_at) }))
+      .filter((r) => !Number.isNaN(r.at.getTime()))
+      .sort((a, b) => a.at - b.at);
+    return {
+      overdue: rows.filter((r) => r.at.getTime() < now),
+      today: rows.filter((r) => r.at.getTime() >= now && r.at <= endToday),
+      later: rows.filter((r) => r.at > endToday),
+    };
+  }, [leads]);
+  // The phone header's Search and Add Lead (CRMPage) live outside this board, so they
+  // reach it as window events.
+  useEffect(() => {
+    if (!phoneGrid) return undefined;
+    const onSearch = () => { setActiveTab("leads"); setPhoneSearchOpen(true); window.scrollTo({ top: 0 }); };
+    const onCreate = () => setShowCreate(true);
+    window.addEventListener("presales-phone:search", onSearch);
+    window.addEventListener("presales-phone:create", onCreate);
+    return () => {
+      window.removeEventListener("presales-phone:search", onSearch);
+      window.removeEventListener("presales-phone:create", onCreate);
+    };
+  }, [phoneGrid]);
   // The phone's own Back, as on Branch Admin (see ui/phone-back): one press lands on the
   // stage cards with everything above them closed; from the cards it asks before the app
   // is left. The rep's own page only -- an embedded board's history is its host's.
@@ -1807,7 +1922,204 @@ export const PreSalesCRM = ({
 
       {activeTab === "leads" && (
         <div className="space-y-3 md:hidden" data-testid="presales-leads-mobile">
-          {phoneCards ? (
+          {phoneGrid ? (
+            <>
+            {/* Opened from the header's search circle. */}
+            {phoneSearchOpen && (
+              <div className="relative" data-testid="presales-phone-search-row">
+                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Input
+                  autoFocus
+                  className="h-10 pl-9 pr-9"
+                  placeholder="Search leads by name or phone..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  data-testid="presales-mobile-search"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setPhoneSearchOpen(false); setSearch(""); }}
+                  className="absolute right-2 top-2 rounded p-1.5 text-slate-400 active:bg-slate-100"
+                  aria-label="Close search"
+                  data-testid="presales-phone-search-close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* The stages two across, All Stages the full-width total under them. A tap
+                narrows the list below and scrolls to it; the open stage tapped again goes
+                back to All. */}
+            <div className="grid grid-cols-2 gap-2.5" data-testid="presales-phone-grid">
+              {stages.map((st) => (
+                <PhoneStageTile
+                  key={st.id}
+                  icon={presalesStageIcon(st.name)}
+                  label={st.name}
+                  count={stageCounts[st.name] || 0}
+                  active={stageFilter === st.name}
+                  onClick={() => pickPhoneStage(st.name)}
+                  testid={`presales-phone-card-${st.name}`}
+                />
+              ))}
+            </div>
+            <NotifyCard
+              icon={LayoutGrid}
+              label="All Stages"
+              value={stageCounts.All}
+              color={PHONE_CARD_HEX}
+              active={stageFilter === "All"}
+              onClick={() => pickPhoneStage("All")}
+              testid="presales-phone-card-all-stages"
+              inline
+            />
+
+            {/* The ranges, four and three. Custom is the calendar; a date picked there
+                sets the row back to All, as on the desk. */}
+            <div className="space-y-1.5" data-testid="presales-phone-quick-date">
+              {[PHONE_RANGE_ROW_1, PHONE_RANGE_ROW_2].map((row, i) => (
+                <div key={i} className={`grid gap-1.5 ${i === 0 ? "grid-cols-4" : "grid-cols-3"}`}>
+                  {row.map((key) => {
+                    const p = QUICK_DATE_PRESETS.find((x) => x.key === key);
+                    const on = key === "all" ? !quickDate && !customDate : quickDate?.key === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => { setCustomDate(null); setQuickDate(quickDatePreset(key)); }}
+                        aria-pressed={on}
+                        className={`${PHONE_RANGE_PILL} ${phoneRangeTone(on)}`}
+                        data-testid={`presales-phone-quick-date-preset-${key}`}
+                      >
+                        {p.short}
+                      </button>
+                    );
+                  })}
+                  {i === 1 && (
+                    <span className={`min-w-0 [&_button]:h-10 [&_button]:w-full [&_button]:justify-center [&_button]:overflow-hidden [&_button]:rounded-md [&_button]:px-1 [&_button]:text-xs [&_button]:font-medium [&_svg]:hidden ${customDate ? "[&_button]:!border-sky-600 [&_button]:!bg-sky-600 [&_button]:!text-white" : ""}`}>
+                      <DateFilterPopover value={customDate} onChange={applyCustomDate} testid="presales-mobile-date-filter" placeholder="Custom" centered />
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* The list's own bar: which stage and how many, then the order, the two marks,
+                refresh and the sheet pull. */}
+            <div ref={phoneListRef} className="flex scroll-mt-20 items-center gap-1.5 pt-1" data-testid="presales-phone-list-bar">
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                {stageFilter === "All" ? "All Stages" : stageFilter}
+                <span className="ml-1.5 font-medium text-slate-400">{filtered.length}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
+                title={sortOrder === "newest" ? "New to Old — tap for Old to New" : "Old to New — tap for New to Old"}
+                aria-label={sortOrder === "newest" ? "Sort: New to Old" : "Sort: Old to New"}
+                className={PHONE_SQUARE}
+                data-testid="presales-phone-sort-toggle"
+              >
+                {sortOrder === "newest" ? <ArrowDown className={PHONE_ICON} /> : <ArrowUp className={PHONE_ICON} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkFilter((m) => (m === "vip" ? "" : "vip"))}
+                aria-label="Show VIP clients only"
+                aria-pressed={markFilter === "vip"}
+                className={`${PHONE_SQUARE} ${markFilter === "vip" ? "!border-amber-300 !bg-amber-50" : ""}`}
+                data-testid="presales-phone-filter-vip"
+              >
+                <Star className={`${PHONE_ICON} ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkFilter((m) => (m === "attention" ? "" : "attention"))}
+                aria-label="Show leads needing attention only"
+                aria-pressed={markFilter === "attention"}
+                className={`${PHONE_SQUARE} ${markFilter === "attention" ? "!border-rose-300 !bg-rose-50" : ""}`}
+                data-testid="presales-phone-filter-attention"
+              >
+                <AlertCircle className={`${PHONE_ICON} ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
+              </button>
+              <button
+                type="button"
+                onClick={load}
+                disabled={loading}
+                aria-label="Refresh"
+                className={`${PHONE_SQUARE} !bg-slate-100`}
+                data-testid="presales-mobile-refresh-btn"
+              >
+                <RefreshCw className={`${PHONE_ICON} ${loading ? "animate-spin" : ""}`} />
+              </button>
+              <PullFromSheetButton onPulled={load} iconOnly soft phoneSmall />
+              {/* From sm to md the round phone header is gone but this layout is not, so
+                  its Search and Add Lead come down here. */}
+              <button type="button" onClick={() => setPhoneSearchOpen(true)} className={`${PHONE_SQUARE} hidden sm:flex`} aria-label="Search leads" data-testid="presales-phone-search-open">
+                <Search className={PHONE_ICON} />
+              </button>
+              <button type="button" onClick={() => setShowCreate(true)} className={`${PHONE_SQUARE} hidden !bg-sky-50 text-sky-600 sm:flex`} aria-label="Create Lead" data-testid="presales-mobile-create-lead-btn">
+                <UserPlus className={PHONE_ICON} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5" data-testid="presales-phone-list">
+              {visibleLeads.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="presales-phone-list-empty">
+                  {loading ? "Loading..." : `No leads ${stageFilter === "All" ? "in this range" : `in "${stageFilter}"`}.`}
+                </p>
+              ) : visibleLeads.map((l) => {
+                const stg = stages.find((st) => st.name === l.stage);
+                const rnr = l.stage === "RNR" && (l.rnr_attempts || 0) > 0;
+                const fu = l.stage === "Follow Up" && l.next_follow_up_at ? new Date(l.next_follow_up_at) : null;
+                const fuOverdue = fu ? fu.getTime() < Date.now() : false;
+                const pb = l.stage === "Pre Book" ? preBookOf(l) : null;
+                return (
+                  <PhoneLeadCard
+                    key={l.id}
+                    lead={l}
+                    stageHex={notifyHex(stageInk(stg))}
+                    onOpen={() => setEditing(l)}
+                    testid="presales-card"
+                    details={rnr || fu || pb ? (
+                      <>
+                        {rnr && (
+                          <p className="flex items-center gap-1.5 text-[11px]">
+                            <PhoneOff className="h-3 w-3 text-rose-500" />
+                            <span className="font-semibold text-rose-600">×{l.rnr_attempts}</span>
+                            {l.rnr_last_attempt_at && <span className="text-slate-500">{callTimeStamp(l.rnr_last_attempt_at)}</span>}
+                          </p>
+                        )}
+                        {fu && (
+                          <p className="flex items-center gap-1.5 text-[11px]">
+                            <Clock className={`h-3 w-3 ${fuOverdue ? "text-rose-500" : "text-slate-400"}`} />
+                            <span className={`font-semibold ${fuOverdue ? "text-rose-600" : "text-slate-700"}`}>
+                              {fu.toLocaleDateString(undefined, { day: "2-digit", month: "short" })} · {fu.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })}
+                            </span>
+                            {fuOverdue && <span className="font-medium text-rose-500">Overdue</span>}
+                          </p>
+                        )}
+                        {pb && (
+                          <p className="flex items-center gap-1.5 text-[11px]">
+                            <CalendarClock className="h-3 w-3 text-teal-500" />
+                            <span className="truncate font-semibold text-slate-700">{preBookWhen(pb)}</span>
+                          </p>
+                        )}
+                      </>
+                    ) : null}
+                  />
+                );
+              })}
+            </div>
+            {filtered.length > visibleCount && (
+              <div className="flex items-center justify-center pt-1">
+                <Button variant="outline" onClick={() => setVisibleCount((c) => c + 50)} data-testid="presales-mobile-load-more">
+                  Load More ({filtered.length - visibleCount} remaining)
+                </Button>
+              </div>
+            )}
+            </>
+          ) : phoneCards ? (
             <>
             {/* The rep's own board on a phone is Branch Leads' phone screen, piece for
                 piece: the stages as a stack of cards under the toolbar and the ranges, a
@@ -2282,6 +2594,46 @@ export const PreSalesCRM = ({
         </div>
       )}
 
+      {/* Follow Ups: the calls the rep has booked, overdue first. */}
+      {role === "pre_sales" && activeTab === "followups" && (
+        <div className="space-y-4 md:hidden" data-testid="presales-followups-tab">
+          {[
+            { key: "overdue", title: "Overdue", tone: "text-rose-600", rows: followUps.overdue },
+            { key: "today", title: "Later Today", tone: "text-amber-600", rows: followUps.today },
+            { key: "later", title: "Upcoming", tone: "text-slate-600", rows: followUps.later },
+          ].map((group) => group.rows.length > 0 && (
+            <section key={group.key} className="space-y-2.5" data-testid={`presales-followups-${group.key}`}>
+              <h3 className={`text-sm font-semibold ${group.tone}`}>
+                {group.title}
+                <span className="ml-1.5 font-medium text-slate-400">{group.rows.length}</span>
+              </h3>
+              {group.rows.map(({ lead: l, at }) => (
+                <PhoneLeadCard
+                  key={l.id}
+                  lead={l}
+                  stageHex={notifyHex(stageInk(stages.find((st) => st.name === l.stage)))}
+                  onOpen={() => setEditing(l)}
+                  testid="presales-followup-card"
+                  details={(
+                    <p className="flex items-center gap-1.5 text-[11px]">
+                      <Clock className={`h-3 w-3 ${group.key === "overdue" ? "text-rose-500" : "text-slate-400"}`} />
+                      <span className={`font-semibold ${group.key === "overdue" ? "text-rose-600" : "text-slate-700"}`}>
+                        {at.toLocaleDateString(undefined, { day: "2-digit", month: "short" })} · {at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })}
+                      </span>
+                    </p>
+                  )}
+                />
+              ))}
+            </section>
+          ))}
+          {followUps.overdue.length + followUps.today.length + followUps.later.length === 0 && (
+            <p className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="presales-followups-empty">
+              {loading ? "Loading..." : "No follow-up calls booked."}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* My Profile, the page Branch Admin's bar opens: attendance, details, and Logout on
           its Security tab -- the phone header carries no account menu. */}
       {role === "pre_sales" && activeTab === "profile" && (
@@ -2365,6 +2717,8 @@ export const PreSalesCRM = ({
                   label={t.label}
                   title={t.label}
                   aria-label={t.label}
+                  badge={t.key === "followups" ? followUps.overdue.length + followUps.today.length : 0}
+                  badgeTestId="presales-nav-followups-badge"
                   active={activeTab === t.key}
                   data-testid={`presales-nav-${t.key}`}
                 />
