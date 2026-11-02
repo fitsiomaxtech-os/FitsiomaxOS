@@ -52,6 +52,19 @@ const num = (n) => Number(n) || 0;
 export const preBookPaid = (pb) => num(pb?.consultation?.paid) + num(pb?.advance?.amount);
 
 /**
+ * When the branch first took Pre Book money: the earlier of the two parts' payments, or null
+ * while nothing is paid. A part deleted from finance is gone from the record, so this falls
+ * back to the one still standing.
+ */
+export const preBookPaidAt = (pb) => {
+  const stamps = [
+    num(pb?.consultation?.paid) > 0 && pb.consultation.at,
+    num(pb?.advance?.amount) > 0 && pb.advance.at,
+  ].filter(Boolean);
+  return stamps.sort((a, b) => new Date(a) - new Date(b))[0] || null;
+};
+
+/**
  * What is still owed on a Pre Book consultation: its price, less the discount agreed and what
  * was paid. A discount is never collected; only the rest of a part payment is.
  */

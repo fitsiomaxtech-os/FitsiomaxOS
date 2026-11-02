@@ -133,3 +133,11 @@ export const callDateStamp = (value) => {
     timeZone: CALL_TZ, day: "2-digit", month: "short",
   }).format(d);
 };
+
+/** "2026-08-02T08:55:00Z" -> "02 Aug, 02:25 pm" — dateTimeStamp without the year, for a
+ * stamp sat beside a chip where the row has no room for it. */
+export const shortDateTimeStamp = (value) => {
+  const d = toDate(value);
+  if (!d) return "";
+  return `${callDateStamp(d)}, ${istClock(d)}`;
+};

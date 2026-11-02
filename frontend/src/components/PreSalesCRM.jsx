@@ -33,9 +33,9 @@ import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
-import { callTimeStamp, callDateStamp, dateStampFull, to12h } from "@/lib/time";
+import { callTimeStamp, callDateStamp, dateStampFull, dateTimeStamp, shortDateTimeStamp, to12h } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
-import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
+import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookPaidAt, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -1535,19 +1535,19 @@ export const PreSalesCRM = ({
   // The desk table's columns and each one's share of the row. table-fixed divides the row
   // by the stated widths, so they have to add up to the whole however many of the optional
   // columns are drawn: each is a weight here, turned into a percentage of what is on.
-  // Stage is wide enough for its chip and a follow-up time beside it, and Branch Admin
-  // Status for branch, status and expert on the one line.
+  // Stage is wide enough for its chip and a follow-up time beside it, Created for its date
+  // and time, and Branch Admin Status for branch, status and expert on the one line.
   const onAppointmentTab = stageFilter === "Appointment";
-  // Pre Book adds a Status after Branch Transfer: Converted once the branch has taken the
-  // Pre Book money, Unconvert until it has.
+  // Pre Book adds a Status after Branch Transfer: Converted, and when, once the branch has
+  // taken the Pre Book money; Unconvert until it has.
   const onPreBookTab = stageFilter === "Pre Book";
   const tableCols = [
     ["lead", 20], ["contact", 13], ["source", 11], ["stage", 18],
     isSuperAdminMasterView && ["handled", 12],
     onAppointmentTab && ["branchStatus", 24],
     stageFilter === "RNR" && ["lastCall", 16],
-    ["created", 10], ["assigned", 15],
-    onPreBookTab && ["preBookStatus", 10],
+    ["created", 15], ["assigned", 15],
+    onPreBookTab && ["preBookStatus", 16],
     ["actions", 6],
   ].filter(Boolean);
   const tableWeight = tableCols.reduce((sum, [, w]) => sum + w, 0);
@@ -1997,7 +1997,11 @@ export const PreSalesCRM = ({
                           )}
                         </td>
                       )}
-                      <td className="truncate px-4 py-3 text-slate-500">{(l.created_at || "").slice(0, 10) || "—"}</td>
+                      {/* In IST: the UTC date the slice used to show was the day before for
+                          a lead created before 5:30 in the morning. */}
+                      <td className="truncate px-4 py-3 text-slate-500" title={dateTimeStamp(l.created_at) || undefined} data-testid={`presales-lead-created-${l.id}`}>
+                        {dateTimeStamp(l.created_at) || "—"}
+                      </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         {/* Branch Admin's Branch Transfer, on the lead's own row: the same
                             dialog, reason and confirm step, so a move from here is the same
@@ -2044,13 +2048,23 @@ export const PreSalesCRM = ({
                       </td>
                       {onPreBookTab && (() => {
                         // Paid is what the Branch Admin collected in the Pre Book popup --
-                        // the consultation, the advance, or both.
-                        const paid = preBookPaid(preBookOf(l));
+                        // the consultation, the advance, or both -- and Converted carries
+                        // when the first of it came in.
+                        const pb = preBookOf(l);
+                        const paid = preBookPaid(pb);
+                        const paidAt = paid > 0 ? preBookPaidAt(pb) : null;
                         return (
-                          <td className="px-4 py-3" title={paid > 0 ? `${rupees(paid)} paid to the branch` : "Not paid to the branch yet"} data-testid={`presales-prebook-status-${l.id}`}>
-                            <span className={`inline-block w-[92px] max-w-full truncate rounded-[5px] border px-2 py-0.5 text-center text-xs font-semibold ${paid > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
-                              {paid > 0 ? "Converted" : "Unconvert"}
-                            </span>
+                          <td className="px-4 py-3" title={paid > 0 ? [`${rupees(paid)} paid to the branch`, dateTimeStamp(paidAt)].filter(Boolean).join(" · ") : "Not paid to the branch yet"} data-testid={`presales-prebook-status-${l.id}`}>
+                            <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                              <span className={`inline-block w-[84px] shrink-0 truncate rounded-[5px] border px-2 py-0.5 text-center text-xs font-semibold ${paid > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                                {paid > 0 ? "Converted" : "Unconvert"}
+                              </span>
+                              {paidAt && (
+                                <span className="min-w-0 truncate text-[10px] font-medium text-slate-500" data-testid={`presales-prebook-converted-at-${l.id}`}>
+                                  {shortDateTimeStamp(paidAt)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                         );
                       })()}
