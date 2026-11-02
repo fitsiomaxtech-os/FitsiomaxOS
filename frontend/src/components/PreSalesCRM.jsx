@@ -2057,15 +2057,9 @@ export const PreSalesCRM = ({
               })}
             </div>
 
-            {/* Which stage the list is showing, and how many. */}
-            <div ref={phoneListRef} className="scroll-mt-20 pt-1" data-testid="presales-phone-list-bar">
-              <p className="truncate text-sm font-semibold text-slate-800">
-                {stageFilter === "All" ? "All Stages" : stageFilter}
-                <span className="ml-1.5 font-medium text-slate-400">{filtered.length}</span>
-              </p>
-            </div>
-
-            <div className="space-y-2.5" data-testid="presales-phone-list">
+            {/* The list, with no title over it: the lit summary card already says which
+                stage this is and how many. A card tap scrolls here. */}
+            <div ref={phoneListRef} className="scroll-mt-20 space-y-2.5 pt-1" data-testid="presales-phone-list">
               {visibleLeads.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="presales-phone-list-empty">
                   {loading ? "Loading..." : `No leads ${stageFilter === "All" ? "in this range" : `in "${stageFilter}"`}.`}
