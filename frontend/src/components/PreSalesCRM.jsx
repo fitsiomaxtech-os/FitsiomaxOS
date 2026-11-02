@@ -1538,12 +1538,17 @@ export const PreSalesCRM = ({
   // Stage is wide enough for its chip and a follow-up time beside it, and Branch Admin
   // Status for branch, status and expert on the one line.
   const onAppointmentTab = stageFilter === "Appointment";
+  // Pre Book adds a Status after Branch Transfer: Converted once the branch has taken the
+  // Pre Book money, Unconvert until it has.
+  const onPreBookTab = stageFilter === "Pre Book";
   const tableCols = [
     ["lead", 20], ["contact", 13], ["source", 11], ["stage", 18],
     isSuperAdminMasterView && ["handled", 12],
     onAppointmentTab && ["branchStatus", 24],
     stageFilter === "RNR" && ["lastCall", 16],
-    ["created", 10], ["assigned", 15], ["actions", 6],
+    ["created", 10], ["assigned", 15],
+    onPreBookTab && ["preBookStatus", 10],
+    ["actions", 6],
   ].filter(Boolean);
   const tableWeight = tableCols.reduce((sum, [, w]) => sum + w, 0);
   const colWidth = Object.fromEntries(tableCols.map(([key, w]) => [key, { width: `${(w / tableWeight) * 100}%` }]));
@@ -1842,6 +1847,7 @@ export const PreSalesCRM = ({
                   {stageFilter === "RNR" && <th className="truncate px-4 py-3" style={colWidth.lastCall}>Last Call</th>}
                   <th className="truncate px-4 py-3" style={colWidth.created}>Created</th>
                   <th className="truncate px-4 py-3" style={colWidth.assigned}>{onAppointmentTab ? "Transfer" : "Branch Transfer"}</th>
+                  {onPreBookTab && <th className="truncate px-4 py-3" style={colWidth.preBookStatus}>Status</th>}
                   <th className="truncate px-2 py-3 text-center" style={colWidth.actions}>Actions</th>
                 </tr>
               </thead>
@@ -2036,6 +2042,18 @@ export const PreSalesCRM = ({
                         />
                         )}
                       </td>
+                      {onPreBookTab && (() => {
+                        // Paid is what the Branch Admin collected in the Pre Book popup --
+                        // the consultation, the advance, or both.
+                        const paid = preBookPaid(preBookOf(l));
+                        return (
+                          <td className="px-4 py-3" title={paid > 0 ? `${rupees(paid)} paid to the branch` : "Not paid to the branch yet"} data-testid={`presales-prebook-status-${l.id}`}>
+                            <span className={`inline-block w-[92px] max-w-full truncate rounded-[5px] border px-2 py-0.5 text-center text-xs font-semibold ${paid > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                              {paid > 0 ? "Converted" : "Unconvert"}
+                            </span>
+                          </td>
+                        );
+                      })()}
                       <td className="px-1 py-3 text-center">
                         <div className="flex items-center justify-center gap-0.5">
                           {/* One bin a row: on All Stages and New Leads it is the Branch Leads
