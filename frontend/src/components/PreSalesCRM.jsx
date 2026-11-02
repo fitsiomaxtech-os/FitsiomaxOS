@@ -857,16 +857,16 @@ const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) =
     type="button"
     onClick={onClick}
     aria-pressed={active}
-    className={`relative flex h-full min-h-[78px] w-full flex-col justify-between gap-2 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 p-[11px]" : "border border-slate-200 p-3"}`}
+    className={`relative flex h-full min-h-[72px] w-full min-w-0 flex-col justify-between gap-2 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 p-[9px]" : "border border-slate-200 p-2.5"}`}
     data-testid={testid}
   >
-    <span className="flex items-center justify-between gap-2">
+    <span className="flex items-center justify-between gap-1">
       <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500 opacity-70" />
-      <span className="inline-flex h-7 min-w-[2.5rem] items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-2 text-base font-medium tabular-nums text-orange-700" data-testid={`${testid}-badge`}>
+      <span className="inline-flex h-6 min-w-[2rem] items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-1.5 text-sm font-medium tabular-nums text-orange-700" data-testid={`${testid}-badge`}>
         {count}
       </span>
     </span>
-    <span className="truncate text-xs font-medium text-slate-900 opacity-75">{label}</span>
+    <span className="truncate text-[11px] font-medium text-slate-900 opacity-75" title={label}>{label}</span>
     {count > 0 && (
       <span aria-hidden className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white motion-safe:animate-dot-pop" />
     )}
@@ -876,13 +876,10 @@ const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) =
 /**
  * A lead on the rep's phone, drawn to the wireframe and to the inline stage rows: initials
  * in a grey rounded square, the name with its number and source under it, the stage in the
- * orange box the stage rows keep their counts in, and a chevron. The red dot in the corner
- * marks a lead waiting on the rep -- still in New Leads, flagged for attention, or past its
- * follow-up call. Call and WhatsApp are in the lead's popup, under Contact.
+ * orange box the stage rows keep their counts in, and a chevron. No red dot: that stays on
+ * the summary cards. Call and WhatsApp are in the lead's popup, under Contact.
  */
 const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
-  const overdueCall = /follow/i.test(lead.stage || "") && lead.next_follow_up_at && new Date(lead.next_follow_up_at).getTime() < Date.now();
-  const waiting = lead.stage === "New Leads" || !!lead.needs_attention || !!overdueCall;
   return (
     <div
       role="button"
@@ -913,9 +910,6 @@ const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
         <span className="truncate">{lead.stage || "—"}</span>
       </span>
       <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />
-      {waiting && (
-        <span aria-hidden className="absolute right-2.5 top-2 h-2.5 w-2.5 rounded-full bg-red-500 motion-safe:animate-dot-pop" data-testid={`${testid}-dot-${lead.id}`} />
-      )}
     </div>
   );
 };
@@ -1152,7 +1146,11 @@ export const PreSalesCRM = ({
   const phoneListRef = useRef(null);
   const pickPhoneStage = (key) => {
     setStageFilter((cur) => (cur === key && key !== "All" ? "All" : key));
-    phoneListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // After the list has re-rendered for the new stage: scrolling in the same tick starts
+    // from the old list's height, and the smooth scroll gets cut short when it changes.
+    window.setTimeout(() => {
+      phoneListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
   };
   // The Follow Ups tab: every lead in Follow Up with a call booked, soonest first, split
   // into overdue, later today, and after today. Read off the whole book, not the range
@@ -2015,7 +2013,7 @@ export const PreSalesCRM = ({
                 Leads, RNR and Follow Up, Pre Book and Appointment, Not a prospect and Lost.
                 Every card the same height. A tap narrows the list below and scrolls to it;
                 the open stage tapped again goes back to All. */}
-            <div className="grid auto-rows-fr grid-cols-2 gap-2.5" data-testid="presales-phone-grid">
+            <div className="grid auto-rows-fr grid-cols-3 gap-2" data-testid="presales-phone-grid">
               <PhoneStageTile
                 icon={LayoutGrid}
                 label="All Stages"
