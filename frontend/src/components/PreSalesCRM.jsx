@@ -834,11 +834,17 @@ const PRESALES_TABS = [
   { key: "profile", label: "Profile", icon: UserRound },
 ];
 
-// The rep's phone range rows, drawn to the wireframe: four across, then three, the last
-// of the three the calendar's Custom.
-const PHONE_RANGE_ROW_1 = ["all", "today", "yesterday", "this_week"];
-const PHONE_RANGE_ROW_2 = ["this_month", "last_90"];
-const PHONE_RANGE_PILL = "h-10 w-full truncate rounded-md px-1 text-xs font-medium transition";
+// The rep's phone summary cards in a fixed order, whatever order the stages come back in.
+// A stage not named here (one added later) goes after these.
+const PHONE_STAGE_ORDER = ["new leads", "rnr", "follow up", "pre book", "appointment", "not a prospect", "lost"];
+const phoneStageRank = (name) => {
+  const i = PHONE_STAGE_ORDER.indexOf(String(name || "").trim().toLowerCase());
+  return i === -1 ? PHONE_STAGE_ORDER.length : i;
+};
+
+// The rep's phone ranges, one row of six; the custom pick is the toolbar's calendar.
+const PHONE_RANGE_KEYS = ["all", "today", "yesterday", "this_week", "this_month", "last_90"];
+const PHONE_RANGE_PILL = "h-10 w-full min-w-0 truncate rounded-md px-0.5 text-[11px] font-medium transition";
 const phoneRangeTone = (on) => (on ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 active:bg-slate-50");
 
 /**
@@ -851,7 +857,7 @@ const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) =
     type="button"
     onClick={onClick}
     aria-pressed={active}
-    className={`relative flex min-h-[78px] w-full flex-col justify-between gap-2 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 p-[11px]" : "border border-slate-200 p-3"}`}
+    className={`relative flex h-full min-h-[78px] w-full flex-col justify-between gap-2 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 p-[11px]" : "border border-slate-200 p-3"}`}
     data-testid={testid}
   >
     <span className="flex items-center justify-between gap-2">
@@ -1165,19 +1171,6 @@ export const PreSalesCRM = ({
       later: rows.filter((r) => r.at > endToday),
     };
   }, [leads]);
-  // The phone header's Search and Add Lead (CRMPage) live outside this board, so they
-  // reach it as window events.
-  useEffect(() => {
-    if (!phoneGrid) return undefined;
-    const onSearch = () => { setActiveTab("leads"); setPhoneSearchOpen(true); window.scrollTo({ top: 0 }); };
-    const onCreate = () => setShowCreate(true);
-    window.addEventListener("presales-phone:search", onSearch);
-    window.addEventListener("presales-phone:create", onCreate);
-    return () => {
-      window.removeEventListener("presales-phone:search", onSearch);
-      window.removeEventListener("presales-phone:create", onCreate);
-    };
-  }, [phoneGrid]);
   // The phone's own Back, as on Branch Admin (see ui/phone-back): one press lands on the
   // stage cards with everything above them closed; from the cards it asks before the app
   // is left. The rep's own page only -- an embedded board's history is its host's.
@@ -1931,35 +1924,107 @@ export const PreSalesCRM = ({
         <div className="space-y-3 md:hidden" data-testid="presales-leads-mobile">
           {phoneGrid ? (
             <>
-            {/* Opened from the header's search circle. */}
-            {phoneSearchOpen && (
-              <div className="relative" data-testid="presales-phone-search-row">
-                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <Input
-                  autoFocus
-                  className="h-10 pl-9 pr-9"
-                  placeholder="Search leads by name or phone..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  data-testid="presales-mobile-search"
-                />
-                <button
-                  type="button"
-                  onClick={() => { setPhoneSearchOpen(false); setSearch(""); }}
-                  className="absolute right-2 top-2 rounded p-1.5 text-slate-400 active:bg-slate-100"
-                  aria-label="Close search"
-                  data-testid="presales-phone-search-close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+            {/* The toolbar, on top of the cards: search, order, the two marks, calendar,
+                refresh, create, pull. The search collapses to its icon and takes the whole
+                row when opened. */}
+            <div className="flex items-center justify-center gap-1 max-[374px]:gap-0.5" data-testid="presales-phone-toolbar">
+              {phoneSearchOpen ? (
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    autoFocus
+                    className="pl-9 pr-9"
+                    placeholder="Search leads..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    data-testid="presales-mobile-search"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setPhoneSearchOpen(false); setSearch(""); }}
+                    className="absolute right-2 top-2 rounded p-1 text-slate-400 hover:bg-slate-100"
+                    aria-label="Close search"
+                    data-testid="presales-phone-search-close"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button type="button" onClick={() => setPhoneSearchOpen(true)} className={PHONE_SQUARE} aria-label="Search leads" title="Search leads" data-testid="presales-phone-search-open">
+                    <Search className={PHONE_ICON} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
+                    title={sortOrder === "newest" ? "New to Old — tap for Old to New" : "Old to New — tap for New to Old"}
+                    aria-label={sortOrder === "newest" ? "Sort: New to Old" : "Sort: Old to New"}
+                    className={PHONE_SQUARE}
+                    data-testid="presales-phone-sort-toggle"
+                  >
+                    {sortOrder === "newest" ? <ArrowDown className={PHONE_ICON} /> : <ArrowUp className={PHONE_ICON} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkFilter((m) => (m === "vip" ? "" : "vip"))}
+                    aria-label="Show VIP clients only"
+                    aria-pressed={markFilter === "vip"}
+                    className={`${PHONE_SQUARE} ${markFilter === "vip" ? "!border-amber-300 !bg-amber-50" : ""}`}
+                    data-testid="presales-phone-filter-vip"
+                  >
+                    <Star className={`${PHONE_ICON} ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkFilter((m) => (m === "attention" ? "" : "attention"))}
+                    aria-label="Show leads needing attention only"
+                    aria-pressed={markFilter === "attention"}
+                    className={`${PHONE_SQUARE} ${markFilter === "attention" ? "!border-rose-300 !bg-rose-50" : ""}`}
+                    data-testid="presales-phone-filter-attention"
+                  >
+                    <AlertCircle className={`${PHONE_ICON} ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
+                  </button>
+                  <DateFilterPopover value={customDate} onChange={applyCustomDate} testid="presales-mobile-date-filter" centered iconOnly phoneIconOnly phoneSmall />
+                  <button
+                    type="button"
+                    onClick={load}
+                    disabled={loading}
+                    aria-label="Refresh"
+                    title="Refresh"
+                    className={`${PHONE_SQUARE} !bg-slate-100`}
+                    data-testid="presales-mobile-refresh-btn"
+                  >
+                    <RefreshCw className={`${PHONE_ICON} ${loading ? "animate-spin" : ""}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreate(true)}
+                    aria-label="Create Lead"
+                    title="Create Lead"
+                    className={`${PHONE_SQUARE} !bg-sky-50 text-sky-600`}
+                    data-testid="presales-mobile-create-lead-btn"
+                  >
+                    <UserPlus className={PHONE_ICON} />
+                  </button>
+                  <PullFromSheetButton onPulled={load} iconOnly soft phoneSmall />
+                </>
+              )}
+            </div>
 
-            {/* The stages two across, All Stages the full-width total under them. A tap
-                narrows the list below and scrolls to it; the open stage tapped again goes
-                back to All. */}
-            <div className="grid grid-cols-2 gap-2.5" data-testid="presales-phone-grid">
-              {stages.map((st) => (
+            {/* The eight summary cards, two across in a fixed order: All Stages and New
+                Leads, RNR and Follow Up, Pre Book and Appointment, Not a prospect and Lost.
+                Every card the same height. A tap narrows the list below and scrolls to it;
+                the open stage tapped again goes back to All. */}
+            <div className="grid auto-rows-fr grid-cols-2 gap-2.5" data-testid="presales-phone-grid">
+              <PhoneStageTile
+                icon={LayoutGrid}
+                label="All Stages"
+                count={stageCounts.All}
+                active={stageFilter === "All"}
+                onClick={() => pickPhoneStage("All")}
+                testid="presales-phone-card-all-stages"
+              />
+              {[...stages].sort((a, b) => phoneStageRank(a.name) - phoneStageRank(b.name)).map((st) => (
                 <PhoneStageTile
                   key={st.id}
                   icon={presalesStageIcon(st.name)}
@@ -1971,103 +2036,35 @@ export const PreSalesCRM = ({
                 />
               ))}
             </div>
-            <NotifyCard
-              icon={LayoutGrid}
-              label="All Stages"
-              value={stageCounts.All}
-              color={PHONE_CARD_HEX}
-              active={stageFilter === "All"}
-              onClick={() => pickPhoneStage("All")}
-              testid="presales-phone-card-all-stages"
-              inline
-            />
 
-            {/* The ranges, four and three. Custom is the calendar; a date picked there
-                sets the row back to All, as on the desk. */}
-            <div className="space-y-1.5" data-testid="presales-phone-quick-date">
-              {[PHONE_RANGE_ROW_1, PHONE_RANGE_ROW_2].map((row, i) => (
-                <div key={i} className={`grid gap-1.5 ${i === 0 ? "grid-cols-4" : "grid-cols-3"}`}>
-                  {row.map((key) => {
-                    const p = QUICK_DATE_PRESETS.find((x) => x.key === key);
-                    const on = key === "all" ? !quickDate && !customDate : quickDate?.key === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => { setCustomDate(null); setQuickDate(quickDatePreset(key)); }}
-                        aria-pressed={on}
-                        className={`${PHONE_RANGE_PILL} ${phoneRangeTone(on)}`}
-                        data-testid={`presales-phone-quick-date-preset-${key}`}
-                      >
-                        {p.short}
-                      </button>
-                    );
-                  })}
-                  {i === 1 && (
-                    <span className={`min-w-0 [&_button]:h-10 [&_button]:w-full [&_button]:justify-center [&_button]:overflow-hidden [&_button]:rounded-md [&_button]:px-1 [&_button]:text-xs [&_button]:font-medium [&_svg]:hidden ${customDate ? "[&_button]:!border-sky-600 [&_button]:!bg-sky-600 [&_button]:!text-white" : ""}`}>
-                      <DateFilterPopover value={customDate} onChange={applyCustomDate} testid="presales-mobile-date-filter" placeholder="Custom" centered />
-                    </span>
-                  )}
-                </div>
-              ))}
+            {/* The ranges on one row, six equal buttons. A date picked on the toolbar's
+                calendar sets this row back to All, as on the desk. */}
+            <div className="grid grid-cols-6 gap-1" data-testid="presales-phone-quick-date">
+              {PHONE_RANGE_KEYS.map((key) => {
+                const p = QUICK_DATE_PRESETS.find((x) => x.key === key);
+                const on = key === "all" ? !quickDate && !customDate : quickDate?.key === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { setCustomDate(null); setQuickDate(quickDatePreset(key)); }}
+                    aria-pressed={on}
+                    title={p.label}
+                    className={`${PHONE_RANGE_PILL} ${phoneRangeTone(on)}`}
+                    data-testid={`presales-phone-quick-date-preset-${key}`}
+                  >
+                    {p.short}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* The list's own bar: which stage and how many, then the order, the two marks,
-                refresh and the sheet pull. */}
-            <div ref={phoneListRef} className="flex scroll-mt-20 items-center gap-1.5 pt-1" data-testid="presales-phone-list-bar">
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+            {/* Which stage the list is showing, and how many. */}
+            <div ref={phoneListRef} className="scroll-mt-20 pt-1" data-testid="presales-phone-list-bar">
+              <p className="truncate text-sm font-semibold text-slate-800">
                 {stageFilter === "All" ? "All Stages" : stageFilter}
                 <span className="ml-1.5 font-medium text-slate-400">{filtered.length}</span>
               </p>
-              <button
-                type="button"
-                onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
-                title={sortOrder === "newest" ? "New to Old — tap for Old to New" : "Old to New — tap for New to Old"}
-                aria-label={sortOrder === "newest" ? "Sort: New to Old" : "Sort: Old to New"}
-                className={PHONE_SQUARE}
-                data-testid="presales-phone-sort-toggle"
-              >
-                {sortOrder === "newest" ? <ArrowDown className={PHONE_ICON} /> : <ArrowUp className={PHONE_ICON} />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMarkFilter((m) => (m === "vip" ? "" : "vip"))}
-                aria-label="Show VIP clients only"
-                aria-pressed={markFilter === "vip"}
-                className={`${PHONE_SQUARE} ${markFilter === "vip" ? "!border-amber-300 !bg-amber-50" : ""}`}
-                data-testid="presales-phone-filter-vip"
-              >
-                <Star className={`${PHONE_ICON} ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setMarkFilter((m) => (m === "attention" ? "" : "attention"))}
-                aria-label="Show leads needing attention only"
-                aria-pressed={markFilter === "attention"}
-                className={`${PHONE_SQUARE} ${markFilter === "attention" ? "!border-rose-300 !bg-rose-50" : ""}`}
-                data-testid="presales-phone-filter-attention"
-              >
-                <AlertCircle className={`${PHONE_ICON} ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
-              </button>
-              <button
-                type="button"
-                onClick={load}
-                disabled={loading}
-                aria-label="Refresh"
-                className={`${PHONE_SQUARE} !bg-slate-100`}
-                data-testid="presales-mobile-refresh-btn"
-              >
-                <RefreshCw className={`${PHONE_ICON} ${loading ? "animate-spin" : ""}`} />
-              </button>
-              <PullFromSheetButton onPulled={load} iconOnly soft phoneSmall />
-              {/* From sm to md the round phone header is gone but this layout is not, so
-                  its Search and Add Lead come down here. */}
-              <button type="button" onClick={() => setPhoneSearchOpen(true)} className={`${PHONE_SQUARE} hidden sm:flex`} aria-label="Search leads" data-testid="presales-phone-search-open">
-                <Search className={PHONE_ICON} />
-              </button>
-              <button type="button" onClick={() => setShowCreate(true)} className={`${PHONE_SQUARE} hidden !bg-sky-50 text-sky-600 sm:flex`} aria-label="Create Lead" data-testid="presales-mobile-create-lead-btn">
-                <UserPlus className={PHONE_ICON} />
-              </button>
             </div>
 
             <div className="space-y-2.5" data-testid="presales-phone-list">

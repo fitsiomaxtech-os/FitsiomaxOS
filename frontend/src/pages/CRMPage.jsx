@@ -24,7 +24,6 @@ import {
   Workflow,
   X,
   Bell,
-  Search,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1156,27 +1155,8 @@ export const CRMPage = ({ auth, onLogout }) => {
                   </p>
                 </div>
               </div>
-              {/* Four round controls, as the wireframe: Search and Add Lead (which the
-                  board hears as window events), then the clock and the theme. */}
-              <div className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new Event("presales-phone:search"))}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 active:bg-slate-100"
-                  aria-label="Search leads"
-                  data-testid="presales-mobile-header-search"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new Event("presales-phone:create"))}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-600 active:bg-sky-100"
-                  aria-label="Add new lead"
-                  data-testid="presales-mobile-header-create"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </button>
+              {/* Clock In / Clock Out only; Search and Add Lead are on the board's toolbar. */}
+              <div className="flex shrink-0 items-center gap-1">
                 <ClockWidget />
                 <HeaderThemePicker userId={auth.user.id} />
               </div>
