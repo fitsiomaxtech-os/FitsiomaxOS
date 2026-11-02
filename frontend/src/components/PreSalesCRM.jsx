@@ -1145,13 +1145,25 @@ export const PreSalesCRM = ({
   const phoneGrid = phoneCards && role === "pre_sales" && !embedded;
   const phoneListRef = useRef(null);
   const pickPhoneStage = (key) => {
-    setStageFilter((cur) => (cur === key && key !== "All" ? "All" : key));
+    const next = stageFilter === key && key !== "All" ? "All" : key;
+    setStageFilter(next);
+    // All Stages stays where it is: it is the whole list, not a stage to jump into.
+    if (next === "All") return;
     // After the list has re-rendered for the new stage: scrolling in the same tick starts
     // from the old list's height, and the smooth scroll gets cut short when it changes.
     window.setTimeout(() => {
       phoneListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
   };
+  // The back-to-top arrow, shown once the rep has scrolled a screen's worth down.
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  useEffect(() => {
+    if (!phoneGrid) return undefined;
+    const onScroll = () => setShowBackToTop(window.scrollY > 400);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [phoneGrid]);
   // The Follow Ups tab: every lead in Follow Up with a call booked, soonest first, split
   // into overdue, later today, and after today. Read off the whole book, not the range
   // picked on Leads -- a call is due whenever the lead came in.
@@ -2725,6 +2737,19 @@ export const PreSalesCRM = ({
             })}
           </div>
         </nav>
+      )}
+      {/* Back to top, bottom right just above the bar, once the page is scrolled down. */}
+      {phoneGrid && showBackToTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-lg transition active:scale-95 md:hidden"
+          aria-label="Back to top"
+          title="Back to top"
+          data-testid="presales-back-to-top"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </button>
       )}
       {role === "pre_sales" && !embedded && <PhoneExitConfirm phoneBack={phoneBack} />}
     </div>
