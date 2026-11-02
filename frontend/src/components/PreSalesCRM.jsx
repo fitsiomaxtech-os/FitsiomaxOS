@@ -2697,7 +2697,13 @@ export const PreSalesCRM = ({
           className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(15,23,42,0.06)] backdrop-blur supports-[backdrop-filter]:bg-slate-500/85 md:hidden"
           data-testid="presales-bottom-nav"
         >
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${PRESALES_TABS.length}, minmax(0, 1fr))` }}>
+          {/* About three quarters of the shared bar's height, on this board only: the icon
+              disc 36px -> 26px and the stop's padding 4/6px -> 2/4px. The 18px icons and
+              the labels are unchanged. */}
+          <div
+            className="grid [&_button>span:first-child]:h-[26px] [&_button>span:first-child]:w-[26px] [&_button]:pb-1 [&_button]:pt-0.5"
+            style={{ gridTemplateColumns: `repeat(${PRESALES_TABS.length}, minmax(0, 1fr))` }}
+          >
             {PRESALES_TABS.map((t) => {
               const Icon = t.icon;
               return (
