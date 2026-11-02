@@ -3006,7 +3006,10 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   ];
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" data-testid="presales-detail-dialog">
+    // z-50 on a phone: this layer is the stacking context for every popup opened from the
+    // lead (Appointment, Follow Up, Pre Book, Reschedule), so at z-30 the Pre Sales bottom
+    // bar (z-40) drew over all of them and hid their Cancel / Confirm footers.
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4 md:z-30" data-testid="presales-detail-dialog">
       {!showEdit && (
       // Branch Admin's lead popup (Branch Leads), piece for piece, with 4px corners: a white
       // header carrying the ID and stage chips, square pill tabs, white cards, and the stage

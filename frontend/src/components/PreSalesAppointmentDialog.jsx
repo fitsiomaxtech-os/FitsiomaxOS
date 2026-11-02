@@ -270,7 +270,7 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-2 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="presales-appt-modal">
       <div
-        className={`flex max-h-[calc(100vh-2rem)] w-full ${booking ? "max-w-6xl" : "max-w-2xl"} flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl`}
+        className={`flex max-h-[calc(100vh-2rem)] supports-[height:100dvh]:max-h-[calc(100dvh-2rem)] w-full ${booking ? "max-w-6xl" : "max-w-2xl"} flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl`}
         style={{ maxHeight: "calc(100dvh - 2rem)" }}
       >
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2 sm:px-5 sm:py-2.5">
