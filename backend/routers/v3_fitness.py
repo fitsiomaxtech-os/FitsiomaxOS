@@ -469,6 +469,22 @@ async def _row_or_404(registration_id: str, user: V3UserOut) -> dict:
     return row
 
 
+async def _log_on_lead(row: dict, action: str, details: str, user: V3UserOut) -> None:
+    """Put a referred membership's move on the patient's own timeline -- as Zumba does, and
+    only for a row that came from a consultation; a walk-in has no lead to put it on."""
+    if not row.get("lead_id"):
+        return
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": row["lead_id"],
+        "action": action,
+        "details": details,
+        "created_by": user.full_name or user.email,
+        "created_by_role": user.role,
+        "created_at": now_iso(),
+    })
+
+
 @router.post("/branch/fitness")
 async def add_fitness(
     payload: FitnessInput,
@@ -549,6 +565,7 @@ async def accept_fitness_referral(
     # Edit, Collect and Renew on it like any other membership.
     row.pop("origin", None)
     await v3_col("fitness_registrations").insert_one(dict(row))
+    await _log_on_lead(row, "fitness_referral_accepted", "Fitness: referral taken on by the branch as a membership", user)
     return _shape(row)
 
 
@@ -614,6 +631,9 @@ async def set_fitness_status(
             "updated_at": now_iso(),
         }},
     )
+    if status != row.get("status"):
+        remarks = (payload.remarks or "").strip()
+        await _log_on_lead(row, "fitness_status_change", f"Fitness: marked {status}" + (f" · {remarks}" if remarks else ""), user)
     updated = await v3_col("fitness_registrations").find_one({"id": registration_id}, {"_id": 0})
     return {"message": f"{row.get('name', 'Member')} marked {status}", "registration": _shape(updated)}
 

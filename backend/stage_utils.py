@@ -1,10 +1,93 @@
-from typing import List, Optional, Set
+import uuid
+from typing import Iterable, List, Optional, Set
 
 import lead_control
 from constants import BRANCH_ADMIN_RNR_STAGE, SALES_ARM_OFFLINE, SALES_ARM_ONLINE
 from database import v3_col
 from deps import names_the_online_arm, online_arm_practice
 from utils import now_iso
+
+
+# ------------------------------------------------------------------- The lead's timeline
+#
+# Every board's Timeline tab is the lead_activity trail read back, so a stage written with
+# no row here is a move nobody can see: the lead jumps from one pill to another and the
+# timeline has nothing between the two points. The routes that already log their move keep
+# their own wording; these are for the ones that only ever had a $set, in the same words
+# v3_move_stage and v3_move_branch_stage write, so the two kinds read alike on a timeline.
+
+
+def _move_words(field: str, old: Optional[str], new: Optional[str]) -> str:
+    if field == "stage":
+        return f"Moved from '{old or 'Unknown'}' to '{new}'"
+    # A branch stage starts empty (the lead has not reached a branch) and goes empty again
+    # when the branch it sat in is deleted, so "'None' -> 'X'" is never the right reading.
+    if not old:
+        return f"Branch stage: arrived at '{new}'"
+    if not new:
+        return f"Branch stage: left '{old}'"
+    return f"Branch stage: '{old}' -> '{new}'"
+
+
+_MOVE_ACTIONS = {"stage": "stage_change", "branch_stage": "branch_stage_change"}
+
+
+def stage_move_rows(
+    lead_id: str, before: Optional[dict], after: dict, by: str, by_role: str, note: str = ""
+) -> List[dict]:
+    """The timeline rows for whichever of a lead's Pre-Sales and Branch stages `after`
+    changes. A field `after` does not name, or names unchanged, writes nothing."""
+    rows = []
+    at = now_iso()
+    for field, action in _MOVE_ACTIONS.items():
+        if field not in after:
+            continue
+        old, new = (before or {}).get(field), after[field]
+        if (old or None) == (new or None):
+            continue
+        rows.append({
+            "id": str(uuid.uuid4()),
+            "lead_id": lead_id,
+            "action": action,
+            "details": _move_words(field, old, new) + (f" · {note}" if note else ""),
+            "created_by": by or "system",
+            "created_by_role": by_role or "system",
+            "created_at": at,
+        })
+    return rows
+
+
+async def insert_activity_rows(rows: Iterable[dict]) -> None:
+    rows = list(rows)
+    if rows:
+        await v3_col("lead_activity").insert_many(rows)
+
+
+async def log_stage_moves(
+    lead_id: str, before: Optional[dict], after: dict, by: str, by_role: str, note: str = ""
+) -> None:
+    await insert_activity_rows(stage_move_rows(lead_id, before, after, by, by_role, note))
+
+
+def lead_created_row(lead: dict, by: str, by_role: str, how: str = "") -> dict:
+    """The first point on a lead's timeline: where it opened, and where from.
+
+    Dated with the lead's own created_at rather than now, because an imported lead is dated
+    by when the patient enquired -- and the timeline has to start where the lead does, or
+    its first point sits after moves made on the lead the day it actually arrived.
+    """
+    details = f"Lead created at '{lead.get('stage') or 'New Leads'}'" + (f" · {how}" if how else "")
+    if lead.get("branch_stage"):
+        details += f" · Branch stage: arrived at '{lead['branch_stage']}'"
+    return {
+        "id": str(uuid.uuid4()),
+        "lead_id": lead["id"],
+        "action": "lead_created",
+        "details": details,
+        "created_by": by or "system",
+        "created_by_role": by_role or "system",
+        "created_at": lead.get("created_at") or now_iso(),
+    }
 
 
 # ---------------------------------------------------------------- Branch ("sales") stages
@@ -144,7 +227,9 @@ async def entry_branch_stage_names() -> Set[str]:
     return names
 
 
-async def realign_branch_stage_leads(branch_id: str, control: str) -> int:
+async def realign_branch_stage_leads(
+    branch_id: str, control: str, by: str = "system", by_role: str = "system"
+) -> int:
     """Rehome a branch's leads after its Lead Control changed. Returns how many moved.
 
     Lead Control is resolved live rather than stamped on the lead, so flipping the switch
@@ -157,6 +242,9 @@ async def realign_branch_stage_leads(branch_id: str, control: str) -> int:
     both modes. Only stages the target mode does not have get moved, and RNR folds into
     Follow Up rather than back to the start, the same way it did when RNR was retired from
     the Pre-Sales and Consultation pipelines.
+
+    Each lead moved gets its own timeline row: a whole branch changing desks is exactly the
+    move a patient's timeline must explain, or their stage changes with nobody's name on it.
     """
     rows = await _sales_stage_rows(await sales_arm_for(branch_id=branch_id))
     target = [r["name"] for r in rows if _visible_to(r, control)]
@@ -171,12 +259,43 @@ async def realign_branch_stage_leads(branch_id: str, control: str) -> int:
         destination = fallback_for_rnr if name == BRANCH_ADMIN_RNR_STAGE else entry
         if destination == name:
             continue
+        stranded_ids = [l["id"] for l in await v3_col("leads").find(
+            {"branch_id": branch_id, "branch_stage": name}, {"_id": 0, "id": 1}
+        ).to_list(None)]
+        if not stranded_ids:
+            continue
         result = await v3_col("leads").update_many(
-            {"branch_id": branch_id, "branch_stage": name},
+            {"id": {"$in": stranded_ids}, "branch_stage": name},
             {"$set": {"branch_stage": destination, "updated_at": now_iso()}},
         )
         moved += result.modified_count
+        note = "Lead Control changed to " + {
+            lead_control.PRE_SALES: "Pre-Sales", lead_control.BRANCH_ADMIN: "Branch Admin", lead_control.BOTH: "Both",
+        }.get(control, control)
+        await insert_activity_rows(
+            row for lid in stranded_ids
+            for row in stage_move_rows(lid, {"branch_stage": name}, {"branch_stage": destination}, by, by_role, note)
+        )
     return moved
+
+
+async def unbranch_leads(branch_id: str, branch_name: str, by: str, by_role: str) -> None:
+    """Send a deleted branch's leads back to "no branch", saying so on each one's timeline.
+
+    The lead is not deleted with its branch, it falls back to the normal Pre-Sales flow --
+    and without a row here its timeline ends on a Branch stage that no board shows any more.
+    """
+    leads = await v3_col("leads").find(
+        {"branch_id": branch_id}, {"_id": 0, "id": 1, "branch_stage": 1}
+    ).to_list(None)
+    await v3_col("leads").update_many(
+        {"branch_id": branch_id},
+        {"$set": {"branch_id": None, "branch_stage": None, "updated_at": now_iso()}},
+    )
+    note = f"branch '{branch_name}' deleted, back to no branch" if branch_name else "branch deleted, back to no branch"
+    await insert_activity_rows(
+        row for l in leads for row in stage_move_rows(l["id"], l, {"branch_stage": None}, by, by_role, note)
+    )
 
 
 async def get_first_stage_name(stage_type: str, fallback: str) -> str:

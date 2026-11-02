@@ -13,6 +13,7 @@ from routers.v3_hr import is_multi_branch_role, holds_calendar_per_branch, exper
 from security import verify_password
 import lead_control
 import past_data_store
+from stage_utils import unbranch_leads
 from seed import create_default_lead_source
 from schemas.v3 import V3UserOut
 
@@ -152,7 +153,7 @@ async def delete_archived_branch(branch_id: str, payload: BranchArchiveInput, us
     if admin_id:
         # Only if they are still on this branch — they may have been given another since.
         await v3_col("users").update_one({"id": admin_id, "branch_id": branch_id}, {"$set": {"branch_id": None}})
-    await v3_col("leads").update_many({"branch_id": branch_id}, {"$set": {"branch_id": None, "branch_stage": None}})
+    await unbranch_leads(branch_id, branch.get("branch_name", ""), user.full_name, user.role)
     await v3_col("marketing_sources").update_many({"branch_id": branch_id}, {"$set": {"branch_id": None}})
     return {"message": "Branch deleted"}
 

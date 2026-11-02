@@ -10,7 +10,7 @@ from deps import (
     vertical_names_an_arm, lead_as_read_by, works_org_wide,
 )
 from constants import V3_STAGES, PRESALES_LOST_STAGE
-from stage_utils import first_branch_stage_for, first_branch_stage_for_branch
+from stage_utils import first_branch_stage_for, first_branch_stage_for_branch, lead_created_row, log_stage_moves
 import lead_control
 import lead_purge
 from routers.v3_lead_documents import leads_with_prescription
@@ -151,6 +151,7 @@ async def v3_manual_lead(payload: V3LeadCreate, user: V3UserOut = Depends(v3_req
         "updated_at": now_iso(),
     }
     await v3_col("leads").insert_one(lead.copy())
+    await v3_col("lead_activity").insert_one(lead_created_row(lead, user.full_name, user.role, "added by hand"))
     return V3LeadOut(**lead)
 
 
@@ -343,13 +344,14 @@ async def v3_edit_lead(
 
     updates["updated_at"] = now_iso()
 
+    branch = None
     if "branch_id" in updates:
-        branch = await v3_col("branches").find_one({"id": updates["branch_id"]}, {"_id": 0, "id": 1})
+        branch = await v3_col("branches").find_one({"id": updates["branch_id"]}, {"_id": 0, "id": 1, "branch_name": 1})
         if not branch:
             raise HTTPException(status_code=404, detail="Branch not found")
 
     existing = None
-    if "stage" in updates or "branch_id" in updates:
+    if "stage" in updates or "branch_stage" in updates or "branch_id" in updates:
         existing = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "id": 1, "branch_id": 1, "branch_stage": 1, "stage": 1})
     if "stage" in updates and updates["stage"] != PRESALES_LOST_STAGE:
         _refuse_if_lost(existing)
@@ -377,6 +379,19 @@ async def v3_edit_lead(
             raise HTTPException(status_code=404, detail="Lead not found")
         raise HTTPException(status_code=403, detail="Lead not in your branch scope")
 
+    # This PUT moves a lead as surely as the move-stage routes do -- Master Control's Assign
+    # Branch and the edit form both come through here -- so it puts the same points on the
+    # timeline they do. A change of branch reads as arriving on the new branch's board --
+    # even when the stage there has the same name as the one left, which would otherwise
+    # read as no move at all.
+    if existing is not None:
+        before, note = existing, ""
+        if "branch_id" in updates and existing.get("branch_id") != updates["branch_id"]:
+            before = {**existing, "branch_stage": None}
+            note = f"assigned to branch '{(branch or {}).get('branch_name') or 'Unknown'}'"
+        moves = {k: updates[k] for k in ("stage", "branch_stage") if k in updates}
+        await log_stage_moves(lead_id, before, moves, user.full_name, user.role, note)
+
     if "phone" in updates:
         # Imported here, not at the top: the portal router pulls in several others, and
         # this is the only thing v3_leads needs from it.
@@ -388,21 +403,23 @@ async def v3_edit_lead(
 
 
 @router.post("/leads/{lead_id}/qualify", response_model=V3LeadOut)
-async def v3_qualify_lead(lead_id: str, _: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
-    _refuse_if_lost(await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "stage": 1}))
+async def v3_qualify_lead(lead_id: str, user: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
+    before = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "stage": 1})
+    _refuse_if_lost(before)
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {"stage": "Follow Up", "updated_at": now_iso()}})
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await log_stage_moves(lead_id, before, {"stage": "Follow Up"}, user.full_name, user.role, "qualified")
     return V3LeadOut(**lead)
 
 
 @router.post("/leads/{lead_id}/assign-branch", response_model=V3LeadOut)
-async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, _: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
-    branch = await v3_col("branches").find_one({"id": payload.branch_id}, {"_id": 0, "id": 1})
+async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, user: V3UserOut = Depends(v3_require_roles("pre_sales", "business_dev", "super_admin"))):
+    branch = await v3_col("branches").find_one({"id": payload.branch_id}, {"_id": 0, "id": 1, "branch_name": 1})
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
-    existing_lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "patient_number": 1, "stage": 1})
+    existing_lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "patient_number": 1, "stage": 1, "branch_id": 1, "branch_stage": 1})
     if not existing_lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     _refuse_if_lost(existing_lead)
@@ -421,6 +438,12 @@ async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, _: V3User
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    # Read as arriving on the branch's board whatever it carried before -- see v3_edit_lead.
+    before = {**existing_lead, "branch_stage": None} if existing_lead.get("branch_id") != payload.branch_id else existing_lead
+    await log_stage_moves(
+        lead_id, before, {"stage": "Appointment", "branch_stage": new_branch_stage}, user.full_name, user.role,
+        f"assigned to branch '{branch.get('branch_name') or 'Unknown'}'",
+    )
     return V3LeadOut(**lead)
 
 
@@ -433,7 +456,7 @@ async def v3_confirm_lead(lead_id: str, user: V3UserOut = Depends(v3_require_rol
     # Read the lead's branch before writing: the entry stage it lands on depends on that
     # branch's Lead Control, and a branch_admin caller's own branch_id is not necessarily
     # the lead's when a Super Admin is the one confirming.
-    target = await v3_col("leads").find_one(filter_query, {"_id": 0, "branch_id": 1, "stage": 1})
+    target = await v3_col("leads").find_one(filter_query, {"_id": 0, "branch_id": 1, "stage": 1, "branch_stage": 1})
     _refuse_if_lost(target)
     new_branch_stage = await first_branch_stage_for_branch((target or {}).get("branch_id"), "New Appointment")
     result = await v3_col("leads").update_one(filter_query, {"$set": {"stage": "Appointment", "branch_stage": new_branch_stage, "updated_at": now_iso()}})
@@ -443,6 +466,9 @@ async def v3_confirm_lead(lead_id: str, user: V3UserOut = Depends(v3_require_rol
             raise HTTPException(status_code=404, detail="Lead not found")
         raise HTTPException(status_code=403, detail="Lead not in your branch scope")
 
+    await log_stage_moves(
+        lead_id, target, {"stage": "Appointment", "branch_stage": new_branch_stage}, user.full_name, user.role, "confirmed",
+    )
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -480,6 +506,10 @@ async def v3_book_appointment(lead_id: str, payload: V3BookAppointmentInput, use
     await v3_col("appointments").insert_one(appointment.copy())
     new_branch_stage = await first_branch_stage_for_branch(appointment["branch_id"], "New Appointment")
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {"stage": "Appointment", "branch_stage": new_branch_stage, "updated_at": now_iso()}})
+    await log_stage_moves(
+        lead_id, lead, {"stage": "Appointment", "branch_stage": new_branch_stage}, user.full_name, user.role,
+        f"appointment booked with {doctor['full_name']} at {slot_key}",
+    )
     return V3AppointmentOut(**appointment)
 
 
@@ -543,7 +573,10 @@ async def v3_complete_follow_up(lead_id: str, followup_id: str, _: V3UserOut = D
 
 @router.get("/leads/{lead_id}/activity")
 async def v3_get_activity(lead_id: str, _: V3UserOut = Depends(v3_current_user)):
-    rows = await v3_col("lead_activity").find({"lead_id": lead_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # The whole trail, not the latest page of it: a patient a course in writes a row a
+    # session, and a cap of 200 cut the oldest off -- the stages they came in through, which
+    # are the points a timeline is opened to follow.
+    rows = await v3_col("lead_activity").find({"lead_id": lead_id}, {"_id": 0}).sort("created_at", -1).to_list(5000)
     return rows
 
 

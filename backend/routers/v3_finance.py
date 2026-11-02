@@ -2982,7 +2982,7 @@ async def client_transaction_history(
         branch_name = (branch or {}).get("branch_name", "")
 
     today = datetime.now(timezone.utc).date().isoformat()
-    activity = await v3_col("lead_activity").find({"lead_id": lead_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    activity = await v3_col("lead_activity").find({"lead_id": lead_id}, {"_id": 0}).sort("created_at", -1).to_list(5000)
 
     first_installment_amount = None
     if lead.get("treatment_fee_payment_mode") == "partial":

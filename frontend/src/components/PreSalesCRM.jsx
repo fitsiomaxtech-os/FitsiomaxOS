@@ -35,6 +35,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { callTimeStamp, callDateStamp, dateStampFull, dateTimeStamp, shortDateTimeStamp, to12h } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
+import { byOldestFirst } from "@/lib/timeline";
 import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookPaidAt, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -3578,7 +3579,9 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
               )}
               {!activityLoading && activity.length > 0 && (
                 <ol className="ml-3 space-y-4 border-l-2 border-slate-200 py-1 pl-6">
-                  {activity.map((a) => (
+                  {/* Oldest first, as Branch Admin's and Consultations' Timeline read: the
+                      lead's path from where it came in to where it is now, point to point. */}
+                  {byOldestFirst(activity).map((a) => (
                     <li key={a.id} className="relative" data-testid={`presales-history-row-${a.id}`}>
                       <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-sky-500" />
                       <div className="rounded-[3px] border border-slate-100 bg-slate-50 p-3">

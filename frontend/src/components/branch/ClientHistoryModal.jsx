@@ -4,6 +4,7 @@ import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRigh
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { displayPhone, telNumber } from "@/lib/phone";
+import { byOldestFirst } from "@/lib/timeline";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
 import { BalanceDiscount, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 
@@ -384,7 +385,8 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
   const schedule = data?.schedule || [];
   const pastOwed = data?.past_owed || [];
   const transactions = data?.transactions || [];
-  const timeline = data?.timeline || [];
+  // Oldest first, as every board's Timeline reads: the client's path point to point.
+  const timeline = byOldestFirst(data?.timeline || []);
   const status = data?.status || "processing";
   const balanceMeta = BALANCE_STATUS_META[data?.balance_status] || BALANCE_STATUS_META.partial;
 

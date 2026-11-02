@@ -16,7 +16,7 @@ from deps import (
     collapse_duplicate_experts, names_the_online_arm, super_admin_consults_at,
     super_admin_branch_switches_enabled, SA_CONSULT_BRANCHES_SETTING_ID,
 )
-from stage_utils import get_first_stage_name, realign_branch_stage_leads
+from stage_utils import get_first_stage_name, realign_branch_stage_leads, unbranch_leads
 from shift_utils import attach_shifts
 import lead_control
 import lead_purge
@@ -521,7 +521,7 @@ async def v3_update_branch(branch_id: str, payload: V3BranchUpdate, user: V3User
     # mode's stages are rehomed now, in the same request as the flip, so the board the admin
     # lands on after switching is the full backlog rather than a board missing most of it.
     if "lead_control" in updates and updates["lead_control"] != lead_control.normalize(existing.get("lead_control")):
-        await realign_branch_stage_leads(branch_id, updates["lead_control"])
+        await realign_branch_stage_leads(branch_id, updates["lead_control"], user.full_name, user.role)
         # A branch that ran its own leads had no Pre-Sales rep on any of them, so handing
         # the book back left every lead sitting in the Pre-Sales pipeline unowned. The rep
         # named on the switch takes them, which is the whole point of being asked.
@@ -588,7 +588,7 @@ async def v3_lead_control_history(
 
 
 @router.delete("/branches/{branch_id}")
-async def v3_delete_branch(branch_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def v3_delete_branch(branch_id: str, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
     existing = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Branch not found")
@@ -598,10 +598,7 @@ async def v3_delete_branch(branch_id: str, _: V3UserOut = Depends(v3_require_rol
     # Don't leave leads/sources pointing at a branch that no longer exists — unassign them
     # back to "no branch" so they fall back to the normal Pre-Sales flow instead of silently
     # keeping a dead branch_id forever.
-    await v3_col("leads").update_many(
-        {"branch_id": branch_id},
-        {"$set": {"branch_id": None, "branch_stage": None}},
-    )
+    await unbranch_leads(branch_id, existing.get("branch_name", ""), user.full_name, user.role)
     await v3_col("marketing_sources").update_many(
         {"branch_id": branch_id},
         {"$set": {"branch_id": None}},

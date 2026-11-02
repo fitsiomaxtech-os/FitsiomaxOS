@@ -27,7 +27,7 @@ from database import v3_col
 from utils import now_iso, generate_patient_number, enquiry_created_at, find_enquiry_stamp, without_past_moves
 from deps import v3_require_roles, is_branch_admin_role
 from schemas.v3 import V3UserOut
-from stage_utils import first_branch_stage_for
+from stage_utils import first_branch_stage_for, lead_created_row
 import branch_routing
 import lead_control
 import lead_mapping
@@ -611,6 +611,7 @@ async def _pull_source_unlocked(source_id: str, range_: str = "A1:Z10000") -> Di
                 "updated_at": now_iso(),
             }
             await v3_col("leads").insert_one(lead.copy())
+            await v3_col("lead_activity").insert_one(lead_created_row(lead, "system", "system", f"imported from sheet '{lead['source_tab']}'"))
             known_phones.add(phone_norm)
             imported += 1
 

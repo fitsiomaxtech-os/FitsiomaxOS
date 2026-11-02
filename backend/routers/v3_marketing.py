@@ -11,7 +11,7 @@ from deps import v3_require_roles, v3_current_user
 from constants import V3_STAGES
 from security import hash_password
 from schemas.v3 import V3UserOut
-from stage_utils import first_branch_stage_for
+from stage_utils import first_branch_stage_for, lead_created_row
 # Which branch a row asks for, where the sheet asks the patient at all.
 import branch_routing
 import lead_control
@@ -723,7 +723,7 @@ async def delete_source(source_id: str, _: V3UserOut = Depends(v3_require_roles(
 
 
 @router.post("/sources/{source_id}/sync")
-async def sync_source(source_id: str, payload: MarketingSyncInput, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def sync_source(source_id: str, payload: MarketingSyncInput, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
     source = await v3_col("marketing_sources").find_one({"id": source_id}, {"_id": 0})
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
@@ -841,6 +841,7 @@ async def sync_source(source_id: str, payload: MarketingSyncInput, _: V3UserOut 
             "updated_at": now_iso(),
         }
         await v3_col("leads").insert_one(lead.copy())
+        await v3_col("lead_activity").insert_one(lead_created_row(lead, user.full_name, user.role, f"imported from '{source['name']}'"))
         imported += 1
 
     new_row_count = (source.get("row_count") or 0) + imported

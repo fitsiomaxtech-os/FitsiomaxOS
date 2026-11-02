@@ -41,6 +41,7 @@ import {
 import { to12h } from "@/lib/time";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { displayPhone } from "@/lib/phone";
+import { byOldestFirst } from "@/lib/timeline";
 
 const PIPELINE_STAGES = [
   "New Lead",
@@ -916,7 +917,7 @@ function LeadDetailModal({ lead, branches, onClose, onStageMove, onRefresh }) {
               {activityLog.length === 0 ? (
                 <p className="py-4 text-center text-sm text-slate-400">No activity yet</p>
               ) : (
-                activityLog.map((a) => (
+                byOldestFirst(activityLog).map((a) => (
                   <div key={a.id} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3" data-testid={`lead-activity-${a.id}`}>
                     <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-100">
                       <Activity className="h-3 w-3 text-sky-600" />

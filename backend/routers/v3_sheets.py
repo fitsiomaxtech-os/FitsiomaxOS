@@ -5,6 +5,7 @@ import os
 
 from database import v3_col
 from utils import now_iso, without_past_moves
+from stage_utils import lead_created_row
 from deps import v3_require_roles
 from schemas.v3 import (
     V3UserOut, V3SheetConnectionCreate, V3SheetMappingInput, V3SheetSyncInput,
@@ -46,7 +47,7 @@ async def v3_save_mapping(connection_id: str, payload: V3SheetMappingInput, _: V
 
 
 @router.post("/sheets/connections/{connection_id}/sync")
-async def v3_sync_sheet(connection_id: str, payload: V3SheetSyncInput, _: V3UserOut = Depends(v3_require_roles("business_dev", "super_admin"))):
+async def v3_sync_sheet(connection_id: str, payload: V3SheetSyncInput, user: V3UserOut = Depends(v3_require_roles("business_dev", "super_admin"))):
     mapping = await v3_col("sheet_mappings").find_one({"connection_id": connection_id}, {"_id": 0})
     if not mapping:
         raise HTTPException(status_code=400, detail="Field mapping not configured")
@@ -91,6 +92,7 @@ async def v3_sync_sheet(connection_id: str, payload: V3SheetSyncInput, _: V3User
                 "updated_at": now_iso(),
             }
             await v3_col("leads").insert_one(lead.copy())
+            await v3_col("lead_activity").insert_one(lead_created_row(lead, user.full_name, user.role, f"imported from sheet tab '{tab.tab_name}'"))
             imported += 1
 
     return {"imported": imported, "skipped": skipped, "connection_id": connection_id}

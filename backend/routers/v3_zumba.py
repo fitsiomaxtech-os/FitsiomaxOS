@@ -813,6 +813,27 @@ async def _registration_or_400(registration_id: str) -> dict:
     return existing
 
 
+async def _log_on_lead(row: dict, action: str, details: str, user: V3UserOut) -> None:
+    """Put a referred registration's move on the patient's own timeline.
+
+    Only for a row that came from a consultation: a walk-in has no lead and so no timeline,
+    and its history is the registration itself. A referred one is the same patient the
+    branch and the consultation have been following, and the timeline they read has to go
+    on past the referral rather than stop at it.
+    """
+    if not row.get("lead_id"):
+        return
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": row["lead_id"],
+        "action": action,
+        "details": details,
+        "created_by": user.full_name or user.email,
+        "created_by_role": user.role,
+        "created_at": now_iso(),
+    })
+
+
 @router.get("/branch/zumba")
 async def list_zumba(
     branch_id: Optional[str] = Query(None),
@@ -1421,6 +1442,7 @@ async def accept_referral(
         "created_by": user.full_name or user.email,
     }
     await v3_col("zumba_registrations").insert_one(dict(row))
+    await _log_on_lead(row, "zumba_referral_accepted", f"Zumba: referral taken on by the branch at '{row['stage']}'", user)
     return _shape(row, stages)
 
 
@@ -1475,6 +1497,8 @@ async def move_zumba_stage(
         "updated_at": now_iso(),
         "updated_by": user.full_name or user.email,
     }})
+    if stage != existing.get("stage"):
+        await _log_on_lead(existing, "zumba_stage_change", f"Zumba stage: '{existing.get('stage') or 'Unknown'}' -> '{stage}'", user)
     return _shape({**existing, "stage": stage}, stages)
 
 
@@ -1517,6 +1541,11 @@ async def set_zumba_status(
         "updated_by": user.full_name or user.email,
     }
     await v3_col("zumba_registrations").update_one({"id": registration_id}, {"$set": changes})
+    if status != existing.get("status"):
+        await _log_on_lead(
+            existing, "zumba_status_change",
+            f"Zumba: marked {status}" + (f" · {remarks}" if status in ENDED_STATUSES else ""), user,
+        )
     return _shape({**existing, **changes}, await _zumba_stages())
 
 
