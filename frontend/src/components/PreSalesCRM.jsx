@@ -868,44 +868,51 @@ const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) =
 );
 
 /**
- * A lead on the rep's phone, drawn to the wireframe: the avatar, the name with its number
- * and source under it, and on the right the stage over Call and WhatsApp. A tap anywhere
- * else opens the lead.
+ * A lead on the rep's phone, drawn to the wireframe and to the inline stage rows: initials
+ * in a grey rounded square, the name with its number and source under it, the stage in the
+ * orange box the stage rows keep their counts in, and a chevron. The red dot in the corner
+ * marks a lead waiting on the rep -- still in New Leads, flagged for attention, or past its
+ * follow-up call. Call and WhatsApp are in the lead's popup, under Contact.
  */
-const PhoneLeadCard = ({ lead, stageHex, details = null, onOpen, testid }) => (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onOpen}
-    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
-    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition active:bg-slate-50"
-    data-testid={`${testid}-${lead.id}`}
-  >
-    <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarColor(lead.name).bg} ${avatarColor(lead.name).fg}`}>
-      {initials(lead.name)}
-    </span>
-    <div className="min-w-0 flex-1">
-      <p className="flex min-w-0 items-center text-sm font-semibold text-slate-900">
-        <span className="truncate">{lead.name || "—"}</span>
-        <LeadMarks lead={lead} className="ml-1" />
-      </p>
-      <p className="mt-0.5 truncate text-[11px] text-slate-500">
-        {[displayPhone(lead.phone), (lead.source_tab || lead.source_type) && sourceLabel(lead.source_tab || lead.source_type)].filter(Boolean).join(" · ") || "—"}
-      </p>
-      {details && <div className="mt-1 space-y-0.5">{details}</div>}
-    </div>
-    <div className="flex shrink-0 flex-col items-end gap-2">
-      <span
-        className="max-w-[96px] truncate rounded-[5px] border px-2 py-0.5 text-[10px] font-medium"
-        style={{ background: `${stageHex}14`, color: stageHex, borderColor: `${stageHex}33` }}
-        title={lead.stage || undefined}
-      >
-        {lead.stage || "—"}
+const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
+  const overdueCall = /follow/i.test(lead.stage || "") && lead.next_follow_up_at && new Date(lead.next_follow_up_at).getTime() < Date.now();
+  const waiting = lead.stage === "New Leads" || !!lead.needs_attention || !!overdueCall;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
+      className="relative flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-md transition active:scale-[0.99]"
+      data-testid={`${testid}-${lead.id}`}
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">
+        {initials(lead.name)}
       </span>
-      <LeadContactIcons lead={lead} />
+      <div className="min-w-0 flex-1">
+        <p className="flex min-w-0 items-center text-sm font-semibold text-slate-900">
+          <span className="truncate">{lead.name || "—"}</span>
+          <LeadMarks lead={lead} className="ml-1" />
+        </p>
+        <p className="mt-0.5 truncate text-[11px] text-slate-500">
+          {[displayPhone(lead.phone), (lead.source_tab || lead.source_type) && sourceLabel(lead.source_tab || lead.source_type)].filter(Boolean).join(" · ") || "—"}
+        </p>
+        {details && <div className="mt-1 space-y-0.5">{details}</div>}
+      </div>
+      <span
+        className="inline-flex h-7 w-[5.5rem] shrink-0 items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-1.5 text-[11px] font-medium text-orange-700"
+        title={lead.stage || undefined}
+        data-testid={`${testid}-stage-${lead.id}`}
+      >
+        <span className="truncate">{lead.stage || "—"}</span>
+      </span>
+      <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />
+      {waiting && (
+        <span aria-hidden className="absolute right-2.5 top-2 h-2.5 w-2.5 rounded-full bg-red-500 motion-safe:animate-dot-pop" data-testid={`${testid}-dot-${lead.id}`} />
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // The rep's phone stage cards, drawn Branch Leads' way (see PHONE_CARD_HEX, notifyHex and
 // leadStageIcon in BranchAdminBoard): every card the one grey, the stage's own colour only
@@ -2069,7 +2076,6 @@ export const PreSalesCRM = ({
                   {loading ? "Loading..." : `No leads ${stageFilter === "All" ? "in this range" : `in "${stageFilter}"`}.`}
                 </p>
               ) : visibleLeads.map((l) => {
-                const stg = stages.find((st) => st.name === l.stage);
                 const rnr = l.stage === "RNR" && (l.rnr_attempts || 0) > 0;
                 const fu = l.stage === "Follow Up" && l.next_follow_up_at ? new Date(l.next_follow_up_at) : null;
                 const fuOverdue = fu ? fu.getTime() < Date.now() : false;
@@ -2078,7 +2084,6 @@ export const PreSalesCRM = ({
                   <PhoneLeadCard
                     key={l.id}
                     lead={l}
-                    stageHex={notifyHex(stageInk(stg))}
                     onOpen={() => setEditing(l)}
                     testid="presales-card"
                     details={rnr || fu || pb ? (
@@ -2611,7 +2616,6 @@ export const PreSalesCRM = ({
                 <PhoneLeadCard
                   key={l.id}
                   lead={l}
-                  stageHex={notifyHex(stageInk(stages.find((st) => st.name === l.stage)))}
                   onOpen={() => setEditing(l)}
                   testid="presales-followup-card"
                   details={(
@@ -3074,6 +3078,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                 <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600"><Phone className="h-4 w-4" /></span>
                   <p className="text-xs font-bold uppercase tracking-wider text-sky-700">Contact</p>
+                  {/* Call and WhatsApp, phone only: the rep's phone list cards no longer
+                      carry them, and on a desk tel: and wa.me open nothing useful. */}
+                  <div className="ml-auto md:hidden" data-testid="presales-detail-contact-actions">
+                    <LeadContactIcons lead={currentLead} />
+                  </div>
                 </div>
                 <div className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between gap-3 text-sm">
