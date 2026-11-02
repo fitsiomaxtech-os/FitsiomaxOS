@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -32,7 +32,7 @@ import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
 import { MilkDateInput, MilkDateTextInput, MilkTimeInput } from "@/components/ui/milk-calendar";
-import { callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
+import { callTimeStamp, callDateStamp, dateStampFull, to12h } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
 import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 
@@ -336,8 +336,122 @@ const isBranchAppointment = (l) => BRANCH_APPOINTMENT_STAGES.includes(l.branch_s
  * from Pre Sales.
  */
 const CONSULTATION_VISIT_STAGE = "Consultation Visit";
-const CONSULTATION_VISIT_CARD = { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: "#14b8a6" };
+// The stage's seeded colour, until the live Consultation list says otherwise (see load()).
+const CONSULTATION_VISIT_HEX = "#f43f5e";
 const isConsultationVisit = (l) => l.consultation_stage === CONSULTATION_VISIT_STAGE;
+
+// The Consultation board's appointment chip, day and tone: "Mon, 2 Nov", amber today, sky
+// ahead, grey behind. Copied from ConsultationsBoard (apptDayLabel, appointmentTone) rather
+// than imported, so this file does not pull that board in -- keep the two in step.
+const consultApptDay = (d) => {
+  const dt = new Date(`${d}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return d || "—";
+  return dt.toLocaleDateString("en-IN", {
+    weekday: "short", day: "numeric", month: "short",
+    ...(dt.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+  });
+};
+const consultApptTone = (date) => {
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const on = String(date || "").slice(0, 10);
+  if (on === today) return "border-amber-200 bg-amber-50 text-amber-700";
+  return on > today ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-50 text-slate-500";
+};
+
+/**
+ * The Consultation Visit list, drawn as Branch Admin > Consultation draws it: S.No, Name,
+ * Appointment, Consultant, Stage, Phone, Patient No., Consultation Fee -- same widths, header,
+ * chips and fee control.
+ *
+ * The fee cell reports rather than acts. Collecting it, and filing the prescription it waits
+ * on, are the branch's; here it says which of those the patient is waiting on -- Paid,
+ * Collect Balance, Prescription or Collect -- in the colours the branch's button wears. The
+ * row itself still opens the lead.
+ */
+const ConsultationVisitTable = ({ leads, loading, stageHex, onOpen }) => {
+  const COLS = { sno: "w-[4%]", patient: "w-[19%]", appt: "w-[14%]", expert: "w-[13%]", stage: "w-[14%]", phone: "w-[12%]", pno: "w-[12%]", action: "w-[12%]" };
+  const feeChip = "flex h-8 w-full items-center justify-center gap-1 rounded-md px-2 text-[11px] font-semibold shadow-sm sm:px-3 sm:text-xs";
+  return (
+    <table className="w-full min-w-[980px] table-fixed text-sm" data-testid="presales-consult-visit-table">
+      <thead className="sticky top-0 z-10 bg-slate-500 text-xs uppercase text-white">
+        <tr>
+          <th className={`${COLS.sno} px-3 py-2 text-left align-middle`}>S.No</th>
+          <th className={`${COLS.patient} px-4 py-2 text-left align-middle`}>Name</th>
+          <th className={`${COLS.appt} px-3 py-2 text-left align-middle`}>Appointment</th>
+          <th className={`${COLS.expert} px-4 py-2 text-left align-middle`}>Consultant</th>
+          <th className={`${COLS.stage} px-4 py-2 text-left align-middle`}>Stage</th>
+          <th className={`${COLS.phone} px-4 py-2 text-left align-middle`}>Phone</th>
+          <th className={`${COLS.pno} px-4 py-2 text-left align-middle`}>Patient No.</th>
+          <th className={`${COLS.action} px-3 py-2 text-left align-middle`}>Consultation Fee</th>
+        </tr>
+      </thead>
+      <tbody>
+        {leads.map((l, i) => {
+          const unpaid = (l.package_payment_details?.installments || []).some((x) => !x.paid);
+          const fee = unpaid ? "balance" : l.package_paid != null ? "paid" : l.rx_on_file === false ? "rx" : "due";
+          return (
+            <tr key={l.id} onClick={() => onOpen(l)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" data-testid={`presales-consult-row-${l.id}`}>
+              <td className="px-3 py-3 align-middle leading-5 text-slate-400">{i + 1}</td>
+              <td className="truncate px-4 py-3 align-middle font-medium text-slate-800" title={l.name}>
+                <span className="block truncate">{l.name || "—"}<LeadMarks lead={l} className="ml-1.5" /></span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
+                {l.appointment_date ? (
+                  <span className={`flex w-full items-center justify-center gap-1 rounded-md border px-2 py-1 align-middle font-semibold ${consultApptTone(l.appointment_date)}`} data-testid={`presales-consult-appt-${l.id}`}>
+                    <span className="flex items-center gap-1 whitespace-nowrap">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      {consultApptDay(l.appointment_date)}
+                    </span>
+                    {l.appointment_time && (
+                      <span className="whitespace-nowrap text-[11px] font-bold opacity-90">- {to12h(l.appointment_time)}</span>
+                    )}
+                  </span>
+                ) : <span className="block text-center text-slate-400">—</span>}
+              </td>
+              <td className="px-4 py-3 align-middle leading-5 text-slate-600" title={l.assigned_physio_name}>
+                <span className="flex min-w-0 items-center"><span className="truncate">{l.assigned_physio_name || "—"}</span></span>
+              </td>
+              <td className="px-4 py-3 align-middle">
+                <span
+                  className="inline-flex max-w-full items-center gap-1 truncate rounded-[5px] px-2 py-0.5 align-middle text-xs font-semibold"
+                  style={{ background: `${stageHex}14`, color: stageHex, border: `1px solid ${stageHex}33` }}
+                  title={l.consultation_stage || ""}
+                >
+                  {l.consultation_stage || "—"}
+                </span>
+              </td>
+              <td className="truncate px-4 py-3 align-middle leading-5 text-slate-600" title={displayPhone(l.phone)}>{displayPhone(l.phone) || "—"}</td>
+              <td className="truncate px-4 py-3 align-middle font-mono text-xs leading-5 text-slate-500" title={l.patient_number}>{l.patient_number || "—"}</td>
+              <td className="whitespace-nowrap px-3 py-3 align-middle text-xs" data-testid={`presales-consult-fee-${l.id}`}>
+                {fee === "paid" ? (
+                  <span className={`${feeChip} border border-emerald-200 bg-emerald-50 text-emerald-700 shadow-none`}>
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Paid
+                  </span>
+                ) : fee === "balance" ? (
+                  <span className={`${feeChip} bg-amber-500 text-white`} title="Balance with Branch Admin">
+                    <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Collect Balance
+                  </span>
+                ) : fee === "rx" ? (
+                  <span className={`${feeChip} border border-amber-300 bg-amber-50 text-amber-700`} title="Waiting on the prescription before Branch Admin collects the Consultation Fee">
+                    <FileText className="h-3.5 w-3.5 shrink-0" /> Prescription
+                  </span>
+                ) : (
+                  <span className={`${feeChip} bg-sky-600 text-white`} title="Consultation Fee to be collected by Branch Admin">
+                    <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Collect
+                  </span>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+        {leads.length === 0 && (
+          <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">{loading ? "Loading…" : "No patients at Consultation Visit."}</td></tr>
+        )}
+      </tbody>
+    </table>
+  );
+};
 
 /**
  * The Sales Master View's cards: five counts, then the two revenue figures.
@@ -997,6 +1111,8 @@ export const PreSalesCRM = ({
   branchFilterInToolbar = false,
 }) => {
   const [stages, setStages] = useState([]);
+  // Consultation Visit's colour as Branch Admin's Consultation list has it, for its card and chip.
+  const [consultVisitHex, setConsultVisitHex] = useState(CONSULTATION_VISIT_HEX);
   const [leads, setLeads] = useState([]);
   const [branches, setBranches] = useState([]);
   const [search, setSearch] = useState("");
@@ -1100,6 +1216,10 @@ export const PreSalesCRM = ({
     // next Refresh rather than the next sign-in. Apart from the leads: a failure hides the
     // bin and nothing else.
     getLeadDeleteEnabled().then((r) => setLeadDeleteEnabled(!!r?.enabled)).catch(() => setLeadDeleteEnabled(false));
+    // Off to the side like the bin's switch: a failure keeps the seeded colour, nothing else.
+    stagesList("consultation")
+      .then((rows) => { const s = rows.find((x) => x.name === CONSULTATION_VISIT_STAGE); if (s?.color) setConsultVisitHex(s.color); })
+      .catch(() => {});
     try {
       // Scoped to the branch when this board is pinned to one. The API already scopes a
       // Branch Admin to their own branch, but a Super Admin drilled into a branch is not
@@ -1295,7 +1415,11 @@ export const PreSalesCRM = ({
 
   // The summary cards' list: the live stages, then Consultation Visit after Lost. Only the
   // card rows read this -- a lead's chip and the stage pills still go by `stages`.
-  const cardStages = useMemo(() => [...stages, CONSULTATION_VISIT_CARD], [stages]);
+  const cardStages = useMemo(() => [
+    ...stages,
+    { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: consultVisitHex },
+  ], [stages, consultVisitHex]);
+  const onConsultVisitTab = stageFilter === CONSULTATION_VISIT_STAGE;
 
   // Marketing Head's own bucket counts — same idea as stageCounts, against
   // MARKETING_HEAD_FUNNEL's match functions instead of a live stage-name equality.
@@ -1698,6 +1822,10 @@ export const PreSalesCRM = ({
           the same 65vh of screen the Branch Leads list takes. */}
       <div className="w-full overflow-hidden rounded-[4px] border border-slate-200 bg-white" style={{ zoom: 0.9 }} data-testid="presales-leads-card">
           <div className="max-h-[72vh] overflow-auto">
+            {/* Consultation Visit is the branch's stage, so its list is the branch's table. */}
+            {onConsultVisitTab ? (
+              <ConsultationVisitTable leads={visibleLeads} loading={loading} stageHex={consultVisitHex} onOpen={setEditing} />
+            ) : (
             <table className="w-full min-w-[900px] table-fixed divide-y divide-slate-200 text-sm">
               <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
                 <tr>
@@ -1939,6 +2067,7 @@ export const PreSalesCRM = ({
                 {filtered.length === 0 && <tr><td colSpan={tableCols.length} className="px-4 py-10 text-center text-slate-400">{loading ? "Loading..." : "No leads match."}</td></tr>}
               </tbody>
             </table>
+            )}
           </div>
           {filtered.length > visibleCount && (
             <div className="flex items-center justify-center border-t border-slate-100 p-3">
