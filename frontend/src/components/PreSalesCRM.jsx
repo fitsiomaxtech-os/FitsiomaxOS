@@ -18,6 +18,7 @@ import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
+import { PreSalesConsultationVisitView } from "@/components/PreSalesConsultationVisitView";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
@@ -2798,7 +2799,10 @@ export const PreSalesCRM = ({
         </div>
       )}
 
-      {editing && (
+      {/* On the Consultation Visit card a patient opens in the branch's own popup, to read only. */}
+      {editing && onConsultVisitTab && isConsultationVisit(editing) ? (
+        <PreSalesConsultationVisitView lead={editing} onClose={() => setEditing(null)} />
+      ) : editing && (
         <LeadDetailDialog lead={editing} stages={stages} currentUser={currentUser} pinnedBranchId={branchId} canMoveStage={canMoveStage} onClose={() => setEditing(null)} onSaved={load} onMoveStage={moveToStage} />
       )}
 
