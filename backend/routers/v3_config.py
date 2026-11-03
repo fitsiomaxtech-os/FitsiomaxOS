@@ -16,7 +16,7 @@ from deps import (
     collapse_duplicate_experts, names_the_online_arm, super_admin_consults_at,
     super_admin_branch_switches_enabled, SA_CONSULT_BRANCHES_SETTING_ID,
 )
-from stage_utils import get_first_stage_name, realign_branch_stage_leads, unbranch_leads
+from stage_utils import align_desk_stages, get_first_stage_name, realign_branch_stage_leads, unbranch_leads
 from shift_utils import attach_shifts
 import lead_control
 import lead_purge
@@ -522,6 +522,8 @@ async def v3_update_branch(branch_id: str, payload: V3BranchUpdate, user: V3User
     # lands on after switching is the full backlog rather than a board missing most of it.
     if "lead_control" in updates and updates["lead_control"] != lead_control.normalize(existing.get("lead_control")):
         await realign_branch_stage_leads(branch_id, updates["lead_control"], user.full_name, user.role)
+        # Both desks share one stage from here on, so the leads they disagree on are put on one.
+        await align_desk_stages(branch_id, user.full_name, user.role)
         # A branch that ran its own leads had no Pre-Sales rep on any of them, so handing
         # the book back left every lead sitting in the Pre-Sales pipeline unowned. The rep
         # named on the switch takes them, which is the whole point of being asked.

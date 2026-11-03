@@ -18,7 +18,7 @@ from constants import (
     SALES_ARM_OFFLINE, SALES_ARM_ONLINE,
 )
 import lead_control
-from stage_utils import get_first_stage_name, first_branch_stage_for, realign_branch_stage_leads
+from stage_utils import align_desk_stages, get_first_stage_name, first_branch_stage_for, realign_branch_stage_leads
 
 
 # Maps deprecated branch_stage labels (legacy 8-stage flow) to the new flow.
@@ -1130,6 +1130,31 @@ async def ensure_branch_admin_stages() -> None:
     for branch in branches:
         if lead_control.normalize(branch.get("lead_control")) == lead_control.BRANCH_ADMIN:
             await realign_branch_stage_leads(branch["id"], lead_control.BRANCH_ADMIN)
+
+
+_BOTH_DESKS_ALIGNED_MIGRATION = "align_both_desk_stages"
+
+
+async def align_both_desk_stages() -> None:
+    """Put every Lead Control Both branch's leads on one stage across Pre Sales and Branch
+    Leads, for the leads that drifted apart before the two desks shared one (see
+    stage_utils.match_desk_stages). A branch switched to Both later is aligned by the switch.
+
+    A one-shot, by its marker in `migrations`: from here on every move keeps the two equal.
+    Must follow the sales passes, since it pairs the stages by their roles.
+    """
+    if await v3_col("migrations").find_one({"name": _BOTH_DESKS_ALIGNED_MIGRATION}):
+        return
+    moved = 0
+    branches = await v3_col("branches").find({}, {"_id": 0, "id": 1, "lead_control": 1}).to_list(1000)
+    for branch in branches:
+        if lead_control.normalize(branch.get("lead_control")) == lead_control.BOTH:
+            moved += await align_desk_stages(branch["id"])
+    await v3_col("migrations").insert_one({
+        "name": _BOTH_DESKS_ALIGNED_MIGRATION,
+        "leads_moved": moved,
+        "ran_at": now_iso(),
+    })
 
 
 # The stage briefly promoted from the mirrored "Leads" pill into a real branch stage, and

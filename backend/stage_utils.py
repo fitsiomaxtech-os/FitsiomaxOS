@@ -2,7 +2,12 @@ import uuid
 from typing import Iterable, List, Optional, Set
 
 import lead_control
-from constants import BRANCH_ADMIN_RNR_STAGE, SALES_ARM_OFFLINE, SALES_ARM_ONLINE
+from constants import (
+    BRANCH_ADMIN_RNR_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE, SALES_ARM_ONLINE,
+    PRESALES_LOST_STAGE, PRESALES_NOT_A_PROSPECT_STAGE, PRESALES_PRE_BOOK_STAGE, V3_STAGES,
+    SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_FOLLOW_UP, SALES_STAGE_ROLE_NOT_A_PROSPECT,
+    SALES_STAGE_ROLE_PRE_BOOK, SALES_STAGE_ROLE_RNR, SALES_STAGE_ROLES_BY_NAME,
+)
 from database import v3_col
 from deps import names_the_online_arm, online_arm_practice
 from utils import now_iso
@@ -276,6 +281,134 @@ async def realign_branch_stage_leads(
             row for lid in stranded_ids
             for row in stage_move_rows(lid, {"branch_stage": name}, {"branch_stage": destination}, by, by_role, note)
         )
+    return moved
+
+
+# ------------------------------------------------------------------ One stage, both desks
+#
+# A branch on Lead Control "Both" has two desks working one lead, and each kept its own
+# place for it: Pre Sales its `stage`, Branch Leads its `branch_stage`. The two strips carry
+# the same stages -- New Leads, RNR, Follow Up, Pre Book, Appointment, Not a prospect -- so
+# the same patient read New Leads on one desk and Appointment on the other, and the two rows
+# of counts never agreed. On a Both branch they are one stage: a move on either desk is
+# written onto the other in the same request.
+#
+# The Pre Sales names are fixed (move-stage checks them against V3_STAGES); the Branch ones
+# are found by role, so a rename in CI/CD ROOTS keeps them paired. New Leads pairs with the
+# branch's own opening (Branch Assign), which is what the Branch Leads "New Leads" card holds.
+# A stage only one desk has has no partner: Lost writes the lead off on the branch as Not a
+# prospect, and Cancelled, Portfolio and the rest leave Pre Sales where it was.
+
+_PRESALES_BY_ROLE = {
+    SALES_STAGE_ROLE_RNR: "RNR",
+    SALES_STAGE_ROLE_FOLLOW_UP: "Follow Up",
+    SALES_STAGE_ROLE_PRE_BOOK: PRESALES_PRE_BOOK_STAGE,
+    SALES_STAGE_ROLE_APPOINTMENT: "Appointment",
+    SALES_STAGE_ROLE_NOT_A_PROSPECT: PRESALES_NOT_A_PROSPECT_STAGE,
+}
+# How far along each Pre Sales stage is, for settling a lead the desks already disagree on.
+_PRESALES_PROGRESS = {name: i for i, name in enumerate(V3_STAGES)}
+
+
+async def _desk_pairs(control: str, arm: str) -> Optional[tuple]:
+    """({Pre Sales name: Branch name}, {Branch name: Pre Sales name}) for a Both branch's
+    board on one arm, or None for a branch under any other Lead Control."""
+    if control != lead_control.BOTH:
+        return None
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "sales"}, {"_id": 0, "name": 1, "applies_to": 1, "arm": 1, "role": 1}
+    ).sort("order", 1).to_list(400)
+    rows = [r for r in rows if _in_arm(r, arm) and _visible_to(r, control)]
+    if not rows:
+        return None
+    to_branch = {V3_STAGES[0]: rows[0]["name"]}
+    for r in rows:
+        name = _PRESALES_BY_ROLE.get(r.get("role") or SALES_STAGE_ROLES_BY_NAME.get(r["name"]))
+        if name and name not in to_branch:
+            to_branch[name] = r["name"]
+    to_presales = {b: p for p, b in to_branch.items()}
+    if "Appointment" in to_branch:
+        to_presales.setdefault(BRANCH_APPOINTMENT_STAGE_FORMER, "Appointment")
+    if PRESALES_NOT_A_PROSPECT_STAGE in to_branch:
+        to_branch[PRESALES_LOST_STAGE] = to_branch[PRESALES_NOT_A_PROSPECT_STAGE]
+    return to_branch, to_presales
+
+
+async def _write_desk_stage(lead: dict, field: str, target: Optional[str], by: str, by_role: str, note: str) -> bool:
+    if not target or lead.get(field) == target:
+        return False
+    await v3_col("leads").update_one({"id": lead["id"]}, {"$set": {field: target, "updated_at": now_iso()}})
+    await log_stage_moves(lead["id"], lead, {field: target}, by, by_role, note)
+    return True
+
+
+async def match_desk_stages(lead_id: str, moved: str, by: str, by_role: str) -> None:
+    """Write the stage just set on one desk onto the other, on a Lead Control Both branch.
+
+    `moved` names the field the caller wrote: "stage" for a Pre Sales move, "branch_stage"
+    for a Branch Leads one. A no-op on every other branch, for a stage with no partner, and
+    for a lead already standing on its partner. Lost stays locked (see _refuse_if_lost in
+    routers/v3_leads.py): a Branch move does not bring a Lost lead back on Pre Sales.
+    """
+    lead = await v3_col("leads").find_one(
+        {"id": lead_id}, {"_id": 0, "id": 1, "stage": 1, "branch_stage": 1, "branch_id": 1, "vertical": 1}
+    )
+    if not lead or not lead.get("branch_id"):
+        return
+    pairs = await _desk_pairs(
+        await lead_control.branch_lead_control(lead["branch_id"]),
+        await sales_arm_for(branch_id=lead["branch_id"], vertical=lead.get("vertical")),
+    )
+    if not pairs:
+        return
+    to_branch, to_presales = pairs
+    if moved == "stage":
+        await _write_desk_stage(lead, "branch_stage", to_branch.get(lead.get("stage")), by, by_role, "same as Pre Sales")
+    elif lead.get("stage") != PRESALES_LOST_STAGE:
+        await _write_desk_stage(lead, "stage", to_presales.get(lead.get("branch_stage")), by, by_role, "same as Branch Leads")
+
+
+async def align_desk_stages(branch_id: str, by: str = "system", by_role: str = "system") -> int:
+    """Put a Both branch's leads on one stage wherever the two desks disagree. Returns how
+    many moved.
+
+    For the leads already apart when the desks began sharing: a branch just switched to
+    Both, or one that was Both before. The desk that has taken the lead further wins, so a
+    booked appointment is never pulled back to New Leads by a desk that had not caught up.
+    A lead the branch has put on a stage of its own (Cancelled, Portfolio) is left there.
+    """
+    control = await lead_control.branch_lead_control(branch_id)
+    if control != lead_control.BOTH:
+        return 0
+    branch_arm = await sales_arm_for(branch_id=branch_id)
+    pairs_by_arm = {}
+    moved = 0
+    leads = await v3_col("leads").find(
+        {"branch_id": branch_id}, {"_id": 0, "id": 1, "stage": 1, "branch_stage": 1, "vertical": 1}
+    ).to_list(None)
+    for lead in leads:
+        arm = SALES_ARM_ONLINE if names_the_online_arm(lead.get("vertical")) else branch_arm
+        if arm not in pairs_by_arm:
+            pairs_by_arm[arm] = await _desk_pairs(control, arm)
+        if not pairs_by_arm[arm]:
+            continue
+        to_branch, to_presales = pairs_by_arm[arm]
+        stage, branch_stage = lead.get("stage"), lead.get("branch_stage")
+        as_branch, as_presales = to_branch.get(stage), to_presales.get(branch_stage)
+        if as_branch == branch_stage:
+            continue
+        if as_presales is None:
+            if branch_stage:
+                continue
+            field, target = "branch_stage", as_branch
+        elif as_branch is None:
+            field, target = "stage", as_presales
+        elif _PRESALES_PROGRESS[stage] >= _PRESALES_PROGRESS[as_presales]:
+            field, target = "branch_stage", as_branch
+        else:
+            field, target = "stage", as_presales
+        if await _write_desk_stage(lead, field, target, by, by_role, "Pre Sales and Branch Leads share one stage"):
+            moved += 1
     return moved
 
 

@@ -28,7 +28,7 @@ from constants import (
 )
 from stage_utils import (
     branch_stage_names_for_branch, first_branch_stage_for_branch, get_first_stage_name,
-    sales_arm_for,
+    match_desk_stages, sales_arm_for,
 )
 from schemas.v3 import (
     V3UserOut, V3LeadOut,
@@ -688,6 +688,8 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         "created_at": now_iso(),
     }
     await v3_col("lead_activity").insert_one(activity.copy())
+    # On a Lead Control Both branch the Pre Sales card follows (see match_desk_stages).
+    await match_desk_stages(lead_id, "branch_stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -738,6 +740,7 @@ async def v3_pre_sales_pre_book(lead_id: str, payload: V3PreSalesPreBookInput, u
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -828,6 +831,7 @@ async def v3_assign_physio(lead_id: str, payload: V3AssignPhysioInput, user: V3U
         "created_at": now_iso(),
     }
     await v3_col("lead_activity").insert_one(activity.copy())
+    await match_desk_stages(lead_id, "branch_stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -1154,6 +1158,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "branch_stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -2046,6 +2051,7 @@ async def v3_schedule_branch_follow_up(lead_id: str, payload: V3BranchFollowUpIn
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "branch_stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -2093,6 +2099,7 @@ async def v3_reschedule_branch_follow_up(lead_id: str, followup_id: str, payload
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "branch_stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 

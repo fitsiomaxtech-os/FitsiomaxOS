@@ -10,7 +10,7 @@ from deps import (
     vertical_names_an_arm, lead_as_read_by, works_org_wide,
 )
 from constants import V3_STAGES, PRESALES_LOST_STAGE
-from stage_utils import first_branch_stage_for, first_branch_stage_for_branch, lead_created_row, log_stage_moves
+from stage_utils import first_branch_stage_for, first_branch_stage_for_branch, lead_created_row, log_stage_moves, match_desk_stages
 import lead_control
 import lead_purge
 from routers.v3_lead_documents import leads_with_prescription
@@ -391,6 +391,9 @@ async def v3_edit_lead(
             note = f"assigned to branch '{(branch or {}).get('branch_name') or 'Unknown'}'"
         moves = {k: updates[k] for k in ("stage", "branch_stage") if k in updates}
         await log_stage_moves(lead_id, before, moves, user.full_name, user.role, note)
+        # A Pre Sales move, or a lead handed to a branch: on a Both branch the Branch Leads
+        # card follows (see match_desk_stages).
+        await match_desk_stages(lead_id, "stage", user.full_name, user.role)
 
     if "phone" in updates:
         # Imported here, not at the top: the portal router pulls in several others, and
@@ -411,6 +414,8 @@ async def v3_qualify_lead(lead_id: str, user: V3UserOut = Depends(v3_require_rol
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     await log_stage_moves(lead_id, before, {"stage": "Follow Up"}, user.full_name, user.role, "qualified")
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**lead)
 
 
@@ -444,6 +449,8 @@ async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, user: V3U
         lead_id, before, {"stage": "Appointment", "branch_stage": new_branch_stage}, user.full_name, user.role,
         f"assigned to branch '{branch.get('branch_name') or 'Unknown'}'",
     )
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**lead)
 
 
@@ -469,6 +476,7 @@ async def v3_confirm_lead(lead_id: str, user: V3UserOut = Depends(v3_require_rol
     await log_stage_moves(
         lead_id, target, {"stage": "Appointment", "branch_stage": new_branch_stage}, user.full_name, user.role, "confirmed",
     )
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -510,6 +518,7 @@ async def v3_book_appointment(lead_id: str, payload: V3BookAppointmentInput, use
         lead_id, lead, {"stage": "Appointment", "branch_stage": new_branch_stage}, user.full_name, user.role,
         f"appointment booked with {doctor['full_name']} at {slot_key}",
     )
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     return V3AppointmentOut(**appointment)
 
 
@@ -606,6 +615,7 @@ async def v3_move_stage(lead_id: str, payload: V3MoveStageInput, user: V3UserOut
         "created_at": now_iso(),
     }
     await v3_col("lead_activity").insert_one(activity.copy())
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -767,6 +777,7 @@ async def v3_schedule_appointment(lead_id: str, payload: V3AppointmentScheduleIn
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -800,6 +811,7 @@ async def v3_schedule_follow_up(lead_id: str, payload: V3FollowUpInput, user: V3
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
 
@@ -854,5 +866,6 @@ async def v3_reschedule_follow_up(lead_id: str, followup_id: str, payload: V3Fol
         "created_by_role": user.role,
         "created_at": now_iso(),
     })
+    await match_desk_stages(lead_id, "stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     return V3LeadOut(**updated)
