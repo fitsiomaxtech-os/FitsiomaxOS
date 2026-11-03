@@ -279,23 +279,24 @@ const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
   return lines.join("\n");
 };
 
-// Call → native dialer (tel:). WhatsApp → straight into the lead's own chat. Before an
-// appointment the chat opens blank, for the rep to write; once one is fixed it opens with
-// the welcome typed in: the appointment and the branch's map link. PDF → the appointment
-// confirmation itself, attached.
+// Call → native dialer (tel:). WhatsApp, before an appointment → the lead's own chat,
+// blank, for the rep to write. After one → one tap sends it all: the appointment
+// confirmation PDF as the file, with the welcome and the branch's location link as its
+// message, in that order.
 //
-// Two taps, because WhatsApp gives no single route that does both: wa.me opens one
-// number's chat but carries text only, and the share sheet carries a file but asks who it
-// is for -- and a new lead is rarely a saved contact, so it would not be on that list. The
-// first tap sends the welcome, which puts the lead's chat at the top of WhatsApp's
-// recents; the PDF tap then shares the file there. Same-tab navigation for wa.me
-// (window.location.href, not window.open), matching the fix applied elsewhere for the
-// mobile "blank screen on return from WhatsApp" bug.
+// WhatsApp gives no single route that addresses a number AND carries a file: wa.me opens
+// one number's chat but carries text only, and the share sheet carries a file but asks
+// who it is for. The file is the point, so it goes by the share sheet (whatsappPdf), and
+// the rep picks the lead's chat there. A desk, where WhatsApp Web cannot be handed a file,
+// gets the PDF downloaded and the chat opened with the message typed in, to drop it into.
 //
 // `apptCard` is the lead popup's copy of the confirmation, loaded when it opened, so the
 // PDF is drawn before the tap rather than after it -- the share sheet only opens inside
-// the click. The PDF button is the popup's only; a card on the list fetches the
-// appointment on tap for the welcome's wording. `branches` saves the location a request.
+// the click, and a fetch plus a draw on tap would outlast that. So a card on the list,
+// which has no copy, keeps the text-only welcome: it fetches the appointment on tap for
+// the wording and opens the chat with it typed in (same-tab wa.me, matching the fix
+// applied elsewhere for the mobile "blank screen on return from WhatsApp" bug).
+// `branches` saves the location a request.
 const LeadContactIcons = ({ lead, apptCard, branches }) => {
   const [busy, setBusy] = useState(false);
   const pdf = usePdf(apptCard ? apptHtml(apptCard) : null);
@@ -308,6 +309,19 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
     // Before an appointment there is nothing to confirm yet: a blank chat.
     if (!apptCard && !hasAppointment(lead)) {
       window.location.href = `https://wa.me/${num}`;
+      return;
+    }
+    // The popup's appointment: the PDF with the welcome and the location as its message.
+    // Nothing awaited before whatsappPdf, so the share sheet still counts as this click.
+    if (apptCard && pdf) {
+      const ref = apptCard.refNo && apptCard.refNo !== "—" ? apptCard.refNo : "";
+      whatsappPdf(
+        pdf,
+        `appointment-${ref || "confirmation"}.pdf`,
+        `FITSIOMAX Appointment ${ref}`.trim(),
+        lead.phone,
+        welcomeText(lead, { card: apptCard, mapUrl: apptMapUrl(apptCard), branchName: apptCard.branch }),
+      );
       return;
     }
     setBusy(true);
@@ -330,23 +344,12 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
           mapUrl = apptMapUrl({ branch: branchName, branchAddress: b.address, mapLocation: b.map_location });
         }
       }
-      // No pdfUrl: the PDF goes as the file, from its own button.
+      // No pdfUrl: the PDF goes as the file, from the popup.
       const text = welcomeText(lead, { card, mapUrl, branchName });
       window.location.href = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
     } finally {
       setBusy(false);
     }
-  };
-  const handlePdf = (e) => {
-    e.stopPropagation();
-    const ref = apptCard.refNo && apptCard.refNo !== "—" ? apptCard.refNo : "";
-    whatsappPdf(
-      pdf,
-      `appointment-${ref || "confirmation"}.pdf`,
-      `FITSIOMAX Appointment ${ref}`.trim(),
-      lead.phone,
-      `Your FITSIOMAX appointment confirmation${ref ? ` (${ref})` : ""}`,
-    );
   };
   // 40px targets with a tinted disc behind each. These now render only on the phone
   // cards, and at 3.5 icons inside 1.5 padding they were 26px of tappable area with
@@ -370,24 +373,12 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
         onClick={handleWhatsApp}
         disabled={busy}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100 disabled:opacity-60"
-        title="WhatsApp"
+        title={apptCard && pdf ? "WhatsApp the welcome, appointment PDF and location" : "WhatsApp"}
         aria-label={`WhatsApp ${lead.name || "lead"}`}
         data-testid={`presales-whatsapp-${lead.id}`}
       >
         {busy ? <RefreshCw className="h-5 w-5 animate-spin" /> : <WhatsAppIcon className="h-5 w-5" />}
       </button>
-      {apptCard && pdf && (
-        <button
-          type="button"
-          onClick={handlePdf}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100"
-          title="Send the appointment PDF on WhatsApp"
-          aria-label={`Send the appointment PDF to ${lead.name || "lead"} on WhatsApp`}
-          data-testid={`presales-whatsapp-pdf-${lead.id}`}
-        >
-          <FileText className="h-5 w-5" />
-        </button>
-      )}
     </div>
   );
 };
