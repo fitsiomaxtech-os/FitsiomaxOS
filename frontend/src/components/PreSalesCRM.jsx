@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar, IndianRupee } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, Eye, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -3297,8 +3297,8 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
       // taller than the screen, and only the body scrolls, so the header and tabs stay put.
       <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="presales-detail-card">
         {/* One row on every screen: avatar, name, ID and stage chip, then the buttons on the
-            same centre line. The name gives way first (truncated, whole on hover) so the
-            chips and buttons never wrap under it. No avatar on a phone: the initial only
+            same centre line. On a phone the name alone, with the buttons: beside the ID and
+            stage chips it was cut to two letters. No avatar there either -- the initial only
             repeats the name beside it. */}
         <div className="relative shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2 sm:gap-3">
@@ -3306,9 +3306,9 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
               <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:inline-flex sm:h-11 sm:w-11">{avatarFirstChar}</span>
               <p className="min-w-0 truncate text-[15px] font-semibold leading-tight text-slate-900 sm:text-base" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
               {currentLead.patient_number && (
-                <span className="shrink-0 rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
+                <span className="hidden shrink-0 rounded-[5px] bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:inline" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
               )}
-              <span className="shrink-0 whitespace-nowrap rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 sm:px-2.5" data-testid="presales-detail-stage">
+              <span className="hidden shrink-0 whitespace-nowrap rounded-[5px] border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 sm:inline" data-testid="presales-detail-stage">
                 {currentLead.stage || "No Stage"}
               </span>
             </div>
@@ -3322,10 +3322,10 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   onClick={() => setShowApptCard(true)}
                   title="Appointment confirmation"
                   aria-label="Appointment confirmation"
-                  className="inline-flex items-center rounded-[5px] p-1.5 text-teal-600 transition hover:bg-teal-50 hover:text-teal-700 sm:p-2"
+                  className="inline-flex shrink-0 items-center p-1.5 text-teal-400 transition hover:text-teal-600 sm:p-2"
                   data-testid="presales-detail-appt-card-btn"
                 >
-                  <CalendarCheck className="h-5 w-5" />
+                  <Eye className="h-5 w-5" />
                 </button>
               )}
               {currentLead.source_type === "manual" && (
