@@ -17,8 +17,9 @@ import { gsAutoSyncSources, gsPull } from "@/lib/api";
  *  - phoneSmall: with iconOnly, 32px below sm to match a phone toolbar of that size
  *  - soft: with iconOnly, a bordered light-green wash with a spreadsheet icon (Pre Sales'
  *    toolbar), so it no longer wears the same arrows as the Refresh button beside it
- *  - sheetIcon: with iconOnly, keeps the solid green circle but swaps the arrows for a
- *    spreadsheet icon (a spinner while pulling) -- Branch Admin, beside its own Refresh
+ *  - sheetIcon: with iconOnly, a solid green rounded box (not the circle) with a
+ *    spreadsheet icon (a spinner while pulling) -- Branch Admin, so it squares up with
+ *    the Refresh, Create Lead and Download boxes beside it
  */
 export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint, iconOnly, phoneSmall, soft, sheetIcon }) => {
   const [busy, setBusy] = useState(false);
@@ -96,7 +97,7 @@ export const PullFromSheetButton = ({ onPulled, notConnectedHint, noSourcesHint,
         disabled={busy}
         title="Pull from Sheet"
         aria-label="Pull from Sheet"
-        className={`h-10 w-10 ${phoneSmall ? "max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5" : ""} shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white shadow-sm hover:bg-emerald-700`}
+        className={`h-10 w-10 ${phoneSmall ? "max-sm:h-8 max-sm:w-8 max-sm:[&_svg]:!size-3.5" : ""} shrink-0 ${sheetIcon ? "" : "rounded-full"} border-emerald-600 bg-emerald-600 p-0 text-white shadow-sm hover:bg-emerald-700`}
         data-testid="presales-pull-from-sheet-btn"
       >
         {sheetIcon ? (
