@@ -10,9 +10,13 @@ export const APPT_MSG_PLACEHOLDERS = [
   { key: "date_time", label: "Date & time", sample: "04 Nov 2026 · 10:00 AM" },
   { key: "branch", label: "Branch", sample: "Anna Nagar Branch" },
   { key: "reference", label: "Reference", sample: "APT-103-0008-105136" },
-  { key: "pdf_link", label: "PDF link", sample: "https://os.fitsiomax.clinic/api/v3/public/appointment/…/pdf" },
   { key: "location_link", label: "Location link", sample: "https://maps.app.goo.gl/…" },
 ];
+
+// No longer offered: the PDF goes as a file from its own button, not as a link. Still
+// known, so a template saved while it was offered leaves the line out rather than
+// sending "{pdf_link}" to the patient.
+const RETIRED = ["pdf_link"];
 
 export const APPT_MSG_SAMPLE = Object.fromEntries(APPT_MSG_PLACEHOLDERS.map((p) => [p.key, p.sample]));
 
@@ -20,12 +24,13 @@ const TOKEN = /\{([a-z_]+)\}/g;
 
 /**
  * The template with its placeholders filled. A line whose placeholders all come out empty
- * -- no PDF, no reference -- is left out. When that line was the placeholder alone (a link
+ * -- no reference, no map -- is left out. When that line was the placeholder alone (a link
  * on its own line), the "…:" line introducing it goes too, so the patient never reads a
  * label pointing at nothing. Unknown placeholders stay as typed.
  */
 export const fillAppointmentMessage = (template, values) => {
-  const known = (k) => APPT_MSG_PLACEHOLDERS.some((p) => p.key === k);
+  const known = (k) => APPT_MSG_PLACEHOLDERS.some((p) => p.key === k) || RETIRED.includes(k);
+  values = Object.fromEntries(Object.entries(values).filter(([k]) => !RETIRED.includes(k)));
   const out = [];
   for (const line of String(template || "").replace(/\r\n/g, "\n").split("\n")) {
     const keys = [...line.matchAll(TOKEN)].map((m) => m[1]).filter(known);

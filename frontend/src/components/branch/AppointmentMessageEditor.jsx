@@ -75,9 +75,6 @@ export const AppointmentMessageEditor = ({ branchId, onClose }) => {
         ) : (
           <div className="grid gap-4 overflow-y-auto p-4 md:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2">
-              <p className="text-xs text-slate-500">
-                The WhatsApp message sent with an appointment at this branch. Tap a field to put it where the cursor is — it is filled in for each patient as the message is sent. A line whose field is empty is left out.
-              </p>
               <div className="flex flex-wrap gap-1.5">
                 {APPT_MSG_PLACEHOLDERS.map((p) => (
                   <button
@@ -111,7 +108,6 @@ export const AppointmentMessageEditor = ({ branchId, onClose }) => {
                   {fillAppointmentMessage(text, APPT_MSG_SAMPLE) || <span className="text-slate-400">The standard message is sent when this is left blank.</span>}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400">Home visits and Google Meet consultations keep the standard wording.</p>
             </div>
           </div>
         )}
