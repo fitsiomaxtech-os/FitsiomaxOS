@@ -2618,13 +2618,17 @@ async def v3_lead_appointment_card(lead_id: str, _: V3UserOut = Depends(v3_curre
     if not appt:
         raise HTTPException(status_code=404, detail="No appointment is booked for this patient")
 
+    branch_id = appt.get("branch_id") or lead.get("branch_id")
     branch = await v3_col("branches").find_one(
-        {"id": appt.get("branch_id") or lead.get("branch_id")},
+        {"id": branch_id},
         {"_id": 0, "branch_name": 1, "address": 1, "map_location": 1,
          "admin_name": 1, "admin_phone": 1, "phone": 1},
     ) or {}
 
     return {
+        # The WhatsApp welcome's wording, as this branch's Appointment Msg Editor left it.
+        # Rides on the card so Pre Sales' WhatsApp tap needs no second request.
+        "messageTemplate": await appointment_message_template(branch_id),
         # Bookings taken before ref_no existed carry none. The card prints "Ref —" rather
         # than refusing to open: the appointment is real and the reference is the one
         # thing on the sheet that is only ever quoted back to the branch itself.
@@ -2653,6 +2657,92 @@ async def v3_lead_appointment_card(lead_id: str, _: V3UserOut = Depends(v3_curre
         "packageName": appt.get("visit_package_name") or "",
         "packagePrice": appt.get("visit_package_price"),
     }
+
+
+# The WhatsApp welcome Pre Sales sends for a booking at the branch, worded by that branch's
+# Admin in Settings > Appointment Msg Editor. One per branch: the message names the branch,
+# its location and how its desk talks to patients. The {placeholders} are filled in the
+# browser as the message is typed into WhatsApp (PreSalesCRM's welcomeText), and a line
+# whose placeholders all come out empty -- no PDF, no reference -- is left out there.
+#
+# Home visits and Google Meet consultations keep the standard wording: "at {branch}" and
+# the branch's map are wrong for both.
+APPT_MSG_SETTING_PREFIX = "appointment_message:"
+APPT_MSG_MAX_LEN = 2000
+APPT_MSG_PLACEHOLDERS = ("name", "date_time", "branch", "reference", "pdf_link", "location_link")
+APPT_MSG_DEFAULT = (
+    "Hi {name}, welcome to FITSIOMAX!\n"
+    "\n"
+    "Your appointment is confirmed for {date_time} at {branch}.\n"
+    "Reference: {reference}\n"
+    "\n"
+    "Your appointment confirmation (PDF):\n"
+    "{pdf_link}\n"
+    "\n"
+    "{branch} location:\n"
+    "{location_link}"
+)
+_APPT_MSG_TOKEN = re.compile(r"\{([a-z_]+)\}")
+
+
+async def appointment_message_template(branch_id: Optional[str]) -> str:
+    if not branch_id:
+        return APPT_MSG_DEFAULT
+    row = await v3_col("app_settings").find_one({"id": APPT_MSG_SETTING_PREFIX + branch_id}, {"_id": 0, "template": 1})
+    return (row or {}).get("template") or APPT_MSG_DEFAULT
+
+
+def _appt_msg_branch_guard(user: V3UserOut, branch_id: str) -> None:
+    # A Branch Admin words its own branch's message; the org-wide desks any branch's.
+    if is_branch_admin_role(user.role) and branch_id not in user_branch_ids(user):
+        raise HTTPException(status_code=403, detail="This is not your branch")
+
+
+class AppointmentMessageInput(BaseModel):
+    template: str = ""
+
+
+@router.get("/branches/{branch_id}/appointment-message")
+async def v3_get_appointment_message(
+    branch_id: str,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    _appt_msg_branch_guard(user, branch_id)
+    template = await appointment_message_template(branch_id)
+    return {
+        "template": template,
+        "default": APPT_MSG_DEFAULT,
+        "is_default": template == APPT_MSG_DEFAULT,
+        "placeholders": list(APPT_MSG_PLACEHOLDERS),
+    }
+
+
+@router.put("/branches/{branch_id}/appointment-message")
+async def v3_set_appointment_message(
+    branch_id: str,
+    payload: AppointmentMessageInput,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """Saves the branch's wording. Blank puts the standard message back."""
+    _appt_msg_branch_guard(user, branch_id)
+    if not await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Branch not found")
+    body = (payload.template or "").replace("\r\n", "\n").strip()
+    if len(body) > APPT_MSG_MAX_LEN:
+        raise HTTPException(status_code=400, detail=f"Message must be under {APPT_MSG_MAX_LEN} characters")
+    unknown = sorted({t for t in _APPT_MSG_TOKEN.findall(body) if t not in APPT_MSG_PLACEHOLDERS})
+    if unknown:
+        raise HTTPException(status_code=400, detail="Unknown placeholder: " + ", ".join("{" + t + "}" for t in unknown))
+    key = APPT_MSG_SETTING_PREFIX + branch_id
+    if not body or body == APPT_MSG_DEFAULT:
+        await v3_col("app_settings").delete_one({"id": key})
+    else:
+        await v3_col("app_settings").update_one(
+            {"id": key},
+            {"$set": {"id": key, "template": body, "updated_by": user.full_name, "updated_at": now_iso()}},
+            upsert=True,
+        )
+    return await v3_get_appointment_message(branch_id, user)
 
 
 

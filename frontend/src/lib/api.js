@@ -275,6 +275,10 @@ export const uploadAppointmentPdf = async (leadId, blob, filename) => {
   return (await api.post(`/leads/${leadId}/appointment-card/pdf`, form)).data;
 };
 export const publicAppointmentPdfUrl = (token) => `${BACKEND_URL}/api/v3/public/appointment/${token}/pdf`;
+// The branch's wording of that WhatsApp welcome (Settings > Appointment Msg Editor).
+// Saving it blank puts the standard message back.
+export const getAppointmentMessage = async (branchId) => (await api.get(`/branches/${branchId}/appointment-message`)).data;
+export const saveAppointmentMessage = async (branchId, template) => (await api.put(`/branches/${branchId}/appointment-message`, { template })).data;
 // `mine` narrows the board to the consultations booked to the caller — what My
 // Consultation needs and what Operations, reading a whole branch, must not send.
 // `headChief` narrows it to the consultations booked to a Super Admin instead — Branch

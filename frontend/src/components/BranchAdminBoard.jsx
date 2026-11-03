@@ -48,7 +48,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock,
+  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -103,6 +103,7 @@ import { FitsiomaxStorePanel } from "@/components/BranchStoreBoard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
+import { AppointmentMessageEditor } from "@/components/branch/AppointmentMessageEditor";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
 import { PhysioSessionSettings } from "@/components/branch/PhysioSessionSettings";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
@@ -998,6 +999,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The tab strip's Settings gear → Upcoming Appointments popup (desk; a phone keeps it
   // under Management > Calendar).
   const [upcomingOpen, setUpcomingOpen] = useState(false);
+  // The same gear → Appointment Msg Editor: the WhatsApp welcome Pre Sales sends.
+  const [apptMsgOpen, setApptMsgOpen] = useState(false);
   // Which tab of that popup is up. Only the Physiotherapist Calendar's gear has more than
   // Time Management's three parts: its Treatment Session Duration and Per slot sit beside
   // them, all five in one row.
@@ -2069,6 +2072,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setApptMsgOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-appt-msg">
+                <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -2089,6 +2096,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           </div>
         </div>
       )}
+
+      {apptMsgOpen && <AppointmentMessageEditor branchId={branchId} onClose={() => setApptMsgOpen(false)} />}
 
       {profileOpen && (
         <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
@@ -2808,6 +2817,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <DropdownMenuItem onSelect={() => setUpcomingOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-upcoming">
                     <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setApptMsgOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-appt-msg">
+                    <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
                   </DropdownMenuItem>
                   {/* The phone's copy of the Consultation tab's Add New Lead -- the row's
                       own button waits for sm (see its note). */}

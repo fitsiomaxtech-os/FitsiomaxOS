@@ -39,6 +39,7 @@ import { callTimeStamp, callDateStamp, dateStampFull, dateTimeStamp, shortDateTi
 import { displayPhone, telNumber } from "@/lib/phone";
 import { byOldestFirst } from "@/lib/timeline";
 import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookPaidAt, preBookWhen, rupees, todayIso } from "@/lib/preBook";
+import { fillAppointmentMessage } from "@/lib/appointmentMessage";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -248,6 +249,19 @@ const hasAppointment = (lead) => !!(lead?.appointment_date || lead?.stage === "A
  * branch is.
  */
 const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
+  // A booking at the branch reads as that branch worded it (Settings > Appointment Msg
+  // Editor). A home visit or a Google Meet keeps the wording below: "at {branch}" and the
+  // branch's map are wrong for both.
+  if (card?.messageTemplate && !card.meetLink && !card.houseVisit) {
+    return fillAppointmentMessage(card.messageTemplate, {
+      name: lead.name || "there",
+      date_time: preBookWhen({ date: card.date, time: card.time }),
+      branch: card.branch || branchName,
+      reference: card.refNo && card.refNo !== "—" ? card.refNo : "",
+      pdf_link: pdfUrl,
+      location_link: mapUrl,
+    });
+  }
   const lines = [`Hi ${lead.name || "there"}, welcome to FITSIOMAX!`];
   const pb = preBookOf(lead);
   if (card) {
