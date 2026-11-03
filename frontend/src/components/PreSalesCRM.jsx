@@ -279,9 +279,10 @@ const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
   return lines.join("\n");
 };
 
-// Call → native dialer (tel:). WhatsApp → straight into the lead's own chat with the
-// welcome typed in: the appointment and the branch's map link when one is fixed, else the
-// lead's branch location. PDF → the appointment confirmation itself, attached.
+// Call → native dialer (tel:). WhatsApp → straight into the lead's own chat. Before an
+// appointment the chat opens blank, for the rep to write; once one is fixed it opens with
+// the welcome typed in: the appointment and the branch's map link. PDF → the appointment
+// confirmation itself, attached.
 //
 // Two taps, because WhatsApp gives no single route that does both: wa.me opens one
 // number's chat but carries text only, and the share sheet carries a file but asks who it
@@ -304,6 +305,11 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
   const handleWhatsApp = async (e) => {
     e.stopPropagation();
     if (busy) return;
+    // Before an appointment there is nothing to confirm yet: a blank chat.
+    if (!apptCard && !hasAppointment(lead)) {
+      window.location.href = `https://wa.me/${num}`;
+      return;
+    }
     setBusy(true);
     try {
       let card = apptCard || null;
