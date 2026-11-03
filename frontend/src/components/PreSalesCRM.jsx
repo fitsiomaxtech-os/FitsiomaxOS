@@ -239,15 +239,13 @@ const BranchSelect = ({
   );
 };
 
-const testimonialsUrl = () => `${window.location.origin}/testimonials`;
-
 /** A lead with a consultation fixed -- the one the appointment card endpoint answers for. */
 const hasAppointment = (lead) => !!(lead?.appointment_date || lead?.stage === "Appointment");
 
 /**
  * The welcome WhatsApp types into the lead's own chat: who we are, the appointment and its
- * PDF when one is fixed (the Pre Book visit when that is all there is), where the branch
- * is, and the testimonials.
+ * PDF when one is fixed (the Pre Book visit when that is all there is), and where the
+ * branch is.
  */
 const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
   const lines = [`Hi ${lead.name || "there"}, welcome to FITSIOMAX!`];
@@ -264,13 +262,12 @@ const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
     if (when) lines.push("", `Your visit is planned for ${when}.`);
   }
   if (mapUrl) lines.push("", `${branchName || "Our branch"} location:`, mapUrl);
-  lines.push("", "Take a look at real patient success stories:", testimonialsUrl());
   return lines.join("\n");
 };
 
 // Call → native dialer (tel:). WhatsApp → straight into the lead's own chat with the
 // welcome typed in: the appointment confirmation PDF and the branch's map link when an
-// appointment is fixed, else the lead's branch location and the testimonials.
+// appointment is fixed, else the lead's branch location.
 //
 // wa.me opens one number's chat but carries text only; the share sheet carries a file but
 // asks who it is for. So the PDF goes up to the server first (behind the booking's share
