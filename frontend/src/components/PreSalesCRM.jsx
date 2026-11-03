@@ -7,7 +7,7 @@ import { toast } from "@/components/ui/sonner";
 import {
   getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
   getLeadDeleteEnabled, preSalesPreBook,
-  getDashboardOverview, getLeadAppointmentCard, uploadAppointmentPdf, publicAppointmentPdfUrl,
+  getDashboardOverview, getLeadAppointmentCard,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { CreateLeadModal } from "@/components/CreateLeadModal";
@@ -19,7 +19,7 @@ import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
 import { AppointmentConfirmCard, apptHtml, apptMapUrl } from "@/components/AppointmentConfirmCard";
-import { pdfJob, usePdf } from "@/lib/pdf";
+import { usePdf, whatsappPdf } from "@/lib/pdf";
 import { PreSalesConsultationVisitView } from "@/components/PreSalesConsultationVisitView";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
@@ -280,18 +280,21 @@ const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
 };
 
 // Call → native dialer (tel:). WhatsApp → straight into the lead's own chat with the
-// welcome typed in: the appointment confirmation PDF and the branch's map link when an
-// appointment is fixed, else the lead's branch location.
+// welcome typed in: the appointment and the branch's map link when one is fixed, else the
+// lead's branch location. PDF → the appointment confirmation itself, attached.
 //
-// wa.me opens one number's chat but carries text only; the share sheet carries a file but
-// asks who it is for. So the PDF goes up to the server first (behind the booking's share
-// token) and rides in the message as a link -- one tap from the rep, the right chat, and
-// everything in it. Same-tab navigation (window.location.href, not window.open), matching
-// the fix applied elsewhere for the mobile "blank screen on return from WhatsApp" bug.
+// Two taps, because WhatsApp gives no single route that does both: wa.me opens one
+// number's chat but carries text only, and the share sheet carries a file but asks who it
+// is for -- and a new lead is rarely a saved contact, so it would not be on that list. The
+// first tap sends the welcome, which puts the lead's chat at the top of WhatsApp's
+// recents; the PDF tap then shares the file there. Same-tab navigation for wa.me
+// (window.location.href, not window.open), matching the fix applied elsewhere for the
+// mobile "blank screen on return from WhatsApp" bug.
 //
 // `apptCard` is the lead popup's copy of the confirmation, loaded when it opened, so the
-// PDF is drawn before the tap rather than after it; a card on the list fetches on tap.
-// `branches` likewise saves the location a request.
+// PDF is drawn before the tap rather than after it -- the share sheet only opens inside
+// the click. The PDF button is the popup's only; a card on the list fetches the
+// appointment on tap for the welcome's wording. `branches` saves the location a request.
 const LeadContactIcons = ({ lead, apptCard, branches }) => {
   const [busy, setBusy] = useState(false);
   const pdf = usePdf(apptCard ? apptHtml(apptCard) : null);
@@ -307,16 +310,6 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
       if (!card && apptCard === undefined && hasAppointment(lead)) {
         card = await getLeadAppointmentCard(lead.id).catch(() => null);
       }
-      let pdfUrl = "";
-      if (card?.shareToken) {
-        try {
-          const blob = await (card === apptCard && pdf ? pdf : pdfJob(apptHtml(card)))();
-          await uploadAppointmentPdf(lead.id, blob, `appointment-${card.refNo || "confirmation"}.pdf`);
-          pdfUrl = publicAppointmentPdfUrl(card.shareToken);
-        } catch {
-          toast.error("Couldn't attach the appointment PDF — the welcome goes without it");
-        }
-      }
       // The location: the booking's branch when there is one, else the lead's own.
       let mapUrl = "";
       let branchName = "";
@@ -331,11 +324,23 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
           mapUrl = apptMapUrl({ branch: branchName, branchAddress: b.address, mapLocation: b.map_location });
         }
       }
-      const text = welcomeText(lead, { card, pdfUrl, mapUrl, branchName });
+      // No pdfUrl: the PDF goes as the file, from its own button.
+      const text = welcomeText(lead, { card, mapUrl, branchName });
       window.location.href = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
     } finally {
       setBusy(false);
     }
+  };
+  const handlePdf = (e) => {
+    e.stopPropagation();
+    const ref = apptCard.refNo && apptCard.refNo !== "—" ? apptCard.refNo : "";
+    whatsappPdf(
+      pdf,
+      `appointment-${ref || "confirmation"}.pdf`,
+      `FITSIOMAX Appointment ${ref}`.trim(),
+      lead.phone,
+      `Your FITSIOMAX appointment confirmation${ref ? ` (${ref})` : ""}`,
+    );
   };
   // 40px targets with a tinted disc behind each. These now render only on the phone
   // cards, and at 3.5 icons inside 1.5 padding they were 26px of tappable area with
@@ -365,6 +370,18 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
       >
         {busy ? <RefreshCw className="h-5 w-5 animate-spin" /> : <WhatsAppIcon className="h-5 w-5" />}
       </button>
+      {apptCard && pdf && (
+        <button
+          type="button"
+          onClick={handlePdf}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100"
+          title="Send the appointment PDF on WhatsApp"
+          aria-label={`Send the appointment PDF to ${lead.name || "lead"} on WhatsApp`}
+          data-testid={`presales-whatsapp-pdf-${lead.id}`}
+        >
+          <FileText className="h-5 w-5" />
+        </button>
+      )}
     </div>
   );
 };
