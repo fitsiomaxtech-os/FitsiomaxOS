@@ -2663,20 +2663,20 @@ async def v3_lead_appointment_card(lead_id: str, _: V3UserOut = Depends(v3_curre
 # Admin in Settings > Appointment Msg Editor. One per branch: the message names the branch,
 # its location and how its desk talks to patients. The {placeholders} are filled in the
 # browser as the message is typed into WhatsApp (PreSalesCRM's welcomeText), and a line
-# whose placeholders all come out empty -- no reference, no map -- is left out there.
+# whose placeholders all come out empty -- no PDF, no reference -- is left out there.
 #
 # Home visits and Google Meet consultations keep the standard wording: "at {branch}" and
 # the branch's map are wrong for both.
 APPT_MSG_SETTING_PREFIX = "appointment_message:"
 APPT_MSG_MAX_LEN = 2000
-# No {pdf_link}: the PDF goes as a file from its own button, not as a link in the text.
-APPT_MSG_PLACEHOLDERS = ("name", "date_time", "branch", "reference", "location_link")
-# The PDF goes between the appointment and the location: what comes before the location
-# is typed into the chat, and the location rides under the PDF as its caption.
+APPT_MSG_PLACEHOLDERS = ("name", "date_time", "branch", "reference", "pdf_link", "location_link")
 APPT_MSG_DEFAULT = (
-    "Hi {name}, Welcome to Fitsiomax Clinic!\n"
+    "Hi {name}, Welcome to Fitsiomax Clinic !\n"
     "\n"
     "Your appointment is confirmed for {date_time} at {branch}.\n"
+    "\n"
+    "Your appointment confirmation (PDF):\n"
+    "{pdf_link}\n"
     "\n"
     "{branch} location:\n"
     "{location_link}"

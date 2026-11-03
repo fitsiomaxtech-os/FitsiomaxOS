@@ -7,7 +7,7 @@ import { toast } from "@/components/ui/sonner";
 import {
   getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
   getLeadDeleteEnabled, preSalesPreBook,
-  getDashboardOverview, getLeadAppointmentCard,
+  getDashboardOverview, getLeadAppointmentCard, uploadAppointmentPdf, publicAppointmentPdfUrl,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { CreateLeadModal } from "@/components/CreateLeadModal";
@@ -19,7 +19,7 @@ import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
 import { AppointmentConfirmCard, apptHtml, apptMapUrl } from "@/components/AppointmentConfirmCard";
-import { usePdf, whatsappPdf } from "@/lib/pdf";
+import { pdfJob, usePdf } from "@/lib/pdf";
 import { PreSalesConsultationVisitView } from "@/components/PreSalesConsultationVisitView";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
@@ -262,7 +262,7 @@ const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
       location_link: mapUrl,
     });
   }
-  const lines = [`Hi ${lead.name || "there"}, Welcome to Fitsiomax Clinic!`];
+  const lines = [`Hi ${lead.name || "there"}, Welcome to Fitsiomax Clinic !`];
   const pb = preBookOf(lead);
   if (card) {
     const when = preBookWhen({ date: card.date, time: card.time });
@@ -278,38 +278,19 @@ const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
   return lines.join("\n");
 };
 
-/**
- * The welcome cut where the PDF goes: before the branch's location, and the "… location:"
- * line introducing it. The first part is typed into the chat; the rest rides under the PDF
- * as its caption, so the patient reads the welcome, then the PDF, then the location.
- */
-const splitAtLocation = (text, mapUrl) => {
-  const lines = text.split("\n");
-  let i = mapUrl ? lines.findIndex((l) => l.includes(mapUrl)) : -1;
-  if (i < 0) return [text, ""];
-  if (i > 0 && /:\s*$/.test(lines[i - 1])) i -= 1;
-  return [lines.slice(0, i).join("\n").trim(), lines.slice(i).join("\n").trim()];
-};
-
 // Call → native dialer (tel:). WhatsApp, before an appointment → the lead's own chat,
-// blank, for the rep to write. After one, two taps, so the patient reads the welcome, then
-// the PDF, then the location:
-//   WhatsApp → the lead's chat with the welcome and the appointment typed in.
-//   PDF      → the confirmation PDF as the file, with the location link as its caption.
+// blank, for the rep to write. After one → the lead's chat with the welcome typed in: the
+// appointment, its confirmation PDF as a link, and the branch's location.
 //
-// Two taps, because WhatsApp puts a file's text under it, never above, and gives no single
-// route that does both: wa.me opens one number's chat but carries text only, and the
-// share sheet carries a file but asks who it is for -- and a new lead is rarely a saved
-// contact, so it would not be on that list. The first tap puts the lead's chat at the top
-// of WhatsApp's recents; the PDF tap then shares the file there. Same-tab navigation for
-// wa.me (window.location.href, not window.open), matching the fix applied elsewhere for
-// the mobile "blank screen on return from WhatsApp" bug.
+// wa.me opens one number's chat but carries text only; the share sheet carries a file but
+// asks who it is for. So the PDF goes up to the server first (behind the booking's share
+// token) and rides in the message as a link -- one tap from the rep, the right chat, and
+// everything in it. Same-tab navigation (window.location.href, not window.open), matching
+// the fix applied elsewhere for the mobile "blank screen on return from WhatsApp" bug.
 //
 // `apptCard` is the lead popup's copy of the confirmation, loaded when it opened, so the
-// PDF is drawn before the tap rather than after it -- the share sheet only opens inside
-// the click. The PDF button is the popup's only; a card on the list fetches the
-// appointment on tap and types the whole welcome, location and all, since it has no PDF
-// tap to carry the location. `branches` saves the location a request.
+// PDF is drawn before the tap rather than after it; a card on the list fetches on tap.
+// `branches` likewise saves the location a request.
 const LeadContactIcons = ({ lead, apptCard, branches }) => {
   const [busy, setBusy] = useState(false);
   const pdf = usePdf(apptCard ? apptHtml(apptCard) : null);
@@ -330,6 +311,16 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
       if (!card && apptCard === undefined && hasAppointment(lead)) {
         card = await getLeadAppointmentCard(lead.id).catch(() => null);
       }
+      let pdfUrl = "";
+      if (card?.shareToken) {
+        try {
+          const blob = await (card === apptCard && pdf ? pdf : pdfJob(apptHtml(card)))();
+          await uploadAppointmentPdf(lead.id, blob, `appointment-${card.refNo || "confirmation"}.pdf`);
+          pdfUrl = publicAppointmentPdfUrl(card.shareToken);
+        } catch {
+          toast.error("Couldn't attach the appointment PDF — the welcome goes without it");
+        }
+      }
       // The location: the booking's branch when there is one, else the lead's own.
       let mapUrl = "";
       let branchName = "";
@@ -344,27 +335,11 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
           mapUrl = apptMapUrl({ branch: branchName, branchAddress: b.address, mapLocation: b.map_location });
         }
       }
-      // No pdfUrl: the PDF goes as the file, from its own button.
-      let text = welcomeText(lead, { card, mapUrl, branchName });
-      // With the PDF button beside it, the location waits to go under the PDF.
-      if (card && card === apptCard && pdf) [text] = splitAtLocation(text, mapUrl);
-      window.location.href = `https://wa.me/${num}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+      const text = welcomeText(lead, { card, pdfUrl, mapUrl, branchName });
+      window.location.href = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
     } finally {
       setBusy(false);
     }
-  };
-  const handlePdf = (e) => {
-    e.stopPropagation();
-    const ref = apptCard.refNo && apptCard.refNo !== "—" ? apptCard.refNo : "";
-    const mapUrl = apptMapUrl(apptCard);
-    const [, location] = splitAtLocation(welcomeText(lead, { card: apptCard, mapUrl, branchName: apptCard.branch }), mapUrl);
-    whatsappPdf(
-      pdf,
-      `appointment-${ref || "confirmation"}.pdf`,
-      `FITSIOMAX Appointment ${ref}`.trim(),
-      lead.phone,
-      location,
-    );
   };
   // 40px targets with a tinted disc behind each. These now render only on the phone
   // cards, and at 3.5 icons inside 1.5 padding they were 26px of tappable area with
@@ -394,18 +369,6 @@ const LeadContactIcons = ({ lead, apptCard, branches }) => {
       >
         {busy ? <RefreshCw className="h-5 w-5 animate-spin" /> : <WhatsAppIcon className="h-5 w-5" />}
       </button>
-      {apptCard && pdf && (
-        <button
-          type="button"
-          onClick={handlePdf}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100"
-          title="Send the appointment PDF and location on WhatsApp"
-          aria-label={`Send the appointment PDF to ${lead.name || "lead"} on WhatsApp`}
-          data-testid={`presales-whatsapp-pdf-${lead.id}`}
-        >
-          <FileText className="h-5 w-5" />
-        </button>
-      )}
     </div>
   );
 };
