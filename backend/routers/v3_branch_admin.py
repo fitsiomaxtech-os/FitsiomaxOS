@@ -2671,11 +2671,12 @@ APPT_MSG_SETTING_PREFIX = "appointment_message:"
 APPT_MSG_MAX_LEN = 2000
 # No {pdf_link}: the PDF goes as a file from its own button, not as a link in the text.
 APPT_MSG_PLACEHOLDERS = ("name", "date_time", "branch", "reference", "location_link")
+# The PDF goes between the appointment and the location: what comes before the location
+# is typed into the chat, and the location rides under the PDF as its caption.
 APPT_MSG_DEFAULT = (
-    "Hi {name}, welcome to FITSIOMAX!\n"
+    "Hi {name}, Welcome to Fitsiomax Clinic!\n"
     "\n"
     "Your appointment is confirmed for {date_time} at {branch}.\n"
-    "Reference: {reference}\n"
     "\n"
     "{branch} location:\n"
     "{location_link}"
