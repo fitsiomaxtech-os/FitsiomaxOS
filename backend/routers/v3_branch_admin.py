@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Depends, File, Query, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Dict, Optional
 from datetime import date, datetime, timedelta, timezone
 from calendar import monthrange
 import logging
+import os
+import re
 import uuid
 
 from database import v3_col
@@ -2651,6 +2653,74 @@ async def v3_lead_appointment_card(lead_id: str, _: V3UserOut = Depends(v3_curre
         "packageName": appt.get("visit_package_name") or "",
         "packagePrice": appt.get("visit_package_price"),
     }
+
+
+
+# The confirmation as a PDF, behind the same share token as its page. Pre Sales' WhatsApp
+# opens the patient's chat with the message already typed, and wa.me carries text only --
+# so the PDF goes as a link in that message rather than as an attachment. The browser
+# draws it (lib/pdf.js, the same file Print and Download make) and leaves it here.
+#
+# Not under uploads/: that folder is served statically to anyone, and these are named by
+# a token that must only ever come from the appointment row, never from the request.
+APPT_PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "appointment_pdfs")
+APPT_PDF_MAX_BYTES = 10 * 1024 * 1024
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+
+
+def _appt_pdf_path(share_token: str) -> Optional[str]:
+    if not _TOKEN_RE.match(share_token or ""):
+        return None
+    return os.path.join(APPT_PDF_DIR, f"{share_token}.pdf")
+
+
+@router.post("/leads/{lead_id}/appointment-card/pdf")
+async def v3_store_appointment_pdf(lead_id: str, file: UploadFile = File(...), _: V3UserOut = Depends(v3_current_user)):
+    """Keep the confirmation PDF for this lead's live appointment, and say where it is.
+
+    The token comes off the appointment row, not the upload, so a caller can only ever
+    write the file for the booking the card endpoint would answer for. Replaced on every
+    send: a sheet drawn after the patient's name was corrected should be the one they get.
+    """
+    appt = await v3_col("appointments").find_one(
+        {"lead_id": lead_id, "appt_kind": "consultation", "status": "new_appointment"},
+        {"_id": 0, "share_token": 1},
+        sort=[("updated_at", -1)],
+    )
+    if not appt:
+        raise HTTPException(status_code=404, detail="No appointment is booked for this patient")
+    token = appt.get("share_token") or ""
+    path = _appt_pdf_path(token)
+    if not path:
+        raise HTTPException(status_code=409, detail="This booking has no share link to attach a PDF to")
+
+    data = await file.read(APPT_PDF_MAX_BYTES + 1)
+    if len(data) > APPT_PDF_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The PDF is too large")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="That is not a PDF")
+
+    os.makedirs(APPT_PDF_DIR, exist_ok=True)
+    tmp = f"{path}.{uuid.uuid4().hex}.tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+    return {"share_token": token}
+
+
+@router.get("/public/appointment/{share_token}/pdf")
+async def v3_public_appointment_pdf(share_token: str):
+    """The confirmation PDF behind its share link. Unauthenticated, as the page is: the
+    token is the key, and the file holds only what the sheet the patient was sent holds."""
+    path = _appt_pdf_path(share_token)
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="This confirmation is no longer available")
+    appt = await v3_col("appointments").find_one({"share_token": share_token}, {"_id": 0, "ref_no": 1})
+    if not appt:
+        raise HTTPException(status_code=404, detail="This confirmation is no longer available")
+    name = f"appointment-{appt.get('ref_no') or 'confirmation'}.pdf"
+    # inline, so a tap in WhatsApp opens the sheet rather than only saving it.
+    return FileResponse(path, media_type="application/pdf", filename=name, content_disposition_type="inline")
 
 
 class V3BranchTransferInput(BaseModel):

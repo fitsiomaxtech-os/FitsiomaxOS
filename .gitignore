@@ -120,3 +120,6 @@ frontend/node_modules/.cache/default-development/52.pack
 frontend/node_modules/.cache/default-development/52.pack
 frontend/node_modules/.cache/default-development/2.pack
 frontend/node_modules/.cache/default-development/55.pack
+
+# Appointment confirmation PDFs sent to patients (routers/v3_branch_admin.py)
+backend/appointment_pdfs/

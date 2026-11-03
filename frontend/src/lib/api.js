@@ -267,6 +267,14 @@ export const publicAppointmentUrl = (token) => `${BACKEND_URL}/api/v3/public/app
 // over again. 404s when the patient has no live consultation booked — the caller says so
 // rather than opening an empty card.
 export const getLeadAppointmentCard = async (leadId) => (await api.get(`/leads/${leadId}/appointment-card`)).data;
+// That confirmation as a PDF, kept on the server behind the booking's share token so a
+// WhatsApp message -- text only, through wa.me -- can carry it as a link.
+export const uploadAppointmentPdf = async (leadId, blob, filename) => {
+  const form = new FormData();
+  form.append("file", blob, filename || "appointment.pdf");
+  return (await api.post(`/leads/${leadId}/appointment-card/pdf`, form)).data;
+};
+export const publicAppointmentPdfUrl = (token) => `${BACKEND_URL}/api/v3/public/appointment/${token}/pdf`;
 // `mine` narrows the board to the consultations booked to the caller — what My
 // Consultation needs and what Operations, reading a whole branch, must not send.
 // `headChief` narrows it to the consultations booked to a Super Admin instead — Branch

@@ -7,7 +7,7 @@ import { toast } from "@/components/ui/sonner";
 import {
   getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
   getLeadDeleteEnabled, preSalesPreBook,
-  getDashboardOverview,
+  getDashboardOverview, getLeadAppointmentCard, uploadAppointmentPdf, publicAppointmentPdfUrl,
 } from "@/lib/api";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { CreateLeadModal } from "@/components/CreateLeadModal";
@@ -18,6 +18,8 @@ import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
+import { AppointmentConfirmCard, apptHtml, apptMapUrl } from "@/components/AppointmentConfirmCard";
+import { pdfJob, usePdf } from "@/lib/pdf";
 import { PreSalesConsultationVisitView } from "@/components/PreSalesConsultationVisitView";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
@@ -239,23 +241,90 @@ const BranchSelect = ({
 
 const testimonialsUrl = () => `${window.location.origin}/testimonials`;
 
-// Call → native dialer (tel:); WhatsApp → a template message pointing the lead at the
-// patient testimonial videos before the rep even gets them on the phone. Same-tab
-// navigation (window.location.href, not window.open), matching the fix applied
-// elsewhere for the mobile "blank screen on return from WhatsApp" bug.
-const LeadContactIcons = ({ lead }) => {
+/** A lead with a consultation fixed -- the one the appointment card endpoint answers for. */
+const hasAppointment = (lead) => !!(lead?.appointment_date || lead?.stage === "Appointment");
+
+/**
+ * The welcome WhatsApp types into the lead's own chat: who we are, the appointment and its
+ * PDF when one is fixed (the Pre Book visit when that is all there is), where the branch
+ * is, and the testimonials.
+ */
+const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
+  const lines = [`Hi ${lead.name || "there"}, welcome to FITSIOMAX!`];
+  const pb = preBookOf(lead);
+  if (card) {
+    const when = preBookWhen({ date: card.date, time: card.time });
+    lines.push("", `Your appointment is confirmed${when ? ` for ${when}` : ""}${card.branch && !card.meetLink && !card.houseVisit ? ` at ${card.branch}` : ""}.`);
+    if (card.refNo && card.refNo !== "—") lines.push(`Reference: ${card.refNo}`);
+    if (card.houseVisit) lines.push("Our consultant will come to your home at this time.");
+    if (card.meetLink) lines.push(`Google Meet: ${card.meetLink}`);
+    if (pdfUrl) lines.push("", "Your appointment confirmation (PDF):", pdfUrl);
+  } else if (lead.stage === "Pre Book" && pb) {
+    const when = preBookWhen(pb);
+    if (when) lines.push("", `Your visit is planned for ${when}.`);
+  }
+  if (mapUrl) lines.push("", `${branchName || "Our branch"} location:`, mapUrl);
+  lines.push("", "Take a look at real patient success stories:", testimonialsUrl());
+  return lines.join("\n");
+};
+
+// Call → native dialer (tel:). WhatsApp → straight into the lead's own chat with the
+// welcome typed in: the appointment confirmation PDF and the branch's map link when an
+// appointment is fixed, else the lead's branch location and the testimonials.
+//
+// wa.me opens one number's chat but carries text only; the share sheet carries a file but
+// asks who it is for. So the PDF goes up to the server first (behind the booking's share
+// token) and rides in the message as a link -- one tap from the rep, the right chat, and
+// everything in it. Same-tab navigation (window.location.href, not window.open), matching
+// the fix applied elsewhere for the mobile "blank screen on return from WhatsApp" bug.
+//
+// `apptCard` is the lead popup's copy of the confirmation, loaded when it opened, so the
+// PDF is drawn before the tap rather than after it; a card on the list fetches on tap.
+// `branches` likewise saves the location a request.
+const LeadContactIcons = ({ lead, apptCard, branches }) => {
+  const [busy, setBusy] = useState(false);
+  const pdf = usePdf(apptCard ? apptHtml(apptCard) : null);
   if (!lead.phone) return null;
   const num = waNumber(lead.phone);
   const handleCall = (e) => { e.stopPropagation(); window.location.href = `tel:${telNumber(lead.phone)}`; };
-  const handleWhatsApp = (e) => {
+  const handleWhatsApp = async (e) => {
     e.stopPropagation();
-    const text = [
-      `Hi ${lead.name || "there"}, this is Fitsiomax!`,
-      "",
-      "Take a look at real patient success stories before we connect:",
-      testimonialsUrl(),
-    ].join("\n");
-    window.location.href = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+    if (busy) return;
+    setBusy(true);
+    try {
+      let card = apptCard || null;
+      if (!card && apptCard === undefined && hasAppointment(lead)) {
+        card = await getLeadAppointmentCard(lead.id).catch(() => null);
+      }
+      let pdfUrl = "";
+      if (card?.shareToken) {
+        try {
+          const blob = await (card === apptCard && pdf ? pdf : pdfJob(apptHtml(card)))();
+          await uploadAppointmentPdf(lead.id, blob, `appointment-${card.refNo || "confirmation"}.pdf`);
+          pdfUrl = publicAppointmentPdfUrl(card.shareToken);
+        } catch {
+          toast.error("Couldn't attach the appointment PDF — the welcome goes without it");
+        }
+      }
+      // The location: the booking's branch when there is one, else the lead's own.
+      let mapUrl = "";
+      let branchName = "";
+      if (card) {
+        mapUrl = apptMapUrl(card);
+        branchName = card.branch;
+      } else if (lead.branch_id) {
+        const rows = branches?.length ? branches : await getBranches().catch(() => []);
+        const b = (rows || []).find((r) => r.id === lead.branch_id);
+        if (b) {
+          branchName = branchLabel(b);
+          mapUrl = apptMapUrl({ branch: branchName, branchAddress: b.address, mapLocation: b.map_location });
+        }
+      }
+      const text = welcomeText(lead, { card, pdfUrl, mapUrl, branchName });
+      window.location.href = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+    } finally {
+      setBusy(false);
+    }
   };
   // 40px targets with a tinted disc behind each. These now render only on the phone
   // cards, and at 3.5 icons inside 1.5 padding they were 26px of tappable area with
@@ -277,12 +346,13 @@ const LeadContactIcons = ({ lead }) => {
       <button
         type="button"
         onClick={handleWhatsApp}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100"
+        disabled={busy}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100 disabled:opacity-60"
         title="WhatsApp"
         aria-label={`WhatsApp ${lead.name || "lead"}`}
         data-testid={`presales-whatsapp-${lead.id}`}
       >
-        <WhatsAppIcon className="h-5 w-5" />
+        {busy ? <RefreshCw className="h-5 w-5 animate-spin" /> : <WhatsAppIcon className="h-5 w-5" />}
       </button>
     </div>
   );
@@ -3060,6 +3130,23 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
   useEffect(() => { setCurrentLead(lead); }, [lead]);
 
+  // The appointment confirmation, on a lead with one fixed: the header's Appointment
+  // button opens it, and WhatsApp sends it as a PDF. Read when the popup opens so the
+  // PDF is drawn before the rep taps, not after. Undefined until it answers, null when
+  // there is none (a cancelled booking, or never one).
+  const leadHasAppointment = hasAppointment(currentLead);
+  const [apptCard, setApptCard] = useState(undefined);
+  const [showApptCard, setShowApptCard] = useState(false);
+  useEffect(() => {
+    if (!leadId || !leadHasAppointment) { setApptCard(null); return undefined; }
+    let cancelled = false;
+    setApptCard(undefined);
+    getLeadAppointmentCard(leadId)
+      .then((c) => { if (!cancelled) setApptCard(c); })
+      .catch(() => { if (!cancelled) setApptCard(null); });
+    return () => { cancelled = true; };
+  }, [leadId, leadHasAppointment, currentLead.appointment_date, currentLead.appointment_time]);
+
   const refreshAndKeep = () => { onSaved && onSaved(); };
 
   // Logged from the RNR Status card on Overview and from the RNR Record tab alike. The
@@ -3212,34 +3299,45 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
       // pills as the last card on Overview rather than a footer under every tab. Never
       // taller than the screen, and only the body scrolls, so the header and tabs stay put.
       <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="presales-detail-card">
-        {/* One row: avatar, name, ID and stage chip, the buttons on the same centre line.
-            On a phone, two: name and buttons, then the chips under both — the wrappers are
-            display:contents there so all of it lays out on one grid. No avatar on a phone:
-            the initial only repeats the name beside it. */}
-        <div className="relative shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:flex sm:justify-between sm:gap-3">
-            <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-3">
+        {/* One row on every screen: avatar, name, ID and stage chip, then the buttons on the
+            same centre line. The name gives way first (truncated, whole on hover) so the
+            chips and buttons never wrap under it. No avatar on a phone: the initial only
+            repeats the name beside it. */}
+        <div className="relative shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-4">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
               <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:inline-flex sm:h-11 sm:w-11">{avatarFirstChar}</span>
-              <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
-                <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-slate-900" data-testid="presales-detail-name">{currentLead.name}</p>
-                <div className="col-span-2 col-start-1 row-start-2 flex flex-wrap items-center gap-1.5">
-                  {currentLead.patient_number && (
-                    <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
-                  )}
-                  <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 sm:px-2.5" data-testid="presales-detail-stage">
-                    {currentLead.stage || "No Stage"}
-                  </span>
-                </div>
-              </div>
+              <p className="min-w-0 truncate text-[15px] font-semibold leading-tight text-slate-900 sm:text-base" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
+              {currentLead.patient_number && (
+                <span className="shrink-0 rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
+              )}
+              <span className="shrink-0 whitespace-nowrap rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 sm:px-2.5" data-testid="presales-detail-stage">
+                {currentLead.stage || "No Stage"}
+              </span>
             </div>
-            <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+              {/* The confirmation the patient was sent, handed back -- print, send or save
+                  it again. Only once the record has answered with one, so it never opens
+                  onto an empty card. */}
+              {apptCard && (
+                <button
+                  type="button"
+                  onClick={() => setShowApptCard(true)}
+                  title="Appointment confirmation"
+                  aria-label="Appointment confirmation"
+                  className="inline-flex items-center rounded-[5px] p-1.5 text-teal-600 transition hover:bg-teal-50 hover:text-teal-700 sm:p-2"
+                  data-testid="presales-detail-appt-card-btn"
+                >
+                  <CalendarCheck className="h-5 w-5" />
+                </button>
+              )}
               {currentLead.source_type === "manual" && (
                 <button
                   type="button"
                   onClick={() => setShowEdit(true)}
                   title="Edit"
                   aria-label="Edit"
-                  className="inline-flex items-center rounded-[5px] bg-white p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+                  className="inline-flex items-center rounded-[5px] bg-white p-1.5 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 sm:p-2"
                   data-testid="presales-detail-edit-btn"
                 >
                   <Pencil className="h-5 w-5" />
@@ -3251,13 +3349,13 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   onClick={() => setConfirmDelete(true)}
                   title="Delete"
                   aria-label="Delete"
-                  className="inline-flex items-center rounded-[5px] bg-white p-2 text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
+                  className="inline-flex items-center rounded-[5px] bg-white p-1.5 text-rose-600 transition hover:bg-rose-50 hover:text-rose-700 sm:p-2"
                   data-testid="presales-detail-delete-btn"
                 >
                   <Trash2 className="h-5 w-5" />
                 </button>
               )}
-              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="presales-detail-close">
+              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 sm:p-2" data-testid="presales-detail-close">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -3292,7 +3390,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   {/* Call and WhatsApp, phone only: the rep's phone list cards no longer
                       carry them, and on a desk tel: and wa.me open nothing useful. */}
                   <div className="ml-auto md:hidden" data-testid="presales-detail-contact-actions">
-                    <LeadContactIcons lead={currentLead} />
+                    <LeadContactIcons lead={currentLead} apptCard={apptCard} branches={branches} />
                   </div>
                 </div>
                 <div className="space-y-2 px-4 py-3">
@@ -3923,6 +4021,10 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
       {/* The Appointment pill: where the consultation happens, then the date, CONSULTANT
           and time -- the desk books the consultant itself now, rather than passing the
           lead to Branch Admin with a requested time for the branch to book. */}
+      {showApptCard && apptCard && (
+        <AppointmentConfirmCard appt={apptCard} onClose={() => setShowApptCard(false)} testid="presales-appt-reissue" />
+      )}
+
       {bookingAppointment && !showEdit && (
         <PreSalesAppointmentDialog
           lead={currentLead}
