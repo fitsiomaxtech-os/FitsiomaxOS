@@ -6000,12 +6000,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                 package, so that is picked next and the slot after it. */}
             {apptDraft.step === "visit" && (
               <div className="overflow-y-auto p-4 sm:p-6" data-testid="branch-appt-visit-step">
-                <p className="mb-1 text-base font-bold text-slate-800">How will {lead.name || "the patient"} be consulted?</p>
-                <p className="mb-4 text-xs text-slate-500">Choose where the consultation happens. You'll pick the date and time next.</p>
+                <p className="mb-4 text-base font-bold text-slate-800">How will {lead.name || "the patient"} be consulted?</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
-                    { key: "branch", label: "Offline Consultation", sub: "The patient comes to the branch", icon: Building2 },
-                    { key: "home", label: "House Visit", sub: "The consultant goes to the patient's home — pick a package next", icon: Home },
+                    { key: "branch", label: "Offline Consultation", icon: Building2 },
+                    { key: "home", label: "House Visit", icon: Home },
                   ].map((v) => {
                     const Icon = v.icon;
                     const on = apptDraft.visit_type === v.key;
@@ -6021,7 +6020,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                             setApptDraft({ ...apptDraft, visit_type: "branch", visit_package_id: "", visit_package: null, step: "book" });
                           }
                         }}
-                        className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
+                        className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${
                           on ? "border-sky-500 bg-sky-50 shadow-sm" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-slate-50"
                         }`}
                         data-testid={`branch-appt-visit-${v.key}`}
@@ -6029,10 +6028,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${on ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`}>
                           <Icon className="h-5 w-5" />
                         </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-bold text-slate-800">{v.label}</span>
-                          <span className="mt-0.5 block text-xs text-slate-500">{v.sub}</span>
-                        </span>
+                        <span className="text-sm font-bold text-slate-800">{v.label}</span>
                       </button>
                     );
                   })}
