@@ -3271,7 +3271,6 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   // refuses the same moves on its own.
   const stageLocked = currentLead.stage === "Lost";
   const canMove = canMoveStage && !stageLocked;
-  const avatarFirstChar = (currentLead.name?.trim()?.charAt(0) || "?").toUpperCase();
 
   // Who the patient is, read back off the record, on a tab of its own. Empty fields are
   // dropped rather than drawn as dashes — a walk-in carries three of these and a sheet
@@ -3318,14 +3317,13 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
       // pills as the last card on Overview rather than a footer under every tab. Never
       // taller than the screen, and only the body scrolls, so the header and tabs stay put.
       <div className="flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[530px] sm:max-w-[575px]" data-testid="presales-detail-card">
-        {/* One row on every screen: avatar, name, ID and stage chip, then the buttons on the
-            same centre line. On a phone the name alone, with the buttons: beside the ID and
-            stage chips it was cut to two letters. No avatar there either -- the initial only
-            repeats the name beside it. */}
+        {/* One row on every screen: name, ID and stage chip, then the buttons on the same
+            centre line. On a phone the name alone, with the buttons: beside the ID and stage
+            chips it was cut to two letters. No avatar -- the initial only repeats the name
+            beside it. */}
         <div className="relative shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2 sm:gap-3">
             <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
-              <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-600 ring-1 ring-slate-200 sm:inline-flex sm:h-11 sm:w-11">{avatarFirstChar}</span>
               <p className="min-w-0 truncate text-[15px] font-semibold leading-tight text-slate-900 sm:text-base" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
               {currentLead.patient_number && (
                 <span className="hidden shrink-0 rounded-[5px] bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:inline" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
