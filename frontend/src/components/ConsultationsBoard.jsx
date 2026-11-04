@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useShownPaymentModes } from "@/lib/paymentModes";
 import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -2786,6 +2787,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   }
   const compactDetail = detailFrame.compact;
   const bookedDetail = detailFrame.booked;
+  // The band at the bottom of the card, under the part that scrolls. Fee Collected and Physio
+  // Assign put their Quit in it (see FootExitButton); every other panel leaves it empty, and
+  // an empty band is not drawn.
+  const [footSlot, setFootSlot] = useState(null);
   const [timelineRemarks, setTimelineRemarks] = useState([]);
   const [timelineActivity, setTimelineActivity] = useState([]);
   const [storeItems, setStoreItems] = useState([]);
@@ -9489,6 +9494,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 let ExitButton = null;
                 if (awaitingVisit) ExitButton = exitButton("Lost", "cons-lost-btn", () => markLost(selectedLead));
                 else if (quittable) ExitButton = exitButton("Quit", "cons-quit-btn", askQuit);
+                // Fee Collected and Physio Assign hold it clear of the work: at the foot of the
+                // card, not on the row above the fees and the sessions.
+                const FootExitButton = ExitButton && footSlot ? createPortal(ExitButton, footSlot) : null;
 
                 // Diet, one button, one strict sequence: the Diet Fee first, then the
                 // Nutrition Coach + their appointment — can't reach assignment until the fee
@@ -11264,7 +11272,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               </Button>
                               {DietDetailButton}
                               {RehabDetailButton}
-                              {ExitButton}
+                              {FootExitButton}
                             </div>
                             {detailBody && <div className="mt-3 border-t border-emerald-100 pt-3">{detailBody}</div>}
                             </div>
@@ -11313,7 +11321,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 as well put the same view two doors apart on one screen,
                                 above a panel whose job right now is the fee that is due. */}
                             {RehabDetailButton}
-                            {ExitButton}
+                            {FootExitButton}
                           </>
                         }
                       >
@@ -11409,25 +11417,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // patient is on three programmes and this is the first of them. Pressing
                     // the lit tab returns you to the view you are already on, which is what
                     // every other tab row on this board does.
-                    //
-                    // Quit sits on the same row, with or without them: this is where a patient
-                    // part-way through a course leaves from.
-                    const programmeTabs = DietDetailButton || RehabDetailButton;
-                    const physioAssignTabs = (programmeTabs || ExitButton) ? (
+                    const physioAssignTabs = (DietDetailButton || RehabDetailButton) ? (
                       <>
-                        {programmeTabs && (
-                          <OwnTab
-                            label="Physio Assign"
-                            short="Physio"
-                            icon={Users}
-                            active="border-violet-600 bg-violet-600 text-white shadow-sm hover:bg-violet-700 hover:text-white"
-                            due={treatmentDue}
-                            dueTitle="Treatment fee still to collect"
-                          />
-                        )}
+                        <OwnTab
+                          label="Physio Assign"
+                          short="Physio"
+                          icon={Users}
+                          active="border-violet-600 bg-violet-600 text-white shadow-sm hover:bg-violet-700 hover:text-white"
+                          due={treatmentDue}
+                          dueTitle="Treatment fee still to collect"
+                        />
                         {DietDetailButton}
                         {RehabDetailButton}
-                        {ExitButton}
                       </>
                     ) : null;
                     return (
@@ -11446,6 +11447,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         tabs={physioAssignTabs}
                       >
                         {detailBody || PhysioDetailBody}
+                        {FootExitButton}
                       </StagePanel>
                     );
                   }
@@ -11658,6 +11660,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </div>
               )}
             </div>
+
+            {/* Held out of the scroll, like the name and the tab row at the top of the card, so
+                what is in it stays at the very bottom however long the panel above runs. Out
+                here as well because .fee-flat strips every border inside the Overview, this
+                band's own rule with them; the corners are set here for the same reason. */}
+            <div
+              ref={setFootSlot}
+              className="flex shrink-0 items-center justify-end border-t border-slate-200 bg-slate-50/60 px-4 py-2 empty:hidden [&>button]:rounded-[2px]"
+              data-testid="cons-detail-foot"
+            />
 
             {/* Collect Fee popup (Branch Admin) — Consultation Visit stage. The Consultation
                 Fee alone: it closes once that is collected, and a "Consultation + Treatment"
