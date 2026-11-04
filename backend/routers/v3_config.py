@@ -23,7 +23,7 @@ import lead_purge
 import consult_duration_rule
 import store_branch_overrides
 from seed import create_default_lead_source, sync_lead_source_branch_name
-from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled
+from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled, UNDO_PAYMENT_SETTING_ID, undo_payment_enabled
 from routers.v3_inventory import _add_to_stock
 from routers.v3_zumba import MASTER_SLOT_FIELD
 from routers.v3_tab_activity import TAB_DOTS_SETTING_ID, tab_dots_enabled
@@ -1379,6 +1379,33 @@ async def v3_set_before_verify_delete_button(
         {"id": BEFORE_VERIFY_DELETE_SETTING_ID},
         {"$set": {
             "id": BEFORE_VERIFY_DELETE_SETTING_ID,
+            "enabled": payload.enabled,
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"enabled": payload.enabled}
+
+
+# Undo Payment: whether Branch Admin's Accountant Manage offers Undo Payment on the payments
+# still in To Verify (undo_unverified_payment). Its own switch rather than Before Verify
+# Transactions, so the desk can be given one without the bin. Off hides the button and the
+# endpoint refuses.
+@router.get("/admin/undo-payment-button")
+async def v3_get_undo_payment_button(_: V3UserOut = Depends(require_developer_password)):
+    return {"enabled": await undo_payment_enabled()}
+
+
+@router.put("/admin/undo-payment-button")
+async def v3_set_undo_payment_button(
+    payload: ExpenseDeleteButtonInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    await v3_col("app_settings").update_one(
+        {"id": UNDO_PAYMENT_SETTING_ID},
+        {"$set": {
+            "id": UNDO_PAYMENT_SETTING_ID,
             "enabled": payload.enabled,
             "updated_by": user.full_name,
             "updated_at": now_iso(),

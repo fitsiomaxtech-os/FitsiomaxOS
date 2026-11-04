@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
-import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getBranchTabDots, setBranchTabDots, getAppThemeAdmin, setAppThemeAdmin, getPaymentModeVisibilityAdmin, setPaymentModeHidden } from "@/lib/api";
+import { stagesList, stagesCreate, stagesUpdate, stagesDelete, stagesReorder, resetAllLeads, resetAllPayments, resetAllUsers, unlockDangerZone, getPhysioDayLock, setPhysioDayLock, getLeadDeleteButton, setLeadDeleteButton, getExpenseDeleteButton, setExpenseDeleteButton, getBeforeVerifyDeleteButton, setBeforeVerifyDeleteButton, getUndoPaymentButton, setUndoPaymentButton, getSaConsultBranchesSetting, setSaConsultBranchesSetting, getStoreBranchOverrides, setStoreBranchOverrides, getLeadSourceButton, setLeadSourceButton, getConsultationDurationRule, setConsultationDurationRule, getBranchTabDots, setBranchTabDots, getAppThemeAdmin, setAppThemeAdmin, getPaymentModeVisibilityAdmin, setPaymentModeHidden } from "@/lib/api";
 import { setHiddenPaymentModes } from "@/lib/paymentModes";
 import { ThemeAppearanceCard } from "@/components/ThemeAppearanceCard";
 
@@ -229,6 +229,9 @@ export const PipelineStageManagement = ({ leading = null }) => {
   // Before Verify Transactions: the bin on Branch Admin's To Verify payments. null until read.
   const [beforeVerifyDelete, setBeforeVerifyDelete] = useState(null);
   const [savingBeforeVerifyDelete, setSavingBeforeVerifyDelete] = useState(false);
+  // Undo Payment: the button on the same To Verify payments. null until read.
+  const [undoPayment, setUndoPayment] = useState(null);
+  const [savingUndoPayment, setSavingUndoPayment] = useState(false);
   // The Super Admin's branch-wise On/Off on My Consultation. null until the zone is open.
   const [saBranches, setSaBranches] = useState(null);
   const [savingSaBranches, setSavingSaBranches] = useState(false);
@@ -388,10 +391,11 @@ export const PipelineStageManagement = ({ leading = null }) => {
 
   // Read once the zone is open, with the password it was opened with.
   useEffect(() => {
-    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); setTabDots(null); setHiddenModes(null); return; }
+    if (!devPassword) { setDayLock(null); setDeleteButton(null); setExpenseDelete(null); setBeforeVerifyDelete(null); setUndoPayment(null); setSaBranches(null); setStorePerBranch(null); setLeadSourceButtonState(null); setDurationRule(null); setTabDots(null); setHiddenModes(null); return; }
     getStoreBranchOverrides(devPassword).then((r) => setStorePerBranch(!!r.enabled)).catch(() => setStorePerBranch(null));
     getExpenseDeleteButton(devPassword).then((r) => setExpenseDelete(!!r.enabled)).catch(() => setExpenseDelete(null));
     getBeforeVerifyDeleteButton(devPassword).then((r) => setBeforeVerifyDelete(!!r.enabled)).catch(() => setBeforeVerifyDelete(null));
+    getUndoPaymentButton(devPassword).then((r) => setUndoPayment(!!r.enabled)).catch(() => setUndoPayment(null));
     getPhysioDayLock(devPassword).then((r) => setDayLock(!!r.locked)).catch(() => setDayLock(null));
     getLeadDeleteButton(devPassword).then((r) => setDeleteButton(!!r.enabled)).catch(() => setDeleteButton(null));
     getSaConsultBranchesSetting(devPassword).then((r) => setSaBranches(!!r.enabled)).catch(() => setSaBranches(null));
@@ -619,6 +623,23 @@ export const PipelineStageManagement = ({ leading = null }) => {
       resetFailed(e);
     }
     setSavingBeforeVerifyDelete(false);
+  };
+
+  const toggleUndoPayment = async () => {
+    const next = !undoPayment;
+    const ok = window.confirm(next
+      ? "Turn Undo Payment ON?\n\nA Branch Admin gets an Undo Payment button on every payment still in To Verify on Accountant Manage > Summary. Undoing a payment takes it off the books: the fee or instalment is owed again, a store sale's stock goes back on the shelf, and a line stays on the client's history. Payments already sent to the accountant, approved, or on a closed day cannot be undone this way."
+      : "Turn Undo Payment OFF?\n\nThe button disappears from the Branch Admin's To Verify list, and the server refuses the request even if one is sent. Nothing already undone comes back.");
+    if (!ok) return;
+    setSavingUndoPayment(true);
+    try {
+      const r = await setUndoPaymentButton(devPassword, next);
+      setUndoPayment(!!r.enabled);
+      toast.success(r.enabled ? "Undo Payment is ON" : "Undo Payment is OFF");
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingUndoPayment(false);
   };
 
   const toggleSaBranches = async () => {
@@ -973,6 +994,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
               { key: "lead-delete-button", label: "Branch Leads & Pre Sales delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
               { key: "expense-delete-button", label: "Accountant Approvals & Branch Accountant Manage delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
               { key: "before-verify-delete-button", label: "Before Verify Transactions", value: beforeVerifyDelete, saving: savingBeforeVerifyDelete, onFlip: toggleBeforeVerifyDelete, on: "ON", off: "OFF" },
+              { key: "undo-payment-button", label: "Undo Payment", value: undoPayment, saving: savingUndoPayment, onFlip: toggleUndoPayment, on: "ON", off: "OFF" },
               { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
               { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
               { key: "lead-source-button", label: "Leads Source Show / Hide Sources button", value: leadSourceButton, saving: savingLeadSourceButton, onFlip: toggleLeadSourceButton, on: "ON", off: "OFF" },

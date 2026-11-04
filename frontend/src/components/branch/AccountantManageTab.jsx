@@ -13,7 +13,7 @@ import { FilterSelect } from "@/components/ui/filter-select";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { useStageBack } from "@/components/ui/phone-back";
 import { rangeFor, todayIso } from "@/lib/dateRange";
-import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction, deleteOldClient } from "@/lib/api";
+import { getBranches, getRevenueOverview, getFinanceExpenses, getBranchCash, requestTransactions, unrequestTransactions, undoLastInstalment, deleteUnverifiedTransaction, undoUnverifiedPayment, deleteOldClient } from "@/lib/api";
 import { ClientHistoryModal } from "@/components/branch/ClientHistoryModal";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { receiptFromTransaction } from "@/lib/receipt";
@@ -309,6 +309,21 @@ const DeleteBin = ({ onClick, busy = false, compact = false, label, testid }) =>
     data-testid={testid}
   >
     <Trash2 className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+  </button>
+);
+
+/** Undo Payment, Developer Access > Undo Payment: a To Verify payment off the books and owed
+ *  again. Rose, not the amber of MoveChip's Undo, which only moves money back a pile. */
+const UndoPaymentChip = ({ onClick, busy = false, compact = false, title, testid }) => (
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    disabled={busy}
+    className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-rose-200 bg-rose-50 font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 ${compact ? "h-7 px-2 text-[11px]" : "h-8 px-2.5 text-xs"}`}
+    title={title}
+    data-testid={testid}
+  >
+    <Undo2 className="h-3.5 w-3.5" /> Undo Payment
   </button>
 );
 
@@ -686,28 +701,30 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
    * every one of their payments still in To Verify, newest first -- a later instalment goes
    * back to owed before the fee it was paid against is reset, the order the server can undo
    * them in -- and one already gone with an earlier fee's reset is not counted as a failure.
+   * Undo Payment is the same walk over the same payments, with its own words and its own
+   * endpoint (Developer Access > Undo Payment). True when anything went.
    */
-  const deleteUnverified = async (payments, head) => {
+  const takeBackUnverified = async (payments, head, { ask, call, failed, done: doneWord }) => {
     const list = payments
       .filter((t) => stageOf(t) === "collected")
       .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-    if (!list.length) return;
+    if (!list.length) return false;
     const what = list.length === 1
       ? `${RECEIPT_PAID_FOR[list[0].source] || titleCase(list[0].source || "")} of ${fmt(list[0].gross)}`
       : `all ${list.length} payments (${fmt(list.reduce((n, t) => n + (Number(t.gross) || 0), 0))})`;
-    if (!window.confirm(`Delete ${what} from ${head.client_name || "this client"}?\n\nThe payment is removed at the source and is owed again. This cannot be undone.`)) return;
+    if (!window.confirm(ask(what))) return false;
     const ids = list.map((t) => t.id);
     setMoving((prev) => new Set([...prev, ...ids]));
     let done = 0;
     let message = "";
     for (const t of list) {
       try {
-        const res = await deleteUnverifiedTransaction(t.id);
+        const res = await call(t.id);
         done += 1;
         message = res?.message || "";
       } catch (err) {
         if (err?.response?.status === 404 && done > 0) continue;
-        toast.error(err?.response?.data?.detail || "Could not delete that payment");
+        toast.error(err?.response?.data?.detail || failed);
         break;
       }
     }
@@ -716,12 +733,26 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
       ids.forEach((id) => next.delete(id));
       return next;
     });
-    if (done) toast.success(done === 1 && message ? message.replace(/ -- /g, " — ") : `${countLabel(done, "payment")} deleted`);
+    if (done) toast.success(done === 1 && message ? message.replace(/ -- /g, " — ") : `${countLabel(done, "payment")} ${doneWord}`);
     load();
     loadExpenseTotals();
+    return done > 0;
   };
+  const deleteUnverified = (payments, head) => takeBackUnverified(payments, head, {
+    ask: (what) => `Delete ${what} from ${head.client_name || "this client"}?\n\nThe payment is removed at the source and is owed again. This cannot be undone.`,
+    call: deleteUnverifiedTransaction,
+    failed: "Could not delete that payment",
+    done: "deleted",
+  });
+  const undoPayment = (payments, head) => takeBackUnverified(payments, head, {
+    ask: (what) => `Undo ${what} from ${head.client_name || "this client"}?\n\nThe payment comes off the books and the amount is owed again, ready to collect afresh. A line stays on the client's history.`,
+    call: undoUnverifiedPayment,
+    failed: "Could not undo that payment",
+    done: "undone",
+  });
   // Drawn only on the branch desk's To Verify list, and only while the switch is on.
   const canDeleteUnverified = canVerify && incomeStage === "collected" && Boolean(data?.before_verify_delete);
+  const undoPaymentOn = canVerify && Boolean(data?.undo_payment);
 
   const k = data?.kpis || {};
   // `data?.x || []` builds a fresh array on every render, so every memo keyed on one was
@@ -1347,6 +1378,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
             rows={revenueView === "collected" ? filteredTxns : filteredTxns.filter((t) => t.source === revenueView)}
             onOpen={openDetail}
             onDelete={canDeleteUnverified ? deleteUnverified : undefined}
+            onUndoPayment={undoPaymentOn && incomeStage === "collected" ? undoPayment : undefined}
             busy={moving}
             verify={verify}
             squareTable={squareTable}
@@ -1406,6 +1438,11 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           head={detail.head}
           payments={detailPayments}
           verify={verify}
+          busy={moving}
+          onUndoPayment={undoPaymentOn ? async (t) => {
+            // The last one on the card gone, there is nothing left for it to show.
+            if (await undoPayment([t], detail.head) && detailPayments.length === 1) setDetail(null);
+          } : undefined}
           onReceipt={(tx) => setReceipt(receiptForTxn(tx))}
           onClose={() => setDetail(null)}
         />
@@ -1719,7 +1756,7 @@ const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.l
  * @param verify  Whether this is the branch desk's copy, which heads the arrow's column
  *              Action rather than View -- Send and Undo are in what it opens.
  */
-const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null, squareTable = false }) => {
+const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verify = null, squareTable = false }) => {
   const groups = useMemo(() => groupPaymentsByClient(rows), [rows]);
   // Keyed by group, so narrowing the list above leaves stale keys behind harmlessly
   // rather than opening the wrong client.
@@ -1735,6 +1772,9 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null, squar
     return next;
   });
   const toggleAll = () => setOpen(allOpen ? new Set() : new Set(expandable.map((g) => g.key)));
+  // Each column's share: the plain list's, the branch desk's with To Verify beside it, and
+  // that with Undo Payment widening Action. Whole class names, for Tailwind to find.
+  const width = (plain, desk, withUndo) => (onUndoPayment ? withUndo : verify ? desk : plain);
 
   return (
     <Card className={`overflow-hidden ${squareTable ? "rounded-[4px]" : ""}`} data-testid="accountant-manage-revenue-detail">
@@ -1814,23 +1854,23 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null, squar
               letting the wrapper scroll — the min-width is what makes it scroll instead. */}
           {/* Flat rows with a hairline between them, under the same slate-500 header the
               branch lead list uses. */}
-          <table className="w-full min-w-[52rem] table-fixed border-collapse text-sm">
+          <table className={`w-full ${onUndoPayment ? "min-w-[66rem]" : "min-w-[52rem]"} table-fixed border-collapse text-sm`}>
             <thead className="bg-slate-500 text-[11px] font-semibold uppercase tracking-wide text-white">
               <tr>
                 <th className="w-[4%] px-3 py-2.5 text-center">S.No</th>
-                <th className={`${verify ? "w-[12%]" : "w-[14%]"} px-3 py-2.5 text-left`}>Client</th>
-                <th className={`${verify ? "w-[11%]" : "w-[13%]"} px-3 py-2.5 text-center`}>Transaction ID</th>
-                <th className={`${verify ? "w-[11%]" : "w-[12%]"} px-3 py-2.5 text-center`}>Consultation/Session</th>
-                <th className={`${verify ? "w-[9%]" : "w-[11%]"} px-3 py-2.5 text-center`}>Phone</th>
-                <th className={`${verify ? "w-[8%]" : "w-[10%]"} px-3 py-2.5 text-center`}>Paid Amount</th>
-                <th className={`${verify ? "w-[8%]" : "w-[10%]"} px-3 py-2.5 text-center`}>Payment Mode</th>
-                <th className={`${verify ? "w-[8%]" : "w-[10%]"} px-3 py-2.5 text-center`}>Date</th>
-                <th className="w-[9%] px-3 py-2.5 text-center">Branch</th>
+                <th className={`${width("w-[14%]", "w-[12%]", "w-[11%]")} px-3 py-2.5 text-left`}>Client</th>
+                <th className={`${width("w-[13%]", "w-[11%]", "w-[10%]")} px-3 py-2.5 text-center`}>Transaction ID</th>
+                <th className={`${width("w-[12%]", "w-[11%]", "w-[10%]")} px-3 py-2.5 text-center`}>Consultation/Session</th>
+                <th className={`${width("w-[11%]", "w-[9%]", "w-[8%]")} px-3 py-2.5 text-center`}>Phone</th>
+                <th className={`${width("w-[10%]", "w-[8%]", "w-[7%]")} px-3 py-2.5 text-center`}>Paid Amount</th>
+                <th className={`${width("w-[10%]", "w-[8%]", "w-[8%]")} px-3 py-2.5 text-center`}>Payment Mode</th>
+                <th className={`${width("w-[10%]", "w-[8%]", "w-[7%]")} px-3 py-2.5 text-center`}>Date</th>
+                <th className={`${onUndoPayment ? "w-[8%]" : "w-[9%]"} px-3 py-2.5 text-center`}>Branch</th>
                 {/* The branch desk sends a row's unverified collections straight from the
                     list, without opening it first. */}
                 {verify && <th className="w-[13%] px-3 py-2.5 text-center">To Verify</th>}
                 {/* Action where the desk can move the row, View where it can only open it. */}
-                <th className="w-[7%] px-3 py-2.5 text-center">{verify ? "Action" : "View"}</th>
+                <th className={`${onUndoPayment ? "w-[14%]" : "w-[7%]"} px-3 py-2.5 text-center`}>{verify ? "Action" : "View"}</th>
               </tr>
             </thead>
             <tbody>
@@ -1915,6 +1955,14 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null, squar
                       {/* The one control on the row: into the client's payments, where Send
                           for approval, Undo and each receipt are (PaymentDetails). */}
                       <div className="flex items-center justify-center gap-1">
+                        {onUndoPayment && (
+                          <UndoPaymentChip
+                            onClick={() => onUndoPayment(g.payments, groupHead(g))}
+                            busy={g.payments.some((t) => busy?.has(t.id))}
+                            title={many ? `Undo all ${g.payments.length} payments` : "Undo this payment"}
+                            testid={`revenue-detail-undo-payment-${g.key}`}
+                          />
+                        )}
                         {onDelete && (
                           <DeleteBin
                             onClick={() => onDelete(g.payments, groupHead(g))}
@@ -1956,6 +2004,15 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, busy, verify = null, squar
                       {/* Each payment is a collection in its own right, so it opens on its own. */}
                       <td className="px-3 py-1.5 text-center">
                         <div className="flex items-center justify-center gap-1">
+                          {onUndoPayment && (
+                            <UndoPaymentChip
+                              onClick={() => onUndoPayment([p], groupHead(g))}
+                              busy={busy?.has(p.id)}
+                              compact
+                              title="Undo this payment"
+                              testid={`revenue-detail-undo-payment-${p.id}`}
+                            />
+                          )}
                           {onDelete && (
                             <DeleteBin
                               onClick={() => onDelete([p], groupHead(g))}
@@ -1998,14 +2055,15 @@ const stageLine = (t) => {
  * A ledger row opened by its arrow: every payment behind it, and what can be done to each.
  *
  * Send for approval and Undo (the branch desk's, `verify`), and the receipt, live here
- * rather than as a row of icons on every line of the table. Each payment says which pile it
+ * rather than as a row of icons on every line of the table. Undo Payment too, while its
+ * switch is on, on each payment still in To Verify. Each payment says which pile it
  * is in and who put it there; a client with several in one pile can send or take back all
  * of them at once.
  *
  * Portalled at the client card's own level (z-50), so the receipt (z-80) opens over it and
  * the desk comes back to this when the receipt is shut.
  */
-const PaymentDetails = ({ head, payments, verify, onReceipt, onClose }) => {
+const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt, onClose }) => {
   const total = payments.reduce((n, t) => n + (Number(t.gross) || 0), 0);
   const toVerify = payments.filter((t) => stageOf(t) === "collected");
   const waiting = payments.filter((t) => stageOf(t) === "requested");
@@ -2062,6 +2120,7 @@ const PaymentDetails = ({ head, payments, verify, onReceipt, onClose }) => {
             const badge = STAGE_BADGE[stage];
             const off = Number(t.discount) || 0;
             const canMove = verify && stage !== "approved";
+            const canUndoPayment = onUndoPayment && stage === "collected";
             return (
               <div key={t.id} className="rounded-lg border border-slate-200 bg-white px-3.5 py-3" data-testid={`payment-details-row-${t.id}`}>
                 <div className="flex items-start justify-between gap-3">
@@ -2091,6 +2150,14 @@ const PaymentDetails = ({ head, payments, verify, onReceipt, onClose }) => {
                 <p className="mt-1 text-[11px] text-slate-500">{stageLine(t)}</p>
                 {(canMove || t.transaction_id) && (
                   <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2.5">
+                    {canUndoPayment && (
+                      <UndoPaymentChip
+                        onClick={() => onUndoPayment(t)}
+                        busy={busy?.has(t.id)}
+                        title="Undo this payment"
+                        testid={`payment-details-undo-payment-${t.id}`}
+                      />
+                    )}
                     {canMove && <MoveChip txs={[t]} verify={verify} />}
                     {/* Only where the collection has a transaction id. Rows taken before
                         ids existed are real money and still list, but a receipt with no
