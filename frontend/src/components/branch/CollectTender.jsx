@@ -89,8 +89,10 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * still sitting on the net payable, the rule the fee popups on the Consultations board use
  * -- an amount already typed short is a part payment somebody chose, and agreeing a
  * discount is no reason to quietly collect the rest of it.
+ *
+ * `rupeesOnly` leaves the percentage out, for Chennai's Collect Balance.
  */
-export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "balance", compact = false }) => {
+export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "balance", compact = false, rupeesOnly = false }) => {
   const owed = Number(due) || 0;
   const off = Math.max(0, parseFloat(discount) || 0);
   const net = r2(owed - off);
@@ -110,21 +112,23 @@ export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "bal
 
   return (
     <div className="space-y-2" data-testid={`${testid}-discount`}>
-      <div className="grid grid-cols-2 gap-2">
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-slate-700">Discount %</span>
-          <input
-            type="number" min="0" max="100" inputMode="decimal" placeholder="0"
-            value={pctText}
-            onChange={(e) => {
-              setPctText(e.target.value);
-              const p = parseFloat(e.target.value);
-              apply(Number.isFinite(p) && p > 0 ? String(r2((owed * p) / 100)) : "");
-            }}
-            className={box}
-            data-testid={`${testid}-discount-pct`}
-          />
-        </label>
+      <div className={rupeesOnly ? "" : "grid grid-cols-2 gap-2"}>
+        {!rupeesOnly && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-slate-700">Discount %</span>
+            <input
+              type="number" min="0" max="100" inputMode="decimal" placeholder="0"
+              value={pctText}
+              onChange={(e) => {
+                setPctText(e.target.value);
+                const p = parseFloat(e.target.value);
+                apply(Number.isFinite(p) && p > 0 ? String(r2((owed * p) / 100)) : "");
+              }}
+              className={box}
+              data-testid={`${testid}-discount-pct`}
+            />
+          </label>
+        )}
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-slate-700">Discount (₹)</span>
           <input

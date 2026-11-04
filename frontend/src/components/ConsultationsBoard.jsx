@@ -12767,6 +12767,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       onChange={(patch) => setPartialCollectDraft((d) => ({ ...d, ...patch }))}
                       testid="cons-partial-collect"
                       compact
+                      rupeesOnly={chennaiBranch}
                     />
                     {!chennaiBranch && amountBox}
 
