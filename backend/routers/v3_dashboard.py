@@ -6,7 +6,7 @@ from database import v3_col
 from utils import CLINIC_UTC_OFFSET, clinic_day_of, clinic_today, live_branch_query, without_past_moves
 from stage_utils import get_closing_stage_name
 from deps import v3_current_user, v3_require_roles
-from constants import V3_STAGES, V3_BRANCH_STAGES, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_STAGE_ROLE_APPOINTMENT
+from constants import V3_STAGES, V3_BRANCH_STAGES, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE, SALES_STAGE_ROLE_APPOINTMENT
 from schemas.v3 import V3UserOut, V3LeadOut
 from routers.v3_finance import REVENUE_ACTIONS, CONSULTATION_FEE_ACTIONS, _parse_rs_amount, _revenue_category, _lead_session_summary
 
@@ -569,7 +569,7 @@ async def v3_master_control(
         {"name": "New", "value": journey["New Lead"]},
         {"name": "In Review", "value": journey["Follow Up"]},
         {"name": "Confirmed", "value": journey["Appointment"] + journey["New Appointment"] + journey["Portfolio"] + journey["Appointment Date & Time"]},
-        {"name": "Archived", "value": await leads.count_documents(merged({"branch_stage": "Cancelled"}))},
+        {"name": "Archived", "value": await leads.count_documents(merged({"branch_stage": {"$in": [BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE]}}))},
     ]
 
     # Patient Information Completion

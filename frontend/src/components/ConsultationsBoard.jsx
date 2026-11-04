@@ -16,7 +16,7 @@ import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from
 import { advanceForLabel, preBookConsultOwed, preBookOf, preBookWhen } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
-  getConsultationsBoard, moveConsultationStage, listStoreItems, collectRehabFee,
+  getConsultationsBoard, moveBranchStage, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, setSessionPackageTotal, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
   saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
   assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
@@ -1739,7 +1739,7 @@ const feeDiscount = (l, fee = "consultation") => {
 // already passed the fee desk — the stages an unpaid rehab or diet fee gets stranded on.
 const PAST_FEE_DESK = ["Physio Assign", "Consultation Completed"];
 
-// The stages before the visit -- the same three the Quit button is offered on. "Follow
+// The stages before the visit -- the same three the Lost button is offered on. "Follow
 // Up" is Consultation Booked's former name. A patient on one of these has nothing dated
 // but their appointment, so a date filter reads them by that alone.
 const AWAITING_VISIT = ["New Appointment", "Consultation Booked", "Follow Up"];
@@ -2775,7 +2775,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Held rather than read off the stage live, so a fee taken or a physio assigned with the
   // popup still up does not resize the card under the hand that just pressed the button.
   // At Consultation Booked the card is narrower still, 514 wide: all it holds is the booked
-  // slot and Reschedule / Quit, and the 1024px sheet around two buttons was mostly white.
+  // slot and Reschedule / Lost, and the 1024px sheet around two buttons was mostly white.
   const [detailFrame, setDetailFrame] = useState({ id: null, compact: false, booked: false });
   if (detailFrame.id !== (selectedLead?.id ?? null)) {
     setDetailFrame({
@@ -3613,11 +3613,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // for the same reason FEE_TABS' `scope` is: a later edit can clear a tick and it cannot
     // unmake a payment, so a paid patient must not fall off the only pill that reports them.
     //
-    // A cancelled consultation is the one thing that takes a referral back. Nobody is going
-    // to deliver a diet plan agreed at a visit that was called off, and every one of those
-    // leads would otherwise arrive on these pills the moment they read the referral instead
-    // of the fee. Money already taken still counts, cancelled or not: a fee on no list at
-    // all is worse than a row that has to be explained.
+    // Quitting is the one thing that takes a referral back. Nobody is going to deliver a diet
+    // plan to a patient who has left, and every one of those leads would otherwise arrive on
+    // these pills the moment they read the referral instead of the fee. Money already taken
+    // still counts, quit or not: a fee on no list at all is worse than a row that has to be
+    // explained.
     const referralLive = lead[stageField] !== "Quit";
     if (!isConsultant && stageName === "Diet Consultation") {
       return (referralLive && (!!lead.diet_recommended || !!lead.diet_consultation))
@@ -3745,10 +3745,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // costs the seven reporting ones a point or two each to say nothing. The fee is
   // collected from Consultation Visit onward, where it is real.
   //
-  // Off on Quit for the same reason. Quit is only offered before the visit, so a
-  // patient on that list never had the consultation the fee pays for.
+  // On for Quit: those patients were seen, and the list has to say what they paid. Nothing
+  // more is collected from them -- see the row itself.
   const showStageFeeAction = !showDiscountColumn && !isConsultant
-    && stageFilter !== "Consultation Booked" && stageFilter !== "Quit";
+    && stageFilter !== "Consultation Booked";
   // Which fee that column reports and collects: the open desk's own where the stage has
   // one of its own (see STAGE_ROW_FEE), and the Consultation Fee everywhere else, which
   // is the fee every one of those stages is actually waiting on.
@@ -3913,7 +3913,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const isFeeStage = stage === "Fee Collected";
     const withContact = consultantBranchColumn && !branchColumn && !rowArrow && !isFeeStage
       && stage !== "Consultation Booked" && stage !== "Consultation Visit";
-    const withStageFee = !isFeeStage && !isConsultant && stage !== "Consultation Booked" && stage !== "Quit";
+    const withStageFee = !isFeeStage && !isConsultant && stage !== "Consultation Booked";
     const stageFee = STAGE_ROW_FEE[stage] || "consultation";
     const stageFeeSpec = ROW_FEES[stageFee];
     let list;
@@ -3968,7 +3968,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           xlsx: 20,
           get: (l) => {
             const fee = feeStateOf(l, stageFee);
-            // Same reading as the row's button: a cancelled patient owes nothing more.
+            // Same reading as the row's button: a patient who quit owes nothing more.
             return feeText(l[stageField] === "Quit" && fee.kind !== "paid" ? { kind: "none" } : fee);
           },
         },
@@ -4269,6 +4269,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       toast.success(`${lead.name || "Lead"} moved → ${next}`);
       setSelectedLead(null);
       setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => l.id === lead.id ? { ...l, consultation_stage: updated.consultation_stage } : l) }));
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Move failed");
+    }
+  };
+
+  // Before the visit the way out is the Branch pipeline's Lost, in the words Branch Leads asks
+  // it. The server reads this "Lost" as whatever the lead's own pipeline calls that stage, and
+  // takes the lead off this board, so its row goes rather than changing.
+  const markLost = async (lead) => {
+    if (!window.confirm(
+      `Move ${lead.name || "this lead"} to Lost?\n\n`
+      + "Once Lost, the stage is locked — this lead cannot be moved to any other stage afterwards."
+      + " Their appointment is cancelled and the slot is freed.",
+    )) return;
+    try {
+      const updated = await moveBranchStage(lead.id, { branch_stage: "Lost" });
+      toast.success(`${lead.name || "Lead"} moved → ${updated.branch_stage}`);
+      setSelectedLead(null);
+      setBoard((b) => ({ ...b, leads: (b.leads || []).filter((l) => l.id !== lead.id) }));
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Move failed");
     }
@@ -7841,11 +7860,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     })()}
                     {showStageFeeAction && (() => {
                       const fee = feeStateOf(l, stageRowFee);
-                      // A cancelled patient met on another list owes nothing either -- the
-                      // same reason the column is off on the Quit stage above. Money
-                      // already taken still reads as Paid.
+                      // A patient who quit owes nothing more, here or on another list:
+                      // the fee desk will not take it from them. Money already taken still
+                      // reads as Paid.
                       const c = l[stageField] === "Quit" && fee.kind !== "paid"
-                        ? { kind: "none", hint: "Consultation cancelled" }
+                        ? { kind: "none", hint: "Patient quit" }
                         : fee;
                       // The prescription the CONSULTATION fee waits on, still missing. The
                       // button stays on the row and stays pressable — it is the way to the
@@ -9433,35 +9452,43 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {!isConsultant && (() => {
                 const stage = selectedLead.consultation_stage;
                 const decision = selectedLead.consultation_decision;
-                // Quit belongs before the consultation, not after it. A patient who has
-                // not come in yet can call the appointment off, and that is what cancelling
-                // one means. Once they have been seen the visit is a fact: the paperwork is
-                // being filed against it and the fee taken for it, and a Quit sitting in
-                // that panel offers to call off something that already happened -- next to
-                // the money it was collected with.
+                // Two ways out, one either side of the visit. A patient who has not come in
+                // yet is Lost: the appointment is off, the slot goes back and the lead locks.
+                // Once they have been seen the visit is a fact, with the paperwork filed
+                // against it and the fee taken for it, so they Quit instead and what they
+                // paid stays on their record. The server holds the same line (see
+                // consultation_visit_reached).
                 //
-                // So the stages before the visit keep it and the stages from the visit on do
-                // not. QuitButton is null there, which is what the {QuitButton} slots in
-                // those panels already render.
-                // "Follow Up" is this stage's former name — see the panel below for why both
-                // are still matched.
-                const cancellable = ["New Appointment", "Consultation Booked", "Follow Up"].includes(stage);
+                // A finished course has nothing left to leave. ExitButton is null there,
+                // which is what the {ExitButton} slots in those panels already render.
+                const awaitingVisit = AWAITING_VISIT.includes(stage);
+                const quittable = !!stage && !awaitingVisit && stage !== "Quit"
+                  && stage !== "Consultation Completed" && !isCourseComplete(selectedLead);
                 // Once a lead has moved forward past a stage, it can never come back —
                 // there's no manual "move backward" control anymore (see the backend's
                 // matching rejection in move-consultation-stage).
                 const activeFollowUp = (selectedLead.consultation_follow_ups || []).slice().reverse().find((f) => f.status !== "rescheduled");
 
-                const QuitButton = cancellable ? (
+                const exitButton = (label, testId, onClick) => (
                   <Button
                     size="sm"
                     variant="outline"
                     className={`border-rose-200 text-rose-600 hover:bg-rose-50 ${ACT_BTN}`}
-                    onClick={() => { if (window.confirm("Quit this consultation?")) moveStage(selectedLead, "Quit"); }}
-                    data-testid="cons-cancel-btn"
+                    onClick={onClick}
+                    data-testid={testId}
                   >
-                    <Ban className="mr-1 h-3.5 w-3.5" /> Quit
+                    <Ban className="mr-1 h-3.5 w-3.5" /> {label}
                   </Button>
-                ) : null;
+                );
+                const askQuit = () => {
+                  if (window.confirm(
+                    `Move ${selectedLead.name || "this patient"} to Quit?\n\n`
+                    + "They leave the pipeline here and cannot be moved back. What they have paid stays on their record.",
+                  )) moveStage(selectedLead, "Quit");
+                };
+                let ExitButton = null;
+                if (awaitingVisit) ExitButton = exitButton("Lost", "cons-lost-btn", () => markLost(selectedLead));
+                else if (quittable) ExitButton = exitButton("Quit", "cons-quit-btn", askQuit);
 
                 // Diet, one button, one strict sequence: the Diet Fee first, then the
                 // Nutrition Coach + their appointment — can't reach assignment until the fee
@@ -11044,14 +11071,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               {PhysioDetailButton}
                               {DietDetailButton}
                               <OwnTab label="Rehab Details" short="Rehab" icon={Activity} active="border-cyan-600 bg-cyan-600 text-white shadow-sm hover:bg-cyan-700 hover:text-white" due={rehabDue} dueTitle="Rehab fee still to collect" />
-                              {QuitButton}
+                              {ExitButton}
                             </>
                           ) : (
                             <>
                               {PhysioDetailButton}
                               <OwnTab label="Diet Details" short="Diet" icon={Salad} active="border-orange-600 bg-orange-600 text-white shadow-sm hover:bg-orange-700 hover:text-white" due={dietDue} dueTitle="Diet fee still to collect" />
                               {RehabDetailButton}
-                              {QuitButton}
+                              {ExitButton}
                             </>
                           )
                         }
@@ -11079,7 +11106,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           >
                             Schedule Consultation & Move
                           </Button>
-                          {QuitButton}
+                          {ExitButton}
                         </div>
                       </div>
                     );
@@ -11135,7 +11162,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           >
                             Reschedule
                           </Button>
-                          {QuitButton}
+                          {ExitButton}
                         </div>
                       </div>
                     );
@@ -11198,7 +11225,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             />
                             {DietDetailButton}
                             {RehabDetailButton}
-                            {QuitButton}
+                            {ExitButton}
                           </>
                         }
                       >
@@ -11237,7 +11264,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               </Button>
                               {DietDetailButton}
                               {RehabDetailButton}
-                              {QuitButton}
+                              {ExitButton}
                             </div>
                             {detailBody && <div className="mt-3 border-t border-emerald-100 pt-3">{detailBody}</div>}
                             </div>
@@ -11286,7 +11313,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 as well put the same view two doors apart on one screen,
                                 above a panel whose job right now is the fee that is due. */}
                             {RehabDetailButton}
-                            {QuitButton}
+                            {ExitButton}
                           </>
                         }
                       >
@@ -11382,18 +11409,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // patient is on three programmes and this is the first of them. Pressing
                     // the lit tab returns you to the view you are already on, which is what
                     // every other tab row on this board does.
-                    const physioAssignTabs = (DietDetailButton || RehabDetailButton) ? (
+                    //
+                    // Quit sits on the same row, with or without them: this is where a patient
+                    // part-way through a course leaves from.
+                    const programmeTabs = DietDetailButton || RehabDetailButton;
+                    const physioAssignTabs = (programmeTabs || ExitButton) ? (
                       <>
-                        <OwnTab
-                          label="Physio Assign"
-                          short="Physio"
-                          icon={Users}
-                          active="border-violet-600 bg-violet-600 text-white shadow-sm hover:bg-violet-700 hover:text-white"
-                          due={treatmentDue}
-                          dueTitle="Treatment fee still to collect"
-                        />
+                        {programmeTabs && (
+                          <OwnTab
+                            label="Physio Assign"
+                            short="Physio"
+                            icon={Users}
+                            active="border-violet-600 bg-violet-600 text-white shadow-sm hover:bg-violet-700 hover:text-white"
+                            due={treatmentDue}
+                            dueTitle="Treatment fee still to collect"
+                          />
+                        )}
                         {DietDetailButton}
                         {RehabDetailButton}
+                        {ExitButton}
                       </>
                     ) : null;
                     return (

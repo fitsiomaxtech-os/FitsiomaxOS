@@ -58,7 +58,7 @@ StageType = Literal["pre_sales", "sales", "consultation", "head_consultation", "
 # itself lives on the stage row; see constants.SALES_STAGE_ROLES_BY_NAME.
 ROLE_DESCRIPTIONS = {
     "appointment": "hold a booked appointment",
-    "cancelled": "cancel an appointment and free the expert's slot",
+    "cancelled": "send a move onto it to Lost",
     "rnr": "park a lead nobody could reach",
     "portfolio": "hold a patient booked through the Portfolio dialog",
     "follow_up": "offer Follow Up as an exit from a booked appointment",

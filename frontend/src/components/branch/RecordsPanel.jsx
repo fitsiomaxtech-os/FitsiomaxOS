@@ -665,7 +665,7 @@ const isConvertedLead = (l) => SERVICES.some((s) => s.match(l));
 const servicesOf = (l) => SERVICES.filter((s) => s.match(l)).map((s) => s.label);
 
 // Consultation stages a lead only stands on once it has been seen.
-const SEEN_STAGES = new Set(["Consultation Visit", "Fee Collected", "Physio Assign", "Consultation Completed"]);
+const SEEN_STAGES = new Set(["Consultation Visit", "Fee Collected", "Physio Assign", "Consultation Completed", "Quit"]);
 
 // The main line, in order -- what the Reached column reads. Each step counts the leads that
 // REACHED it, not the ones standing on it now: a lead is on one stage at a time, so "on
@@ -680,7 +680,7 @@ const FUNNEL = [
     key: "appointment",
     label: "Appointment",
     proof: (l) => !!l.appointment_date || (l.consultation_follow_ups || []).length > 0
-      || !!l.head_consultation_stage || (!!l.consultation_stage && l.consultation_stage !== "Quit"),
+      || !!l.head_consultation_stage || !!l.consultation_stage,
   },
   {
     key: "consultation_visit",
@@ -699,14 +699,12 @@ const reachedAtLeast = (key) => {
   return (l) => furthestStep(l) >= i;
 };
 
-const isCancelled = (l) => l.branch_stage === "Cancelled" || l.consultation_stage === "Quit";
-
 /**
  * The tab's six cards, one row. RNR and Follow Up are detours a lead comes back from, so
  * they count anyone who was ever there; Appointment and Consultation Visit count the leads
- * that reached them (see FUNNEL); Lost is every way a lead stops short -- Not a Prospect,
- * Cancelled at the branch or Quit at the consultation, and Pre-Sales' own Lost -- the reading the
- * Marketing Head's Lost card takes in PreSalesCRM.
+ * that reached them (see FUNNEL); Lost is every way a lead stops short of the visit -- Not a
+ * Prospect, Lost or Cancelled at the branch, and Pre-Sales' own Lost -- the reading the
+ * Marketing Head's Lost card takes in PreSalesCRM. A Quit is not one: that patient was seen.
  */
 const LEAD_CARDS = [
   { key: "leads", label: "Leads", match: () => true },
@@ -717,7 +715,7 @@ const LEAD_CARDS = [
   {
     key: "lost",
     label: "Lost",
-    match: (l) => l.stage === "Lost" || l.stage === "Not a prospect" || !!l.not_prospect_at || l.branch_stage === "Not a prospect" || l.branch_stage === "Lost" || isCancelled(l),
+    match: (l) => l.stage === "Lost" || l.stage === "Not a prospect" || !!l.not_prospect_at || l.branch_stage === "Not a prospect" || l.branch_stage === "Lost" || l.branch_stage === "Cancelled",
   },
 ];
 const CARD_BY_KEY = Object.fromEntries(LEAD_CARDS.map((c) => [c.key, c]));

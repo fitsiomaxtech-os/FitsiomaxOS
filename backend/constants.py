@@ -65,15 +65,15 @@ V3_BRANCH_STAGES = [
 BRANCH_ADMIN_ENTRY_STAGE = "Branch Assign"
 BRANCH_ADMIN_RNR_STAGE = "RNR"
 
-# Where a branch appointment goes when it is called off. Last in the pipeline and final:
-# nothing moves on from it, and reaching it releases the slot the consultation was holding
-# (see v3_move_branch_stage).
+# Where a branch appointment went when it was called off, until 2026-11-04. A call-off is Lost
+# now (BRANCH_LOST_STAGE below) and a move onto this stage lands there instead: see
+# v3_move_branch_stage, and seed.move_unvisited_cancellations_to_lost for the leads that were
+# already on it. No board offers it. The row stays because a patient already past their visit
+# can still be standing on it, and Past Data's Dropped clients are put on it.
 #
-# Named here rather than written as a literal at each site because three of them have to
-# agree -- the seed that creates the pill, the stage move that frees the slot, and the
-# booking endpoint's own final_stage -- and they were already one rename apart from
-# silently doing nothing. Note it is "Cancelled", not the consultation pipeline's "Quit":
-# two pipelines, two stages, and the Branch Leads card shows both.
+# Named here rather than written as a literal at each site because several have to agree, and
+# they were already one rename apart from silently doing nothing. Note it is "Cancelled", not
+# the consultation pipeline's "Quit": two pipelines, two stages.
 BRANCH_CANCELLED_STAGE = "Cancelled"
 
 # Where a booked consultation lands. The other half of the booking dialog's two outcomes,
@@ -112,9 +112,11 @@ BRANCH_PRE_BOOK_STAGE = "Pre Book"
 # after Pre Book, and locked as that one is: once there, nothing moves the lead again (see
 # stage_utils.refuse_if_branch_lost), and the board asks before putting it there.
 #
-# Not Not a prospect beside it, which parks a lead until a reminder call, and not Cancelled,
-# which is a real client calling off one appointment and may well rebook. This one is over --
-# so, like Cancelled, reaching it releases any slot the lead was holding.
+# Not Not a prospect beside it, which parks a lead until a reminder call. This one is over, so
+# reaching it releases any slot the lead was holding and takes a lead that never had its visit
+# off the consultation boards (see stage_utils.clear_consultation_stages). It is the way out
+# before the consultation, which is what Cancel used to be; from the visit on the way out is
+# CONSULTATION_QUIT_STAGE.
 BRANCH_LOST_STAGE = "Lost"
 
 # When the client said they would come, as the move onto Pre Book offers it. The label is
@@ -208,8 +210,9 @@ SALES_STAGE_ROLE_FALLBACKS = {v: k for k, v in SALES_STAGE_ROLES_BY_NAME.items()
 # sat on a stage that tab had no pill for: in the list, counted in All Stages, and under
 # none of the cards above it. A name of its own gives the stage a pill of its own.
 #
-# Quit is the consultation called off. Named here for the reason BRANCH_CANCELLED_STAGE is:
-# the seed, the move endpoint and Past Data all have to agree on it.
+# Quit is a patient leaving after their consultation: it is offered from Consultation Visit on,
+# and before that the way out is BRANCH_LOST_STAGE. Named here for the reason
+# BRANCH_CANCELLED_STAGE is: the seed, the move endpoint and Past Data all have to agree on it.
 CONSULTATION_QUIT_STAGE = "Quit"
 # What it was called until 2026-11-04 (see seed.rename_consultation_cancel_stage). Still
 # sent by a browser running an older chunk, and still written on an older OS Data sheet.

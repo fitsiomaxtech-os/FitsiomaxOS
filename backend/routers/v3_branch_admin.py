@@ -30,7 +30,8 @@ from constants import (
 )
 from stage_utils import (
     branch_stage_names_for_branch, first_branch_stage_for_branch, get_first_stage_name,
-    match_desk_stages, refuse_if_branch_lost, sales_arm_for,
+    clear_consultation_stages, consultation_visit_reached, match_desk_stages, refuse_if_branch_lost,
+    sales_arm_for,
 )
 from schemas.v3 import (
     V3UserOut, V3LeadOut,
@@ -619,13 +620,24 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     await refuse_if_branch_lost(lead)
+    lead_arm = await sales_arm_for(branch_id=lead.get("branch_id"), vertical=lead.get("vertical"))
+    lost_stage = await _sales_stage_for_role(SALES_STAGE_ROLE_LOST, lead_arm)
+    # Cancel is Lost now, so a move onto Cancelled lands there. The shipped name is accepted
+    # for the Consultation tab, which has no Branch pipeline to read this one's real name off.
+    if payload.branch_stage in (BRANCH_LOST_STAGE, await _sales_stage_for_role(SALES_STAGE_ROLE_CANCELLED, lead_arm)):
+        payload.branch_stage = lost_stage
     # Validated against this lead's own branch, not the whole sales list: Branch Assign and
     # RNR only exist for a branch running its own leads, and moving a Pre-Sales-fed lead
     # onto one would strand it on a stage its board never draws.
     if payload.branch_stage not in await _branch_stage_names(lead.get("branch_id")):
         raise HTTPException(status_code=400, detail="Invalid branch stage")
+    # Lost is the way out before the visit. A patient who has been seen Quits instead.
+    if payload.branch_stage == lost_stage and await consultation_visit_reached(lead):
+        raise HTTPException(
+            status_code=409,
+            detail=f"This patient has had their consultation — move them to {CONSULTATION_QUIT_STAGE} instead",
+        )
     old_stage = lead.get("branch_stage", "Unknown")
-    lead_arm = await sales_arm_for(branch_id=lead.get("branch_id"), vertical=lead.get("vertical"))
 
     # Not a prospect parks the lead rather than ending it: the desk picks when to ring the
     # patient back, and the board lists that date on the stage. Asked for on every move
@@ -662,20 +674,16 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         updates.update(plan_updates)
     await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
 
-    # Cancelled is where a booked consultation goes to die, and the slot it was holding has
-    # to go back on the calendar with it. Without this the lead read as cancelled on every
-    # board while the expert's 10:30 stayed Booked -- an hour nobody could sell and nobody
-    # was coming to.
+    # Lost is where a booked consultation goes to die, and the slot it was holding has to go
+    # back on the calendar with it. Without this the lead read as gone on every board while
+    # the expert's 10:30 stayed Booked -- an hour nobody could sell and nobody was coming to.
     #
     # Done here rather than in a cancel endpoint of its own because the stage is the event:
-    # however a lead reaches Cancelled -- this pill, a bulk move, a later screen -- the
-    # appointment behind it is off. Idempotent, since a lead already cancelled has no rows
-    # left in new_appointment to match. Lost the same: that client is not coming either.
+    # however a lead reaches Lost -- this pill, the Consultation tab's button, a later screen
+    # -- the appointment behind it is off. Idempotent, since a lead already lost has no rows
+    # left in new_appointment to match.
     freed = 0
-    if payload.branch_stage in (
-        await _sales_stage_for_role(SALES_STAGE_ROLE_CANCELLED, lead_arm),
-        await _sales_stage_for_role(SALES_STAGE_ROLE_LOST, lead_arm),
-    ):
+    if payload.branch_stage == lost_stage:
         res = await v3_col("appointments").update_many(
             {"lead_id": lead_id, "status": "new_appointment"},
             {"$set": {"status": "cancelled", "updated_at": now_iso()}},
@@ -694,6 +702,8 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         "created_at": now_iso(),
     }
     await v3_col("lead_activity").insert_one(activity.copy())
+    if payload.branch_stage == lost_stage:
+        await clear_consultation_stages(lead, user.full_name, user.role, "lost before the visit")
     # On a Lead Control Both branch the Pre Sales card follows (see match_desk_stages).
     await match_desk_stages(lead_id, "branch_stage", user.full_name, user.role)
     updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
@@ -1980,6 +1990,14 @@ async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageI
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Quit is for a patient who has been seen. Before the visit the way out is Lost, which
+    # gives the slot back and takes them off the consultation boards as well.
+    if payload.consultation_stage == CONSULTATION_QUIT_STAGE and not await consultation_visit_reached(lead):
+        raise HTTPException(
+            status_code=409,
+            detail="This patient has not had their consultation yet — move them to Lost instead",
+        )
+
     previous = lead.get("consultation_stage") or "—"
     # Backward moves (to an earlier stage than the lead's current one) are never
     # allowed once a lead has moved forward — Quit is a side-exit, not a
@@ -1997,9 +2015,8 @@ async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageI
         "consultation_stage": payload.consultation_stage,
         "updated_at": now_iso(),
     }})
-    # Quit is also the Branch Leads card's Quit pill, which reaches it straight off a
-    # booked Appointment. The slot that booking holds goes back on the calendar, the way the
-    # Branch pipeline's own Cancelled stage always released it (see v3_move_branch_stage).
+    # Whatever the patient still had booked goes back on the calendar, the way Lost gives
+    # back the slot it holds (see v3_move_branch_stage).
     freed = 0
     if payload.consultation_stage == CONSULTATION_QUIT_STAGE:
         res = await v3_col("appointments").update_many(

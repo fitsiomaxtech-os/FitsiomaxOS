@@ -144,7 +144,7 @@ const TYPES = [
 // screen used to hint at the difference between that row and any other.
 const ROLE_LABELS = {
   appointment: "Books appointments",
-  cancelled: "Frees the slot",
+  cancelled: "Moves to Lost",
   rnr: "Not reached",
   portfolio: "Portfolio dialog",
   follow_up: "Appointment exit",
@@ -177,8 +177,8 @@ const TONE_CLASSES = {
 //   - the Pre-Sales-control entry stage ("New Appointment"), which a branch running its own
 //     leads does not have at all (`applies_to`);
 //   - the branch's own entry stage ("Branch Assign"), whose pill is the mirror row below;
-//   - the Portfolio stage and the final one ("Cancelled"), both reached from their own
-//     dialogs rather than from the strip.
+//   - the Portfolio stage, reached from its own dialog rather than from the strip, and the
+//     final one ("Cancelled"), which nothing lands on now a call-off is Lost.
 //
 // Listed rather than dropped, deliberately. They are real positions carrying real leads --
 // Branch Assign holds the branch's whole intake -- and this is the only screen in the
@@ -912,12 +912,12 @@ export const PipelineStageManagement = ({ leading = null }) => {
                     {/* Said plainly, because the rows below look like stages the branch has
                         lost and are nothing of the kind. Naming the mode matters too: the
                         split above describes a branch running its own leads, and a
-                        Pre-Sales-fed one draws its own entry stage and Cancelled as well. */}
+                        Pre-Sales-fed one draws its own entry stage as well. */}
                     <p className="mt-1 max-w-2xl text-[11px] font-normal normal-case tracking-normal text-slate-400">
                       Real positions carrying real leads — the board reaches them another way, so the
                       strip has no pill for them. Still renameable, recolourable and reorderable here.
                       This split describes a branch running its own leads (Lead Control = Branch
-                      Admin); a Pre-Sales-fed branch draws its own entry stage and Cancelled too.
+                      Admin); a Pre-Sales-fed branch draws its own entry stage too.
                     </p>
                   </td>
                 </tr>

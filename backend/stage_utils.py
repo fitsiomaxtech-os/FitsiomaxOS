@@ -360,6 +360,41 @@ async def refuse_if_branch_lost(lead: Optional[dict]) -> None:
         raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
 
 
+async def consultation_visit_reached(lead: Optional[dict]) -> bool:
+    """Has this patient been seen? The line between the two ways out: Lost before the visit,
+    Quit from it on.
+
+    Off the stage, because the Consultant's Save & Move is what takes a lead past the
+    pipeline's opening stage. Quit counts, being only reachable from out here.
+    """
+    stage = (lead or {}).get("consultation_stage")
+    return bool(stage) and stage != await get_first_stage_name("consultation", "Consultation Booked")
+
+
+async def clear_consultation_stages(lead: dict, by: str, by_role: str, note: str) -> None:
+    """Take a lead lost before its visit off the two consultation boards.
+
+    Those boards list whoever has a stage of theirs set and never read the Branch stage, so a
+    lead lost at Consultation Booked stayed listed there, and on its Consultant's New
+    Appointment, with the slot already given back.
+    """
+    left = lead.get("consultation_stage") or lead.get("head_consultation_stage")
+    if not left:
+        return
+    await v3_col("leads").update_one(
+        {"id": lead["id"]}, {"$set": {"consultation_stage": None, "head_consultation_stage": None}},
+    )
+    await insert_activity_rows([{
+        "id": str(uuid.uuid4()),
+        "lead_id": lead["id"],
+        "action": "consultation_stage_moved",
+        "details": f"Consultation: left '{left}' · {note}",
+        "created_by": by or "system",
+        "created_by_role": by_role or "system",
+        "created_at": now_iso(),
+    }])
+
+
 async def match_desk_stages(lead_id: str, moved: str, by: str, by_role: str) -> None:
     """Write the stage just set on one desk onto the other, on a Lead Control Both branch.
 
@@ -369,7 +404,9 @@ async def match_desk_stages(lead_id: str, moved: str, by: str, by_role: str) -> 
     routers/v3_leads.py): a Branch move does not bring a Lost lead back on Pre Sales.
     """
     lead = await v3_col("leads").find_one(
-        {"id": lead_id}, {"_id": 0, "id": 1, "stage": 1, "branch_stage": 1, "branch_id": 1, "vertical": 1}
+        {"id": lead_id},
+        {"_id": 0, "id": 1, "stage": 1, "branch_stage": 1, "branch_id": 1, "vertical": 1,
+         "consultation_stage": 1, "head_consultation_stage": 1},
     )
     if not lead or not lead.get("branch_id"):
         return
@@ -389,6 +426,8 @@ async def match_desk_stages(lead_id: str, moved: str, by: str, by_role: str) -> 
                 {"lead_id": lead_id, "status": "new_appointment"},
                 {"$set": {"status": "cancelled", "updated_at": now_iso()}},
             )
+            if not await consultation_visit_reached(lead):
+                await clear_consultation_stages(lead, by, by_role, "lost before the visit")
     elif lead.get("stage") != PRESALES_LOST_STAGE:
         await _write_desk_stage(lead, "stage", to_presales.get(lead.get("branch_stage")), by, by_role, "same as Branch Leads")
 

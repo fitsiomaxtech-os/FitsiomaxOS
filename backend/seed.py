@@ -19,7 +19,10 @@ from constants import (
     SALES_ARM_OFFLINE, SALES_ARM_ONLINE,
 )
 import lead_control
-from stage_utils import align_desk_stages, get_first_stage_name, first_branch_stage_for, match_desk_stages, realign_branch_stage_leads
+from stage_utils import (
+    align_desk_stages, clear_consultation_stages, get_closing_stage_name, get_first_stage_name,
+    first_branch_stage_for, log_stage_moves, match_desk_stages, realign_branch_stage_leads, sales_arm_for,
+)
 
 
 # Maps deprecated branch_stage labels (legacy 8-stage flow) to the new flow.
@@ -1209,6 +1212,101 @@ async def align_both_desk_stages() -> None:
     await v3_col("migrations").insert_one({
         "name": _BOTH_DESKS_ALIGNED_MIGRATION,
         "leads_moved": moved,
+        "ran_at": now_iso(),
+    })
+
+
+# Money that is only taken at or after the visit, as proof a lead was seen. Each is None until
+# it is collected, so a nought from a full discount still counts.
+_FEES_AFTER_THE_VISIT = (
+    "consultation_fee", "package_paid", "treatment_fee_paid", "rehab_fee_paid", "diet_fee_paid",
+    "diet_chart_fee_paid",
+)
+# What a lead stood on before the move below, kept on its marker.
+_CALLED_OFF_FIELDS = ("id", "stage", "branch_stage", "consultation_stage", "head_consultation_stage")
+_CALLED_OFF_MIGRATION = "move_unvisited_cancellations_to_lost"
+
+
+async def move_unvisited_cancellations_to_lost() -> None:
+    """Stand every lead called off before its visit on Lost, which is where a call-off goes now.
+
+    Cancel and Lost are one stage: Lost before the consultation, Quit from it on. The leads
+    already called off are on three different things:
+
+      - the Branch pipeline's Cancelled;
+      - consultation Quit, which is what the Cancel button became (see
+        rename_consultation_cancel_stage). It was only ever offered before the visit, so
+        nearly everybody on it was never seen;
+      - Lost itself, but still listed under Consultation Booked, since nothing took a lost lead
+        off the consultation boards until stage_utils.clear_consultation_stages.
+
+    A lead with anything to show for a visit stays where it is -- the consultation pipeline past
+    its opening stage, the Consultant's decision, a fee -- since that is a real Quit. So does a
+    Past Data trial client, whose Dropped is a course given up, and who goes back with the sheet.
+
+    A one-shot, by its marker in `migrations`, which keeps what each lead stood on so the move
+    can be put back: Lost is locked, and nothing on the boards would undo it. Must follow every
+    sales pass, for the roles it reads, and the consultation passes, for the stages it compares.
+    """
+    if await v3_col("migrations").find_one({"name": _CALLED_OFF_MIGRATION}):
+        return
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "sales", "role": {"$in": [SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_LOST]}},
+        {"_id": 0, "name": 1, "role": 1, "arm": 1},
+    ).to_list(50)
+    lost_by_arm = {r.get("arm"): r["name"] for r in rows if r["role"] == SALES_STAGE_ROLE_LOST}
+    if not lost_by_arm:
+        return
+    lost_names = set(lost_by_arm.values())
+    called_off = {r["name"] for r in rows if r["role"] == SALES_STAGE_ROLE_CANCELLED} | {BRANCH_CANCELLED_STAGE}
+    opening = await get_first_stage_name("consultation", "Consultation Booked")
+    head_closing = await get_closing_stage_name("head_consultation", V3_HEAD_CONSULTATION_STAGES[-1])
+
+    def was_seen(lead: dict) -> bool:
+        stage = lead.get("consultation_stage")
+        return (
+            bool(stage and stage not in (opening, CONSULTATION_QUIT_STAGE))
+            or bool(lead.get("consultation_decision"))
+            or lead.get("head_consultation_stage") == head_closing
+            or any(lead.get(fee) is not None for fee in _FEES_AFTER_THE_VISIT)
+        )
+
+    leads = await v3_col("leads").find(
+        {
+            PAST_MOVE_FIELD: None,
+            "$or": [
+                {"branch_stage": {"$in": list(called_off | lost_names)}},
+                {"consultation_stage": CONSULTATION_QUIT_STAGE},
+            ],
+        },
+        {"_id": 0},
+    ).to_list(None)
+    note = "called off before the visit"
+    moved = []
+    for lead in leads:
+        if was_seen(lead):
+            continue
+        on_lost = lead.get("branch_stage") in lost_names
+        if on_lost and not (lead.get("consultation_stage") or lead.get("head_consultation_stage")):
+            continue
+        moved.append({field: lead.get(field) for field in _CALLED_OFF_FIELDS})
+        if not on_lost:
+            arm = await sales_arm_for(branch_id=lead.get("branch_id"), vertical=lead.get("vertical"))
+            lost = lost_by_arm.get(arm) or lost_by_arm.get(None) or BRANCH_LOST_STAGE
+            await v3_col("leads").update_one({"id": lead["id"]}, {"$set": {"branch_stage": lost}})
+            await log_stage_moves(lead["id"], lead, {"branch_stage": lost}, "system", "system", note)
+        await clear_consultation_stages(lead, "system", "system", note)
+        if not on_lost:
+            await match_desk_stages(lead["id"], "branch_stage", "system", "system")
+    if moved:
+        await v3_col("appointments").update_many(
+            {"lead_id": {"$in": [m["id"] for m in moved]}, "status": "new_appointment"},
+            {"$set": {"status": "cancelled", "updated_at": now_iso()}},
+        )
+    await v3_col("migrations").insert_one({
+        "name": _CALLED_OFF_MIGRATION,
+        "leads_moved": len(moved),
+        "moved": moved,
         "ran_at": now_iso(),
     })
 
