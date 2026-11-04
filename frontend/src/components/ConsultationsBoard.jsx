@@ -12656,6 +12656,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const pickModes = allowed ? INSTALLMENT_PAYMENT_MODES.filter((m) => allowed.includes(m.value)) : INSTALLMENT_PAYMENT_MODES;
               const splitModes = allowed ? SPLIT_PAYMENT_MODES.filter((m) => allowed.includes(m.value)) : SPLIT_PAYMENT_MODES;
               const modeLabel = INSTALLMENT_PAYMENT_MODES.find((m) => m.value === mode)?.label || "";
+              // Chennai reads as its Collect Payment popup does: sessions, amount, discount.
+              const chennaiBranch = isChennaiBranch(branchNames[selectedLead?.branch_id]);
+              const amountBox = (
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-slate-500">Amount (₹) *</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={partialCollectDraft.amount}
+                    onChange={(e) => setPartialCollectDraft({ ...partialCollectDraft, amount: e.target.value })}
+                    className="h-9"
+                    data-testid="cons-partial-collect-amount"
+                  />
+                </div>
+              );
               return (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" data-testid="cons-partial-collect-modal">
                   <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
@@ -12674,8 +12689,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </div>
 
                     {/* A discount on the balance, the same Discount % / ₹ pair the fee's own
-                        Collect popup asks. The amount below follows it while it is still on
-                        the net payable. */}
+                        Collect popup asks. The amount follows it while it is still on the
+                        net payable. */}
                     {/* How many of this row's sessions are being paid for now. Fewer than
                         all prices this collection at their share of the row; the sessions
                         left over stay owing as a row of their own, on the Due Date for
@@ -12743,6 +12758,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       );
                     })()}
 
+                    {chennaiBranch && amountBox}
                     <BalanceDiscount
                       key={`sessions-${partialCollectDraft.sessions_now}`}
                       due={partialCollectDraft.due}
@@ -12752,18 +12768,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       testid="cons-partial-collect"
                       compact
                     />
-
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-500">Amount (₹) *</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={partialCollectDraft.amount}
-                        onChange={(e) => setPartialCollectDraft({ ...partialCollectDraft, amount: e.target.value })}
-                        className="h-9"
-                        data-testid="cons-partial-collect-amount"
-                      />
-                    </div>
+                    {!chennaiBranch && amountBox}
 
                     {/* The one mode this installment came in — replaced by the lines
                         themselves once it turns out to have come in several. */}
