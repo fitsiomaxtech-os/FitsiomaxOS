@@ -62,6 +62,7 @@ ROLE_DESCRIPTIONS = {
     "rnr": "park a lead nobody could reach",
     "portfolio": "hold a patient booked through the Portfolio dialog",
     "follow_up": "offer Follow Up as an exit from a booked appointment",
+    "lost": "lock a lead the branch has lost and free its slot",
 }
 
 

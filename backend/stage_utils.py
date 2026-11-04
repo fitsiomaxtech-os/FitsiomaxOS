@@ -1,12 +1,14 @@
 import uuid
 from typing import Iterable, List, Optional, Set
 
+from fastapi import HTTPException
+
 import lead_control
 from constants import (
     BRANCH_ADMIN_RNR_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE, SALES_ARM_ONLINE,
     PRESALES_LOST_STAGE, PRESALES_NOT_A_PROSPECT_STAGE, PRESALES_PRE_BOOK_STAGE, V3_STAGES,
-    SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_FOLLOW_UP, SALES_STAGE_ROLE_NOT_A_PROSPECT,
-    SALES_STAGE_ROLE_PRE_BOOK, SALES_STAGE_ROLE_RNR, SALES_STAGE_ROLES_BY_NAME,
+    SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_FOLLOW_UP, SALES_STAGE_ROLE_LOST,
+    SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK, SALES_STAGE_ROLE_RNR, SALES_STAGE_ROLES_BY_NAME,
 )
 from database import v3_col
 from deps import names_the_online_arm, online_arm_practice
@@ -288,7 +290,7 @@ async def realign_branch_stage_leads(
 #
 # A branch on Lead Control "Both" has two desks working one lead, and each kept its own
 # place for it: Pre Sales its `stage`, Branch Leads its `branch_stage`. The two strips carry
-# the same stages -- New Leads, RNR, Follow Up, Pre Book, Appointment, Not a prospect -- so
+# the same stages -- New Leads, RNR, Follow Up, Pre Book, Appointment, Not a prospect, Lost -- so
 # the same patient read New Leads on one desk and Appointment on the other, and the two rows
 # of counts never agreed. On a Both branch they are one stage: a move on either desk is
 # written onto the other in the same request.
@@ -296,8 +298,8 @@ async def realign_branch_stage_leads(
 # The Pre Sales names are fixed (move-stage checks them against V3_STAGES); the Branch ones
 # are found by role, so a rename in CI/CD ROOTS keeps them paired. New Leads pairs with the
 # branch's own opening (Branch Assign), which is what the Branch Leads "New Leads" card holds.
-# A stage only one desk has has no partner: Lost writes the lead off on the branch as Not a
-# prospect, and Cancelled, Portfolio and the rest leave Pre Sales where it was.
+# A stage only one desk has has no partner: Cancelled, Portfolio and the rest leave Pre Sales
+# where it was. A board with no Lost of its own takes a Pre Sales Lost as Not a prospect.
 
 _PRESALES_BY_ROLE = {
     SALES_STAGE_ROLE_RNR: "RNR",
@@ -305,6 +307,7 @@ _PRESALES_BY_ROLE = {
     SALES_STAGE_ROLE_PRE_BOOK: PRESALES_PRE_BOOK_STAGE,
     SALES_STAGE_ROLE_APPOINTMENT: "Appointment",
     SALES_STAGE_ROLE_NOT_A_PROSPECT: PRESALES_NOT_A_PROSPECT_STAGE,
+    SALES_STAGE_ROLE_LOST: PRESALES_LOST_STAGE,
 }
 # How far along each Pre Sales stage is, for settling a lead the desks already disagree on.
 _PRESALES_PROGRESS = {name: i for i, name in enumerate(V3_STAGES)}
@@ -330,7 +333,7 @@ async def _desk_pairs(control: str, arm: str) -> Optional[tuple]:
     if "Appointment" in to_branch:
         to_presales.setdefault(BRANCH_APPOINTMENT_STAGE_FORMER, "Appointment")
     if PRESALES_NOT_A_PROSPECT_STAGE in to_branch:
-        to_branch[PRESALES_LOST_STAGE] = to_branch[PRESALES_NOT_A_PROSPECT_STAGE]
+        to_branch.setdefault(PRESALES_LOST_STAGE, to_branch[PRESALES_NOT_A_PROSPECT_STAGE])
     return to_branch, to_presales
 
 
@@ -340,6 +343,21 @@ async def _write_desk_stage(lead: dict, field: str, target: Optional[str], by: s
     await v3_col("leads").update_one({"id": lead["id"]}, {"$set": {field: target, "updated_at": now_iso()}})
     await log_stage_moves(lead["id"], lead, {field: target}, by, by_role, note)
     return True
+
+
+async def refuse_if_branch_lost(lead: Optional[dict]) -> None:
+    """Lost is locked on Branch Leads as it is on Pre Sales: a lead the branch has marked Lost
+    stays there.
+
+    Every route that writes `branch_stage` asks this first, so a Lost lead cannot be brought
+    back by a follow-up, a booking or a hand-off any more than by its stage pills. Read off
+    the role, so a stage renamed in CI/CD ROOTS stays locked.
+    """
+    stage = (lead or {}).get("branch_stage")
+    if stage and await v3_col("pipeline_stages").find_one(
+        {"type": "sales", "role": SALES_STAGE_ROLE_LOST, "name": stage}, {"_id": 0, "id": 1}
+    ):
+        raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
 
 
 async def match_desk_stages(lead_id: str, moved: str, by: str, by_role: str) -> None:
@@ -364,6 +382,13 @@ async def match_desk_stages(lead_id: str, moved: str, by: str, by_role: str) -> 
     to_branch, to_presales = pairs
     if moved == "stage":
         await _write_desk_stage(lead, "branch_stage", to_branch.get(lead.get("stage")), by, by_role, "same as Pre Sales")
+        # Lost means nobody is coming, so the slot goes back as it does on Branch Leads' own
+        # move (see v3_move_branch_stage). Idempotent: none left to match the second time.
+        if lead.get("stage") == PRESALES_LOST_STAGE:
+            await v3_col("appointments").update_many(
+                {"lead_id": lead_id, "status": "new_appointment"},
+                {"$set": {"status": "cancelled", "updated_at": now_iso()}},
+            )
     elif lead.get("stage") != PRESALES_LOST_STAGE:
         await _write_desk_stage(lead, "stage", to_presales.get(lead.get("branch_stage")), by, by_role, "same as Branch Leads")
 

@@ -48,7 +48,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText,
+  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -151,6 +151,9 @@ const STAGE_ROLE_NOT_A_PROSPECT = "not_a_prospect";
 // A client who will come later and has paid to hold the visit. The move onto it asks when
 // they plan to come, and the lead card offers the Pre Book popup on it -- both by role.
 const STAGE_ROLE_PRE_BOOK = "pre_book";
+// The lead the branch has lost, as Pre Sales has its own Lost: the move asks first, and the
+// stage is locked from then on -- both by role (see the lead card's stageLocked).
+const STAGE_ROLE_LOST = "lost";
 
 // Branch Consultation's cancel stage. The Branch Leads card offers it as its Cancel pill,
 // moving consultation_stage rather than branch_stage -- see consultationCancelStage.
@@ -167,6 +170,7 @@ const STAGE_ROLE_FALLBACK_NAMES = {
   [STAGE_ROLE_FOLLOW_UP]: "Follow Up",
   [STAGE_ROLE_NOT_A_PROSPECT]: "Not a prospect",
   [STAGE_ROLE_PRE_BOOK]: "Pre Book",
+  [STAGE_ROLE_LOST]: "Lost",
 };
 
 // What the Branch Leads cards read on a phone, where six full names will not sit in one
@@ -222,6 +226,7 @@ const LEAD_STAGE_ICONS = [
   ["portfolio", ClipboardList],
   ["cancel", CalendarX],
   ["prospect", UserX],
+  ["lost", Ban],
   ["book", CalendarClock],
   ["lead", UserPlus],
 ];
@@ -915,8 +920,9 @@ export const matchesBranchStage = (lead, stage, isConsultationOnlyStage = () => 
   // Pre Book is held the same way for a different reason: it is a stop until the planned
   // visit, and the client who books ahead for a reconsultation is often one whose earlier
   // consultation or course is still on the record -- handedOver and finished below would
-  // drop them out of the pill the desk just put them on.
-  const abandoned = here === "Cancelled" || here === "Cancel" || here === "Not a prospect" || here === "Pre Book";
+  // drop them out of the pill the desk just put them on. Lost stops a lead harder than any of
+  // them, for the reason Not a prospect is here.
+  const abandoned = here === "Cancelled" || here === "Cancel" || here === "Not a prospect" || here === "Pre Book" || here === "Lost";
   const finished = !abandoned && isCourseComplete(lead);
   // Only the Consultation-ONLY stages hand a lead over — a name both pipelines share gets a
   // single pill backed by the sales-side field, so releasing on one would drop a lead out of
@@ -1220,7 +1226,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const finalBranchStages = useMemo(
     () => new Set(
       stages
-        .filter((s) => s.is_final || stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT) || stageHasRole(s, STAGE_ROLE_PRE_BOOK))
+        .filter((s) => s.is_final || stageHasRole(s, STAGE_ROLE_NOT_A_PROSPECT) || stageHasRole(s, STAGE_ROLE_PRE_BOOK) || stageHasRole(s, STAGE_ROLE_LOST))
         .map((s) => s.name),
     ),
     [stages],
@@ -3872,7 +3878,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
   const cancelledStageName = stageNameForRole(stages, STAGE_ROLE_CANCELLED);
   const notProspectStageName = stageNameForRole(stages, STAGE_ROLE_NOT_A_PROSPECT);
   const preBookStageName = stageNameForRole(stages, STAGE_ROLE_PRE_BOOK);
+  const lostStageName = stageNameForRole(stages, STAGE_ROLE_LOST);
   const inAppointmentStage = lead.branch_stage === appointmentStageName;
+  // Lost is locked, as on Pre Sales: the pills stay on screen with Lost filled and the rest
+  // shut, and nothing here that would move the lead (a follow-up, a transfer) is offered. The
+  // server refuses the same moves on its own (stage_utils.refuse_if_branch_lost).
+  const stageLocked = lead.branch_stage === lostStageName;
   // The real stages reachable from Appointment. RNR and Follow Up are no longer among them:
   // the pipeline above hides both once a slot is booked. Reschedule is not in here either,
   // because it is not a stage at all -- see the pill itself.
@@ -3885,6 +3896,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
     notProspectStageName,
     // A booked client who would rather come next month is moved here, not cancelled.
     preBookStageName,
+    // The client who is gone for good. The move hands the slot back, as Cancelled does.
+    lostStageName,
     cancelledStageName,
   ];
   // `!!name` guards the matchesBranchStage call below: a lead with no consultation_stage
@@ -4872,7 +4885,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
             <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1.5">
               {/* Super Admin only — the backend refuses anyone else, and the branch losing
                   the patient should not be the one deciding it. */}
-              {canTransferBranch && (
+              {canTransferBranch && !stageLocked && (
                 <button
                   onClick={() => setTransferring(true)}
                   title="Branch Transfer"
@@ -5242,12 +5255,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     // entered that pipeline (schedule-branch-appointment seeds
                     // consultation_stage the first time) — shown, but not yet clickable.
                     const notYetReached = consultationOnly && !lead.consultation_stage;
-                    // Everything that is not one of Appointment's four exits, while the
-                    // lead is sitting on Appointment. Drawn, and deliberately dead.
+                    // Everything that is not one of Appointment's exits, while the lead is
+                    // sitting on Appointment. Drawn, and deliberately dead.
                     const blockedFromAppointment = inAppointmentStage && !isActive && !APPOINTMENT_EXITS.includes(stage);
                     const tint = s.color || "#64748b";
                     const handleClick = () => {
-                      if (isMirror || blockedFromAppointment) return;
+                      if (isMirror || blockedFromAppointment || stageLocked) return;
                       // Cancelling is not a move like the others: it puts the expert's slot
                       // back on the calendar, and the lead stops here. Asked before, not
                       // reported after — the pill sits one press from Follow Up and there
@@ -5302,6 +5315,13 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                         openPreBookMove(stage);
                         return;
                       }
+                      // Lost asks first, in the words Pre Sales asks them: nothing moves the
+                      // lead again from there.
+                      if (stage === lostStageName && !window.confirm(
+                        `Move ${lead.name || "this lead"} to ${stage}?\n\n`
+                        + `Once ${stage}, the stage is locked — this lead cannot be moved to any other stage afterwards.`
+                        + (inAppointmentStage ? " Their appointment is cancelled and the slot is freed." : ""),
+                      )) return;
                       if (consultationOnly) {
                         if (notYetReached) {
                           toast.error("This lead needs an appointment scheduled before it can enter the Consultations pipeline");
@@ -5320,10 +5340,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       <button
                         key={s.id}
                         type="button"
-                        disabled={isActive || notYetReached || isMirror || blockedFromAppointment}
+                        disabled={isActive || notYetReached || isMirror || blockedFromAppointment || stageLocked}
                         onClick={handleClick}
                         title={blockedFromAppointment ? `${stage} is not reachable from Appointment — the consultation moves the patient on from here` : undefined}
-                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${blockedFromAppointment ? "disabled:opacity-40" : "disabled:opacity-90"}`}
+                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${blockedFromAppointment || (stageLocked && !isActive) ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid={`branch-stage-btn-${stage}`}
                       >
@@ -5346,10 +5366,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     return (
                       <button
                         type="button"
-                        disabled={isActive}
+                        disabled={isActive || stageLocked}
                         onClick={() => setCancelDraft(true)}
                         title="Moves this lead to Cancel in Branch Consultation"
-                        className="rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90 sm:whitespace-nowrap sm:px-3 sm:text-xs"
+                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${stageLocked && !isActive ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid="branch-stage-btn-consultation-cancel"
                       >
@@ -5358,6 +5378,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                     );
                   })()}
                 </div>
+                {stageLocked && (
+                  <p className="flex items-center justify-center gap-1.5 border-t border-violet-100 px-4 py-2 text-[11px] font-semibold text-rose-600" data-testid="branch-lead-stage-locked">
+                    <Lock className="h-3.5 w-3.5" /> {lostStageName} — this lead's stage is locked
+                  </p>
+                )}
               </div>
 
             </div>
@@ -5419,7 +5444,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
           )}
           {activeTab === "follow-up" && (
             <div className="space-y-4" data-testid="branch-lead-followup">
-              <div className="rounded-[3px] border border-amber-200 bg-amber-50/40 p-4" data-testid="branch-followup-form">
+              <div className={`rounded-[3px] border border-amber-200 bg-amber-50/40 p-4 ${stageLocked ? "hidden" : ""}`} data-testid="branch-followup-form">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-700"><Bell className="h-3.5 w-3.5" /> Schedule Follow-Up</p>
                 {/* Every control in the row carries a label and the same h-9, so the
                     three fields and the button sit on one line rather than the unlabelled
@@ -5469,7 +5494,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                           )}
                           <p className="mt-1.5 text-[11px] text-slate-400">Set by {f.created_by || "—"}</p>
                         </div>
-                        {isActive && (
+                        {isActive && !stageLocked && (
                           <Button size="sm" variant="outline" className="h-8 flex-shrink-0 border-amber-200 text-amber-700 hover:bg-amber-50" onClick={() => setRescheduleDraft({ followupId: f.id, date: f.date, time: f.time, reason: "" })} data-testid={`branch-followup-reschedule-${f.id}`}>
                             Reschedule
                           </Button>

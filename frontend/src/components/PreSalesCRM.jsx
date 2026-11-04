@@ -591,7 +591,7 @@ const MARKETING_HEAD_FUNNEL = [
     label: "Lost",
     color: "#ef4444",
     // "Not a prospect" is the Pre-Sales stage Lost was renamed to (see seed.replace_presales_lost_stage).
-    match: (l) => l.stage === "Lost" || l.stage === "Not a prospect" || l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel",
+    match: (l) => l.stage === "Lost" || l.stage === "Not a prospect" || l.branch_stage === "Lost" || l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel",
   },
 ];
 

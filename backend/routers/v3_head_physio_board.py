@@ -14,7 +14,7 @@ from deps import (
 )
 from physio_scope import ensure_head_chief_lead
 from constants import V3_HEAD_CONSULTATION_STAGES
-from stage_utils import get_closing_stage_name, get_stage_name_at
+from stage_utils import get_closing_stage_name, get_stage_name_at, refuse_if_branch_lost
 from schemas.v3 import (
     V3UserOut, V3PackageRecommendInput, V3HeadPhysioReviewInput, V3LeadOut,
     V3ConsultationDecisionInput, V3AssignPhysioSessionsInput,
@@ -373,6 +373,7 @@ async def hp_recommend_package(
     lead = await v3_col("leads").find_one({"id": payload.lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
 
     doctor = await _resolve_hp_doctor(user, lead.get("branch_id"))
 

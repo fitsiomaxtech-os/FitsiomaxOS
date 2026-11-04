@@ -6,6 +6,7 @@ from database import v3_col
 from utils import now_iso, normalize_slot_time, slot_capacity_of
 from deps import v3_require_roles
 from schemas.v3 import V3UserOut, V3AssignSessionsInput
+from stage_utils import refuse_if_branch_lost
 from routers.v3_physio_absence import refuse_if_physio_absent
 
 router = APIRouter(prefix="/api/v3")
@@ -41,6 +42,7 @@ async def assign_sessions(
     lead = await v3_col("leads").find_one({"id": payload.lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
 
     physio = await v3_col("doctors").find_one({"id": payload.physio_id}, {"_id": 0})
     if not physio:

@@ -6,7 +6,7 @@ import logging
 
 from database import client
 from indexes import ensure_core_indexes
-from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_zumba_package_sessions, ensure_rnr_stage, replace_presales_lost_stage, rename_presales_pre_book_stage, restore_presales_pre_book_stage, move_presales_pre_book_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_branch_pre_book_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources, align_both_desk_stages
+from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_zumba_package_sessions, ensure_rnr_stage, replace_presales_lost_stage, rename_presales_pre_book_stage, restore_presales_pre_book_stage, move_presales_pre_book_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_branch_pre_book_stage, ensure_branch_lost_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources, align_both_desk_stages, move_both_desk_lost_leads
 from routers.v3_google_sheets import start_auto_sync_scheduler
 from payment_reminders import start_payment_reminder_scheduler
 import lead_package_pricing
@@ -125,8 +125,11 @@ async def startup_seed_data():
     await ensure_branch_not_a_prospect_stage()
     # After Not a prospect, which it positions itself behind; per arm for the same reason.
     await ensure_branch_pre_book_stage()
+    # After Pre Book, which it positions itself behind; per arm for the same reason.
+    await ensure_branch_lost_stage()
     # After every sales pass and the role stamping, since it pairs the two desks' stages by role.
     await align_both_desk_stages()
+    await move_both_desk_lost_leads()
     await migrate_consultation_stages()
     # After the consultation stages exist, and before the three passes below that position
     # themselves by order: this one goes in at the head of the pipeline and pushes every

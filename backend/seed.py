@@ -9,7 +9,7 @@ from constants import (
     PRESALES_LOST_STAGE, PRESALES_NOT_A_PROSPECT_STAGE, PRESALES_PRE_BOOK_STAGE,
     BRANCH_ADMIN_ENTRY_STAGE, BRANCH_ADMIN_RNR_STAGE,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_NOT_A_PROSPECT_STAGE,
-    BRANCH_PRE_BOOK_STAGE, SALES_STAGE_ROLE_PRE_BOOK,
+    BRANCH_PRE_BOOK_STAGE, SALES_STAGE_ROLE_PRE_BOOK, BRANCH_LOST_STAGE, SALES_STAGE_ROLE_LOST,
     SALES_STAGE_ROLES_BY_NAME,
     SALES_STAGE_ROLE_CANCELLED,
     SALES_STAGE_ROLE_RNR,
@@ -18,7 +18,7 @@ from constants import (
     SALES_ARM_OFFLINE, SALES_ARM_ONLINE,
 )
 import lead_control
-from stage_utils import align_desk_stages, get_first_stage_name, first_branch_stage_for, realign_branch_stage_leads
+from stage_utils import align_desk_stages, get_first_stage_name, first_branch_stage_for, match_desk_stages, realign_branch_stage_leads
 
 
 # Maps deprecated branch_stage labels (legacy 8-stage flow) to the new flow.
@@ -711,6 +711,61 @@ async def ensure_branch_pre_book_stage() -> None:
         await v3_col("pipeline_stages").insert_one(doc)
 
 
+async def ensure_branch_lost_stage() -> None:
+    """Give the Branch (sales) pipeline its "Lost" pill, right after Pre Book.
+
+    The Pre-Sales desk's Lost, on Branch Leads: the lead is over, and locked there. Positioned
+    against Pre Book, then Not a prospect, then Appointment, for whichever of them a pipeline
+    still has. Not is_final, for the reason those two are not, even though it stops a lead
+    harder than either: a final stage loses its pill on a branch running its own leads, and
+    the board treats this one as a stop by its role instead.
+
+    Run per arm after ensure_branch_pre_book_stage, so the stage it is positioned against
+    exists. Idempotent, and a no-op until the sales stages exist.
+    """
+    rows = await v3_col("pipeline_stages").find(
+        {"type": "sales"}, {"_id": 0, "name": 1, "order": 1, "arm": 1, "role": 1}
+    ).sort("order", 1).to_list(400)
+    if not rows:
+        return
+    by_arm = {}
+    for row in rows:
+        by_arm.setdefault(row.get("arm"), []).append(row)
+
+    for arm, arm_rows in by_arm.items():
+        if any(_sales_row_has_role(r, SALES_STAGE_ROLE_LOST, BRANCH_LOST_STAGE) for r in arm_rows):
+            continue
+        after = None
+        for role, shipped_name in (
+            (SALES_STAGE_ROLE_PRE_BOOK, BRANCH_PRE_BOOK_STAGE),
+            (SALES_STAGE_ROLE_NOT_A_PROSPECT, BRANCH_NOT_A_PROSPECT_STAGE),
+            (SALES_STAGE_ROLE_APPOINTMENT, BRANCH_APPOINTMENT_STAGE),
+        ):
+            after = after or next((r for r in arm_rows if _sales_row_has_role(r, role, shipped_name)), None)
+        if not after:
+            continue
+        insert_order = (after.get("order") or 0) + 1
+        arm_filter = {"arm": arm} if arm else {"arm": None}
+        await v3_col("pipeline_stages").update_many(
+            {"type": "sales", "order": {"$gte": insert_order}, **arm_filter},
+            {"$inc": {"order": 1}},
+        )
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": BRANCH_LOST_STAGE,
+            # The Pre-Sales desk's own Lost rose, so the stage reads the same on both boards.
+            "color": _PRESALES_LOST_COLOUR,
+            "type": "sales",
+            "order": insert_order,
+            "is_final": False,
+            "role": SALES_STAGE_ROLE_LOST,
+            "created_at": now_iso(),
+        }
+        if arm:
+            doc["arm"] = arm
+        await v3_col("pipeline_stages").insert_one(doc)
+
+
 async def ensure_consultation_booked_stage() -> None:
     """Give the Branch consultation pipeline its opening pill, at the head of the bar.
 
@@ -1152,6 +1207,44 @@ async def align_both_desk_stages() -> None:
             moved += await align_desk_stages(branch["id"])
     await v3_col("migrations").insert_one({
         "name": _BOTH_DESKS_ALIGNED_MIGRATION,
+        "leads_moved": moved,
+        "ran_at": now_iso(),
+    })
+
+
+_BOTH_DESK_LOST_MIGRATION = "move_both_desk_lost_leads"
+
+
+async def move_both_desk_lost_leads() -> None:
+    """Stand a Lead Control Both branch's Lost leads on the Branch Leads Lost stage.
+
+    Until Branch Leads had a Lost of its own, a Pre Sales Lost was written onto the branch as
+    Not a prospect (see stage_utils._desk_pairs), so those leads would read Lost on one desk
+    and Not a prospect on the other for good. A lead the branch put on some other stage of
+    its own stays there, as align_desk_stages leaves it.
+
+    A one-shot, by its marker in `migrations`. Must follow ensure_branch_lost_stage, since
+    it pairs the stages by their roles.
+    """
+    if await v3_col("migrations").find_one({"name": _BOTH_DESK_LOST_MIGRATION}):
+        return
+    not_a_prospect = await v3_col("pipeline_stages").distinct(
+        "name", {"type": "sales", "role": SALES_STAGE_ROLE_NOT_A_PROSPECT}
+    )
+    moved = 0
+    branches = await v3_col("branches").find({}, {"_id": 0, "id": 1, "lead_control": 1}).to_list(1000)
+    for branch in branches:
+        if lead_control.normalize(branch.get("lead_control")) != lead_control.BOTH:
+            continue
+        leads = await v3_col("leads").find(
+            {"branch_id": branch["id"], "stage": PRESALES_LOST_STAGE, "branch_stage": {"$in": not_a_prospect}},
+            {"_id": 0, "id": 1},
+        ).to_list(None)
+        for lead in leads:
+            await match_desk_stages(lead["id"], "stage", "system", "system")
+            moved += 1
+    await v3_col("migrations").insert_one({
+        "name": _BOTH_DESK_LOST_MIGRATION,
         "leads_moved": moved,
         "ran_at": now_iso(),
     })

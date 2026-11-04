@@ -63,7 +63,7 @@ async def list_branches_full(archived: bool = False, _: V3UserOut = Depends(v3_r
     for b in branches:
         bid = b["id"]
         leads_total = await v3_col("leads").count_documents({"branch_id": bid})
-        leads_open = await v3_col("leads").count_documents({"branch_id": bid, "stage": {"$nin": ["Completed", "Lost", "Not a prospect"]}})
+        leads_open = await v3_col("leads").count_documents({"branch_id": bid, "stage": {"$nin": ["Completed", "Lost", "Not a prospect"]}, "branch_stage": {"$ne": "Lost"}})
         leads_completed = await v3_col("leads").count_documents({"branch_id": bid, "stage": "Completed"})
         appointments = await v3_col("appointments").count_documents({"branch_id": bid})
         doctors = await v3_col("doctors").count_documents({"branch_id": bid})
@@ -453,7 +453,7 @@ async def branch_detail(branch_id: str, user: V3UserOut = Depends(v3_require_rol
         "performance": {
             "kpis": {
                 "leads_total": len(leads),
-                "leads_open": len([ld for ld in leads if ld.get("stage") not in ("Completed", "Lost", "Not a prospect")]),
+                "leads_open": len([ld for ld in leads if ld.get("stage") not in ("Completed", "Lost", "Not a prospect") and ld.get("branch_stage") != "Lost"]),
                 "leads_completed": len([ld for ld in leads if ld.get("stage") == "Completed"]),
             },
             "appointments": {

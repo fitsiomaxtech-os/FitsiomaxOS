@@ -24,13 +24,13 @@ import store_branch_overrides
 from constants import (
     PRESALES_LOST_STAGE, PRESALES_PRE_BOOK_STAGE,
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
-    BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
+    BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
-    SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK, PRE_BOOK_PLANS,
+    SALES_STAGE_ROLE_LOST, SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK, PRE_BOOK_PLANS,
 )
 from stage_utils import (
     branch_stage_names_for_branch, first_branch_stage_for_branch, get_first_stage_name,
-    match_desk_stages, sales_arm_for,
+    match_desk_stages, refuse_if_branch_lost, sales_arm_for,
 )
 from schemas.v3 import (
     V3UserOut, V3LeadOut,
@@ -618,6 +618,7 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
     # Validated against this lead's own branch, not the whole sales list: Branch Assign and
     # RNR only exist for a branch running its own leads, and moving a Pre-Sales-fed lead
     # onto one would strand it on a stage its board never draws.
@@ -669,9 +670,12 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
     # Done here rather than in a cancel endpoint of its own because the stage is the event:
     # however a lead reaches Cancelled -- this pill, a bulk move, a later screen -- the
     # appointment behind it is off. Idempotent, since a lead already cancelled has no rows
-    # left in new_appointment to match.
+    # left in new_appointment to match. Lost the same: that client is not coming either.
     freed = 0
-    if payload.branch_stage == await _sales_stage_for_role(SALES_STAGE_ROLE_CANCELLED, lead_arm):
+    if payload.branch_stage in (
+        await _sales_stage_for_role(SALES_STAGE_ROLE_CANCELLED, lead_arm),
+        await _sales_stage_for_role(SALES_STAGE_ROLE_LOST, lead_arm),
+    ):
         res = await v3_col("appointments").update_many(
             {"lead_id": lead_id, "status": "new_appointment"},
             {"$set": {"status": "cancelled", "updated_at": now_iso()}},
@@ -712,6 +716,7 @@ async def v3_pre_sales_pre_book(lead_id: str, payload: V3PreSalesPreBookInput, u
     # Lost is locked on the Pre-Sales side (see _refuse_if_lost in routers/v3_leads.py).
     if lead.get("stage") == PRESALES_LOST_STAGE:
         raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
+    await refuse_if_branch_lost(lead)
     if not (payload.pre_book_time or "").strip():
         raise HTTPException(status_code=400, detail="Pick the planned visit time")
     plan_updates, plan_note = _planned_visit_updates(
@@ -755,6 +760,7 @@ async def v3_schedule_portfolio(lead_id: str, payload: V3PortfolioScheduleInput,
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
     old_stage = lead.get("branch_stage", "Unknown")
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {
         "branch_stage": "Portfolio",
@@ -808,6 +814,7 @@ async def v3_assign_physio(lead_id: str, payload: V3AssignPhysioInput, user: V3U
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
     physio = await v3_col("doctors").find_one({"id": payload.physio_id}, {"_id": 0})
     if not physio:
         raise HTTPException(status_code=404, detail="Physio not found")
@@ -912,6 +919,7 @@ async def v3_schedule_branch_appointment(lead_id: str, payload: V3BranchAppointm
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
     # Lost is locked on the Pre-Sales side (see _refuse_if_lost in routers/v3_leads.py), and
     # a hand-off would move the lead to Appointment.
     if payload.presales_handoff and lead.get("stage") == PRESALES_LOST_STAGE:
@@ -2031,6 +2039,7 @@ async def v3_schedule_branch_follow_up(lead_id: str, payload: V3BranchFollowUpIn
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
     entry = {
         "id": str(uuid.uuid4()),
         "date": payload.date,
@@ -2064,6 +2073,7 @@ async def v3_reschedule_branch_follow_up(lead_id: str, followup_id: str, payload
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
     follow_ups = lead.get("follow_ups") or []
     old = next((f for f in follow_ups if f.get("id") == followup_id), None)
     if not old:
@@ -2421,7 +2431,7 @@ async def _booked_by_expert(branch_id: str, date_str: str):
     """Return {expert_id: set(HH:MM)} of already-booked slots for a branch on a date."""
     cursor = v3_col("leads").find(
         {"branch_id": branch_id, "appointment_date": date_str,
-         "assigned_physio_id": {"$ne": None}, "branch_stage": {"$ne": "Cancelled"}},
+         "assigned_physio_id": {"$ne": None}, "branch_stage": {"$nin": [BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE]}},
         {"_id": 0, "assigned_physio_id": 1, "appointment_time": 1}
     )
     booked = {}
@@ -2520,7 +2530,7 @@ async def v3_expert_calendar(
         else:
             # Fallback: look at any lead assigned to this expert that day
             cursor = v3_col("leads").find(
-                {"assigned_physio_id": expert_id, "appointment_date": date_str, "branch_stage": {"$ne": "Cancelled"}},
+                {"assigned_physio_id": expert_id, "appointment_date": date_str, "branch_stage": {"$nin": [BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE]}},
                 {"_id": 0, "appointment_time": 1},
             )
             taken = set()
@@ -3029,6 +3039,7 @@ async def v3_transfer_branch(
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    await refuse_if_branch_lost(lead)
 
     out_of_scope = _transfer_scope_error(lead, user)
     if out_of_scope:

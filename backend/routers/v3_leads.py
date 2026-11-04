@@ -10,7 +10,7 @@ from deps import (
     vertical_names_an_arm, lead_as_read_by, works_org_wide,
 )
 from constants import V3_STAGES, PRESALES_LOST_STAGE
-from stage_utils import first_branch_stage_for, first_branch_stage_for_branch, lead_created_row, log_stage_moves, match_desk_stages
+from stage_utils import first_branch_stage_for, first_branch_stage_for_branch, lead_created_row, log_stage_moves, match_desk_stages, refuse_if_branch_lost
 import lead_control
 import lead_purge
 from routers.v3_lead_documents import leads_with_prescription
@@ -368,6 +368,10 @@ async def v3_edit_lead(
     if "branch_id" in updates and "branch_stage" not in updates and existing is not None and existing.get("branch_id") != updates["branch_id"]:
         updates["branch_stage"] = await first_branch_stage_for_branch(updates["branch_id"], "New Appointment")
 
+    # Asked here, after the two bridges above, so a branch reassignment is caught as well.
+    if existing is not None and "branch_stage" in updates and updates["branch_stage"] != existing.get("branch_stage"):
+        await refuse_if_branch_lost(existing)
+
     filter_query: Dict[str, object] = {"id": lead_id}
     if is_branch_admin_role(user.role) and user.branch_id:
         filter_query["branch_id"] = user.branch_id
@@ -428,6 +432,7 @@ async def v3_assign_branch(lead_id: str, payload: V3AssignBranchInput, user: V3U
     if not existing_lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     _refuse_if_lost(existing_lead)
+    await refuse_if_branch_lost(existing_lead)
     new_branch_stage = await first_branch_stage_for_branch(payload.branch_id, "New Appointment")
     # branch_assigned_at: the moment it arrived, which is what lights the Branch Leads dot
     # (see v3_tab_activity) -- created_at is when Pre-Sales got it, often days earlier.
@@ -465,6 +470,7 @@ async def v3_confirm_lead(lead_id: str, user: V3UserOut = Depends(v3_require_rol
     # the lead's when a Super Admin is the one confirming.
     target = await v3_col("leads").find_one(filter_query, {"_id": 0, "branch_id": 1, "stage": 1, "branch_stage": 1})
     _refuse_if_lost(target)
+    await refuse_if_branch_lost(target)
     new_branch_stage = await first_branch_stage_for_branch((target or {}).get("branch_id"), "New Appointment")
     result = await v3_col("leads").update_one(filter_query, {"$set": {"stage": "Appointment", "branch_stage": new_branch_stage, "updated_at": now_iso()}})
     if result.matched_count == 0:
@@ -489,6 +495,7 @@ async def v3_book_appointment(lead_id: str, payload: V3BookAppointmentInput, use
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     _refuse_if_lost(lead)
+    await refuse_if_branch_lost(lead)
     slot_key = normalize_slot_time(payload.slot_time)
     doctor = await v3_col("doctors").find_one({"id": payload.doctor_id}, {"_id": 0})
     if not doctor:
@@ -734,6 +741,7 @@ async def v3_schedule_appointment(lead_id: str, payload: V3AppointmentScheduleIn
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     _refuse_if_lost(lead)
+    await refuse_if_branch_lost(lead)
     branch_name = None
     if branch_id:
         b = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "branch_name": 1, "name": 1})

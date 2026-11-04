@@ -47,6 +47,7 @@ V3_BRANCH_STAGES = [
     "Appointment",
     "Not a prospect",
     "Pre Book",
+    "Lost",
     "Cancelled",
 ]
 
@@ -107,6 +108,15 @@ BRANCH_NOT_A_PROSPECT_STAGE = "Not a prospect"
 # (see routers/v3_pre_book.py).
 BRANCH_PRE_BOOK_STAGE = "Pre Book"
 
+# The lead the branch has lost, as the Pre-Sales desk has its own PRESALES_LOST_STAGE. Sits
+# after Pre Book, and locked as that one is: once there, nothing moves the lead again (see
+# stage_utils.refuse_if_branch_lost), and the board asks before putting it there.
+#
+# Not Not a prospect beside it, which parks a lead until a reminder call, and not Cancelled,
+# which is a real client calling off one appointment and may well rebook. This one is over --
+# so, like Cancelled, reaching it releases any slot the lead was holding.
+BRANCH_LOST_STAGE = "Lost"
+
 # When the client said they would come, as the move onto Pre Book offers it. The label is
 # what the board shows; the date it works out to travels beside it and may be adjusted, so
 # "Next Month" can mean the 3rd as readily as today's date a month on. "date" is a day the
@@ -166,12 +176,16 @@ SALES_STAGE_ROLE_NOT_A_PROSPECT = "not_a_prospect"
 # The move onto it asks when the client plans to come, and the board opens the Pre Book
 # popup on it -- both found by role, so a rename keeps them.
 SALES_STAGE_ROLE_PRE_BOOK = "pre_book"
+# The stage that locks a lead, and frees its slot on the way there -- found by role so a
+# rename keeps both, and so a Both branch can pair it with the Pre-Sales desk's own Lost.
+SALES_STAGE_ROLE_LOST = "lost"
 
 SALES_STAGE_ROLES_BY_NAME = {
     BRANCH_APPOINTMENT_STAGE: SALES_STAGE_ROLE_APPOINTMENT,
     BRANCH_CANCELLED_STAGE: SALES_STAGE_ROLE_CANCELLED,
     BRANCH_NOT_A_PROSPECT_STAGE: SALES_STAGE_ROLE_NOT_A_PROSPECT,
     BRANCH_PRE_BOOK_STAGE: SALES_STAGE_ROLE_PRE_BOOK,
+    BRANCH_LOST_STAGE: SALES_STAGE_ROLE_LOST,
     BRANCH_ADMIN_RNR_STAGE: SALES_STAGE_ROLE_RNR,
     "Portfolio": SALES_STAGE_ROLE_PORTFOLIO,
     "Follow Up": SALES_STAGE_ROLE_FOLLOW_UP,
