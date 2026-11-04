@@ -230,6 +230,7 @@ def settle_fee_money(
     allow_discount=True,
     over_label="above listed fee",
     existing_installments=None,
+    extra_toward_bill=False,
 ):
     """The three facts one collection has to keep apart: the discount that was agreed,
     the money that came in, and whatever is still owed.
@@ -252,6 +253,11 @@ def settle_fee_money(
     Treatment Fee, where a collection can cover some of a package's sessions: the discount
     is measured against those sessions, the balance against the package.
 
+    `extra_toward_bill` is for that same split. Money above what today's sessions cost is
+    then part of the bill rather than on top of it: Rs.22,000 for 20 sessions worth
+    Rs.21,428.57 of a Rs.90,000 package leaves Rs.68,000, and only money past the whole
+    bill is an additional amount.
+
     `allow_discount` is False for the modes that cannot negotiate one (Cheque and Partial
     Payment keep their locked price), which also stops a discount arriving on a payload
     that has no box to type it in.
@@ -262,21 +268,22 @@ def settle_fee_money(
     if discount > list_price:
         raise HTTPException(status_code=400, detail=f"Discount cannot be more than the Rs.{list_price:g} being collected for")
     net_payable = round(list_price - discount, 2)
+    bill = list_price if total_price is None else total_price
+    ceiling = round(bill - discount, 2) if extra_toward_bill else net_payable
 
     reason = None
     suffix = ""
     if discount > 0:
         reason = "Discount"
         suffix = f" · Actual Price Rs.{list_price}, Discount Rs.{discount}"
-    elif allow_discount and amount > net_payable + 0.01:
+    elif allow_discount and amount > ceiling + 0.01:
         # Over the fee is recorded rather than refused — it is usually a rounding-up the
         # patient insisted on — and keeps the negative-discount convention the reports
         # already read, so nothing downstream has to learn a new sign.
-        discount = -round(amount - net_payable, 2)
+        discount = -round(amount - ceiling, 2)
         reason = "Additional amount collected"
-        suffix = f" · Actual Price Rs.{net_payable}, Rs.{abs(discount)} {over_label}"
+        suffix = f" · Actual Price Rs.{ceiling}, Rs.{abs(discount)} {over_label}"
 
-    bill = list_price if total_price is None else total_price
     balance = round(bill - discount - amount, 2)
     installments = None
     carry = None
@@ -543,6 +550,7 @@ async def settle_standard_payment(
     total_price: Optional[float] = None,
     existing_installments=None,
     over_label: str = "above listed fee",
+    extra_toward_bill: bool = False,
 ) -> dict:
     """One fee collection, settled the one way this branch settles money.
 
@@ -640,6 +648,7 @@ async def settle_standard_payment(
         allow_discount=settles_now,
         over_label=over_label,
         existing_installments=existing_installments,
+        extra_toward_bill=extra_toward_bill,
     )
 
     details, detail_suffix = _standard_payment_record(payload, amount, lines, fee_label)
@@ -1277,6 +1286,7 @@ async def collect_treatment_fee(lead_id: str, payload: V3CollectTreatmentFeeInpu
         total_price=original_price,
         over_label="above assigned fee",
         existing_installments=(lead.get("treatment_fee_payment_details") or {}).get("installments"),
+        extra_toward_bill=bool(payload.extra_toward_package),
     )
     amount = taken["amount"]
     transaction_id = taken["transaction_id"]

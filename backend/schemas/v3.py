@@ -892,6 +892,9 @@ class V3CollectTreatmentFeeInput(BaseModel):
     # Those are two different facts: only what arrives in this field comes off the bill,
     # and anything else short of it is scheduled as a balance installment instead.
     discount_amount: Optional[float] = None
+    # Chennai's Collect Payment popup: money above what sessions_now cost counts toward the
+    # package, so the balance is the package less what was collected. See settle_fee_money.
+    extra_toward_package: bool = False
 
 
 class V3MarkInstallmentPaidInput(BaseModel):
