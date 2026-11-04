@@ -4901,7 +4901,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Everything still owed once this money is in: the whole package, less the discount
   // that was agreed, less what is being handed over now. Short by sessions, short by
   // amount, or both -- it is one balance either way, and it is never a discount.
-  const treatmentBalanceDue = round2(treatmentFeeTotal - treatmentDiscount - treatmentAmountNow);
+  //
+  // Chennai's first collection is the exception. The amount typed there is the price agreed
+  // for these sessions, above or below what they come to at the package rate, and the
+  // sessions not bought stay at that rate -- so what is owed is those sessions and nothing
+  // else. A correction keeps the rule above: its boxes reopen on the whole package, and a
+  // short amount there is the balance already on the record, not a new price.
+  const chennaiAgreed = chennaiCollect && selectedLead?.treatment_fee_paid == null;
+  const treatmentBalanceDue = chennaiAgreed
+    ? round2(treatmentFeeTotal - treatmentComputedAmount)
+    : round2(treatmentFeeTotal - treatmentDiscount - treatmentAmountNow);
   const treatmentHasBalance = treatmentFeeDraft?.payment_mode !== "partial" && treatmentBalanceDue > 0.009;
   // Whether the balance is settled enough to ask for its due date. A shortfall the desk
   // has not answered for yet is not a balance -- it is a question -- and putting a date
@@ -4910,6 +4919,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // no fork to reach because every rupee of today's bill is tendered and what remains
   // is simply the sessions this collection did not buy.
   const treatmentBalanceSettled = !!treatmentConfirmDraft?.balance_partial || treatmentOutstanding <= 0.009;
+  // The discount this collection goes on the record with. An agreed price below the
+  // package rate is money that will never arrive, so all of the gap goes down as discount
+  // (the typed one is inside it); above the rate there is none, and the server records the
+  // extra as an additional amount. Only once the desk has settled it: until then a gap
+  // could still be the next tender.
+  const treatmentRecordedDiscount = chennaiAgreed && treatmentBalanceSettled
+    ? round2(Math.max(0, treatmentComputedAmount - treatmentAmountNow))
+    : treatmentDiscount;
 
   // Changing "Sessions Covered Now" re-computes the Treatment Fee amount to match, less
   // whatever discount has been agreed on those sessions. Still hand-editable afterward
@@ -4930,7 +4947,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   };
   // The Chennai Collect Payment popup's three boxes. The amount follows the sessions and
   // the discount while it is empty or still sitting on what they come to -- an amount
-  // typed short of that is a part payment somebody chose, and stays as typed.
+  // typed away from that is a price somebody agreed, and stays as typed.
   const chennaiAmountFollows = () => {
     const amt = parseFloat(treatmentFeeDraft?.amount);
     return !Number.isFinite(amt) || Math.abs(amt - treatmentNetPayable) < 0.01;
@@ -4992,8 +5009,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // date is missing.
   const attachSessionsSplit = (payload) => {
     const next = { ...payload };
-    if (SETTLED_NOW_MODES.includes(payload.payment_mode) && treatmentDiscount > 0) {
-      next.discount_amount = treatmentDiscount;
+    if (SETTLED_NOW_MODES.includes(payload.payment_mode) && treatmentRecordedDiscount > 0) {
+      next.discount_amount = treatmentRecordedDiscount;
     }
     if (treatmentIsPartialSessions) next.sessions_now = treatmentSessionsNow;
     if (treatmentHasBalance) {
@@ -11847,8 +11864,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const sessionsOk = !totalSessions || (sessionsN >= 1 && sessionsN <= totalSessions);
               const amountN = parseFloat(treatmentFeeDraft.amount) || 0;
               const overDiscount = treatmentDiscount > treatmentComputedAmount + 0.009;
-              const overpaid = amountN > treatmentNetPayable + 0.01;
+              // An amount off the package rate is allowed on a first collection -- see
+              // chennaiAgreed -- and only a correction is still held to it.
+              const overpaid = !chennaiAgreed && amountN > treatmentNetPayable + 0.01;
               const short = round2(treatmentNetPayable - amountN);
+              const agreedDiffers = chennaiAgreed && amountN > 0 && Math.abs(short) > 0.009;
               const editTotal = parseFloat(chennaiPkgEdit) || 0;
               const ready = priced && chennaiPkgEdit === null && sessionsOk && amountN > 0 && !overDiscount && !overpaid;
               const rs = (n) => `Rs.${round2(n).toLocaleString("en-IN")}`;
@@ -11978,7 +11998,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {priced && sessionsOk && sessionsN > 0 && (
                       <div
                         className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-[4px] px-2.5 py-1.5 text-[11px] font-semibold ${
-                          overDiscount || overpaid ? "bg-rose-50 text-rose-700" : short > 0.009 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                          overDiscount || overpaid ? "bg-rose-50 text-rose-700" : agreedDiffers ? "bg-sky-50 text-sky-700" : short > 0.009 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
                         }`}
                         data-testid="cons-chennai-collect-total"
                       >
@@ -11991,6 +12011,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             ? "Discount is more than these sessions cost"
                             : overpaid
                             ? `Amount is ${rs(amountN - treatmentNetPayable)} over`
+                            : agreedDiffers
+                            ? `${rs(amountN / sessionsN)} per session`
                             : amountN > 0 && short > 0.009
                             ? `${rs(short)} left as balance`
                             : amountN > 0
@@ -12013,7 +12035,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {!priced || chennaiPkgEdit !== null
                           ? "Save the package amount first."
                           : ready
-                          ? `Pick a payment mode to open its Collect popup.${treatmentDiscount > 0 ? " Cheque and Partial Payment are taken without the discount." : ""}`
+                          ? `Pick a payment mode to open its Collect popup.${treatmentDiscount > 0 || agreedDiffers ? " Cheque and Partial Payment are taken at the package rate, without any discount." : ""}`
                           : "Enter the sessions and the amount first."}
                       </p>
                     </div>
@@ -12228,7 +12250,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             className="w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs font-semibold text-slate-600 transition hover:border-rose-400 hover:text-rose-700"
                             data-testid="cons-treatment-fee-next-partial"
                           >
-                            Nothing more today — leave Rs.{outstandingLabel} as a Partial Payment
+                            {chennaiAgreed
+                              ? `Nothing more today — Rs.${treatmentAmountNow.toLocaleString("en-IN")} is the agreed amount`
+                              : `Nothing more today — leave Rs.${outstandingLabel} as a Partial Payment`}
                           </button>
                         )}
                       </>
@@ -12275,7 +12299,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {[
                           ["Sessions", treatmentFeeTotalSessions ? `${treatmentSessionsNow} of ${treatmentFeeTotalSessions}` : "—"],
                           ["Amount", `Rs.${treatmentTenderAmount.toLocaleString("en-IN")}`],
-                          ["Discount", `Rs.${treatmentDiscount.toLocaleString("en-IN")}`],
+                          ["Discount", `Rs.${treatmentRecordedDiscount.toLocaleString("en-IN")}`],
                         ].map(([k, v]) => (
                           <div key={k} className="px-2 py-1.5">
                             <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{k}</p>
@@ -12362,7 +12386,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         dueDate={treatmentFeeDraft.balance_due_date}
                         onDueDateChange={(v) => setTreatmentFeeDraft({ ...treatmentFeeDraft, balance_due_date: v })}
                         amount={treatmentAmountNow}
-                        discount={treatmentDiscount}
+                        discount={treatmentRecordedDiscount}
                         note={treatmentIsPartialSessions && treatmentRemainingSessions > 0 ? `${treatmentRemainingSessions} sessions` : ""}
                         leading={treatmentIsPartialSessions ? (
                           <>Covers <span className="font-semibold">{treatmentSessionsNow} of {treatmentFeeTotalSessions}</span> sessions. </>
@@ -12572,7 +12596,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" data-testid="cons-treatment-fee-balance-modal">
                 <div className="w-full max-w-sm space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-800">Balance Amount</p>
+                    <p className="text-sm font-semibold text-slate-800">{chennaiAgreed ? "Amount Is Less" : "Balance Amount"}</p>
                     <button
                       onClick={() => setTreatmentBalanceChoice(null)}
                       className="rounded p-1 text-slate-400 hover:bg-slate-100"
@@ -12598,12 +12622,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </div>
                     ))}
                     <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-1.5">
-                      <span className="font-semibold text-slate-600">Balance</span>
+                      <span className="font-semibold text-slate-600">{chennaiAgreed ? "Difference" : "Balance"}</span>
                       <span className="font-semibold text-amber-700" data-testid="cons-treatment-fee-balance-amount">Rs.{treatmentBalanceChoice.balance.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-500">How is the Rs.{treatmentBalanceChoice.balance.toLocaleString("en-IN")} balance being settled?</p>
+                  <p className="text-[11px] text-slate-500">
+                    {chennaiAgreed
+                      ? `Is the other Rs.${treatmentBalanceChoice.balance.toLocaleString("en-IN")} being paid now, or is this the agreed amount?`
+                      : `How is the Rs.${treatmentBalanceChoice.balance.toLocaleString("en-IN")} balance being settled?`}
+                  </p>
 
                   {/* The money is here, in another form. Takes the tender on the popup
                       onto the list and comes back for the next one. */}
@@ -12616,14 +12644,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </Button>
 
                   {/* The money is not here. The shortfall becomes a dated balance the
-                      patient can settle later under any mode -- see BalanceDueBlock. */}
+                      patient can settle later under any mode -- see BalanceDueBlock. On
+                      Chennai's first collection nobody is coming back with it: what was
+                      handed over is the price of these sessions -- see chennaiAgreed. */}
                   <Button
                     variant="outline"
                     className="w-full text-xs"
                     onClick={leaveTreatmentBalanceAsPartial}
                     data-testid="cons-treatment-fee-balance-partial"
                   >
-                    Partial payment — collect the balance later
+                    {chennaiAgreed
+                      ? `Accept Rs.${treatmentBalanceChoice.collected.toLocaleString("en-IN")}${treatmentSessionsNow > 0 ? ` for ${treatmentSessionsNow} session${treatmentSessionsNow === 1 ? "" : "s"} · Rs.${round2(treatmentBalanceChoice.collected / treatmentSessionsNow).toLocaleString("en-IN")} per session` : ""}`
+                      : "Partial payment — collect the balance later"}
                   </Button>
 
                   <button
