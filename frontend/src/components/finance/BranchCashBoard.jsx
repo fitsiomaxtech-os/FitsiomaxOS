@@ -60,8 +60,8 @@ const entryNoun = (r) => {
 };
 const capFirst = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 
-/** One row, opened off its arrow (or a tap on the row): every field it has, and its bin
- *  again as a button while it can be deleted. */
+/** One row, opened off its arrow (or a tap on the row): every field it has, under a
+ *  one-line header carrying its bin while it can be deleted. */
 const EntryDetail = ({ row, partyLabel, onClose, onDelete, deleting }) => {
   const noun = entryNoun(row);
   const lines = [
@@ -79,11 +79,24 @@ const EntryDetail = ({ row, partyLabel, onClose, onDelete, deleting }) => {
       data-testid="branch-cash-entry-detail"
     >
       <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-4">
-          <div className="min-w-0">
-            <h3 className="text-base font-semibold text-slate-800">{capFirst(noun)}</h3>
-            <p className={`text-lg font-bold tabular-nums ${row.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(row.amount)}</p>
+        <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
+          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+            <h3 className="truncate text-base font-semibold text-slate-800">{capFirst(noun)}</h3>
+            <p className={`shrink-0 text-lg font-bold tabular-nums ${row.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(row.amount)}</p>
           </div>
+          {row.can_delete && (
+            <button
+              type="button"
+              onClick={() => onDelete(row)}
+              disabled={deleting}
+              title={`Delete ${noun}`}
+              aria-label={`Delete ${noun}`}
+              className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+              data-testid="branch-cash-entry-detail-delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
@@ -96,19 +109,6 @@ const EntryDetail = ({ row, partyLabel, onClose, onDelete, deleting }) => {
             </div>
           ))}
         </dl>
-        {row.can_delete && (
-          <div className="flex shrink-0 justify-end border-t border-slate-200 px-5 py-3">
-            <Button
-              variant="outline"
-              onClick={() => onDelete(row)}
-              disabled={deleting}
-              className="h-9 border-rose-200 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-              data-testid="branch-cash-entry-detail-delete"
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {deleting ? "Deleting…" : `Delete ${noun}`}
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );
