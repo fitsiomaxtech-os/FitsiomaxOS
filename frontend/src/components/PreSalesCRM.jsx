@@ -446,9 +446,29 @@ const consultApptTone = (date) => {
 };
 
 /**
+ * A row's option that is shut: Lost's Branch Transfer and Consultation Visit's View. Drawn
+ * greyed out with its lock rather than left off, so the option reads as locked, not missing.
+ * `iconOnly` is the phone card's, where the word does not fit beside the stage.
+ */
+const LockedRowButton = ({ title, label, testid, iconOnly = false }) => (
+  <button
+    type="button"
+    disabled
+    title={title}
+    aria-label={label}
+    className={`inline-flex shrink-0 cursor-not-allowed items-center rounded-md border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-400 ${iconOnly ? "h-7 w-7 justify-center" : "h-8 max-w-full gap-1.5 px-2.5"}`}
+    data-testid={testid}
+  >
+    <Lock className={`${iconOnly ? "h-3.5 w-3.5" : "h-4 w-4"} shrink-0`} />
+    {!iconOnly && <span className="truncate">Locked</span>}
+  </button>
+);
+const VIEW_LOCKED = { title: "View is locked — Pre Sales sees this list only", label: "View locked" };
+
+/**
  * The Consultation Visit list, drawn as Branch Admin > Consultation draws it: S.No, Name,
- * Appointment, Consultant, Stage, Phone, Patient No., Consultation Fee -- same widths, header,
- * chips and fee control.
+ * Appointment, Consultant, Stage, Phone, Patient No., Consultation Fee -- same header, chips
+ * and fee control -- with a View column after them, locked on every row.
  *
  * The fee cell reports rather than acts. Collecting it, and filing the prescription it waits
  * on, are the branch's; here it says which of those the patient is waiting on -- Paid,
@@ -456,10 +476,10 @@ const consultApptTone = (date) => {
  * list is the whole of it: Pre Sales reads the rows, and nothing on them opens.
  */
 const ConsultationVisitTable = ({ leads, loading, stageHex }) => {
-  const COLS = { sno: "w-[4%]", patient: "w-[19%]", appt: "w-[14%]", expert: "w-[13%]", stage: "w-[14%]", phone: "w-[12%]", pno: "w-[12%]", action: "w-[12%]" };
+  const COLS = { sno: "w-[4%]", patient: "w-[15%]", appt: "w-[13%]", expert: "w-[11%]", stage: "w-[13%]", phone: "w-[11%]", pno: "w-[11%]", action: "w-[12%]", view: "w-[10%]" };
   const feeChip = "flex h-8 w-full items-center justify-center gap-1 rounded-md px-2 text-[11px] font-semibold shadow-sm sm:px-3 sm:text-xs";
   return (
-    <table className="w-full min-w-[980px] table-fixed text-sm" data-testid="presales-consult-visit-table">
+    <table className="w-full min-w-[1080px] table-fixed text-sm" data-testid="presales-consult-visit-table">
       <thead className="sticky top-0 z-10 bg-slate-500 text-xs uppercase text-white">
         <tr>
           <th className={`${COLS.sno} px-3 py-2 text-left align-middle`}>S.No</th>
@@ -470,6 +490,7 @@ const ConsultationVisitTable = ({ leads, loading, stageHex }) => {
           <th className={`${COLS.phone} px-4 py-2 text-left align-middle`}>Phone</th>
           <th className={`${COLS.pno} px-4 py-2 text-left align-middle`}>Patient No.</th>
           <th className={`${COLS.action} px-3 py-2 text-left align-middle`}>Consultation Fee</th>
+          <th className={`${COLS.view} px-3 py-2 text-left align-middle`}>View</th>
         </tr>
       </thead>
       <tbody>
@@ -528,11 +549,14 @@ const ConsultationVisitTable = ({ leads, loading, stageHex }) => {
                   </span>
                 )}
               </td>
+              <td className="px-3 py-3 align-middle">
+                <LockedRowButton {...VIEW_LOCKED} testid={`presales-consult-view-locked-${l.id}`} />
+              </td>
             </tr>
           );
         })}
         {leads.length === 0 && (
-          <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">{loading ? "Loading…" : "No patients at Consultation Visit."}</td></tr>
+          <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-400">{loading ? "Loading…" : "No patients at Consultation Visit."}</td></tr>
         )}
       </tbody>
     </table>
@@ -1092,7 +1116,7 @@ const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) =
  * the summary cards. Call and WhatsApp are in the lead's popup, under Contact.
  */
 const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
-  // Without onOpen the card is a row to read: not a button, and no arrow into it.
+  // Without onOpen the card is a row to read: not a button, and a lock where the arrow was.
   const opens = onOpen ? {
     role: "button",
     tabIndex: 0,
@@ -1125,7 +1149,9 @@ const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
       >
         <span className="truncate">{lead.stage || "—"}</span>
       </span>
-      {onOpen && <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />}
+      {onOpen
+        ? <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />
+        : <LockedRowButton {...VIEW_LOCKED} iconOnly testid={`${testid}-locked-${lead.id}`} />}
     </div>
   );
 };
@@ -1510,7 +1536,7 @@ export const PreSalesCRM = ({
     { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: consultVisitHex },
   ], [stages, consultVisitHex]);
   // Consultation Visit is the branch's stage, so Pre Sales only reads its list: the table has
-  // no row click and the phone rows are given no onOpen.
+  // no row click, the phone rows are given no onOpen, and each row shows its View locked.
   const onConsultVisitTab = stageFilter === CONSULTATION_VISIT_STAGE;
 
   // Marketing Head's own bucket counts — same idea as stageCounts, against
@@ -2105,17 +2131,7 @@ export const PreSalesCRM = ({
                         {l.branch_id && role === "marketing_head" ? (
                           <span className="block truncate text-xs font-semibold text-slate-700">{branchLabel(branches.find((b) => b.id === l.branch_id)) || "—"}</span>
                         ) : l.stage === "Lost" ? (
-                          <button
-                            type="button"
-                            disabled
-                            title="Lost — Branch Transfer is locked"
-                            aria-label="Branch Transfer locked"
-                            className="inline-flex h-8 max-w-full cursor-not-allowed items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-400"
-                            data-testid={`presales-branch-transfer-locked-${l.id}`}
-                          >
-                            <Lock className="h-4 w-4 shrink-0" />
-                            <span className="truncate">Locked</span>
-                          </button>
+                          <LockedRowButton title="Lost — Branch Transfer is locked" label="Branch Transfer locked" testid={`presales-branch-transfer-locked-${l.id}`} />
                         ) : l.branch_id ? (
                             <button
                               type="button"
