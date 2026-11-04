@@ -306,7 +306,8 @@ def test_a_child_sample_row_is_skipped_even_when_its_id_is_reused():
     ("consultation booked", "Consultation Booked", False),
     ("NOT A PROSPECT", "Not a prospect", False),
     ("Cancelled", "Cancelled", False),
-    ("Cancel", "Cancel", False),
+    ("Quit", "Quit", False),
+    ("Cancel", "Quit", False),  # Quit's former name, on a sheet filled in before the rename
     ("Consulted", "Leads", True),
     (None, "Leads", True),
 ])

@@ -43,6 +43,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional, Tuple
 
+from constants import CONSULTATION_QUIT_STAGE, CONSULTATION_QUIT_STAGE_FORMER
 from past_data import (
     HEADER_SEARCH_ROWS, PastData, PastDataError, _add_totals, _flag, amount, day, match_key,
     payment_mode, phone, same_person, squash, text, whole,
@@ -190,13 +191,14 @@ REQUIRED = {
 
 # The OS's stage names, in the order a client moves through them (the template's Listed
 # Data > Current Stage). "Cancelled" is the Branch pipeline's -- the appointment called off
-# -- and "Cancel" the consultation pipeline's; "Completed" is a finished course.
+# -- and "Quit" the consultation pipeline's; "Completed" is a finished course.
 STAGES = (
     "Leads", "RNR", "Follow Up", "Portfolio", "Not a prospect", "Cancelled",
     "Consultation Booked", "Consultation Visit", "Fee Collected", "Physio Assign", "Rehab",
-    "Diet Consultation", "Diet Chart", "Completed", "Cancel",
+    "Diet Consultation", "Diet Chart", "Completed", CONSULTATION_QUIT_STAGE,
 )
-STAGE_BY_KEY = {squash(s): s for s in STAGES}
+# Quit's former name too: a sheet filled in before the rename still says Cancel.
+STAGE_BY_KEY = {squash(CONSULTATION_QUIT_STAGE_FORMER): CONSULTATION_QUIT_STAGE, **{squash(s): s for s in STAGES}}
 
 # The template's Department as the lead form's own values (DEPARTMENT_OPTIONS in
 # frontend CreateLeadModal.jsx), so a moved lead's card reads its department back.

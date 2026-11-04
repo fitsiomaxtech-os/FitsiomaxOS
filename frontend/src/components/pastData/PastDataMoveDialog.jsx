@@ -16,7 +16,7 @@ const STAGE_NOTES = {
   "Physio Assign": "a course running",
   Completed: "Completed",
   "Referred Out": "Referred Out",
-  Cancel: "Dropped",
+  Quit: "Dropped",
 };
 
 /**

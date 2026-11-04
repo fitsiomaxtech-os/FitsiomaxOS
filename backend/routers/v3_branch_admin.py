@@ -24,7 +24,7 @@ import store_branch_overrides
 from constants import (
     PRESALES_LOST_STAGE, PRESALES_PRE_BOOK_STAGE,
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
-    BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, SALES_ARM_OFFLINE,
+    BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, CONSULTATION_QUIT_STAGE, CONSULTATION_QUIT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
     SALES_STAGE_ROLE_LOST, SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK, PRE_BOOK_PLANS,
 )
@@ -1964,6 +1964,10 @@ _CONSULTATION_STAGE_GATED = {
 @router.post("/leads/{lead_id}/move-consultation-stage", response_model=V3LeadOut)
 async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageInput, user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio"))):
     stage_names = await _consultation_stage_names()
+    # The shipped name stays accepted, so a browser still running a chunk from before the
+    # rename quits the consultation instead of being rejected.
+    if payload.consultation_stage == CONSULTATION_QUIT_STAGE_FORMER:
+        payload.consultation_stage = CONSULTATION_QUIT_STAGE
     if payload.consultation_stage not in stage_names:
         raise HTTPException(status_code=400, detail=f"Invalid consultation_stage. Allowed: {stage_names}")
     if payload.consultation_stage in _CONSULTATION_STAGE_GATED:
@@ -1978,9 +1982,9 @@ async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageI
 
     previous = lead.get("consultation_stage") or "—"
     # Backward moves (to an earlier stage than the lead's current one) are never
-    # allowed once a lead has moved forward — "Cancel" is a side-exit, not a
+    # allowed once a lead has moved forward — Quit is a side-exit, not a
     # reorder, so it's exempt.
-    if previous in stage_names and payload.consultation_stage != "Cancel":
+    if previous in stage_names and payload.consultation_stage != CONSULTATION_QUIT_STAGE:
         prev_idx = stage_names.index(previous)
         next_idx = stage_names.index(payload.consultation_stage)
         if next_idx < prev_idx:
@@ -1993,11 +1997,11 @@ async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageI
         "consultation_stage": payload.consultation_stage,
         "updated_at": now_iso(),
     }})
-    # Cancel is also the Branch Leads card's Cancel pill, which reaches it straight off a
+    # Quit is also the Branch Leads card's Quit pill, which reaches it straight off a
     # booked Appointment. The slot that booking holds goes back on the calendar, the way the
     # Branch pipeline's own Cancelled stage always released it (see v3_move_branch_stage).
     freed = 0
-    if payload.consultation_stage == "Cancel":
+    if payload.consultation_stage == CONSULTATION_QUIT_STAGE:
         res = await v3_col("appointments").update_many(
             {"lead_id": lead_id, "status": "new_appointment"},
             {"$set": {"status": "cancelled", "updated_at": now_iso()}},
@@ -3069,7 +3073,7 @@ async def v3_transfer_branch(
     at_treatment = stage == TRANSFERABLE_AT_PHYSIO_ASSIGN
     # A finished or called-off record has nothing live to release, and its physio is the
     # name on work that already happened — kept, so the record still says who did it.
-    closed = stage in ("Consultation Completed", BRANCH_CANCELLED_STAGE, "Cancel")
+    closed = stage in ("Consultation Completed", BRANCH_CANCELLED_STAGE, CONSULTATION_QUIT_STAGE)
 
     # 1. Pin what this branch has already taken. Recorded even when it is zero: "nothing was
     #    collected here" is a fact the finance split needs as much as a number, and a lead

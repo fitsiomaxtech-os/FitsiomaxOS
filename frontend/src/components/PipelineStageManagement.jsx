@@ -194,12 +194,12 @@ const BRANCH_ADMIN_CONTROL = "branch_admin";
 // there is no document behind it to edit, delete or reorder.
 const MIRROR_ROW_ID = "presales-new-leads";
 
-// Branch Leads' Cancel pill is Branch Consultation's Cancel stage, lent to the lead card
-// rather than copied into this pipeline (see consultationCancelStage in BranchAdminBoard).
+// Branch Leads' Quit pill is Branch Consultation's Quit stage, lent to the lead card
+// rather than copied into this pipeline (see consultationQuitStage in BranchAdminBoard).
 // Listed on the Branch Leads tabs so the link is visible here, and drawn read-only: the
 // stage is edited, recoloured or deleted on the Branch Consultation tab, where it lives.
-const LINKED_CANCEL_ROW_ID = "consultation-cancel-link";
-const LINKED_ROW_IDS = [MIRROR_ROW_ID, LINKED_CANCEL_ROW_ID];
+const LINKED_QUIT_ROW_ID = "consultation-quit-link";
+const LINKED_ROW_IDS = [MIRROR_ROW_ID, LINKED_QUIT_ROW_ID];
 
 export const PipelineStageManagement = ({ leading = null }) => {
   const [type, setType] = useState("pre_sales");
@@ -263,22 +263,22 @@ export const PipelineStageManagement = ({ leading = null }) => {
   // the active list, the other four existing solely to put a count in a tab label — with
   // the counts gone so is the reason, so a load and every pipeline switch costs one call
   // instead of five.
-  // Branch Consultation's Cancel, for the linked row on the Branch Leads tabs.
-  const [linkedCancel, setLinkedCancel] = useState(null);
+  // Branch Consultation's Quit, for the linked row on the Branch Leads tabs.
+  const [linkedQuit, setLinkedQuit] = useState(null);
   const load = useCallback(async () => {
     setStages(await stagesList(apiType, arm));
     if (apiType === "sales") {
       const consult = await stagesList("consultation").catch(() => []);
-      const cancel = (consult || []).find((st) => st.name === "Cancel");
-      setLinkedCancel(cancel ? {
-        id: LINKED_CANCEL_ROW_ID,
-        name: cancel.name,
-        color: cancel.color,
-        lead_count: cancel.lead_count,
+      const quit = (consult || []).find((st) => st.name === "Quit");
+      setLinkedQuit(quit ? {
+        id: LINKED_QUIT_ROW_ID,
+        name: quit.name,
+        color: quit.color,
+        lead_count: quit.lead_count,
         linkedFrom: "Branch Consultation",
       } : null);
     } else {
-      setLinkedCancel(null);
+      setLinkedQuit(null);
     }
   }, [apiType, arm]);
 
@@ -291,7 +291,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
   const splitsByStrip = apiType === "sales" && arm === "offline";
 
   const { stripRows, hiddenRows } = useMemo(() => {
-    const linked = linkedCancel ? [linkedCancel] : [];
+    const linked = linkedQuit ? [linkedQuit] : [];
     if (!splitsByStrip) return { stripRows: [...stages, ...linked], hiddenRows: [] };
     // Modelled on a branch running its own leads, which is the mode that has a strip worth
     // describing. `applies_to` drops the other mode's entry stage before anything else, the
@@ -319,7 +319,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
       stripRows: [...(mirror ? [mirror] : []), ...stages.filter((st) => onStrip.has(st.id)), ...linked],
       hiddenRows: stages.filter((st) => !onStrip.has(st.id)),
     };
-  }, [stages, splitsByStrip, linkedCancel]);
+  }, [stages, splitsByStrip, linkedQuit]);
 
   // Where a row sits in the pipeline itself, which is what the Order column has always
   // meant. Read off the real list rather than off the half it is drawn in: the two halves
@@ -413,7 +413,7 @@ export const PipelineStageManagement = ({ leading = null }) => {
   // and offering either would suggest the strip's first pill is Super Admin's to rename,
   // when what it is called is fixed in _presales_mirror_stage.
   const renderRow = (s, muted = false) => {
-    const isLinked = s.id === LINKED_CANCEL_ROW_ID;
+    const isLinked = s.id === LINKED_QUIT_ROW_ID;
     const isMirror = s.id === MIRROR_ROW_ID || isLinked;
     return (
       <tr

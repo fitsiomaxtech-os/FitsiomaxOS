@@ -9,6 +9,7 @@ from constants import (
     PRESALES_LOST_STAGE, PRESALES_NOT_A_PROSPECT_STAGE, PRESALES_PRE_BOOK_STAGE,
     BRANCH_ADMIN_ENTRY_STAGE, BRANCH_ADMIN_RNR_STAGE,
     BRANCH_CANCELLED_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_NOT_A_PROSPECT_STAGE,
+    CONSULTATION_QUIT_STAGE, CONSULTATION_QUIT_STAGE_FORMER,
     BRANCH_PRE_BOOK_STAGE, SALES_STAGE_ROLE_PRE_BOOK, BRANCH_LOST_STAGE, SALES_STAGE_ROLE_LOST,
     SALES_STAGE_ROLES_BY_NAME,
     SALES_STAGE_ROLE_CANCELLED,
@@ -860,9 +861,9 @@ async def ensure_diet_and_completed_stages() -> None:
     """Put Diet Consultation and Completed on the Branch consultation pipeline, after Rehab.
 
     Two more stages nothing ever writes -- see matchesConsultationStage on the frontend for
-    what puts a lead under each. They sit between Rehab and Cancel because that is the order
+    what puts a lead under each. They sit between Rehab and Quit because that is the order
     a course actually ends in: the physio work finishes, the diet side runs on beside it,
-    and Cancel stays last as the thing that is not an ending but an abandonment.
+    and Quit stays last as the thing that is not an ending but an abandonment.
 
     Positioned against Rehab rather than at a fixed index, since Pipeline Stage Management
     may have moved things. Each is inserted on its own and skipped if already there, so a
@@ -1297,7 +1298,7 @@ _LEGACY_CONSULTATION_STAGE_MAP = {
     "Clinic Visit": "Consultation Visit",
     "Package Chosen": "Fee Collected",
     "Completed": "Fee Collected",
-    "Cancelled": "Cancel",
+    "Cancelled": CONSULTATION_QUIT_STAGE,
     "Consultation Fee": "Fee Collected",
     "Treatment Fee": "Physio Assign",
     "Consultation Fee Collected": "Fee Collected",
@@ -1315,6 +1316,60 @@ _LEGACY_CONSULTATION_STAGE_MAP = {
 # on the stages that survive. This is one stage being renamed in place, so it renames one
 # stage in place.
 _RENAMED_CONSULTATION_ENTRY = ("Follow Up", "Consultation Booked")
+
+_RENAME_CONSULTATION_CANCEL_MIGRATION = "rename_consultation_cancel_stage"
+
+
+async def rename_consultation_cancel_stage() -> None:
+    """Rename the consultation pipeline's "Cancel" stage to "Quit".
+
+    One row renamed, for the reason _RENAMED_CONSULTATION_ENTRY is, and not a line in
+    _LEGACY_CONSULTATION_STAGE_MAP, whose keys re-seed the whole list. The leads move first,
+    so none is left on a name the stage has stopped being called. Has to run before
+    migrate_consultation_stages, or its orphan sweep takes them for leads on a dead stage.
+    An OS Data client's Current Stage is the same name on a
+    record Move to live reads later, so it moves as well, or the client would land at Leads;
+    what the sheet said stays in current_stage_as_written.
+
+    The Branch pipeline's "Cancelled" is another stage and stays as it is.
+
+    A one-shot, by its marker in `migrations`, as rename_branch_appointment_stage is.
+    """
+    if await v3_col("migrations").find_one({"name": _RENAME_CONSULTATION_CANCEL_MIGRATION}):
+        return
+    leads = await v3_col("leads").update_many(
+        {"consultation_stage": CONSULTATION_QUIT_STAGE_FORMER},
+        {"$set": {"consultation_stage": CONSULTATION_QUIT_STAGE}},
+    )
+    clients = await v3_col("past_clients").update_many(
+        {"current_stage": CONSULTATION_QUIT_STAGE_FORMER},
+        {"$set": {"current_stage": CONSULTATION_QUIT_STAGE, "latest_status": CONSULTATION_QUIT_STAGE}},
+    )
+    old_stage = await v3_col("pipeline_stages").find_one(
+        {"type": "consultation", "name": CONSULTATION_QUIT_STAGE_FORMER}, {"_id": 0, "id": 1, "order": 1}
+    )
+    if old_stage:
+        already = await v3_col("pipeline_stages").find_one(
+            {"type": "consultation", "name": CONSULTATION_QUIT_STAGE}, {"_id": 0, "id": 1}
+        )
+        if already:
+            # A Quit added by hand before this ran. Two pills would claim the same leads, so
+            # the old row goes and the gap it leaves is closed.
+            await v3_col("pipeline_stages").delete_one({"id": old_stage["id"]})
+            await v3_col("pipeline_stages").update_many(
+                {"type": "consultation", "order": {"$gt": old_stage["order"]}},
+                {"$inc": {"order": -1}},
+            )
+        else:
+            await v3_col("pipeline_stages").update_one(
+                {"id": old_stage["id"]}, {"$set": {"name": CONSULTATION_QUIT_STAGE}}
+            )
+    await v3_col("migrations").insert_one({
+        "name": _RENAME_CONSULTATION_CANCEL_MIGRATION,
+        "leads": leads.modified_count,
+        "past_clients": clients.modified_count,
+        "ran_at": now_iso(),
+    })
 
 
 async def migrate_consultation_stages() -> None:
@@ -1341,7 +1396,7 @@ async def migrate_consultation_stages() -> None:
                 "color": CONSULTATION_COLORS[idx % len(CONSULTATION_COLORS)],
                 "type": "consultation",
                 "order": idx,
-                "is_final": name in ("Physio Assign", "Consultation Completed", "Cancel"),
+                "is_final": name in ("Physio Assign", "Consultation Completed", CONSULTATION_QUIT_STAGE),
                 "created_at": now_iso(),
             })
         if docs:

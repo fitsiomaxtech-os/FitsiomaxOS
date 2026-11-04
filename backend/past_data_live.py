@@ -45,7 +45,7 @@ from typing import Dict, List, Optional, Tuple
 import lead_purge
 import past_os
 from constants import (
-    SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
+    CONSULTATION_QUIT_STAGE, SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
     SALES_STAGE_ROLE_FOLLOW_UP, SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PORTFOLIO,
     SALES_STAGE_ROLE_RNR, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
 )
@@ -140,11 +140,11 @@ FEE_COLLECTED = "Fee Collected"
 IN_TREATMENT = "Physio Assign"
 COMPLETED = "Completed"
 REFERRED_OUT = "Referred Out"
-CANCELLED = "Cancel"
+QUIT = CONSULTATION_QUIT_STAGE
 # The pill each one is read under on the board, in the order a patient moves through them.
 PILLS = {LEADS: LEADS, FOLLOW_UP: FOLLOW_UP, FEE_COLLECTED: FEE_COLLECTED, IN_TREATMENT: IN_TREATMENT,
-         COMPLETED: COMPLETED, REFERRED_OUT: COMPLETED, CANCELLED: CANCELLED}
-STAGE_ORDER = (LEADS, FOLLOW_UP, FEE_COLLECTED, IN_TREATMENT, COMPLETED, REFERRED_OUT, CANCELLED)
+         COMPLETED: COMPLETED, REFERRED_OUT: COMPLETED, QUIT: QUIT}
+STAGE_ORDER = (LEADS, FOLLOW_UP, FEE_COLLECTED, IN_TREATMENT, COMPLETED, REFERRED_OUT, QUIT)
 
 OS_PREFIX = "os:"
 OS_STAGE_ORDER = tuple(OS_PREFIX + s for s in past_os.STAGES)
@@ -178,7 +178,7 @@ def stage_for(client: dict, latest: Optional[dict]) -> str:
         return OS_PREFIX + client["current_stage"]
     status = " ".join((client.get("latest_status") or "").lower().split())
     if status == "dropped":
-        return CANCELLED
+        return QUIT
     if status == "completed":
         return COMPLETED
     if status == "referred out":
@@ -253,9 +253,9 @@ def placement(stage: str, names: dict) -> dict:
         return at_entry
     if stage == FOLLOW_UP:
         return {**at_entry, "branch_stage": names["follow_up"]}
-    if stage == CANCELLED:
+    if stage == QUIT:
         return {"branch_stage": names["cancelled"], "physio_stage": None,
-                "consultation_stage": CANCELLED if CANCELLED in consultation else None}
+                "consultation_stage": QUIT if QUIT in consultation else None}
     if stage == REFERRED_OUT:
         return {"branch_stage": names["appointment"], "consultation_stage": "Consultation Completed", "physio_stage": None}
     written = FEE_COLLECTED if stage == FEE_COLLECTED else IN_TREATMENT
@@ -270,7 +270,7 @@ def _os_placement(name: str, names: dict) -> dict:
 
     Leads is the branch's opening stage. RNR, Follow Up, Portfolio, Not a prospect and
     Cancelled are Branch stages, found by role on this branch's own board. Every other name is
-    a consultation stage -- Consultation Booked through Diet Chart, and Cancel -- with the
+    a consultation stage -- Consultation Booked through Diet Chart, and Quit -- with the
     booked appointment behind it, as a booking leaves a lead. Completed is a closed course,
     as the register's is. A stage this branch has no pill for leaves the client at Leads.
     """
@@ -517,7 +517,7 @@ def care_for(client: dict, courses: List[dict], payments: List[dict], *, staff: 
         hm = hm or "00:00"
         fields.update(appointment_date=day, appointment_time=hm, appointment_datetime=f"{day}T{hm}:00")
         if consultant:
-            called_off = stage == CANCELLED
+            called_off = stage == QUIT
             out["appointments"].append({
                 "id": str(uuid.uuid4()),
                 "branch_id": lead.get("branch_id"),

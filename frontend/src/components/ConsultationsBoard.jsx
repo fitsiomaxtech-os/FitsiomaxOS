@@ -1371,7 +1371,7 @@ const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, 
  * Button label that shortens on a phone.
  *
  * The Fee Collected panel can show four actions at once — Assign Physio, Collect Diet Fee,
- * Diet Appointment, Cancel — and their full labels need roughly 280px of text, more than a
+ * Diet Appointment, Quit — and their full labels need roughly 280px of text, more than a
  * phone has once the panel's padding is off. They have to sit on one row, so the row cannot
  * wrap and must not scroll; the labels are what gives way instead.
  */
@@ -1438,7 +1438,7 @@ const COLS_WITH_ACTION = {
 // The stages whose popup is drawn in the Fee Collected style: a one-row header with the
 // Appointment Card as an eye icon in it, and the flat .fee-flat buttons (index.css). For a
 // Branch Admin they also open in the narrow 565px card.
-const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign", "Cancel"];
+const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign", "Quit"];
 // Those stages, and the popup opened from these pills, draw their buttons the Fee Collected
 // way: no fill and no shadow, the words in colour, a 1px gray border (.fee-soft, index.css).
 const FEE_SOFT_PILLS = ["Rehab", "Diet Consultation", "Diet Chart"];
@@ -1739,7 +1739,7 @@ const feeDiscount = (l, fee = "consultation") => {
 // already passed the fee desk — the stages an unpaid rehab or diet fee gets stranded on.
 const PAST_FEE_DESK = ["Physio Assign", "Consultation Completed"];
 
-// The stages before the visit -- the same three the Cancel button is offered on. "Follow
+// The stages before the visit -- the same three the Quit button is offered on. "Follow
 // Up" is Consultation Booked's former name. A patient on one of these has nothing dated
 // but their appointment, so a date filter reads them by that alone.
 const AWAITING_VISIT = ["New Appointment", "Consultation Booked", "Follow Up"];
@@ -2771,11 +2771,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Branch Admin opening someone at Consultation Visit, Fee Collected or Physio Assign gets a
   // 570 × 610 card: the work there is the payments and the physio, and a 1024px sheet around
   // them was mostly white. Physio Assign's two halves stack in it (see PhysioDetailBody).
-  // Cancel opens in it too, drawn the Fee Collected way (FEE_FLAT_STAGES).
+  // Quit opens in it too, drawn the Fee Collected way (FEE_FLAT_STAGES).
   // Held rather than read off the stage live, so a fee taken or a physio assigned with the
   // popup still up does not resize the card under the hand that just pressed the button.
   // At Consultation Booked the card is narrower still, 514 wide: all it holds is the booked
-  // slot and Reschedule / Cancel, and the 1024px sheet around two buttons was mostly white.
+  // slot and Reschedule / Quit, and the 1024px sheet around two buttons was mostly white.
   const [detailFrame, setDetailFrame] = useState({ id: null, compact: false, booked: false });
   if (detailFrame.id !== (selectedLead?.id ?? null)) {
     setDetailFrame({
@@ -3582,9 +3582,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // read Completed, which is the same contradiction one pill further along. Completed is
     // where a finished patient is, and it is the only place they are.
     //
-    // Cancel keeps whatever it holds. Abandoning a course is not finishing one, and the
+    // Quit keeps whatever it holds. Abandoning a course is not finishing one, and the
     // branch pipeline reads it the same way.
-    if (!isConsultant && lead[stageField] !== "Cancel" && isCourseComplete(lead)) return false;
+    if (!isConsultant && lead[stageField] !== "Quit" && isCourseComplete(lead)) return false;
     // Diet Consultation is a stage nothing writes: the backend sets consultation_stage to
     // Consultation Booked, Consultation Visit, Fee Collected, Physio Assign and Treatment Fee, and
     // never to this one — so the pill could only ever read 0 however many diet patients the
@@ -3618,7 +3618,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // leads would otherwise arrive on these pills the moment they read the referral instead
     // of the fee. Money already taken still counts, cancelled or not: a fee on no list at
     // all is worse than a row that has to be explained.
-    const referralLive = lead[stageField] !== "Cancel";
+    const referralLive = lead[stageField] !== "Quit";
     if (!isConsultant && stageName === "Diet Consultation") {
       return (referralLive && (!!lead.diet_recommended || !!lead.diet_consultation))
         || lead.diet_fee_paid != null || !!lead.diet_coach_id;
@@ -3669,7 +3669,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
    * the pill it was listed under cannot say different things about one patient.
    */
   const rowStageName = useCallback((lead) => (
-    !isConsultant && lead[stageField] !== "Cancel" && isCourseComplete(lead)
+    !isConsultant && lead[stageField] !== "Quit" && isCourseComplete(lead)
       ? "Completed"
       : lead[stageField]
   ), [isConsultant, stageField]);
@@ -3745,10 +3745,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // costs the seven reporting ones a point or two each to say nothing. The fee is
   // collected from Consultation Visit onward, where it is real.
   //
-  // Off on Cancel for the same reason. Cancel is only offered before the visit, so a
+  // Off on Quit for the same reason. Quit is only offered before the visit, so a
   // patient on that list never had the consultation the fee pays for.
   const showStageFeeAction = !showDiscountColumn && !isConsultant
-    && stageFilter !== "Consultation Booked" && stageFilter !== "Cancel";
+    && stageFilter !== "Consultation Booked" && stageFilter !== "Quit";
   // Which fee that column reports and collects: the open desk's own where the stage has
   // one of its own (see STAGE_ROW_FEE), and the Consultation Fee everywhere else, which
   // is the fee every one of those stages is actually waiting on.
@@ -3913,7 +3913,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const isFeeStage = stage === "Fee Collected";
     const withContact = consultantBranchColumn && !branchColumn && !rowArrow && !isFeeStage
       && stage !== "Consultation Booked" && stage !== "Consultation Visit";
-    const withStageFee = !isFeeStage && !isConsultant && stage !== "Consultation Booked" && stage !== "Cancel";
+    const withStageFee = !isFeeStage && !isConsultant && stage !== "Consultation Booked" && stage !== "Quit";
     const stageFee = STAGE_ROW_FEE[stage] || "consultation";
     const stageFeeSpec = ROW_FEES[stageFee];
     let list;
@@ -3969,7 +3969,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
           get: (l) => {
             const fee = feeStateOf(l, stageFee);
             // Same reading as the row's button: a cancelled patient owes nothing more.
-            return feeText(l[stageField] === "Cancel" && fee.kind !== "paid" ? { kind: "none" } : fee);
+            return feeText(l[stageField] === "Quit" && fee.kind !== "paid" ? { kind: "none" } : fee);
           },
         },
       ] : []),
@@ -7842,9 +7842,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {showStageFeeAction && (() => {
                       const fee = feeStateOf(l, stageRowFee);
                       // A cancelled patient met on another list owes nothing either -- the
-                      // same reason the column is off on the Cancel stage above. Money
+                      // same reason the column is off on the Quit stage above. Money
                       // already taken still reads as Paid.
-                      const c = l[stageField] === "Cancel" && fee.kind !== "paid"
+                      const c = l[stageField] === "Quit" && fee.kind !== "paid"
                         ? { kind: "none", hint: "Consultation cancelled" }
                         : fee;
                       // The prescription the CONSULTATION fee waits on, still missing. The
@@ -9433,15 +9433,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {!isConsultant && (() => {
                 const stage = selectedLead.consultation_stage;
                 const decision = selectedLead.consultation_decision;
-                // Cancel belongs before the consultation, not after it. A patient who has
+                // Quit belongs before the consultation, not after it. A patient who has
                 // not come in yet can call the appointment off, and that is what cancelling
                 // one means. Once they have been seen the visit is a fact: the paperwork is
-                // being filed against it and the fee taken for it, and a Cancel sitting in
+                // being filed against it and the fee taken for it, and a Quit sitting in
                 // that panel offers to call off something that already happened -- next to
                 // the money it was collected with.
                 //
                 // So the stages before the visit keep it and the stages from the visit on do
-                // not. CancelButton is null there, which is what the {CancelButton} slots in
+                // not. QuitButton is null there, which is what the {QuitButton} slots in
                 // those panels already render.
                 // "Follow Up" is this stage's former name — see the panel below for why both
                 // are still matched.
@@ -9451,15 +9451,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // matching rejection in move-consultation-stage).
                 const activeFollowUp = (selectedLead.consultation_follow_ups || []).slice().reverse().find((f) => f.status !== "rescheduled");
 
-                const CancelButton = cancellable ? (
+                const QuitButton = cancellable ? (
                   <Button
                     size="sm"
                     variant="outline"
                     className={`border-rose-200 text-rose-600 hover:bg-rose-50 ${ACT_BTN}`}
-                    onClick={() => { if (window.confirm("Cancel this consultation?")) moveStage(selectedLead, "Cancel"); }}
+                    onClick={() => { if (window.confirm("Quit this consultation?")) moveStage(selectedLead, "Quit"); }}
                     data-testid="cons-cancel-btn"
                   >
-                    <Ban className="mr-1 h-3.5 w-3.5" /> Cancel
+                    <Ban className="mr-1 h-3.5 w-3.5" /> Quit
                   </Button>
                 ) : null;
 
@@ -11044,14 +11044,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               {PhysioDetailButton}
                               {DietDetailButton}
                               <OwnTab label="Rehab Details" short="Rehab" icon={Activity} active="border-cyan-600 bg-cyan-600 text-white shadow-sm hover:bg-cyan-700 hover:text-white" due={rehabDue} dueTitle="Rehab fee still to collect" />
-                              {CancelButton}
+                              {QuitButton}
                             </>
                           ) : (
                             <>
                               {PhysioDetailButton}
                               <OwnTab label="Diet Details" short="Diet" icon={Salad} active="border-orange-600 bg-orange-600 text-white shadow-sm hover:bg-orange-700 hover:text-white" due={dietDue} dueTitle="Diet fee still to collect" />
                               {RehabDetailButton}
-                              {CancelButton}
+                              {QuitButton}
                             </>
                           )
                         }
@@ -11079,7 +11079,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           >
                             Schedule Consultation & Move
                           </Button>
-                          {CancelButton}
+                          {QuitButton}
                         </div>
                       </div>
                     );
@@ -11135,7 +11135,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           >
                             Reschedule
                           </Button>
-                          {CancelButton}
+                          {QuitButton}
                         </div>
                       </div>
                     );
@@ -11198,7 +11198,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             />
                             {DietDetailButton}
                             {RehabDetailButton}
-                            {CancelButton}
+                            {QuitButton}
                           </>
                         }
                       >
@@ -11237,7 +11237,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               </Button>
                               {DietDetailButton}
                               {RehabDetailButton}
-                              {CancelButton}
+                              {QuitButton}
                             </div>
                             {detailBody && <div className="mt-3 border-t border-emerald-100 pt-3">{detailBody}</div>}
                             </div>
@@ -11286,7 +11286,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 as well put the same view two doors apart on one screen,
                                 above a panel whose job right now is the fee that is due. */}
                             {RehabDetailButton}
-                            {CancelButton}
+                            {QuitButton}
                           </>
                         }
                       >
@@ -11436,7 +11436,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   // A row like Consultation Record's, in rose. The one-row header has no room
                   // for the booking, so the slot and the expert it was with sit under the
                   // heading.
-                  if (stage === "Cancel") {
+                  if (stage === "Quit") {
                     const bookedSlot = selectedLead.appointment_date
                       ? `${apptDayLabel(selectedLead.appointment_date)}${selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}`
                       : null;
@@ -11448,7 +11448,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             <Ban className="h-4 w-4" />
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate text-xs font-semibold uppercase tracking-wider text-rose-700">Consultation Cancelled</p>
+                            <p className="truncate text-xs font-semibold uppercase tracking-wider text-rose-700">Consultation Quit</p>
                             {bookedLine && <p className="truncate text-[11px] text-slate-500" data-testid="cons-cancelled-booking">{bookedLine}</p>}
                           </div>
                         </div>

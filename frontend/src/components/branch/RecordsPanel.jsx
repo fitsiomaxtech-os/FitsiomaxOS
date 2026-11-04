@@ -680,7 +680,7 @@ const FUNNEL = [
     key: "appointment",
     label: "Appointment",
     proof: (l) => !!l.appointment_date || (l.consultation_follow_ups || []).length > 0
-      || !!l.head_consultation_stage || (!!l.consultation_stage && l.consultation_stage !== "Cancel"),
+      || !!l.head_consultation_stage || (!!l.consultation_stage && l.consultation_stage !== "Quit"),
   },
   {
     key: "consultation_visit",
@@ -699,13 +699,13 @@ const reachedAtLeast = (key) => {
   return (l) => furthestStep(l) >= i;
 };
 
-const isCancelled = (l) => l.branch_stage === "Cancelled" || l.consultation_stage === "Cancel";
+const isCancelled = (l) => l.branch_stage === "Cancelled" || l.consultation_stage === "Quit";
 
 /**
  * The tab's six cards, one row. RNR and Follow Up are detours a lead comes back from, so
  * they count anyone who was ever there; Appointment and Consultation Visit count the leads
  * that reached them (see FUNNEL); Lost is every way a lead stops short -- Not a Prospect,
- * Cancel at the branch or at the consultation, and Pre-Sales' own Lost -- the reading the
+ * Cancelled at the branch or Quit at the consultation, and Pre-Sales' own Lost -- the reading the
  * Marketing Head's Lost card takes in PreSalesCRM.
  */
 const LEAD_CARDS = [

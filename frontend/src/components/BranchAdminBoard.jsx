@@ -155,9 +155,9 @@ const STAGE_ROLE_PRE_BOOK = "pre_book";
 // stage is locked from then on -- both by role (see the lead card's stageLocked).
 const STAGE_ROLE_LOST = "lost";
 
-// Branch Consultation's cancel stage. The Branch Leads card offers it as its Cancel pill,
-// moving consultation_stage rather than branch_stage -- see consultationCancelStage.
-const CONSULTATION_CANCEL_STAGE = "Cancel";
+// Branch Consultation's Quit stage. The Branch Leads card offers it as its Quit pill,
+// moving consultation_stage rather than branch_stage -- see consultationQuitStage.
+const CONSULTATION_QUIT_STAGE = "Quit";
 
 // What each role was called when it shipped. Only ever a fallback: a stage row that predates
 // the stamping pass carries no role, and until the next backend restart stamps it, the name
@@ -905,9 +905,9 @@ const ARM_DEPARTMENT = {
 export const matchesBranchStage = (lead, stage, isConsultationOnlyStage = () => false, consultationOpeningStage = null) => {
   const name = stage?.name;
   const here = lead.branch_stage;
-  // Cancel is an abandonment rather than an ending, so it keeps whatever it holds and is
+  // Quitting is an abandonment rather than an ending, so it keeps whatever it holds and is
   // never read as finished. Both spellings: this pipeline stores "Cancelled" and the
-  // consultation one is named "Cancel", and the two pill sets are shown in one row.
+  // consultation one is named "Quit", and the two pill sets are shown in one row.
   //
   // Writing a lead off as never having been a prospect is the same kind of stop, and needs
   // the same exemption for the same reason: the branch usually reaches that conclusion
@@ -922,7 +922,7 @@ export const matchesBranchStage = (lead, stage, isConsultationOnlyStage = () => 
   // consultation or course is still on the record -- handedOver and finished below would
   // drop them out of the pill the desk just put them on. Lost stops a lead harder than any of
   // them, for the reason Not a prospect is here.
-  const abandoned = here === "Cancelled" || here === "Cancel" || here === "Not a prospect" || here === "Pre Book" || here === "Lost";
+  const abandoned = here === "Cancelled" || here === CONSULTATION_QUIT_STAGE || here === "Not a prospect" || here === "Pre Book" || here === "Lost";
   const finished = !abandoned && isCourseComplete(lead);
   // Only the Consultation-ONLY stages hand a lead over — a name both pipelines share gets a
   // single pill backed by the sales-side field, so releasing on one would drop a lead out of
@@ -1239,7 +1239,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       // lead, which is why both pill sets read it off the patient instead. The chip has to
       // read it the same way or a row listed under Completed sits there saying Fee
       // Collected. Cancelled leads are already answered by the final-stage line above.
-      if (lead.consultation_stage !== "Cancel" && isCourseComplete(lead)) return "Completed";
+      if (lead.consultation_stage !== CONSULTATION_QUIT_STAGE && isCourseComplete(lead)) return "Completed";
       return lead.consultation_stage || lead.branch_stage;
     },
     [showingMirror, atBranchOpening, mirrorStage, finalBranchStages],
@@ -1321,13 +1321,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     [consultationStages],
   );
 
-  // Branch Consultation's Cancel stage, lent to the Branch Leads card as its Cancel pill.
+  // Branch Consultation's Quit stage, lent to the Branch Leads card as its Quit pill.
   // Linked rather than copied: the stage lives in the consultation pipeline only, so a
-  // lead cancelled from Branch Leads is counted under that pipeline's Cancel card and not
+  // lead quit from Branch Leads is counted under that pipeline's Quit card and not
   // under a second, Branch-side stage of the same name. By name because the backend's
-  // move endpoint treats "Cancel" as the side-exit by name too.
-  const consultationCancelStage = useMemo(
-    () => consultationStages.find((s) => s.name === CONSULTATION_CANCEL_STAGE) || null,
+  // move endpoint treats Quit as the side-exit by name too.
+  const consultationQuitStage = useMemo(
+    () => consultationStages.find((s) => s.name === CONSULTATION_QUIT_STAGE) || null,
     [consultationStages],
   );
 
@@ -3588,9 +3588,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           // So the highlighted pill on the card reads the lead the same way the bar above
           // counted it — see matchesBranchStage.
           consultationOpeningStage={consultationOpeningStage}
-          // The Consultation pipeline's Cancel stage, offered as the card's last pill. The
+          // The Consultation pipeline's Quit stage, offered as the card's last pill. The
           // stage stays in Branch Consultation; the pill only moves the lead onto it.
-          consultationCancelStage={consultationCancelStage}
+          consultationQuitStage={consultationQuitStage}
           onlineArm={armScoped}
           canTransferBranch={canTransferBranch}
           onClose={() => setSelectedLead(null)}
@@ -3809,7 +3809,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 // appointment about to be confirmed. At a branch it is nothing — the consultation is held
 // in a room, the field that would set a link is not offered on that board at all, and an
 // amber panel naming a gap nobody there can fill is noise on every booking they make.
-function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = null, onClose, onUpdate, onMoved, onOpenConsultationStage, consultationOpeningStage = null, openedFromMirror = false, onlineArm = false, canTransferBranch = false }) {
+function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null, onClose, onUpdate, onMoved, onOpenConsultationStage, consultationOpeningStage = null, openedFromMirror = false, onlineArm = false, canTransferBranch = false }) {
   // The board offers two entry stages — the mirrored Pre-Sales "Leads" pill and the branch's
   // own first stage — but a single lead only ever came in through one of them, so its
   // pipeline shows that one and drops the other. Everything from RNR onwards is shared.
@@ -5357,24 +5357,24 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                       </button>
                     );
                   })}
-                  {/* Cancel, borrowed from Branch Consultation. Not a Branch stage: it
+                  {/* Quit, borrowed from Branch Consultation. Not a Branch stage: it
                       writes consultation_stage, so the lead leaves these pills and is
-                      counted under the Consultation tab's Cancel card. Reachable from
+                      counted under the Consultation tab's Quit card. Reachable from
                       Appointment, which is where a booking gets called off. */}
-                  {consultationCancelStage && (() => {
-                    const tint = consultationCancelStage.color || "#e11d48";
-                    const isActive = lead.consultation_stage === consultationCancelStage.name;
+                  {consultationQuitStage && (() => {
+                    const tint = consultationQuitStage.color || "#e11d48";
+                    const isActive = lead.consultation_stage === consultationQuitStage.name;
                     return (
                       <button
                         type="button"
                         disabled={isActive || stageLocked}
                         onClick={() => setCancelDraft(true)}
-                        title="Moves this lead to Cancel in Branch Consultation"
+                        title={`Moves this lead to ${consultationQuitStage.name} in Branch Consultation`}
                         className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${stageLocked && !isActive ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid="branch-stage-btn-consultation-cancel"
                       >
-                        {consultationCancelStage.name}
+                        {consultationQuitStage.name}
                       </button>
                     );
                   })()}
@@ -6630,7 +6630,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   {apptSlotLabel(lead)
                     ? <>The {apptSlotLabel(lead)} slot{lead.assigned_physio_name ? ` with ${lead.assigned_physio_name}` : ""} goes back on the calendar for someone else to take. </>
                     : <>Any slot this lead is holding goes back on the calendar. </>}
-                  {lead.name} moves to {consultationCancelStage?.name || CONSULTATION_CANCEL_STAGE} in Branch Consultation and leaves the Branch Leads pills.
+                  {lead.name} moves to {consultationQuitStage?.name || CONSULTATION_QUIT_STAGE} in Branch Consultation and leaves the Branch Leads pills.
                 </span>
               </div>
               {/* Rebooking is the other door, and it is one press away on the same card.
@@ -6651,7 +6651,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                   setCancelling(true);
                   // Stays open if the move was refused, so the reason is read beside the
                   // button that caused it rather than over a card that has just closed.
-                  const target = consultationCancelStage?.name || CONSULTATION_CANCEL_STAGE;
+                  const target = consultationQuitStage?.name || CONSULTATION_QUIT_STAGE;
                   let moved = false;
                   try {
                     await moveConsultationStage(lead.id, target);

@@ -72,7 +72,7 @@ BRANCH_ADMIN_RNR_STAGE = "RNR"
 # Named here rather than written as a literal at each site because three of them have to
 # agree -- the seed that creates the pill, the stage move that frees the slot, and the
 # booking endpoint's own final_stage -- and they were already one rename apart from
-# silently doing nothing. Note it is "Cancelled", not the consultation pipeline's "Cancel":
+# silently doing nothing. Note it is "Cancelled", not the consultation pipeline's "Quit":
 # two pipelines, two stages, and the Branch Leads card shows both.
 BRANCH_CANCELLED_STAGE = "Cancelled"
 
@@ -207,6 +207,14 @@ SALES_STAGE_ROLE_FALLBACKS = {v: k for k, v in SALES_STAGE_ROLES_BY_NAME.items()
 # consultationOnlyStages in BranchAdminBoard.jsx). Every freshly booked patient therefore
 # sat on a stage that tab had no pill for: in the list, counted in All Stages, and under
 # none of the cards above it. A name of its own gives the stage a pill of its own.
+#
+# Quit is the consultation called off. Named here for the reason BRANCH_CANCELLED_STAGE is:
+# the seed, the move endpoint and Past Data all have to agree on it.
+CONSULTATION_QUIT_STAGE = "Quit"
+# What it was called until 2026-11-04 (see seed.rename_consultation_cancel_stage). Still
+# sent by a browser running an older chunk, and still written on an older OS Data sheet.
+CONSULTATION_QUIT_STAGE_FORMER = "Cancel"
+
 V3_CONSULTATION_STAGES = [
     "Consultation Booked",
     "Consultation Visit",
@@ -216,7 +224,7 @@ V3_CONSULTATION_STAGES = [
     # Consultation Only patient is closed out -- but it has no pill of its own any more:
     # the Completed stage takes those patients in beside everybody who finished a course.
     # See retire_consultation_completed_stage in seed.py.
-    "Cancel",
+    CONSULTATION_QUIT_STAGE,
 ]
 
 # Standalone Head Physio consultation pipeline — fully independent from the
