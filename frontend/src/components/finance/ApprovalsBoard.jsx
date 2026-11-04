@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { FinanceDateFilter } from "@/components/finance/FinanceDateFilter";
 import { CreamPicker } from "@/components/ui/cream-picker";
+import { LedgerCard } from "@/components/ui/ledger-card";
 import { rangeFor, toIso } from "@/lib/dateRange";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { getFinanceApprovals, getBranches, approveTransaction, unapproveTransaction, bulkApproveTransactions, deleteTransaction } from "@/lib/api";
@@ -830,9 +831,9 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           was for and how it was paid describe a collection and have nothing to say about
           an expense -- /finance/expenses does not take them -- so those two dropdowns are
           not offered against one. Every control here is 2px-cornered, like Summary's
-          cards, except the date filter's and the two dropdowns' 4px. No borders, on the
-          block's edge or on any control in it but those two dropdowns -- the same flat
-          look Summary's bars took. */}
+          cards, except the date filter's and the dropdowns' 4px. No borders, on the
+          block's edge or on any control in it but the dropdowns -- the same flat look
+          Summary's bars took. */}
       <div className="overflow-hidden rounded-[2px] bg-white" data-testid="finance-approvals-filters">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5" data-testid="finance-approvals-toolbar">
           <div className="flex shrink-0 items-center gap-0.5 rounded-[2px] bg-slate-50 p-[3px]" data-testid="finance-approvals-ledger">
@@ -869,15 +870,17 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
                 in Super Admin's Finance screen — asking again underneath it would be a
                 second answer to a question that has one. */}
             {!controlled && (
-              <select
+              <CreamPicker
                 value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="h-[30px] rounded-[2px] border-0 bg-slate-50 px-2 text-xs"
-                data-testid="finance-approvals-branch"
-              >
-                <option value="">All Branches</option>
-                {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-              </select>
+                onChange={setBranchId}
+                options={[{ value: "", label: "All Branches" }, ...branches.map((b) => ({ value: b.id, label: b.branch_name }))]}
+                label={branches.find((b) => b.id === branchId)?.branch_name || "All Branches"}
+                set={!!branchId}
+                compact
+                title="Branch"
+                className="w-44 justify-between"
+                testid="finance-approvals-branch"
+              />
             )}
           </FilterGroup>
 
@@ -886,8 +889,8 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
               band of screen on two questions a dropdown answers in one box each. Dressed as
               Filter by Date (CreamPicker) rather than the OS's blue <select> list: a cream
               list, amber on the picked row, and the trigger amber once it narrows the list.
-              The only two controls on the line that keep a border, so they read as boxes to
-              open rather than as more of the buttons around them. Both describe a
+              Like the branch dropdown, they keep a border, so they read as boxes to open
+              rather than as more of the buttons around them. Both describe a
               collection and neither is a question /finance/expenses can answer, so they go
               when the ledger switches to expenses rather than sitting there greyed. */}
           {ledger === "income" && (
@@ -964,27 +967,23 @@ export const ApprovalsBoard = ({ pending = { income: 0, expenses: 0 }, onChanged
           naming each side and totalling it — so the pair does the picking now. */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { key: "pending", label: "Pending Approval", total: s.pending_total, count: s.pending_count, ring: "#d97706", border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-700", sub: "text-amber-600" },
-          { key: "approved", label: "Approved", total: s.approved_total, count: s.approved_count, ring: "#059669", border: "border-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", sub: "text-emerald-600" },
+          { key: "pending", label: "Pending Approval", total: s.pending_total, count: s.pending_count, color: "#d97706" },
+          { key: "approved", label: "Approved", total: s.approved_total, count: s.approved_count, color: "#059669" },
         ].map((c) => {
-          const on = view === c.key;
-          // Summary's ledger cards: tinted, 2px corners, the picked one outlined in its own
-          // colour and the other stepping back to 70%. The same soft two-layer shadow as the
-          // ledger cards on Branch Admin's Zumba tab, deepening on hover.
+          const count = c.count || 0;
+          // Accountant Manage Summary's ledger cards (ui/ledger-card), as the expense
+          // ledger's two wear them: the picked one filled solid in its own colour.
           return (
-            <button
+            <LedgerCard
               key={c.key}
-              type="button"
+              label={c.label}
+              value={fmt(c.total)}
+              sub={`${count} ${count === 1 ? "payment" : "payments"}`}
+              color={c.color}
+              active={view === c.key}
               onClick={() => setView(c.key)}
-              aria-pressed={on}
-              className={`rounded-[2px] border ${c.border} ${c.bg} p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_14px_rgba(15,23,42,0.07)] transition duration-200 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.10)] ${on ? "" : "opacity-70 hover:opacity-100"}`}
-              style={on ? { borderColor: c.ring } : undefined}
-              data-testid={`finance-approvals-${c.key}-card`}
-            >
-              <p className={`text-[11px] font-bold uppercase tracking-wider ${c.text}`}>{c.label}</p>
-              <p className={`mt-1 text-2xl font-bold tabular-nums ${c.text}`}>{fmt(c.total)}</p>
-              <p className={`text-[11px] ${c.sub}`}>{c.count || 0} payments</p>
-            </button>
+              testid={`finance-approvals-${c.key}-card`}
+            />
           );
         })}
       </div>
