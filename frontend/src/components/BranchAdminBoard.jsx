@@ -3847,18 +3847,17 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // The pills are where the lead can go next, not where it has been. The entry stage
   // ("New Leads", mirrored or the branch's own) is never one -- nothing moves a lead back
   // to intake -- and the stage the lead sits on is the header chip, not a move. Beyond
-  // that, RNR -> Follow Up -> Appointment only runs forward, and Not a prospect / Pre Book
-  // may go back to Follow Up or Appointment but never to RNR.
+  // that every stage may go back to RNR, and Appointment to Follow Up as well, up to the
+  // visit (see hiddenRoles). Pre Book does not go to Not a prospect.
   const HIDDEN_ROLES_BY_STAGE_ROLE = {
     [STAGE_ROLE_RNR]: [STAGE_ROLE_RNR],
-    [STAGE_ROLE_FOLLOW_UP]: [STAGE_ROLE_RNR, STAGE_ROLE_FOLLOW_UP],
-    [STAGE_ROLE_APPOINTMENT]: [STAGE_ROLE_RNR, STAGE_ROLE_FOLLOW_UP, STAGE_ROLE_APPOINTMENT],
-    [STAGE_ROLE_NOT_A_PROSPECT]: [STAGE_ROLE_RNR, STAGE_ROLE_NOT_A_PROSPECT],
-    [STAGE_ROLE_PRE_BOOK]: [STAGE_ROLE_RNR, STAGE_ROLE_NOT_A_PROSPECT, STAGE_ROLE_PRE_BOOK],
+    [STAGE_ROLE_FOLLOW_UP]: [STAGE_ROLE_FOLLOW_UP],
+    [STAGE_ROLE_APPOINTMENT]: [STAGE_ROLE_APPOINTMENT],
+    [STAGE_ROLE_NOT_A_PROSPECT]: [STAGE_ROLE_NOT_A_PROSPECT],
+    [STAGE_ROLE_PRE_BOOK]: [STAGE_ROLE_NOT_A_PROSPECT, STAGE_ROLE_PRE_BOOK],
   };
   const currentStageRole = Object.keys(HIDDEN_ROLES_BY_STAGE_ROLE)
     .find((role) => lead.branch_stage === stageNameForRole(stages, role));
-  const hiddenRoles = HIDDEN_ROLES_BY_STAGE_ROLE[currentStageRole] || [];
   // Has this patient been seen? The two ways out sit either side of it: Lost before the visit
   // and Quit from it on, and the server refuses each on the wrong side. The opening stage is
   // where a booking waits, so anywhere past it the Consultant has saved the visit. A finished
@@ -3869,6 +3868,20 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     lead.consultation_stage === consultationQuitStage.name
     || (lead.consultation_stage !== "Consultation Completed" && !isCourseComplete(lead))
   );
+  // Going back ends at the visit. A seen patient's consultation stage keeps them off these
+  // stages' lists (see handedOver in matchesBranchStage), so a move onto RNR, or off
+  // Appointment onto Follow Up, would leave them on no list at all.
+  const hiddenRoles = [
+    ...(HIDDEN_ROLES_BY_STAGE_ROLE[currentStageRole] || []),
+    ...(visitDone ? [STAGE_ROLE_RNR] : []),
+    ...(visitDone && currentStageRole === STAGE_ROLE_APPOINTMENT ? [STAGE_ROLE_FOLLOW_UP] : []),
+  ];
+  // Standing on a slot they have not come to yet. RNR and Follow Up give it up, which the
+  // server does (_give_booking_back), so both ask first, in the words Lost asks them.
+  const holdsBooking = !!lead.consultation_stage && !visitDone;
+  const confirmSendBack = (stage) => !holdsBooking || window.confirm(
+    `Move ${lead.name || "this lead"} back to ${stage}?\n\nTheir appointment is cancelled and the slot is freed.`,
+  );
   const pipelineStages = entryStages.filter((s) => (
     !stageHasRole(s, STAGE_ROLE_CANCELLED)
     && s.name !== mirrorStageName
@@ -3876,8 +3889,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     && !hiddenRoles.some((role) => stageHasRole(s, role))
     && !(visitDone && stageHasRole(s, STAGE_ROLE_LOST) && lead.branch_stage !== s.name)
   ));
-  // A lead whose appointment is booked and not yet consulted. From here the branch has
-  // four things it can do, and none of them is moving the patient forward: forward is the
+  // A lead whose appointment is booked and not yet consulted. The branch can do a few
+  // things from here, and none of them is moving the patient forward: forward is the
   // consultation happening, which the Consultant drives from their own board.
   //
   // So the rest of the pipeline is drawn but not pressable. Hidden would read as a
@@ -3893,15 +3906,17 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // shut, and nothing here that would move the lead (a follow-up, a transfer) is offered. The
   // server refuses the same moves on its own (stage_utils.refuse_if_branch_lost).
   const stageLocked = lead.branch_stage === lostStageName;
-  // The real stages reachable from Appointment. RNR and Follow Up are no longer among them:
-  // the pipeline above hides both once a slot is booked. Reschedule is not in here either,
-  // because it is not a stage at all -- see the pill itself.
+  // The real stages reachable from Appointment. Reschedule is not in here, because it is
+  // not a stage at all -- see the pill itself.
   //
   // Not a prospect is in the list for the reason it sits where it does in the pipeline:
   // the branch usually learns there was never a client here at the point the appointment
   // is made or missed, so Appointment is the stage it has to be reachable from. Left out,
   // it would be drawn on the card and dead on every lead that could actually use it.
   const APPOINTMENT_EXITS = [
+    // The client who has to be rung again. The move hands the slot back.
+    stageNameForRole(stages, STAGE_ROLE_RNR),
+    stageNameForRole(stages, STAGE_ROLE_FOLLOW_UP),
     notProspectStageName,
     // A booked client who would rather come next month is moved here, not cancelled.
     preBookStageName,
@@ -4617,6 +4632,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
 
   const submitFollowUp = async () => {
     if (!followUpForm.date || !followUpForm.time) { toast.error("Date and time are required"); return; }
+    if (!confirmSendBack("Follow Up")) return;
     try {
       setFollowUpBusy(true);
       await scheduleBranchFollowUp(lead.id, followUpForm);
@@ -4632,6 +4648,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
 
   const submitReschedule = async () => {
     if (!rescheduleDraft?.date || !rescheduleDraft?.time) { toast.error("Date and time are required"); return; }
+    if (!confirmSendBack("Follow Up")) return;
     try {
       setFollowUpBusy(true);
       await rescheduleBranchFollowUp(lead.id, rescheduleDraft.followupId, {
@@ -5301,6 +5318,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                         return;
                       }
                       if (stage === "Follow Up") {
+                        if (!confirmSendBack(stage)) return;
                         setFollowUpMoveDraft({ date: tomorrowIso(), time: "10:00", remarks: "" });
                         return;
                       }
@@ -5323,6 +5341,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                         + `Once ${stage}, the stage is locked — this lead cannot be moved to any other stage afterwards.`
                         + (inAppointmentStage ? " Their appointment is cancelled and the slot is freed." : ""),
                       )) return;
+                      if (stageHasRole(s, STAGE_ROLE_RNR) && !confirmSendBack(stage)) return;
                       if (consultationOnly) {
                         if (notYetReached) {
                           toast.error("This lead needs an appointment scheduled before it can enter the Consultations pipeline");

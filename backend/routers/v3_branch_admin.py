@@ -26,7 +26,8 @@ from constants import (
     V3_BRANCH_STAGES, V3_CONSULTATION_STAGES, V3_HEAD_CONSULTATION_STAGES,
     BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, CONSULTATION_QUIT_STAGE, CONSULTATION_QUIT_STAGE_FORMER, SALES_ARM_OFFLINE,
     SALES_STAGE_ROLE_APPOINTMENT, SALES_STAGE_ROLE_CANCELLED, SALES_STAGE_ROLE_FALLBACKS,
-    SALES_STAGE_ROLE_LOST, SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK, PRE_BOOK_PLANS,
+    SALES_STAGE_ROLE_FOLLOW_UP, SALES_STAGE_ROLE_LOST, SALES_STAGE_ROLE_NOT_A_PROSPECT, SALES_STAGE_ROLE_PRE_BOOK,
+    SALES_STAGE_ROLE_RNR, PRE_BOOK_PLANS,
 )
 from stage_utils import (
     branch_stage_names_for_branch, first_branch_stage_for_branch, get_first_stage_name,
@@ -614,6 +615,36 @@ def _planned_visit_updates(
     return updates, f" · planned visit {PRE_BOOK_PLANS[plan_key].lower()} ({when})"
 
 
+async def _give_booking_back(lead: dict, user: V3UserOut) -> str:
+    """A lead sent back to RNR or Follow Up before its visit is not coming to the slot it
+    holds, so the booking goes, and the line the activity trail adds for it comes back.
+
+    The slot returns to the calendar and the lead leaves the two consultation boards, as on
+    Lost. Unlike Lost the lead stays in play, so the date and the consultant come off it as
+    well: its card would otherwise go on naming a booking there no longer is, with Change
+    still offered on it. The cancelled appointment and the trail keep the record, and booking
+    again writes all of it afresh.
+
+    A patient who has been seen keeps everything, having no booking left to undo. A lead with
+    no booking is left alone, so the time Pre Sales asked for survives a move between stages.
+    """
+    if await consultation_visit_reached(lead):
+        return ""
+    res = await v3_col("appointments").update_many(
+        {"lead_id": lead["id"], "status": "new_appointment"},
+        {"$set": {"status": "cancelled", "updated_at": now_iso()}},
+    )
+    freed = res.modified_count
+    if not (freed or lead.get("consultation_stage") or lead.get("head_consultation_stage")):
+        return ""
+    await v3_col("leads").update_one({"id": lead["id"]}, {"$set": {
+        "appointment_date": None, "appointment_time": None, "appointment_datetime": None,
+        "assigned_physio_id": None, "assigned_physio_name": None, "physio_assigned_at": None,
+    }})
+    await clear_consultation_stages(lead, user.full_name, user.role, "sent back before the visit")
+    return f" · {freed} appointment{'' if freed == 1 else 's'} cancelled, slot freed" if freed else ""
+
+
 @router.post("/leads/{lead_id}/branch-stage")
 async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev"))):
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
@@ -637,6 +668,11 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
             status_code=409,
             detail=f"This patient has had their consultation — move them to {CONSULTATION_QUIT_STAGE} instead",
         )
+    # RNR is behind a visit too: the lead's consultation stage keeps it off the Branch stages'
+    # lists, so a seen patient moved here would leave the stage they are on and be on no other.
+    rnr_stage = await _sales_stage_for_role(SALES_STAGE_ROLE_RNR, lead_arm)
+    if payload.branch_stage == rnr_stage and await consultation_visit_reached(lead):
+        raise HTTPException(status_code=409, detail=f"This patient has had their consultation — they cannot go back to {rnr_stage}")
     old_stage = lead.get("branch_stage", "Unknown")
 
     # Not a prospect parks the lead rather than ending it: the desk picks when to ring the
@@ -689,6 +725,10 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
             {"$set": {"status": "cancelled", "updated_at": now_iso()}},
         )
         freed = res.modified_count
+    # Back to the calls: the same, for a lead that is still in play (see _give_booking_back).
+    back_note = ""
+    if payload.branch_stage in (rnr_stage, await _sales_stage_for_role(SALES_STAGE_ROLE_FOLLOW_UP, lead_arm)):
+        back_note = await _give_booking_back(lead, user)
 
     activity = {
         "id": str(uuid.uuid4()),
@@ -696,7 +736,7 @@ async def v3_move_branch_stage(lead_id: str, payload: V3BranchStageInput, user: 
         "action": "branch_stage_change",
         "details": f"Branch stage: '{old_stage}' -> '{payload.branch_stage}'"
                    + (f" · {freed} appointment{'' if freed == 1 else 's'} cancelled, slot freed" if freed else "")
-                   + reminder_note,
+                   + back_note + reminder_note,
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": now_iso(),
@@ -2074,11 +2114,12 @@ async def v3_schedule_branch_follow_up(lead_id: str, payload: V3BranchFollowUpIn
         {"id": lead_id},
         {"$push": {"follow_ups": entry}, "$set": {"branch_stage": "Follow Up", "next_follow_up_at": f"{payload.date}T{payload.time}:00", "updated_at": now_iso()}},
     )
+    back_note = await _give_booking_back(lead, user)
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
         "action": "branch_follow_up_scheduled",
-        "details": f"Branch follow-up on {payload.date} at {payload.time} — {entry['remarks'] or 'no remarks'}",
+        "details": f"Branch follow-up on {payload.date} at {payload.time} — {entry['remarks'] or 'no remarks'}" + back_note,
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": now_iso(),
@@ -2123,6 +2164,7 @@ async def v3_reschedule_branch_follow_up(lead_id: str, followup_id: str, payload
     details = f"Branch follow-up rescheduled from {old_summary} to {payload.date} at {payload.time}"
     if reason:
         details += f" — reason: {reason}"
+    details += await _give_booking_back(lead, user)
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
