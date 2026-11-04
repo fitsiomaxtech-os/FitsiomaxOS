@@ -11940,7 +11940,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <p className={`mt-1 text-[11px] ${sessionsRaw !== "" && !sessionsOk ? "text-rose-600" : "text-slate-400"}`}>
                           {sessionsRaw !== "" && !sessionsOk
                             ? `Enter 1 to ${totalSessions} sessions`
-                            : `Of ${totalSessions} sessions${priced ? ` · ${rs(perSessionRate)} per session` : ""}`}
+                            : `Of ${totalSessions} sessions`}
                         </p>
                       </div>
                     )}
