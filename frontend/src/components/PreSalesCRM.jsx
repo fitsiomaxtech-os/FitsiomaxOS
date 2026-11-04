@@ -20,7 +20,6 @@ import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransfer
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
 import { AppointmentConfirmCard, apptHtml, apptMapUrl } from "@/components/AppointmentConfirmCard";
 import { pdfJob, usePdf } from "@/lib/pdf";
-import { PreSalesConsultationVisitView } from "@/components/PreSalesConsultationVisitView";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
@@ -454,9 +453,9 @@ const consultApptTone = (date) => {
  * The fee cell reports rather than acts. Collecting it, and filing the prescription it waits
  * on, are the branch's; here it says which of those the patient is waiting on -- Paid,
  * Collect Balance, Prescription or Collect -- in the colours the branch's button wears. The
- * row itself still opens the lead.
+ * list is the whole of it: Pre Sales reads the rows, and nothing on them opens.
  */
-const ConsultationVisitTable = ({ leads, loading, stageHex, onOpen }) => {
+const ConsultationVisitTable = ({ leads, loading, stageHex }) => {
   const COLS = { sno: "w-[4%]", patient: "w-[19%]", appt: "w-[14%]", expert: "w-[13%]", stage: "w-[14%]", phone: "w-[12%]", pno: "w-[12%]", action: "w-[12%]" };
   const feeChip = "flex h-8 w-full items-center justify-center gap-1 rounded-md px-2 text-[11px] font-semibold shadow-sm sm:px-3 sm:text-xs";
   return (
@@ -478,7 +477,7 @@ const ConsultationVisitTable = ({ leads, loading, stageHex, onOpen }) => {
           const unpaid = (l.package_payment_details?.installments || []).some((x) => !x.paid);
           const fee = unpaid ? "balance" : l.package_paid != null ? "paid" : l.rx_on_file === false ? "rx" : "due";
           return (
-            <tr key={l.id} onClick={() => onOpen(l)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" data-testid={`presales-consult-row-${l.id}`}>
+            <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`presales-consult-row-${l.id}`}>
               <td className="px-3 py-3 align-middle leading-5 text-slate-400">{i + 1}</td>
               <td className="truncate px-4 py-3 align-middle font-medium text-slate-800" title={l.name}>
                 <span className="block truncate">{l.name || "—"}<LeadMarks lead={l} className="ml-1.5" /></span>
@@ -1093,13 +1092,17 @@ const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) =
  * the summary cards. Call and WhatsApp are in the lead's popup, under Contact.
  */
 const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
+  // Without onOpen the card is a row to read: not a button, and no arrow into it.
+  const opens = onOpen ? {
+    role: "button",
+    tabIndex: 0,
+    onClick: onOpen,
+    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } },
+  } : {};
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
-      className="relative flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-md transition active:scale-[0.99]"
+      {...opens}
+      className={`relative flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-md ${onOpen ? "transition active:scale-[0.99]" : ""}`}
       data-testid={`${testid}-${lead.id}`}
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">
@@ -1122,7 +1125,7 @@ const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
       >
         <span className="truncate">{lead.stage || "—"}</span>
       </span>
-      <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />
+      {onOpen && <ChevronRight aria-hidden className="h-[1.2rem] w-[1.2rem] shrink-0 text-slate-500 opacity-[0.85]" />}
     </div>
   );
 };
@@ -1506,6 +1509,8 @@ export const PreSalesCRM = ({
     ...stages,
     { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: consultVisitHex },
   ], [stages, consultVisitHex]);
+  // Consultation Visit is the branch's stage, so Pre Sales only reads its list: the table has
+  // no row click and the phone rows are given no onOpen.
   const onConsultVisitTab = stageFilter === CONSULTATION_VISIT_STAGE;
 
   // Marketing Head's own bucket counts — same idea as stageCounts, against
@@ -1916,7 +1921,7 @@ export const PreSalesCRM = ({
           <div className="max-h-[72vh] overflow-auto">
             {/* Consultation Visit is the branch's stage, so its list is the branch's table. */}
             {onConsultVisitTab ? (
-              <ConsultationVisitTable leads={visibleLeads} loading={loading} stageHex={consultVisitHex} onOpen={setEditing} />
+              <ConsultationVisitTable leads={visibleLeads} loading={loading} stageHex={consultVisitHex} />
             ) : (
             <table className="w-full min-w-[900px] table-fixed divide-y divide-slate-200 text-sm">
               <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
@@ -2367,7 +2372,7 @@ export const PreSalesCRM = ({
                   <PhoneLeadCard
                     key={l.id}
                     lead={l}
-                    onOpen={() => setEditing(l)}
+                    onOpen={onConsultVisitTab ? null : () => setEditing(l)}
                     testid="presales-card"
                     details={rnr || fu || pb ? (
                       <>
@@ -2616,10 +2621,10 @@ export const PreSalesCRM = ({
                       badgeColor={stg ? stageInk(stg) : null}
                       idLine={allStages ? [displayPhone(l.phone) || "—"] : [l.patient_number, wa ? null : displayPhone(l.phone), sourceLabel(l.source_tab || l.source_type)]}
                       wa={wa}
-                      onOpen={() => setEditing(l)}
+                      onOpen={onConsultVisitTab ? null : () => setEditing(l)}
                       onDelete={onNewLeads && canPurgeLeads ? () => setPurgeLead(l) : null}
                       glance={allStages}
-                      arrow={!onNewLeads}
+                      arrow={!onNewLeads && !onConsultVisitTab}
                       testid="presales-card"
                       details={!allStages && (rnr || fu || pb) ? (
                         <>
@@ -2929,10 +2934,7 @@ export const PreSalesCRM = ({
         </div>
       )}
 
-      {/* On the Consultation Visit card a patient opens in the branch's own popup, to read only. */}
-      {editing && onConsultVisitTab && isConsultationVisit(editing) ? (
-        <PreSalesConsultationVisitView lead={editing} onClose={() => setEditing(null)} />
-      ) : editing && (
+      {editing && (
         <LeadDetailDialog lead={editing} stages={stages} currentUser={currentUser} pinnedBranchId={branchId} canMoveStage={canMoveStage} onClose={() => setEditing(null)} onSaved={load} onMoveStage={moveToStage} />
       )}
 
