@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, Eye, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar, IndianRupee } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, Eye, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -467,19 +467,17 @@ const VIEW_LOCKED = { title: "View is locked — Pre Sales sees this list only",
 
 /**
  * The Consultation Visit list, drawn as Branch Admin > Consultation draws it: S.No, Name,
- * Appointment, Consultant, Stage, Phone, Patient No., Consultation Fee -- same header, chips
- * and fee control -- with a View column after them, locked on every row.
+ * Appointment, Consultant, Stage, Phone, Patient No. -- same header and chips -- with a View
+ * column after them, locked on every row.
  *
- * The fee cell reports rather than acts. Collecting it, and filing the prescription it waits
- * on, are the branch's; here it says which of those the patient is waiting on -- Paid,
- * Collect Balance, Prescription or Collect -- in the colours the branch's button wears. The
- * list is the whole of it: Pre Sales reads the rows, and nothing on them opens.
+ * The Consultation Fee is left off: collecting it, and filing the prescription it waits on,
+ * are the branch's. The list is the whole of it: Pre Sales reads the rows, and nothing on
+ * them opens.
  */
 const ConsultationVisitTable = ({ leads, loading, stageHex }) => {
-  const COLS = { sno: "w-[4%]", patient: "w-[15%]", appt: "w-[13%]", expert: "w-[11%]", stage: "w-[13%]", phone: "w-[11%]", pno: "w-[11%]", action: "w-[12%]", view: "w-[10%]" };
-  const feeChip = "flex h-8 w-full items-center justify-center gap-1 rounded-md px-2 text-[11px] font-semibold shadow-sm sm:px-3 sm:text-xs";
+  const COLS = { sno: "w-[4%]", patient: "w-[17%]", appt: "w-[15%]", expert: "w-[13%]", stage: "w-[14%]", phone: "w-[13%]", pno: "w-[13%]", view: "w-[11%]" };
   return (
-    <table className="w-full min-w-[1080px] table-fixed text-sm" data-testid="presales-consult-visit-table">
+    <table className="w-full min-w-[980px] table-fixed text-sm" data-testid="presales-consult-visit-table">
       <thead className="sticky top-0 z-10 bg-slate-500 text-xs uppercase text-white">
         <tr>
           <th className={`${COLS.sno} px-3 py-2 text-left align-middle`}>S.No</th>
@@ -489,74 +487,50 @@ const ConsultationVisitTable = ({ leads, loading, stageHex }) => {
           <th className={`${COLS.stage} px-4 py-2 text-left align-middle`}>Stage</th>
           <th className={`${COLS.phone} px-4 py-2 text-left align-middle`}>Phone</th>
           <th className={`${COLS.pno} px-4 py-2 text-left align-middle`}>Patient No.</th>
-          <th className={`${COLS.action} px-3 py-2 text-left align-middle`}>Consultation Fee</th>
           <th className={`${COLS.view} px-3 py-2 text-left align-middle`}>View</th>
         </tr>
       </thead>
       <tbody>
-        {leads.map((l, i) => {
-          const unpaid = (l.package_payment_details?.installments || []).some((x) => !x.paid);
-          const fee = unpaid ? "balance" : l.package_paid != null ? "paid" : l.rx_on_file === false ? "rx" : "due";
-          return (
-            <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`presales-consult-row-${l.id}`}>
-              <td className="px-3 py-3 align-middle leading-5 text-slate-400">{i + 1}</td>
-              <td className="truncate px-4 py-3 align-middle font-medium text-slate-800" title={l.name}>
-                <span className="block truncate">{l.name || "—"}<LeadMarks lead={l} className="ml-1.5" /></span>
-              </td>
-              <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
-                {l.appointment_date ? (
-                  <span className={`flex w-full items-center justify-center gap-1 rounded-md border px-2 py-1 align-middle font-semibold ${consultApptTone(l.appointment_date)}`} data-testid={`presales-consult-appt-${l.id}`}>
-                    <span className="flex items-center gap-1 whitespace-nowrap">
-                      <Calendar className="h-3 w-3 shrink-0" />
-                      {consultApptDay(l.appointment_date)}
-                    </span>
-                    {l.appointment_time && (
-                      <span className="whitespace-nowrap text-[11px] font-bold opacity-90">- {to12h(l.appointment_time)}</span>
-                    )}
+        {leads.map((l, i) => (
+          <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`presales-consult-row-${l.id}`}>
+            <td className="px-3 py-3 align-middle leading-5 text-slate-400">{i + 1}</td>
+            <td className="truncate px-4 py-3 align-middle font-medium text-slate-800" title={l.name}>
+              <span className="block truncate">{l.name || "—"}<LeadMarks lead={l} className="ml-1.5" /></span>
+            </td>
+            <td className="whitespace-nowrap px-3 py-3 align-middle text-xs">
+              {l.appointment_date ? (
+                <span className={`flex w-full items-center justify-center gap-1 rounded-md border px-2 py-1 align-middle font-semibold ${consultApptTone(l.appointment_date)}`} data-testid={`presales-consult-appt-${l.id}`}>
+                  <span className="flex items-center gap-1 whitespace-nowrap">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    {consultApptDay(l.appointment_date)}
                   </span>
-                ) : <span className="block text-center text-slate-400">—</span>}
-              </td>
-              <td className="px-4 py-3 align-middle leading-5 text-slate-600" title={l.assigned_physio_name}>
-                <span className="flex min-w-0 items-center"><span className="truncate">{l.assigned_physio_name || "—"}</span></span>
-              </td>
-              <td className="px-4 py-3 align-middle">
-                <span
-                  className="inline-flex max-w-full items-center gap-1 truncate rounded-[5px] px-2 py-0.5 align-middle text-xs font-semibold"
-                  style={{ background: `${stageHex}14`, color: stageHex, border: `1px solid ${stageHex}33` }}
-                  title={l.consultation_stage || ""}
-                >
-                  {l.consultation_stage || "—"}
+                  {l.appointment_time && (
+                    <span className="whitespace-nowrap text-[11px] font-bold opacity-90">- {to12h(l.appointment_time)}</span>
+                  )}
                 </span>
-              </td>
-              <td className="truncate px-4 py-3 align-middle leading-5 text-slate-600" title={displayPhone(l.phone)}>{displayPhone(l.phone) || "—"}</td>
-              <td className="truncate px-4 py-3 align-middle font-mono text-xs leading-5 text-slate-500" title={l.patient_number}>{l.patient_number || "—"}</td>
-              <td className="whitespace-nowrap px-3 py-3 align-middle text-xs" data-testid={`presales-consult-fee-${l.id}`}>
-                {fee === "paid" ? (
-                  <span className={`${feeChip} border border-emerald-200 bg-emerald-50 text-emerald-700 shadow-none`}>
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Paid
-                  </span>
-                ) : fee === "balance" ? (
-                  <span className={`${feeChip} bg-amber-500 text-white`} title="Balance with Branch Admin">
-                    <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Collect Balance
-                  </span>
-                ) : fee === "rx" ? (
-                  <span className={`${feeChip} border border-amber-300 bg-amber-50 text-amber-700`} title="Waiting on the prescription before Branch Admin collects the Consultation Fee">
-                    <FileText className="h-3.5 w-3.5 shrink-0" /> Prescription
-                  </span>
-                ) : (
-                  <span className={`${feeChip} bg-sky-600 text-white`} title="Consultation Fee to be collected by Branch Admin">
-                    <IndianRupee className="h-3.5 w-3.5 shrink-0" /> Collect
-                  </span>
-                )}
-              </td>
-              <td className="px-3 py-3 align-middle">
-                <LockedRowButton {...VIEW_LOCKED} testid={`presales-consult-view-locked-${l.id}`} />
-              </td>
-            </tr>
-          );
-        })}
+              ) : <span className="block text-center text-slate-400">—</span>}
+            </td>
+            <td className="px-4 py-3 align-middle leading-5 text-slate-600" title={l.assigned_physio_name}>
+              <span className="flex min-w-0 items-center"><span className="truncate">{l.assigned_physio_name || "—"}</span></span>
+            </td>
+            <td className="px-4 py-3 align-middle">
+              <span
+                className="inline-flex max-w-full items-center gap-1 truncate rounded-[5px] px-2 py-0.5 align-middle text-xs font-semibold"
+                style={{ background: `${stageHex}14`, color: stageHex, border: `1px solid ${stageHex}33` }}
+                title={l.consultation_stage || ""}
+              >
+                {l.consultation_stage || "—"}
+              </span>
+            </td>
+            <td className="truncate px-4 py-3 align-middle leading-5 text-slate-600" title={displayPhone(l.phone)}>{displayPhone(l.phone) || "—"}</td>
+            <td className="truncate px-4 py-3 align-middle font-mono text-xs leading-5 text-slate-500" title={l.patient_number}>{l.patient_number || "—"}</td>
+            <td className="px-3 py-3 align-middle">
+              <LockedRowButton {...VIEW_LOCKED} testid={`presales-consult-view-locked-${l.id}`} />
+            </td>
+          </tr>
+        ))}
         {leads.length === 0 && (
-          <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-400">{loading ? "Loading…" : "No patients at Consultation Visit."}</td></tr>
+          <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">{loading ? "Loading…" : "No patients at Consultation Visit."}</td></tr>
         )}
       </tbody>
     </table>

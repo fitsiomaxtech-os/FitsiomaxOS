@@ -383,10 +383,6 @@ class V3LeadOut(BaseModel):
     package_paid: Optional[float] = None  # the Consultation Fee payment, by any of the standard modes
     package_payment_mode: Optional[str] = None  # "cash" | "upi" | "card"
     package_payment_details: Optional[dict] = None  # mode-specific fields (UPI txn/UTR, card/account last 4)
-    # Whether a prescription is on file, which the Consultation Fee waits on. Stamped by
-    # GET /leads on Consultation Visit rows only, for the Pre Sales Consultation Visit list;
-    # None everywhere else -- the branch's own board is sent it as rx_lead_ids instead.
-    rx_on_file: Optional[bool] = None
     treatment_fee_paid: Optional[float] = None  # the Treatment Fee payment — any payment method
     treatment_fee_payment_mode: Optional[str] = None  # "cash" | "upi" | "card" | "cheque" | "partial"
     treatment_fee_payment_details: Optional[dict] = None  # mode-specific fields (card last 4, cheque no., Partial schedule)

@@ -13,7 +13,6 @@ from constants import V3_STAGES, PRESALES_LOST_STAGE
 from stage_utils import first_branch_stage_for, first_branch_stage_for_branch, lead_created_row, log_stage_moves, match_desk_stages, refuse_if_branch_lost
 import lead_control
 import lead_purge
-from routers.v3_lead_documents import leads_with_prescription
 from schemas.v3 import (
     V3UserOut, V3LeadCreate, V3LeadUpdate, V3LeadOut,
     V3AssignBranchInput, V3BookAppointmentInput, V3AppointmentOut,
@@ -76,15 +75,6 @@ async def v3_get_leads(
         query = without_past_moves(query)
 
     rows = await v3_col("leads").find(query, {"_id": 0}).sort("updated_at", -1).to_list(20000)
-    # The Pre Sales Consultation Visit list ends each row in the Consultation Fee the way the
-    # branch's Consultation board does, and that reads "Prescription" until one is filed. One
-    # query, and only for the few rows at that stage with the fee still owed.
-    rx_due = {r["id"] for r in rows if r.get("consultation_stage") == "Consultation Visit" and r.get("package_paid") is None and r.get("id")}
-    if rx_due:
-        rx_ids = await leads_with_prescription(list(rx_due))
-        for r in rows:
-            if r.get("id") in rx_due:
-                r["rx_on_file"] = r["id"] in rx_ids
     # Lead Control is read from the branch here rather than stored on the lead, so a
     # branch switched to "branch_admin" hands over the leads it already has instead of
     # only the next import. One query for every branch, not one per lead.
