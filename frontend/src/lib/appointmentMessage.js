@@ -6,7 +6,7 @@
 
 /** The {placeholders} a template may use, in the order the editor offers them. */
 export const APPT_MSG_PLACEHOLDERS = [
-  { key: "name", label: "Patient name", sample: "BALA TESTING" },
+  { key: "name", label: "Patient name", sample: "Bala" },
   { key: "date_time", label: "Date & time", sample: "04 Nov 2026 · 10:00 AM" },
   { key: "branch", label: "Branch", sample: "Anna Nagar Branch" },
   { key: "reference", label: "Reference", sample: "APT-103-0008-105136" },
