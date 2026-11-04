@@ -16,10 +16,11 @@ import { clamp, useDismissOutside, useFloatingPosition } from "@/lib/use-floatin
  * reader is looking at — the name of the branch they are going to should be read once,
  * in a sentence, before it happens.
  *
- * Any stage. Eligibility is still asked for up front: it carries what the move does — the
- * money that stays here, the balance the new branch collects, anything booked here that is
- * released — and the confirm screen says all of it before the button is pressed. The reason
- * is required, because the receiving branch reads it on its Branch Transfer Record.
+ * Any stage but Pre Sales' Lost, which eligibility answers as blocked. It also carries what
+ * the move does — the money that stays here, the balance the new branch collects, anything
+ * booked here that is released — and the confirm screen says all of it before the button is
+ * pressed. The reason is required, because the receiving branch reads it on its Branch
+ * Transfer Record.
  */
 export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransferred }) => {
   const [branches, setBranches] = useState(null);

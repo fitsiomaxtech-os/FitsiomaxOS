@@ -2094,11 +2094,24 @@ export const PreSalesCRM = ({
                             recorded transfer the branch would make. Marketing Master View
                             only reads the funnel, so it gets the branch name instead.
                             A lead with no branch yet has nothing to transfer out of, so it
-                            keeps the assign dropdown that gives it its first branch. */}
-                        {l.branch_id ? (
-                          role === "marketing_head" ? (
-                            <span className="block truncate text-xs font-semibold text-slate-700">{branchLabel(branches.find((b) => b.id === l.branch_id)) || "—"}</span>
-                          ) : (
+                            keeps the assign dropdown that gives it its first branch.
+                            Lost is locked, so it shuts both and draws the button greyed out;
+                            the server refuses the transfer on its own. */}
+                        {l.branch_id && role === "marketing_head" ? (
+                          <span className="block truncate text-xs font-semibold text-slate-700">{branchLabel(branches.find((b) => b.id === l.branch_id)) || "—"}</span>
+                        ) : l.stage === "Lost" ? (
+                          <button
+                            type="button"
+                            disabled
+                            title="Lost — Branch Transfer is locked"
+                            aria-label="Branch Transfer locked"
+                            className="inline-flex h-8 max-w-full cursor-not-allowed items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-400"
+                            data-testid={`presales-branch-transfer-locked-${l.id}`}
+                          >
+                            <Lock className="h-4 w-4 shrink-0" />
+                            <span className="truncate">Locked</span>
+                          </button>
+                        ) : l.branch_id ? (
                             <button
                               type="button"
                               onClick={() => setTransferLead(l)}
@@ -2110,7 +2123,6 @@ export const PreSalesCRM = ({
                               <ArrowLeftRight className="h-4 w-4 shrink-0" />
                               <span className="truncate">Transfer</span>
                             </button>
-                          )
                         ) : (
                         <BranchSelect
                           value={l.branch_id || ""}
@@ -3806,7 +3818,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
       )}
 
       {showEdit && (
-        <LeadEditModal lead={currentLead} onClose={() => setShowEdit(false)} onSaved={() => { refreshAndKeep(); setShowEdit(false); }} />
+        <LeadEditModal lead={currentLead} allowBranchChange={!stageLocked} onClose={() => setShowEdit(false)} onSaved={() => { refreshAndKeep(); setShowEdit(false); }} />
       )}
 
       {confirmDelete && onDeleted && (

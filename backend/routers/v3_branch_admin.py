@@ -2567,7 +2567,7 @@ async def v3_expert_calendar(
 
 # ---------------------------------------------------------------- Branch Transfer
 #
-# Moving a patient from one branch to another, at any stage.
+# Moving a patient from one branch to another, at any stage but Pre Sales' Lost.
 #
 # It used to be allowed only before a consultation was booked or once treatment had started
 # at Physio Assign. Branches asked to move patients whenever the patient asks — after a
@@ -2594,9 +2594,14 @@ TRANSFER_REBOOK_STAGES = ("Consultation Booked",)
 def _transfer_block_reason(lead: dict) -> Optional[str]:
     """Why this patient cannot be transferred right now, or None if they can.
 
-    No longer about the stage — see the section comment above. What is left is the one
-    case where the patient is not really this branch's to send anywhere.
+    Otherwise no longer about the stage — see the section comment above. What is left is
+    Lost, which is locked, and the case where the patient is not really this branch's to
+    send anywhere.
     """
+    # Lost is locked on the Pre-Sales side (see _refuse_if_lost in routers/v3_leads.py), and
+    # the branch goes with the stage. Asked here so the dialogs say so before the form.
+    if lead.get("stage") == PRESALES_LOST_STAGE:
+        return "This lead is Lost — its Branch Transfer is locked."
     # A Past Data trial client is a copy on the Past Data branch, kept out of every org-wide
     # figure (see past_data_live.py). Sent to a working branch it would be a patient there
     # that no dashboard counts.

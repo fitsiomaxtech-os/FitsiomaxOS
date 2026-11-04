@@ -312,7 +312,8 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
     return () => { cancelled = true; };
   }, [fromBranchId]);
 
-  // Every patient at the branch: a transfer is allowed at any stage.
+  // Every patient at the branch: a transfer is allowed at any stage. A Lost one is listed
+  // too, and eligibility says it is blocked once picked.
   const transferable = leads || [];
   const q = search.trim().toLowerCase();
   const shown = q

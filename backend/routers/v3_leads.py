@@ -355,6 +355,10 @@ async def v3_edit_lead(
         existing = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "id": 1, "branch_id": 1, "branch_stage": 1, "stage": 1})
     if "stage" in updates and updates["stage"] != PRESALES_LOST_STAGE:
         _refuse_if_lost(existing)
+    # The Edit form is the other way a lead changes branch, and Branch Transfer is shut to a
+    # Lost lead. Only a real change: an older form re-posts the branch it was opened with.
+    if "branch_id" in updates and existing is not None and existing.get("branch_id") != updates["branch_id"]:
+        _refuse_if_lost(existing)
 
     # Hand-off bridge: when stage is set to "Appointment" via PUT, push lead into Branch Admin's
     # New Lead column (only if branch_stage isn't already set on the lead).
