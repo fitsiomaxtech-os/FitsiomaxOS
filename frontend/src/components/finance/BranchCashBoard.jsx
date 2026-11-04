@@ -78,7 +78,7 @@ const EntryDetail = ({ row, partyLabel, onClose, onDelete, deleting }) => {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       data-testid="branch-cash-entry-detail"
     >
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
           <div className="flex min-w-0 flex-1 items-baseline gap-2">
             <h3 className="truncate text-base font-semibold text-slate-800">{capFirst(noun)}</h3>
