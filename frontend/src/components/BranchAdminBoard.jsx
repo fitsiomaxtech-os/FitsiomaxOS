@@ -6020,12 +6020,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationCancelStage = nul
                             setApptDraft({ ...apptDraft, visit_type: "branch", visit_package_id: "", visit_package: null, step: "book" });
                           }
                         }}
-                        className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${
+                        className={`flex items-center gap-3 rounded-[4px] border p-4 text-left transition ${
                           on ? "border-sky-500 bg-sky-50 shadow-sm" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-slate-50"
                         }`}
                         data-testid={`branch-appt-visit-${v.key}`}
                       >
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${on ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] ${on ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`}>
                           <Icon className="h-5 w-5" />
                         </span>
                         <span className="text-sm font-bold text-slate-800">{v.label}</span>
