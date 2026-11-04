@@ -4585,6 +4585,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       payment_mode: lead.package_payment_mode || "cash",
       // Rupees off the package, typed at the desk. Rupees only -- no percentage box.
       discount: "",
+      cash_notes: {},
       // What each method needs before the server will take it, typed on the section
       // under the Payment Mode: the card slip's transaction id, an Account Transfer's
       // account and reference, a cheque's bank and number. Bank Name is one box shared
@@ -5118,6 +5119,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       payload.amount = consultationNetPayable;
       if (consultationDiscount > 0) payload.discount_amount = consultationDiscount;
       payload.confirmed = true;
+      if (mode === "cash") {
+        if (!notesSettled(collectFeeDraft.cash_notes, payload.amount)) {
+          toast.error(noteTotal(collectFeeDraft.cash_notes) === 0
+            ? "Count the cash being taken before collecting it"
+            : "The cash counted does not match the amount being taken");
+          return;
+        }
+        payload.denominations = countedNotes(collectFeeDraft.cash_notes);
+      }
       if (mode === "card" && !attachCardDetails(payload, collectFeeDraft)) return;
       if (BANK_DETAIL_MODES.includes(mode) && !attachBankDetails(payload, collectFeeDraft)) return;
     }
@@ -11741,8 +11751,20 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </div>
                         )}
 
-                        {/* Only what the server will not take the method without. Cash and
-                            UPI need nothing more than the OK that Collect asks for. */}
+                        {/* Under the discount, because the amount left after it is the
+                            figure the notes have to account for: a count entered above that
+                            box would read as short the moment a discount was typed. */}
+                        {consultationChosenPrice > 0 && collectFeeDraft.payment_mode === "cash" && (
+                          <CashDenominations
+                            amount={consultationNetPayable}
+                            notes={collectFeeDraft.cash_notes}
+                            onChange={(cash_notes) => setCollectFeeDraft({ ...collectFeeDraft, cash_notes })}
+                            testPrefix="cons-collect-fee"
+                          />
+                        )}
+
+                        {/* Only what the server will not take the method without. UPI needs
+                            nothing more than the OK that Collect asks for. */}
                         {consultationChosenPrice != null && collectFeeDraft.payment_mode === "card" && (
                           <div>
                             <label className="mb-1 block text-[11px] font-medium text-slate-500">Transaction ID <span className="text-rose-500">*</span></label>
@@ -11795,7 +11817,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <Button
                           className="h-9 w-full bg-sky-600 text-xs hover:bg-sky-700"
                           onClick={collectConsultationFee}
-                          disabled={collectingFee || consultationChosenPrice == null}
+                          disabled={
+                            collectingFee || consultationChosenPrice == null ||
+                            (collectFeeDraft.payment_mode === "cash" && !notesSettled(collectFeeDraft.cash_notes, consultationNetPayable))
+                          }
                           data-testid="cons-collect-fee-submit"
                         >
                           {collectingFee ? "Saving..." : collectFeeDraft.payment_mode === "partial" ? "Save Payment Schedule" : "Collect"}

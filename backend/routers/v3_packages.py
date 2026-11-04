@@ -343,14 +343,19 @@ def _settle_cash_count(raw, amount: float, where: str = "") -> dict:
     """The count to store against a cash payment of `amount`, or {} if none was taken.
 
     Counting is optional — a busy desk records the figure alone, as it always could. But a
-    count that was taken has to agree with the money: notes short of the amount, or over
-    it, mean one of the two numbers is wrong, and banking either would bank a figure nobody
-    checked. So this refuses rather than choosing between them.
+    count that was taken has to agree with the money: notes over the amount, or short of it
+    by a note or more, mean one of the two numbers is wrong, and banking either would bank a
+    figure nobody checked. So this refuses rather than choosing between them.
+
+    Short by less than the smallest note is coins, which the count has no box for: a
+    discount can put a fee on Rs.967, and the notes for it stop at Rs.960. The same rule as
+    notesSettled on the collect popups, which would otherwise pass a count this refuses.
     """
     counted, clean = _denomination_total(raw)
     if not clean:
         return {}
-    if abs(counted - float(amount)) > 0.01:
+    short = float(amount) - counted
+    if short < -0.01 or short >= DENOMINATIONS[-1] - 0.01:
         raise HTTPException(
             status_code=400,
             detail=f"The notes counted{where} come to Rs.{counted:g}, but the cash being collected is Rs.{float(amount):g}",
