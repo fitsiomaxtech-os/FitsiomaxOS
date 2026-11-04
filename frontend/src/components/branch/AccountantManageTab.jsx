@@ -137,6 +137,13 @@ const SUMMARY_CARDS = [
   { key: "expenses", label: "Expenses", color: "#e11d48", icon: Receipt },
 ];
 
+// The Accountant's own Summary (approvedOnly) reads four of them: what has reached it is
+// on Approvals, so Awaiting Approval is not repeated here, and the branch's pile is named
+// for whose move it is.
+const APPROVED_ONLY_SUMMARY_CARDS = SUMMARY_CARDS
+  .filter((c) => c.key !== "requested")
+  .map((c) => (c.key === "collected" ? { ...c, label: "Branch Verify Pending" } : c));
+
 /** Which of the three one collection is in -- read off the record, where the arrow and its
  *  Undo write it (income_requested) and the accountant's approval does (approved). */
 const stageOf = (tx) => (tx?.approved ? "approved" : tx?.income_requested ? "requested" : "collected");
@@ -422,8 +429,8 @@ const PaymentModes = ({ tx }) => {
  * @param approvedOnly  Counts signed-off money and nothing else, which is what the
  *              Accountant's own Summary tab asks for: money the branch has collected but
  *              had nobody sign is not the accountant's income yet, and showing it as such
- *              overstates the books. The income side fixes on the Approved pile, and the
- *              two stage pills stop being a filter and become figures to read.
+ *              overstates the books. The income side fixes on the Approved pile, Branch
+ *              Verify Pending is a figure to read, and Awaiting Approval is not shown.
  * @param toolbarTarget  An element in the page's own top bar (the finance workspace's tab
  *              row). Given one, the date range and Refresh are drawn there, so the whole
  *              dashboard reads off one top bar and this board keeps a single row of its own.
@@ -473,6 +480,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
   // always has -- except where only signed-off money counts, which fixes it on Approved
   // and never moves it again.
   const [incomeStage, setIncomeStage] = useState(approvedOnly ? "approved" : canVerify ? "collected" : "requested");
+  const summaryCards = approvedOnly ? APPROVED_ONLY_SUMMARY_CARDS : SUMMARY_CARDS;
   // Collections whose Send or Undo is on its way to the server, so a second press waits.
   const [moving, setMoving] = useState(() => new Set());
   // The ledger row its arrow opened (PaymentDetails): who it is, and the ids of the
@@ -924,7 +932,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
         // Inside Summary the bar names the step it is on: the card picked, then the
         // revenue card under it -- "To Verify · Consultation".
         const inSummary = tab === "summary" && summaryStep > 0;
-        const pickedCard = SUMMARY_CARDS.find((c) => c.key === (ledger === "income" ? incomeStage : ledger));
+        const pickedCard = summaryCards.find((c) => c.key === (ledger === "income" ? incomeStage : ledger));
         const pickedView = REVENUE_VIEWS.find((v) => v.key === revenueView);
         const Icon = inSummary ? (summaryStep === 2 ? pickedView?.icon : pickedCard?.icon) || t.icon : t.icon;
         const label = inSummary
@@ -1128,17 +1136,18 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           {/* The four cards, each the view under it (Zumba's summary cards, ui/ledger-card):
               the two income piles, the drawer, and the money that went out. The picked one is
               filled in its colour. Where only signed-off money counts there is no pile to move
-              to, so Awaiting Approval is a figure to read rather than a card to press.
+              to, so Branch Verify Pending is a figure to read rather than a card to press.
 
               The book line that sat under them (Revenue, Expense, Profit, Total Expense) is
               gone: the branch asked for these cards and nothing else. */}
           {/* Five to a line from lg; on a phone two to a line with the fifth, Expenses,
-              across both columns rather than half a line on its own. */}
+              across both columns rather than half a line on its own. Four fill their lines
+              either way. */}
           {/* Phone, step 0: the five as Branch Leads' stack, one to a row in the shared grey,
               the amount as the figure and how many payments make it up in the corner badge. */}
           {sumStep === 0 && (
             <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="accountant-manage-phone-summary-cards">
-              {SUMMARY_CARDS.map((c) => {
+              {summaryCards.map((c) => {
                 const pile = c.key === "approved" || c.key === "requested" || c.key === "collected";
                 const value = pile ? stagePiles[c.key].total : c.key === "cash" ? cashInHand : expenseTotals.approved_total;
                 const count = pile ? stagePiles[c.key].count : Number(expenseTotals.approved_count) || 0;
@@ -1169,8 +1178,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
               })}
             </div>
           )}
-          <div className={`grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1 ${phoneHide(false)}`} data-testid="accountant-manage-ledger-filter">
-            {SUMMARY_CARDS.map((c) => {
+          <div className={`grid grid-cols-2 gap-3 ${approvedOnly ? "lg:grid-cols-4" : "lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1"} ${phoneHide(false)}`} data-testid="accountant-manage-ledger-filter">
+            {summaryCards.map((c) => {
               // The income-side cards, each opening the income ledger at its own pile.
               const pile = c.key === "approved" || c.key === "requested" || c.key === "collected";
               const picked = pile ? ledger === "income" && incomeStage === c.key : ledger === c.key;
@@ -1195,7 +1204,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
                     : countLabel(Number(expenseTotals.approved_count) || 0, "approved expense"),
                 },
               }[c.key];
-              const readOnly = approvedOnly && (c.key === "requested" || c.key === "collected");
+              const readOnly = approvedOnly && c.key === "collected";
               return (
                 <LedgerCard
                   key={c.key}

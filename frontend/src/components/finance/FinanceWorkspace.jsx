@@ -35,7 +35,7 @@ const SummaryTab = ({ branchId, scoped, toolbarTarget }) => (
         approvedOnly: from this chair income means money that has been signed off. A
         collection still sitting at a branch desk is the branch's figure, not the
         accountant's, and counting it here would have this board disagree with the books
-        it is read against. The three piles still show, as figures rather than a filter. */}
+        it is read against. The branch's pile still shows, as a figure rather than a filter. */}
     <AccountantManageTab branchId={branchId} scoped={scoped} verticalModeFilter approvedOnly toolbarTarget={toolbarTarget} />
   </div>
 );
