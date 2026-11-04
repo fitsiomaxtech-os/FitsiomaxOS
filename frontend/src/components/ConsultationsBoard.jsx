@@ -2788,8 +2788,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const compactDetail = detailFrame.compact;
   const bookedDetail = detailFrame.booked;
   // The band at the bottom of the card, under the part that scrolls. Fee Collected and Physio
-  // Assign put their Quit in it (see FootExitButton); every other panel leaves it empty, and
-  // an empty band is not drawn.
+  // Assign put their actions and Quit in it (see footBand); every other panel leaves it empty,
+  // and an empty band is not drawn.
   const [footSlot, setFootSlot] = useState(null);
   const [timelineRemarks, setTimelineRemarks] = useState([]);
   const [timelineActivity, setTimelineActivity] = useState([]);
@@ -9495,8 +9495,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 if (awaitingVisit) ExitButton = exitButton("Lost", "cons-lost-btn", () => markLost(selectedLead));
                 else if (quittable) ExitButton = exitButton("Quit", "cons-quit-btn", askQuit);
                 // Fee Collected and Physio Assign hold it clear of the work: at the foot of the
-                // card, not on the row above the fees and the sessions.
-                const FootExitButton = ExitButton && footSlot ? createPortal(ExitButton, footSlot) : null;
+                // card, not on the row above the fees and the sessions, with their actions to
+                // its left. One portal for the lot, because two into the same band land in the
+                // order they mounted, and Quit has to stay last.
+                const footBand = (actions) => (footSlot ? createPortal(
+                  <>
+                    {actions && <div className="mr-auto flex flex-wrap items-center gap-1.5">{actions}</div>}
+                    {ExitButton}
+                  </>,
+                  footSlot,
+                ) : null);
 
                 // Diet, one button, one strict sequence: the Diet Fee first, then the
                 // Nutrition Coach + their appointment — can't reach assignment until the fee
@@ -9645,8 +9653,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // Mark Online also works before the Treatment Fee is in -- the whole course is
                 // re-priced, so the Collect beside it takes the Online figure.
                 const canMarkMode = repriceable && (treatmentFeePaid ? !courseDone : selectedLead.package_paid != null);
-                // The row Fee Collected and Physio Assign share, on one line:
+                // The row Fee Collected and Physio Assign share, in the foot of the card:
                 //   [ Assign / Reassign Physio ] [ Online ] [ Collect Online Payment ]
+                // Fee Collected adds its Add Due after Online, and Quit ends the row (footBand).
                 // Collect Online Payment takes the next balance owed -- the Treatment Fee's
                 // first, else whichever fee still has one -- through the installment popup
                 // Collect Balance opens, offering UPI and Account Transfer only. It is there
@@ -10031,8 +10040,45 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                    second against the first.
 
                    The action goes under the people rather than under the course, because
-                   reassigning is something done to the delivery and not to the package. */
-                const PhysioDetailBody = (
+                   reassigning is something done to the delivery and not to the package. The
+                   Rehab and Diet pills draw it there. The Physio Assign panel passes no action
+                   and puts it in the foot of the card, so the body takes it as an argument. */
+                const PhysioActions = (
+                  <>
+                    {/* No helper sentences here (choose a physio / course delivered /
+                        reassigning keeps the delivered days) or fee gate note under the
+                        buttons: the button and its hover title carry it. */}
+                    <Button
+                      size="sm"
+                      disabled={(treatmentAssigned && courseDone) || !treatmentFeePaid}
+                      /* The fee is the gate assign-physio-sessions itself holds, and this
+                         view is now reachable from Rehab and Diet, where the treatment fee
+                         may well be the one still outstanding. It was never drawn unpaid
+                         before, so the button had no unpaid state to be in. */
+                      title={!treatmentFeePaid
+                        ? "Collect the Treatment Fee first"
+                        : treatmentAssigned && courseDone
+                          ? "The course is finished — there are no sessions left to reassign"
+                          : undefined}
+                      className={`${!treatmentFeePaid
+                        ? "bg-slate-100 text-slate-400"
+                        : treatmentAssigned
+                          ? "bg-white text-violet-700 shadow-sm ring-1 ring-violet-200 hover:bg-violet-50"
+                          : "bg-violet-600 text-white shadow-sm hover:bg-violet-700"} ${ACT_BTN}`}
+                      onClick={() => openPhysioModal("treatment")}
+                      data-testid={treatmentAssigned ? "cons-reassign-physio" : "cons-open-physio-assign"}
+                    >
+                      <Users className="mr-1 h-3.5 w-3.5" />
+                      {treatmentAssigned ? "Reassign Physio" : "Assign Physio & Book Sessions"}
+                    </Button>
+                    {/* Offline <-> Online for the days still to come -- Swap, Mark
+                        Online and Online Physio Assign -- now sits behind this one
+                        button. The Branch Admin's call, any time in the course. */}
+                    {MarkOnlineButton}
+                    {OnlinePayButton}
+                  </>
+                );
+                const physioBody = (actions) => (
                   <div className={`grid grid-cols-1 gap-x-4 gap-y-3 ${compactDetail ? "" : "lg:grid-cols-2"}`}>
                     <div className="min-w-0 space-y-2" data-testid="cons-physio-assign-course">
                       <PanelCard testid="cons-physio-assign-summary">
@@ -10122,7 +10168,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       {/* No green course bar here: the physio card's own bar shows the same. */}
                     </div>
 
-                    <div className="min-w-0 space-y-2">
+                    <div className="min-w-0 space-y-2 empty:hidden">
                       {/* No heading over this column (Delivered By / Next Step / Physio
                           History) and no Online/Offline tag: the physio cards and the
                           buttons say it. */}
@@ -10151,42 +10197,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </div>
                       )}
 
-                      {/* No helper sentences here (choose a physio / course delivered /
-                          reassigning keeps the delivered days) or fee gate note under the
-                          buttons: the button and its hover title carry it. */}
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        <Button
-                          size="sm"
-                          disabled={(treatmentAssigned && courseDone) || !treatmentFeePaid}
-                          /* The fee is the gate assign-physio-sessions itself holds, and this
-                             view is now reachable from Rehab and Diet, where the treatment fee
-                             may well be the one still outstanding. It was never drawn unpaid
-                             before, so the button had no unpaid state to be in. */
-                          title={!treatmentFeePaid
-                            ? "Collect the Treatment Fee first"
-                            : treatmentAssigned && courseDone
-                              ? "The course is finished — there are no sessions left to reassign"
-                              : undefined}
-                          className={`${!treatmentFeePaid
-                            ? "bg-slate-100 text-slate-400"
-                            : treatmentAssigned
-                              ? "bg-white text-violet-700 shadow-sm ring-1 ring-violet-200 hover:bg-violet-50"
-                              : "bg-violet-600 text-white shadow-sm hover:bg-violet-700"} ${ACT_BTN}`}
-                          onClick={() => openPhysioModal("treatment")}
-                          data-testid={treatmentAssigned ? "cons-reassign-physio" : "cons-open-physio-assign"}
-                        >
-                          <Users className="mr-1 h-3.5 w-3.5" />
-                          {treatmentAssigned ? "Reassign Physio" : "Assign Physio & Book Sessions"}
-                        </Button>
-                        {/* Offline <-> Online for the days still to come -- Swap, Mark
-                            Online and Online Physio Assign -- now sits behind this one
-                            button. The Branch Admin's call, any time in the course. */}
-                        {MarkOnlineButton}
-                        {OnlinePayButton}
-                      </div>
+                      {actions}
                     </div>
                   </div>
                 );
+                const PhysioDetailBody = physioBody(<div className="flex flex-wrap gap-1.5 pt-0.5">{PhysioActions}</div>);
 
                 // Documents, as a view of the panel rather than a trip to the Documents tab
                 // at the top of the card. Consultation Visit needs one before it will take a
@@ -11272,7 +11287,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               </Button>
                               {DietDetailButton}
                               {RehabDetailButton}
-                              {FootExitButton}
+                              {footBand()}
                             </div>
                             {detailBody && <div className="mt-3 border-t border-emerald-100 pt-3">{detailBody}</div>}
                             </div>
@@ -11321,70 +11336,59 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 as well put the same view two doors apart on one screen,
                                 above a panel whose job right now is the fee that is due. */}
                             {RehabDetailButton}
-                            {FootExitButton}
                           </>
                         }
                       >
-                        {detailBody || (
+                        {/* No Total / Balance summary under the fee cards: the part-paid row
+                            already names the balance beside Collect Balance. */}
+                        {detailBody || FeeSteps}
+                        {/* The act itself lives in the view, not in the tab that opens the
+                            view. A tab that also fired the picker could not be pressed to come
+                            back to what it was showing. */}
+                        {footBand(treatmentFeePaid && !detailBody && (
                           <>
-                            {FeeSteps}
+                            <Button
+                              size="sm"
+                              className={`bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 hover:shadow ${ACT_BTN}`}
+                              onClick={() => openPhysioModal("treatment")}
+                              data-testid="cons-open-physio-assign-from-fee-collected"
+                            >
+                              <Users className="mr-1 h-3.5 w-3.5" />
+                              {/* Never "Reassign" here. assigned_physio_name is written
+                                  when the appointment is booked -- it is the physio who
+                                  took the consultation, set by the Branch Admin long
+                                  before anyone picks who delivers the treatment -- so
+                                  reading it as "a physio is already assigned" made this
+                                  button say Reassign for every patient who ever had a
+                                  consultation, which is all of them.
 
-                            {/* No Total / Balance summary under the fee cards: the part-paid
-                                row already names the balance beside Collect Balance. */}
-                            {treatmentFeePaid && (
-                              <>
-                                {/* The act itself lives in the view, not in the tab that opens
-                                    the view. A tab that also fired the picker could not be
-                                    pressed to come back to what it was showing.
-
-                                    Its own inset, because the panel body is flush: without
-                                    it the button sat jammed in the panel's corner. */}
-                                <div className="flex flex-wrap items-center gap-2 p-3 sm:flex-nowrap">
-                                  <Button
-                                    size="sm"
-                                    className={`bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 hover:shadow ${ACT_BTN}`}
-                                    onClick={() => openPhysioModal("treatment")}
-                                    data-testid="cons-open-physio-assign-from-fee-collected"
-                                  >
-                                    <Users className="mr-1 h-3.5 w-3.5" />
-                                    {/* Never "Reassign" here. assigned_physio_name is written
-                                        when the appointment is booked -- it is the physio who
-                                        took the consultation, set by the Branch Admin long
-                                        before anyone picks who delivers the treatment -- so
-                                        reading it as "a physio is already assigned" made this
-                                        button say Reassign for every patient who ever had a
-                                        consultation, which is all of them.
-
-                                        The stage is the honest test and it needs no field:
-                                        assign-consultation-physio is what moves a lead off
-                                        Fee Collected, so a lead sitting on this panel has no
-                                        treatment physio yet. Reassigning belongs to the
-                                        Physio Assign panel below, where the name does mean
-                                        what it says. */}
-                                    Assign Physio
-                                  </Button>
-                                  {MarkOnlineButton}
-                                  {/* An extra amount on top of the fees, owed on one date or
-                                      on a Payment Schedule. It lands on the Extra Amount card
-                                      above, which collects it. */}
-                                  <Button
-                                    size="sm"
-                                    className={`group bg-rose-600 text-white shadow-sm transition hover:bg-rose-700 hover:shadow ${ACT_BTN}`}
-                                    onClick={openExtraDueDraft}
-                                    data-testid="cons-open-add-due"
-                                  >
-                                    {/* Still until the pointer is on the button, then a quarter
-                                        turn clockwise -- 90 degrees, not a full spin -- and back
-                                        when it leaves. */}
-                                    <Plus className="mr-1 h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:rotate-90 group-active:rotate-90" />
-                                    Add Due
-                                  </Button>
-                                  {OnlinePayButton}
-                                </div>
-                              </>
-                            )}
+                                  The stage is the honest test and it needs no field:
+                                  assign-consultation-physio is what moves a lead off
+                                  Fee Collected, so a lead sitting on this panel has no
+                                  treatment physio yet. Reassigning belongs to the
+                                  Physio Assign panel below, where the name does mean
+                                  what it says. */}
+                              Assign Physio
+                            </Button>
+                            {MarkOnlineButton}
+                            {/* An extra amount on top of the fees, owed on one date or
+                                on a Payment Schedule. It lands on the Extra Amount card
+                                above, which collects it. */}
+                            <Button
+                              size="sm"
+                              className={`group bg-rose-600 text-white shadow-sm transition hover:bg-rose-700 hover:shadow ${ACT_BTN}`}
+                              onClick={openExtraDueDraft}
+                              data-testid="cons-open-add-due"
+                            >
+                              {/* Still until the pointer is on the button, then a quarter
+                                  turn clockwise -- 90 degrees, not a full spin -- and back
+                                  when it leaves. */}
+                              <Plus className="mr-1 h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:rotate-90 group-active:rotate-90" />
+                              Add Due
+                            </Button>
+                            {OnlinePayButton}
                           </>
-                        )}
+                        ))}
                       </StagePanel>
                     );
                   }
@@ -11431,6 +11435,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {RehabDetailButton}
                       </>
                     ) : null;
+                    // The physio's own buttons go with the physio view: Diet and Rehab, opened
+                    // from the tabs here, leave Quit alone in the foot of the card.
+                    const physioOnScreen = !detailBody || programmeDetail === "physio";
                     return (
                       <StagePanel
                         tone={detailView ? detailView.tone : assigned ? "emerald" : "violet"}
@@ -11446,8 +11453,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         )}
                         tabs={physioAssignTabs}
                       >
-                        {detailBody || PhysioDetailBody}
-                        {FootExitButton}
+                        {physioOnScreen ? physioBody(null) : detailBody}
+                        {footBand(physioOnScreen && PhysioActions)}
                       </StagePanel>
                     );
                   }
@@ -11664,10 +11671,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* Held out of the scroll, like the name and the tab row at the top of the card, so
                 what is in it stays at the very bottom however long the panel above runs. Out
                 here as well because .fee-flat strips every border inside the Overview, this
-                band's own rule with them; the corners are set here for the same reason. */}
+                band's own rule with them; the corners are set here for the same reason. Its
+                buttons are portalled out of the Overview's .fee-soft, so it carries its own. */}
             <div
               ref={setFootSlot}
-              className="flex shrink-0 items-center justify-end border-t border-slate-200 bg-slate-50/60 px-4 py-2 empty:hidden [&>button]:rounded-[2px]"
+              className="fee-soft flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-4 py-2 empty:hidden [&>button]:rounded-[2px]"
               data-testid="cons-detail-foot"
             />
 
