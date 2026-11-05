@@ -182,7 +182,7 @@ export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-co
           on the size actually drawn. scale would leave the box at full size, centring
           the card off its own bounds and reserving space nothing occupies. */}
       <div
-        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl"
         style={{ zoom: 0.9 }}
       >
         {/* The receipt popup's header. items-center so the two-line title does not
