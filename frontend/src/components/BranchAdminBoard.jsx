@@ -97,7 +97,7 @@ import { TabDot, TabDotsProvider, useTabDotsState } from "@/components/ui/tab-do
 import { ScrollTopButton } from "@/components/ui/scroll-top-button";
 import { PhoneBackProvider, PhoneExitConfirm, usePhoneBackState, useStageBack } from "@/components/ui/phone-back";
 import { HeadPhysioCalendar } from "@/components/HeadPhysioCalendar";
-import { ConsultationsBoard } from "@/components/ConsultationsBoard";
+import { ConsultationRescheduleDialog, ConsultationsBoard, rescheduleDraftFor } from "@/components/ConsultationsBoard";
 import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
 import { FitsiomaxStorePanel } from "@/components/BranchStoreBoard";
 import { PullFromSheetButton } from "@/components/PullFromSheetButton";
@@ -789,7 +789,10 @@ const waNumber = (raw) => {
  *  it can see in the source, and `w-[${n}%]` is not one of them.
  *
  *  Only the branch's post-entry shape has a second set. Follow Up is never an entry stage,
- *  so the entry header can only ever draw the eight it always has. */
+ *  so the entry header can only ever draw the eight it always has.
+ *
+ *  Appointment is a third set: Reschedule takes the place Pain Duration held, moved along
+ *  to sit between Stage and Actions (see showRescheduleColumn). It totals 100 too. */
 const BRANCH_LIST_WIDTHS = {
   base: {
     patient: "w-[17%]", phone: "w-[12%]", source: "w-[11%]", painType: "w-[12%]",
@@ -800,6 +803,11 @@ const BRANCH_LIST_WIDTHS = {
     patient: "w-[15%]", phone: "w-[11%]", source: "w-[10%]", painType: "w-[10%]",
     painDuration: "w-[10%]", physio: "w-[10%]", appt: "w-[9%]", followUp: "w-[9%]", stage: "w-[10%]",
     action: "w-[6%]",
+  },
+  appointment: {
+    patient: "w-[18%]", phone: "w-[11%]", source: "w-[10%]", painType: "w-[11%]",
+    painDuration: "", physio: "w-[11%]", appt: "w-[12%]", followUp: "", stage: "w-[11%]",
+    reschedule: "w-[10%]", action: "w-[6%]",
   },
 };
 
@@ -1055,6 +1063,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [rowDelete, setRowDelete] = useState(null);
   // The Pre Book row whose Collect Advance popup is open -- see showPreBookOption.
   const [rowPreBookCollect, setRowPreBookCollect] = useState(null);
+  // The Appointment row whose Reschedule popup is open -- see showRescheduleColumn.
+  const [rowReschedule, setRowReschedule] = useState(null);
   // The roles that endpoint accepts (branch_admin's aliases included server-side). Anyone
   // else would only be shown a button that 403s.
   const deleteRoleAllowed = ["super_admin", "business_dev", "branch_admin", "online_physio_admin", "online_fitness_admin",
@@ -1276,11 +1286,20 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // Option, between Stage and Actions: the Collect Advance button, so the money can be
   // taken from the list without opening the patient. A branch's Pre Book table only.
   const showPreBookOption = showPreBookColumns && !onArmBoard && !entryStageNames.includes(stageFilter);
+  // Reschedule, between Stage and Actions: moving a booking from the list, without opening
+  // the patient. A branch's Appointment table only. Pain Duration gives up its column for
+  // it, there and nowhere else; the toolbar's filter on it stays, being shared by every
+  // stage. Every row on this table is at the consultation's opening stage or short of it
+  // (see handedOver in matchesBranchStage), which is where the popup is offered anyway.
+  const showRescheduleColumn = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_APPOINTMENT)
+    && !onArmBoard && !entryStageNames.includes(stageFilter);
+  const listQuestions = showRescheduleColumn ? intakeQuestions.filter((q) => q.key !== "pain_duration") : intakeQuestions;
 
   // The column widths this list is drawn at, chosen once for the header and the rows
   // together — a row that disagreed with the header about how many columns there are
   // slides every cell after it a column across.
-  const listWidths = (showExtraColumn ? BRANCH_LIST_WIDTHS.withFollowUp : BRANCH_LIST_WIDTHS.base);
+  const listWidths = showRescheduleColumn ? BRANCH_LIST_WIDTHS.appointment
+    : showExtraColumn ? BRANCH_LIST_WIDTHS.withFollowUp : BRANCH_LIST_WIDTHS.base;
   const armWidths = (showExtraColumn ? ARM_LIST_WIDTHS.withFollowUp : ARM_LIST_WIDTHS.base);
   // The fixed columns on an arm's table take their stated share; the questions divide what
   // is left, however many the arm asks. An inline width rather than a class because
@@ -3156,7 +3175,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             {/* Wider floor where the board asks more than two questions: fitness draws
                 eight columns, and eight inside 760px is 95px each with the scroll region
                 around it going unused. */}
-            <table className={`w-full ${intakeQuestions.length > 2 || showPreBookOption ? "min-w-[980px]" : "min-w-[760px]"} table-fixed divide-y divide-slate-200 text-sm`}>
+            <table className={`w-full ${intakeQuestions.length > 2 || showPreBookOption || showRescheduleColumn ? "min-w-[980px]" : "min-w-[760px]"} table-fixed divide-y divide-slate-200 text-sm`}>
               <thead className="sticky top-0 z-10 bg-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-white">
                 <tr>
                   {/* Three shapes: an online arm's, and a branch's with and without
@@ -3237,7 +3256,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                       ) : (
                         <>
                           <th className={`${listWidths.painType} px-4 py-3`}>Pain Type</th>
-                          <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
+                          {!showRescheduleColumn && (
+                            <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
+                          )}
                           <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
                           {showNotProspectColumns ? (
                             <>
@@ -3253,6 +3274,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         </>
                       )}
                       <th className={`${listWidths.stage} px-4 py-3`}>Stage</th>
+                      {showRescheduleColumn && (
+                        <th className={`${listWidths.reschedule} whitespace-nowrap px-2 py-3`} data-testid="branch-list-reschedule-head">Reschedule</th>
+                      )}
                       {showPreBookOption && (
                         <th className="w-[13%] whitespace-nowrap px-4 py-3" data-testid="branch-list-prebook-option-head">Option</th>
                       )}
@@ -3280,7 +3304,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             drawn. It used to read 9/8, one more than the table has ever
                             had, and a fitness arm's nine would have been a third wrong
                             answer to write down. */}
-                        <td colSpan={(showPreBookColumns ? 7 + (showPreBookOption ? 1 : 0) :5 + intakeQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
+                        <td colSpan={(showPreBookColumns ? 7 + (showPreBookOption ? 1 : 0) :5 + listQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0) + (showRescheduleColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
                           No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                         </td>
                       </tr>
@@ -3392,7 +3416,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             where it has one — see formAnswer. Read from the same list the
                             toolbar filters are built from, so a column and the dropdown
                             above it cannot drift apart. */}
-                        {!showPreBookColumns && intakeQuestions.map((q) => {
+                        {!showPreBookColumns && listQuestions.map((q) => {
                           const answer = formAnswer(lead, q.question, q.fallback, q.formatFallback);
                           return (
                             <td key={q.key} className="truncate px-4 py-3 text-slate-600" title={answer || undefined}>
@@ -3505,6 +3529,23 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             {rowStage ? rowStage : "—"}
                           </span>
                         </td>
+                        {/* Reschedule, straight from the row: the same popup the Consultation
+                            tab opens for this patient. Nothing else on Branch Leads moves a
+                            booking, since the Appointment pill is shut once a lead is on it.
+                            stopPropagation, because the row itself opens the patient. */}
+                        {showRescheduleColumn && (
+                          <td className="whitespace-nowrap px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setRowReschedule(lead); }}
+                              className="w-[88px] max-w-full rounded-[3px] bg-amber-500 py-1 text-center text-[11px] font-semibold text-white hover:bg-amber-600"
+                              aria-label={`Reschedule ${lead.name || "patient"}`}
+                              data-testid={`branch-row-reschedule-${lead.id}`}
+                            >
+                              Reschedule
+                            </button>
+                          </td>
+                        )}
                         {/* Collect Advance, straight from the row: the same popup the
                             patient's Pre Book card opens. View once the advance is in.
                             stopPropagation, because the row itself opens the patient. */}
@@ -3566,6 +3607,18 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           branchId={branchId || rowPreBookCollect.branch_id}
           onClose={() => setRowPreBookCollect(null)}
           onCollected={() => { loadBoard(); }}
+        />
+      )}
+
+      {/* The row's Reschedule popup. Refreshes the list behind it, so the Appointment and
+          Assigned Physio columns read the new booking the moment it closes. */}
+      {rowReschedule && (
+        <ConsultationRescheduleDialog
+          lead={rowReschedule}
+          branchId={branchId}
+          initialDraft={rescheduleDraftFor(rowReschedule)}
+          onClose={() => setRowReschedule(null)}
+          onRescheduled={() => { loadBoard(); }}
         />
       )}
 
@@ -3904,7 +3957,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // server refuses the same moves on its own (stage_utils.refuse_if_branch_lost).
   const stageLocked = lead.branch_stage === lostStageName;
   // The real stages reachable from Appointment. Reschedule is not in here, because it is
-  // not a stage at all -- see the pill itself.
+  // not a stage at all -- it is a button on the Appointment table's rows.
   //
   // Not a prospect is in the list for the reason it sits where it does in the pipeline:
   // the branch usually learns there was never a client here at the point the appointment

@@ -2717,6 +2717,145 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   );
 };
 
+/** Where a patient's Reschedule popup opens: the booking being moved off, and a blank draft
+ *  for the one it moves to.
+ *
+ *  The date and time being left are read off the lead first. Every path that moves a booking
+ *  writes them, and they are what the Branch Leads row beside the button shows; the pencil
+ *  and SWAP on the Appointment popup move a booking without touching the follow-up entry.
+ *
+ *  followupId is null for a patient booked from Branch Leads, who reaches Consultation
+ *  Booked with no follow-up entry behind them.
+ */
+export const rescheduleDraftFor = (lead) => {
+  const active = (lead?.consultation_follow_ups || []).slice().reverse().find((f) => f.status !== "rescheduled");
+  return {
+    followupId: active?.id || null,
+    fromDate: lead?.appointment_date || active?.date || "",
+    fromTime: lead?.appointment_time || active?.time || "",
+    currentConsultant: lead?.assigned_physio_name || "",
+    // Deliberately blank rather than pre-filled with the slot being left. The date it is
+    // on is the one date this cannot stay on, and a picker that opens already answered
+    // invites a Reschedule that moves nothing.
+    date: "", time: "", physio_id: "", duration: null, reason: "",
+  };
+};
+
+/** Reschedule popup: a new date, a consultant available on it, and the hour agreed with
+ *  the patient, typed.
+ *
+ *  Its own component because two boards offer it for the same patient at the same stage:
+ *  the Consultation popup at Consultation Booked, and the Branch Leads table's Appointment
+ *  rows, which are those same patients. One popup, so the two cannot come to ask different
+ *  questions or move a booking in different ways.
+ *
+ *  `initialDraft` is rescheduleDraftFor's shape, read once on opening. `onRescheduled` is
+ *  handed the updated lead.
+ */
+export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onClose, onRescheduled }) => {
+  const [draft, setDraft] = useState(initialDraft);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!draft.date) { toast.error("Pick a new date"); return; }
+    if (!draft.physio_id) { toast.error("Pick the consultant who will take it"); return; }
+    if (!draft.time) { toast.error("Type the new time"); return; }
+    if (!draft.reason.trim()) { toast.error("A reason is required"); return; }
+    setBusy(true);
+    try {
+      const body = {
+        date: draft.date,
+        time: draft.time,
+        reason: draft.reason,
+        physio_id: draft.physio_id,
+        ...(draft.duration ? { duration: draft.duration } : {}),
+      };
+      // Two ways in, one act. A patient booked from Branch Leads reaches Consultation
+      // Booked with no follow-up entry behind them, so there is nothing for the reschedule
+      // endpoint to mark as moved -- scheduling the new slot is what moves them, and it
+      // rebooks the consultant's calendar the same way.
+      const updated = draft.followupId
+        ? await rescheduleConsultationFollowUp(lead.id, draft.followupId, body)
+        : await scheduleConsultationFollowUp(lead.id, {
+            date: body.date, time: body.time, physio_id: body.physio_id,
+            remarks: `Rescheduled: ${draft.reason.trim()}`,
+            ...(body.duration ? { duration: body.duration } : {}),
+          });
+      onRescheduled?.(updated);
+      onClose();
+      toast.success(`Rescheduled to ${draft.date} at ${to12h(draft.time)}${updated.assigned_physio_name ? ` with ${updated.assigned_physio_name}` : ""}`);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to reschedule"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" data-testid="cons-reschedule-modal">
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bell className="h-5 w-5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-base font-semibold">Reschedule Consultation</p>
+              {/* The booking being moved off, spelled out. The picker below shows open
+                  slots and says nothing about which one the patient is on now, and "move
+                  it" is not a decision anyone can make without that. */}
+              <p className="truncate text-[11px] text-white/80" data-testid="cons-reschedule-current">
+                Now {draft.fromDate || "—"}{draft.fromTime ? ` at ${to12h(draft.fromTime)}` : ""}
+                {draft.currentConsultant ? ` with ${draft.currentConsultant}` : ""}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="cons-reschedule-close">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          <ConsultationSlotPicker
+            branchId={lead.branch_id || branchId}
+            leadId={lead.id}
+            value={draft}
+            onChange={(v) => setDraft({ ...draft, ...v })}
+            currentConsultantName={draft.currentConsultant}
+            testPrefix="cons-reschedule"
+          />
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-600">Reason for Reschedule *</label>
+            <textarea
+              rows={2}
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+              placeholder="Why is this being rescheduled..."
+              value={draft.reason}
+              onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+              data-testid="cons-reschedule-reason"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
+          <p className="min-w-0 truncate text-xs text-slate-500" data-testid="cons-reschedule-summary">
+            {draft.date && draft.time && draft.physio_id
+              ? `Moving to ${draft.date} at ${to12h(draft.time)}`
+              : "Pick a date and a consultant, then type the time."}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" onClick={onClose} data-testid="cons-reschedule-cancel">Cancel</Button>
+            <Button
+              className="bg-amber-500 text-white hover:bg-amber-600"
+              // A collision is the one thing this button will not carry through. The hour
+              // is typed now, so an overlap is a slip rather than a choice, and the picker
+              // has already named whose appointment it runs into.
+              disabled={busy || !!draft.timeClash}
+              onClick={save}
+              data-testid="cons-reschedule-save"
+            >
+              <CheckCircle2 className="mr-1 h-4 w-4" /> {busy ? "Rescheduling..." : "Reschedule"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, squareTable = false, compactTable = false, branchColumn = false, consultantBranchColumn = false, exportRef }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
@@ -2795,7 +2934,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [timelineActivity, setTimelineActivity] = useState([]);
   const [storeItems, setStoreItems] = useState([]);
   const [followUpDraft, setFollowUpDraft] = useState(null); // { date, time, physio_id, duration, remarks } | null
-  const [rescheduleBusy, setRescheduleBusy] = useState(false);
   // { followupId, fromDate, fromTime, currentConsultant, date, time, physio_id, duration, reason } | null
   // followupId is null for a patient booked from Branch Leads, who reaches Consultation
   // Booked with no follow-up entry behind them.
@@ -11170,17 +11308,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             // "Schedule Follow-Up" for the commonest case -- a patient booked
                             // from Branch Leads, who has no entry -- and that popup neither
                             // knew what it was moving off nor asked for a reason.
-                            onClick={() => setRescheduleDraft({
-                              followupId: activeFollowUp?.id || null,
-                              fromDate: activeFollowUp?.date || selectedLead.appointment_date || "",
-                              fromTime: activeFollowUp?.time || selectedLead.appointment_time || "",
-                              currentConsultant: selectedLead.assigned_physio_name || "",
-                              // Deliberately blank rather than pre-filled with the slot being
-                              // left. The date it is on is the one date this cannot stay on,
-                              // and a picker that opens already answered invites a Reschedule
-                              // that moves nothing.
-                              date: "", time: "", physio_id: "", duration: null, reason: "",
-                            })}
+                            onClick={() => setRescheduleDraft(rescheduleDraftFor(selectedLead))}
                             data-testid="cons-reschedule-btn"
                           >
                             Reschedule
@@ -15351,106 +15479,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               </div>
             )}
 
-            {/* Reschedule popup: a new date, a consultant available on it, and the hour
-                agreed with the patient, typed. */}
+            {/* Reschedule popup -- see ConsultationRescheduleDialog. */}
             {rescheduleDraft && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" data-testid="cons-reschedule-modal">
-                <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
-                  <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Bell className="h-5 w-5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-base font-semibold">Reschedule Consultation</p>
-                        {/* The booking being moved off, spelled out. The picker below shows
-                            open slots and says nothing about which one the patient is on
-                            now, and "move it" is not a decision anyone can make without
-                            that. */}
-                        <p className="truncate text-[11px] text-white/80" data-testid="cons-reschedule-current">
-                          Now {rescheduleDraft.fromDate || "—"}{rescheduleDraft.fromTime ? ` at ${to12h(rescheduleDraft.fromTime)}` : ""}
-                          {rescheduleDraft.currentConsultant ? ` with ${rescheduleDraft.currentConsultant}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <button onClick={() => setRescheduleDraft(null)} className="shrink-0 rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="cons-reschedule-close">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                    <ConsultationSlotPicker
-                      branchId={selectedLead.branch_id || branchId}
-                      leadId={selectedLead.id}
-                      value={rescheduleDraft}
-                      onChange={(v) => setRescheduleDraft({ ...rescheduleDraft, ...v })}
-                      currentConsultantName={rescheduleDraft.currentConsultant}
-                      testPrefix="cons-reschedule"
-                    />
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">Reason for Reschedule *</label>
-                      <textarea
-                        rows={2}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                        placeholder="Why is this being rescheduled..."
-                        value={rescheduleDraft.reason}
-                        onChange={(e) => setRescheduleDraft({ ...rescheduleDraft, reason: e.target.value })}
-                        data-testid="cons-reschedule-reason"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
-                    <p className="min-w-0 truncate text-xs text-slate-500" data-testid="cons-reschedule-summary">
-                      {rescheduleDraft.date && rescheduleDraft.time && rescheduleDraft.physio_id
-                        ? `Moving to ${rescheduleDraft.date} at ${to12h(rescheduleDraft.time)}`
-                        : "Pick a date and a consultant, then type the time."}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Button variant="outline" onClick={() => setRescheduleDraft(null)} data-testid="cons-reschedule-cancel">Cancel</Button>
-                      <Button
-                        className="bg-amber-500 text-white hover:bg-amber-600"
-                        // A collision is the one thing this button will not carry through.
-                        // The hour is typed now, so an overlap is a slip rather than a
-                        // choice, and the picker has already named whose appointment it
-                        // runs into.
-                        disabled={rescheduleBusy || !!rescheduleDraft.timeClash}
-                        onClick={async () => {
-                          if (!rescheduleDraft.date) { toast.error("Pick a new date"); return; }
-                          if (!rescheduleDraft.physio_id) { toast.error("Pick the consultant who will take it"); return; }
-                          if (!rescheduleDraft.time) { toast.error("Type the new time"); return; }
-                          if (!rescheduleDraft.reason.trim()) { toast.error("A reason is required"); return; }
-                          setRescheduleBusy(true);
-                          try {
-                            const body = {
-                              date: rescheduleDraft.date,
-                              time: rescheduleDraft.time,
-                              reason: rescheduleDraft.reason,
-                              physio_id: rescheduleDraft.physio_id,
-                              ...(rescheduleDraft.duration ? { duration: rescheduleDraft.duration } : {}),
-                            };
-                            // Two ways in, one act. A patient booked from Branch Leads
-                            // reaches Consultation Booked with no follow-up entry behind
-                            // them, so there is nothing for the reschedule endpoint to mark
-                            // as moved -- scheduling the new slot is what moves them, and
-                            // it rebooks the consultant's calendar the same way.
-                            const updated = rescheduleDraft.followupId
-                              ? await rescheduleConsultationFollowUp(selectedLead.id, rescheduleDraft.followupId, body)
-                              : await scheduleConsultationFollowUp(selectedLead.id, {
-                                  date: body.date, time: body.time, physio_id: body.physio_id,
-                                  remarks: `Rescheduled: ${rescheduleDraft.reason.trim()}`,
-                                  ...(body.duration ? { duration: body.duration } : {}),
-                                });
-                            applyUpdatedLead(updated);
-                            setRescheduleDraft(null);
-                            toast.success(`Rescheduled to ${rescheduleDraft.date} at ${to12h(rescheduleDraft.time)}${updated.assigned_physio_name ? ` with ${updated.assigned_physio_name}` : ""}`);
-                          } catch (e) { toast.error(e?.response?.data?.detail || "Failed to reschedule"); }
-                          finally { setRescheduleBusy(false); }
-                        }}
-                        data-testid="cons-reschedule-save"
-                      >
-                        <CheckCircle2 className="mr-1 h-4 w-4" /> {rescheduleBusy ? "Rescheduling..." : "Reschedule"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <ConsultationRescheduleDialog
+                lead={selectedLead}
+                branchId={branchId}
+                initialDraft={rescheduleDraft}
+                onClose={() => setRescheduleDraft(null)}
+                onRescheduled={applyUpdatedLead}
+              />
             )}
           </div>
         </div>
