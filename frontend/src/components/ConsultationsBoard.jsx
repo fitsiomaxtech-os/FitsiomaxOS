@@ -2314,8 +2314,11 @@ const buildRehabProgress = (rows, lead) => {
  *  offer. `leadId` is passed to both: this patient's own current slot must keep showing as
  *  free, or the popup would report the booking it is looking at as a clash with itself and
  *  refuse to move off it.
+ *
+ *  `children` sits beside the hour, under the consultant list. It lives in this grid rather
+ *  than below it so the calendar and the list keep a row to themselves.
  */
-const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentConsultantName, testPrefix = "cons-slot" }) => {
+const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentConsultantName, testPrefix = "cons-slot", children }) => {
   const [openDates, setOpenDates] = useState({});
   const [experts, setExperts] = useState({ rows: [], slotMinutes: null, durationRule: true, loading: false });
   // The new hour, typed rather than picked, held as its three parts. See the Appointment
@@ -2430,6 +2433,14 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   };
   const clash = clashAt(value?.time);
 
+  // The warning sits under the time, near the bottom of a popup that does not grow, so it
+  // is brought into view rather than left below the fold with Reschedule greyed out.
+  const warningRef = useRef(null);
+  const warning = clash ? "clash" : outsideHours ? "outside" : "";
+  useEffect(() => {
+    if (warning) warningRef.current?.scrollIntoView({ block: "nearest" });
+  }, [warning]);
+
   /** The three fields read as one 24-hour "HH:MM", or "" while any is unreadable. */
   const clockOf = ({ h, m, ap }) => {
     const hh = Number(h);
@@ -2532,24 +2543,22 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
         </div>
       </div>
 
-      {/* 2 — Consultant, then 3 — their time. Stacked in one column because choosing the
-          consultant is what reveals the times, and the two read as one step. */}
-      <div className="space-y-4">
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">2 · Consultant</p>
-          <p className="mb-2 text-[10px] text-slate-400">
-            Only those free on the picked date{currentConsultantName ? ` · currently ${currentConsultantName}` : ""}.
-          </p>
+      {/* 2 — Consultant. Takes the whole height of the calendar beside it and scrolls inside
+          that, so a branch with many consultants shows as many of them as the popup can
+          hold. Absolute on wider screens so a long list cannot stretch the row it sits in. */}
+      <div className="relative">
+        <div className="flex flex-col sm:absolute sm:inset-0">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">2 · Consultant</p>
           {!value?.date ? (
-            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">Pick a date first.</p>
+            <p className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">Pick a date first.</p>
           ) : experts.loading ? (
             <p className="text-xs text-slate-400">Checking availability…</p>
           ) : experts.rows.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-6 text-center text-xs text-amber-700" data-testid={`${testPrefix}-no-experts`}>
+            <p className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-6 text-center text-xs text-amber-700" data-testid={`${testPrefix}-no-experts`}>
               No consultant is free on this date. Pick another day.
             </p>
           ) : (
-            <div className="max-h-44 space-y-1.5 overflow-y-auto pr-0.5">
+            <div className="max-h-44 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5 sm:max-h-none" data-testid={`${testPrefix}-experts`}>
               {experts.rows.map((doc) => {
                 const active = value?.physio_id === doc.id;
                 // Available means this consultant is working the day, which is the one
@@ -2599,120 +2608,121 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
             </div>
           )}
         </div>
+      </div>
 
-        {/* 3 — The hour, typed. The Consultant Calendar publishes the DAY a consultant
-            works and nothing finer, because the minute a patient is moved to is agreed on
-            the phone and no grid of cut tiles can offer it. The hours they published are
-            named beside the field rather than enforced by it; a collision is refused. */}
-        <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">3 · New Time</p>
-          {!value?.physio_id ? (
-            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">Pick a consultant first.</p>
-          ) : !dayPublished ? (
-            <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-6 text-center text-xs text-amber-700">
-              This consultant is not available on that date.
+      {/* 3 — The hour, typed. The Consultant Calendar publishes the DAY a consultant
+          works and nothing finer, because the minute a patient is moved to is agreed on
+          the phone and no grid of cut tiles can offer it. The hours they published are
+          named beside the field rather than enforced by it; a collision is refused. */}
+      <div>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">3 · New Time</p>
+          {value?.physio_id && dayPublished && dayHours && (
+            <p className="min-w-0 truncate text-[10px] text-slate-500" data-testid={`${testPrefix}-hours`}>
+              Working <b className="font-semibold text-slate-600">{dayHours}</b>
             </p>
-          ) : (
-            <>
-              {dayHours && (
-                <p className="mb-2 text-[10px] text-slate-500" data-testid={`${testPrefix}-hours`}>
-                  Working <b className="font-semibold text-slate-600">{dayHours}</b>.
-                </p>
-              )}
-              <div className="flex items-center gap-1.5" data-testid={`${testPrefix}-time-entry`}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={2}
-                  placeholder="7"
-                  value={clock.h}
-                  onChange={(e) => setClockPart({ h: e.target.value.replace(/\D/g, "").slice(0, 2) })}
-                  className="h-10 w-14 rounded-md border-2 border-slate-200 text-center text-base font-bold text-slate-800 outline-none focus:border-sky-400"
-                  data-testid={`${testPrefix}-hour`}
-                />
-                <span className="text-base font-bold text-slate-400">:</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={2}
-                  placeholder="15"
-                  value={clock.m}
-                  onChange={(e) => setClockPart({ m: e.target.value.replace(/\D/g, "").slice(0, 2) })}
-                  className="h-10 w-14 rounded-md border-2 border-slate-200 text-center text-base font-bold text-slate-800 outline-none focus:border-sky-400"
-                  data-testid={`${testPrefix}-minute`}
-                />
-                <div className="ml-1 flex overflow-hidden rounded-md border-2 border-slate-200">
-                  {["AM", "PM"].map((half) => (
-                    <button
-                      key={half}
-                      type="button"
-                      onClick={() => setClockPart({ ap: half })}
-                      className={`px-2.5 py-2 text-xs font-bold transition ${clock.ap === half ? "bg-sky-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
-                      data-testid={`${testPrefix}-${half.toLowerCase()}`}
-                    >
-                      {half}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <p className="mt-1.5 text-[10px] text-slate-400">
-                {!durationRule
-                  ? (value?.time
-                    ? <>Moving to <b className="font-semibold text-slate-600">{to12h(value.time)}</b>. Others can be booked at the same time.</>
-                    : <>Type the hour agreed with the patient.</>)
-                  : value?.time
-                    ? <>Moving to <b className="font-semibold text-slate-600">{to12h(value.time)}</b>, {slotMinutes} minutes.</>
-                    : <>Type the hour agreed with the patient. {slotMinutes} minutes, per FITSIO STORE.</>}
-              </p>
-
-              {/* Two patients in one hour. Named here so the refusal is read beside the
-                  field that caused it rather than as a 409 after Reschedule is pressed. */}
-              {clash && (
-                <p className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-700" data-testid={`${testPrefix}-clash`}>
-                  <b className="font-semibold">{to12h(value.time)} runs into {to12h(clash.time)}{clash.lead_name ? ` — ${clash.lead_name}` : ""}.</b>{" "}
-                  Pick a different time.
-                </p>
-              )}
-              {!clash && outsideHours && (
-                <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700" data-testid={`${testPrefix}-outside-hours`}>
-                  <b className="font-semibold">{to12h(value.time)} is outside the hours published for this day.</b>{" "}
-                  It will still book — check the consultant is coming in for it.
-                </p>
-              )}
-
-              {/* The day as it already stands. "What else is around three" is the question
-                  the branch gets asked on the phone, and an hour with nothing against it
-                  is the answer. */}
-              {daySlots.some((x) => x.booked) && (
-                <div className="mt-3" data-testid={`${testPrefix}-booked-list`}>
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Already booked this day</p>
-                  {/* A numbered row per patient, so several at one time each show — the
-                      Branch Leads Appointment popup lists the day the same way. */}
-                  <ol className="max-h-28 divide-y divide-slate-200 overflow-y-auto rounded-md border border-slate-200 bg-slate-50">
-                    {daySlots.filter((x) => x.booked).map((x, i) => (
-                      <li
-                        key={`${x.slot_time}-${x.review_id || x.lead_id || i}`}
-                        className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-slate-500"
-                        data-testid={`${testPrefix}-booked-row-${i + 1}`}
-                      >
-                        <span className="w-4 shrink-0 text-slate-400">{i + 1}.</span>
-                        <span className="shrink-0 text-slate-600">
-                          {to12h(x.time)}{durationRule ? ` – ${endTime12h(x.time, Number(x.duration) || slotMinutes)}` : ""}
-                        </span>
-                        <span className="min-w-0 truncate">
-                          {(x.lead_name || "").trim() || (x.review_id ? "Review" : "Booked")}
-                          {(x.lead_branch || "").trim() ? ` - ${x.lead_branch.trim()}` : ""}
-                          {x.review_id && x.lead_name ? " · Review" : ""}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-            </>
           )}
         </div>
+        {!value?.physio_id ? (
+          <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">Pick a consultant first.</p>
+        ) : !dayPublished ? (
+          <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-6 text-center text-xs text-amber-700">
+            This consultant is not available on that date.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5" data-testid={`${testPrefix}-time-entry`}>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
+                placeholder="7"
+                value={clock.h}
+                onChange={(e) => setClockPart({ h: e.target.value.replace(/\D/g, "").slice(0, 2) })}
+                className="h-10 w-14 rounded-md border-2 border-slate-200 text-center text-base font-bold text-slate-800 outline-none focus:border-sky-400"
+                data-testid={`${testPrefix}-hour`}
+              />
+              <span className="text-base font-bold text-slate-400">:</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
+                placeholder="15"
+                value={clock.m}
+                onChange={(e) => setClockPart({ m: e.target.value.replace(/\D/g, "").slice(0, 2) })}
+                className="h-10 w-14 rounded-md border-2 border-slate-200 text-center text-base font-bold text-slate-800 outline-none focus:border-sky-400"
+                data-testid={`${testPrefix}-minute`}
+              />
+              <div className="ml-1 flex overflow-hidden rounded-md border-2 border-slate-200">
+                {["AM", "PM"].map((half) => (
+                  <button
+                    key={half}
+                    type="button"
+                    onClick={() => setClockPart({ ap: half })}
+                    className={`px-2.5 py-2 text-xs font-bold transition ${clock.ap === half ? "bg-sky-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                    data-testid={`${testPrefix}-${half.toLowerCase()}`}
+                  >
+                    {half}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {value?.time && !warning && (
+              <p className="mt-1.5 text-[10px] text-slate-400">
+                Moving to <b className="font-semibold text-slate-600">{to12h(value.time)}</b>
+                {durationRule ? `, ${slotMinutes} minutes.` : ". Others can be booked at the same time."}
+              </p>
+            )}
+
+            {/* Two patients in one hour. Named here so the refusal is read beside the
+                field that caused it rather than as a 409 after Reschedule is pressed. */}
+            {clash && (
+              <p ref={warningRef} className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-700" data-testid={`${testPrefix}-clash`}>
+                <b className="font-semibold">{to12h(value.time)} runs into {to12h(clash.time)}{clash.lead_name ? ` — ${clash.lead_name}` : ""}.</b>{" "}
+                Pick a different time.
+              </p>
+            )}
+            {!clash && outsideHours && (
+              <p ref={warningRef} className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700" data-testid={`${testPrefix}-outside-hours`}>
+                <b className="font-semibold">{to12h(value.time)} is outside the hours published for this day.</b>{" "}
+                It will still book — check the consultant is coming in for it.
+              </p>
+            )}
+          </>
+        )}
       </div>
+
+      <div>{children}</div>
+
+      {/* The day as it already stands. "What else is around three" is the question
+          the branch gets asked on the phone, and an hour with nothing against it
+          is the answer. */}
+      {dayPublished && daySlots.some((x) => x.booked) && (
+        <div className="sm:col-span-2" data-testid={`${testPrefix}-booked-list`}>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Already booked this day</p>
+          {/* A numbered row per patient, so several at one time each show — the
+              Branch Leads Appointment popup lists the day the same way. */}
+          <ol className="max-h-28 divide-y divide-slate-200 overflow-y-auto rounded-md border border-slate-200 bg-slate-50">
+            {daySlots.filter((x) => x.booked).map((x, i) => (
+              <li
+                key={`${x.slot_time}-${x.review_id || x.lead_id || i}`}
+                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-slate-500"
+                data-testid={`${testPrefix}-booked-row-${i + 1}`}
+              >
+                <span className="w-4 shrink-0 text-slate-400">{i + 1}.</span>
+                <span className="shrink-0 text-slate-600">
+                  {to12h(x.time)}{durationRule ? ` – ${endTime12h(x.time, Number(x.duration) || slotMinutes)}` : ""}
+                </span>
+                <span className="min-w-0 truncate">
+                  {(x.lead_name || "").trim() || (x.review_id ? "Review" : "Booked")}
+                  {(x.lead_branch || "").trim() ? ` - ${x.lead_branch.trim()}` : ""}
+                  {x.review_id && x.lead_name ? " · Review" : ""}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 };
@@ -2790,20 +2800,13 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" data-testid="cons-reschedule-modal">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
+      {/* A set height, so the popup opens at this size and stays there through every step.
+          The body scrolls for what does not fit. */}
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:h-[580px]">
         <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 text-white">
           <div className="flex min-w-0 items-center gap-2">
             <Bell className="h-5 w-5 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-base font-semibold">Reschedule Consultation</p>
-              {/* The booking being moved off, spelled out. The picker below shows open
-                  slots and says nothing about which one the patient is on now, and "move
-                  it" is not a decision anyone can make without that. */}
-              <p className="truncate text-[11px] text-white/80" data-testid="cons-reschedule-current">
-                Now {draft.fromDate || "—"}{draft.fromTime ? ` at ${to12h(draft.fromTime)}` : ""}
-                {draft.currentConsultant ? ` with ${draft.currentConsultant}` : ""}
-              </p>
-            </div>
+            <p className="min-w-0 truncate text-base font-semibold">Reschedule Consultation</p>
           </div>
           <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="cons-reschedule-close">
             <X className="h-4 w-4" />
@@ -2817,39 +2820,36 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
             onChange={(v) => setDraft({ ...draft, ...v })}
             currentConsultantName={draft.currentConsultant}
             testPrefix="cons-reschedule"
-          />
-          <div>
+          >
             <label className="mb-1 block text-xs font-semibold text-slate-600">Reason for Reschedule *</label>
             <textarea
               rows={2}
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-              placeholder="Why is this being rescheduled..."
               value={draft.reason}
               onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
               data-testid="cons-reschedule-reason"
             />
-          </div>
+          </ConsultationSlotPicker>
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
-          <p className="min-w-0 truncate text-xs text-slate-500" data-testid="cons-reschedule-summary">
-            {draft.date && draft.time && draft.physio_id
-              ? `Moving to ${draft.date} at ${to12h(draft.time)}`
-              : "Pick a date and a consultant, then type the time."}
+          {/* The booking being moved off, spelled out. The picker shows open days and says
+              nothing about which one the patient is on now, and "move it" is not a decision
+              anyone can make without that. */}
+          <p className="min-w-0 text-xs font-semibold text-slate-700 sm:truncate sm:text-sm" data-testid="cons-reschedule-current">
+            Now {draft.fromDate || "—"}{draft.fromTime ? ` at ${to12h(draft.fromTime)}` : ""}
+            {draft.currentConsultant ? ` with ${draft.currentConsultant}` : ""}
           </p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" onClick={onClose} data-testid="cons-reschedule-cancel">Cancel</Button>
-            <Button
-              className="bg-amber-500 text-white hover:bg-amber-600"
-              // A collision is the one thing this button will not carry through. The hour
-              // is typed now, so an overlap is a slip rather than a choice, and the picker
-              // has already named whose appointment it runs into.
-              disabled={busy || !!draft.timeClash}
-              onClick={save}
-              data-testid="cons-reschedule-save"
-            >
-              <CheckCircle2 className="mr-1 h-4 w-4" /> {busy ? "Rescheduling..." : "Reschedule"}
-            </Button>
-          </div>
+          <Button
+            className="shrink-0 bg-amber-500 text-white hover:bg-amber-600"
+            // A collision is the one thing this button will not carry through. The hour
+            // is typed now, so an overlap is a slip rather than a choice, and the picker
+            // has already named whose appointment it runs into.
+            disabled={busy || !!draft.timeClash}
+            onClick={save}
+            data-testid="cons-reschedule-save"
+          >
+            <CheckCircle2 className="mr-1 h-4 w-4" /> {busy ? "Rescheduling..." : "Reschedule"}
+          </Button>
         </div>
       </div>
     </div>
