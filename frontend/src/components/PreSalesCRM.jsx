@@ -38,7 +38,7 @@ import { callTimeStamp, callDateStamp, dateStampFull, dateTimeStamp, shortDateTi
 import { displayPhone, telNumber } from "@/lib/phone";
 import { byOldestFirst } from "@/lib/timeline";
 import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookPaidAt, preBookWhen, rupees, todayIso } from "@/lib/preBook";
-import { fillAppointmentMessage } from "@/lib/appointmentMessage";
+import { apptWelcomeText } from "@/lib/appointmentMessage";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -248,28 +248,12 @@ const hasAppointment = (lead) => !!(lead?.appointment_date || lead?.stage === "A
  * branch is.
  */
 const welcomeText = (lead, { card, pdfUrl, mapUrl, branchName }) => {
-  // A booking at the branch reads as that branch worded it (Settings > Appointment Msg
-  // Editor). A home visit or a Google Meet keeps the wording below: "at {branch}" and the
-  // branch's map are wrong for both.
-  if (card?.messageTemplate && !card.meetLink && !card.houseVisit) {
-    return fillAppointmentMessage(card.messageTemplate, {
-      name: lead.name || "there",
-      date_time: preBookWhen({ date: card.date, time: card.time }),
-      branch: card.branch || branchName,
-      reference: card.refNo && card.refNo !== "—" ? card.refNo : "",
-      pdf_link: pdfUrl,
-      location_link: mapUrl,
-    });
-  }
+  // A booking: the shared builder, the same message the Appointment Confirmed popup's
+  // WhatsApp sends (lib/appointmentMessage).
+  if (card) return apptWelcomeText(card, { name: lead.name, pdfUrl, mapUrl, branchName });
   const lines = [`Hi ${lead.name || "there"}, Welcome to Fitsiomax Clinic !`];
   const pb = preBookOf(lead);
-  if (card) {
-    const when = preBookWhen({ date: card.date, time: card.time });
-    lines.push("", `Your appointment is confirmed${when ? ` for ${when}` : ""}${card.branch && !card.meetLink && !card.houseVisit ? ` at ${card.branch}` : ""}.`);
-    if (card.houseVisit) lines.push("Our consultant will come to your home at this time.");
-    if (card.meetLink) lines.push(`Google Meet: ${card.meetLink}`);
-    if (pdfUrl) lines.push("", "Your appointment confirmation (PDF):", pdfUrl);
-  } else if (lead.stage === "Pre Book" && pb) {
+  if (lead.stage === "Pre Book" && pb) {
     const when = preBookWhen(pb);
     if (when) lines.push("", `Your visit is planned for ${when}.`);
   }

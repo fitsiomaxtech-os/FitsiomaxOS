@@ -4442,6 +4442,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     const hp = (apptExperts.experts || []).find((d) => d.id === draft.physio_id);
     setApptConfirm({
       finalStage: draft.final_stage,
+      leadId: lead.id,
       refNo,
       shareToken,
       patient: lead.name || "—",

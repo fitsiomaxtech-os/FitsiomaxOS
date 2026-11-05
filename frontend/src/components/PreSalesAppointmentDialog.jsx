@@ -225,6 +225,7 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
       toast.success(`Appointment ${draft.appointment_date} ${to12h(draft.appointment_time)} booked`);
       onBooked && onBooked(saved);
       setConfirm({
+        leadId: lead.id,
         refNo,
         shareToken,
         patient: lead.name || "—",

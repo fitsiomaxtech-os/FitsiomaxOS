@@ -2712,6 +2712,8 @@ async def v3_lead_appointment_card(lead_id: str, _: V3UserOut = Depends(v3_curre
         # thing on the sheet that is only ever quoted back to the branch itself.
         "refNo": appt.get("ref_no") or "—",
         "shareToken": appt.get("share_token") or "",
+        # The lead the WhatsApp tap stores the PDF against.
+        "leadId": lead_id,
         # Off the lead, not off the appointment: the appointment's copy of the name was
         # frozen at booking, and a patient whose name was corrected since should be
         # handed a sheet with the corrected one on it.

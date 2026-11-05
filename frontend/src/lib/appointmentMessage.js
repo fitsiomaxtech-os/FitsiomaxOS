@@ -4,6 +4,8 @@
  * message is typed into the lead's chat; the editor fills it with a sample for its preview.
  */
 
+import { preBookWhen } from "@/lib/preBook";
+
 /** The {placeholders} a template may use, in the order the editor offers them. */
 export const APPT_MSG_PLACEHOLDERS = [
   { key: "name", label: "Patient name", sample: "Bala" },
@@ -38,4 +40,35 @@ export const fillAppointmentMessage = (template, values) => {
   }
   // Two blank lines where a dropped block sat between two kept ones read as one.
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+};
+
+/**
+ * The WhatsApp welcome for one booking: the branch's own wording when the booking is at the
+ * branch, else the standard lines (a home visit or a Google Meet — "at {branch}" and the
+ * branch's map are wrong for both). Shared by Pre Sales' Contact WhatsApp and the
+ * Appointment Confirmed popup's WhatsApp, so the patient gets one message whichever was
+ * tapped.
+ */
+export const apptWelcomeText = (card, { name, pdfUrl = "", mapUrl = "", branchName = "" } = {}) => {
+  const who = name || card?.patient || "there";
+  const when = preBookWhen({ date: card?.date, time: card?.time });
+  if (card?.messageTemplate && !card.meetLink && !card.houseVisit) {
+    return fillAppointmentMessage(card.messageTemplate, {
+      name: who,
+      date_time: when,
+      branch: card.branch || branchName,
+      reference: card.refNo && card.refNo !== "—" ? card.refNo : "",
+      pdf_link: pdfUrl,
+      location_link: mapUrl,
+    });
+  }
+  const lines = [`Hi ${who}, Welcome to Fitsiomax Clinic !`];
+  if (card) {
+    lines.push("", `Your appointment is confirmed${when ? ` for ${when}` : ""}${card.branch && !card.meetLink && !card.houseVisit ? ` at ${card.branch}` : ""}.`);
+    if (card.houseVisit) lines.push("Our consultant will come to your home at this time.");
+    if (card.meetLink) lines.push(`Google Meet: ${card.meetLink}`);
+    if (pdfUrl) lines.push("", "Your appointment confirmation (PDF):", pdfUrl);
+  }
+  if (mapUrl) lines.push("", `${branchName || card?.branch || "Our branch"} location:`, mapUrl);
+  return lines.join("\n");
 };

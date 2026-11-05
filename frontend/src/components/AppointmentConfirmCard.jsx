@@ -9,12 +9,19 @@
 // which is the whole point — the second copy has to be the first copy, not a redrawing of
 // it that differs in some detail the patient then queries.
 //
-// WhatsApp, Share and Download send the printed sheet as a PDF (lib/pdf.js). They used to
-// send a PNG card and a typed message; the branches asked for one file type, PDF, only.
-import { CheckCircle2, Download, Printer, Share2, X } from "lucide-react";
+// Share and Download send the printed sheet as a PDF (lib/pdf.js). WhatsApp opens the
+// patient's chat with the welcome typed in and that PDF in it as a link — the message the
+// Pre Sales Contact WhatsApp sends.
+import { useState } from "react";
+import { CheckCircle2, Download, Loader2, Printer, Share2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { downloadPdf, sharePdf, usePdf, whatsappPdf } from "@/lib/pdf";
+import { getLeadAppointmentCard, publicAppointmentPdfUrl, uploadAppointmentPdf } from "@/lib/api";
+import { apptWelcomeText } from "@/lib/appointmentMessage";
+import { waNumber } from "@/lib/phone";
+import { isHandheld } from "@/lib/receipt";
 import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml, openPrintable } from "@/lib/printable";
 import { to12h } from "@/lib/time";
 import { displayPhone } from "@/lib/phone";
@@ -171,10 +178,58 @@ export const apptHtml = (a) => {
 export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-confirm" }) {
   // WhatsApp, Share and Download all send this one PDF — the printed sheet, as a file.
   const pdf = usePdf(appt ? apptHtml(appt) : null);
+  const [sending, setSending] = useState(false);
   if (!appt) return null;
   const pdfName = `appointment-${appt.refNo || "confirmation"}.pdf`;
   const pdfTitle = `FITSIOMAX Appointment ${appt.refNo || ""}`.trim();
   const shareText = apptShareText(appt);
+
+  // WhatsApp: the patient's own chat with the welcome already typed — the appointment,
+  // its confirmation PDF as a link and the branch's location — the same message the
+  // Pre Sales Contact WhatsApp sends. wa.me carries text only, so the PDF goes up to the
+  // server first (behind the booking's share token) and rides in the message as a link.
+  // A card with no lead behind it falls back to the file hand-off.
+  const sendWhatsApp = async () => {
+    if (sending) return;
+    const num = waNumber(appt.phone);
+    if (!num) { toast.error("This patient has no phone number on file"); return; }
+    if (!appt.leadId) { whatsappPdf(pdf, pdfName, pdfTitle, appt.phone, shareText); return; }
+    const handheld = isHandheld();
+    // A desk opens the chat in a new tab, claimed now while the click still counts —
+    // after the awaits the popup blocker takes it. A phone goes same-tab: a new tab
+    // there came back to a blank screen on return from WhatsApp.
+    const tab = handheld ? null : window.open("", "_blank");
+    if (tab) tab.opener = null;
+    setSending(true);
+    try {
+      // The branch's wording lives on the record; a fresh booking's card was built in
+      // the browser and does not carry it, so it is read back once here.
+      const live = appt.messageTemplate !== undefined
+        ? appt
+        : { ...appt, ...(await getLeadAppointmentCard(appt.leadId).catch(() => ({}))) };
+      const token = live.shareToken || appt.shareToken;
+      let pdfUrl = "";
+      if (token) {
+        try {
+          await uploadAppointmentPdf(appt.leadId, await pdf(), pdfName);
+          pdfUrl = publicAppointmentPdfUrl(token);
+        } catch {
+          toast.error("Couldn't attach the appointment PDF — the message goes without it");
+        }
+      }
+      const name = appt.patient && appt.patient !== "—" ? appt.patient : "";
+      const text = apptWelcomeText(live, { name, pdfUrl, mapUrl: apptMapUrl(live) });
+      const url = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+      if (handheld) window.location.href = url;
+      else if (tab && !tab.closed) tab.location.href = url;
+      else window.open(url, "_blank");
+    } catch {
+      tab?.close();
+      toast.error("Couldn't open WhatsApp");
+    } finally {
+      setSending(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3" data-testid={`${testid}-modal`}>
       {/* 90%, this dialog only. zoom rather than transform: scale — zoom shrinks the
@@ -273,12 +328,13 @@ export function AppointmentConfirmCard({ appt, onClose, testid = "branch-appt-co
                 patient's own number. */}
             <Button
               className="h-10 w-10 shrink-0 bg-[#25D366] p-0 text-white hover:bg-[#1da851]"
-              onClick={() => whatsappPdf(pdf, pdfName, pdfTitle, appt.phone, shareText)}
+              onClick={sendWhatsApp}
+              disabled={sending}
               title="Send on WhatsApp"
               aria-label="Send on WhatsApp"
               data-testid={`${testid}-whatsapp`}
             >
-              <WhatsAppIcon className="h-4 w-4" />
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <WhatsAppIcon className="h-4 w-4" />}
             </Button>
             {/* The PDF through the share sheet, for anyone other than the patient. */}
             <Button
