@@ -142,7 +142,7 @@ const BranchChangeDialog = ({ mode, member, branch, desk, onClose, onSaved }) =>
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-2xl" data-testid={`team-row-${mode}-dialog`}>
+      <div className="w-full max-w-sm rounded-[4px] bg-white shadow-2xl" data-testid={`team-row-${mode}-dialog`}>
         <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
           <h3 className="min-w-0 truncate text-base font-semibold text-slate-800">
             {adding ? "Add to" : "Remove from"} {branch.name}
@@ -151,7 +151,7 @@ const BranchChangeDialog = ({ mode, member, branch, desk, onClose, onSaved }) =>
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
             title="Close"
             aria-label="Close"
           >
@@ -166,12 +166,12 @@ const BranchChangeDialog = ({ mode, member, branch, desk, onClose, onSaved }) =>
             {!adding && <> Appointments already booked here are kept.</>}
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button variant="outline" size="sm" onClick={onClose} disabled={busy} className="rounded-[4px]">Cancel</Button>
             <Button
               size="sm"
               onClick={confirm}
               disabled={busy}
-              className={adding ? "bg-sky-600 text-white hover:bg-sky-700" : "bg-rose-600 text-white hover:bg-rose-700"}
+              className={`rounded-[4px] ${adding ? "bg-sky-600 text-white hover:bg-sky-700" : "bg-rose-600 text-white hover:bg-rose-700"}`}
               data-testid={`team-row-${mode}-confirm`}
             >
               {busy ? (adding ? "Adding..." : "Removing...") : (adding ? "Add" : "Remove")}
