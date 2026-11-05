@@ -2314,11 +2314,8 @@ const buildRehabProgress = (rows, lead) => {
  *  offer. `leadId` is passed to both: this patient's own current slot must keep showing as
  *  free, or the popup would report the booking it is looking at as a clash with itself and
  *  refuse to move off it.
- *
- *  `children` sits beside the hour, under the consultant list. It lives in this grid rather
- *  than below it so the calendar and the list keep a row to themselves.
  */
-const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentConsultantName, testPrefix = "cons-slot", children }) => {
+const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentConsultantName, testPrefix = "cons-slot" }) => {
   const [openDates, setOpenDates] = useState({});
   const [experts, setExperts] = useState({ rows: [], slotMinutes: null, durationRule: true, loading: false });
   // The new hour, typed rather than picked, held as its three parts. See the Appointment
@@ -2440,6 +2437,8 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
   useEffect(() => {
     if (warning) warningRef.current?.scrollIntoView({ block: "nearest" });
   }, [warning]);
+
+  const bookedSlots = dayPublished ? daySlots.filter((x) => x.booked) : [];
 
   /** The three fields read as one 24-hour "HH:MM", or "" while any is unreadable. */
   const clockOf = ({ h, m, ap }) => {
@@ -2614,7 +2613,7 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
           works and nothing finer, because the minute a patient is moved to is agreed on
           the phone and no grid of cut tiles can offer it. The hours they published are
           named beside the field rather than enforced by it; a collision is refused. */}
-      <div>
+      <div className={bookedSlots.length ? "" : "sm:col-span-2"}>
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">3 · New Time</p>
           {value?.physio_id && dayPublished && dayHours && (
@@ -2692,18 +2691,17 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
         )}
       </div>
 
-      <div>{children}</div>
-
       {/* The day as it already stands. "What else is around three" is the question
           the branch gets asked on the phone, and an hour with nothing against it
-          is the answer. */}
-      {dayPublished && daySlots.some((x) => x.booked) && (
-        <div className="sm:col-span-2" data-testid={`${testPrefix}-booked-list`}>
+          is the answer. Beside the time rather than under it, so it is read while the
+          hour is being typed and a popup of this size does not have to scroll for it. */}
+      {bookedSlots.length > 0 && (
+        <div data-testid={`${testPrefix}-booked-list`}>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Already booked this day</p>
           {/* A numbered row per patient, so several at one time each show — the
               Branch Leads Appointment popup lists the day the same way. */}
-          <ol className="max-h-28 divide-y divide-slate-200 overflow-y-auto rounded-md border border-slate-200 bg-slate-50">
-            {daySlots.filter((x) => x.booked).map((x, i) => (
+          <ol className="max-h-28 divide-y divide-slate-200 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 sm:max-h-[74px]">
+            {bookedSlots.map((x, i) => (
               <li
                 key={`${x.slot_time}-${x.review_id || x.lead_id || i}`}
                 className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-slate-500"
@@ -2747,7 +2745,7 @@ export const rescheduleDraftFor = (lead) => {
     // Deliberately blank rather than pre-filled with the slot being left. The date it is
     // on is the one date this cannot stay on, and a picker that opens already answered
     // invites a Reschedule that moves nothing.
-    date: "", time: "", physio_id: "", duration: null, reason: "",
+    date: "", time: "", physio_id: "", duration: null,
   };
 };
 
@@ -2770,13 +2768,11 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
     if (!draft.date) { toast.error("Pick a new date"); return; }
     if (!draft.physio_id) { toast.error("Pick the consultant who will take it"); return; }
     if (!draft.time) { toast.error("Type the new time"); return; }
-    if (!draft.reason.trim()) { toast.error("A reason is required"); return; }
     setBusy(true);
     try {
       const body = {
         date: draft.date,
         time: draft.time,
-        reason: draft.reason,
         physio_id: draft.physio_id,
         ...(draft.duration ? { duration: draft.duration } : {}),
       };
@@ -2788,7 +2784,7 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
         ? await rescheduleConsultationFollowUp(lead.id, draft.followupId, body)
         : await scheduleConsultationFollowUp(lead.id, {
             date: body.date, time: body.time, physio_id: body.physio_id,
-            remarks: `Rescheduled: ${draft.reason.trim()}`,
+            remarks: "Rescheduled",
             ...(body.duration ? { duration: body.duration } : {}),
           });
       onRescheduled?.(updated);
@@ -2812,7 +2808,7 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5">
           <ConsultationSlotPicker
             branchId={lead.branch_id || branchId}
             leadId={lead.id}
@@ -2820,16 +2816,7 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
             onChange={(v) => setDraft({ ...draft, ...v })}
             currentConsultantName={draft.currentConsultant}
             testPrefix="cons-reschedule"
-          >
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Reason for Reschedule *</label>
-            <textarea
-              rows={2}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-              value={draft.reason}
-              onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
-              data-testid="cons-reschedule-reason"
-            />
-          </ConsultationSlotPicker>
+          />
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3">
           {/* The booking being moved off, spelled out. The picker shows open days and says
@@ -11675,7 +11662,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 fromDate: f.date,
                                 fromTime: f.time,
                                 currentConsultant: f.consultant_name || selectedLead.assigned_physio_name || "",
-                                date: "", time: "", physio_id: "", duration: null, reason: "",
+                                date: "", time: "", physio_id: "", duration: null,
                               })}
                               data-testid={`cons-followup-reschedule-${f.id}`}
                             >
