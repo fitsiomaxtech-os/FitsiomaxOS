@@ -3321,18 +3321,18 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
             centre line. On a phone the name alone, with the buttons: beside the ID and stage
             chips it was cut to two letters. No avatar -- the initial only repeats the name
             beside it. */}
-        <div className="relative shrink-0 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-4">
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
-              <p className="min-w-0 truncate text-[15px] font-semibold leading-tight text-slate-900 sm:text-base" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
+        <div className="relative shrink-0 border-b border-slate-200 bg-white px-3 py-1.5 sm:px-4 sm:py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <p className="min-w-0 truncate text-sm font-semibold leading-tight text-slate-900" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
               {currentLead.patient_number && (
-                <span className="hidden shrink-0 rounded-[5px] bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:inline" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
+                <span className="hidden shrink-0 rounded-[4px] bg-slate-100 px-1.5 py-px font-mono text-[10px] font-semibold text-slate-600 sm:inline" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
               )}
-              <span className="hidden shrink-0 whitespace-nowrap rounded-[5px] border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 sm:inline" data-testid="presales-detail-stage">
+              <span className="hidden shrink-0 whitespace-nowrap rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold text-slate-700 sm:inline" data-testid="presales-detail-stage">
                 {currentLead.stage || "No Stage"}
               </span>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+            <div className="flex shrink-0 items-center gap-0.5">
               {/* The confirmation the patient was sent, handed back -- print, send or save
                   it again. Only once the record has answered with one, so it never opens
                   onto an empty card. */}
@@ -3342,10 +3342,10 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   onClick={() => setShowApptCard(true)}
                   title="Appointment confirmation"
                   aria-label="Appointment confirmation"
-                  className="inline-flex shrink-0 items-center p-1.5 text-teal-400 transition hover:text-teal-600 sm:p-2"
+                  className="inline-flex shrink-0 items-center p-1.5 text-teal-400 transition hover:text-teal-600"
                   data-testid="presales-detail-appt-card-btn"
                 >
-                  <Eye className="h-5 w-5" />
+                  <Eye className="h-5 w-5 sm:h-4 sm:w-4" />
                 </button>
               )}
               {currentLead.source_type === "manual" && (
@@ -3354,10 +3354,10 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   onClick={() => setShowEdit(true)}
                   title="Edit"
                   aria-label="Edit"
-                  className="inline-flex items-center rounded-[5px] bg-white p-1.5 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 sm:p-2"
+                  className="inline-flex items-center rounded-[5px] bg-white p-1.5 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
                   data-testid="presales-detail-edit-btn"
                 >
-                  <Pencil className="h-5 w-5" />
+                  <Pencil className="h-5 w-5 sm:h-4 sm:w-4" />
                 </button>
               )}
               {onDeleted && (
@@ -3366,14 +3366,14 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   onClick={() => setConfirmDelete(true)}
                   title="Delete"
                   aria-label="Delete"
-                  className="inline-flex items-center rounded-[5px] bg-white p-1.5 text-rose-600 transition hover:bg-rose-50 hover:text-rose-700 sm:p-2"
+                  className="inline-flex items-center rounded-[5px] bg-white p-1.5 text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
                   data-testid="presales-detail-delete-btn"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
                 </button>
               )}
-              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 sm:p-2" data-testid="presales-detail-close">
-                <X className="h-5 w-5" />
+              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="presales-detail-close">
+                <X className="h-5 w-5 sm:h-4 sm:w-4" />
               </button>
             </div>
           </div>
