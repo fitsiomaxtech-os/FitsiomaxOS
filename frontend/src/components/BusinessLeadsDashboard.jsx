@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import {
   Activity,
   AlertCircle,
@@ -77,11 +78,11 @@ import { displayPhone } from "@/lib/phone";
 // one chunk per board and neither pays for the other's copy. Static would have pulled the
 // whole HR org chart and the whole catalogue into the chunk that draws this board's
 // Dashboard, which is the tab it opens on and the only one most days need.
-const FinanceWiseBoard = lazy(() => import("@/components/branch/FinanceWiseBoard").then((m) => ({ default: m.FinanceWiseBoard })));
-const HRBoard = lazy(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.HRBoard })));
-const PackagesBoard = lazy(() => import("@/components/PackagesBoard").then((m) => ({ default: m.PackagesBoard })));
-const MarketingBoard = lazy(() => import("@/components/marketing/MarketingBoard").then((m) => ({ default: m.MarketingBoard })));
-const PipelineStageManagement = lazy(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
+const FinanceWiseBoard = lazyWithRetry(() => import("@/components/branch/FinanceWiseBoard").then((m) => ({ default: m.FinanceWiseBoard })));
+const HRBoard = lazyWithRetry(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.HRBoard })));
+const PackagesBoard = lazyWithRetry(() => import("@/components/PackagesBoard").then((m) => ({ default: m.PackagesBoard })));
+const MarketingBoard = lazyWithRetry(() => import("@/components/marketing/MarketingBoard").then((m) => ({ default: m.MarketingBoard })));
+const PipelineStageManagement = lazyWithRetry(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
 
 /**
  * What sits under the tab strip while one of those chunks is on the wire.

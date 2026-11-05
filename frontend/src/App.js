@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "@/App.css";
 import { LoginPage } from "@/pages/LoginPage";
@@ -22,12 +23,12 @@ import { AppThemeController } from "@/components/ThemeAppearance";
  * they carry none of the CRM -- keeping them out of the shared bundle is most of the point
  * for the people least likely to be on good wifi.
  */
-const CRMPage = lazy(() => import("@/pages/CRMPage").then((m) => ({ default: m.CRMPage })));
-const CreateSuperAdminPublicPage = lazy(() => import("@/pages/CreateSuperAdminPublicPage").then((m) => ({ default: m.CreateSuperAdminPublicPage })));
-const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
-const PatientPortalPage = lazy(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })));
-const TestimonialsPage = lazy(() => import("@/pages/TestimonialsPage").then((m) => ({ default: m.TestimonialsPage })));
-const LegalPage = lazy(() => import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage })));
+const CRMPage = lazyWithRetry(() => import("@/pages/CRMPage").then((m) => ({ default: m.CRMPage })));
+const CreateSuperAdminPublicPage = lazyWithRetry(() => import("@/pages/CreateSuperAdminPublicPage").then((m) => ({ default: m.CreateSuperAdminPublicPage })));
+const ResetPasswordPage = lazyWithRetry(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const PatientPortalPage = lazyWithRetry(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })));
+const TestimonialsPage = lazyWithRetry(() => import("@/pages/TestimonialsPage").then((m) => ({ default: m.TestimonialsPage })));
+const LegalPage = lazyWithRetry(() => import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage })));
 
 /**
  * What a route shows while its chunk is on the wire.

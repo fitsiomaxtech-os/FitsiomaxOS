@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import {
   Activity,
   ArrowDownUp,
@@ -76,37 +77,37 @@ import { displayPhone } from "@/lib/phone";
  * -- are fine as they are: webpack lifts what they share into a common chunk rather than
  * copying it into each, and none of them is reachable from the login screen either way.
  */
-const BusinessLeadsDashboard = lazy(() => import("@/components/BusinessLeadsDashboard").then((m) => ({ default: m.BusinessLeadsDashboard })));
-const PreSalesBoard = lazy(() => import("@/components/PreSalesBoard").then((m) => ({ default: m.PreSalesBoard })));
-const BranchAdminBoard = lazy(() => import("@/components/BranchAdminBoard").then((m) => ({ default: m.BranchAdminBoard })));
+const BusinessLeadsDashboard = lazyWithRetry(() => import("@/components/BusinessLeadsDashboard").then((m) => ({ default: m.BusinessLeadsDashboard })));
+const PreSalesBoard = lazyWithRetry(() => import("@/components/PreSalesBoard").then((m) => ({ default: m.PreSalesBoard })));
+const BranchAdminBoard = lazyWithRetry(() => import("@/components/BranchAdminBoard").then((m) => ({ default: m.BranchAdminBoard })));
 // Two entries against one module, which webpack resolves to one chunk they share -- the
 // calendar modal is opened from the header while the board is up, so by then it is loaded.
-const HeadPhysioBoard = lazy(() => import("@/components/HeadPhysioBoard").then((m) => ({ default: m.HeadPhysioBoard })));
-const HeadPhysioCalendarModal = lazy(() => import("@/components/HeadPhysioBoard").then((m) => ({ default: m.HeadPhysioCalendarModal })));
-const PhysioBoard = lazy(() => import("@/components/PhysioBoard").then((m) => ({ default: m.PhysioBoard })));
-const PhysioCalendarPage = lazy(() => import("@/components/PhysioBoard").then((m) => ({ default: m.CalendarPage })));
-const DietBoard = lazy(() => import("@/components/DietBoard").then((m) => ({ default: m.DietBoard })));
-const MarketingBoard = lazy(() => import("@/components/marketing/MarketingBoard").then((m) => ({ default: m.MarketingBoard })));
-const PreSalesCRM = lazy(() => import("@/components/PreSalesCRM").then((m) => ({ default: m.PreSalesCRM })));
-const DashboardBoard = lazy(() => import("@/components/DashboardBoard").then((m) => ({ default: m.DashboardBoard })));
-const PipelineStageManagement = lazy(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
-const PastDataImportExport = lazy(() => import("@/components/pastData/PastDataImportExport").then((m) => ({ default: m.PastDataImportExport })));
-const HRBoard = lazy(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.HRBoard })));
-const HumanResourceBoard = lazy(() => import("@/components/hr/HumanResourceBoard").then((m) => ({ default: m.HumanResourceBoard })));
-const FinanceWiseBoard = lazy(() => import("@/components/branch/FinanceWiseBoard").then((m) => ({ default: m.FinanceWiseBoard })));
-const PackagesBoard = lazy(() => import("@/components/PackagesBoard").then((m) => ({ default: m.PackagesBoard })));
-const MyConsultationBoard = lazy(() => import("@/components/MyConsultationBoard").then((m) => ({ default: m.MyConsultationBoard })));
-const OperationsBoard = lazy(() => import("@/components/OperationsBoard").then((m) => ({ default: m.OperationsBoard })));
-const AccountantBoard = lazy(() => import("@/components/finance/AccountantBoard").then((m) => ({ default: m.AccountantBoard })));
-const ZumbaMasterBoard = lazy(() => import("@/components/ZumbaMasterBoard").then((m) => ({ default: m.ZumbaMasterBoard })));
-const FeedbackBoard = lazy(() => import("@/components/branch/FeedbackBoard").then((m) => ({ default: m.FeedbackBoard })));
+const HeadPhysioBoard = lazyWithRetry(() => import("@/components/HeadPhysioBoard").then((m) => ({ default: m.HeadPhysioBoard })));
+const HeadPhysioCalendarModal = lazyWithRetry(() => import("@/components/HeadPhysioBoard").then((m) => ({ default: m.HeadPhysioCalendarModal })));
+const PhysioBoard = lazyWithRetry(() => import("@/components/PhysioBoard").then((m) => ({ default: m.PhysioBoard })));
+const PhysioCalendarPage = lazyWithRetry(() => import("@/components/PhysioBoard").then((m) => ({ default: m.CalendarPage })));
+const DietBoard = lazyWithRetry(() => import("@/components/DietBoard").then((m) => ({ default: m.DietBoard })));
+const MarketingBoard = lazyWithRetry(() => import("@/components/marketing/MarketingBoard").then((m) => ({ default: m.MarketingBoard })));
+const PreSalesCRM = lazyWithRetry(() => import("@/components/PreSalesCRM").then((m) => ({ default: m.PreSalesCRM })));
+const DashboardBoard = lazyWithRetry(() => import("@/components/DashboardBoard").then((m) => ({ default: m.DashboardBoard })));
+const PipelineStageManagement = lazyWithRetry(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
+const PastDataImportExport = lazyWithRetry(() => import("@/components/pastData/PastDataImportExport").then((m) => ({ default: m.PastDataImportExport })));
+const HRBoard = lazyWithRetry(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.HRBoard })));
+const HumanResourceBoard = lazyWithRetry(() => import("@/components/hr/HumanResourceBoard").then((m) => ({ default: m.HumanResourceBoard })));
+const FinanceWiseBoard = lazyWithRetry(() => import("@/components/branch/FinanceWiseBoard").then((m) => ({ default: m.FinanceWiseBoard })));
+const PackagesBoard = lazyWithRetry(() => import("@/components/PackagesBoard").then((m) => ({ default: m.PackagesBoard })));
+const MyConsultationBoard = lazyWithRetry(() => import("@/components/MyConsultationBoard").then((m) => ({ default: m.MyConsultationBoard })));
+const OperationsBoard = lazyWithRetry(() => import("@/components/OperationsBoard").then((m) => ({ default: m.OperationsBoard })));
+const AccountantBoard = lazyWithRetry(() => import("@/components/finance/AccountantBoard").then((m) => ({ default: m.AccountantBoard })));
+const ZumbaMasterBoard = lazyWithRetry(() => import("@/components/ZumbaMasterBoard").then((m) => ({ default: m.ZumbaMasterBoard })));
+const FeedbackBoard = lazyWithRetry(() => import("@/components/branch/FeedbackBoard").then((m) => ({ default: m.FeedbackBoard })));
 // Everybody's own page — their month, and their record. Lazy like the boards it stands in
 // for: it is opened from the header a few times a month, and it is the only screen here
 // that every single role can reach, so bundling it would put it in front of every first
 // paint in the building.
-const MyProfilePage = lazy(() => import("@/components/MyProfilePage").then((m) => ({ default: m.MyProfilePage })));
+const MyProfilePage = lazyWithRetry(() => import("@/components/MyProfilePage").then((m) => ({ default: m.MyProfilePage })));
 // Time Off on its own, opened from the Physio and Consultant phone headers.
-const TimeOffPage = lazy(() => import("@/components/MyTimeOff").then((m) => ({ default: m.TimeOffPage })));
+const TimeOffPage = lazyWithRetry(() => import("@/components/MyTimeOff").then((m) => ({ default: m.TimeOffPage })));
 
 /**
  * What sits under the header while a board's chunk is on the wire.

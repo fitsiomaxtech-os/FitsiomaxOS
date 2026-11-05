@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { createPortal } from "react-dom";
 import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ChevronLeft, ArrowRight, Undo2, X, Trash2, Eye, LayoutDashboard, CalendarClock, BadgePercent, BookCheck, ClipboardCheck, Hourglass, BadgeCheck, Banknote, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import { displayPhone } from "@/lib/phone";
 // The Consultations board, for its patient and Collect popups only (`popupOnly`). Loaded
 // when a Consultation Fee is first collected from Payment Schedule, not with this tab:
 // it is the largest module in the app and most visits here never need it.
-const ConsultationsBoard = lazy(() => import("@/components/ConsultationsBoard"));
+const ConsultationsBoard = lazyWithRetry(() => import("@/components/ConsultationsBoard"));
 
 // Three tabs, not the ten this page used to carry: Consultation/Session/Diet/Store
 // Collections were each a copy of Summary's own card-click-to-filter table scoped to one
