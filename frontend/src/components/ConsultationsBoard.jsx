@@ -2573,33 +2573,32 @@ const ConsultationSlotPicker = ({ branchId, leadId, value, onChange, currentCons
                       onChange({ ...(value || {}), physio_id: doc.id, time: "", duration: null });
                       setClock({ h: "", m: "", ap: "AM" });
                     }}
-                    className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition ${
+                    // One line to a consultant: photo, name, then whether they are working
+                    // the day pinned to the right edge, so the list reads down one column
+                    // of statuses and holds twice the people the two-line card did.
+                    className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition ${
                       active ? "border-sky-400 bg-sky-50 ring-1 ring-sky-300" : "border-slate-200 bg-white hover:bg-slate-50"
                     }`}
                     data-testid={`${testPrefix}-expert-${doc.id}`}
                   >
                     {doc.photo_url ? (
-                      <img src={doc.photo_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                      <img src={doc.photo_url} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
                     ) : (
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
                         {(doc.full_name || "?").slice(0, 1).toUpperCase()}
                       </span>
                     )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-semibold text-slate-700">
-                        {doc.full_name}
-                        {/* Named rather than hidden. Keeping the same consultant is a
-                            legitimate reschedule — the patient is the one who could not
-                            make the day — and a list that quietly left them out would
-                            read as though they had been taken off the case. */}
-                        {isCurrent && <span className="ml-1 text-[10px] font-medium text-sky-600">· current</span>}
-                      </span>
-                      <span className="block truncate text-[10px]">
-                        <span className={open > 0 ? "font-semibold text-emerald-600" : "font-semibold text-amber-600"}>
-                          {open > 0 ? "Available" : "Not available"}
-                        </span>
-                        <span className="text-slate-400">{doc.specialization ? ` · ${doc.specialization}` : ""}</span>
-                      </span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title={doc.specialization ? `${doc.full_name} · ${doc.specialization}` : doc.full_name}>
+                      {doc.full_name}
+                      {/* Named rather than hidden. Keeping the same consultant is a
+                          legitimate reschedule — the patient is the one who could not
+                          make the day — and a list that quietly left them out would
+                          read as though they had been taken off the case. */}
+                      {isCurrent && <span className="ml-1 text-[10px] font-medium text-sky-600">· current</span>}
+                      {doc.specialization && <span className="ml-1 text-[10px] font-normal text-slate-400">· {doc.specialization}</span>}
+                    </span>
+                    <span className={`shrink-0 text-[10px] font-semibold ${open > 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                      {open > 0 ? "Available" : "Not available"}
                     </span>
                   </button>
                 );
