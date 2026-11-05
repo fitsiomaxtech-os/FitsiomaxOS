@@ -3092,10 +3092,14 @@ const weekdayLabel = (d) => {
 // onDeleted: opt-in Delete beside Edit, through the shared DeleteLeadDialog. Only the
 // Business Development board's Dashboard passes it; called with the id once it is gone.
 export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = null, canMoveStage = true, onClose, onSaved, onMoveStage, onDeleted = null }) => {
-  // A lead at Follow Up opens on the Follow-Up tab, as on Branch Admin: the call-back is
-  // what it is opened for, and on Overview that card is shut. Read once, on open, so
-  // moving the lead later does not pull the tab away.
-  const [tab, setTab] = useState(() => (lead?.stage === "Follow Up" ? "follow-up" : "overview"));
+  // A lead at Follow Up opens on the Follow-Up tab, and one at RNR on RNR Record, as on
+  // Branch Admin: that tab is what the lead is opened for. Read once, on open, so moving
+  // the lead later does not pull the tab away.
+  const [tab, setTab] = useState(() => (
+    lead?.stage === "Follow Up" ? "follow-up"
+      : lead?.stage === "RNR" ? "rnr"
+        : "overview"
+  ));
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [currentLead, setCurrentLead] = useState(lead);

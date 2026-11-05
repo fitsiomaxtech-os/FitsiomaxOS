@@ -3976,12 +3976,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // `!!name` guards the matchesBranchStage call below: a lead with no consultation_stage
   // has not been handed over, and an undefined name is in neither pipelines' stage list.
   const isConsultationOnlyStage = (name) => !!name && !stages.some((s) => s.name === name);
-  // A lead at Follow Up opens on the Follow-Up tab: the call-back is the one thing anybody
-  // opens it for, and on Overview that card is shut. Read once, on open, by the same loose
-  // rule as atFollowUpStage below, so moving the lead later does not pull the tab away.
-  const [activeTab, setActiveTab] = useState(() => (
-    /follow\s*-?\s*up/i.test(headerStageName || "") ? "follow-up" : "overview"
-  ));
+  // A lead at Follow Up opens on the Follow-Up tab, and one at RNR on RNR Record: that tab
+  // is what the lead is opened for. Read once, on open, by the same rules as
+  // atFollowUpStage and atRnrStage below, so moving the lead later does not pull the tab
+  // away.
+  const [activeTab, setActiveTab] = useState(() => {
+    if (/follow\s*-?\s*up/i.test(headerStageName || "")) return "follow-up";
+    if (lead.branch_stage === stageNameForRole(stages, STAGE_ROLE_RNR)) return "rnr";
+    return "overview";
+  });
   // Overview's RNR Status and Follow-Up cards, which a lead at Follow Up shows shut.
   const [rnrCardOpen, setRnrCardOpen] = useState(false);
   const [followUpCardOpen, setFollowUpCardOpen] = useState(false);
