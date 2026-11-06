@@ -358,6 +358,9 @@ class V3LeadOut(BaseModel):
     stage: str
     branch_stage: Optional[str] = None
     consultation_stage: Optional[str] = None
+    # Why the patient quit, as typed into the Quit popup on the Consultations card. Set
+    # only by a move to Quit; see v3_move_consultation_stage.
+    consultation_quit_reason: Optional[str] = None
     head_consultation_stage: Optional[str] = None  # Head Physio's own pipeline, independent from consultation_stage
     branch_id: Optional[str] = None
     # Not stored on the lead — GET /leads resolves it from the lead's branch on the way
@@ -1173,6 +1176,9 @@ class V3PortfolioScheduleInput(BaseModel):
 
 class V3ConsultationStageInput(BaseModel):
     consultation_stage: str
+    # Read only on a move to Quit. Optional so the Branch Leads Quit popup, which does not
+    # ask for one, and a browser still on an older chunk keep working.
+    reason: Optional[str] = None
 
 
 class V3HeadConsultationStageInput(BaseModel):

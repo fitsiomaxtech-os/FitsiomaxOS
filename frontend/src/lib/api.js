@@ -322,7 +322,8 @@ export const createPackage = async (payload) => (await api.post("/packages", pay
 export const updatePackage = async (id, payload) => (await api.put(`/packages/${id}`, payload)).data;
 export const deletePackage = async (id) => (await api.delete(`/packages/${id}`)).data;
 export const sellPackage = async (leadId, payload) => (await api.post(`/leads/${leadId}/sell-package`, payload)).data;
-export const moveConsultationStage = async (leadId, consultation_stage) => (await api.post(`/leads/${leadId}/move-consultation-stage`, { consultation_stage })).data;
+// extra carries { reason } on a move to Quit.
+export const moveConsultationStage = async (leadId, consultation_stage, extra = {}) => (await api.post(`/leads/${leadId}/move-consultation-stage`, { consultation_stage, ...extra })).data;
 export const moveHeadConsultationStage = async (leadId, head_consultation_stage) => (await api.post(`/leads/${leadId}/move-head-consultation-stage`, { head_consultation_stage })).data;
 export const scheduleConsultationFollowUp = async (leadId, payload) => (await api.post(`/leads/${leadId}/consultation-follow-up`, payload)).data;
 export const rescheduleConsultationFollowUp = async (leadId, followupId, payload) => (await api.post(`/leads/${leadId}/consultation-follow-up/${followupId}/reschedule`, payload)).data;

@@ -2051,14 +2051,24 @@ async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageI
                 detail=f"'{previous}' has already moved forward — it can't be sent back to '{payload.consultation_stage}'.",
             )
 
-    await v3_col("leads").update_one({"id": lead_id}, {"$set": {
+    quitting = payload.consultation_stage == CONSULTATION_QUIT_STAGE
+    quit_reason = (payload.reason or "").strip() if quitting else ""
+    fields = {
         "consultation_stage": payload.consultation_stage,
         "updated_at": now_iso(),
-    }})
+    }
+    # The reason typed into the Quit popup, kept on the lead so the Quit panel can show it.
+    if quit_reason:
+        fields.update({
+            "consultation_quit_reason": quit_reason,
+            "consultation_quit_at": now_iso(),
+            "consultation_quit_by": user.full_name,
+        })
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": fields})
     # Whatever the patient still had booked goes back on the calendar, the way Lost gives
     # back the slot it holds (see v3_move_branch_stage).
     freed = 0
-    if payload.consultation_stage == CONSULTATION_QUIT_STAGE:
+    if quitting:
         res = await v3_col("appointments").update_many(
             {"lead_id": lead_id, "status": "new_appointment"},
             {"$set": {"status": "cancelled", "updated_at": now_iso()}},
@@ -2069,6 +2079,7 @@ async def v3_move_consultation_stage(lead_id: str, payload: V3ConsultationStageI
         "lead_id": lead_id,
         "action": "consultation_stage_moved",
         "details": f"Consultation: {previous} → {payload.consultation_stage}"
+                   + (f" — reason: {quit_reason}" if quit_reason else "")
                    + (f" · {freed} appointment{'' if freed == 1 else 's'} cancelled, slot freed" if freed else ""),
         "created_by": user.full_name,
         "created_by_role": user.role,

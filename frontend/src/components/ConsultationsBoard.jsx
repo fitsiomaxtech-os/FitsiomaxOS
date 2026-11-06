@@ -3440,6 +3440,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Payment Schedule. { reason, mode: "single" | "schedule", amount, due_date, installments } | null
   const [extraDueDraft, setExtraDueDraft] = useState(null);
   const [savingExtraDue, setSavingExtraDue] = useState(false);
+  // The Quit popup: the reason the patient is leaving, asked before the move. { reason } | null
+  const [quitDraft, setQuitDraft] = useState(null);
+  const [quitting, setQuitting] = useState(false);
   // The Inspect popup open on a fee row, by fee: "treatment" (how the figure was worked
   // out) or "extra" (what the Extra Amount is for and when it falls due); false when shut.
   const [feeInspect, setFeeInspect] = useState(false);
@@ -4422,16 +4425,29 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return consultationItemPrice(i, selectedLead?.appointment_mode || "offline");
   }, [selectedLead?.visit_package_id, selectedLead?.visit_package_price, selectedLead?.appointment_mode]);
 
-  const moveStage = async (lead, next) => {
-    if (next === lead.consultation_stage) return;
+  // Resolves true once moved, so a popup that called it knows whether to close.
+  const moveStage = async (lead, next, extra) => {
+    if (next === lead.consultation_stage) return false;
     try {
-      const updated = await moveConsultationStage(lead.id, next);
+      const updated = await moveConsultationStage(lead.id, next, extra);
       toast.success(`${lead.name || "Lead"} moved → ${next}`);
       setSelectedLead(null);
-      setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => l.id === lead.id ? { ...l, consultation_stage: updated.consultation_stage } : l) }));
+      setBoard((b) => ({ ...b, leads: (b.leads || []).map((l) => l.id === lead.id ? { ...l, consultation_stage: updated.consultation_stage, consultation_quit_reason: updated.consultation_quit_reason } : l) }));
+      return true;
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Move failed");
+      return false;
     }
+  };
+
+  const submitQuit = async () => {
+    const reason = (quitDraft?.reason || "").trim();
+    if (!reason) { toast.error("Enter the reason for quitting"); return; }
+    setQuitting(true);
+    const moved = await moveStage(selectedLead, "Quit", { reason });
+    setQuitting(false);
+    // Stays open if the move was refused, so the reason typed is not lost.
+    if (moved) setQuitDraft(null);
   };
 
   // Before the visit the way out is the Branch pipeline's Lost, in the words Branch Leads asks
@@ -9640,12 +9656,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <Ban className="mr-1 h-3.5 w-3.5" /> {label}
                   </Button>
                 );
-                const askQuit = () => {
-                  if (window.confirm(
-                    `Move ${selectedLead.name || "this patient"} to Quit?\n\n`
-                    + "They leave the pipeline here and cannot be moved back. What they have paid stays on their record.",
-                  )) moveStage(selectedLead, "Quit");
-                };
+                const askQuit = () => setQuitDraft({ reason: "" });
                 let ExitButton = null;
                 if (awaitingVisit) ExitButton = exitButton("Lost", "cons-lost-btn", () => markLost(selectedLead));
                 else if (quittable) ExitButton = exitButton("Quit", "cons-quit-btn", askQuit);
@@ -11640,6 +11651,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             {bookedLine && <p className="truncate text-[11px] text-slate-500" data-testid="cons-cancelled-booking">{bookedLine}</p>}
                           </div>
                         </div>
+                        {selectedLead.consultation_quit_reason && (
+                          <p className="whitespace-pre-wrap border-t border-slate-100 px-4 py-2 text-xs text-slate-600" data-testid="cons-quit-reason-shown">
+                            <span className="font-semibold text-slate-700">Reason: </span>{selectedLead.consultation_quit_reason}
+                          </p>
+                        )}
                       </section>
                     );
                   }
@@ -14308,6 +14324,45 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </div>
               );
             })()}
+
+            {/* Quit, from the foot of the card. Asks why before the patient leaves the
+                pipeline; the reason is kept on the lead and written to its Timeline. */}
+            {quitDraft && selectedLead && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !quitting) setQuitDraft(null); }} data-testid="cons-quit-modal">
+                <div className="w-full max-w-sm space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
+                  <div className="flex items-center justify-between">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                      <Ban className="h-4 w-4 text-rose-600" />
+                      Quit {selectedLead.name || "this patient"}?
+                    </p>
+                    <button onClick={() => setQuitDraft(null)} disabled={quitting} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-quit-close"><X className="h-4 w-4" /></button>
+                  </div>
+                  <p className="rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
+                    They leave the pipeline here and cannot be moved back. What they have paid stays on their record.
+                  </p>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500">Reason *</label>
+                    <textarea
+                      rows={3}
+                      autoFocus
+                      value={quitDraft.reason}
+                      onChange={(e) => setQuitDraft((x) => ({ ...x, reason: e.target.value }))}
+                      placeholder="Enter the reason for quitting..."
+                      className="w-full resize-y rounded-[4px] border border-slate-200 px-2.5 py-2 text-sm focus:border-rose-300 focus:outline-none focus:ring-1 focus:ring-rose-200"
+                      data-testid="cons-quit-reason"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setQuitDraft(null)} disabled={quitting} data-testid="cons-quit-cancel">
+                      Cancel
+                    </Button>
+                    <Button size="sm" className={`bg-rose-600 text-white hover:bg-rose-700 ${ACT_BTN}`} onClick={submitQuit} disabled={quitting || !quitDraft.reason.trim()} data-testid="cons-quit-confirm">
+                      {quitting ? "Moving..." : "Quit"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {onlineMenu && (() => {
               const isOnline = onlineMenu.mode === "online";
