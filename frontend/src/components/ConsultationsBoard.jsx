@@ -1201,8 +1201,11 @@ const SplitPaymentLines = ({ lines, modes: allModes, expected, onChange, testPre
  * The percentage box is a way of arriving at the rupee discount and nothing more, so it
  * keeps its own text state -- a half-typed "1." must survive to the "12" it is becoming
  * -- with `selfEdit` stopping the sync back from overwriting the box being typed into.
+ *
+ * `amountFirst` puts the fee box at the top, with the rupee Discount under it and no
+ * percentage box at all. The Diet Consultation Fee's confirm popup asked for it that way.
  */
-const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, testPrefix, lockAmount = false }) => {
+const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, testPrefix, lockAmount = false, amountFirst = false }) => {
   const price = Number(assignedPrice);
   const hasPrice = Number.isFinite(price) && price > 0;
   const discountRs = Math.max(0, parseFloat(discount) || 0);
@@ -1247,30 +1250,32 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
   const overDiscounted = hasPrice && discountRs > price;
   const overpaid = hasPrice && validAmt && amt > netPayable + 0.01;
 
-  return (
-    <div className="space-y-2.5">
-      {hasPrice && (
-        <div className="flex items-center justify-between rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px]">
-          <span className="text-slate-500">Assigned Price</span>
-          <span className="font-semibold text-slate-700">Rs.{price}</span>
-        </div>
-      )}
+  const discountRsInput = (
+    <Input type="number" min="0" value={discount ?? ""} onChange={(e) => applyDiscount(e.target.value)} className="h-9" placeholder="0" data-testid={`${testPrefix}-discount-rs`} />
+  );
 
-      {hasPrice && (
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount %</label>
-            <Input type="number" min="0" value={pctText} onChange={(e) => onPct(e.target.value)} className="h-9" placeholder="0" data-testid={`${testPrefix}-discount-pct`} />
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount (₹)</label>
-            <Input type="number" min="0" value={discount ?? ""} onChange={(e) => applyDiscount(e.target.value)} className="h-9" placeholder="0" data-testid={`${testPrefix}-discount-rs`} />
-          </div>
-        </div>
-      )}
+  const discountBoxes = hasPrice && (amountFirst ? (
+    <div>
+      <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount (₹)</label>
+      {discountRsInput}
+    </div>
+  ) : (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount %</label>
+        <Input type="number" min="0" value={pctText} onChange={(e) => onPct(e.target.value)} className="h-9" placeholder="0" data-testid={`${testPrefix}-discount-pct`} />
+      </div>
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-slate-500">Discount (₹)</label>
+        {discountRsInput}
+      </div>
+    </div>
+  ));
 
+  const discountNotes = (
+    <>
       {/* Spelled out the moment a discount exists, because it is the figure the amount
-          below is measured against -- not the assigned price it came off. */}
+          is measured against -- not the assigned price it came off. */}
       {hasPrice && discountRs > 0 && !overDiscounted && (
         <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800" data-testid={`${testPrefix}-net-payable`}>
           <span>Net Payable <span className="opacity-70">(after Rs.{discountRs} discount, {round2((discountRs / price) * 100)}%)</span></span>
@@ -1283,6 +1288,20 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
           A discount of <span className="font-semibold">Rs.{discountRs}</span> is more than the Rs.{price} being collected for.
         </div>
       )}
+    </>
+  );
+
+  return (
+    <div className="space-y-2.5">
+      {hasPrice && (
+        <div className="flex items-center justify-between rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px]">
+          <span className="text-slate-500">Assigned Price</span>
+          <span className="font-semibold text-slate-700">Rs.{price}</span>
+        </div>
+      )}
+
+      {!amountFirst && discountBoxes}
+      {!amountFirst && discountNotes}
 
       <div>
         <label className="mb-1 block text-[11px] font-medium text-slate-500">{label}</label>
@@ -1299,7 +1318,7 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
               <Lock className="h-3.5 w-3.5 text-slate-400" />
             </div>
             <p className="mt-1 text-[11px] text-slate-400" data-testid={`${testPrefix}-amount-hint`}>
-              Fixed at the assigned price{discountRs > 0 ? " less the discount" : ""}. Use the Discount boxes above to reduce what is payable.
+              Fixed at the assigned price{discountRs > 0 ? " less the discount" : ""}. Use the Discount {amountFirst ? "box below" : "boxes above"} to reduce what is payable.
             </p>
           </>
         ) : (
@@ -1315,6 +1334,9 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
           </>
         )}
       </div>
+
+      {amountFirst && discountBoxes}
+      {amountFirst && discountNotes}
 
       {overpaid && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800" data-testid={`${testPrefix}-overpaid-warning`}>
@@ -13468,6 +13490,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         onChange={(patch) => setDietFeeDraft({ ...dietFeeDraft, ...patch })}
                         label={`${dietFeeCfg.label} (₹)`}
                         testPrefix="cons-diet-fee-confirm"
+                        amountFirst
                       />
                     )}
 
