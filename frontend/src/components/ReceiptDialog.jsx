@@ -36,7 +36,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
           on the size actually drawn. scale would leave the box at full size, centring
           the card off its own bounds and reserving space nothing occupies. */}
       <div
-        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl"
         style={{ zoom: 0.88 }}
       >
         {/* items-center, not items-start: the title block is shorter than the logo, so
@@ -54,7 +54,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
               <p className="truncate text-xs text-white/80">{isSchedule(receipt) ? "Reference" : "Txn"} {receipt.receiptNo}</p>
             </div>
           </div>
-          <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid={`${testid}-close`}>
+          <button onClick={onClose} className="shrink-0 rounded-[4px] p-1.5 text-white/80 hover:bg-white/20" data-testid={`${testid}-close`}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -81,7 +81,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
             const showSplit = !isSchedule(receipt) && off > 0 && billed > 0;
             if (!showSplit) {
               return (
-                <div className={`rounded-xl border-2 px-4 py-5 text-center ${isSchedule(receipt) ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+                <div className={`rounded-[4px] border-2 px-4 py-5 text-center ${isSchedule(receipt) ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
                   <p className={`text-xs font-bold uppercase tracking-widest ${isSchedule(receipt) ? "text-amber-600" : "text-emerald-600"}`}>
                     {isSchedule(receipt) ? "Total Payable" : "Amount Paid"}
                   </p>
@@ -95,7 +95,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
             }
             const pct = round2((off / billed) * 100);
             return (
-              <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-4" data-testid={`${testid}-amount-split`}>
+              <div className="rounded-[4px] border-2 border-emerald-200 bg-emerald-50 px-4 py-4" data-testid={`${testid}-amount-split`}>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
                     <p className="text-[11px] font-medium text-slate-500">Total Amount</p>
@@ -171,7 +171,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
         <div className="flex items-center justify-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:gap-3 sm:px-6">
           <Button
             variant="outline"
-            className="h-10 w-10 shrink-0 p-0"
+            className="h-10 w-10 shrink-0 rounded-[4px] p-0"
             onClick={() => printReceipt(receipt)}
             title={isSchedule(receipt) ? "Print Schedule" : "Print Bill"}
             aria-label={isSchedule(receipt) ? "Print Schedule" : "Print Bill"}
@@ -182,7 +182,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
           {/* The one the branch actually reaches for: the receipt PDF is nearly always
               going to the number already printed on it. */}
           <Button
-            className="h-10 w-10 shrink-0 bg-[#25D366] p-0 text-white hover:bg-[#1da851]"
+            className="h-10 w-10 shrink-0 rounded-[4px] bg-[#25D366] p-0 text-white hover:bg-[#1da851]"
             onClick={() => whatsappPdf(pdf, pdfName, pdfTitle, receipt.phone)}
             title="Send on WhatsApp"
             aria-label="Send on WhatsApp"
@@ -192,7 +192,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
           </Button>
           <Button
             variant="outline"
-            className="h-10 w-10 shrink-0 p-0"
+            className="h-10 w-10 shrink-0 rounded-[4px] p-0"
             onClick={() => sharePdf(pdf, pdfName, pdfTitle)}
             title="Share PDF"
             aria-label="Share PDF"
@@ -202,7 +202,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
           </Button>
           <Button
             variant="outline"
-            className="h-10 w-10 shrink-0 p-0"
+            className="h-10 w-10 shrink-0 rounded-[4px] p-0"
             onClick={() => downloadPdf(pdf, pdfName)}
             title={isSchedule(receipt) ? "Download Schedule" : "Download Receipt"}
             aria-label={isSchedule(receipt) ? "Download Schedule" : "Download Receipt"}
