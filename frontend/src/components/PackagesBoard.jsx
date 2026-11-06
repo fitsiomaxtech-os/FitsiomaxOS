@@ -1034,10 +1034,14 @@ export const CreateSessionPackageModal = ({ item, onClose, onSaved, category = "
 // Services page passes its own All/Offline/Online pill selection through here, since an
 // Offline Branch Admin only ever needs this item's offline price and an Online one only
 // the online price.
-export const PriceModeBadges = ({ item, isSession, mode = "all" }) => (
+// `squared`: the price rows with 4px corners rather than rounded-lg -- the Chennai branch's
+// Consultations > Physiotherapy cards.
+export const PriceModeBadges = ({ item, isSession, mode = "all", squared = false }) => {
+  const rowRadius = squared ? "rounded-[4px]" : "rounded-lg";
+  return (
   item.item_type === "diet" || item.item_type === "diet_package" ? (
     <div className="mt-2">
-      <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-1.5">
+      <div className={`flex items-center justify-between ${rowRadius} bg-emerald-50 px-2.5 py-1.5`}>
         <span className="text-xs font-bold text-emerald-800">Price</span>
         <span className="text-sm font-extrabold text-emerald-900">₹{item.price_online ?? 0}</span>
       </div>
@@ -1045,7 +1049,7 @@ export const PriceModeBadges = ({ item, isSession, mode = "all" }) => (
   ) : (
   <div className="mt-2 space-y-1.5">
     {mode !== "offline" && (
-      <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-1.5">
+      <div className={`flex items-center justify-between ${rowRadius} bg-emerald-50 px-2.5 py-1.5`}>
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800">
           <Wifi className="h-3.5 w-3.5" />Online
         </span>
@@ -1055,7 +1059,7 @@ export const PriceModeBadges = ({ item, isSession, mode = "all" }) => (
       </div>
     )}
     {mode !== "online" && (
-      <div className="flex items-center justify-between rounded-lg bg-amber-50 px-2.5 py-1.5">
+      <div className={`flex items-center justify-between ${rowRadius} bg-amber-50 px-2.5 py-1.5`}>
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800">
           <MapPin className="h-3.5 w-3.5" />Offline
         </span>
@@ -1066,7 +1070,8 @@ export const PriceModeBadges = ({ item, isSession, mode = "all" }) => (
     )}
   </div>
   )
-);
+  );
+};
 
 // Same mode convention as PriceModeBadges — "all" (default) keeps both boxes, exactly
 // what every existing caller (ViewItemModal, BranchStoreBoard) still gets since neither

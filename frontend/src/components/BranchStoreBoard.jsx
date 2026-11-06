@@ -43,7 +43,7 @@ const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
 //
 // `squareFourUp`: four cards to a row on a wide screen (three on a laptop, two on a tablet)
 // and 4px corners on the card, its price boxes, image and buttons -- the Chennai branch's
-// Sessions > Treatment shelf.
+// Sessions > Treatment and Consultations > Physiotherapy shelves.
 const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", branchId, squareFourUp = false }) => {
   const [items, setItems] = useState([]);
   const [viewingItem, setViewingItem] = useState(null);
@@ -113,10 +113,10 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
                 {isSession ? (
                   <SessionPriceBoxes item={it} mode={modeFilter} squared={squareFourUp} testid={`${testidPrefix}-item-${it.id}-highlights`} />
                 ) : (
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3" data-testid={`${testidPrefix}-item-${it.id}-highlights`}>
-                    <PriceModeBadges item={it} isSession={false} mode={modeFilter} />
+                  <div className={`${squareFourUp ? "rounded-[4px]" : "rounded-xl"} border border-slate-100 bg-slate-50/50 p-3`} data-testid={`${testidPrefix}-item-${it.id}-highlights`}>
+                    <PriceModeBadges item={it} isSession={false} mode={modeFilter} squared={squareFourUp} />
                     {itemType !== "diet_package" && it.duration_minutes && (
-                      <div className="mt-1.5 flex items-center justify-between rounded-lg bg-sky-50 px-2.5 py-1.5">
+                      <div className={`mt-1.5 flex items-center justify-between ${squareFourUp ? "rounded-[4px]" : "rounded-lg"} bg-sky-50 px-2.5 py-1.5`}>
                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-800">
                           <Clock className="h-3.5 w-3.5" />{durationLabel}
                         </span>
@@ -171,7 +171,9 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
   );
 };
 
-export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", branchId }) => {
+// `chennai`: the Physiotherapy shelf as four 4px-cornered cards to a row (see
+// squareFourUp). Pre Book keeps its three-up rounded cards.
+export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", branchId, chennai = false }) => {
   const [sub, setSub] = useState("physiotherapy");
   return (
     <div className="space-y-4" data-testid="branch-store-panel-consultations">
@@ -200,6 +202,7 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", bran
           testidPrefix="branch-consultation"
           reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
+          squareFourUp={chennai}
         />
       )}
       {/* The Pre Book price list, with this branch's own prices -- what the Pre Book popup
@@ -493,7 +496,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
         })}
       </div>
 
-      {tab === "consultations" && <BranchConsultationsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
+      {tab === "consultations" && <BranchConsultationsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} chennai={chennai} />}
       {tab === "sessions" && <BranchSessionsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} chennai={chennai} />}
       {tab === "diet" && <BranchDietPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
       {tab === "home_visit" && <BranchHomeVisitPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
