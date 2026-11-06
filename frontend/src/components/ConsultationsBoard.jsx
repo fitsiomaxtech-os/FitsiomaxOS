@@ -1327,8 +1327,10 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
 
 // Red while the Due Date for Balance is still empty, so the one required field left in
 // the popup can't be missed; it settles back to the normal field once a date is picked.
-// `!` because MilkDateInput already sets its own border and text colour.
+// `!` because MilkDateInput already sets its own border and text colour. The field's
+// own placeholder says why it is red, so nothing has to sit under it.
 const DUE_DATE_MISSING = "!border-red-400 !bg-red-50 !text-red-500";
+const DUE_DATE_PLACEHOLDER = "Required: pick the date the balance is due";
 
 /**
  * What is still owed after a collection, and when it is due.
@@ -1359,14 +1361,10 @@ const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, 
           title="Due Date for Balance"
           value={dueDate}
           onChange={(e) => onDueDateChange(e.target.value)}
+          placeholder={DUE_DATE_PLACEHOLDER}
           className={`h-9 ${missing ? DUE_DATE_MISSING : ""}`}
           data-testid={`${testPrefix}-balance-due-date`}
         />
-        {missing && (
-          <p className="mt-1 text-[11px] font-medium text-red-500" data-testid={`${testPrefix}-balance-due-date-required`}>
-            Required: pick the date the balance is due
-          </p>
-        )}
       </div>
       <div className="rounded-md border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-800" data-testid={`${testPrefix}-balance-note`}>
         {leading}
@@ -12928,14 +12926,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 title="Due Date for Balance"
                                 value={partialCollectDraft.balance_due_date}
                                 onChange={(e) => setPartialCollectDraft((d) => ({ ...d, balance_due_date: e.target.value }))}
+                                placeholder={DUE_DATE_PLACEHOLDER}
                                 className={`h-9 ${partialCollectDraft.balance_due_date ? "" : DUE_DATE_MISSING}`}
                                 data-testid="cons-partial-collect-balance-due-date"
                               />
-                              {!partialCollectDraft.balance_due_date && (
-                                <p className="mt-1 text-[11px] font-medium text-red-500" data-testid="cons-partial-collect-balance-due-date-required">
-                                  Required: pick the date the balance is due
-                                </p>
-                              )}
                             </div>
                           )}
                         </div>
