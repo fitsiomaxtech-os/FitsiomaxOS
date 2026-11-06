@@ -434,7 +434,8 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
       .then((rows) => {
         const branch = rows.find((b) => b.id === branchId);
         setMode(isOnlineVertical(branch?.vertical) ? "online" : "offline");
-        setChennai(isChennaiBranch(branch?.name));
+        // branch_name: a branch record has no `name` field (V3BranchOut).
+        setChennai(isChennaiBranch(branch?.branch_name));
       })
       .catch(() => { setMode("all"); setChennai(false); });
   }, [branchId]);
