@@ -1325,6 +1325,11 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
   );
 };
 
+// Red while the Due Date for Balance is still empty, so the one required field left in
+// the popup can't be missed; it settles back to the normal field once a date is picked.
+// `!` because MilkDateInput already sets its own border and text colour.
+const DUE_DATE_MISSING = "!border-red-400 !bg-red-50 !text-red-500";
+
 /**
  * What is still owed after a collection, and when it is due.
  *
@@ -1340,11 +1345,12 @@ const FeeAmountEntry = ({ assignedPrice, discount, amount, onChange, label, test
  */
 const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, note = "", leading = null, testPrefix }) => {
   if (!(balance > 0.009)) return null;
+  const missing = !dueDate;
   return (
     <>
       <div>
-        <label className="mb-1 block text-[11px] font-medium text-slate-500">
-          Due Date for Balance ({note ? `${note}, ` : ""}Rs.{balance}) *
+        <label className={`mb-1 block text-[11px] font-medium ${missing ? "text-red-600" : "text-slate-500"}`}>
+          Due Date for Balance ({note ? `${note}, ` : ""}Rs.{balance}) <span className="text-red-500">*</span>
         </label>
         {/* Centered rather than anchored: this sits low in a modal, and a calendar
             hanging off the field opens past the modal's edge. */}
@@ -1353,9 +1359,14 @@ const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, 
           title="Due Date for Balance"
           value={dueDate}
           onChange={(e) => onDueDateChange(e.target.value)}
-          className="h-9"
+          className={`h-9 ${missing ? DUE_DATE_MISSING : ""}`}
           data-testid={`${testPrefix}-balance-due-date`}
         />
+        {missing && (
+          <p className="mt-1 text-[11px] font-medium text-red-500" data-testid={`${testPrefix}-balance-due-date-required`}>
+            Required: pick the date the balance is due
+          </p>
+        )}
       </div>
       <div className="rounded-md border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-800" data-testid={`${testPrefix}-balance-note`}>
         {leading}
@@ -12907,8 +12918,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </p>
                           {n >= 1 && left > 0 && (
                             <div className="mt-3">
-                              <label className="mb-1 block text-[11px] font-medium text-slate-500">
-                                Due Date for Balance *
+                              <label className={`mb-1 block text-[11px] font-medium ${partialCollectDraft.balance_due_date ? "text-slate-500" : "text-red-600"}`}>
+                                Due Date for Balance <span className="text-red-500">*</span>
                               </label>
                               {/* Centered rather than anchored, as on the fee's own Collect
                                   popup: a calendar hanging off the field opens past the modal. */}
@@ -12917,9 +12928,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 title="Due Date for Balance"
                                 value={partialCollectDraft.balance_due_date}
                                 onChange={(e) => setPartialCollectDraft((d) => ({ ...d, balance_due_date: e.target.value }))}
-                                className="h-9"
+                                className={`h-9 ${partialCollectDraft.balance_due_date ? "" : DUE_DATE_MISSING}`}
                                 data-testid="cons-partial-collect-balance-due-date"
                               />
+                              {!partialCollectDraft.balance_due_date && (
+                                <p className="mt-1 text-[11px] font-medium text-red-500" data-testid="cons-partial-collect-balance-due-date-required">
+                                  Required: pick the date the balance is due
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
