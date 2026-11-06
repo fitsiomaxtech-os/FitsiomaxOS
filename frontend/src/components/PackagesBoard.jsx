@@ -1071,7 +1071,10 @@ export const PriceModeBadges = ({ item, isSession, mode = "all" }) => (
 // Same mode convention as PriceModeBadges — "all" (default) keeps both boxes, exactly
 // what every existing caller (ViewItemModal, BranchStoreBoard) still gets since neither
 // passes it.
-export const SessionPriceBoxes = ({ item, testid, mode = "all" }) => {
+// `squared`: the boxes with 4px corners rather than rounded-xl — the Chennai branch's
+// Sessions > Treatment cards.
+export const SessionPriceBoxes = ({ item, testid, mode = "all", squared = false }) => {
+  const boxRadius = squared ? "rounded-[4px]" : "rounded-xl";
   // A Zumba row is a membership: the schedule is fixed and the money that changes hands is
   // the plan amount, so the per-session pair every other package shows would be reading out
   // an internal figure. Offline only, so one box either way.
@@ -1079,7 +1082,7 @@ export const SessionPriceBoxes = ({ item, testid, mode = "all" }) => {
     const classes = item.sessions_offline || item.sessions_online || 0;
     const months = zumbaMonthsFor(classes);
     return (
-      <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-3" data-testid={testid}>
+      <div className={`${boxRadius} border border-violet-100 bg-violet-50/60 p-3`} data-testid={testid}>
         <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-violet-800">
           <Music2 className="h-3.5 w-3.5" />{months ? `${months} Month${months > 1 ? "s" : ""} Plan` : "Zumba Class"}
         </p>
@@ -1119,7 +1122,7 @@ export const SessionPriceBoxes = ({ item, testid, mode = "all" }) => {
   return (
   <div className={`grid gap-2 ${mode === "all" && !offlineOnly ? "grid-cols-2" : "grid-cols-1"}`} data-testid={testid}>
     {showOnline && (
-      <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+      <div className={`${boxRadius} border border-emerald-100 bg-emerald-50/60 p-3`}>
         <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-emerald-800"><Wifi className="h-3.5 w-3.5" />Online Mode</p>
         <div className="space-y-1.5 text-xs text-emerald-800">
           {!courseOnly && <div className="flex items-center justify-between"><span>Per Session</span><span className="font-bold">₹{item.price_online ?? 0}</span></div>}
@@ -1132,7 +1135,7 @@ export const SessionPriceBoxes = ({ item, testid, mode = "all" }) => {
       </div>
     )}
     {showOffline && (
-      <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-3">
+      <div className={`${boxRadius} border border-amber-100 bg-amber-50/60 p-3`}>
         <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800">
           {homeVisit ? <Home className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}{homeVisit ? "Home Visit" : offlineOnly ? "At the gym" : "Offline Mode"}
         </p>

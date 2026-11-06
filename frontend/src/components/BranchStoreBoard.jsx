@@ -29,6 +29,9 @@ import {
 // group branches.
 const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 
+// The same test ConsultationsBoard.jsx uses for its Chennai-only Collect Payment popup.
+const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
+
 // Every shelf here is editable with Super Admin's own dialog for it: the session form for
 // Sessions, Rehab, Zumba, Workshop and Home Visit, the consultation form for Consultations
 // and both Diet Details shelves. Edit only — create and delete stay with Super Admin,
@@ -37,11 +40,16 @@ const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 // With Services and Products per branch switched On (Developer Access), what is listed and
 // saved here is this branch's own copy — see store_branch_overrides.py. branchId is what
 // tells the server which branch when Super Admin is the one driving the board.
-const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", branchId }) => {
+//
+// `squareFourUp`: four cards to a row on a wide screen (three on a laptop, two on a tablet)
+// and 4px corners on the card, its price boxes, image and buttons -- the Chennai branch's
+// Sessions > Treatment shelf.
+const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", branchId, squareFourUp = false }) => {
   const [items, setItems] = useState([]);
   const [viewingItem, setViewingItem] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const isSession = itemType === "session";
+  const iconBtnRadius = squareFourUp ? "rounded-[4px]" : "rounded-md";
 
   // useCallback so the effect can name it as a dependency — it was an inline function with
   // an empty dep array, which is what the exhaustive-deps warning here was pointing at, and
@@ -63,9 +71,9 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
           <CardContent className="p-8 text-center text-sm text-slate-400">{emptyLabel}</CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid={`${testidPrefix}-items-grid`}>
+        <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${squareFourUp ? "xl:grid-cols-4" : ""}`} data-testid={`${testidPrefix}-items-grid`}>
           {items.map((it) => (
-            <Card key={it.id} data-testid={`${testidPrefix}-item-${it.id}`}>
+            <Card key={it.id} className={squareFourUp ? "rounded-[4px]" : undefined} data-testid={`${testidPrefix}-item-${it.id}`}>
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <p className="flex-1 font-semibold text-slate-800">
@@ -83,7 +91,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
                   <div className="flex shrink-0 gap-1">
                     <button
                       onClick={() => setViewingItem(it)}
-                      className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-sky-600"
+                      className={`${iconBtnRadius} p-1.5 text-slate-500 hover:bg-slate-100 hover:text-sky-600`}
                       data-testid={`${testidPrefix}-item-${it.id}-view`}
                       title="View"
                     >
@@ -91,7 +99,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
                     </button>
                     <button
                       onClick={() => setEditingItem(it)}
-                      className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-sky-600"
+                      className={`${iconBtnRadius} p-1.5 text-slate-500 hover:bg-slate-100 hover:text-sky-600`}
                       data-testid={`${testidPrefix}-item-${it.id}-edit`}
                       title="Edit"
                     >
@@ -99,11 +107,11 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
                     </button>
                   </div>
                 </div>
-                {it.image_url && <img src={it.image_url} alt={it.name} className="h-[200px] w-full rounded-lg object-cover" />}
+                {it.image_url && <img src={it.image_url} alt={it.name} className={`h-[200px] w-full object-cover ${squareFourUp ? "rounded-[4px]" : "rounded-lg"}`} />}
                 {it.description && <p className="line-clamp-2 text-xs text-slate-500">{it.description}</p>}
 
                 {isSession ? (
-                  <SessionPriceBoxes item={it} mode={modeFilter} testid={`${testidPrefix}-item-${it.id}-highlights`} />
+                  <SessionPriceBoxes item={it} mode={modeFilter} squared={squareFourUp} testid={`${testidPrefix}-item-${it.id}-highlights`} />
                 ) : (
                   <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3" data-testid={`${testidPrefix}-item-${it.id}-highlights`}>
                     <PriceModeBadges item={it} isSession={false} mode={modeFilter} />
@@ -122,7 +130,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
 
                 <Button
                   onClick={() => handleBook(it)}
-                  className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+                  className={`w-full bg-emerald-600 text-white hover:bg-emerald-700 ${squareFourUp ? "rounded-[4px]" : ""}`}
                   data-testid={`${testidPrefix}-item-${it.id}-book`}
                 >
                   <CalendarCheck className="mr-1 h-4 w-4" />Book
@@ -211,7 +219,9 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", bran
   );
 };
 
-export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all", branchId }) => {
+// `chennai`: the Treatment shelf as four 4px-cornered cards to a row (see squareFourUp).
+// Fitness and Rehab keep their three-up rounded cards.
+export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all", branchId, chennai = false }) => {
   const [sub, setSub] = useState("physiotherapy");
   return (
     <div className="space-y-4" data-testid="branch-store-panel-sessions">
@@ -240,6 +250,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all", branchId 
           testidPrefix="branch-session"
           reloadToken={reloadToken} branchId={branchId}
           modeFilter={modeFilter}
+          squareFourUp={chennai}
         />
       )}
       {/* Was a "coming soon" card, which cost nothing while the top-level Fitness tab
@@ -415,6 +426,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
   // guessing offline or online, so a slow fetch shows every tab briefly rather than the
   // wrong scoped set that would then have to swap out from under whoever's looking.
   const [mode, setMode] = useState(null);
+  const [chennai, setChennai] = useState(false);
 
   useEffect(() => {
     if (!branchId) return;
@@ -422,8 +434,9 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
       .then((rows) => {
         const branch = rows.find((b) => b.id === branchId);
         setMode(isOnlineVertical(branch?.vertical) ? "online" : "offline");
+        setChennai(isChennaiBranch(branch?.name));
       })
-      .catch(() => setMode("all"));
+      .catch(() => { setMode("all"); setChennai(false); });
   }, [branchId]);
 
   const modeFilter = mode || "all";
@@ -480,7 +493,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
       </div>
 
       {tab === "consultations" && <BranchConsultationsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
-      {tab === "sessions" && <BranchSessionsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
+      {tab === "sessions" && <BranchSessionsPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} chennai={chennai} />}
       {tab === "diet" && <BranchDietPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
       {tab === "home_visit" && <BranchHomeVisitPanel reloadToken={reloadTick} modeFilter={modeFilter} branchId={branchId} />}
       {/* Keyed by category: without it React keeps the same instance across a tab switch
