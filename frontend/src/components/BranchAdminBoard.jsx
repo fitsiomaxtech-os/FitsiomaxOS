@@ -4911,10 +4911,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="branch-lead-modal-overlay">
       {/* A floating card on every size, not a full-bleed sheet on a phone. Edge to edge
           reads as a page you navigated to — there's no backdrop left to show it sits on
-          top of the list, and nothing to tap beside it to dismiss. From sm up it opens at
-          590 × 450, or 590 × 630 on the RNR stage, never wider or taller than the window;
-          the body below scrolls. */}
-      <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-full sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:h-[630px]" : "sm:h-[450px]"}`} data-testid="branch-lead-modal">
+          top of the list, and nothing to tap beside it to dismiss. From sm up it is 590
+          wide and as tall as what it holds, up to 450 (630 on the RNR stage) and never
+          taller than the window; past that the body below scrolls. A fixed height left a
+          short tab -- Overview, with just the contact and the move buttons -- sitting on a
+          block of blank card. */}
+      <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
         {/* Plain header. The gradient made this the loudest thing on a screen whose
             subject is the cards underneath — the patient's name and their stage are the
             information here, and they read better on white than reversed out of three
@@ -5014,7 +5016,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           ))}
         </div>
 
-        <div className={`flex-1 overflow-y-auto bg-slate-50/30 ${activeTab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
+        <div className={`min-h-0 flex-1 overflow-y-auto bg-slate-50/30 ${activeTab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
           {activeTab === "overview" && (
             <div className="space-y-3">
               <div className="overflow-hidden rounded-[3px] border border-sky-100 bg-white shadow-sm">
