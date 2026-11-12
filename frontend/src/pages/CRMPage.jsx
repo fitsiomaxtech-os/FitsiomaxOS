@@ -57,6 +57,7 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 // it would only add a round trip to the one control that is always there.
 import { ClockWidget } from "@/components/ClockWidget";
 import { HeaderThemePicker } from "@/components/ThemeAppearance";
+import { useDevZone, openDevZone, lockDevZone } from "@/lib/devZone";
 import { SessionPaymentBell } from "@/components/SessionPaymentBell";
 import { displayPhone } from "@/lib/phone";
 
@@ -106,6 +107,10 @@ const FeedbackBoard = lazyWithRetry(() => import("@/components/branch/FeedbackBo
 // that every single role can reach, so bundling it would put it in front of every first
 // paint in the building.
 const MyProfilePage = lazyWithRetry(() => import("@/components/MyProfilePage").then((m) => ({ default: m.MyProfilePage })));
+// The Danger Zone as a full-screen page — unlocked on Workflow Roots' Developer Access,
+// reopened from the red gear this header shows while it stays unlocked. Lazy because it
+// can only ever mount after that unlock.
+const DeveloperZone = lazyWithRetry(() => import("@/components/DeveloperZone").then((m) => ({ default: m.DeveloperZone })));
 // Time Off on its own, opened from the Physio and Consultant phone headers.
 const TimeOffPage = lazyWithRetry(() => import("@/components/MyTimeOff").then((m) => ({ default: m.TimeOffPage })));
 
@@ -649,6 +654,7 @@ export const CRMPage = ({ auth, onLogout }) => {
   }, [editingLeadId, leads]);
 
   const logout = async () => {
+    lockDevZone();
     try {
       await apiLogout();
     } catch {
@@ -1035,6 +1041,11 @@ export const CRMPage = ({ auth, onLogout }) => {
   // Settings' Marketing Source / CI/CD ROOTS switcher. Not a row of its own: each screen
   // places it in its own top bar -- left of Marketing Source's sub-tabs, left of CI/CD
   // ROOTS' Add Stage -- so Settings opens on one row of controls rather than two.
+  // Whether Developer Access is unlocked (the red gear shows) and whether its full-screen
+  // page is open right now — shared state the unlock on Workflow Roots writes.
+  const devZone = useDevZone();
+  useEffect(() => () => lockDevZone(), [auth.user.id]);
+
   const settingsSubTabs = (
     <div className="flex flex-wrap gap-2" data-testid="settings-subtabs">
       {SETTINGS_SUB_TABS.map((t) => (
@@ -1055,6 +1066,15 @@ export const CRMPage = ({ auth, onLogout }) => {
   return (
     <div className="min-h-screen bg-slate-50" data-testid="role-board-page">
       <Toaster richColors position="top-right" />
+
+      {/* The Danger Zone page, in front of everything while open. It renders nothing of
+          its own once Exit or Lock is pressed, and can only be open after an unlock, so
+          the chunk is never fetched for anyone who never enters the password. */}
+      {devZone.open && (
+        <Suspense fallback={null}>
+          <DeveloperZone />
+        </Suspense>
+      )}
 
       <div className="w-full" data-testid="role-board-full-width-wrap">
         <header className="sticky top-0 z-20 w-full border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-6 sm:py-4" data-testid="role-board-header">
@@ -1223,6 +1243,21 @@ export const CRMPage = ({ auth, onLogout }) => {
               <ClockWidget />
               {/* Theme Appearance, only while Developer Access lets users choose. */}
               <HeaderThemePicker userId={auth.user.id} />
+              {/* The Danger Zone's red gear, only while Developer Access is unlocked on
+                  this page load. Exit on the zone keeps it; Lock (or a refresh) takes it
+                  away, and the way back in is Workflow Roots > Developer Access. */}
+              {devZone.password && (
+                <button
+                  type="button"
+                  onClick={openDevZone}
+                  className="shrink-0 rounded-md p-2 text-red-500 transition hover:bg-red-50 hover:text-red-600"
+                  title="Danger Zone"
+                  aria-label="Danger Zone"
+                  data-testid="danger-zone-gear"
+                >
+                  <Settings className="h-5 w-5" />
+                </button>
+              )}
               {/* A Head Physio's own calendar sits beside their profile rather than in the
                   board's tab row — it's a reference, not one of the lists they work. */}
               {/* A Consultant + Physiotherapist keeps it on the Physiotherapy side too, where

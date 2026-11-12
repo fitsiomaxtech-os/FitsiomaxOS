@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { listStoreItems, getBranches } from "@/lib/api";
+import { useFeatureHidden } from "@/lib/featureVisibility";
 import { StoreInventoryPanel } from "@/components/branch/StoreInventoryPanel";
 import { TreatmentTypesBoard } from "@/components/TreatmentTypesBoard";
 import {
@@ -443,16 +444,22 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
       .catch(() => { setMode("all"); setChennai(false); });
   }, [branchId]);
 
+  // Treatments can be hidden as a whole feature (Danger Zone > Hide Features) — the same
+  // switch that takes it off Super Admin's Services and Products takes it off every branch.
+  const treatmentsHidden = useFeatureHidden("treatments");
+
   const modeFilter = mode || "all";
   const branchStoreTabs = TABS.filter(
-    (t) => MODE_TAB_KEYS[modeFilter].has(t.key) && !SUPER_ADMIN_CATALOGUE_TABS.has(t.key) && !BRANCH_HIDDEN_TABS.has(t.key),
+    (t) => MODE_TAB_KEYS[modeFilter].has(t.key) && !SUPER_ADMIN_CATALOGUE_TABS.has(t.key) && !BRANCH_HIDDEN_TABS.has(t.key)
+      && !(treatmentsHidden && t.key === "treatment"),
   );
 
   // Falls back to Consultations rather than leaving `tab` pointed at a key this branch's
-  // own mode doesn't carry, once its vertical is known.
+  // own mode doesn't carry, once its vertical is known — or at the Treatments tab once
+  // that feature is hidden.
   useEffect(() => {
-    if (mode && !MODE_TAB_KEYS[mode].has(tab)) setTab("consultations");
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    if ((mode && !MODE_TAB_KEYS[mode].has(tab)) || (treatmentsHidden && tab === "treatment")) setTab("consultations");
+  }, [mode, treatmentsHidden, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-4" data-testid="branch-store-board">
@@ -519,7 +526,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
           since it was built and had no panel behind it, so a branch clicking Treatments got
           "setup coming soon" for a list that has been populated all along. Create, rename
           and delete are all the branch's now — the endpoints take branch_admin. */}
-      {tab === "treatment" && <TreatmentTypesBoard />}
+      {tab === "treatment" && !treatmentsHidden && <TreatmentTypesBoard />}
       {!PANELS_BUILT.has(tab) && branchStoreTabs.map((t) => tab === t.key && (
         <PlaceholderPanel key={t.key} label={t.label} testid={`branch-store-panel-${t.key}`} />
       ))}

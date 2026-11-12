@@ -781,6 +781,10 @@ export const setLeadSourceButton = async (password, enabled) => (await api.put("
 export const getPaymentModeVisibility = async () => (await api.get("/payment-mode-visibility")).data;
 export const getPaymentModeVisibilityAdmin = async (password) => (await api.get("/admin/payment-mode-visibility", { headers: developerHeaders(password) })).data;
 export const setPaymentModeHidden = async (password, mode, hidden) => (await api.put("/admin/payment-mode-visibility", { mode, hidden }, { headers: developerHeaders(password) })).data;
+// Hide Features: read by every screen that draws a hideable feature, changed behind the password.
+export const getFeatureVisibility = async () => (await api.get("/feature-visibility")).data;
+export const getFeatureVisibilityAdmin = async (password) => (await api.get("/admin/feature-visibility", { headers: developerHeaders(password) })).data;
+export const setFeatureHidden = async (password, feature, hidden) => (await api.put("/admin/feature-visibility", { feature, hidden }, { headers: developerHeaders(password) })).data;
 // Theme Appearance: read by everyone (the login screen included), changed behind the password.
 export const getAppTheme = async () => (await api.get("/app-theme")).data;
 export const getAppThemeAdmin = async (password) => (await api.get("/admin/app-theme", { headers: developerHeaders(password) })).data;

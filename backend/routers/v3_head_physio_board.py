@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from datetime import date
 import uuid
 
+import feature_visibility
 import session_mode_swap
 import store_branch_overrides
 from database import v3_col
@@ -616,7 +617,10 @@ async def hp_consultation_decision(
         raise HTTPException(status_code=404, detail="Lead not found")
     if not (lead.get("physio_diagnosis_report") or "").strip():
         raise HTTPException(status_code=400, detail="Write the Diagnosis Report before Save & Move")
-    if not (lead.get("treatment_summary") or "").strip():
+    # Not asked for while the Treatments feature is hidden (Danger Zone > Hide Features):
+    # the box this demands is off the Consultant's screen, so demanding it would make
+    # Move to Admin impossible rather than optional.
+    if not (lead.get("treatment_summary") or "").strip() and not await feature_visibility.feature_hidden("treatments"):
         raise HTTPException(status_code=400, detail="Write the Treatment Summary before Save & Move")
     # Completing a consultation moves BOTH pipelines at once: the lead closes out on the
     # Head Physio's board and appears on Branch Admin's Consultation Visit column, which

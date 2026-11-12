@@ -22,6 +22,7 @@ import lead_control
 import lead_purge
 import consult_duration_rule
 import store_branch_overrides
+import feature_visibility
 from seed import create_default_lead_source, sync_lead_source_branch_name
 from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled, UNDO_PAYMENT_SETTING_ID, undo_payment_enabled
 from routers.v3_inventory import _add_to_stock
@@ -1593,6 +1594,56 @@ async def v3_set_payment_mode_visibility(
         upsert=True,
     )
     return {"hidden": await hidden_payment_modes()}
+
+
+# Hide Features -- whole features a developer has switched off (see feature_visibility.py).
+# Hiding one takes its screens and controls off for everybody at once; what the feature
+# already wrote stays. The list itself is no secret -- every board has to know what to
+# draw -- so reading it takes a sign-in, and only changing it takes the password.
+
+
+class FeatureHiddenInput(BaseModel):
+    feature: str
+    hidden: bool
+
+
+@router.get("/feature-visibility")
+async def v3_get_feature_visibility(_: V3UserOut = Depends(v3_current_user)):
+    """Read by every screen that draws a hideable feature, without the password."""
+    return {"hidden": await feature_visibility.hidden_features()}
+
+
+@router.get("/admin/feature-visibility")
+async def v3_get_feature_visibility_dev(_: V3UserOut = Depends(require_developer_password)):
+    return {"hidden": await feature_visibility.hidden_features()}
+
+
+@router.put("/admin/feature-visibility")
+async def v3_set_feature_visibility(
+    payload: FeatureHiddenInput,
+    user: V3UserOut = Depends(require_developer_password),
+):
+    if payload.feature not in feature_visibility.FEATURE_KEYS:
+        raise HTTPException(status_code=400, detail=f"Feature must be one of {', '.join(feature_visibility.FEATURE_KEYS)}")
+    # The whole list is written, not $addToSet/$pull on the stored row: a feature can be
+    # hidden by DEFAULT_HIDDEN with no row at all, and a $pull against a missing row would
+    # leave it hidden while claiming to have shown it.
+    hidden = set(await feature_visibility.hidden_features())
+    if payload.hidden:
+        hidden.add(payload.feature)
+    else:
+        hidden.discard(payload.feature)
+    await v3_col("app_settings").update_one(
+        {"id": feature_visibility.SETTING_ID},
+        {"$set": {
+            "id": feature_visibility.SETTING_ID,
+            "hidden": sorted(hidden),
+            "updated_by": user.full_name,
+            "updated_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"hidden": await feature_visibility.hidden_features()}
 
 
 # Theme Appearance -- the look of the whole OS, picked in Developer Access: Default, Dark,

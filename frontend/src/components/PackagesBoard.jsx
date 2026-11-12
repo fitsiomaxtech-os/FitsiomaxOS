@@ -11,6 +11,7 @@ import { StoreInventoryPanel } from "@/components/branch/StoreInventoryPanel";
 import { VendorPanel } from "@/components/branch/VendorPanel";
 import { TreatmentTypesBoard } from "@/components/TreatmentTypesBoard";
 import { PhysioTypesBoard } from "@/components/PhysioTypesBoard";
+import { useFeatureHidden } from "@/lib/featureVisibility";
 
 export const TABS = [
   { key: "consultations", label: "Consultations", icon: Stethoscope },
@@ -1988,7 +1989,17 @@ export const PackagesBoard = ({ navSlot } = {}) => {
   // ref object mutating in place never triggers that.
   const [createSlot, setCreateSlot] = useState(null);
 
-  const visibleTabs = TABS.filter((t) => MODE_TAB_KEYS[modeFilter].has(t.key));
+  // Treatments can be hidden as a whole feature (Danger Zone > Hide Features) — the tab
+  // goes from here and from every branch's store, with the Consultant's Treatment Summary
+  // dropdown it feeds.
+  const treatmentsHidden = useFeatureHidden("treatments");
+  const visibleTabs = TABS.filter((t) => MODE_TAB_KEYS[modeFilter].has(t.key) && !(treatmentsHidden && t.key === "treatment"));
+
+  // The same fallback the mode switch below makes, for the tab being hidden while open —
+  // or arriving on a saved pointer at it.
+  useEffect(() => {
+    if (treatmentsHidden && tab === "treatment") setTab("consultations");
+  }, [treatmentsHidden, tab]);
 
   // Falls back to Consultations rather than leaving `tab` pointed at a key the new mode
   // doesn't carry — Equipment picked under Offline, then Online clicked, would otherwise
@@ -2120,7 +2131,7 @@ export const PackagesBoard = ({ navSlot } = {}) => {
       {view === "catalog" && tab === "home_visit" && <HomeVisitPanel reloadToken={reloadTick} toolbarSlot={createSlot} modeFilter={modeFilter} />}
       {view === "catalog" && tab === "diet" && <DietDetailsPanel reloadToken={reloadTick} toolbarSlot={createSlot} modeFilter={modeFilter} />}
       {view === "history" && <HistoryPanel reloadToken={reloadTick} />}
-      {view === "catalog" && tab === "treatment" && <TreatmentTypesBoard />}
+      {view === "catalog" && tab === "treatment" && !treatmentsHidden && <TreatmentTypesBoard />}
       {view === "catalog" && tab === "physio_type" && <PhysioTypesBoard />}
       {view === "catalog" && INVENTORY_TABS.has(tab) && <SuperAdminInventoryPanel key={tab} category={tab} reloadToken={reloadTick} />}
       {/* No branch picker, unlike the three shelves above it: the vendor list is

@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useShownPaymentModes } from "@/lib/paymentModes";
+import { useFeatureHidden } from "@/lib/featureVisibility";
 import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -2995,6 +2996,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // until someone fills it, and the box falls back to free text while it is, so a clinic
   // that has not populated it can still finish a consultation.
   const [treatmentTypes, setTreatmentTypes] = useState([]);
+  // Whether the whole Treatments feature is hidden (Danger Zone > Hide Features): the
+  // Treatment Summary box goes from this popup — unless a summary was already written,
+  // which stays readable — and Move to Admin stops asking for one.
+  const treatmentsHidden = useFeatureHidden("treatments");
 
   // Collect Fee popup (Branch Admin only) — at the Consultation Fee stage
   const [collectFeeDraft, setCollectFeeDraft] = useState(null); // { consultation_item_id, payment_mode, ... } | null
@@ -4472,7 +4477,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // ---- Consultation Decision (Head Physio) — "Move to Admin" ----
   const submitConsultationDecision = async () => {
     if (!(selectedLead.physio_diagnosis_report || "").trim()) { toast.error("Write the Diagnosis Report first"); return; }
-    if (!(selectedLead.treatment_summary || "").trim()) { toast.error("Write the Treatment Summary first"); return; }
+    // Not asked for while the Treatments feature is hidden — the box this demands is not
+    // on the screen. The server relaxes the same check (hp_consultation_decision).
+    if (!treatmentsHidden && !(selectedLead.treatment_summary || "").trim()) { toast.error("Write the Treatment Summary first"); return; }
 
     // Treatment is optional: without it the patient moves to Admin as Consultation only,
     // with whichever other services were ticked.
@@ -8745,7 +8752,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           />
                         )}
 
-                        {(isConsultant || selectedLead.treatment_summary) && (
+                        {/* Gone when the Treatments feature is hidden — unless a summary
+                            was already written, which stays on the patient and readable. */}
+                        {(!treatmentsHidden || selectedLead.treatment_summary) && (isConsultant || selectedLead.treatment_summary) && (
                           <LockableTextBox
                             // Keyed by lead so the tick-list remounts between patients. It holds
                             // the open/search state, and without this the panel would stay open
@@ -8759,7 +8768,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             locked={!!selectedLead.treatment_summary_locked}
                             savedText={selectedLead.treatment_summary}
                             saving={savingTreatment}
-                            canEdit={isConsultant && !treatmentSummaryFrozen}
+                            canEdit={isConsultant && !treatmentSummaryFrozen && !treatmentsHidden}
                             // Why the Edit button is gone, said on the card rather than left to be
                             // worked out — a Consultant who wrote this box yesterday and finds no
                             // way back into it today is owed the reason. Said only to them, which
@@ -8826,7 +8835,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // the whole form back in front of a consultation already finished.
                 const alreadyMoved = !!selectedLead.consultation_decision && !editingDecision;
                 const diagnosisReady = !!(selectedLead.physio_diagnosis_report || "").trim();
-                const summaryReady = !!(selectedLead.treatment_summary || "").trim();
+                // Satisfied outright while the Treatments feature is hidden: the box this
+                // waits on is not on the screen to be written in.
+                const summaryReady = treatmentsHidden || !!(selectedLead.treatment_summary || "").trim();
                 const selectedPackage = treatmentPackageItems.find((i) => i.id === decisionDraft.item_id);
                 const selectedPackageWeeks = selectedPackage ? weeksFromPackageName(selectedPackage.name) : null;
                 // Treatment is optional. Once ticked, though, its package and sessions/week
@@ -9424,7 +9435,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             reports are above this panel, Treatment is inside it, and naming
                             both at once sends the eye to the wrong half of the screen. */}
                         {!diagnosisReady || !summaryReady
-                          ? "Write the Diagnosis Report and Treatment Summary above before Move to Admin."
+                          ? (treatmentsHidden
+                            ? "Write the Diagnosis Report above before Move to Admin."
+                            : "Write the Diagnosis Report and Treatment Summary above before Move to Admin.")
                           : "Choose Treatment's package and sessions/week before Move to Admin."}
                       </p>
                     )}
