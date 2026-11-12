@@ -3735,7 +3735,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       </div>
 
       {loading && (
-        <div className="fixed bottom-20 right-4 rounded-md bg-slate-900 px-3 py-2 text-sm text-white md:bottom-4">Loading...</div>
+        <div className="fixed bottom-20 right-4 z-50 flex flex-col items-center gap-1.5 rounded-xl border border-blue-100 bg-white px-5 py-3 shadow-lg md:bottom-4">
+          <div className="flex items-end gap-0.5 text-blue-600">
+            <Settings className="h-4 w-4 animate-spin" style={{ animationDirection: "reverse" }} />
+            <Settings className="h-6 w-6 animate-spin" />
+            <Settings className="h-4 w-4 animate-spin" style={{ animationDirection: "reverse" }} />
+          </div>
+          <div className="h-1.5 w-36 overflow-hidden rounded-full bg-blue-100">
+            <div className="loading-bar-sweep h-full w-1/2 rounded-full bg-blue-600" />
+          </div>
+          <div className="text-sm font-semibold text-slate-600">Loading...</div>
+        </div>
       )}
 
       {/* Back-to-top arrow over the lists, phone and desktop (Branch Leads, Consultation,

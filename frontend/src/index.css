@@ -153,6 +153,28 @@ code {
     }
 }
 
+/* The corner Loading... card's progress bar: the filled stretch sweeps along the track
+   while the board's data is on its way (indeterminate -- there is no real percentage to
+   show). Holds a part-filled bar for a desk set to reduce motion. */
+@keyframes loading-bar-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(250%);
+    }
+}
+
+.loading-bar-sweep {
+    animation: loading-bar-sweep 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-bar-sweep {
+        animation: none;
+    }
+}
+
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;
