@@ -204,7 +204,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
           the window without scrolling. Capped at the window height all the same, so on a
           short one only the fields scroll and Create Lead stays in sight. On a phone the
           card is nine tenths of the screen each way, the backdrop showing round it. */}
-      <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-2xl max-sm:max-h-[90%] max-sm:w-[90%]">
+      <div className="flex max-h-full w-full max-w-4xl flex-col rounded bg-white shadow-2xl max-sm:max-h-[90%] max-sm:w-[90%]">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-3.5 max-sm:px-4 max-sm:py-2.5">
           <h3 className="text-xl font-bold text-slate-900 max-sm:text-lg">Add New Lead</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="lead-create-close"><X className="h-5 w-5" /></button>
@@ -287,7 +287,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
               <Field label="Age"><Input className={PHONE_CONTROL} type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-create-age" /></Field>
               <Field label="Gender"><ThemedSelect className={PHONE_CONTROL} value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDER_OPTIONS]} testid="lead-create-gender" /></Field>
               <Field label="Occupation"><Input className={PHONE_CONTROL} value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-create-occupation" /></Field>
-              <Field label="Expected Consultation Date" className={`${PHONE_WIDE} ${showPicker ? "" : "sm:col-span-2"}`}><MilkDateInput centered confirm title="Expected Consultation Date" className={PHONE_CONTROL} value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
+              <Field label="Expected Consultation Date (Optional)" className={`${PHONE_WIDE} ${showPicker ? "" : "sm:col-span-2"}`}><MilkDateInput centered confirm title="Expected Consultation Date" placeholder="Select date (Optional)" className={PHONE_CONTROL} value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
               {showPicker && (
                 <Field label="Assign Branch" className={PHONE_WIDE}>
                   {/* Left blank, the lead lands Unassigned, as it always has. */}
