@@ -8200,8 +8200,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 than hanging off the right edge on a row of its own. */}
             <div className="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
               {/* Consultation Visit and Fee Collected: one row -- name, patient number, phone,
-                  no icons. The expert and the appointment's day are left to the Overview below it. */}
-              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? (
+                  no icons. The expert and the appointment's day are left to the Overview below it.
+
+                  The Consultant's Treatment Report popup takes the same one row, with the
+                  appointment's day and time after the phone. No Expert (that is the
+                  Consultant reading it) and no Consultation Paid / Pending chip. */}
+              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) || isConsultant ? (
               <div className="min-w-0 flex-1 self-center">
                 <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
@@ -8209,6 +8213,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
                   <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
+                  {isConsultant && selectedLead.appointment_date && (
+                    <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-appt-slot">
+                      {apptDayLabel(selectedLead.appointment_date)}
+                      {selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}
+                    </span>
+                  )}
                   {/* The Appointment Card is this eye, in pastel teal -- no border, no box --
                       rather than a row of its own in the Overview. */}
                   {selectedLead.appointment_date && (
@@ -8262,7 +8272,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </span>
                   )}
                 </p>
-                {(selectedLead.appointment_date || isConsultant) && (
+                {selectedLead.appointment_date && (
                   <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto" data-testid="cons-detail-standing">
                     {/* The confirmation the patient was sent, handed back. On the slot's
                         own line, because that is the fact it is about — a branch looking
@@ -8301,16 +8311,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {loadingApptCard ? "Opening..." : "Appointment Card"}
                       </button>
                     )}
-                    {isConsultant && (
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[10px] font-semibold ${
-                          selectedLead.consultation_fee ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                        }`}
-                        data-testid="cons-consultation-paid-badge"
-                      >
-                        {selectedLead.consultation_fee ? "Consultation Paid" : "Consultation Pending"}
-                      </span>
-                    )}
                   </div>
                 )}
                 </div>
@@ -8328,8 +8328,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 height saying it.
 
                 One line on a phone, scrolled sideways, rather than wrapped onto a second
-                row whose underline floats in the middle of the band. */}
-            <div className="flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden" data-testid="cons-detail-tabs">
+                row whose underline floats in the middle of the band.
+
+                Centred on the Consultant's Treatment Report popup. Safe centring, so a
+                row too wide for a phone falls back to the start and still scrolls. */}
+            <div className={`flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden ${isConsultant ? "[justify-content:safe_center]" : ""}`} data-testid="cons-detail-tabs">
               {[
                 { key: "overview", label: "Overview" },
                 // Not for the Consultant, for the same reason the Timeline is not: chasing
@@ -8715,9 +8718,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <div className={isConsultant ? "space-y-3" : "space-y-3 border-t border-slate-200 p-4"} data-testid="cons-case-record-body">
                     {/* Three columns for a reader, two for the Consultant — their Treatment
                         Summary is a tick-list to work in rather than a paragraph to read,
-                        and a third of the card is not enough to work in. */}
+                        and a third of the card is not enough to work in.
+
+                        One column for the Consultant while the Treatment Summary box is not
+                        on screen (Treatments hidden): the Diagnosis Report then runs the
+                        full width of the popup rather than half of it beside nothing. */}
                     {(selectedLead.diagnosis || isConsultant || selectedLead.physio_diagnosis_report || selectedLead.treatment_summary) && (
-                      <div className={`grid grid-cols-1 gap-3 md:grid-cols-2 ${isConsultant ? "" : "lg:grid-cols-3"}`}>
+                      <div className={`grid grid-cols-1 gap-3 ${!isConsultant
+                        ? "md:grid-cols-2 lg:grid-cols-3"
+                        : !treatmentsHidden || selectedLead.treatment_summary ? "md:grid-cols-2" : ""}`}>
                         {/* Pre-Sales Diagnosis — read-only reference */}
                         {selectedLead.diagnosis && (
                           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="cons-presales-diagnosis">
@@ -9426,19 +9435,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         stops the eye rather than a coloured line of text among other lines.
                         Rose over amber for the same reason: amber is the colour half this
                         panel already uses for asides nobody has to act on. */}
-                    {(!diagnosisReady || !summaryReady || !treatmentReady) && (
+                    {/* Only Treatment's own gap is named here now. The "write the reports
+                        above" reminder is gone: the empty Diagnosis Report box directly
+                        above says it, and Move to Admin stays held until it is written. */}
+                    {!treatmentReady && (
                       <p
                         className="mb-3 rounded-md border-l-4 border-rose-500 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700"
                         data-testid="cons-decision-required-hint"
                       >
-                        {/* One thing at a time, in the order the form is worked down: the two
-                            reports are above this panel, Treatment is inside it, and naming
-                            both at once sends the eye to the wrong half of the screen. */}
-                        {!diagnosisReady || !summaryReady
-                          ? (treatmentsHidden
-                            ? "Write the Diagnosis Report above before Move to Admin."
-                            : "Write the Diagnosis Report and Treatment Summary above before Move to Admin.")
-                          : "Choose Treatment's package and sessions/week before Move to Admin."}
+                        Choose Treatment's package and sessions/week before Move to Admin.
                       </p>
                     )}
                     {/* Consultation itself needs no toggle — writing this form up is the
