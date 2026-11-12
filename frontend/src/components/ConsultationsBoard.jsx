@@ -261,24 +261,10 @@ const LONG_TERM_SERVICES = ["rehab", "fitness"];
 const longTermServices = (lead) =>
   LONG_TERM_SERVICES.filter((k) => lead?.long_term_notes && k in lead.long_term_notes);
 
-/**
- * Rehab after Treatment. Rehab ticked beside a Treatment package used not to be sold at
- * the first consultation: the course ran first, the branch booked the patient back in with
- * the Consultant once it was done, and the package was chosen at that Rehab consultation --
- * the Rehab Fee was collected after it, and only then did "Rehab" go on the patient's name.
- *
- * No longer written. Move to Admin now sells Rehab with its package beside Treatment, so
- * both fees are collected separately at Fee Collected. These two read the leads already
- * marked, which keep this flow until the Consultant re-saves them with a Rehab package.
- *
- * `rehabAwaitingConsult` is the stretch in between: marked, and not yet consulted.
- * `treatmentCourseDone` is the branch's cue to book it -- the physio closed the course,
- * or every booked treatment day is signed off.
+/** Existing referrals need a consultant-selected package before fee collection.
+ * Treatment completion and a separate appointment are not prerequisites.
  */
 const rehabAwaitingConsult = (lead) => !!lead?.rehab_after_treatment && !lead?.rehab_consulted_at;
-const treatmentCourseDone = (lead) =>
-  lead?.physio_stage === "Complete"
-  || ((lead?.total_sessions || 0) > 0 && (lead?.completed_sessions || 0) >= lead.total_sessions);
 
 /**
  * The two things a Diet referral can actually be, revealed once Diet is ticked.
@@ -8360,7 +8346,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     rehabAwaitingConsult(selectedLead) && {
                       icon: HeartPulse,
                       label: "Rehab",
-                      value: "After Treatment",
+                      value: "Consultant to select package",
                       note: selectedLead.rehab_consult_date
                         ? `consultation ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` ${to12h(selectedLead.rehab_consult_time)}` : ""}`
                         : null,
@@ -8414,23 +8400,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <p className="mt-1 text-[11px] text-slate-500">A plain consultation — nothing else was recommended.</p>
                         )}
 
-                        {/* Rehab after Treatment: the branch's part is the re-appointment.
-                            Offered once the course is complete -- before then it says what
-                            it is waiting for, so nobody books Rehab over treatment days. */}
+                        {/* Existing referrals can be booked at any point during treatment. */}
                         {rehabAwaitingConsult(selectedLead) && (() => {
-                          const done = treatmentCourseDone(selectedLead);
                           const booked = !!selectedLead.rehab_consult_date;
                           return (
                             <div className="mt-2 rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-2" data-testid="cons-rehab-booking">
                               <p className="text-[11px] leading-relaxed text-cyan-800">
-                                {!done
-                                  ? `Rehab follows the Treatment. Book the Rehab consultation once the course is complete${selectedLead.total_sessions ? ` (${selectedLead.completed_sessions || 0}/${selectedLead.total_sessions} days done)` : ""}.`
-                                  : booked
-                                    ? `Rehab consultation booked with ${selectedLead.rehab_consult_doctor_name || "the Consultant"} on ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` at ${to12h(selectedLead.rehab_consult_time)}` : ""}. The Consultant chooses the package there; collect the Rehab Fee after it.`
-                                    : "Treatment is complete. Book the Rehab consultation with the Consultant."}
+                                {booked
+                                  ? `Rehab consultation booked with ${selectedLead.rehab_consult_doctor_name || "the Consultant"} on ${selectedLead.rehab_consult_date}${selectedLead.rehab_consult_time ? ` at ${to12h(selectedLead.rehab_consult_time)}` : ""}. Collect the Rehab Fee once the Consultant confirms the package.`
+                                  : "Rehab is marked. The Consultant can confirm the Rehab package now so the Rehab Fee can be collected. Treatment does not need to be complete."}
                               </p>
-                              {done && (
-                                <Button
+                              <Button
                                   size="sm"
                                   className="mt-2 h-8 bg-cyan-600 text-xs text-white hover:bg-cyan-700"
                                   onClick={() => setRehabBookDraft({
@@ -8442,7 +8422,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 >
                                   <HeartPulse className="mr-1 h-3 w-3" />{booked ? "Reschedule Rehab Consultation" : "Book Rehab Consultation"}
                                 </Button>
-                              )}
                             </div>
                           );
                         })()}
@@ -9228,25 +9207,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           Zumba Plan: <span className="font-semibold">{selectedLead.zumba_package_name}</span>
                         </p>
                       )}
-                      {/* Rehab after Treatment. Waiting on the course, then on the Rehab
-                          consultation the branch books -- where the package is chosen, here,
-                          and the patient goes on to Rehab. */}
+                      {/* The consultant can confirm an existing referral without another booking. */}
                       {rehabAwaitingConsult(selectedLead) && !selectedLead.rehab_consult_date && (
                         <p className="mt-0.5 text-xs text-slate-600" data-testid="cons-decision-summary-rehab-after">
-                          Rehab: <span className="font-semibold">After Treatment</span>
-                          <span className="text-slate-400"> · the branch books the Rehab consultation once the course is complete</span>
+                          Rehab: <span className="font-semibold">Package pending</span>
+                          <span className="text-slate-400"> · the Consultant can confirm the package now</span>
                         </p>
                       )}
-                      {rehabAwaitingConsult(selectedLead) && !!selectedLead.rehab_consult_date && (
+                      {rehabAwaitingConsult(selectedLead) && (
                         <div className="mt-2 rounded-md border border-cyan-200 bg-white p-2.5" data-testid="cons-rehab-consult-panel">
                           <p className="flex items-center gap-1.5 text-xs font-semibold text-cyan-700">
-                            <HeartPulse className="h-3.5 w-3.5" /> Rehab Consultation
-                            <span className="font-medium text-slate-500">
-                              · {selectedLead.rehab_consult_date}{selectedLead.rehab_consult_time ? ` ${to12h(selectedLead.rehab_consult_time)}` : ""}
-                            </span>
+                            <HeartPulse className="h-3.5 w-3.5" /> Confirm Rehab Package
+                            {selectedLead.rehab_consult_date && (
+                              <span className="font-medium text-slate-500">
+                                {selectedLead.rehab_consult_date}{selectedLead.rehab_consult_time ? ` ${to12h(selectedLead.rehab_consult_time)}` : ""}
+                              </span>
+                            )}
                           </p>
                           <p className="mt-1 text-[11px] text-slate-500">
-                            Treatment is complete. Choose the Rehab package — the branch collects the Rehab Fee after this.
+                            Choose the Rehab package now — the branch collects the Rehab Fee after this.
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2" data-testid="cons-rehab-consult-options">
                             {rehabPackageItems.map((i) => (

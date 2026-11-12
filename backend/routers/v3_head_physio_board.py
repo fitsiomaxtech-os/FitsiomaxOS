@@ -839,7 +839,7 @@ async def hp_book_rehab_consultation(
     payload: V3RehabConsultBookInput,
     user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
 ):
-    """Re-appoint a Rehab-after-Treatment patient with the Consultant, once treatment is done.
+    """Re-appoint a Rehab-after-Treatment patient with the Consultant at any point during treatment.
 
     Its own appointment row (appt_kind "rehab_consultation") rather than a move of the
     first consultation's: the consultation follow-up rebooks that row, re-dates the lead's
@@ -957,8 +957,8 @@ async def hp_complete_rehab_consultation(
         raise HTTPException(status_code=400, detail="This patient was not marked for Rehab after Treatment")
     if lead.get("rehab_consulted_at"):
         raise HTTPException(status_code=400, detail="The Rehab consultation has already been done")
-    if not lead.get("rehab_consult_date"):
-        raise HTTPException(status_code=400, detail="Book the Rehab consultation first")
+    # The consultant may confirm the package directly, without another appointment
+    # or waiting for the treatment course to finish.
 
     mode = payload.mode if payload.mode in ("online", "offline") else (lead.get("session_package_mode") or "offline")
     rehab_fields, rehab_detail = await _rehab_package_fields(payload.rehab_item_id, mode, lead.get("branch_id"))
