@@ -262,10 +262,14 @@ const longTermServices = (lead) =>
   LONG_TERM_SERVICES.filter((k) => lead?.long_term_notes && k in lead.long_term_notes);
 
 /**
- * Rehab after Treatment. Rehab ticked beside a Treatment package is not sold at the first
- * consultation: the course runs first, the branch books the patient back in with the
- * Consultant once it is done, and the package is chosen at that Rehab consultation -- the
- * Rehab Fee is collected after it, and only then does "Rehab" go on the patient's name.
+ * Rehab after Treatment. Rehab ticked beside a Treatment package used not to be sold at
+ * the first consultation: the course ran first, the branch booked the patient back in with
+ * the Consultant once it was done, and the package was chosen at that Rehab consultation --
+ * the Rehab Fee was collected after it, and only then did "Rehab" go on the patient's name.
+ *
+ * No longer written. Move to Admin now sells Rehab with its package beside Treatment, so
+ * both fees are collected separately at Fee Collected. These two read the leads already
+ * marked, which keep this flow until the Consultant re-saves them with a Rehab package.
  *
  * `rehabAwaitingConsult` is the stretch in between: marked, and not yet consulted.
  * `treatmentCourseDone` is the branch's cue to book it -- the physio closed the course,
@@ -4484,7 +4488,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // Treatment is optional: without it the patient moves to Admin as Consultation only,
     // with whichever other services were ticked.
     const decision = decisionDraft.treatment ? "consultation_treatment" : "consultation_only";
-    const rehabDeferred = decisionDraft.treatment && !selectedLead.rehab_consulted_at;
     let payload = {
       decision,
       // A Diet referral is a referral to the Nutritionist's consultation and nothing else,
@@ -4492,13 +4495,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // no longer accepts a chart here at all: whether the patient needs one is decided at
       // that consultation, by the Nutritionist, and recommended from their own board.
       diet_recommended: decisionDraft.diet,
-      // Rehab beside a Treatment package waits for the course to finish -- no referral
-      // and no package now; the Rehab consultation afterwards settles both. A patient
-      // already past that consultation keeps the package it chose.
-      rehab_referred: decisionDraft.rehab && !rehabDeferred,
-      rehab_after_treatment: decisionDraft.rehab && rehabDeferred,
+      // Rehab is sold here with its package, beside a Treatment package or on its own, so
+      // the branch collects its fee at Fee Collected as a fee of its own. It used to wait
+      // for the Treatment course when both were ticked (Rehab after Treatment), which left
+      // Fee Collected with a Treatment Fee and no Rehab Fee. rehab_after_treatment is no
+      // longer sent; leads already marked with it keep their own flow (rehabAwaitingConsult).
+      rehab_referred: decisionDraft.rehab,
       // Only meaningful with the referral, and the server enforces the same pairing.
-      rehab_item_id: decisionDraft.rehab && !rehabDeferred ? decisionDraft.rehab_item_id || null : null,
+      rehab_item_id: decisionDraft.rehab ? decisionDraft.rehab_item_id || null : null,
       fitness_recommended: decisionDraft.fitness,
       zumba_recommended: decisionDraft.zumba,
       zumba_item_id: decisionDraft.zumba ? decisionDraft.zumba_item_id || null : null,
@@ -4524,9 +4528,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setSavingDecision(true);
     try {
       const res = await saveConsultationDecision(selectedLead.id, payload);
-      toast.success(!decisionDraft.rehab ? "Moved to Branch Admin"
-        : rehabDeferred ? "Moved to Branch Admin — Rehab follows the Treatment"
-        : "Moved to Branch Admin — with a Rehab referral");
+      toast.success(decisionDraft.rehab ? "Moved to Branch Admin — with a Rehab referral" : "Moved to Branch Admin");
       // The lead stays open behind the confirmation rather than the board closing it. The
       // popup's three actions all act on this patient, and two of them — Edit and Share —
       // have nothing to work with once the record underneath has gone.
@@ -8865,10 +8867,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // nothing to book and nothing to collect -- the same gap Move to Admin is
                 // held open for on the Treatment package above, held here the same way.
                 //
-                // Unless Treatment is ticked too: then Rehab follows the course, and the
-                // package is the Rehab consultation's to choose, not this one's.
-                const rehabDeferred = decisionDraft.treatment && !selectedLead.rehab_consulted_at;
-                const rehabReady = !decisionDraft.rehab || rehabDeferred || !!decisionDraft.rehab_item_id;
+                // With Treatment ticked too, as on its own: the two are separate fees at
+                // Fee Collected, and the Rehab Fee needs this package to be priced.
+                const rehabReady = !decisionDraft.rehab || !!decisionDraft.rehab_item_id;
                 const canSave = diagnosisReady && summaryReady && treatmentReady && rehabReady;
 
                 // What the Consultant has ticked, in the shelf's own order. The detail column
@@ -8940,9 +8941,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     // calls for one, is recorded on the patient and shown on the branch's own
                     // panel — it was never something this form could answer.
                     return { text: "Diet Consultation", incomplete: false };
-                  }
-                  if (key === "rehab" && rehabDeferred) {
-                    return { text: "After Treatment — package at the Rehab consultation", incomplete: false };
                   }
                   if (key === "rehab" || key === "zumba") {
                     const items = key === "rehab" ? rehabPackageItems : zumbaPackageItems;
@@ -9073,20 +9071,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           recommends it after seeing them — and the Diet Chart Fee is
                           collected then.
                         </p>
-                      </div>
-                    );
-                  }
-
-                  if (key === "rehab" && rehabDeferred) {
-                    return (
-                      <div data-testid="cons-decision-rehab-after-treatment">
-                        <label className="mb-1 block text-[11px] font-medium text-slate-500">Rehab after Treatment</label>
-                        <p className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-[11px] leading-relaxed text-cyan-800">
-                          Rehab starts once the Treatment course is complete. The branch then
-                          books a Rehab consultation with you, you choose the Rehab package
-                          there, and the Rehab Fee is collected after it.
-                        </p>
-                        {longTermField("rehab")}
                       </div>
                     );
                   }
