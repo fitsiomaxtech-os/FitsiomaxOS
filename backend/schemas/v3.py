@@ -316,6 +316,9 @@ class V3LeadCreate(BaseModel):
     expected_consultation_date: Optional[str] = ""
     # The ad record behind the lead — see V3LeadData. Only Super Admin's form offers it.
     lead_data: Optional[V3LeadData] = None
+    # "YYYY-MM-DD" on the clinic's clock: the day the patient actually enquired, for a lead
+    # being typed in after the fact. Blank or today means now. Never a future day.
+    created_date: Optional[str] = None
 
 
 class V3LeadUpdate(BaseModel):

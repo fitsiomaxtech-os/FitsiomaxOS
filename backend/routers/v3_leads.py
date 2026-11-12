@@ -1,10 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, Dict
 from pydantic import BaseModel
+from datetime import date, datetime, timezone
 import uuid
 
 from database import v3_col
-from utils import now_iso, normalize_slot_time, generate_patient_number, without_past_moves
+from utils import (
+    now_iso, now_utc, normalize_slot_time, generate_patient_number, without_past_moves,
+    clinic_today, CLINIC_UTC_OFFSET,
+)
 from deps import (
     v3_current_user, v3_require_roles, is_branch_admin_role, is_head_physio_role, is_physio_role,
     vertical_names_an_arm, lead_as_read_by, works_org_wide,
@@ -85,8 +89,32 @@ async def v3_get_leads(
     ]
 
 
+def _manual_created_at(day: Optional[str]) -> str:
+    """created_at for a lead typed in by hand, from the form's Lead Create Date.
+
+    A past day keeps the current time of day on the clinic's clock, so the lead lands on
+    that day in every IST-bucketed count and sorts plausibly among that day's leads.
+    """
+    text = str(day or "").strip()
+    if not text:
+        return now_iso()
+    try:
+        picked = date.fromisoformat(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Lead Create Date is not a valid date")
+    today = clinic_today()
+    if picked.isoformat() == today:
+        return now_iso()
+    if picked.isoformat() > today:
+        raise HTTPException(status_code=400, detail="Lead Create Date cannot be in the future")
+    clinic_clock = (now_utc() + CLINIC_UTC_OFFSET).time()
+    wall = datetime.combine(picked, clinic_clock)
+    return (wall - CLINIC_UTC_OFFSET).replace(tzinfo=timezone.utc).isoformat()
+
+
 @router.post("/leads/manual", response_model=V3LeadOut)
 async def v3_manual_lead(payload: V3LeadCreate, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "pre_sales", "branch_admin"))):
+    created_at = _manual_created_at(payload.created_date)
     # A Pre-Sales rep assigned to a branch is read only that branch's leads (see
     # v3_get_leads above), so a lead they file with no branch would never show on their
     # own board. It lands in their branch instead.
@@ -106,7 +134,7 @@ async def v3_manual_lead(payload: V3LeadCreate, user: V3UserOut = Depends(v3_req
         branch_stage = await first_branch_stage_for(lead_control.PRE_SALES, "New Appointment")
     else:
         branch_stage = None
-    patient_number = await generate_patient_number(branch_id) if branch_id else None
+    patient_number = await generate_patient_number(branch_id, at=created_at) if branch_id else None
     lead = {
         "id": str(uuid.uuid4()),
         "patient_number": patient_number,
@@ -137,7 +165,7 @@ async def v3_manual_lead(payload: V3LeadCreate, user: V3UserOut = Depends(v3_req
         # and only Super Admin reads it back — see lead_as_read_by in deps.py. Empty dict,
         # not None, so the field is shaped the same for anyone who does read it.
         "lead_data": payload.lead_data.model_dump() if payload.lead_data else {},
-        "created_at": now_iso(),
+        "created_at": created_at,
         "updated_at": now_iso(),
     }
     await v3_col("leads").insert_one(lead.copy())

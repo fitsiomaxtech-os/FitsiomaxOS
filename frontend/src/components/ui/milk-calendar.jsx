@@ -48,7 +48,7 @@ export const formatSlotLabel = (hhmm) => {
  *
  * `className` is merged onto the card, so a caller can set its width or corners.
  */
-export const MilkCalendar = ({ value, onChange, min, accent = "amber", testid = "milk-calendar", size = "md", className = "" }) => {
+export const MilkCalendar = ({ value, onChange, min, max, accent = "amber", testid = "milk-calendar", size = "md", className = "" }) => {
   const lg = size === "lg";
   const today = todayIso();
   const [cursor, setCursor] = useState(() => {
@@ -87,7 +87,7 @@ export const MilkCalendar = ({ value, onChange, min, accent = "amber", testid = 
         {Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1;
           const d = iso(cursor.y, cursor.m, day);
-          const disabled = min ? d < min : false;
+          const disabled = !!((min && d < min) || (max && d > max));
           const selected = d === value;
           const isToday = d === today;
           return (

@@ -77,7 +77,12 @@ const blank = {
   name: "", source_tab: "", email: "", phone: "", alternative_phone: "",
   address: "", city: "", state: "", department: "", condition: "",
   months_of_pain: "", age: "", gender: "", occupation: "",
-  expected_consultation_date: "", branch_id: "",
+  created_date: "", branch_id: "",
+};
+
+const todayLocalIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
 /**
@@ -97,8 +102,10 @@ const blank = {
  *   clears it, and the Offline-only list under the fields stays the way a lead gets one.
  */
 export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepartment = null, formQuestions = [], branchPicker = false }) => {
+  const [today] = useState(todayLocalIso);
   const [form, setForm] = useState({
     ...blank,
+    created_date: today,
     ...(branchId ? { branch_id: branchId } : {}),
     ...(lockedDepartment ? { department: lockedDepartment } : {}),
   });
@@ -287,7 +294,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
               <Field label="Age"><Input className={PHONE_CONTROL} type="number" min="0" value={form.age} onChange={(e) => set("age", e.target.value)} data-testid="lead-create-age" /></Field>
               <Field label="Gender"><ThemedSelect className={PHONE_CONTROL} value={form.gender} onChange={(v) => set("gender", v)} options={["", ...GENDER_OPTIONS]} testid="lead-create-gender" /></Field>
               <Field label="Occupation"><Input className={PHONE_CONTROL} value={form.occupation} onChange={(e) => set("occupation", e.target.value)} data-testid="lead-create-occupation" /></Field>
-              <Field label="Expected Consultation Date (Optional)" className={`${PHONE_WIDE} ${showPicker ? "" : "sm:col-span-2"}`}><MilkDateInput centered confirm title="Expected Consultation Date" placeholder="Select date (Optional)" className={PHONE_CONTROL} value={form.expected_consultation_date} onChange={(e) => set("expected_consultation_date", e.target.value)} data-testid="lead-create-consultdate" /></Field>
+              <Field label="Lead Create Date" className={`${PHONE_WIDE} ${showPicker ? "" : "sm:col-span-2"}`}><MilkDateInput centered confirm title="Lead Create Date" max={today} className={PHONE_CONTROL} value={form.created_date} onChange={(e) => set("created_date", e.target.value)} data-testid="lead-create-created-date" /></Field>
               {showPicker && (
                 <Field label="Assign Branch" className={PHONE_WIDE}>
                   {/* Left blank, the lead lands Unassigned, as it always has. */}
