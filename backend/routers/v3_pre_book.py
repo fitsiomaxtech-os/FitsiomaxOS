@@ -37,7 +37,6 @@ from database import v3_col
 from deps import v3_current_user, v3_require_roles
 from schemas.v3 import V3UserOut, V3LeadOut
 from utils import generate_transaction_id, clinic_today, now_iso
-from routers.v3_lead_documents import has_prescription_on_file
 from routers.v3_packages import build_payment_details, SETTLED_NOW_MODES, _settle_cash_count, _notes_label
 
 router = APIRouter(prefix="/api/v3", tags=["pre-book"])
@@ -414,9 +413,6 @@ async def apply_pre_book_consultation(
         raise HTTPException(status_code=400, detail="This patient already has a Consultation Fee on record, so the Pre Book consultation cannot be used on it")
     if lead.get("consultation_stage") not in ("Consultation Visit", "Fee Collected"):
         raise HTTPException(status_code=400, detail="The Pre Book consultation can be used once the CONSULTANT has completed the consultation")
-    if not await has_prescription_on_file(lead_id):
-        raise HTTPException(status_code=400, detail="Upload the patient's prescription before collecting the Consultation Fee")
-
     paid, price = _money(consult["paid"]), _money(consult.get("price") or consult["paid"])
     discount = _money(consult.get("discount"))
     now = now_iso()
