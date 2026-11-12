@@ -3735,19 +3735,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       </div>
 
       {loading && (
-        <div className="fixed bottom-20 right-4 z-50 flex flex-col items-center gap-1.5 md:bottom-4">
-          <div className="h-0.5 w-36 overflow-hidden rounded-full bg-blue-100">
-            <div className="loading-bar-sweep h-full w-1/2 rounded-full bg-blue-600" />
-          </div>
-          <div className="text-sm font-semibold text-slate-600">Loading...</div>
+        <div role="status" aria-label="Loading" className="pointer-events-none fixed inset-x-0 bottom-0 z-50 h-0.5 overflow-hidden bg-blue-100">
+          <div className="loading-bar-sweep h-full w-1/2 bg-blue-600" />
         </div>
       )}
 
       {/* Back-to-top arrow over the lists, phone and desktop (Branch Leads, Consultation,
           House Visit, Activity Care for its Review) -- the screens where the user scrolls a
           long list of rows. On desktop the leads table scrolls inside its own box
-          (branch-list), so the arrow watches that too. Left off while Loading... holds the
-          same corner, and off when Super Admin embeds this board. */}
+          (branch-list), so the arrow watches that too. Hidden while loading and when
+          Super Admin embeds this board. */}
       {!embedded && !profileOpen && !loading && LIST_VIEWS.includes(activeView) && (
         <ScrollTopButton target='[data-testid="branch-list"]' data-testid="branch-scroll-top" />
       )}
