@@ -6264,7 +6264,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               <div className="w-full flex-shrink-0 border-b border-slate-200 p-4 sm:p-5 lg:w-[24rem] lg:border-b-0 lg:border-r lg:overflow-y-auto" data-testid="branch-appt-date-panel">
                 <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">1 · Date</p>
                 {(() => {
-                  const todayStr = new Date().toISOString().slice(0, 10);
+                  // The clinic's own date, not UTC's: toISOString() still said yesterday
+                  // until 5:30 every morning in India.
+                  const todayStr = todayIso();
                   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                   const firstDow = new Date(apptMonth.y, apptMonth.m, 1).getDay();
                   const daysInMonth = new Date(apptMonth.y, apptMonth.m + 1, 0).getDate();
@@ -6311,7 +6313,13 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                                 setApptTime({ h: "", m: "", ap: "AM" });
                               }}
                               className={`h-11 rounded-lg text-base font-semibold transition ${
-                                isPicked
+                                // Today is a light orange whatever else it is, so it is found
+                                // at a glance; picked, it keeps the orange and gains a ring.
+                                isToday
+                                  ? isPicked
+                                    ? "bg-orange-100 text-orange-700 shadow-sm ring-2 ring-orange-400"
+                                    : "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                                  : isPicked
                                   // Brand blue -- colors.palette.primary, #0EA5E9. The halo
                                   // is sky-300 rather than sky-200 on purpose: sky-200 is
                                   // what the legend teaches as "available", and a picked
@@ -6326,8 +6334,6 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                                   // fill -- this carried white text while it was
                                   // violet-300, which a light blue cannot hold.
                                   ? "bg-sky-200 text-sky-900 shadow-sm hover:bg-sky-300"
-                                  : isToday
-                                  ? "border border-sky-400 text-sky-700 hover:bg-sky-50"
                                   : "text-slate-600 hover:bg-slate-100"
                               }`}
                               title={hasSlots ? "A CONSULTANT is available on this day" : undefined}
@@ -6341,6 +6347,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                       <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs font-semibold text-slate-400">
                         <span className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded bg-sky-200" /> Available</span>
                         <span className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded bg-sky-500" /> Picked</span>
+                        <span className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded bg-orange-100 ring-1 ring-inset ring-orange-200" /> Today</span>
                       </div>
                     </>
                   );

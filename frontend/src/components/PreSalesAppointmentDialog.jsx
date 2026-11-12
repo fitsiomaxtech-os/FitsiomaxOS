@@ -486,14 +486,18 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
                         setTime({ h: "", m: "", ap: "AM" });
                       }}
                       className={`h-11 rounded-lg text-base font-semibold transition ${
-                        isPicked
-                          ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300"
-                          : pastBlocked
-                            ? "cursor-not-allowed text-slate-300"
-                            : hasSlots
-                              ? "bg-sky-200 text-sky-900 shadow-sm hover:bg-sky-300"
-                              : dateStr === todayStr
-                                ? "border border-sky-400 text-sky-700 hover:bg-sky-50"
+                        // Today is a light orange whatever else it is, so it is found at a
+                        // glance; picked, it keeps the orange and gains a ring.
+                        dateStr === todayStr
+                          ? isPicked
+                            ? "bg-orange-100 text-orange-700 shadow-sm ring-2 ring-orange-400"
+                            : "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          : isPicked
+                            ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300"
+                            : pastBlocked
+                              ? "cursor-not-allowed text-slate-300"
+                              : hasSlots
+                                ? "bg-sky-200 text-sky-900 shadow-sm hover:bg-sky-300"
                                 : "text-slate-600 hover:bg-slate-100"
                       }`}
                       data-testid={`presales-appt-day-${day}`}
@@ -506,6 +510,7 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
               <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs font-semibold text-slate-400">
                 <span className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded bg-sky-200" /> Available</span>
                 <span className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded bg-sky-500" /> Picked</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded bg-orange-100 ring-1 ring-inset ring-orange-200" /> Today</span>
               </div>
             </div>
 
