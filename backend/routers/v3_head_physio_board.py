@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from datetime import date
 import uuid
 
-import feature_visibility
 import session_mode_swap
 import store_branch_overrides
 from database import v3_col
@@ -496,7 +495,7 @@ async def hp_move_head_consultation_stage(
     if payload.head_consultation_stage == await _head_closing_stage():
         raise HTTPException(
             status_code=403,
-            detail="Use the consultation-decision endpoint (Save & Move) — it requires Diagnosis, Treatment Summary and a decision first.",
+            detail="Use the consultation-decision endpoint (Save & Move) — it requires Diagnosis and a decision first.",
         )
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
     if not lead:
@@ -605,8 +604,8 @@ async def hp_consultation_decision(
     user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin")),
 ):
     """Head Physio's 'Save & Move' — the single action that closes out the
-    consultation: requires Diagnosis Report + Treatment Summary to already be
-    written, records the Consultation Only / Consultation + Treatment decision
+    consultation: requires Diagnosis Report to already be
+    written (Treatment Summary is optional), records the Consultation Only / Consultation + Treatment decision
     (and, for the latter, the chosen Treatment/Session package — names only, no
     price shown here), then hands the lead to Branch Admin's 'Consultation Visit'
     column on both pipelines at once."""
@@ -617,11 +616,6 @@ async def hp_consultation_decision(
         raise HTTPException(status_code=404, detail="Lead not found")
     if not (lead.get("physio_diagnosis_report") or "").strip():
         raise HTTPException(status_code=400, detail="Write the Diagnosis Report before Save & Move")
-    # Not asked for while the Treatments feature is hidden (Danger Zone > Hide Features):
-    # the box this demands is off the Consultant's screen, so demanding it would make
-    # Move to Admin impossible rather than optional.
-    if not (lead.get("treatment_summary") or "").strip() and not await feature_visibility.feature_hidden("treatments"):
-        raise HTTPException(status_code=400, detail="Write the Treatment Summary before Save & Move")
     # Completing a consultation moves BOTH pipelines at once: the lead closes out on the
     # Head Physio's board and appears on Branch Admin's Consultation Visit column, which
     # is the one hand-off point between the two.

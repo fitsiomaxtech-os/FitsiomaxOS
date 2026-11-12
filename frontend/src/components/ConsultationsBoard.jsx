@@ -3489,8 +3489,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [dietPickerDate, setDietPickerDate] = useState(null); // "YYYY-MM-DD"
   const [dietMinutes, setDietMinutes] = useState(FALLBACK_SESSION_MINUTES);
 
-  // Treatment (Head Physio only) — "Move to Admin": Diagnosis Report + Treatment Summary
-  // have to be written first, but no add-on has to be picked — every toggle starts off,
+  // Treatment (Head Physio only) — "Move to Admin": Diagnosis Report
+  // has to be written first, but no add-on has to be picked — every toggle starts off,
   // which submits as a plain Consultation, the same as a patient who needs nothing else.
   // Picking Treatment reveals the Treatment Package (names only, no prices shown here).
   const [decisionDraft, setDecisionDraft] = useState({ treatment: false, diet: false, dietConsultation: false, rehab: false, fitness: false, zumba: false, item_id: "", rehab_item_id: "", zumba_item_id: "", mode: "offline", sessionsPerWeek: "", long_term_notes: {} });
@@ -4413,9 +4413,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // ---- Consultation Decision (Head Physio) — "Move to Admin" ----
   const submitConsultationDecision = async () => {
     if (!(selectedLead.physio_diagnosis_report || "").trim()) { toast.error("Write the Diagnosis Report first"); return; }
-    // Not asked for while the Treatments feature is hidden — the box this demands is not
-    // on the screen. The server relaxes the same check (hp_consultation_decision).
-    if (!treatmentsHidden && !(selectedLead.treatment_summary || "").trim()) { toast.error("Write the Treatment Summary first"); return; }
+
 
     // Treatment is optional: without it the patient moves to Admin as Consultation only,
     // with whichever other services were ticked.
@@ -8725,8 +8723,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 );
               })()}
 
-              {/* Treatment — Head Physio's own "Move to Admin". Requires Diagnosis Report +
-                  Treatment Summary to already be written (that's what marks the consultation
+              {/* Treatment — Head Physio's own "Move to Admin". Requires Diagnosis Report
+                  to already be written; Treatment Summary is optional (that's what marks the consultation
                   itself done and ready for Branch Admin to collect the Consultation Fee).
                   Every patient goes on to a Treatment Package here — "Consultation Only" is a
                   legacy decision value some already-existing leads still carry, no longer
@@ -8740,9 +8738,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // the whole form back in front of a consultation already finished.
                 const alreadyMoved = !!selectedLead.consultation_decision && !editingDecision;
                 const diagnosisReady = !!(selectedLead.physio_diagnosis_report || "").trim();
-                // Satisfied outright while the Treatments feature is hidden: the box this
-                // waits on is not on the screen to be written in.
-                const summaryReady = treatmentsHidden || !!(selectedLead.treatment_summary || "").trim();
                 const selectedPackage = treatmentPackageItems.find((i) => i.id === decisionDraft.item_id);
                 const selectedPackageWeeks = selectedPackage ? weeksFromPackageName(selectedPackage.name) : null;
                 // Treatment is optional. Once ticked, though, its package and sessions/week
@@ -8764,7 +8759,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // With Treatment ticked too, as on its own: the two are separate fees at
                 // Fee Collected, and the Rehab Fee needs this package to be priced.
                 const rehabReady = !decisionDraft.rehab || !!decisionDraft.rehab_item_id;
-                const canSave = diagnosisReady && summaryReady && treatmentReady && rehabReady;
+                const canSave = diagnosisReady && treatmentReady && rehabReady;
 
                 // What the Consultant has ticked, in the shelf's own order. The detail column
                 // is built from this rather than from five separate conditionals, so a card

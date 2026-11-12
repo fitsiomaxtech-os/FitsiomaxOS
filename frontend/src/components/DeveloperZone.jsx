@@ -42,9 +42,9 @@ const HIDE_FEATURE_ROWS = [
     label: "Treatments",
     note: "The Treatments tab in Services and Products (Super Admin and every branch), and the Consultant's Treatment Summary dropdown with it.",
     confirmHide:
-      "Hide Treatments?\n\nThe Treatments tab disappears from Services and Products for Super Admin and every branch, and the Treatment Summary dropdown disappears from the Consultant's consultation. Move to Admin stops asking for a Treatment Summary. Summaries already written stay on their patients.",
+      "Hide Treatments?\n\nThe Treatments tab disappears from Services and Products for Super Admin and every branch, and the Treatment Summary dropdown disappears from the Consultant's consultation. Treatment Summary remains optional when moving to Admin. Summaries already written stay on their patients.",
     confirmShow:
-      "Show Treatments?\n\nThe Treatments tab comes back to Services and Products, the Treatment Summary dropdown comes back to the Consultant's consultation, and Move to Admin asks for it again.",
+      "Show Treatments?\n\nThe Treatments tab comes back to Services and Products, the Treatment Summary dropdown comes back to the Consultant's consultation, and Treatment Summary remains optional when moving to Admin.",
   },
   {
     // Hidden is Block. Read as Allow / Block rather than Show / Hide: nothing leaves the
