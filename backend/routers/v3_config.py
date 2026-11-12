@@ -1638,6 +1638,9 @@ async def v3_set_feature_visibility(
         {"$set": {
             "id": feature_visibility.SETTING_ID,
             "hidden": sorted(hidden),
+            # Every key this write decided on, so a key added to FEATURE_KEYS later takes
+            # its default instead of reading as shown (see hidden_features).
+            "known": list(feature_visibility.FEATURE_KEYS),
             "updated_by": user.full_name,
             "updated_at": now_iso(),
         }},

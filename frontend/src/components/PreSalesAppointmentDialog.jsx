@@ -8,6 +8,7 @@ import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
 import { getAvailableDates, getAvailableExperts, listStoreItems, scheduleBranchAppointment } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
 import { toIso, todayIso } from "@/lib/dateRange";
+import { useFeatureAllowed } from "@/lib/featureVisibility";
 
 // The Pre Sales lead card's Appointment pill. It used to take a branch, a requested date
 // and time and a remark, and pass the lead to Branch Admin, who then booked the consultant.
@@ -84,6 +85,9 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
   const [saving, setSaving] = useState(false);
   // Shown once the booking is made, as Branch Leads shows it, so the patient can be sent it.
   const [confirm, setConfirm] = useState(null);
+  // Days before today are greyed out unless Developer Access > Hide Features > Past Day
+  // Book Appointment is on Allow (Block until the setting has been read).
+  const pastDaysAllowed = useFeatureAllowed("past_day_appointments");
 
   const loadHvPackages = async () => {
     setHvPackages((p) => ({ ...p, loading: true, error: "" }));
@@ -468,14 +472,14 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
                 {Array.from({ length: daysInMonth }, (_, i) => {
                   const day = i + 1;
                   const dateStr = `${month.y}-${pad(month.m + 1)}-${pad(day)}`;
-                  const isPast = dateStr < todayStr;
+                  const pastBlocked = !pastDaysAllowed && dateStr < todayStr;
                   const isPicked = draft.appointment_date === dateStr;
-                  const hasSlots = !isPast && (openDates[dateStr] || 0) > 0;
+                  const hasSlots = !pastBlocked && (openDates[dateStr] || 0) > 0;
                   return (
                     <button
                       key={day}
                       type="button"
-                      disabled={isPast}
+                      disabled={pastBlocked}
                       // Availability is per day, so a new date clears the consultant and time.
                       onClick={() => {
                         setDraft((d) => ({ ...d, appointment_date: dateStr, physio_id: "", appointment_time: "", duration: null }));
@@ -484,7 +488,7 @@ export function PreSalesAppointmentDialog({ lead, branchId: ownBranchId = "", br
                       className={`h-11 rounded-lg text-base font-semibold transition ${
                         isPicked
                           ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300"
-                          : isPast
+                          : pastBlocked
                             ? "cursor-not-allowed text-slate-300"
                             : hasSlots
                               ? "bg-sky-200 text-sky-900 shadow-sm hover:bg-sky-300"

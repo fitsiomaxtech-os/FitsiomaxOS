@@ -46,6 +46,21 @@ const HIDE_FEATURE_ROWS = [
     confirmShow:
       "Show Treatments?\n\nThe Treatments tab comes back to Services and Products, the Treatment Summary dropdown comes back to the Consultant's consultation, and Move to Admin asks for it again.",
   },
+  {
+    // Hidden is Block. Read as Allow / Block rather than Show / Hide: nothing leaves the
+    // screen, the calendar just stops letting a day before today be picked.
+    key: "past_day_appointments",
+    label: "Past Day Book Appointment",
+    note: "Pick a day before today on the Appointment popup's calendar (Branch Leads and Pre Sales).",
+    on: "Allow",
+    off: "Block",
+    confirmHide:
+      "Block past day appointments?\n\nThe Appointment popup's calendar greys out every day before today again, on Branch Leads and Pre Sales. Appointments already booked on past days stay as they are.",
+    confirmShow:
+      "Allow past day appointments?\n\nThe Appointment popup's calendar lets a day before today be picked, on Branch Leads and Pre Sales, so a consultation that already happened can be booked on its real date.",
+    hiddenToast: "Past day appointments are blocked",
+    shownToast: "Past day appointments are allowed",
+  },
 ];
 
 // The four pages inside the zone. Danger Zone first because it is the one the gear is
@@ -333,7 +348,7 @@ export const DeveloperZone = () => {
       setHiddenFeatureKeys(r.hidden || []);
       // Every screen drawing the feature follows at once, without a reload.
       setHiddenFeatures(r.hidden || []);
-      toast.success(hide ? `${row.label} is hidden` : `${row.label} is shown again`);
+      toast.success(hide ? (row.hiddenToast || `${row.label} is hidden`) : (row.shownToast || `${row.label} is shown again`));
     } catch (e) {
       resetFailed(e);
     }
@@ -653,7 +668,7 @@ export const DeveloperZone = () => {
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
                         <span className={`text-[10px] font-bold uppercase ${shown ? "text-emerald-600" : "text-slate-400"}`}>
-                          {shown === null ? "…" : savingFeature === row.key ? "Saving" : shown ? "Show" : "Hide"}
+                          {shown === null ? "…" : savingFeature === row.key ? "Saving" : shown ? (row.on || "Show") : (row.off || "Hide")}
                         </span>
                         <Switch
                           checked={!!shown}

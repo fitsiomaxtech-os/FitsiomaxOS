@@ -90,6 +90,7 @@ import {
   getLeadAppointmentCard,
   listStoreItems,
 } from "@/lib/api";
+import { useFeatureAllowed } from "@/lib/featureVisibility";
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
 import { EmployeeAvatar, ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
@@ -3999,6 +4000,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   const [transferring, setTransferring] = useState(false);
 
   const [apptDraft, setApptDraft] = useState(null); // { appointment_date, appointment_time, physio_id, notes, final_stage, duration, visit_type, visit_package_id, step } | null
+  // Days before today are greyed out on the Appointment calendar unless Developer Access >
+  // Hide Features > Past Day Book Appointment is on Allow (Block until it has been read).
+  const pastDaysAllowed = useFeatureAllowed("past_day_appointments");
   // The Home Visit > Consultant catalogue, offered when the appointment is a house visit.
   // Read when that step is reached rather than with the card: most bookings are at the
   // branch and never need it.
@@ -6290,16 +6294,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                         {Array.from({ length: daysInMonth }, (_, i) => {
                           const day = i + 1;
                           const dateStr = `${apptMonth.y}-${pad(apptMonth.m + 1)}-${pad(day)}`;
-                          const isPast = dateStr < todayStr;
+                          const pastBlocked = !pastDaysAllowed && dateStr < todayStr;
                           const isPicked = apptDraft.appointment_date === dateStr;
                           const isToday = dateStr === todayStr;
                           const openSlots = apptOpenDates[dateStr] || 0;
-                          const hasSlots = !isPast && openSlots > 0;
+                          const hasSlots = !pastBlocked && openSlots > 0;
                           return (
                             <button
                               key={day}
                               type="button"
-                              disabled={isPast}
+                              disabled={pastBlocked}
                               // A new date invalidates the expert and slot chosen under the
                               // old one — availability is per-day, so both are cleared.
                               onClick={() => {
@@ -6313,7 +6317,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                                   // what the legend teaches as "available", and a picked
                                   // day ringed in it would read as saying both.
                                   ? "bg-sky-500 text-white shadow-sm ring-2 ring-sky-300"
-                                  : isPast
+                                  : pastBlocked
                                   ? "cursor-not-allowed text-slate-300"
                                   : hasSlots
                                   // Light blue marks a day some consultant is actually
