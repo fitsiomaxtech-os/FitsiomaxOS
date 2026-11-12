@@ -153,7 +153,7 @@ code {
     }
 }
 
-/* The corner Loading... card's progress bar: the filled stretch sweeps along the track
+/* The corner Loading... indicator's progress bar: the filled stretch sweeps along the track
    while the board's data is on its way (indeterminate -- there is no real percentage to
    show). Holds a part-filled bar for a desk set to reduce motion. */
 @keyframes loading-bar-sweep {
