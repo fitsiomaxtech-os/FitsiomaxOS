@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { createPortal } from "react-dom";
 import { Wallet, Stethoscope, Activity, ShoppingBag, Salad, RefreshCw, Music2, HeartPulse, Dumbbell, ChevronDown, ChevronRight, ChevronLeft, ArrowRight, Undo2, X, Trash2, Eye, LayoutDashboard, CalendarClock, BadgePercent, BookCheck, ClipboardCheck, Hourglass, BadgeCheck, Banknote, Receipt } from "lucide-react";
@@ -464,6 +464,24 @@ const PaymentModes = ({ tx }) => {
 // `canDeleteClients`: Branch Admin's board hands down its Branch Leads bin rule -- the role
 // and the Danger Zone switch -- so Payment Schedule's bin is offered exactly where that one is.
 export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = false, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false, canDeleteClients = false }) => {
+  const stickyRootRef = useRef(null);
+  const toolbarRef = useRef(null);
+  const ledgerCardsRef = useRef(null);
+  // Reconnect when conditional summary cards mount; measure wrapped rows as well.
+  useEffect(() => {
+    if (!stickyTabs) return;
+    const updateHeights = () => {
+      const root = stickyRootRef.current;
+      root?.style.setProperty("--accountant-toolbar-height", `${toolbarRef.current?.getBoundingClientRect().height || 0}px`);
+      root?.style.setProperty("--accountant-ledger-height", `${ledgerCardsRef.current?.getBoundingClientRect().height || 0}px`);
+    };
+    updateHeights();
+    const observer = new ResizeObserver(updateHeights);
+    [toolbarRef.current, ledgerCardsRef.current].filter(Boolean).forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  });
+  const stickyLedgerClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px))] md:z-10 bg-slate-50" : "";
+  const stickyRevenueClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px)+var(--accountant-ledger-height,98px)+16px)] md:z-10 bg-slate-50" : "";
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -955,7 +973,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
   return (
     // flex+gap rather than space-y: the phone back bar and card stack are sm:hidden, and
     // space-y counts a hidden first child, leaving the desk bar a stray 16px down.
-    <div className="flex flex-col gap-4" data-testid="accountant-manage-tab">
+    <div ref={stickyRootRef} className="flex flex-col gap-4" data-testid="accountant-manage-tab">
       {toolbarTarget && dateControls && createPortal(dateControls, toolbarTarget)}
       {/* Phone, one tab open: the tab being read and the way back to the cards, flush under
           the header -- the bar Branch Leads' stage lists and Management's sub-tabs show. */}
@@ -1023,7 +1041,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
           scrolling, and the bar stays flush with the board's edges instead of leaving the
           gap a scaled-down full-width row would. Not on a phone, where the bar is laid out
           to fit and 90% of 12px type was only harder to read. */}
-      <div className={stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px))] md:z-20 bg-slate-50" : ""}>
+      <div ref={toolbarRef} className={stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px))] md:z-20 bg-slate-50" : ""}>
       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
@@ -1212,7 +1230,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
               })}
             </div>
           )}
-          <div className={`grid grid-cols-2 gap-3 ${approvedOnly ? "lg:grid-cols-4" : "lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1"} ${phoneHide(false)}`} data-testid="accountant-manage-ledger-filter">
+          <div ref={ledgerCardsRef} className={`grid grid-cols-2 gap-3 ${stickyLedgerClass} ${approvedOnly ? "lg:grid-cols-4" : "lg:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1"} ${phoneHide(false)}`} data-testid="accountant-manage-ledger-filter">
             {summaryCards.map((c) => {
               // The income-side cards, each opening the income ledger at its own pile.
               const pile = c.key === "approved" || c.key === "requested" || c.key === "collected";
@@ -1306,7 +1324,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
 
               The same card as the five above (ui/ledger-card), so the two rows read as one
               set: white at rest, the picked one filled solid in its own colour. */}
-          <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${phoneHide(false)}`}>
+          <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${stickyRevenueClass} ${phoneHide(false)}`}>
             {REVENUE_VIEWS.map((v) => (
               <LedgerCard
                 key={v.key}
