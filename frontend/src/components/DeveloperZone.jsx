@@ -76,13 +76,12 @@ const HIDE_FEATURE_ROWS = [
   },
 ];
 
-// The four pages inside the zone. Danger Zone first because it is the one the gear is
-// named after; the other three ride behind the same password.
+// The four pages inside the zone, all behind the same developer password.
 const SUB_TABS = [
-  { key: "danger", label: "Danger Zone", icon: AlertTriangle, tone: "text-red-600", activeBg: "bg-red-50" },
+  { key: "hide_features", label: "Features", icon: EyeOff, tone: "text-amber-600", activeBg: "bg-amber-50" },
   { key: "payment_modes", label: "Payment Modes", icon: Wallet, tone: "text-sky-600", activeBg: "bg-sky-50" },
-  { key: "theme", label: "Theme Appearance", icon: Palette, tone: "text-violet-600", activeBg: "bg-violet-50" },
-  { key: "hide_features", label: "Hide Features", icon: EyeOff, tone: "text-amber-600", activeBg: "bg-amber-50" },
+  { key: "theme", label: "Appearance", icon: Palette, tone: "text-violet-600", activeBg: "bg-violet-50" },
+  { key: "danger", label: "Danger Zone", icon: AlertTriangle, tone: "text-red-600", activeBg: "bg-red-50" },
 ];
 
 /**
@@ -545,15 +544,8 @@ export const DeveloperZone = () => {
               <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
                 {[
                   { key: "physio-day-lock", label: "Physio Treatment Days lock", value: dayLock, saving: savingDayLock, onFlip: toggleDayLock, on: "LOCKED", off: "UNLOCKED" },
-                  { key: "lead-delete-button", label: "Branch Leads & Pre Sales delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
                   { key: "expense-delete-button", label: "Accountant Approvals & Branch Accountant Manage delete button (Income & Expense)", value: expenseDelete, saving: savingExpenseDelete, onFlip: toggleExpenseDelete, on: "ON", off: "OFF" },
                   { key: "before-verify-delete-button", label: "Before Verify Transactions", value: beforeVerifyDelete, saving: savingBeforeVerifyDelete, onFlip: toggleBeforeVerifyDelete, on: "ON", off: "OFF" },
-                  { key: "undo-payment-button", label: "Undo Payment", value: undoPayment, saving: savingUndoPayment, onFlip: toggleUndoPayment, on: "ON", off: "OFF" },
-                  { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
-                  { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
-                  { key: "lead-source-button", label: "Leads Source Show / Hide Sources button", value: leadSourceButton, saving: savingLeadSourceButton, onFlip: toggleLeadSourceButton, on: "ON", off: "OFF" },
-                  { key: "consultation-duration-rule", label: "Consultation Duration (OFF: book many patients at the same time)", value: durationRule, saving: savingDurationRule, onFlip: toggleDurationRule, on: "ON", off: "OFF" },
-                  { key: "branch-tab-dots", label: "Branch Admin tabs Red Dot", value: tabDots, saving: savingTabDots, onFlip: toggleTabDots, on: "ON", off: "OFF" },
                 ].map((row) => (
                   <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`${row.key}-card`}>
                     <span className="text-sm font-medium text-slate-800">{row.label}</span>
@@ -642,7 +634,7 @@ export const DeveloperZone = () => {
           <Card data-testid="theme-appearance-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Palette className="h-4 w-4 text-sky-600" /> Theme Appearance
+                <Palette className="h-4 w-4 text-sky-600" /> Appearance
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -666,11 +658,38 @@ export const DeveloperZone = () => {
           <Card data-testid="hide-features-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <EyeOff className="h-4 w-4 text-amber-600" /> Hide Features
+                <EyeOff className="h-4 w-4 text-amber-600" /> Features
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                {[
+                  { key: "branch-tab-dots", label: "Branch Admin tabs Red Dot", value: tabDots, saving: savingTabDots, onFlip: toggleTabDots, on: "ON", off: "OFF" },
+                  { key: "consultation-duration-rule", label: "Consultation Duration (OFF: book many patients at the same time)", value: durationRule, saving: savingDurationRule, onFlip: toggleDurationRule, on: "ON", off: "OFF" },
+                  { key: "lead-source-button", label: "Leads Source Show / Hide Sources button", value: leadSourceButton, saving: savingLeadSourceButton, onFlip: toggleLeadSourceButton, on: "ON", off: "OFF" },
+                  { key: "store-per-branch", label: "Services and Products different for each branch", value: storePerBranch, saving: savingStorePerBranch, onFlip: toggleStorePerBranch, on: "ON", off: "OFF" },
+                  { key: "sa-consult-branches", label: "Super Admin branch On/Off", value: saBranches, saving: savingSaBranches, onFlip: toggleSaBranches, on: "ON", off: "OFF" },
+                  { key: "undo-payment-button", label: "Undo Payment", value: undoPayment, saving: savingUndoPayment, onFlip: toggleUndoPayment, on: "ON", off: "OFF" },
+                  { key: "lead-delete-button", label: "Branch Leads & Pre Sales delete button", value: deleteButton, saving: savingDeleteButton, onFlip: toggleDeleteButton, on: "ON", off: "OFF" },
+                ].map((row) => (
+                  <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`${row.key}-card`}>
+                    <span className="text-sm font-medium text-slate-800">{row.label}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className={`text-[10px] font-bold uppercase ${row.value ? "text-emerald-600" : "text-slate-400"}`}>
+                        {row.value === null ? "…" : row.saving ? "Saving" : row.value ? row.on : row.off}
+                      </span>
+                      <Switch
+                        checked={!!row.value}
+                        disabled={row.value === null || row.saving}
+                        // The toggle functions confirm first and flip from the saved value, so
+                        // the switch only moves once the server has said so.
+                        onCheckedChange={() => row.onFlip()}
+                        className="data-[state=checked]:bg-emerald-600"
+                        data-testid={`${row.key}-toggle`}
+                      />
+                    </span>
+                  </label>
+                ))}
                 {HIDE_FEATURE_ROWS.map((row) => {
                   const shown = hiddenFeatureKeys ? !hiddenFeatureKeys.includes(row.key) : null;
                   return (
