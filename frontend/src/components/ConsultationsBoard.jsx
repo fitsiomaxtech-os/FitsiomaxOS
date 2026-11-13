@@ -10570,13 +10570,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     show: !!selectedLead.rehab_referred,
                     longTerm: true,
                     longTermNote: longTermNotes.rehab,
+                    // Title over an Inspect button, as the Treatment Fee: the course, its
+                    // price, what is paid and who delivers it live in the popup it opens
+                    // (it replaced the Rehab Details tab on Fee Collected). Part-paid, the
+                    // row's figure is the balance, the total being in that popup.
+                    inspect: true,
+                    balanceDue: feeBalances.rehab ? feeBalances.rehab.balance : null,
+                    noTotal: true,
                     // Collected straight from the card once the Consultant has chosen a
                     // course -- the price is that course's. Without one there is nothing to
-                    // collect against yet, so the card still points at the Rehab tab, where
-                    // the course is chosen.
+                    // collect against yet, so the card opens the Inspect popup, which says so.
                     ...balanceStep(
                       "rehab",
-                      selectedLead.rehab_package_id ? openRehabFeeDraft : () => openDetail("rehab"),
+                      selectedLead.rehab_package_id ? openRehabFeeDraft : () => setFeeInspect("rehab"),
                       selectedLead.rehab_package_id ? "Collect" : "Open",
                     ),
                     ...(feeBalances.rehab ? {} : { paid: selectedLead.rehab_fee_paid != null }),
@@ -11269,7 +11275,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 {completingConsultation ? "Saving..." : "Mark Consultation Completed"}
                               </Button>
                               {DietDetailButton}
-                              {RehabDetailButton}
                               {footBand()}
                             </div>
                             {detailBody && <div className="mt-3 border-t border-emerald-100 pt-3">{detailBody}</div>}
@@ -11314,11 +11319,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 Off that view -- Documents, Diet, Rehab -- it is the only road
                                 home, so that is the only time it is drawn. */}
                             {treatmentFeePaid && programmeDetail !== "own" && <OwnTab label="Assign Physio" short="Physio" icon={Users} active="border-violet-600 bg-violet-600 text-white shadow-sm hover:bg-violet-700 hover:text-white" />}
-                            {/* No Diet tab on this row. The Diet Fee card below is the way
-                                into the diet programme from here — a button in the tab row
-                                as well put the same view two doors apart on one screen,
-                                above a panel whose job right now is the fee that is due. */}
-                            {RehabDetailButton}
+                            {/* No Diet or Rehab tab on this row. The Diet Fee card below is
+                                the way into the diet programme from here, and the Rehab Fee
+                                row's Inspect button opens the rehab course -- a button in the
+                                tab row as well put the same thing two doors apart on one
+                                screen, above a panel whose job right now is the fee due. */}
                           </>
                         }
                       >
@@ -13027,14 +13032,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const settlesNow = SETTLED_NOW_MODES.includes(mode);
               return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-rehab-fee-modal">
-                  <div className="max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
-                    <div className="flex items-center justify-between">
+                  {/* 450 x 380, and it holds that size whichever payment mode is picked:
+                      the header and Confirm stay put and only the fields between them
+                      scroll. A phone keeps it as tall as its content, up to the screen. */}
+                  <div className="flex max-h-[90vh] w-full max-w-[450px] flex-col rounded-[4px] bg-white p-4 shadow-2xl sm:h-[380px]" data-testid="cons-rehab-fee-card">
+                    <div className="flex shrink-0 items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         {mode === "partial" ? "Rehab Fee Payment Schedule" : mode === "cheque" ? "Collect Rehab Fee by Cheque" : "Collect Rehab Fee"}
                       </p>
                       <button onClick={() => setRehabFeeDraft(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-rehab-fee-close"><X className="h-4 w-4" /></button>
                     </div>
 
+                    <div className="-mx-1 mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pb-1">
                     <p className="text-[11px] text-slate-500">
                       {selectedLead.rehab_package_name || "Rehab course"}
                       {selectedLead.rehab_package_sessions ? ` · ${selectedLead.rehab_package_sessions} sessions` : ""}
@@ -13049,6 +13058,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         onChange={(patch) => setRehabFeeDraft({ ...rehabFeeDraft, ...patch })}
                         label="Rehab Fee (₹)"
                         testPrefix="cons-rehab-fee"
+                        amountFirst
                       />
                     )}
 
@@ -13151,10 +13161,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </>
                     )}
 
-                    <div className="flex gap-2">
-                      <Button variant="outline" className="flex-1 text-xs" onClick={() => setRehabFeeDraft(null)} data-testid="cons-rehab-fee-cancel">Cancel</Button>
+                    </div>
+
+                    {/* No Cancel: the X in the header closes the popup. */}
+                    <div className="mt-3 flex shrink-0">
                       <Button
-                        className="flex-[2] bg-cyan-600 text-xs hover:bg-cyan-700"
+                        className="w-full bg-cyan-600 text-xs hover:bg-cyan-700"
                         onClick={confirmCollectRehabFee}
                         disabled={
                           collectingRehabFee ||
@@ -13985,6 +13997,135 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                     <div className="flex justify-end">
                       <Button size="sm" variant="outline" className={ACT_BTN} onClick={() => setFeeInspect(false)} data-testid="cons-fee-inspect-done">Close</Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Inspect (Rehab Fee): what the Rehab Details tab used to show on Fee Collected,
+                drawn as the Treatment Fee's Inspect popup -- the course as sold, its price
+                and any discount, where the money stands, and who is delivering it. The
+                Assign Physio button that tab carried comes with it, once the fee is in. */}
+            {feeInspect === "rehab" && selectedLead && (() => {
+              const L = selectedLead;
+              const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN")}`;
+              const sessions = Number(L.rehab_package_sessions) || 0;
+              const price = Number(L.rehab_package_price) || 0;
+              const hasCourse = !!L.rehab_package_id;
+              const details = L.rehab_fee_payment_details || {};
+              const rows = details.installments || [];
+              const discount = Math.max(0, Number(details.discount_amount) || 0);
+              const feeIn = L.rehab_fee_paid != null;
+              const sum = (list) => list.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+              const paidIn = rows.length ? sum(rows.filter((i) => i.paid)) : feeIn ? Number(L.rehab_fee_paid) || 0 : 0;
+              const balance = rows.length ? sum(rows.filter((i) => !i.paid)) : feeIn ? 0 : Math.max(0, price - discount);
+              const assigned = !!L.rehab_physio_name;
+              const close = () => setFeeInspect(false);
+              return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) close(); }} data-testid="cons-rehab-inspect-popup">
+                  <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                        <Activity className="h-4 w-4 text-cyan-600" />
+                        Rehab Fee · Details
+                      </p>
+                      <button onClick={close} className="rounded p-1 text-slate-400 hover:bg-slate-100" data-testid="cons-rehab-inspect-close"><X className="h-4 w-4" /></button>
+                    </div>
+
+                    {/* The course as sold. */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="cons-rehab-inspect-course">
+                      <p className={`font-semibold ${hasCourse ? "text-slate-800" : "text-amber-700"}`}>{L.rehab_package_name || (hasCourse ? "Rehab Course" : "Not chosen yet")}</p>
+                      {hasCourse && (
+                        <p className="mt-0.5 text-slate-500">
+                          {sessions ? `${sessions} session${sessions === 1 ? "" : "s"}` : "Sessions not stated"}
+                          {L.rehab_package_mode ? <> · <span className={L.rehab_package_mode === "online" ? "font-semibold text-sky-700" : "font-semibold text-slate-600"}>{L.rehab_package_mode === "online" ? "Online" : "Offline"}</span></> : null}
+                        </p>
+                      )}
+                    </div>
+
+                    {hasCourse ? (
+                      <>
+                        {/* The price, and any discount agreed off it. */}
+                        <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-rehab-inspect-price">
+                          <div className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="font-semibold text-slate-700">Rehab Fee</span>
+                            <span className="font-bold tabular-nums text-slate-900">{rs(price)}</span>
+                          </div>
+                          {discount > 0 && (
+                            <>
+                              <div className="flex items-center justify-between gap-2 px-3 py-2">
+                                <span className="text-slate-600">Discount</span>
+                                <span className="font-semibold tabular-nums text-rose-600">− {rs(discount)}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 px-3 py-2">
+                                <span className="font-semibold text-slate-700">Payable</span>
+                                <span className="font-bold tabular-nums text-slate-900">{rs(price - discount)}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Where the money stands. */}
+                        <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="cons-rehab-inspect-money">
+                          <div className="flex justify-between gap-2"><span className="text-slate-600">Paid</span><span className="font-semibold tabular-nums text-emerald-700">{rs(paidIn)}</span></div>
+                          <div className="flex justify-between gap-2"><span className="text-slate-600">{feeIn ? "Balance" : "Due"}</span><span className={`font-semibold tabular-nums ${balance > 0 ? "text-amber-700" : "text-slate-500"}`}>{rs(balance)}</span></div>
+                          {feeIn && L.rehab_fee_payment_mode && (
+                            <div className="flex justify-between gap-2"><span className="text-slate-600">Payment Mode</span><span className="font-semibold text-slate-700">{ALL_PAYMENT_MODE_LABELS[L.rehab_fee_payment_mode] || String(L.rehab_fee_payment_mode).replace(/_/g, " ")}</span></div>
+                          )}
+                        </div>
+
+                        {/* The Payment Schedule, when the fee is taken in parts. */}
+                        {rows.length > 0 && (
+                          <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-xs" data-testid="cons-rehab-inspect-schedule">
+                            <p className="bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Payment Schedule</p>
+                            {rows.map((inst, i) => (
+                              <div key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                                <span className="text-slate-600">
+                                  <span className="font-semibold text-slate-700">Payment {i + 1}</span>
+                                  {inst.due_date ? ` · ${inst.due_date}` : ""}
+                                </span>
+                                <span className="text-right tabular-nums">
+                                  <span className="font-semibold text-slate-800">{rs(inst.amount)}</span>
+                                  <span className={`ml-1.5 text-[10px] font-semibold uppercase ${inst.paid ? "text-emerald-600" : "text-amber-600"}`}>{inst.paid ? "Paid" : "Due"}</span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Who is delivering it, and how far in. */}
+                        <div className="space-y-1 rounded-lg border border-slate-200 px-3 py-2 text-xs" data-testid="cons-rehab-inspect-physio">
+                          <div className="flex justify-between gap-2"><span className="text-slate-600">Rehab Physio</span><span className={`font-semibold ${assigned ? "text-slate-700" : "text-amber-700"}`}>{L.rehab_physio_name || "Not assigned"}</span></div>
+                          {rehabProgress && (
+                            <div className="flex justify-between gap-2">
+                              <span className="text-slate-600">Days Completed</span>
+                              <span className={`font-semibold tabular-nums ${rehabProgress.completed > 0 ? "text-emerald-700" : "text-slate-700"}`}>
+                                {rehabProgress.completed} of {rehabProgress.packageDays || "—"}{rehabProgress.done ? "" : ` · ${rehabProgress.remaining} left`}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[11px] leading-relaxed text-slate-500" data-testid="cons-rehab-inspect-no-course">
+                        The Consultant has not chosen a Rehab course yet, so there is no price to collect against and no course to put a physio on.
+                      </p>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                      {feeIn && hasCourse && (
+                        <Button
+                          size="sm"
+                          className={`bg-cyan-600 text-white shadow-sm hover:bg-cyan-700 ${ACT_BTN}`}
+                          onClick={() => { close(); openPhysioModal("rehab"); }}
+                          data-testid="cons-rehab-inspect-assign"
+                        >
+                          <Activity className="mr-1 h-3.5 w-3.5" />
+                          {assigned ? "Reassign Rehab Physio" : "Assign Physio"}
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" className={ACT_BTN} onClick={close} data-testid="cons-rehab-inspect-done">Close</Button>
                     </div>
                   </div>
                 </div>
