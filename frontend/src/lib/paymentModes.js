@@ -76,8 +76,8 @@ const subscribe = (fn) => {
 export const useHiddenPaymentModes = () => useSyncExternalStore(subscribe, () => hiddenModes);
 
 /** `list` without the hidden modes. Items can be mode strings, or objects carrying the mode
- *  as `value` (or `key`). Anything that is not a mode -- Partial Payment, "Nothing collected"
- *  -- passes through. */
+ *  as `value` (or `key`). Partial Payment can be hidden like a mode; anything that is not
+ *  one -- "Nothing collected" -- passes through. */
 export const withoutHiddenModes = (list, hidden) => (list || []).filter((m) => {
   const mode = typeof m === "string" ? m : (m.value ?? m.key);
   return !hidden.includes(mode);

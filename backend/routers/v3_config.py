@@ -1554,9 +1554,12 @@ async def v3_set_lead_source_button(
 
 # Payment Modes Show / Hide -- the tenders a developer has taken off every Payment Mode
 # picker in the OS. Only the choice goes: payments already taken in a hidden mode keep it,
-# and the reports still count them under it. At least one mode always stays shown.
+# and the reports still count them under it. At least one tender always stays shown.
+# Partial Payment can be hidden too, but it is a plan rather than money taken, so it does
+# not count as the tender left standing: with only Partial shown, nothing could be collected.
 PAYMENT_MODE_HIDDEN_ID = "payment_mode_hidden"
-PAYMENT_MODE_KEYS = ("cash", "upi", "card", "account_transfer", "cheque")
+PAYMENT_TENDER_KEYS = ("cash", "upi", "card", "account_transfer", "cheque")
+PAYMENT_MODE_KEYS = PAYMENT_TENDER_KEYS + ("partial",)
 
 
 class PaymentModeHiddenInput(BaseModel):
@@ -1588,7 +1591,7 @@ async def v3_set_payment_mode_visibility(
     if payload.mode not in PAYMENT_MODE_KEYS:
         raise HTTPException(status_code=400, detail=f"Payment mode must be one of {', '.join(PAYMENT_MODE_KEYS)}")
     hidden = set(await hidden_payment_modes())
-    if payload.hidden and len(hidden | {payload.mode}) >= len(PAYMENT_MODE_KEYS):
+    if payload.hidden and payload.mode in PAYMENT_TENDER_KEYS and set(PAYMENT_TENDER_KEYS) <= (hidden | {payload.mode}):
         raise HTTPException(status_code=400, detail="At least one payment mode has to stay shown")
     await v3_col("app_settings").update_one(
         {"id": PAYMENT_MODE_HIDDEN_ID},

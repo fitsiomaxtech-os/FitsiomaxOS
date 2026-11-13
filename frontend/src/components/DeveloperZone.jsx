@@ -25,14 +25,18 @@ import { setHiddenFeatures } from "@/lib/featureVisibility";
 import { useDevZone, closeDevZone, lockDevZone } from "@/lib/devZone";
 import { ThemeAppearanceCard } from "@/components/ThemeAppearanceCard";
 
-// The five tenders the OS collects in, as the Payment Modes tab lists them.
+// The five tenders the OS collects in, plus Partial Payment, as the Payment Modes tab lists
+// them. Partial is a plan rather than a tender (`plan: true`), so it never counts as the last
+// mode left shown -- see PAYMENT_TENDER_KEYS in v3_config.py.
 const PAYMENT_MODE_ROWS = [
   { mode: "cash", label: "Cash" },
   { mode: "upi", label: "UPI" },
   { mode: "card", label: "Card" },
-  { mode: "account_transfer", label: "Account Transfer" },
+  { mode: "account_transfer", label: "Account" },
   { mode: "cheque", label: "Cheque" },
+  { mode: "partial", label: "Partial", plan: true },
 ];
+const TENDER_MODE_KEYS = PAYMENT_MODE_ROWS.filter((r) => !r.plan).map((r) => r.mode);
 
 // Every feature the Hide Features tab offers — the backend's FEATURE_KEYS
 // (feature_visibility.py). The tab shows the label and the switch only; what a flip does is
@@ -603,9 +607,10 @@ export const DeveloperZone = () => {
               <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
                 {PAYMENT_MODE_ROWS.map((row) => {
                   const shown = hiddenModes ? !hiddenModes.includes(row.mode) : null;
-                  // The last mode still shown cannot be hidden: a desk with no mode to pick
-                  // cannot collect at all. The server refuses it as well.
-                  const lastShown = shown && hiddenModes && hiddenModes.length >= PAYMENT_MODE_ROWS.length - 1;
+                  // The last tender still shown cannot be hidden: a desk with no mode to pick
+                  // cannot collect at all. The server refuses it as well. Partial never locks.
+                  const lastShown = shown && hiddenModes && !row.plan
+                    && TENDER_MODE_KEYS.filter((m) => hiddenModes.includes(m)).length >= TENDER_MODE_KEYS.length - 1;
                   return (
                     <label key={row.mode} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`payment-mode-${row.mode}-row`}>
                       <span className="text-sm font-medium text-slate-800">{row.label}</span>

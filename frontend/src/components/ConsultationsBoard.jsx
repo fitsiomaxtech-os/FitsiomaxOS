@@ -15714,7 +15714,7 @@ function PaymentModeDropdown({ value, options, onChange, disabled, testId }) {
 }
 
 function PaymentModeSelect({ value, options, onChange, testId }) {
-  // Less any mode hidden in Developer Access (Partial Payment is a plan, not a mode, and stays).
+  // Less any mode hidden in Developer Access, Partial Payment included.
   const shown = useShownPaymentModes(options);
   return (
     <div className="flex flex-wrap gap-1.5" data-testid={testId}>
