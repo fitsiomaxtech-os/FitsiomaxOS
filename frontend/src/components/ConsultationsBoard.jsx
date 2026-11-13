@@ -6716,6 +6716,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       ifsc_code: "",
       transfer_reference: "",
       cheque_number: "",
+      // The notes counted for a Cash collection -- see CashDenominations.
+      cash_notes: {},
       // The schedule a Partial Payment is spread over, reloaded from the real rows when
       // this fee already has one -- see openCollectFeeDraft, which does the same.
       partial_installments: (selectedLead.rehab_fee_payment_details?.installments || []).length
@@ -6833,7 +6835,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // Each mode's own reference — the one thing a disputed payment is traced by. The
     // server checks these too and answers with the same words, so the desk gets told
     // before the request goes out rather than after it comes back.
-    if (mode === "upi") {
+    if (mode === "cash") {
+      // The same bar every other fee sets: a cash figure with no count behind it cannot
+      // be settled against a till at the end of the day.
+      if (!notesSettled(rehabFeeDraft.cash_notes, amount)) {
+        toast.error(noteTotal(rehabFeeDraft.cash_notes) === 0
+          ? "Count the cash being taken before collecting it"
+          : "The cash counted does not match the amount being taken");
+        return;
+      }
+      payload.denominations = countedNotes(rehabFeeDraft.cash_notes);
+    } else if (mode === "upi") {
       payload.upi_transaction_id = (rehabFeeDraft.upi_transaction_id || "").trim();
       if ((rehabFeeDraft.upi_id || "").trim()) payload.upi_id = rehabFeeDraft.upi_id.trim();
     } else if (mode === "card") {
@@ -13032,10 +13044,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const settlesNow = SETTLED_NOW_MODES.includes(mode);
               return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-rehab-fee-modal">
-                  {/* 450 x 380, and it holds that size whichever payment mode is picked:
-                      the header and Confirm stay put and only the fields between them
-                      scroll. A phone keeps it as tall as its content, up to the screen. */}
-                  <div className="flex max-h-[90vh] w-full max-w-[450px] flex-col rounded-[4px] bg-white p-4 shadow-2xl sm:h-[380px]" data-testid="cons-rehab-fee-card">
+                  {/* 450 wide, and as tall as the payment mode picked needs, so every
+                      mode's own fields are on screen without scrolling. Only on a window
+                      too short for it do the fields between the header and Confirm
+                      scroll; the header and Confirm stay put. */}
+                  <div className="flex max-h-[90vh] w-full max-w-[450px] flex-col rounded-[4px] bg-white p-4 shadow-2xl" data-testid="cons-rehab-fee-card">
                     <div className="flex shrink-0 items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         {mode === "partial" ? "Rehab Fee Payment Schedule" : mode === "cheque" ? "Collect Rehab Fee by Cheque" : "Collect Rehab Fee"}
@@ -13117,6 +13130,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </>
                     )}
 
+                    {/* The notes on the desk, counted against the amount being taken --
+                        required, as on every other fee. Cheque and Partial never reach
+                        here: neither is notes on a desk today. */}
+                    {mode === "cash" && (
+                      <CashDenominations
+                        amount={rehabFeeDraft.amount}
+                        notes={rehabFeeDraft.cash_notes}
+                        onChange={(cash_notes) => setRehabFeeDraft({ ...rehabFeeDraft, cash_notes })}
+                        testPrefix="cons-rehab-fee"
+                      />
+                    )}
+
                     {mode === "upi" && (
                       <UpiCollectFields
                         draft={rehabFeeDraft}
@@ -13134,8 +13159,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </div>
                     )}
 
+                    {/* Two to a row, as the Consultation Fee lays them out: stacked, the
+                        five fields made this the one mode taller than a laptop screen. */}
                     {BANK_DETAIL_MODES.includes(mode) && (
-                      <>
+                      <div className="grid gap-2 sm:grid-cols-2" data-testid="cons-rehab-fee-bank-fields">
                         <div>
                           <label className="mb-1 block text-[11px] font-medium text-slate-500">Account Number</label>
                           <Input value={rehabFeeDraft.account_number} onChange={(e) => setRehabFeeDraft({ ...rehabFeeDraft, account_number: e.target.value })} className="h-9" data-testid="cons-rehab-fee-account-number" />
@@ -13153,12 +13180,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <Input value={rehabFeeDraft.ifsc_code} onChange={(e) => setRehabFeeDraft({ ...rehabFeeDraft, ifsc_code: e.target.value.toUpperCase() })} className="h-9" data-testid="cons-rehab-fee-ifsc" />
                         </div>
                         {mode === "account_transfer" && (
-                          <div>
+                          <div className="sm:col-span-2">
                             <label className="mb-1 block text-[11px] font-medium text-slate-500">Reference / UTR No.</label>
                             <Input value={rehabFeeDraft.transfer_reference} onChange={(e) => setRehabFeeDraft({ ...rehabFeeDraft, transfer_reference: e.target.value })} className="h-9" data-testid="cons-rehab-fee-transfer-reference" />
                           </div>
                         )}
-                      </>
+                      </div>
                     )}
 
                     </div>
@@ -13177,6 +13204,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                (rehabFeeDraft.partial_installments || []).some((i) => !(parseFloat(i.amount) > 0) || !i.due_date) ||
                                Math.abs(round2((rehabFeeDraft.partial_installments || []).reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0)) - rehabPrice) > 0.01)
                             : (!(parseFloat(rehabFeeDraft.amount) > 0) ||
+                               (mode === "cash" && !notesSettled(rehabFeeDraft.cash_notes, rehabFeeDraft.amount)) ||
                                (mode === "card" && !(rehabFeeDraft.card_transaction_id || "").trim()) ||
                                (rehabHasBalance && !rehabFeeDraft.balance_due_date) ||
                                rehabDiscountRs > rehabPrice))
