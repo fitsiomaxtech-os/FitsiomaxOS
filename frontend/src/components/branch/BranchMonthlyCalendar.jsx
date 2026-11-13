@@ -14,10 +14,14 @@ const shortDate = (s) => new Date(`${s}T00:00:00`).toLocaleDateString("en-GB", {
 // MANAGEMENT → CALENDAR → MONTHLY CALENDAR. Which days this branch works and which it is on
 // leave, one month at a time.
 //
-// What is set here is what the Consultant and Physiotherapist calendars obey: a Leave day
-// cannot have slots published on it, its open slots are taken off, and the consultation
-// booking popup does not offer it. Changed by the branch's Branch Admin, Super Admin and
-// BDE only — the server says which through `can_edit`, and everyone else sees it read-only.
+// What is set here is what the Consultant, Physiotherapist and Nutritionists calendars obey.
+// A Working day is open for every one of them across their own shift timings — the server
+// opens it (backend/auto_availability.py), nobody publishes it person by person. A Leave day
+// is open for none of them: its open slots are taken off and no booking popup offers it.
+// Taking one person off one day is done on their own calendar under MANAGEMENT.
+//
+// Changed by the branch's Branch Admin, Super Admin and BDE only — the server says which
+// through `can_edit`, and everyone else sees it read-only.
 export const BranchMonthlyCalendar = ({ branchId }) => {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [data, setData] = useState(null);
@@ -59,7 +63,7 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
     if (picked.length === 0) return;
     const label = picked.length === 1 ? shortDate(picked[0]) : `${picked.length} days`;
     if (status === "leave" && !window.confirm(
-      `Mark ${label} as Leave?\n\nOpen (unbooked) Consultant and Physiotherapist slots on ${picked.length === 1 ? "this day" : "these days"} will be removed, and no new slots or consultations can be booked. Booked slots are kept.`,
+      `Mark ${label} as Leave?\n\nConsultants, Physiotherapists and Nutritionists will not be available on ${picked.length === 1 ? "this day" : "these days"}: their open (unbooked) slots are removed and nothing new can be booked. Booked slots are kept.`,
     )) return;
     setSaving(true);
     try {
@@ -70,7 +74,8 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
         if (res?.booked_slots_kept) parts.push(`${res.booked_slots_kept} booked slot${res.booked_slots_kept === 1 ? "" : "s"} still need moving`);
         (res?.booked_slots_kept ? toast.warning : toast.success)(parts.join(" · "));
       } else {
-        toast.success(`${label} marked Working — publish slots in the Consultant / Physiotherapist Calendar`);
+        const staff = res?.experts_available || 0;
+        toast.success(`${label} marked Working${staff ? ` · ${staff} staff available across their shift timings` : ""}`);
       }
       setPicked([]);
       setNote("");
@@ -98,8 +103,8 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
 
       <p className="hidden text-xs text-slate-500 md:block">
         {canEdit
-          ? "Tap days to select them, then mark them Working or Leave. Leave days are closed on the Consultant and Physiotherapist calendars and for consultation bookings."
-          : "Set by this branch's Branch Admin, Super Admin or BDE. Leave days are closed on the Consultant and Physiotherapist calendars."}
+          ? "Tap days to select them, then mark them Working or Leave. On a Working day every Consultant, Physiotherapist and Nutritionist is available across their own shift timings; on a Leave day none of them are. To take one person off a day, unselect it on their calendar in Management."
+          : "Set by this branch's Branch Admin, Super Admin or BDE. On a Working day every Consultant, Physiotherapist and Nutritionist is available across their shift timings; on a Leave day none of them are."}
       </p>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

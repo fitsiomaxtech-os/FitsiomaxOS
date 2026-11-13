@@ -354,9 +354,16 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   // is a pattern, not a contract — a Morning physio who comes in full-time on Tuesday is
   // normal, and the roster has to be able to say so without moving them off Morning.
   const dayShifts = calendarData?.day_shifts || {};
+  // The branch's own hours on each Working day, as the Monthly Calendar shows them. Somebody
+  // with no shift is opened across these — by the server too (auto_availability), so a day
+  // re-opened here by hand comes out the same as the days it opened. Filled in below, with
+  // the month's leave days.
+  const [dayHours, setDayHours] = useState({});
 
+  /** The usual window on one date: the shift, or with no shift the branch's hours that day. */
+  const usualFor = (date) => (shift?.shift_id || !dayHours[date] ? shift : dayHours[date]);
   /** The window one date is opened across: its own one-off, else the usual, else the default. */
-  const windowFor = (date) => (date && dayShifts[date]) || shift || null;
+  const windowFor = (date) => (date && dayShifts[date]) || usualFor(date) || null;
   // Both halves spelled out — "Morning + Evening · 8:00 AM – 1:00 PM · 5:00 PM – 9:00 PM".
   // Naming only the outer ends would read as a day this expert does not work.
   const labelOf = (w) => (w?.shift_name ? `${w.shift_name} · ${hoursLabel(w)}` : "");
@@ -368,12 +375,14 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   // `windowOverride` is for the moment a day's shift is changed: the new window is known
   // from the response before calendarData has been reloaded, so the day re-cuts straight
   // away instead of one render behind.
-  const stagedSlotsForDay = (d, windowOverride) => {
-    const alreadyOpen = new Set((calendarData?.slots || []).filter((s) => s.startsWith(`${d}T`)));
+  // `data` is the calendar to measure against — a fresh one straight after a save that changed
+  // it, before the state holding it has caught up.
+  const stagedSlotsForDay = (d, windowOverride, data = calendarData) => {
+    const alreadyOpen = new Set((data?.slots || []).filter((s) => s.startsWith(`${d}T`)));
     return gridTimes(windowOverride || windowFor(d))
       .filter((time) => {
         const full = `${d}T${time}`;
-        return !alreadyOpen.has(full) && !calendarData?.booked?.[full];
+        return !alreadyOpen.has(full) && !data?.booked?.[full];
       })
       .map((time) => ({ slot_time: `${d}T${time}`, duration: slotDuration, consultation_type: slotType }));
   };
@@ -391,13 +400,16 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
     try {
       const res = await setDoctorDayShift(selectedDoctor.id, dates, shiftIds);
       const nextDayShifts = res?.day_shifts || {};
-      // Merged in rather than waiting on a reload, so the grid re-cuts on the same click.
-      setCalendarData((prev) => (prev ? { ...prev, day_shifts: nextDayShifts } : prev));
+      // Read back rather than patched: the server has already re-cut the days it opened
+      // across the new window, and staging against the old slots would offer those again.
+      const fresh = await getDoctorCalendar(selectedDoctor.id).catch(() => null);
+      const data = fresh || (calendarData ? { ...calendarData, day_shifts: nextDayShifts } : calendarData);
+      setCalendarData(data);
       // Restage the affected days across their new window. Anything staged under the old
       // one is dropped: half a morning plus half an evening is not a day anyone meant.
       setPendingSlots((prev) => [
         ...prev.filter((s) => !dates.some((d) => s.slot_time.startsWith(`${d}T`))),
-        ...dates.flatMap((d) => stagedSlotsForDay(d, nextDayShifts[d] || shift)),
+        ...dates.flatMap((d) => stagedSlotsForDay(d, nextDayShifts[d] || usualFor(d), data)),
       ]);
       const dayLabel = dates.length === 1 ? shortDate(dates[0]) : `${dates.length} days`;
       toast.success(
@@ -505,8 +517,14 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
       .then((res) => {
         if (cancelled) return;
         const map = {};
-        (res?.days || []).forEach((day) => { if (day.status === "leave") map[day.date] = day; });
+        const hours = {};
+        (res?.days || []).forEach((day) => {
+          if (day.status === "leave") map[day.date] = day;
+          else if (day.open && day.close) hours[day.date] = { start_time: day.open, end_time: day.close };
+        });
         setLeaveDays(map);
+        // Kept across months, so a day picked last month still opens across its own hours.
+        setDayHours((prev) => ({ ...prev, ...hours }));
         setLeaveMonth(monthKey);
       })
       // Still marked as this month's on a failure, so the button does not spin forever:
@@ -605,7 +623,11 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
         setCalendarData(data);
         setPendingSlots((prev) => [
           ...prev.filter((s) => !selectedDates.some((d) => s.slot_time.startsWith(`${d}T`))),
-          ...selectedDates.flatMap((d) => stagedSlotsForDay(d, data?.day_shifts?.[d] || data?.shift)),
+          ...selectedDates.flatMap((d) => stagedSlotsForDay(
+            d,
+            data?.day_shifts?.[d] || (data?.shift?.shift_id || !dayHours[d] ? data?.shift : dayHours[d]),
+            data,
+          )),
         ]);
       }
     } catch (e) {
@@ -643,6 +665,9 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   // writes it — but on this screen it is never shown or picked at. Open or closed is
   // the only state a consultant's day has here.
   const publishedDays = new Set((calendarData?.slots || []).map((x) => (x || "").split("T")[0]));
+  // Days this person was taken off on this calendar. Every other Working day is opened for
+  // them by the server; these stay shut until somebody picks one and makes it available.
+  const daysOff = new Set(calendarData?.days_off || []);
   const dayIsStaged = (d) => pendingSlots.some((x) => x.slot_time.startsWith(`${d}T`) && !x._remove);
   /** Open or closed as the day will stand once Save Changes has run. Closing is not
    *  staged — Mark not available goes straight to the server — so only opening is
@@ -1223,6 +1248,8 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     const isToday = d === todayStr;
                     const slotCount = countSlotsForDay(day);
                     const leave = leaveDays[d];
+                    // Taken off this day on this calendar, on a day the branch works.
+                    const off = !leave && daysOff.has(d);
                     return (
                       <button
                         key={day}
@@ -1238,6 +1265,10 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                             ? `bg-rose-50 text-rose-400 line-through decoration-rose-300 border border-rose-200${isToday ? " ring-2 ring-rose-200 ring-offset-1" : ""}`
                             : isPicked
                             ? `bg-violet-600 text-white shadow-sm${isFocused ? " ring-2 ring-violet-300 ring-offset-1" : ""}`
+                            // Grey and dashed, not white: white is a day nothing has opened
+                            // yet, this is a day somebody closed for this one person.
+                            : off
+                            ? `border border-dashed border-slate-300 bg-slate-100 text-slate-400 line-through decoration-slate-300 hover:bg-slate-200${isToday ? " ring-2 ring-slate-300 ring-offset-1" : ""}`
                             : slotCount > 0
                             ? `bg-green-800 text-white shadow-sm hover:bg-green-900${isToday ? " ring-2 ring-green-300 ring-offset-1" : ""}`
                             : isToday
@@ -1246,6 +1277,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                         }`}
                         title={
                           leave ? `Branch leave day${leave.note ? ` — ${leave.note}` : ""}${slotCount > 0 ? ` · ${slotCount} booked slot${slotCount === 1 ? "" : "s"} kept` : ""}`
+                            : off && !isPicked ? `Not available — taken off this day${slotCount > 0 ? ` · ${slotCount} booked slot${slotCount === 1 ? "" : "s"} kept` : ""}. Pick it to make them available again.`
                             : dayShifts[d] ? `Works ${labelOf(dayShifts[d])} on this day`
                             : isPicked ? "Click again to deselect"
                             : slotCount > 0 ? (isConsultant ? "Available" : `${slotCount} slot${slotCount === 1 ? "" : "s"} open`)
@@ -1329,6 +1361,28 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                     <span className="inline-block h-2.5 w-2.5 rounded border border-rose-200 bg-rose-50" />
                     Branch leave day — set in CALENDAR → MONTHLY CALENDAR
                   </p>
+                )}
+
+                {/* Where this person's days come from now. Desk only, like the legend above. A
+                    consultant who works more than one branch is the one case still opened by
+                    hand: their one calendar serves every branch, so this branch working a day
+                    does not put them here on it. */}
+                {calendarData && (calendarData.auto_open || isConsultant) && (
+                  <div className="mt-2 hidden space-y-1 text-[10px] leading-snug text-slate-400 sm:block" data-testid="calendar-auto-hint">
+                    <p>
+                      {calendarData.auto_open
+                        ? <>Available on every Working day of the Monthly Calendar, across their shift. To take {selectedDoctor.full_name} off a day, pick it and {isConsultant ? "Mark not available" : "Unsave"}.</>
+                        : selectedDoctor.is_super_admin
+                          ? <>The Super Admin consults at every branch, so their days are opened here by hand.</>
+                          : <>Works at more than one branch, so their days are opened here by hand.</>}
+                    </p>
+                    {daysOff.size > 0 && (
+                      <p className="flex items-center gap-1.5">
+                        <span className="inline-block h-2.5 w-2.5 rounded border border-dashed border-slate-300 bg-slate-100" />
+                        Not available — taken off on this calendar
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {/* Not on the physio's or the consultant's calendar: the day's shift and what

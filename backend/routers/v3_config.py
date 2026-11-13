@@ -23,6 +23,7 @@ import lead_purge
 import consult_duration_rule
 import store_branch_overrides
 import feature_visibility
+import auto_availability
 from seed import create_default_lead_source, sync_lead_source_branch_name
 from routers.v3_finance import REVENUE_ACTIONS, EXPENSE_DELETE_SETTING_ID, expense_delete_enabled, BEFORE_VERIFY_DELETE_SETTING_ID, before_verify_delete_enabled, UNDO_PAYMENT_SETTING_ID, undo_payment_enabled
 from routers.v3_inventory import _add_to_stock
@@ -912,6 +913,10 @@ async def v3_calendar_experts(
     """
     if is_branch_admin_role(user.role) and user.branch_id and user.branch_id != branch_id:
         raise HTTPException(status_code=403, detail="You can only open your own branch's calendar")
+    # The branch's Working days opened for this desk before it is listed, so somebody added to
+    # the Team a minute ago opens on a calendar that is already filled. Throttled, and a no-op
+    # when nothing has changed; the sweep in auto_availability does the same every few hours.
+    await auto_availability.fill_branch_throttled(branch_id, profile_type)
     rows = await team_roster_experts(branch_id, profile_type)
     # The rostered window each of them works, resolved from the shift rather than stored —
     # the same attach_shifts every other expert list goes through, so a calendar opened
@@ -1940,7 +1945,9 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
             {"slot_details.0": {"$exists": True}},
             {"shift_overrides": {"$nin": [None, {}]}},
         ]},
-        {"$set": {"slots": [], "slot_details": [], "shift_overrides": {}, "updated_at": now_iso()}},
+        # days_off and auto_days with them: a fresh install has nobody taken off any day, and
+        # the sweep in auto_availability opens the Working days again from scratch.
+        {"$set": {"slots": [], "slot_details": [], "shift_overrides": {}, "days_off": [], "auto_days": {}, "updated_at": now_iso()}},
     )
     zumba_classes_result = await v3_col("users").update_many(
         {MASTER_SLOT_FIELD: {"$nin": ["", None]}},

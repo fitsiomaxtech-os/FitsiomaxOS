@@ -7,6 +7,7 @@ from utils import now_iso, normalize_slot_time, slot_capacity_of, MAX_PHYSIO_SLO
 from shift_utils import day_windows_of, override_shift_ids, shift_ids_of, shift_map, window_of
 from deps import v3_require_roles
 from branch_calendar import is_leave
+import auto_availability
 from schemas.v3 import (
     V3UserOut, V3DoctorOut,
     V3CalendarSlotsInput, V3RemoveSlotsInput,
@@ -129,6 +130,13 @@ async def get_doctor_calendar(doctor_id: str, _: V3UserOut = Depends(v3_require_
         "occupants": occupants,
         "shift": window,
         "day_shifts": day_shifts,
+        # The days this expert was taken off by hand. Every other Working day of the Monthly
+        # Calendar is opened for them by the server (auto_availability); these are the ones it
+        # leaves shut, drawn on the calendar so the Branch Admin can see who is off when.
+        "days_off": sorted(d for d in (doctor.get("days_off") or []) if isinstance(d, str)),
+        # Whether those Working days are opened for them at all. False for a consultant who
+        # works more than one branch, and for the Super Admin, whose days are opened by hand.
+        "auto_open": bool(await auto_availability.auto_branch_of(doctor)),
     }
 
 
@@ -182,8 +190,8 @@ async def set_slot_duration(
 ):
     """How long one treatment session runs on this physio's calendar.
 
-    Only the days opened from now on are cut at it; slots already published keep the
-    length they were saved with.
+    The days the server opened for them (auto_availability) are re-cut at it straight away,
+    booked slots kept; days opened or edited by hand keep the length they were saved with.
     """
     doctor = await v3_col("doctors").find_one({"id": doctor_id}, {"_id": 0, "id": 1, "profile_type": 1})
     if not doctor:
@@ -206,6 +214,7 @@ async def set_slot_duration(
         else {"$unset": {"slot_duration_minutes": ""}, "$set": {"updated_at": now_iso()}}
     )
     await v3_col("doctors").update_one({"id": doctor_id}, update)
+    await auto_availability.safe_fill_for_doctor(doctor_id)
     return {"doctor_id": doctor_id, "slot_duration": minutes}
 
 
@@ -260,6 +269,9 @@ async def add_calendar_slots(
         {"id": doctor_id},
         {"$set": {"slots": all_slots, "slot_details": all_details}},
     )
+    # Opened or added to by hand: a day taken off before is back on, and the server leaves the
+    # day as it was saved here rather than re-cutting it on the next shift change.
+    await auto_availability.record_hand_edit(doctor_id, dates_added={t[:10] for t in new_slot_times if len(t) >= 10})
 
     updated = await v3_col("doctors").find_one({"id": doctor_id}, {"_id": 0})
     return {
@@ -308,6 +320,19 @@ async def remove_calendar_slots(doctor_id: str, payload: V3RemoveSlotsInput, _: 
     await v3_col("doctors").update_one(
         {"id": doctor_id},
         {"$set": {"slots": remaining_slots, "slot_details": remaining_details}},
+    )
+
+    # Every Working day is opened for this expert by the server (auto_availability), so a day
+    # taken off here has to be remembered or it would open again on the next sweep. A day left
+    # with nothing a patient could still book — empty, or only the bookings Unsave keeps — is a
+    # day off. One with free slots left is a day somebody trimmed by hand, and the server stops
+    # topping it back up.
+    touched = {t[:10] for t in normalized_remove if len(t) >= 10}
+    left = [s for s in remaining_slots if isinstance(s, str) and s[:10] in touched]
+    still_booked = await auto_availability.booked_slot_times(doctor_id, left)
+    free_days = {s[:10] for s in left if s not in still_booked}
+    await auto_availability.record_hand_edit(
+        doctor_id, dates_off=touched - free_days, dates_edited=touched & free_days,
     )
 
     return {"doctor_id": doctor_id, "removed": len(normalized_remove - booked_times), "remaining_slots": len(remaining_slots)}

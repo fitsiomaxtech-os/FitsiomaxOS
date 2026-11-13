@@ -21,6 +21,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+import auto_availability
 from attendance_rules import DEFAULTS, WEEKDAY_NAMES, clean_rules, rules_of
 from database import v3_col
 from deps import is_branch_admin_role, v3_require_roles
@@ -151,12 +152,16 @@ async def update_shift(shift_id: str, payload: ShiftUpdate, user: V3UserOut = De
     if payload.start_time is not None or payload.end_time is not None:
         changes["start_time"], changes["end_time"] = _clean_window(start, end)
     await v3_col("shifts").update_one({"id": shift_id}, {"$set": changes})
+    # Everyone on it here has their opened days re-cut across the new hours now, not on the
+    # next sweep. A consultant on it at another branch is caught by that sweep.
+    if "start_time" in changes:
+        await auto_availability.safe_fill_branch(row.get("branch_id"))
     return public_shift({**row, **changes})
 
 
 @router.delete("/shifts/{shift_id}")
 async def delete_shift(shift_id: str, user: V3UserOut = Depends(v3_require_roles(*MANAGE_ROLES))):
-    await _shift_for(user, shift_id)
+    row = await _shift_for(user, shift_id)
     await v3_col("shifts").delete_one({"id": shift_id})
     # Everyone on it comes off it rather than keeping a dangling id. Someone who worked
     # only this shift goes back to the default day — the honest reading of "this expert has
@@ -174,6 +179,8 @@ async def delete_shift(shift_id: str, user: V3UserOut = Depends(v3_require_roles
             }},
         )
         released += 1
+    if released:
+        await auto_availability.safe_fill_branch(row.get("branch_id"))
     return {"deleted": True, "unassigned": released}
 
 
@@ -237,6 +244,9 @@ async def set_doctor_shift(
             "updated_at": now_iso(),
         }},
     )
+    # The days the server opened for them move to the new hours straight away (booked slots
+    # kept), so changing someone's shift is the whole of changing when they can be booked.
+    await auto_availability.safe_fill_for_doctor(doctor_id)
     updated = await v3_col("doctors").find_one({"id": doctor_id}, {"_id": 0})
     return (await attach_shifts([updated]))[0]
 
@@ -265,9 +275,10 @@ async def set_doctor_day_shift(
     Tuesday ends up either published wrong or left off the calendar. The exception is
     recorded against the date instead, and the expert stays on Morning.
 
-    Only what the day is *opened* across changes. Slots already published on these days are
-    left exactly as they are, booked or not: this decides what the next day opened contains,
-    and nothing else in the OS is allowed to drop a patient's slot as a side effect.
+    A day the server opened (auto_availability) is re-cut across the new window here and now,
+    keeping any slot a patient is booked into. A day opened or edited by hand is left exactly as
+    it is: this decides what the next day opened contains, and nothing else in the OS is allowed
+    to drop a patient's slot as a side effect.
     """
     doctor = await v3_col("doctors").find_one({"id": doctor_id}, {"_id": 0})
     if not doctor:
@@ -290,6 +301,8 @@ async def set_doctor_day_shift(
         {"id": doctor_id},
         {"$set": {"shift_overrides": overrides, "updated_at": now_iso()}},
     )
+
+    await auto_availability.safe_fill_for_doctor(doctor_id, dates=dates)
 
     stored = {"shift_overrides": overrides}
     shifts = await shift_map([*shift_ids_of(doctor), *override_shift_ids(stored)])

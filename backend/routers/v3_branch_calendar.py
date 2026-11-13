@@ -11,6 +11,10 @@ could be booked into it:
   2. the open, UNBOOKED slots already published on that date for the branch's Physios and
      Consultants are taken off, so no picker built on doctors.slots can still offer them.
 
+Marking a day Working opens it for every Consultant, Physiotherapist and Nutritionist on the
+branch's Team, across their own shift — nobody has to open it on their calendars one person at
+a time. See auto_availability, which also keeps the next two months open as days come round.
+
 Booked slots are never touched — a patient's appointment does not vanish because the day
 was closed; the response counts them so the branch knows who to call and move.
 
@@ -24,6 +28,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+import auto_availability
 from branch_calendar import LEAVE, WORKING, day_key, day_status
 from database import v3_col
 from deps import is_branch_admin_role, v3_current_user, v3_require_roles, works_org_wide
@@ -88,11 +93,12 @@ async def get_month_calendar(
 
 
 async def _clear_open_slots(branch_id: str, dates: List[str]) -> dict:
-    """Take the unbooked slots on `dates` off this branch's Physio and Consultant calendars."""
+    """Take the unbooked slots on `dates` off this branch's Physio, Consultant and Nutritionist calendars."""
     prefixes = tuple(f"{d}T" for d in dates)
     experts = [
         *(await team_roster_experts(branch_id, "physio")),
         *(await team_roster_experts(branch_id, "head_physio")),
+        *(await team_roster_experts(branch_id, "nutrition_coach")),
     ]
 
     # Which consultants work somewhere else as well — their calendar is shared across branches.
@@ -194,6 +200,18 @@ async def set_day_status(
     )
 
     cleared = {"slots_removed": 0, "booked_slots_kept": 0}
+    opened = {"experts": 0, "days_opened": 0}
     if payload.status == LEAVE:
         cleared = await _clear_open_slots(branch_id, dates)
-    return {"branch_id": branch_id, "status": payload.status, "dates": dates, **cleared}
+    else:
+        # Open straight away rather than on the next sweep, so the calendars and the booking
+        # popups show the day the moment it is marked.
+        opened = await auto_availability.safe_fill_branch(branch_id, dates=dates)
+    return {
+        "branch_id": branch_id,
+        "status": payload.status,
+        "dates": dates,
+        **cleared,
+        "experts_available": opened["experts"],
+        "days_opened": opened["days_opened"],
+    }
