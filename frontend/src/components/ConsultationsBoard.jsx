@@ -9874,7 +9874,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {dietBooked ? "Reschedule Diet" : "Assign Nutritionist"}
                       </Button>
                     </div>
-                    {!dietFeePaid && (
+                    {!programmeFeeStyle && !dietFeePaid && (
                       <GateNote testId="cons-diet-detail-gate">
                         Assign Nutritionist opens once the Diet Fee is collected — a coach's day
                         cannot be booked against a consultation nobody has paid for.
@@ -9942,7 +9942,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </p>
                         {RehabJourney}
 
-                        <p className="text-xs leading-relaxed text-slate-600">
+                        {(!programmeFeeStyle || rehabFeePaid) && <p className="text-xs leading-relaxed text-slate-600">
                           {!rehabFeePaid
                             ? "The course is not paid for yet — collect the Rehab Fee before booking any of its days."
                             : !rehabAssigned
@@ -9950,7 +9950,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               : rehabProgress?.done
                                 ? "Every day of this course has been delivered."
                                 : "The course is booked — every day sits on this physio's calendar and on their board."}
-                        </p>
+                        </p>}
                         {/* Said before the picker is opened rather than found inside it.
                             Reassigning re-dates only what is left — assign-rehab keeps the
                             completed days with the physio who ran them and replaces the
@@ -10012,7 +10012,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             The Consultant has not chosen a Rehab course yet, so there is no price to
                             collect against and no course to put a physio on.
                           </GateNote>
-                        ) : !rehabFeePaid ? (
+                        ) : !programmeFeeStyle && !rehabFeePaid ? (
                           <GateNote testId="cons-rehab-detail-gate">
                             Assign Physio opens once the Rehab Fee is collected — the course cannot go
                             onto a physio's calendar until it is paid for.
@@ -10970,14 +10970,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     const rehab = stageFilter === "Rehab";
                     return (
                       <StagePanel
-                        bare={!detailBody}
+                        bare
                         flush={!detailBody}
                         tone={detailView?.tone}
                         icon={detailView?.icon}
                         title={detailView?.title}
                         testid="cons-stage-panel-programme-fees"
                         tabs={detailBody ? <>
-                          <OwnTab label="Payments" short="Payments" icon={IndianRupee} active={TAB_ON} />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 shrink-0 text-slate-600"
+                            onClick={() => openDetail("own")}
+                            aria-label="Back to payments"
+                            title="Back to payments"
+                            data-testid="cons-programme-details-back"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
                           {PhysioDetailButton}
                           {DietDetailButton}
                           {RehabDetailButton}
