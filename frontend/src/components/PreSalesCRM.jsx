@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, Eye, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -18,7 +18,7 @@ import { DeleteLeadDialog } from "@/components/DeleteLeadDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
 import { PreSalesAppointmentDialog } from "@/components/PreSalesAppointmentDialog";
-import { AppointmentConfirmCard, apptHtml, apptMapUrl } from "@/components/AppointmentConfirmCard";
+import { apptHtml, apptMapUrl } from "@/components/AppointmentConfirmCard";
 import { pdfJob, usePdf } from "@/lib/pdf";
 import { LeadMarks } from "@/components/ui/lead-marks";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
@@ -3140,13 +3140,11 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
 
   useEffect(() => { setCurrentLead(lead); }, [lead]);
 
-  // The appointment confirmation, on a lead with one fixed: the header's Appointment
-  // button opens it, and WhatsApp sends it as a PDF. Read when the popup opens so the
-  // PDF is drawn before the rep taps, not after. Undefined until it answers, null when
-  // there is none (a cancelled booking, or never one).
+  // The appointment confirmation, on a lead with one fixed: WhatsApp sends it as a PDF.
+  // Read when the popup opens so the PDF is drawn before the rep taps, not after.
+  // Undefined until it answers, null when there is none (a cancelled booking, or never one).
   const leadHasAppointment = hasAppointment(currentLead);
   const [apptCard, setApptCard] = useState(undefined);
-  const [showApptCard, setShowApptCard] = useState(false);
   useEffect(() => {
     if (!leadId || !leadHasAppointment) { setApptCard(null); return undefined; }
     let cancelled = false;
@@ -3324,21 +3322,8 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
-              {/* The confirmation the patient was sent, handed back -- print, send or save
-                  it again. Only once the record has answered with one, so it never opens
-                  onto an empty card. */}
-              {apptCard && (
-                <button
-                  type="button"
-                  onClick={() => setShowApptCard(true)}
-                  title="Appointment confirmation"
-                  aria-label="Appointment confirmation"
-                  className="inline-flex shrink-0 items-center p-1.5 text-teal-400 transition hover:text-teal-600"
-                  data-testid="presales-detail-appt-card-btn"
-                >
-                  <Eye className="h-5 w-5 sm:h-4 sm:w-4" />
-                </button>
-              )}
+              {/* No Appointment Card eye here: it lives on Branch Leads' Appointment stage
+                  popup alone. WhatsApp below still sends the confirmation as a PDF. */}
               {currentLead.source_type === "manual" && (
                 <button
                   type="button"
@@ -4029,10 +4014,6 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
       {/* The Appointment pill: where the consultation happens, then the date, CONSULTANT
           and time -- the desk books the consultant itself now, rather than passing the
           lead to Branch Admin with a requested time for the branch to book. */}
-      {showApptCard && apptCard && (
-        <AppointmentConfirmCard appt={apptCard} onClose={() => setShowApptCard(false)} testid="presales-appt-reissue" />
-      )}
-
       {bookingAppointment && !showEdit && (
         <PreSalesAppointmentDialog
           lead={currentLead}

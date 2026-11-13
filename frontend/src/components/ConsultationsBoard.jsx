@@ -27,7 +27,7 @@ import {
   listDietStoreItems,
   scheduleConsultationFollowUp, rescheduleConsultationFollowUp,
   getAvailableExperts, getAvailableDates,
-  getLeadRemarks, getLeadActivity, getLeadAppointmentCard, leadDocuments,
+  getLeadRemarks, getLeadActivity, leadDocuments,
   saveConsultationDecision, markConsultationCompleted, getBranches,
   bookRehabConsultation, completeRehabConsultation,
   listTextPresets, addTextPreset, deleteTextPreset,
@@ -48,7 +48,6 @@ import { pickStoreMinutes } from "@/lib/sessionLength";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { PortalLoginCreatedDialog } from "@/components/branch/PortalLoginCreatedDialog";
-import { AppointmentConfirmCard } from "@/components/AppointmentConfirmCard";
 import { isCourseComplete } from "@/lib/leadStage";
 import { CONSULTATION_PACKAGE_ORDER, consultationItemPrice } from "@/lib/consultationPackages";
 import { MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
@@ -1458,8 +1457,8 @@ const COLS_WITH_ACTION = {
   action: "w-[11%]",
 };
 
-// The stages whose popup is drawn in the Fee Collected style: a one-row header with the
-// Appointment Card as an eye icon in it, and the flat .fee-flat buttons (index.css). For a
+// The stages whose popup is drawn in the Fee Collected style: a one-row header, and the
+// flat .fee-flat buttons (index.css). For a
 // Branch Admin they also open in the narrow 565px card.
 const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign", "Quit"];
 // Those stages, and the popup opened from these pills, draw their buttons the Fee Collected
@@ -3221,22 +3220,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     await refineReceiptFromActivity(lead.id, txnId);
   };
 
-  // The appointment confirmation, reopened off the booking rather than off a dialog that
-  // has long since closed. Held here beside the receipt for the same reason: both are
-  // things a patient walks away with, and neither should vanish with the lead popup.
-  const [apptCard, setApptCard] = useState(null);
-  const [loadingApptCard, setLoadingApptCard] = useState(false);
-  const openApptCard = async () => {
-    if (!selectedLead?.id || loadingApptCard) return;
-    setLoadingApptCard(true);
-    try {
-      setApptCard(await getLeadAppointmentCard(selectedLead.id));
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Couldn't load this patient's appointment");
-    }
-    setLoadingApptCard(false);
-  };
-
   // Collect Treatment Fee popup (Branch Admin only) — at the Treatment Fee stage, any payment method
   const [treatmentFeeDraft, setTreatmentFeeDraft] = useState(null); // { paid_amount, payment_mode } | null
   // The amount the branch types for a Treatment Package with no catalogue price (a Home
@@ -4235,10 +4218,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setRehabDays(null);
     setRehabBookDraft(null);
     setRehabConsultItem("");
-    // The appointment card belongs to the patient it was fetched for. The receipt beside
-    // it deliberately does not reset here: it outlives the lead dialog on purpose, so a
-    // fee that closes the dialog on collection still leaves the receipt on screen.
-    setApptCard(null);
+    // The receipt deliberately does not reset here: it outlives the lead dialog on
+    // purpose, so a fee that closes the dialog on collection still leaves it on screen.
   }, [selectedLead?.id]);
 
   useEffect(() => {
@@ -8104,8 +8085,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             ? "max-w-[570px] sm:h-[min(610px,calc(100dvh-1rem))] sm:max-h-none"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
             {/* Two lines, each read across to its far end: who this is and the expert
-                seeing them, then how to reach them and when, with the Appointment Card at
-                the end of the line it is about. The expert used to sit in a column of its
+                seeing them, then how to reach them and when. The expert used to sit in a column of its
                 own behind a rule, which cost the card a third of its width for one name.
 
                 Each line wraps rather than squeezes: on a phone whatever sits at the end
@@ -8132,21 +8112,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       {selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}
                     </span>
                   )}
-                  {/* The Appointment Card is this eye, in pastel teal -- no border, no box --
-                      rather than a row of its own in the Overview. */}
-                  {selectedLead.appointment_date && (
-                    <button
-                      type="button"
-                      onClick={openApptCard}
-                      disabled={loadingApptCard}
-                      className="shrink-0 text-teal-400 transition hover:text-teal-600 disabled:opacity-50"
-                      title="Open the appointment confirmation — print, send or download it again"
-                      aria-label="Appointment Card"
-                      data-testid="cons-open-appt-card"
-                    >
-                      <Eye className="h-5 w-5" />
-                    </button>
-                  )}
+                  {/* No Appointment Card eye here: it lives on Branch Leads' Appointment
+                      stage popup alone (BranchLeadModal in BranchAdminBoard.jsx). */}
                 </h3>
               </div>
               ) : (
@@ -8185,47 +8152,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </span>
                   )}
                 </p>
-                {selectedLead.appointment_date && (
-                  <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto" data-testid="cons-detail-standing">
-                    {/* The confirmation the patient was sent, handed back. On the slot's
-                        own line, because that is the fact it is about — a branch looking
-                        for "the appointment card" is already reading this line to check
-                        the day.
-
-                        A button rather than a link, and it loads on press: the booking's
-                        reference, room and notes live on the appointment row and not on
-                        the lead, so nothing can be drawn without asking. Fetching for
-                        every patient opened, against a card almost nobody asks for, would
-                        be a request per open to save a click on the rare one. */}
-                    {/* Opened from the Rehab or Diet pills: the same pastel teal eye the
-                        one-row header carries, rather than the labelled button. */}
-                    {selectedLead.appointment_date && FEE_SOFT_PILLS.includes(stageFilter) ? (
-                      <button
-                        type="button"
-                        onClick={openApptCard}
-                        disabled={loadingApptCard}
-                        className="shrink-0 text-teal-400 transition hover:text-teal-600 disabled:opacity-50"
-                        title="Open the appointment confirmation — print, send or download it again"
-                        aria-label="Appointment Card"
-                        data-testid="cons-open-appt-card"
-                      >
-                        <Eye className="h-5 w-5" />
-                      </button>
-                    ) : selectedLead.appointment_date && (
-                      <button
-                        type="button"
-                        onClick={openApptCard}
-                        disabled={loadingApptCard}
-                        className="flex items-center gap-1 rounded-[5px] border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
-                        title="Open the appointment confirmation — print, send or download it again"
-                        data-testid="cons-open-appt-card"
-                      >
-                        <Eye className="h-3 w-3 shrink-0" />
-                        {loadingApptCard ? "Opening..." : "Appointment Card"}
-                      </button>
-                    )}
-                  </div>
-                )}
+                {/* No Appointment Card here, eye or labelled button: it lives on Branch
+                    Leads' Appointment stage popup alone (BranchLeadModal in BranchAdminBoard.jsx). */}
                 </div>
               </div>
               )}
@@ -8294,7 +8222,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               // no shadow, as Fee Collected does -- see .fee-soft. Fee Collected's own fee rows
               // also sit on white -- see .fee-collected.
               <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""} ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) || FEE_SOFT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" ? "fee-collected" : ""}`}>
-              {/* No Appointment Record row: the Appointment Card is the eye icon in the header. */}
+              {/* No Appointment Record row. */}
               {/* The consultation as it was written up — what pre-sales heard, what the
                   Consultant diagnosed, what they wrote down as the treatment, and the plan
                   they confirmed.
@@ -15646,12 +15574,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
       {/* The Client Portal login made when treatment was booked — see submitPhysioAssign. */}
       <PortalLoginCreatedDialog portal={portalNotice} onClose={() => setPortalNotice(null)} />
-
-      {/* The confirmation the patient was given when the slot was booked, handed back.
-          The same card the Branch Admin board raises off the booking itself, because a
-          patient asking for their appointment again should get the sheet they already
-          have rather than a second one saying the same thing differently. */}
-      <AppointmentConfirmCard appt={apptCard} onClose={() => setApptCard(null)} testid="cons-appt-confirm" />
     </div>
   );
 };
