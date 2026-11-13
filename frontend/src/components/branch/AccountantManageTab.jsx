@@ -482,8 +482,12 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
     [toolbarRef.current, ledgerCardsRef.current, revenueCardsRef.current].filter(Boolean).forEach((element) => observer.observe(element));
     return () => observer.disconnect();
   });
-  const stickyLedgerClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px))] md:z-10 bg-slate-50" : "";
-  const stickyRevenueClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px)+var(--accountant-ledger-height,98px))] md:z-10 bg-slate-50" : "";
+  // The 6px between the filter bar, the two card rows and the table is each band's own
+  // slate-50 padding rather than a flex gap: rows scrolling under a gap would show through
+  // it, and the measured heights above take the padding in, so each band's offset still
+  // lands flush under the one before.
+  const stickyLedgerClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px))] md:z-10 md:pb-1.5 bg-slate-50" : "";
+  const stickyRevenueClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px)+var(--accountant-ledger-height,98px))] md:z-10 md:pb-1.5 bg-slate-50" : "";
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -1043,7 +1047,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
           scrolling, and the bar stays flush with the board's edges instead of leaving the
           gap a scaled-down full-width row would. Not on a phone, where the bar is laid out
           to fit and 90% of 12px type was only harder to read. */}
-      <div ref={toolbarRef} className={stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px))] md:z-20 bg-slate-50" : ""}>
+      <div ref={toolbarRef} className={stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px))] md:z-20 md:py-1.5 bg-slate-50" : ""}>
       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
