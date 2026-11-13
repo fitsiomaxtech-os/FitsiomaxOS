@@ -35,12 +35,12 @@ const PAYMENT_MODE_ROWS = [
 ];
 
 // Every feature the Hide Features tab offers — the backend's FEATURE_KEYS
-// (feature_visibility.py), each with the words a Super Admin reads before flipping it.
+// (feature_visibility.py). The tab shows the label and the switch only; what a flip does is
+// in its confirm.
 const HIDE_FEATURE_ROWS = [
   {
     key: "treatments",
     label: "Treatments",
-    note: "The Treatments tab in Services and Products (Super Admin and every branch), and the Consultant's Treatment Summary dropdown with it.",
     confirmHide:
       "Hide Treatments?\n\nThe Treatments tab disappears from Services and Products for Super Admin and every branch, and the Treatment Summary dropdown disappears from the Consultant's consultation. Treatment Summary remains optional when moving to Admin. Summaries already written stay on their patients.",
     confirmShow:
@@ -51,7 +51,6 @@ const HIDE_FEATURE_ROWS = [
     // screen, the calendar just stops letting a day before today be picked.
     key: "past_day_appointments",
     label: "Past Day Book Appointment",
-    note: "Pick a day before today on the Appointment popup's calendar (Branch Leads and Pre Sales).",
     on: "Allow",
     off: "Block",
     confirmHide:
@@ -60,6 +59,20 @@ const HIDE_FEATURE_ROWS = [
       "Allow past day appointments?\n\nThe Appointment popup's calendar lets a day before today be picked, on Branch Leads and Pre Sales, so a consultation that already happened can be booked on its real date.",
     hiddenToast: "Past day appointments are blocked",
     shownToast: "Past day appointments are allowed",
+  },
+  {
+    // Hidden is Optional. Mandatory holds the physio's Mark Treatment Complete until the
+    // three videos are uploaded, and Close Case Sheet until all four are verified.
+    key: "progression_mandatory",
+    label: "Progression Uploads",
+    on: "Mandatory",
+    off: "Optional",
+    confirmHide:
+      "Make Progression Uploads optional?\n\nMark Treatment Complete and Close Case Sheet no longer wait for them.",
+    confirmShow:
+      "Make Progression Uploads mandatory?\n\nMark Treatment Complete waits for Weekly Progression, Before & After and Testimonial. Close Case Sheet waits until all four are verified.",
+    hiddenToast: "Progression Uploads are optional",
+    shownToast: "Progression Uploads are mandatory",
   },
 ];
 
@@ -662,10 +675,7 @@ export const DeveloperZone = () => {
                   const shown = hiddenFeatureKeys ? !hiddenFeatureKeys.includes(row.key) : null;
                   return (
                     <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`hide-feature-${row.key}-row`}>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium text-slate-800">{row.label}</span>
-                        <span className="mt-0.5 block text-xs text-slate-500">{row.note}</span>
-                      </span>
+                      <span className="min-w-0 text-sm font-medium text-slate-800">{row.label}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         <span className={`text-[10px] font-bold uppercase ${shown ? "text-emerald-600" : "text-slate-400"}`}>
                           {shown === null ? "…" : savingFeature === row.key ? "Saving" : shown ? (row.on || "Show") : (row.off || "Hide")}

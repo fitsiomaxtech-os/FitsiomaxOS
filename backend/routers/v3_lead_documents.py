@@ -24,6 +24,8 @@ from database import v3_col
 from utils import now_iso
 from deps import v3_require_roles, is_physio_role, role_satisfies
 from schemas.v3 import V3UserOut
+# Developer Access > Hide Features > Progression Uploads: Mandatory or Optional.
+from feature_visibility import progression_mandatory
 
 router = APIRouter(prefix="/api/v3")
 
@@ -129,6 +131,18 @@ def is_shared_with_patient(doc: dict) -> bool:
     if value is None:
         return default_shared_with_patient(doc.get("kind") or GENERAL)
     return bool(value)
+
+
+async def progression_videos_missing(lead_id: str) -> list:
+    """The progression videos (Weekly Progression, Before & After, Testimonial) with no file
+    filed yet, by label. What the physio's Mark Treatment Complete waits on while the uploads
+    are Mandatory. Filed is enough here; verifying is the Consultant's job and the case
+    sheet's gate, not the physio's."""
+    rows = await v3_col("lead_documents").find(
+        {"lead_id": lead_id, "kind": {"$in": PROGRESSION_KEYS}}, {"_id": 0, "kind": 1}
+    ).to_list(500)
+    have = {r.get("kind") for r in rows}
+    return [label for key, label, _, kind_input in PROGRESSION_KINDS if kind_input == "file" and key not in have]
 
 
 async def has_prescription_on_file(lead_id: str) -> bool:
@@ -511,6 +525,7 @@ async def progression_status(
         })
 
     outstanding = [r["label"] for r in requirements if r["required"] and r["status"] != "completed"]
+    mandatory = await progression_mandatory()
     return {
         "lead_id": lead_id,
         "lead_name": lead.get("name", ""),
@@ -518,7 +533,9 @@ async def progression_status(
         "completed": sum(1 for r in requirements if r["status"] == "completed"),
         "total": sum(1 for r in requirements if r["required"]),
         "outstanding": outstanding,
-        "can_close": not outstanding,
+        # Optional in Hide Features: the case sheet closes whatever is still outstanding.
+        "mandatory": mandatory,
+        "can_close": not outstanding or not mandatory,
         "case_sheet_closed": bool(lead.get("case_sheet_closed")),
         "case_sheet_closed_at": lead.get("case_sheet_closed_at"),
         "case_sheet_closed_by": lead.get("case_sheet_closed_by"),
@@ -556,7 +573,7 @@ async def close_case_sheet(
         label for key, label, required, kind_input in PROGRESSION_KINDS
         if required and not (review_done if kind_input == "text" else key in have)
     ]
-    if missing:
+    if missing and await progression_mandatory():
         raise HTTPException(
             status_code=400,
             detail=f"Still waiting on: {', '.join(missing)}. Each has to be uploaded and verified before the case sheet can close.",
@@ -573,7 +590,10 @@ async def close_case_sheet(
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
         "action": "case_sheet_closed",
-        "details": "Case sheet closed — all four progression uploads verified",
+        "details": (
+            f"Case sheet closed with progression uploads optional — not verified: {', '.join(missing)}"
+            if missing else "Case sheet closed — all four progression uploads verified"
+        ),
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": now,

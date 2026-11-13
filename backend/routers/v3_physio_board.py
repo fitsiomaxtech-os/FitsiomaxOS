@@ -31,6 +31,10 @@ from routers.v3_client_reviews import physio_star_ratings, session_star_ratings
 # A treatment day that uses up the last paid session tells the branch, the accountant and
 # the physio — see v3_session_payment.
 from routers.v3_session_payment import notify_after_session_complete, payment_hold_for_lead, payment_hold_message
+# Progression Uploads on Mandatory (Hide Features) holds Mark Treatment Complete until the
+# three videos are filed.
+from feature_visibility import progression_mandatory
+from routers.v3_lead_documents import progression_videos_missing
 
 router = APIRouter(prefix="/api/v3")
 
@@ -415,6 +419,14 @@ async def physio_complete_consultation(lead_id: str, physio_id: Optional[str] = 
             status_code=400,
             detail="The CONSULTANT hasn't reviewed this patient yet — raise it from the Review tab and wait for the review to be written before closing the treatment",
         )
+
+    if await progression_mandatory():
+        missing_videos = await progression_videos_missing(lead_id)
+        if missing_videos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Upload {', '.join(missing_videos)} before marking the treatment complete",
+            )
 
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {
         "physio_stage": "Complete",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
@@ -19,6 +19,7 @@ import {
   Search,
   Send,
   Star,
+  Upload,
   UserCircle,
   Users,
   UserX,
@@ -57,7 +58,10 @@ import {
   leadDocuments,
   openLeadDocument,
   getPhysioTypes,
+  leadProgression,
+  uploadLeadDocument,
 } from "@/lib/api";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { to12h, slotTo12h } from "@/lib/time";
 
 // A patient's contact details are not printed anywhere on this board, and the physio
@@ -1664,6 +1668,14 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
   );
 }
 
+// The Upload menu on the day being worked: the case sheet's three videos, filed under the
+// same kinds the Progression tab uses.
+const DAY_UPLOADS = [
+  { kind: "progress_weekly", label: "Weekly Progression" },
+  { kind: "progress_final", label: "Before & After" },
+  { kind: "progress_testimonial", label: "Testimonial" },
+];
+
 function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -1699,6 +1711,53 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   // then just the covered days, and this is how far the whole course has actually gone.
   const [coverCourse, setCoverCourse] = useState(null);
   const isComplete = lead.physio_stage === "Complete";
+  // The case sheet's progression uploads, for the Upload menu on the day being worked and
+  // for Mark Treatment Complete while the uploads are Mandatory (Hide Features).
+  const [progression, setProgression] = useState(null);
+  const [uploadingKind, setUploadingKind] = useState(null);
+  const uploadInputRef = useRef(null);
+  const uploadTargetRef = useRef(null);
+
+  const loadProgression = useCallback(async () => {
+    try {
+      setProgression(await leadProgression(lead.id));
+    } catch { /* silent: the menu still uploads, and the server still guards Complete */ }
+  }, [lead.id]);
+
+  // Re-read on every tab change too, so a video filed on the Progression tab frees Mark
+  // Treatment Complete without reopening the popup.
+  useEffect(() => { loadProgression(); }, [loadProgression, tab]);
+
+  // The three videos, as the Upload menu offers them. The Google Review is typed on the
+  // Progression tab, so it is not a file to pick here.
+  const progressionVideos = (progression?.requirements || []).filter((r) => r.input === "file");
+  // Mandatory: Mark Treatment Complete waits until each video has a file. The server
+  // refuses it too; this is so the button says so before it is pressed.
+  const videosMissing = progression?.mandatory
+    ? progressionVideos.filter((r) => !r.uploaded).map((r) => r.label)
+    : [];
+  const uploadsOwed = videosMissing.length > 0;
+
+  // One hidden file input for every row's menu: the item picked says which kind and which
+  // day, then the picker opens.
+  const pickUpload = (kind, label, day) => {
+    uploadTargetRef.current = { kind, label, day };
+    uploadInputRef.current?.click();
+  };
+
+  const uploadProgression = async (file) => {
+    const target = uploadTargetRef.current;
+    if (!file || !target) return;
+    setUploadingKind(target.kind);
+    try {
+      await uploadLeadDocument(lead.id, file, target.day, target.kind);
+      toast.success(`${target.label} uploaded`);
+      await loadProgression();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Upload failed");
+    }
+    setUploadingKind(null);
+  };
 
   const loadSessions = useCallback(async () => {
     try {
@@ -1983,7 +2042,9 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
     return (
       <div
         key={s.id}
-        className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
+        // Wraps on a phone so the day being worked can put Upload, Absent and Complete on a
+        // line of their own rather than over the date.
+        className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 sm:flex-nowrap ${
           done ? "border-emerald-200 bg-emerald-50/50"
           : awaiting ? "border-amber-200 bg-amber-50/60"
           : isOpenDay ? "border-sky-200 bg-sky-50/40"
@@ -2122,7 +2183,42 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
             <Check className="mr-1 h-3 w-3" /> After Day {blockedBy}
           </Button>
         ) : canWork ? (
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto">
+            {/* The case sheet's videos, filed from the day they were filmed on. Gone once
+                the case sheet is closed, as on the Progression tab. */}
+            {!progression?.case_sheet_closed && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!!uploadingKind}
+                    className="border-indigo-200 text-xs text-indigo-700 hover:bg-indigo-50"
+                    data-testid={`physio-upload-day-${s.id}`}
+                  >
+                    <Upload className="h-3 w-3 sm:mr-1" />
+                    <span className="hidden sm:inline">{uploadingKind ? "Uploading…" : "Upload"}</span>
+                    <ChevronDown className="ml-0.5 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" collisionPadding={8} className="z-[60] min-w-[11rem]">
+                  {DAY_UPLOADS.map((u) => {
+                    const filed = progressionVideos.find((r) => r.kind === u.kind)?.uploaded || 0;
+                    return (
+                      <DropdownMenuItem
+                        key={u.kind}
+                        onSelect={() => pickUpload(u.kind, u.label, `${s.track === "rehab" ? "Rehab " : ""}Day ${s.session_number}`)}
+                        className="cursor-pointer text-xs"
+                        data-testid={`physio-upload-day-${s.id}-${u.kind}`}
+                      >
+                        <span className="flex-1">{u.label}</span>
+                        {filed > 0 && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -2226,29 +2322,37 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
           <button
             type="button"
             onClick={() => setConfirmingComplete(true)}
-            disabled={isComplete || submitting || reviewOwed}
+            disabled={isComplete || submitting || reviewOwed || uploadsOwed}
             // Says which of the two it is waiting on. Disabled with no reason given reads
             // as broken, and the reason is on the tab behind this one.
-            title={reviewOwed ? "The CONSULTANT hasn't reviewed this patient yet — raise it from the Review tab first" : undefined}
+            title={reviewOwed
+              ? "The CONSULTANT hasn't reviewed this patient yet — raise it from the Review tab first"
+              : uploadsOwed ? `Upload ${videosMissing.join(", ")} first` : undefined}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition sm:px-3.5 sm:py-2 sm:text-xs ${
               isComplete
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                 // Amber rather than greyed out: this is the state the patient is actually
                 // in — waiting on the review — not a button that happens to be off, and it
                 // matches the milestone banner on the Treatment Days tab saying the same.
-                : reviewOwed
+                : reviewOwed || uploadsOwed
                   ? "cursor-not-allowed border-amber-200 bg-amber-50 text-amber-700"
                   : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
             }`}
             data-testid="physio-consultation-complete"
           >
-            {reviewOwed && !isComplete ? <AlertCircle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+            {(reviewOwed || uploadsOwed) && !isComplete ? <AlertCircle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
             {isComplete ? "Complete" : submitting ? "Marking..." : reviewOwed ? (
               // The course cannot be closed until the review is written, so the button
               // names what it is waiting for instead of offering an action it will refuse.
               <>
                 <span className="sm:hidden">Review Due</span>
                 <span className="hidden sm:inline">Awaiting CONSULTANT Review</span>
+              </>
+            ) : uploadsOwed ? (
+              // Progression Uploads on Mandatory: the videos still to file are on the hover.
+              <>
+                <span className="sm:hidden">Uploads Due</span>
+                <span className="hidden sm:inline">Awaiting Progression Uploads</span>
               </>
             ) : (
               // "Mark Treatment Complete" alongside three tabs overruns a phone. Shortened
@@ -2593,6 +2697,15 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
 
           {tab === "documents" && <DocumentsPanel leadId={lead.id} />}
 
+          {/* Opened by the Upload menu on the day being worked. */}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="video/*,image/*"
+            className="hidden"
+            onChange={(e) => { uploadProgression(e.target.files?.[0]); e.target.value = ""; }}
+            data-testid="physio-day-upload-input"
+          />
         </div>
 
         {completeTarget && (

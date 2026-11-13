@@ -26,13 +26,20 @@ SETTING_ID = "hidden_features"
 #
 # past_day_appointments: picking a day before today on the Appointment popup's calendar
 # (Branch Leads and Pre Sales). The tab shows it as Allow / Block — hidden is Block.
-FEATURE_KEYS = ("treatments", "past_day_appointments")
+#
+# progression_mandatory: whether the case sheet's progression uploads hold anything up.
+# Mandatory (shown): the physio's Mark Treatment Complete waits until Weekly Progression,
+# Before & After and Testimonial each have a file, and Close Case Sheet waits until all
+# four are uploaded and verified. Optional (hidden): neither waits. The tab shows it as
+# Mandatory / Optional — hidden is Optional.
+FEATURE_KEYS = ("treatments", "past_day_appointments", "progression_mandatory")
 
 # What a missing row means. "treatments" ships hidden: this install asked for the tab and
 # the Treatment Summary dropdown to be off out of the box, and Show in Hide Features is how
 # it comes back. "past_day_appointments" ships blocked, which is how the calendar has
-# always behaved.
-DEFAULT_HIDDEN = ("treatments", "past_day_appointments")
+# always behaved. "progression_mandatory" ships Optional, so turning it on is a decision
+# rather than a deploy locking Mark Treatment Complete on patients mid-course.
+DEFAULT_HIDDEN = ("treatments", "past_day_appointments", "progression_mandatory")
 
 # The keys a row decided on before rows carried `known` — every key that existed then. A
 # key added later is not in such a row's `hidden` because nobody has flipped it yet, not
@@ -56,3 +63,8 @@ async def hidden_features() -> List[str]:
 
 async def feature_hidden(feature: str) -> bool:
     return feature in await hidden_features()
+
+
+async def progression_mandatory() -> bool:
+    """Whether the progression uploads are Mandatory (see FEATURE_KEYS)."""
+    return not await feature_hidden("progression_mandatory")

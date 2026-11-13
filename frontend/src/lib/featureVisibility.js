@@ -15,6 +15,9 @@ import { getFeatureVisibility } from "@/lib/api";
 //   past_day_appointments — days before today on the Appointment popup's calendar
 //                           (Branch Leads and Pre Sales). Shown as Allow / Block; hidden
 //                           is Block.
+//   progression_mandatory — whether the progression uploads hold up Mark Treatment
+//                           Complete and Close Case Sheet. Shown as Mandatory / Optional;
+//                           hidden is Optional. The server answers it on /progression too.
 let hiddenFeatures = [];
 let loaded = false;
 // Whether the list has actually come back, as opposed to `loaded`, which is set as soon

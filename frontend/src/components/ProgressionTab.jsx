@@ -135,7 +135,12 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
   };
 
   const close = async () => {
-    if (!window.confirm("Close this case sheet? Everything required is in and checked.")) return;
+    // Uploads on Optional (Hide Features) let the case sheet close with some still missing;
+    // the confirm says so rather than claiming everything is in.
+    const allIn = !(data?.outstanding || []).length;
+    if (!window.confirm(allIn
+      ? "Close this case sheet? Everything required is in and checked."
+      : `Close this case sheet? Still not verified: ${data.outstanding.join(", ")}.`)) return;
     setClosing(true);
     try {
       await closeCaseSheet(leadId);
@@ -153,13 +158,16 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
   if (!data) return <p className="py-10 text-center text-sm text-slate-400">Couldn't load this patient's progression.</p>;
 
   const closed = data.case_sheet_closed;
+  // Green only when every requirement is actually done. can_close alone is true from the
+  // start while the uploads are Optional, and a green "0 of 4" reads as finished.
+  const allDone = !(data.outstanding || []).length;
 
   return (
     <div className="space-y-2" data-testid="progression-tab">
       {/* Where the case sheet stands, before any single requirement is read. The rows below
           say which ones are still pending, so the summary does not list them again. */}
       <div className={`${ROW} ${
-        closed ? "border-slate-200 bg-slate-50" : data.can_close ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"
+        closed ? "border-slate-200 bg-slate-50" : allDone ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"
       }`} data-testid="progression-summary">
         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
           <span className="mr-2 text-xs uppercase tracking-wider text-slate-600">Case Sheet</span>
