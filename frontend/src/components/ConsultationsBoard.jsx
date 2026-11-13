@@ -13044,11 +13044,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const settlesNow = SETTLED_NOW_MODES.includes(mode);
               return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="cons-rehab-fee-modal">
-                  {/* 450 wide, and as tall as the payment mode picked needs, so every
+                  {/* 530 wide, and as tall as the payment mode picked needs, so every
                       mode's own fields are on screen without scrolling. Only on a window
                       too short for it do the fields between the header and Confirm
                       scroll; the header and Confirm stay put. */}
-                  <div className="flex max-h-[90vh] w-full max-w-[450px] flex-col rounded-[4px] bg-white p-4 shadow-2xl" data-testid="cons-rehab-fee-card">
+                  <div className="flex max-h-[90vh] w-full max-w-[530px] flex-col rounded-[4px] bg-white p-4 shadow-2xl" data-testid="cons-rehab-fee-card">
                     <div className="flex shrink-0 items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">
                         {mode === "partial" ? "Rehab Fee Payment Schedule" : mode === "cheque" ? "Collect Rehab Fee by Cheque" : "Collect Rehab Fee"}
@@ -13117,7 +13117,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <LockedFeeRow
                           label="Rehab Fee"
                           price={rehabPrice}
-                          note="The installments below have to add up to this. Scheduling collects nothing — each payment is taken on its own day from Accountant Manage."
                           testId="cons-rehab-fee-partial-total"
                         />
                         <PartialInstallmentsEditor
