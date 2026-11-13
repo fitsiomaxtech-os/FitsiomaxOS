@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Banknote, ChevronDown, CreditCard, FileText, Landmark, Smartphone } from "lucide-react";
-import { useShownPaymentModes } from "@/lib/paymentModes";
+import { PAYMENT_MODE_NAMES, useShownPaymentModes } from "@/lib/paymentModes";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // How one collection was paid, as the Collect popups ask it: the mode, and the reference
@@ -13,11 +13,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 // a payment recorded from here has to be indistinguishable from one recorded there, or
 // Accountant Manage ends up with two grades of record.
 export const COLLECT_MODES = [
-  { value: "cash", label: "Cash", classes: "border-emerald-300 bg-emerald-50 text-emerald-700", active: "border-emerald-500 bg-emerald-600 text-white" },
-  { value: "upi", label: "UPI", classes: "border-sky-300 bg-sky-50 text-sky-700", active: "border-sky-500 bg-sky-600 text-white" },
-  { value: "card", label: "Card", classes: "border-violet-300 bg-violet-50 text-violet-700", active: "border-violet-500 bg-violet-600 text-white" },
-  { value: "account_transfer", label: "Account Transfer", classes: "border-cyan-300 bg-cyan-50 text-cyan-700", active: "border-cyan-500 bg-cyan-600 text-white" },
-  { value: "cheque", label: "Cheque", classes: "border-amber-300 bg-amber-50 text-amber-700", active: "border-amber-500 bg-amber-600 text-white" },
+  { value: "cash", label: PAYMENT_MODE_NAMES.cash, classes: "border-emerald-300 bg-emerald-50 text-emerald-700", active: "border-emerald-500 bg-emerald-600 text-white" },
+  { value: "upi", label: PAYMENT_MODE_NAMES.upi, classes: "border-sky-300 bg-sky-50 text-sky-700", active: "border-sky-500 bg-sky-600 text-white" },
+  { value: "card", label: PAYMENT_MODE_NAMES.card, classes: "border-violet-300 bg-violet-50 text-violet-700", active: "border-violet-500 bg-violet-600 text-white" },
+  { value: "account_transfer", label: PAYMENT_MODE_NAMES.account_transfer, classes: "border-cyan-300 bg-cyan-50 text-cyan-700", active: "border-cyan-500 bg-cyan-600 text-white" },
+  { value: "cheque", label: PAYMENT_MODE_NAMES.cheque, classes: "border-amber-300 bg-amber-50 text-amber-700", active: "border-amber-500 bg-amber-600 text-white" },
 ];
 
 export const emptyTender = {

@@ -11,6 +11,7 @@ import { consultationItemPrice } from "@/lib/consultationPackages";
 import { COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
+import { paymentModeName } from "@/lib/paymentModes";
 import { advanceForLabel, preBookConsultOwed, preBookOf, rupees, shortDay } from "@/lib/preBook";
 
 // Pre Book is money handed over today, so every mode that settles now and not Cheque.
@@ -578,7 +579,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
                   )}
                   <div className="flex justify-between gap-3 border-t border-slate-100 pt-1.5 text-slate-500">
                     <span>Payment Mode</span>
-                    <span className="font-semibold text-slate-700">{ALL_PAYMENT_MODE_LABELS[draft.payment_mode] || draft.payment_mode}</span>
+                    <span className="font-semibold text-slate-700">{paymentModeName(draft.payment_mode)}</span>
                   </div>
                 </div>
               </div>

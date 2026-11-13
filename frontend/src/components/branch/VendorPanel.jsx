@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useHiddenPaymentModes } from "@/lib/paymentModes";
+import { PAYMENT_MODE_NAMES, useHiddenPaymentModes } from "@/lib/paymentModes";
 import {
   Plus, Search, Pencil, Trash2, Eye, History, Power, Wallet, Receipt,
   Building2, Phone, Mail, X, UserRound, Package, ChevronRight, RefreshCw,
@@ -58,12 +58,7 @@ const STOCK_TYPES = ["For Office", "Staffs", "Medical"];
 const OTHER_TYPE = "__other__";
 
 /** Matches VALID_PAYMENT_MODES in backend/routers/v3_inventory.py. */
-const PAYMENT_MODES = [
-  { key: "cash", label: "Cash" },
-  { key: "upi", label: "UPI" },
-  { key: "card", label: "Card" },
-  { key: "account_transfer", label: "Account Transfer" },
-];
+const PAYMENT_MODES = ["cash", "upi", "card", "account_transfer"].map((key) => ({ key, label: PAYMENT_MODE_NAMES[key] }));
 
 // Row keys, so a row being removed doesn't make React reuse the one below it and carry
 // the wrong text into it. Never saved — the server sees the fields and nothing else.

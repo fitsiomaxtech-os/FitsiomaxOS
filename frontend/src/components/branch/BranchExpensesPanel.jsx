@@ -12,6 +12,7 @@ import {
   listVendors, createVendor,
 } from "@/lib/api";
 import { DENOMINATIONS, noteTotal, countedNotes, noteBreakdown, notesLabel } from "@/lib/denominations";
+import { PAYMENT_MODE_NAMES } from "@/lib/paymentModes";
 
 const fmt = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -81,9 +82,7 @@ const DenominationFields = ({ amount, notes, coins, onNotes, onCoins, testPrefix
 
 // For reading back old rows only — a branch expense logged before this screen was
 // cash-only may carry any of these. The form no longer offers the choice.
-const MODE_LABELS = {
-  cash: "Cash", upi: "UPI", card: "Card", account_transfer: "Bank Transfer", cheque: "Cheque",
-};
+const MODE_LABELS = PAYMENT_MODE_NAMES;
 
 const todayIso = () => {
   const d = new Date();

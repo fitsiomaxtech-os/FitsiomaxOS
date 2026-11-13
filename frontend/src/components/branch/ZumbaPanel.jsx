@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
+import { paymentModeOptions, useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
 import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,12 +41,7 @@ export const TIME_SLOTS = ["10:00 am - 11:00 am", "11:00 am - 12:00 pm"];
 // The same four the consultation and store desks offer, in the same slugs, so a class
 // fee taken in cash reads as cash wherever the money is counted later. Cheque and Partial
 // belong to a treatment plan paid down over months; a membership is settled in one go.
-const PAYMENT_MODES = [
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "card", label: "Card" },
-  { value: "account_transfer", label: "Account Transfer" },
-];
+const PAYMENT_MODES = paymentModeOptions(["cash", "upi", "card", "account_transfer"]);
 // The date row, in the shape DateFilterPopover hands back so the two controls write one
 // piece of state. "All" is null rather than an open-ended range: the absence of a filter
 // and a filter that happens to match everything read the same on screen but not in the
@@ -93,10 +88,7 @@ const pluralCustomers = (n) => `${n} customer${n === 1 ? "" : "s"}`;
 
 const MODE_FILTERS = [
   ["", "All Modes"],
-  ["cash", "Cash"],
-  ["upi", "UPI"],
-  ["card", "Card"],
-  ["account_transfer", "Bank Transfer"],
+  ...PAYMENT_MODES.map((m) => [m.value, m.label]),
   // A payment that arrived more than one way is its own answer, not a missing one — and
   // without a pill it was the one kind of row the filter row could not find.
   ["split", "Split"],

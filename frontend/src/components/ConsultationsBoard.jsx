@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useShownPaymentModes } from "@/lib/paymentModes";
+import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
 import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,24 +64,12 @@ import { SeatDots } from "@/components/ui/seat-dots";
 //
 // Mirrors STANDARD_PAYMENT_MODES in the backend's v3_packages.py, which every collect
 // endpoint validates against; the two must be kept in step.
-const STANDARD_PAYMENT_MODES = [
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "card", label: "Card" },
-  { value: "account_transfer", label: "Account Transfer" },
-  { value: "cheque", label: "Cheque" },
-  { value: "partial", label: "Partial Payment" },
-];
+// Named as Developer Access names them (PAYMENT_MODE_NAMES).
+const STANDARD_PAYMENT_MODES = paymentModeOptions(["cash", "upi", "card", "account_transfer", "cheque", "partial"]);
 // Collect Online Payment's tenders: money that moved from the patient's phone or bank, once
 // the course is Online. A split is cut from the same tenders.
 const ONLINE_COLLECT_MODES = ["upi", "account_transfer"];
-const INSTALLMENT_PAYMENT_MODES = [
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "card", label: "Card" },
-  { value: "account_transfer", label: "Account Transfer" },
-  { value: "cheque", label: "Cheque" },
-];
+const INSTALLMENT_PAYMENT_MODES = paymentModeOptions(["cash", "upi", "card", "account_transfer", "cheque"]);
 // Modes that collect the bank's own account details: the account the money moved out of,
 // plus the reference it moved under.
 //
@@ -5261,7 +5249,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       : "";
     const question = mode === "partial"
       ? `Save a payment schedule of ${payload.partial_installments.length} installments for the Consultation Fee of ${fee} (${pkg})?`
-      : `Collect the Consultation Fee of ${fee}${off} by ${ALL_PAYMENT_MODE_LABELS[mode] || mode} for ${pkg}?`;
+      : `Collect the Consultation Fee of ${fee}${off} by ${paymentModeName(mode)} for ${pkg}?`;
     if (!window.confirm(question)) return;
     submitConsultationFee(payload);
   };
@@ -10799,7 +10787,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     </p>
                                     <PaymentModeLine payment={pay} />
                                     <p className="truncate text-[11px] font-medium capitalize text-emerald-700">
-                                      Paid{mode ? ` · ${ALL_PAYMENT_MODE_LABELS[mode] || mode}` : ""}{pay.inst.due_date ? ` · ${pay.inst.due_date}` : ""}
+                                      Paid{mode ? ` · ${paymentModeName(mode)}` : ""}{pay.inst.due_date ? ` · ${pay.inst.due_date}` : ""}
                                     </p>
                                   </div>
                                   {paymentHasReceipt(pay) && (
@@ -12232,7 +12220,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               className="h-2 w-2 shrink-0 rounded-full"
                               style={{ backgroundColor: PAYMENT_MODE_COLORS[t.mode] || "#64748b" }}
                             />
-                            <span className="font-semibold text-slate-700">{ALL_PAYMENT_MODE_LABELS[t.mode] || t.mode}</span>
+                            <span className="font-semibold text-slate-700">{paymentModeName(t.mode)}</span>
                             {t.reference && <span className="min-w-0 truncate text-[11px] text-slate-400">{t.reference}</span>}
                             <span className="ml-auto font-semibold text-slate-800">Rs.{t.amount.toLocaleString("en-IN")}</span>
                             {/* Nothing here has been sent yet, so a tender entered in the
@@ -12654,7 +12642,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </div>
                     {[...treatmentTenders, { mode: treatmentFeeDraft.payment_mode, amount: round2(parseFloat(treatmentFeeDraft.amount) || 0) }].map((t, i) => (
                       <div key={i} className="flex items-center justify-between" data-testid={`cons-treatment-fee-balance-paid-${i}`}>
-                        <span className="text-slate-500">Paid via {ALL_PAYMENT_MODE_LABELS[t.mode] || t.mode}</span>
+                        <span className="text-slate-500">Paid via {paymentModeName(t.mode)}</span>
                         <span className="font-semibold text-emerald-700">Rs.{t.amount.toLocaleString("en-IN")}</span>
                       </div>
                     ))}
@@ -14092,7 +14080,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <div className="flex justify-between gap-2"><span className="text-slate-600">Paid</span><span className="font-semibold tabular-nums text-emerald-700">{rs(paidIn)}</span></div>
                           <div className="flex justify-between gap-2"><span className="text-slate-600">{feeIn ? "Balance" : "Due"}</span><span className={`font-semibold tabular-nums ${balance > 0 ? "text-amber-700" : "text-slate-500"}`}>{rs(balance)}</span></div>
                           {feeIn && L.rehab_fee_payment_mode && (
-                            <div className="flex justify-between gap-2"><span className="text-slate-600">Payment Mode</span><span className="font-semibold text-slate-700">{ALL_PAYMENT_MODE_LABELS[L.rehab_fee_payment_mode] || String(L.rehab_fee_payment_mode).replace(/_/g, " ")}</span></div>
+                            <div className="flex justify-between gap-2"><span className="text-slate-600">Payment Mode</span><span className="font-semibold text-slate-700">{paymentModeName(L.rehab_fee_payment_mode)}</span></div>
                           )}
                         </div>
 

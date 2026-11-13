@@ -11,7 +11,7 @@ import {
   getBranches, getFinanceExpenses, createFinanceExpense, deleteFinanceExpense,
   approveFinanceExpense, rejectFinanceExpense, listVendors, createVendor,
 } from "@/lib/api";
-import { EXPENSE_PAYMENT_MODE_OPTIONS, PAYMENT_MODE_LABELS, PAYMENT_MODE_COLORS, orderedPaymentModeEntries, useKeepModeShown, useShownPaymentModes } from "@/lib/paymentModes";
+import { EXPENSE_PAYMENT_MODE_OPTIONS, PAYMENT_MODE_LABELS, PAYMENT_MODE_NAMES, PAYMENT_MODE_COLORS, orderedPaymentModeEntries, useKeepModeShown, useShownPaymentModes } from "@/lib/paymentModes";
 import { PETTY_CASH_LIMIT, PETTY_CASH_REASON_REQUIRED, isPettyCash } from "@/lib/pettyCash";
 import { DENOMINATIONS, noteTotal, countedNotes, noteBreakdown, notesLabel } from "@/lib/denominations";
 import { PettyCashPanel } from "@/components/finance/PettyCashPanel";
@@ -738,7 +738,7 @@ export const ExpenseBoard = ({ branchId: branchIdProp, mode: modeProp, scoped = 
                         }`}
                         data-testid={`finance-expense-form-mode-${m}`}
                       >
-                        {PAYMENT_MODE_LABELS[m]}
+                        {PAYMENT_MODE_NAMES[m]}
                       </button>
                     );
                   })}

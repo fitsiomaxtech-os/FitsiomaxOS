@@ -26,6 +26,7 @@ import { ScheduleCollectDialog, collectWhat } from "@/components/branch/Schedule
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { loadSession } from "@/lib/session";
 import { displayPhone } from "@/lib/phone";
+import { PAYMENT_MODE_NAMES, paymentModeName } from "@/lib/paymentModes";
 
 // The Consultations board, for its patient and Collect popups only (`popupOnly`). Loaded
 // when a Consultation Fee is first collected from Payment Schedule, not with this tab:
@@ -154,11 +155,7 @@ const stageOf = (tx) => (tx?.approved ? "approved" : tx?.income_requested ? "req
 // same as Finance > Approvals' own payment-mode row.
 const PAYMENT_MODES = [
   ["all", "All Modes"],
-  ["cash", "Cash"],
-  ["upi", "UPI"],
-  ["card", "Card"],
-  ["account_transfer", "Bank Transfer"],
-  ["cheque", "Cheque"],
+  ...["cash", "upi", "card", "account_transfer", "cheque"].map((m) => [m, PAYMENT_MODE_NAMES[m]]),
 ];
 
 // The branch dropdown's value for All Branches (branchId ""): Radix refuses "" as an item.
@@ -374,10 +371,9 @@ const PAYMENT_MODE_STYLES = {
   partial: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
-// Modes whose display name isn't just their key capitalised — without these,
-// "account_transfer" would render as "Account_transfer".
-const MODE_LABELS = { upi: "UPI", account_transfer: "Account Transfer" };
-const formatMode = (mode) => (mode ? (MODE_LABELS[mode] || mode.charAt(0).toUpperCase() + mode.slice(1)) : "—");
+// The name the mode goes by on every picker (PAYMENT_MODE_NAMES), so the badge and the
+// Payment Mode filter above it say the same thing.
+const formatMode = (mode) => (mode ? paymentModeName(mode) : "—");
 
 const PaymentModeBadge = ({ mode }) => (
   <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-semibold ${PAYMENT_MODE_STYLES[mode] || "bg-slate-50 text-slate-600 border-slate-200"}`}>

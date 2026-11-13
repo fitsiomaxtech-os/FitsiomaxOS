@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useKeepModeShown, useShownPaymentModes } from "@/lib/paymentModes";
+import { paymentModeOptions, useKeepModeShown, useShownPaymentModes } from "@/lib/paymentModes";
 import {
   Plus, PackagePlus, ShoppingCart, ArrowRightLeft, Pencil, Trash2, Search, X, History,
 } from "lucide-react";
@@ -53,12 +53,7 @@ const CATEGORIES = {
   },
 };
 
-const PAYMENT_MODES = [
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "card", label: "Card" },
-  { value: "account_transfer", label: "Account Transfer" },
-];
+const PAYMENT_MODES = paymentModeOptions(["cash", "upi", "card", "account_transfer"]);
 
 export const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 export const errText = (e, fallback) => e?.response?.data?.detail || fallback;

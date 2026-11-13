@@ -20,22 +20,16 @@ import {
   getPaymentModeVisibilityAdmin, setPaymentModeHidden,
   getFeatureVisibilityAdmin, setFeatureHidden,
 } from "@/lib/api";
-import { setHiddenPaymentModes } from "@/lib/paymentModes";
+import { DEVELOPER_PAYMENT_MODES, PAYMENT_MODE_NAMES, setHiddenPaymentModes } from "@/lib/paymentModes";
 import { setHiddenFeatures } from "@/lib/featureVisibility";
 import { useDevZone, closeDevZone, lockDevZone } from "@/lib/devZone";
 import { ThemeAppearanceCard } from "@/components/ThemeAppearanceCard";
 
 // The five tenders the OS collects in, plus Partial Payment, as the Payment Modes tab lists
-// them. Partial is a plan rather than a tender (`plan: true`), so it never counts as the last
-// mode left shown -- see PAYMENT_TENDER_KEYS in v3_config.py.
-const PAYMENT_MODE_ROWS = [
-  { mode: "cash", label: "Cash" },
-  { mode: "upi", label: "UPI" },
-  { mode: "card", label: "Card" },
-  { mode: "account_transfer", label: "Account" },
-  { mode: "cheque", label: "Cheque" },
-  { mode: "partial", label: "Partial", plan: true },
-];
+// them -- under the names every picker in the OS uses (PAYMENT_MODE_NAMES). Partial is a plan
+// rather than a tender (`plan: true`), so it never counts as the last mode left shown -- see
+// PAYMENT_TENDER_KEYS in v3_config.py.
+const PAYMENT_MODE_ROWS = DEVELOPER_PAYMENT_MODES.map((mode) => ({ mode, label: PAYMENT_MODE_NAMES[mode], plan: mode === "partial" }));
 const TENDER_MODE_KEYS = PAYMENT_MODE_ROWS.filter((r) => !r.plan).map((r) => r.mode);
 
 // Every feature the Hide Features tab offers — the backend's FEATURE_KEYS

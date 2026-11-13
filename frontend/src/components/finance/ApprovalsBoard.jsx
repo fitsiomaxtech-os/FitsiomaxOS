@@ -11,6 +11,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { getFinanceApprovals, getBranches, approveTransaction, unapproveTransaction, bulkApproveTransactions, deleteTransaction } from "@/lib/api";
 import { ExpenseApprovalsPanel } from "@/components/finance/ExpenseApprovalsPanel";
 import { displayPhone } from "@/lib/phone";
+import { PAYMENT_MODE_NAMES, paymentModeName } from "@/lib/paymentModes";
 
 // The two things this desk signs off. Money coming in was all it ever held, because money
 // going out had no approval to give — a branch could not raise an expense, so the only
@@ -60,8 +61,7 @@ const CATEGORIES = [
   ["other", "Others"],
 ];
 
-const MODE_LABELS = { upi: "UPI", account_transfer: "Bank Transfer", cheque: "Cheque", cash: "Cash", card: "Card", partial: "Partial" };
-const modeLabel = (m) => MODE_LABELS[m] || (m && m !== "unknown" ? m.charAt(0).toUpperCase() + m.slice(1) : "—");
+const modeLabel = (m) => (m && m !== "unknown" ? paymentModeName(m) : "—");
 
 const uniq = (xs) => [...new Set(xs.filter(Boolean))];
 
@@ -97,11 +97,7 @@ const groupByLead = (rows) => {
 // and its siblings across v3_packages.py) — not a separate list invented for this filter.
 const PAYMENT_MODES = [
   ["all", "All Modes"],
-  ["cash", "Cash"],
-  ["upi", "UPI"],
-  ["card", "Card"],
-  ["account_transfer", "Bank Transfer"],
-  ["cheque", "Cheque"],
+  ...["cash", "upi", "card", "account_transfer", "cheque"].map((m) => [m, PAYMENT_MODE_NAMES[m]]),
 ];
 
 const VERTICALS = [["all", "All"], ["offline", "Offline"], ["online", "Online"]];

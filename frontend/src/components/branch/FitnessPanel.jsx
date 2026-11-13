@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
+import { PAYMENT_MODE_NAMES, paymentModeOptions, useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
 import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,10 +37,7 @@ const GENDERS = [
 
 const PAYMENT_MODES = [
   { value: "", label: "Nothing collected" },
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "card", label: "Card" },
-  { value: "account_transfer", label: "Bank Transfer" },
+  ...paymentModeOptions(["cash", "upi", "card", "account_transfer"]),
 ];
 const MODE_LABELS = Object.fromEntries(PAYMENT_MODES.map((m) => [m.value, m.label]));
 // Cash leaves no number behind; the other three do, and it is worth keeping.
@@ -84,10 +81,7 @@ const isPreset = (f) => !f || DATE_PRESETS.some((p) => p.key === f.key);
 // "split" is what the server writes when one collection came in more than one way.
 const MODE_FILTERS = [
   ["all", "All Modes"],
-  ["cash", "Cash"],
-  ["upi", "UPI"],
-  ["card", "Card"],
-  ["account_transfer", "Bank Transfer"],
+  ...["cash", "upi", "card", "account_transfer"].map((m) => [m, PAYMENT_MODE_NAMES[m]]),
   ["split", "Split"],
 ];
 
@@ -1135,12 +1129,7 @@ export const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSav
 // it does not list when it settles a payment.
 const DENOMINATIONS = [500, 200, 100, 50];
 
-const COLLECT_MODES = [
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "card", label: "Card" },
-  { value: "account_transfer", label: "Bank Transfer" },
-];
+const COLLECT_MODES = paymentModeOptions(["cash", "upi", "card", "account_transfer"]);
 const COLLECT_REFERENCE_LABELS = { upi: "UPI ID", card: "Transaction ID", account_transfer: "Transaction ID" };
 
 /** What one payment line comes to, and what a set of them adds up to.

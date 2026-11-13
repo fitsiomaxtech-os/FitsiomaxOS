@@ -47,6 +47,33 @@ export const orderedPaymentModeEntries = (modes) => {
   return [...primary, ...rest].map((mode) => [mode, map[mode] || 0]);
 };
 
+// ------------------------------------------------- Payment Mode names
+//
+// What each Payment Mode is called on every picker and filter in the OS: the Collect popups,
+// Pre Book, Fitness, Zumba, Store, Vendors, Expense, and the Payment Mode filters on
+// Approvals and Accountant Manage. Developer Access lists the modes under the same names, so
+// a mode reads the same where it is switched on or off and where it is picked. Rename one
+// here and every one of those follows. Receipts and the report tiles above keep their own
+// wording.
+export const PAYMENT_MODE_NAMES = {
+  cash: "Cash",
+  upi: "UPI",
+  card: "Card",
+  account_transfer: "Account",
+  cheque: "Cheque",
+  partial: "Partial",
+};
+
+/** The modes Developer Access can show or hide, in the order it lists them. Partial is a plan
+ *  rather than a tender -- see PAYMENT_TENDER_KEYS in v3_config.py. */
+export const DEVELOPER_PAYMENT_MODES = ["cash", "upi", "card", "account_transfer", "cheque", "partial"];
+
+/** A mode's name, or the slug capitalised for one not in the list (split, pre_book...). */
+export const paymentModeName = (mode) => PAYMENT_MODE_NAMES[mode] || (mode ? mode.charAt(0).toUpperCase() + mode.slice(1).replace(/_/g, " ") : "");
+
+/** Picker options for these modes, named as above: [{ value, label }]. */
+export const paymentModeOptions = (modes) => modes.map((value) => ({ value, label: PAYMENT_MODE_NAMES[value] }));
+
 // ------------------------------------------------- Payment Modes Show / Hide
 //
 // The modes a developer has hidden in Developer Access. A hidden mode comes off every
