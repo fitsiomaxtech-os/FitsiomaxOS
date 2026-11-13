@@ -2049,6 +2049,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           itself, so eleven labels fit across a desk without the strip scrolling, and the
           bar stays flush with the board's edges instead of leaving the gap a scaled-down
           full-width row would. */}
+      {/* Keep the sticky wrapper outside the zoomed strip so its header offset stays in viewport pixels. */}
+      <div className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50"}`}>
       <div className="show-scrollbar hidden items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:flex" style={{ zoom: 0.9 }} data-testid="branch-view-tabs">
         {VIEW_TABS.map((tab) => {
           const Icon = tab.icon;
@@ -2102,6 +2104,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+      </div>
+
       </div>
 
       {/* A plain overlay rather than a Dialog: the panel's own reschedule popup is

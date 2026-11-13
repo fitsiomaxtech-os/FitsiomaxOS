@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import {
   Activity,
@@ -464,6 +464,17 @@ const LOGO_URL =
   "https://customer-assets.emergentagent.com/job_3d74aa9e-a241-4207-b148-2bbe29802707/artifacts/nozl77ti_Logo%20Icon.webp";
 
 export const CRMPage = ({ auth, onLogout }) => {
+  const pageRef = useRef(null);
+  const headerRef = useRef(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const updateHeight = () => pageRef.current?.style.setProperty("--role-header-height", `${header.getBoundingClientRect().height}px`);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const [masterBoard, setMasterBoard] = useState({ stage_counts: {}, total: 0 });
   const [branchMaster, setBranchMaster] = useState({ branch_stage_counts: {}, total: 0 });
   const [branchBoard, setBranchBoard] = useState({ stage_counts: {} });
@@ -1064,7 +1075,7 @@ export const CRMPage = ({ auth, onLogout }) => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50" data-testid="role-board-page">
+    <div ref={pageRef} className="min-h-screen bg-slate-50" data-testid="role-board-page">
       <Toaster richColors position="top-right" />
 
       {/* The Danger Zone page, in front of everything while open. It renders nothing of
@@ -1077,7 +1088,7 @@ export const CRMPage = ({ auth, onLogout }) => {
       )}
 
       <div className="w-full" data-testid="role-board-full-width-wrap">
-        <header className="sticky top-0 z-20 w-full border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-6 sm:py-4" data-testid="role-board-header">
+        <header ref={headerRef} className="sticky top-0 z-20 w-full border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-6 sm:py-4" data-testid="role-board-header">
           {/* Physio, mobile only: name + FitsiomaxOS subline on the left, Calendar /
               Profile / Logout icons on the right — replaces the desktop header below,
               which stays exactly as-is for every other role and at sm:+ for physio. */}
