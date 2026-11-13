@@ -1353,37 +1353,10 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   </Button>
                 )}
 
-                {/* Desk only, like the day hint below: on a phone both were guide text
-                    under a calendar that already shows a leave day struck through.
-                    Neither is drawn on the consultant's calendar. */}
-                {!isConsultant && Object.keys(leaveDays).length > 0 && (
-                  <p className="mt-2 hidden items-center gap-1.5 text-[10px] text-slate-400 sm:flex" data-testid="calendar-leave-legend">
-                    <span className="inline-block h-2.5 w-2.5 rounded border border-rose-200 bg-rose-50" />
-                    Branch leave day — set in CALENDAR → MONTHLY CALENDAR
-                  </p>
-                )}
-
-                {/* Where this person's days come from now. Desk only, like the legend above. A
-                    consultant who works more than one branch is the one case still opened by
-                    hand: their one calendar serves every branch, so this branch working a day
-                    does not put them here on it. */}
-                {calendarData && (calendarData.auto_open || isConsultant) && (
-                  <div className="mt-2 hidden space-y-1 text-[10px] leading-snug text-slate-400 sm:block" data-testid="calendar-auto-hint">
-                    <p>
-                      {calendarData.auto_open
-                        ? <>Available on every Working day of the Monthly Calendar, across their shift. To take {selectedDoctor.full_name} off a day, pick it and {isConsultant ? "Mark not available" : "Unsave"}.</>
-                        : selectedDoctor.is_super_admin
-                          ? <>The Super Admin consults at every branch, so their days are opened here by hand.</>
-                          : <>Works at more than one branch, so their days are opened here by hand.</>}
-                    </p>
-                    {daysOff.size > 0 && (
-                      <p className="flex items-center gap-1.5">
-                        <span className="inline-block h-2.5 w-2.5 rounded border border-dashed border-slate-300 bg-slate-100" />
-                        Not available — taken off on this calendar
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* No guide text under the month, on any of the three calendars: the leave
+                    legend and the "Available on every Working day…" line were taken off by
+                    request. A leave day, an off day and an open day each read from the
+                    cell itself, and its hover title says which. */}
 
                 {/* Not on the physio's or the consultant's calendar: the day's shift and what
                     it opens are already said on the right, beside the date, so this was the
