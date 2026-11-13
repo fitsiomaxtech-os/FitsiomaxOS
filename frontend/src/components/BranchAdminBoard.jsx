@@ -996,6 +996,17 @@ const writeStoredBranchView = (view) => {
 // `squareTable`: the List View table with 4px corners rather than rounded-lg — the Branch
 // Admin's own board, matching the Consultant's and the Physio's.
 export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = null, currentUser = null, canTransferBranch = false, roleLabel = "", onLogout, squareTable = false }) => {
+  const boardRootRef = useRef(null);
+  const navRef = useRef(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const updateHeight = () => boardRootRef.current?.style.setProperty("--branch-nav-height", `${nav.getBoundingClientRect().height}px`);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
   const [boardData, setBoardData] = useState({ leads: [], stage_counts: {}, stages: [] });
   const [consultationStages, setConsultationStages] = useState([]); // dynamic Consultation Stages, merged into the same stage bar
   const [loading, setLoading] = useState(false);
@@ -2043,14 +2054,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // scrolling inside it.
     <TabDotsProvider value={tabDots}>
     <PhoneBackProvider value={phoneBack}>
-    <div className={`flex flex-col gap-4 [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
+    <div ref={boardRootRef} className={`flex flex-col gap-4 [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
       {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file.
           90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
           itself, so eleven labels fit across a desk without the strip scrolling, and the
           bar stays flush with the board's edges instead of leaving the gap a scaled-down
           full-width row would. */}
       {/* Keep the sticky wrapper outside the zoomed strip so its header offset stays in viewport pixels. */}
-      <div className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50"}`}>
+      <div ref={navRef} className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50"}`}>
       <div className="show-scrollbar hidden items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:flex" style={{ zoom: 0.9 }} data-testid="branch-view-tabs">
         {VIEW_TABS.map((tab) => {
           const Icon = tab.icon;
@@ -2313,7 +2324,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <RecordsPanel branchId={branchId} />
       ) : activeView === "accountant_mgmt" ? (
         // phoneCards: on a phone its tabs are the same stack as Branch Leads' stages.
-        <AccountantManageTab branchId={branchId} phoneCards squareTable={squareTable} canDeleteClients={canDeleteLeads} />
+        <AccountantManageTab branchId={branchId} stickyTabs={!embedded} phoneCards squareTable={squareTable} canDeleteClients={canDeleteLeads} />
       ) : (
         <>
           {/* Stage Head Bar — Pre-Sales style sticky segmented tabs, and the same block

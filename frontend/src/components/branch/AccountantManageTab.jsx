@@ -463,7 +463,7 @@ const PaymentModes = ({ tx }) => {
 // Applied, Closing Balance, Close Books) with 4px corners — the Branch Admin's own login.
 // `canDeleteClients`: Branch Admin's board hands down its Branch Leads bin rule -- the role
 // and the Danger Zone switch -- so Payment Schedule's bin is offered exactly where that one is.
-export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false, canDeleteClients = false }) => {
+export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = false, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false, canDeleteClients = false }) => {
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -1023,6 +1023,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           scrolling, and the bar stays flush with the board's edges instead of leaving the
           gap a scaled-down full-width row would. Not on a phone, where the bar is laid out
           to fit and 90% of 12px type was only harder to read. */}
+      <div className={stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px))] md:z-20 bg-slate-50" : ""}>
       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
@@ -1122,6 +1123,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, verticalModeFilte
           </>
         )}
         {!toolbarTarget && dateControls}
+      </div>
       </div>
 
       {/* Phone, no tab open: under the date range, the five tabs as Branch Leads' stage
