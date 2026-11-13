@@ -2691,8 +2691,8 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
           </div>
           )}
 
-          {/* Upload, Save Review and Close Case Sheet; Verify stays with the Consultant and
-              the branch, and the server will not close until they have verified all four. */}
+          {/* Upload, Save Review and Close Case Sheet; Verify stays with the Branch Admin,
+              and the server will not close until they have verified all four. */}
           {tab === "progression" && <ProgressionTab leadId={lead.id} canUpload canClose />}
 
           {tab === "documents" && <DocumentsPanel leadId={lead.id} />}
@@ -3590,8 +3590,8 @@ export function PatientDetailPage({ patient, physioId, onClose, onRefresh }) {
           </div>
         )}
 
-        {/* The physio gathers the clips; verifying them is the branch's or the consultant's
-            job, which is why canVerify is not simply true. The backend holds the same line.
+        {/* The physio gathers the clips; verifying them is the Branch Admin's job, which is
+            why canVerify is not simply true. The backend holds the same line.
             Closing the case sheet is on the patient popup's Progression tab instead. */}
         {detailTab === "progression" && (
           <ProgressionTab leadId={patient.lead_id} canUpload canVerify={false} />

@@ -136,7 +136,7 @@ def is_shared_with_patient(doc: dict) -> bool:
 async def progression_videos_missing(lead_id: str) -> list:
     """The progression videos (Weekly Progression, Before & After, Testimonial) with no file
     filed yet, by label. What the physio's Mark Treatment Complete waits on while the uploads
-    are Mandatory. Filed is enough here; verifying is the Consultant's job and the case
+    are Mandatory. Filed is enough here; verifying is the Branch Admin's job and the case
     sheet's gate, not the physio's."""
     rows = await v3_col("lead_documents").find(
         {"lead_id": lead_id, "kind": {"$in": PROGRESSION_KEYS}}, {"_id": 0, "kind": 1}
@@ -187,9 +187,14 @@ WRITE_ROLES = ("branch_admin", "super_admin", "business_dev", "head_physio")
 # film the week, they ask for the review.
 #
 # So the physio may add these kinds and nothing else, and may not verify any of them. The
-# Consultant verifies, which is the whole point of the split — somebody other than whoever
+# Branch Admin verifies, which is the whole point of the split — somebody other than whoever
 # filmed it says it counts, and checking your own work makes the requirement prove nothing.
 PROGRESSION_WRITE_ROLES = (*WRITE_ROLES, "physio")
+
+# Who may verify the case sheet's four. The Consultant reads the Progression tab and no
+# more: verifying is the branch's job (Super Admin and the BDE stand in for it), so
+# head_physio is not here and a Consultant's Verify is refused.
+PROGRESSION_VERIFY_ROLES = ("branch_admin", "super_admin", "business_dev")
 
 
 def may_write_kind(role: str, kind: str) -> bool:
@@ -388,12 +393,12 @@ async def verify_lead_document(
     lead_id: str,
     doc_id: str,
     payload: VerifyInput,
-    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
+    user: V3UserOut = Depends(v3_require_roles(*PROGRESSION_VERIFY_ROLES)),
 ):
     """Confirm that an uploaded file is what it claims to be.
 
     Deliberately not open to the person who uploaded it. The physio delivering the course
-    gathers the clips; the branch or the consultant checks them. A case sheet that could be
+    gathers the clips; the Branch Admin checks them. A case sheet that could be
     closed by one person uploading four files and ticking them off themselves would prove
     nothing, which is the whole point of asking for them.
     """
@@ -448,7 +453,7 @@ async def set_google_review(
 async def verify_google_review(
     lead_id: str,
     payload: VerifyInput,
-    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio")),
+    user: V3UserOut = Depends(v3_require_roles(*PROGRESSION_VERIFY_ROLES)),
 ):
     """Confirm the review is real — the same second pair of eyes the uploads get."""
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
@@ -544,11 +549,12 @@ async def progression_status(
 
 # The physio may close too, from their own patient popup. Closing is not verifying: the
 # check below still wants all four verified, and a physio cannot verify, so somebody else
-# has said each one counts before the physio's close goes through.
+# has said each one counts before the physio's close goes through. The Consultant only reads
+# the Progression tab, so head_physio is not here.
 @router.post("/leads/{lead_id}/close-case-sheet")
 async def close_case_sheet(
     lead_id: str,
-    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev", "head_physio", "physio")),
+    user: V3UserOut = Depends(v3_require_roles(*PROGRESSION_VERIFY_ROLES, "physio")),
 ):
     """Close the case sheet, once every mandatory upload is in and verified.
 

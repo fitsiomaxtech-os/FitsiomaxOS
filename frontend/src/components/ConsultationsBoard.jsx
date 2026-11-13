@@ -8173,8 +8173,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 ...(isConsultant ? [] : [{ key: "followup", label: "Follow up" }]),
                 { key: "documents", label: "Documents" },
                 // The four uploads a case sheet closes on, and the only screen that can
-                // verify them: the physio delivering the course gathers the clips, and
-                // checking their own work would make the requirement prove nothing.
+                // verify them -- the Branch Admin's; the Consultant only reads it. The
+                // physio delivering the course gathers the clips, and checking their own
+                // work would make the requirement prove nothing.
                 { key: "progression", label: "Progression" },
                 // Not for the Consultant. The timeline is every stage move, call attempt
                 // and save on the lead — a branch's working record of how the patient got
@@ -11592,14 +11593,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {detailTab === "progression" && (
                 <ProgressionTab
                   leadId={selectedLead.id}
-                  /* The Consultant verifies but does not gather. The clips and the review
-                     come from the physio delivering the course, and this tab is on the
-                     Consultant's popup so somebody other than the person who filmed them
-                     says they count — checking your own work makes the requirement prove
-                     nothing. So: view and verify here, upload elsewhere. The Branch Admin
-                     only reads it here: no Upload, Save Review, Verify or Close Case Sheet. */
-                  canUpload={viewerRole === "super_admin"}
-                  canVerify={["super_admin", "head_physio"].includes(viewerRole)}
+                  /* The Branch Admin verifies but does not gather. The clips and the review
+                     come from the physio delivering the course, and the branch says they
+                     count — checking your own work makes the requirement prove nothing. So:
+                     view, verify and close here, upload elsewhere. Super Admin and the BDE
+                     reach this popup as viewerRole "branch_admin" and verify the same way.
+                     The Consultant only reads it: no Upload, Save Review, Verify or Close
+                     Case Sheet. */
+                  canUpload={false}
+                  canVerify={!isConsultant && viewerRole === "branch_admin"}
                 />
               )}
 

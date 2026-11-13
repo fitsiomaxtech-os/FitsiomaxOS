@@ -17,7 +17,7 @@ import { closeCaseSheet, leadProgression, openLeadDocument, setGoogleReview, upl
  * and folding it into Pending would hide the work that is waiting on somebody.
  *
  * Uploading and verifying are deliberately different jobs: the physio delivering the course
- * gathers the clips, and the branch or the consultant confirms them. A case sheet that one
+ * gathers the clips, and the Branch Admin confirms them. A case sheet that one
  * person could close by uploading four files and ticking them off themselves would prove
  * nothing, which is the whole reason for asking.
  */
@@ -28,7 +28,7 @@ const STATUS = {
   pending: { label: "Pending", icon: AlertCircle, chip: "bg-slate-100 text-slate-500", ring: "border-slate-200", tone: "text-slate-400" },
 };
 
-// "Uploaded" as a reader who can neither add nor verify (the Branch Admin) sees it. The
+// "Uploaded" as a reader who can neither add nor verify (the Consultant) sees it. The
 // check is not theirs to do, so "Awaiting check" and "Not checked" only ask them a question
 // they cannot answer; they get the file and a View button instead.
 const RECEIVED = { label: "Uploaded", icon: CheckCircle2, chip: "bg-sky-100 text-sky-700", ring: "border-sky-200", tone: "text-sky-600" };
