@@ -8094,10 +8094,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   column beside the name. */}
               {flatFeeStyle || isConsultant ? (
               <div className={`min-w-0 flex-1 self-center ${isConsultant ? "order-last basis-full sm:order-none sm:basis-0" : ""}`}>
-                <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
+                {/* The Consultant's row is one face end to end, its "Treatment Prescription"
+                    too: 14px Manrope (the app's body font) in #64748B (slate-500), medium. */}
+                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-slate-500" : "text-base font-semibold text-slate-900"}`} data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
-                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                    <span className={`shrink-0 rounded bg-slate-100 px-1.5 py-0.5 ${isConsultant ? "text-sm font-medium text-slate-500" : "font-mono text-[11px] font-semibold text-slate-500"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
                   <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
                   {isConsultant && selectedLead.appointment_date && (
@@ -8153,7 +8155,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               )}
               {/* The Consultant's popup names itself at the far right, just before the X. */}
               {isConsultant && (
-                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-semibold text-slate-800" data-testid="cons-detail-popup-name">
+                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-medium text-slate-500 [font-family:Manrope,sans-serif]" data-testid="cons-detail-popup-name">
                   Treatment Prescription
                 </span>
               )}
