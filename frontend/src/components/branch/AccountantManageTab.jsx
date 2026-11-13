@@ -467,6 +467,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
   const stickyRootRef = useRef(null);
   const toolbarRef = useRef(null);
   const ledgerCardsRef = useRef(null);
+  const revenueCardsRef = useRef(null);
   // Reconnect when conditional summary cards mount; measure wrapped rows as well.
   useEffect(() => {
     if (!stickyTabs) return;
@@ -474,10 +475,11 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
       const root = stickyRootRef.current;
       root?.style.setProperty("--accountant-toolbar-height", `${toolbarRef.current?.getBoundingClientRect().height || 0}px`);
       root?.style.setProperty("--accountant-ledger-height", `${ledgerCardsRef.current?.getBoundingClientRect().height || 0}px`);
+      root?.style.setProperty("--accountant-revenue-height", `${revenueCardsRef.current?.getBoundingClientRect().height || 0}px`);
     };
     updateHeights();
     const observer = new ResizeObserver(updateHeights);
-    [toolbarRef.current, ledgerCardsRef.current].filter(Boolean).forEach((element) => observer.observe(element));
+    [toolbarRef.current, ledgerCardsRef.current, revenueCardsRef.current].filter(Boolean).forEach((element) => observer.observe(element));
     return () => observer.disconnect();
   });
   const stickyLedgerClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px))] md:z-10 bg-slate-50" : "";
@@ -1324,7 +1326,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
 
               The same card as the five above (ui/ledger-card), so the two rows read as one
               set: white at rest, the picked one filled solid in its own colour. */}
-          <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${stickyRevenueClass} ${phoneHide(false)}`}>
+          <div ref={revenueCardsRef} className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${stickyRevenueClass} ${phoneHide(false)}`}>
             {REVENUE_VIEWS.map((v) => (
               <LedgerCard
                 key={v.key}
@@ -1396,6 +1398,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
 
           <div className={phoneHide(sumStep === 2)}>
           <RevenueDetailTable
+            stickyHeader={stickyTabs}
             rows={revenueView === "collected" ? filteredTxns : filteredTxns.filter((t) => t.source === revenueView)}
             onOpen={openDetail}
             onDelete={canDeleteUnverified ? deleteUnverified : undefined}
@@ -1777,7 +1780,7 @@ const firstTwo = (list) => ({ shown: list.slice(0, 2), extra: Math.max(0, list.l
  * @param verify  Whether this is the branch desk's copy, which heads the arrow's column
  *              Action rather than View -- Send and Undo are in what it opens.
  */
-const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verify = null, squareTable = false }) => {
+const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verify = null, squareTable = false, stickyHeader = false }) => {
   const groups = useMemo(() => groupPaymentsByClient(rows), [rows]);
   // Keyed by group, so narrowing the list above leaves stale keys behind harmlessly
   // rather than opening the wrong client.
@@ -1870,13 +1873,20 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verif
 
         {/* 90%, the list view only. zoom rather than transform: scale, so the box itself
             shrinks and the card doesn't keep the full-size height around it. */}
-        <div className="hidden overflow-x-auto md:block" style={{ zoom: 0.9 }}>
+        <div
+          className={`hidden md:block ${stickyHeader ? "overflow-auto" : "overflow-x-auto"}`}
+          style={stickyHeader ? { maxHeight: "max(12rem, calc(100dvh - var(--role-header-height, 89px) - var(--branch-nav-height, 42px) - var(--accountant-toolbar-height, 47px) - var(--accountant-ledger-height, 98px) - var(--accountant-revenue-height, 98px) - 100px))" } : undefined}
+          tabIndex={stickyHeader ? 0 : undefined}
+          role={stickyHeader ? "region" : undefined}
+          aria-label={stickyHeader ? "Summary payments" : undefined}
+        >
+        <div style={{ zoom: 0.9 }}>
           {/* table-fixed at w-full squeezes ten columns into a phone's width rather than
               letting the wrapper scroll — the min-width is what makes it scroll instead. */}
           {/* Flat rows with a hairline between them, under the same slate-500 header the
               branch lead list uses. */}
           <table className={`w-full ${onUndoPayment ? "min-w-[66rem]" : "min-w-[52rem]"} table-fixed border-collapse text-sm`}>
-            <thead className="bg-slate-500 text-[11px] font-semibold uppercase tracking-wide text-white">
+            <thead className={`${stickyHeader ? "sticky top-0 z-10" : ""} bg-slate-500 text-[11px] font-semibold uppercase tracking-wide text-white`}>
               <tr>
                 <th className="w-[4%] px-3 py-2.5 text-center">S.No</th>
                 <th className={`${width("w-[14%]", "w-[12%]", "w-[11%]")} px-3 py-2.5 text-left`}>Client</th>
@@ -2052,6 +2062,7 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verif
               })}
             </tbody>
           </table>
+        </div>
         </div>
       </CardContent>
     </Card>
