@@ -8081,15 +8081,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 Each line wraps rather than squeezes: on a phone whatever sits at the end
                 drops under the start of its line and lines up on the left with it, rather
                 than hanging off the right edge on a row of its own. */}
-            <div className="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+            <div className={`flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap sm:flex-nowrap" : ""}`}>
               {/* Consultation Visit and Fee Collected: one row -- name, patient number, phone,
                   no icons. The expert and the appointment's day are left to the Overview below it.
 
                   The Consultant's Treatment Report popup takes the same one row, with the
                   appointment's day and time after the phone. No Expert (that is the
-                  Consultant reading it) and no Consultation Paid / Pending chip. */}
+                  Consultant reading it) and no Consultation Paid / Pending chip.
+
+                  On a phone the Consultant's row drops under its "Treatment Prescription"
+                  and X line and takes the full width, rather than being squeezed into a
+                  column beside the name. */}
               {flatFeeStyle || isConsultant ? (
-              <div className="min-w-0 flex-1 self-center">
+              <div className={`min-w-0 flex-1 self-center ${isConsultant ? "order-last basis-full sm:order-none sm:basis-0" : ""}`}>
                 <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
@@ -8146,6 +8150,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     Leads' Appointment stage popup alone (BranchLeadModal in BranchAdminBoard.jsx). */}
                 </div>
               </div>
+              )}
+              {/* The Consultant's popup names itself at the far right, just before the X. */}
+              {isConsultant && (
+                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-semibold text-slate-800" data-testid="cons-detail-popup-name">
+                  Treatment Prescription
+                </span>
               )}
               {/* A plain bold X, no circle, on every stage of the popup. */}
               <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-black hover:bg-slate-100" data-testid="cons-detail-close">
