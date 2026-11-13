@@ -1397,7 +1397,7 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         </Suspense>
 
-        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : "space-y-4"} px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
+        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : "space-y-4"} px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 ${showBranchBoard ? "md:pt-1" : ""} ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
 
         {showSuperAdminBoard && (
           <div className="hidden flex-wrap items-center gap-2 border-b border-slate-200 pb-2 md:flex" data-testid="super-admin-nav">
