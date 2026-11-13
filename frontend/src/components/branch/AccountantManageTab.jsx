@@ -483,7 +483,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
     return () => observer.disconnect();
   });
   const stickyLedgerClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px))] md:z-10 bg-slate-50" : "";
-  const stickyRevenueClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px)+var(--accountant-ledger-height,98px)+16px)] md:z-10 bg-slate-50" : "";
+  const stickyRevenueClass = stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px)+var(--accountant-toolbar-height,47px)+var(--accountant-ledger-height,98px))] md:z-10 bg-slate-50" : "";
   const [branches, setBranches] = useState([]);
   const [ownBranchId, setOwnBranchId] = useState(fixedBranchId || "");
   // Scoped: whatever the row above says, right now. Otherwise this board's own select,
@@ -975,7 +975,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
   return (
     // flex+gap rather than space-y: the phone back bar and card stack are sm:hidden, and
     // space-y counts a hidden first child, leaving the desk bar a stray 16px down.
-    <div ref={stickyRootRef} className="flex flex-col gap-4" data-testid="accountant-manage-tab">
+    <div ref={stickyRootRef} className={`flex flex-col gap-4 ${stickyTabs ? "md:gap-0" : ""}`} data-testid="accountant-manage-tab">
       {toolbarTarget && dateControls && createPortal(dateControls, toolbarTarget)}
       {/* Phone, one tab open: the tab being read and the way back to the cards, flush under
           the header -- the bar Branch Leads' stage lists and Management's sub-tabs show. */}
@@ -1186,7 +1186,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
       ) : tab === "summary" ? (
         // flex+gap rather than space-y, for the phone stacks above the desk cards: space-y
         // spaces a hidden sibling, and would leave the desk a stray 16px under the bar.
-        <div className="flex flex-col gap-4" data-testid="accountant-manage-summary">
+        <div className={`flex flex-col gap-4 ${stickyTabs ? "md:gap-0" : ""}`} data-testid="accountant-manage-summary">
           {/* The four cards, each the view under it (Zumba's summary cards, ui/ledger-card):
               the two income piles, the drawer, and the money that went out. The picked one is
               filled in its colour. Where only signed-off money counts there is no pile to move
@@ -1786,16 +1786,12 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verif
   // rather than opening the wrong client.
   const [open, setOpen] = useState(() => new Set());
 
-  const expandable = useMemo(() => groups.filter((g) => g.payments.length > 1), [groups]);
-  const allOpen = expandable.length > 0 && expandable.every((g) => open.has(g.key));
-
   const toggle = (key) => setOpen((prev) => {
     const next = new Set(prev);
     if (next.has(key)) next.delete(key);
     else next.add(key);
     return next;
   });
-  const toggleAll = () => setOpen(allOpen ? new Set() : new Set(expandable.map((g) => g.key)));
   // Each column's share: the plain list's, the branch desk's with To Verify beside it, and
   // that with Undo Payment widening Action. Whole class names, for Tailwind to find.
   const width = (plain, desk, withUndo) => (onUndoPayment ? withUndo : verify ? desk : plain);
@@ -1803,21 +1799,6 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verif
   return (
     <Card className={`overflow-hidden ${squareTable ? "rounded-[4px]" : ""}`} data-testid="accountant-manage-revenue-detail">
       <CardContent className="p-0">
-        {/* No title or counts bar: the table's own column header is the top of the card.
-            Expand all only appears when some client actually has several payments. */}
-        {expandable.length > 0 && (
-          <div className="flex justify-end border-b border-slate-100 px-3 py-2">
-            <button
-              type="button"
-              onClick={toggleAll}
-              className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-sky-300 hover:text-sky-600"
-              data-testid="revenue-detail-toggle-all"
-            >
-              {allOpen ? "Collapse all" : "Expand all"}
-            </button>
-          </div>
-        )}
-
         {/* Cards on a phone. Ten columns behind a 52rem scroll means every one of them is
             off-screen except the first two, and a transaction is only useful read whole —
             who paid, how much, by what, when. The collections are listed inside the card
@@ -1875,7 +1856,7 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verif
             shrinks and the card doesn't keep the full-size height around it. */}
         <div
           className={`hidden md:block ${stickyHeader ? "overflow-auto" : "overflow-x-auto"}`}
-          style={stickyHeader ? { maxHeight: "max(12rem, calc(100dvh - var(--role-header-height, 89px) - var(--branch-nav-height, 42px) - var(--accountant-toolbar-height, 47px) - var(--accountant-ledger-height, 98px) - var(--accountant-revenue-height, 98px) - 100px))" } : undefined}
+          style={stickyHeader ? { maxHeight: "max(12rem, calc(100dvh - var(--role-header-height, 89px) - var(--branch-nav-height, 42px) - var(--accountant-toolbar-height, 47px) - var(--accountant-ledger-height, 98px) - var(--accountant-revenue-height, 98px) - 32px))" } : undefined}
           tabIndex={stickyHeader ? 0 : undefined}
           role={stickyHeader ? "region" : undefined}
           aria-label={stickyHeader ? "Summary payments" : undefined}

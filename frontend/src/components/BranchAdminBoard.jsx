@@ -2054,7 +2054,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // scrolling inside it.
     <TabDotsProvider value={tabDots}>
     <PhoneBackProvider value={phoneBack}>
-    <div ref={boardRootRef} className={`flex flex-col gap-4 [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
+    <div ref={boardRootRef} className={`flex flex-col gap-4 ${!embedded && activeView === "accountant_mgmt" ? "md:gap-0" : ""} [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
       {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file.
           90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
           itself, so eleven labels fit across a desk without the strip scrolling, and the
