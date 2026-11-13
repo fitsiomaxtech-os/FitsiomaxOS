@@ -10462,7 +10462,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     amount: selectedLead.diet_fee_paid != null ? selectedLead.diet_fee_paid : dietFeeDue,
                     paid: selectedLead.diet_fee_paid != null,
                     note: selectedLead.diet_fee_paid != null ? selectedLead.diet_fee_payment_mode : null,
-                    show: !!selectedLead.diet_recommended,
+                    show: !!selectedLead.diet_recommended || (programmeFeeStyle && stageFilter !== "Rehab"),
                     // Straight into the collect popup, not across to the Diet tab. This card
                     // sits under a heading that says Collect a Payment, on a panel opened to
                     // take money — so "Open" spent a click moving the Branch Admin to a
@@ -10489,7 +10489,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     amount: selectedLead.diet_chart_fee_paid != null ? selectedLead.diet_chart_fee_paid : dietChartFeeDue,
                     paid: selectedLead.diet_chart_fee_paid != null,
                     note: selectedLead.diet_chart_fee_paid != null ? selectedLead.diet_chart_fee_payment_mode : null,
-                    show: !!selectedLead.diet_chart || !!selectedLead.diet_recommended || selectedLead.diet_chart_fee_paid != null,
+                    show: !!selectedLead.diet_chart || !!selectedLead.diet_recommended || selectedLead.diet_chart_fee_paid != null || (programmeFeeStyle && stageFilter !== "Rehab"),
                     optional: !selectedLead.diet_chart,
                     // Straight into the collect popup, as the Diet Fee card above does — the
                     // chart no longer waits on anything that the Diet tab would have to do.
@@ -10507,7 +10507,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     amount: selectedLead.rehab_fee_paid != null ? selectedLead.rehab_fee_paid : selectedLead.rehab_package_price,
                     paid: selectedLead.rehab_fee_paid != null,
                     note: selectedLead.rehab_fee_paid != null ? selectedLead.rehab_fee_payment_mode : null,
-                    show: !!selectedLead.rehab_referred,
+                    show: !!selectedLead.rehab_referred || (programmeFeeStyle && stageFilter === "Rehab"),
                     longTerm: true,
                     longTermNote: longTermNotes.rehab,
                     // Title over an Inspect button, as the Treatment Fee: the course, its
@@ -10963,6 +10963,62 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const FeeSteps = <>{preBookStrip}{renderFeeSteps(numberedFeeSteps)}</>;
 
                 const panel = (() => {
+
+                  // Programme popups use the same payment rows and fixed action band as
+                  // Fee Collected. Keep the course/appointment summaries one click away.
+                  if (programmeFeeStyle) {
+                    const rehab = stageFilter === "Rehab";
+                    return (
+                      <StagePanel
+                        bare={!detailBody}
+                        flush={!detailBody}
+                        tone={detailView?.tone}
+                        icon={detailView?.icon}
+                        title={detailView?.title}
+                        testid="cons-stage-panel-programme-fees"
+                        tabs={detailBody ? <>
+                          <OwnTab label="Payments" short="Payments" icon={IndianRupee} active={TAB_ON} />
+                          {PhysioDetailButton}
+                          {DietDetailButton}
+                          {RehabDetailButton}
+                        </> : null}
+                      >
+                        {detailBody || FeeSteps}
+                        {footBand(!detailBody && (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={rehab ? !rehabFeePaid : !dietFeePaid}
+                              title={(rehab ? rehabFeePaid : dietFeePaid) ? undefined : "Collect the programme fee first"}
+                              className={`text-violet-600 ${ACT_BTN}`}
+                              onClick={rehab ? () => openPhysioModal("rehab") : openDietModal}
+                              data-testid={rehab ? "cons-rehab-detail-assign" : "cons-diet-detail-assign"}
+                            >
+                              {rehab ? <Activity className="mr-1 h-3.5 w-3.5" /> : <Salad className="mr-1 h-3.5 w-3.5" />}
+                              {rehab ? (rehabAssigned ? "Reassign Physio" : "Assign Physio") : (dietBooked ? "Reschedule Diet" : "Assign Nutritionist")}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`text-violet-600 ${ACT_BTN}`}
+                              onClick={() => openDetail(rehab ? "rehab" : "diet")}
+                              data-testid="cons-programme-details"
+                            >
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Details
+                            </Button>
+                            <Button
+                              size="sm"
+                              className={`text-violet-600 ${ACT_BTN}`}
+                              onClick={openExtraDueDraft}
+                              data-testid="cons-open-add-due"
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" /> Add Due
+                            </Button>
+                          </>
+                        ))}
+                      </StagePanel>
+                    );
+                  }
 
                   // Diet Consultation and Diet Chart are the same kind of pill as Rehab —
                   // nothing writes either, a patient is under one because they are on a diet

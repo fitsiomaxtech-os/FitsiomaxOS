@@ -284,6 +284,7 @@ code {
 .fee-soft [data-testid="cons-physio-assign-collect-balance"],
 .fee-soft [data-testid^="cons-diet-detail-"],
 .fee-soft [data-testid="cons-open-diet-assign"],
+.fee-soft [data-testid="cons-programme-details"],
 .fee-soft [data-testid^="cons-rehab-detail-"],
 .fee-soft [data-testid="cons-open-rehab-fee"] {
   background-color: transparent !important;
