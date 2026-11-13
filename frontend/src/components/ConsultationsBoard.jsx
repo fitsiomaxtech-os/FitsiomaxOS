@@ -1461,9 +1461,9 @@ const COLS_WITH_ACTION = {
 // flat .fee-flat buttons (index.css). For a
 // Branch Admin they also open in the narrow 565px card.
 const FEE_FLAT_STAGES = ["Consultation Visit", "Fee Collected", "Physio Assign", "Quit"];
-// Those stages, and the popup opened from these pills, draw their buttons the Fee Collected
-// way: no fill and no shadow, the words in colour, a 1px gray border (.fee-soft, index.css).
-const FEE_SOFT_PILLS = ["Rehab", "Diet Consultation", "Diet Chart"];
+// These programme pills can contain patients at any consultation stage. Use the
+// pill they opened from to give Branch Admin the full Fee Collected popup style.
+const FEE_FLAT_PILLS = ["Rehab", "Diet Consultation", "Diet Chart"];
 
 /**
  * The four fees a patient can pay, each collected at its own point and stored separately.
@@ -2924,11 +2924,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // At Consultation Booked the card is narrower still, 514 wide: all it holds is the booked
   // slot and Reschedule / Lost, and the 1024px sheet around two buttons was mostly white.
   const [detailFrame, setDetailFrame] = useState({ id: null, compact: false, booked: false });
+  const programmeFeeStyle = !isConsultant && FEE_FLAT_PILLS.includes(stageFilter);
+  const flatFeeStyle = FEE_FLAT_STAGES.includes(selectedLead?.consultation_stage) || programmeFeeStyle;
   if (detailFrame.id !== (selectedLead?.id ?? null)) {
     setDetailFrame({
       id: selectedLead?.id ?? null,
-      compact: !isConsultant && FEE_FLAT_STAGES.includes(selectedLead?.consultation_stage),
-      booked: !isConsultant && ["Consultation Booked", "Follow Up"].includes(selectedLead?.consultation_stage),
+      compact: !isConsultant && flatFeeStyle,
+      booked: !isConsultant && !programmeFeeStyle && ["Consultation Booked", "Follow Up"].includes(selectedLead?.consultation_stage),
     });
   }
   const compactDetail = detailFrame.compact;
@@ -8098,7 +8100,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   The Consultant's Treatment Report popup takes the same one row, with the
                   appointment's day and time after the phone. No Expert (that is the
                   Consultant reading it) and no Consultation Paid / Pending chip. */}
-              {FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) || isConsultant ? (
+              {flatFeeStyle || isConsultant ? (
               <div className="min-w-0 flex-1 self-center">
                 <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
@@ -8218,10 +8220,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {detailTab === "overview" && (
               // Consultation Visit and Fee Collected draw their Overview flat: no borders, 2px
               // corners, and no icons on its buttons -- see .fee-flat in index.css.
-              // Those stages and the Rehab / Diet pills also draw their buttons with no fill and
-              // no shadow, as Fee Collected does -- see .fee-soft. Fee Collected's own fee rows
-              // also sit on white -- see .fee-collected.
-              <div className={`flex flex-col gap-3 ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) ? "fee-flat" : ""} ${FEE_FLAT_STAGES.includes(selectedLead.consultation_stage) || FEE_SOFT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" ? "fee-collected" : ""}`}>
+              // Programme pills share that flat layout and Fee Collected's white fee rows.
+              <div className={`flex flex-col gap-3 ${flatFeeStyle ? "fee-flat" : ""} ${flatFeeStyle || FEE_FLAT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" || programmeFeeStyle ? "fee-collected" : ""}`}>
               {/* No Appointment Record row. */}
               {/* The consultation as it was written up — what pre-sales heard, what the
                   Consultant diagnosed, what they wrote down as the treatment, and the plan
