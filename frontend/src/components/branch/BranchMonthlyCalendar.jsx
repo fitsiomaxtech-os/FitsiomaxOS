@@ -145,7 +145,7 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
                 } ${canEdit ? "cursor-pointer hover:bg-sky-50" : "cursor-default"}`}
                 data-testid={`mcal-day-${day.date}`}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold sm:text-sm ${isToday ? "bg-sky-600 text-white" : isLeave ? "text-rose-600" : "text-slate-700"}`}>{n}</span>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold sm:text-sm ${isToday ? "bg-orange-500 text-white" : isLeave ? "text-rose-600" : "text-slate-700"}`}>{n}</span>
                 {/* A phone cell is ~40px wide, where "WORKING" does not fit: a working day is
                     a green dot there, and a leave day keeps its short word. */}
                 <span className={`rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none sm:text-[10px] ${isLeave ? "bg-rose-100 text-rose-600" : "hidden bg-emerald-100 text-emerald-700 sm:inline"}`}>
