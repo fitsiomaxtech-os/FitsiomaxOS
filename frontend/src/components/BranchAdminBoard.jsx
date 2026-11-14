@@ -1929,6 +1929,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     { key: "store", label: "Services and Products", short: "Services", icon: ShoppingCart },
     // The branch's kept records — Branch Transfer Records first, more to sit beside it.
     { key: "records", label: "Records", short: "Records", icon: FileText },
+    { key: "admin_hr", label: "Admin HR", short: "Admin HR", icon: UserCog },
   ];
 
   // The phone bar carries four of them plus More; the desktop strip above still shows
@@ -2330,7 +2331,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <FitsiomaxStorePanel branchId={branchId} />
       ) : activeView === "records" ? (
         <RecordsPanel branchId={branchId} />
-      ) : activeView === "accountant_mgmt" ? (
+      ) : activeView === "admin_hr" ? null : activeView === "accountant_mgmt" ? (
         // phoneCards: on a phone its tabs are the same stack as Branch Leads' stages.
         <AccountantManageTab branchId={branchId} stickyTabs={!embedded} phoneCards squareTable={squareTable} canDeleteClients={canDeleteLeads} />
       ) : (
