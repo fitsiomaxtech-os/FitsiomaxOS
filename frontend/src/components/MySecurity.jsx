@@ -65,8 +65,11 @@ const prettyMoment = (iso) => {
 
 // ---------- small pieces ----------
 
+// Shared by every dashboard; long forms and session lists scroll inside the panel.
+const SECURITY_FRAME = "mx-auto h-[550px] w-full max-w-[720px] space-y-3 overflow-y-auto rounded-[4px] border border-slate-200 bg-white p-3 shadow-sm";
+
 const Panel = ({ title, icon: Icon, children, right, testid }) => (
-  <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-testid={testid}>
+  <section className="rounded-[4px] border border-slate-200 bg-white p-4 shadow-sm" data-testid={testid}>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         {Icon && <Icon className="h-4 w-4 text-slate-400" />}
@@ -455,7 +458,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className={SECURITY_FRAME}>
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-slate-400" data-testid="my-security-loading">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading your security settings…
         </p>
@@ -465,7 +468,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
   }
   if (error) {
     return (
-      <div className="space-y-4">
+      <div className={SECURITY_FRAME}>
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" data-testid="my-security-error">
           {error}
         </p>
@@ -475,7 +478,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
   }
 
   return (
-    <div className="space-y-4" data-testid="my-security-tab">
+    <div className={SECURITY_FRAME} data-testid="my-security-tab">
       <PasswordPanel changedAt={data.password_changed_at} onChanged={load} />
       <TwoFactorPanel state={data.two_factor} emailMasked={data.email_masked} onChanged={load} />
       <SessionsPanel sessions={data.sessions} lastLoginAt={data.last_login_at} onChanged={load} />
