@@ -7906,11 +7906,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             // row is two columns answering the same question, and it left
                             // this cell two lines tall for no second fact.
                             //
-                            // A small tag rather than a button-sized block: it is a state,
-                            // not a control, and at full width it was the heaviest thing on
-                            // a row whose job is done.
-                            <span className="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 align-middle text-[11px] font-semibold text-emerald-700">
-                              <CheckCircle2 className="h-3 w-3 shrink-0" /> Paid
+                            // As wide and as tall as the Collect / Collect Balance buttons in
+                            // the rows around it, so the column reads as one even edge rather
+                            // than a small tag sitting in a gap among full-width blocks.
+                            <span className={`flex h-8 w-full items-center justify-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 font-semibold text-emerald-700 ${ACT_BTN}`}>
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Paid
                             </span>
                           ) : (
                             <>
