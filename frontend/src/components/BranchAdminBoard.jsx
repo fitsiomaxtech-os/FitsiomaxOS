@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSession } from "@/lib/session";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import {
   Calendar,
   CalendarCheck,
@@ -121,6 +122,8 @@ import { LeadEditModal } from "@/components/LeadEditModal";
 import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { isCourseComplete } from "@/lib/leadStage";
 import { displayPhone } from "@/lib/phone";
+
+const BranchEmployeesPanel = lazyWithRetry(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.BranchEmployeesPanel })));
 
 // Ranges this board's row leaves out. Last 90 Days went so the search beside the
 // ranges gets its width back; anything older is still on the toolbar's calendar.
@@ -2331,7 +2334,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         <FitsiomaxStorePanel branchId={branchId} />
       ) : activeView === "records" ? (
         <RecordsPanel branchId={branchId} />
-      ) : activeView === "admin_hr" ? null : activeView === "accountant_mgmt" ? (
+      ) : activeView === "admin_hr" ? (
+        <Suspense fallback={<div className="py-10 text-center text-sm text-slate-500">Loading employees...</div>}>
+          <BranchEmployeesPanel branchId={branchId} />
+        </Suspense>
+      ) : activeView === "accountant_mgmt" ? (
         // phoneCards: on a phone its tabs are the same stack as Branch Leads' stages.
         <AccountantManageTab branchId={branchId} stickyTabs={!embedded} phoneCards squareTable={squareTable} canDeleteClients={canDeleteLeads} />
       ) : (

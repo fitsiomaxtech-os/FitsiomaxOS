@@ -7,7 +7,7 @@ import uuid
 
 from database import v3_col
 from utils import now_iso, clinic_today, live_branch_query
-from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, is_combined_expert_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES, COMBINED_EXPERT_ROLES
+from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, is_combined_expert_role, is_branch_admin_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES, COMBINED_EXPERT_ROLES
 from security import hash_password
 from email_utils import SmtpNotConfigured, send_email, smtp_status
 from schemas.v3 import V3UserOut
@@ -27,6 +27,53 @@ DEFAULT_DEPARTMENTS = ["Pre-Sales", "Branch", "HR", "Accounts", "Operations", "M
 # any other branch, so a reader never has to know it is a sentinel at all.
 ALL_BRANCHES = "__all__"
 ALL_BRANCHES_LABEL = "All Branches"
+
+
+def _branch_admin_scope(user: V3UserOut) -> Optional[set]:
+    if not is_branch_admin_role(user.role):
+        return None
+    branches = {
+        str(branch).strip()
+        for branch in [user.branch_id, *(user.branch_ids or [])]
+        if branch and str(branch).strip() and str(branch).strip() != ALL_BRANCHES
+    }
+    if not branches:
+        raise HTTPException(status_code=403, detail="No branch is assigned to this account")
+    return branches
+
+
+def _employee_branch_ids(employee: dict) -> set:
+    branches = set()
+    primary = employee.get("branch_id")
+    if primary:
+        branches.add(str(primary).strip())
+    extra = employee.get("branch_ids")
+    if isinstance(extra, str):
+        extra = [extra]
+    for branch in extra or []:
+        if branch:
+            branches.add(str(branch).strip())
+    return {branch for branch in branches if branch}
+
+
+async def _employee_branch_ids_with_account(employee: dict) -> set:
+    branches = _employee_branch_ids(employee)
+    if branches or not employee.get("id"):
+        return branches
+    accounts = await v3_col("users").find(
+        {"employee_id": employee["id"]},
+        {"_id": 0, "branch_id": 1, "branch_ids": 1},
+    ).to_list(20)
+    for account in accounts:
+        branches.update(_employee_branch_ids(account))
+    return branches
+
+
+def _require_employee_branch_scope(branches: set, allowed: set) -> None:
+    if not branches or ALL_BRANCHES in branches or not branches.issubset(allowed):
+        raise HTTPException(status_code=403, detail="Employee is not assigned to your branch")
+
+
 # The branch_admin_* and online_*_admin entries are all Branch Admin, named for the practice
 # the person runs — physio, fitness, both, or the online arm. They hold the same board and
 # the same reach over one branch. See BRANCH_ADMIN_ROLES in deps.py for why these are fixed
@@ -668,11 +715,51 @@ async def resolve_employee_branches(rows: List[Dict[str, Any]]) -> List[Dict[str
 
 
 @router.get("/employees")
-async def list_employees(status: Optional[str] = None, _: V3UserOut = Depends(v3_require_roles("super_admin", "marketing_head", "business_dev"))):
+async def list_employees(
+    status: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "marketing_head", "business_dev", "branch_admin")),
+):
     q: Dict[str, Any] = {}
     if status:
         q["status"] = status
+    branch_scope = _branch_admin_scope(user)
+    if branch_scope is not None:
+        if branch_id and branch_id not in branch_scope:
+            raise HTTPException(status_code=403, detail="This branch is not assigned to your account")
+        selected_branches = {branch_id} if branch_id else branch_scope
+        account_rows = await v3_col("users").find(
+            {
+                "$or": [
+                    {"branch_id": {"$in": list(selected_branches)}},
+                    {"branch_ids": {"$in": list(selected_branches)}},
+                ],
+            },
+            {"_id": 0, "employee_id": 1, "branch_id": 1, "branch_ids": 1},
+        ).to_list(2000)
+        account_branches: Dict[str, set] = {}
+        for account in account_rows:
+            employee_id = account.get("employee_id")
+            if not employee_id:
+                continue
+            account_branches.setdefault(employee_id, set()).update(_employee_branch_ids(account))
+        clauses = [
+            {"branch_id": {"$in": list(selected_branches)}},
+            {"branch_ids": {"$in": list(selected_branches)}},
+        ]
+        if account_branches:
+            clauses.append({"id": {"$in": list(account_branches)}})
+        q["$or"] = clauses
+    elif branch_id:
+        q["$or"] = [{"branch_id": branch_id}, {"branch_ids": branch_id}]
     rows = await v3_col("employees").find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    if branch_scope is not None:
+        filtered = []
+        for row in rows:
+            assigned = _employee_branch_ids(row) or account_branches.get(row.get("id"), set())
+            if assigned and ALL_BRANCHES not in assigned and assigned.issubset(branch_scope):
+                filtered.append(row)
+        rows = filtered
     return await resolve_employee_branches(rows)
 
 
@@ -690,7 +777,8 @@ MAX_PHOTO_BYTES = 5 * 1024 * 1024
 @router.post("/employees/upload-photo")
 async def upload_employee_photo(
     file: UploadFile = File(...),
-    _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev")),
+    branch_id: Optional[str] = None,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
 ):
     """Store one employee photo and answer with the path to it.
 
@@ -701,6 +789,9 @@ async def upload_employee_photo(
 
     Same gate as create/update employee: whoever may edit the record may set its picture.
     """
+    branch_scope = _branch_admin_scope(user)
+    if branch_scope is not None and branch_id not in branch_scope:
+        raise HTTPException(status_code=403, detail="This branch is not assigned to your account")
     return {"url": await save_photo(file)}
 
 
@@ -809,7 +900,10 @@ async def _apply_online_arm(updates: dict, work_type, service) -> None:
 
 
 @router.post("/employees")
-async def create_employee(payload: EmployeeCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def create_employee(
+    payload: EmployeeCreate,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
     # Department and Designation are what every downstream view groups and colour-codes
     # employees by, so an employee without them is unusable — required at the API too,
     # not just in the form.
@@ -818,9 +912,14 @@ async def create_employee(payload: EmployeeCreate, _: V3UserOut = Depends(v3_req
     if not (payload.designation or "").strip():
         raise HTTPException(status_code=400, detail="Designation is required")
     doc = payload.model_dump()
+    branch_scope = _branch_admin_scope(user)
+    if branch_scope is not None and doc.get("branch_id") and doc["branch_id"] not in branch_scope:
+        raise HTTPException(status_code=403, detail="This branch is not assigned to your account")
     # Online is two arms, and Service says which. Posts them there in place of the Branch
     # the Employment tab stops asking for once Online is picked — see _apply_online_arm.
     await _apply_online_arm(doc, doc.get("work_type"), doc.get("service"))
+    if branch_scope is not None:
+        _require_employee_branch_scope(_employee_branch_ids(doc), branch_scope)
     doc["id"] = str(uuid.uuid4())
     doc["employee_code"] = doc.get("employee_code") or await _next_emp_code()
     doc["status"] = doc.get("status") or "active"
@@ -956,10 +1055,32 @@ async def _consultant_login_without_a_link(emp_id: str) -> list:
 
 
 @router.patch("/employees/{emp_id}")
-async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def update_employee(
+    emp_id: str,
+    payload: EmployeeUpdate,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No updates")
+    branch_scope = _branch_admin_scope(user)
+    employee = None
+    if branch_scope is not None:
+        employee = await v3_col("employees").find_one({"id": emp_id}, {"_id": 0})
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        _require_employee_branch_scope(await _employee_branch_ids_with_account(employee), branch_scope)
+        if "account_role" in updates:
+            raise HTTPException(status_code=403, detail="Branch Admins cannot change employee account roles")
+        if "branch_id" in updates or "branch_ids" in updates:
+            raise HTTPException(status_code=403, detail="Branch Admins cannot move employees between branches")
+        for field in ("work_type", "service"):
+            if field in updates:
+                if str(updates[field] or "").strip() != str(employee.get(field) or "").strip():
+                    raise HTTPException(status_code=403, detail="Branch Admins cannot change an employee's work type or service")
+                updates.pop(field)
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates")
     # Omitting these on a partial update is fine; explicitly clearing them is not — an
     # existing employee must not be left without a department or designation.
     for field, label in (("department", "Department"), ("designation", "Designation")):
@@ -984,7 +1105,7 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
     if "work_type" in updates:
         service = updates.get("service")
         if service is None:
-            stored = await v3_col("employees").find_one({"id": emp_id}, {"_id": 0, "service": 1})
+            stored = employee or await v3_col("employees").find_one({"id": emp_id}, {"_id": 0, "service": 1})
             service = (stored or {}).get("service")
         await _apply_online_arm(updates, updates["work_type"], service)
 
@@ -1013,6 +1134,13 @@ async def update_employee(emp_id: str, payload: EmployeeUpdate, _: V3UserOut = D
         # below still read this as the plain move it is: the account's own list is chosen
         # on the user form and is not this control's to empty.
         updates["branch_ids"] = []
+
+    if branch_scope is not None:
+        next_branch_fields = {
+            "branch_id": updates.get("branch_id", (employee or {}).get("branch_id")),
+            "branch_ids": updates.get("branch_ids", (employee or {}).get("branch_ids") or []),
+        }
+        _require_employee_branch_scope(_employee_branch_ids(next_branch_fields), branch_scope)
 
     updates["updated_at"] = now_iso()
     res = await v3_col("employees").update_one({"id": emp_id}, {"$set": updates})
@@ -1905,7 +2033,7 @@ async def reorder_designations(dept_id: str, payload: DesignationReorder, _: V3U
 
 
 @router.get("/meta")
-async def hr_meta(_: V3UserOut = Depends(v3_require_roles("super_admin", "marketing_head", "business_dev"))):
+async def hr_meta(_: V3UserOut = Depends(v3_require_roles("super_admin", "marketing_head", "business_dev", "branch_admin"))):
     custom = await _custom_roles()
     depts = await _seeded_departments()
     return {

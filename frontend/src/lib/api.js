@@ -967,10 +967,12 @@ export const hrUpdateEmployee = async (id, payload) => (await api.patch(`/hr/emp
 // The employee's photo, sent before the record that points at it — the file has to exist
 // for photo_url to mean anything. Answers with { url }; no explicit Content-Type, because
 // the browser has to set the multipart boundary itself.
-export const uploadEmployeePhoto = async (file) => {
+export const uploadEmployeePhoto = async (file, branchId) => {
   const form = new FormData();
   form.append("file", file);
-  return (await api.post("/hr/employees/upload-photo", form)).data;
+  return (await api.post("/hr/employees/upload-photo", form, {
+    params: branchId ? { branch_id: branchId } : undefined,
+  })).data;
 };
 export const hrDeleteEmployee = async (id) => (await api.delete(`/hr/employees/${id}`)).data;
 export const hrEmployeeHistory = async () => (await api.get("/hr/employees/history")).data;

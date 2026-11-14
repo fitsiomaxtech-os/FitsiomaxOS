@@ -335,6 +335,36 @@ export const HRBoard = ({ isSuperAdmin = false }) => {
   );
 };
 
+export const BranchEmployeesPanel = ({ branchId }) => {
+  const [meta, setMeta] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const reloadMeta = useCallback(async () => {
+    try {
+      const loaded = await hrMeta();
+      setCustomRoleClasses(loaded.custom_roles);
+      setMeta(loaded);
+      setLoadError(false);
+    } catch (e) {
+      console.warn("[load failed]", e?.message || e);
+      setLoadError(true);
+      toast.error(e?.response?.data?.detail || "Failed to load employee settings");
+    }
+  }, []);
+  useEffect(() => { reloadMeta(); }, [reloadMeta]);
+
+  if (!branchId) return <p className="text-sm text-slate-500">Select a branch to manage its employees.</p>;
+  if (loadError) {
+    return (
+      <div className="flex items-center gap-3 text-sm text-slate-600">
+        <span>Employee settings could not be loaded.</span>
+        <Button type="button" variant="outline" size="sm" onClick={reloadMeta}>Retry</Button>
+      </div>
+    );
+  }
+  if (!meta) return <p className="text-sm text-slate-500">Loading employees...</p>;
+  return <EmployeesTab key={branchId} meta={meta} reloadMeta={reloadMeta} branchId={branchId} />;
+};
+
 // ---------- Dashboard ----------
 
 const DashboardTab = () => {
@@ -1252,7 +1282,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
 
 // ---------- Employees ----------
 
-const EmployeesTab = ({ meta, reloadMeta, initialFilter }) => {
+const EmployeesTab = ({ meta, reloadMeta, initialFilter, branchId }) => {
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState("");
   const filterStatus = initialFilter?.status || "active";
@@ -1268,7 +1298,13 @@ const EmployeesTab = ({ meta, reloadMeta, initialFilter }) => {
   const [viewing, setViewing] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
-  const load = useCallback(() => hrEmployees({ status: filterStatus === "all" ? "" : filterStatus }).then(setEmployees).catch((e) => console.warn("[load failed]", e?.message || e)), [filterStatus]);
+  const load = useCallback(() => hrEmployees({
+    status: filterStatus === "all" ? "" : filterStatus,
+    ...(branchId ? { branch_id: branchId } : {}),
+  }).then(setEmployees).catch((e) => {
+    console.warn("[load failed]", e?.message || e);
+    if (branchId) toast.error(e?.response?.data?.detail || "Failed to load employees");
+  }), [filterStatus, branchId]);
   useEffect(() => { load(); }, [load]);
 
   // Designation options narrow to whichever department is picked, so the picker never
@@ -1374,7 +1410,7 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
         </div>
         {/* History sits with Add Employee at the far end: both are about the list as a
             whole rather than a filter on it. */}
-        <button
+        {!branchId && <button
           type="button"
           onClick={() => setShowHistory(true)}
           title="Deleted employees"
@@ -1383,7 +1419,7 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           data-testid="hr-emp-history-btn"
         >
           <History className="h-4 w-4" />
-        </button>
+        </button>}
         <Button
           onClick={() => { setEditing(null); setShowAdd(true); }}
           title="Add Employee"
@@ -1402,13 +1438,13 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           employee={viewing}
           onClose={() => setViewing(null)}
           onEdit={() => { setEditing(viewing); setViewing(null); setShowAdd(true); }}
-          onDelete={() => remove(viewing)}
+          onDelete={branchId ? undefined : () => remove(viewing)}
         />
       )}
 
-      {showHistory && <EmployeeHistoryModal onClose={() => setShowHistory(false)} />}
+      {showHistory && !branchId && <EmployeeHistoryModal onClose={() => setShowHistory(false)} />}
 
-      {showAdd && <AddEmployeeModal employee={editing} meta={meta} reloadMeta={reloadMeta} onClose={() => { setShowAdd(false); setEditing(null); }} onSaved={() => { setShowAdd(false); setEditing(null); load(); }} />}
+      {showAdd && <AddEmployeeModal employee={editing} meta={meta} reloadMeta={reloadMeta} lockedBranchId={branchId} onClose={() => { setShowAdd(false); setEditing(null); }} onSaved={() => { setShowAdd(false); setEditing(null); load(); }} />}
     </div>
   );
 };
@@ -1840,13 +1876,20 @@ const useDesignationRole = (meta, reloadMeta) => {
   return { resolve, resolving };
 };
 
-const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initialDesignation, onClose, onSaved }) => {
+const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initialDesignation, lockedBranchId, onClose, onSaved }) => {
   const { resolve: resolveRole } = useDesignationRole(meta, reloadMeta);
   const [tab, setTab] = useState("personal");
   // initialDepartment/initialDesignation only seed a brand-new form — editing keeps using
   // the record's own values, and `employee` (not these fields) is what submit() checks to
   // decide create vs. update, so this never risks turning a create into an update.
-  const [form, setForm] = useState(employee ? { ...blankEmployee, ...employee } : { ...blankEmployee, department: initialDepartment || "", designation: initialDesignation || "" });
+  const [form, setForm] = useState(() => employee
+    ? { ...blankEmployee, ...employee }
+    : {
+      ...blankEmployee,
+      department: initialDepartment || "",
+      designation: initialDesignation || "",
+      ...(lockedBranchId ? { branch_id: lockedBranchId, branch_ids: [lockedBranchId] } : {}),
+    });
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   // The picked photo is held here and only uploaded when the form is submitted — the same
@@ -1980,14 +2023,23 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
       if (photoFile) {
         setUploadingPhoto(true);
         try {
-          const uploaded = await uploadEmployeePhoto(photoFile);
+          const uploaded = await uploadEmployeePhoto(photoFile, lockedBranchId);
           payload.photo_url = uploaded.url;
         } finally { setUploadingPhoto(false); }
+      }
+      if (lockedBranchId) {
+        if (employee) {
+          delete payload.branch_id;
+          delete payload.branch_ids;
+        } else {
+          payload.branch_id = lockedBranchId;
+          delete payload.branch_ids;
+        }
       }
       // A changed designation is a changed role: the linked login follows it. Only on a
       // change, so a login whose role was set apart from its title on purpose is not
       // pulled back to it by an unrelated edit to their phone number.
-      if (employee && jobKey(form.designation) !== jobKey(employee.designation)) {
+      if (!lockedBranchId && employee && jobKey(form.designation) !== jobKey(employee.designation)) {
         const role = await resolveRole(form.designation);
         if (role) payload.account_role = role;
       }
@@ -2110,14 +2162,18 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   Branch field beside it appears at all, which is worth answering
                   deliberately even though blank is allowed. */}
               <FormRow label="Work Type *">
-                <OsSelect
-                  value={form.work_type}
-                  onChange={changeWorkType}
-                  options={["", ...MODE_OPTIONS]}
-                  labels={{ "": "Select", ...MODE_LABELS }}
-                  className={form.work_type ? "" : "border-amber-300 bg-amber-50"}
-                  testid="hr-emp-worktype"
-                />
+                {lockedBranchId && employee ? (
+                  <Input className="h-8" value={MODE_LABELS[modeValue(form.work_type)] || "Offline"} disabled data-testid="hr-emp-worktype" />
+                ) : (
+                  <OsSelect
+                    value={form.work_type}
+                    onChange={changeWorkType}
+                    options={["", ...MODE_OPTIONS]}
+                    labels={{ "": "Select", ...MODE_LABELS }}
+                    className={form.work_type ? "" : "border-amber-300 bg-amber-50"}
+                    testid="hr-emp-worktype"
+                  />
+                )}
                 <p className="mt-1 text-[10px] text-slate-400">
                   {isOnlineMode(form.work_type)
                     ? "Works online, so no branch — Service decides the arm."
@@ -2133,14 +2189,18 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   clears on the way to Online, and a cleared branch reads downstream as
                   "taken off their branch". */}
               <FormRow label={isOnlineMode(form.work_type) ? "Service *" : "Service"}>
-                <OsSelect
-                  value={form.service}
-                  onChange={changeService}
-                  options={["", PRACTICE_PHYSIO, PRACTICE_FITNESS, PRACTICE_BOTH]}
-                  labels={SERVICE_LABELS}
-                  className={isOnlineMode(form.work_type) && !form.service ? "border-amber-300 bg-amber-50" : ""}
-                  testid="hr-emp-service"
-                />
+                {lockedBranchId && employee ? (
+                  <Input className="h-8" value={SERVICE_LABELS[form.service] || "—"} disabled data-testid="hr-emp-service" />
+                ) : (
+                  <OsSelect
+                    value={form.service}
+                    onChange={changeService}
+                    options={["", PRACTICE_PHYSIO, PRACTICE_FITNESS, PRACTICE_BOTH]}
+                    labels={SERVICE_LABELS}
+                    className={isOnlineMode(form.work_type) && !form.service ? "border-amber-300 bg-amber-50" : ""}
+                    testid="hr-emp-service"
+                  />
+                )}
                 {isOnlineMode(form.work_type) && (
                   <p className="mt-1 text-[10px] text-slate-400" data-testid="hr-emp-service-arm">
                     {form.service === PRACTICE_PHYSIO
@@ -2155,6 +2215,15 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               </FormRow>
               {modeHasBranch(form.work_type) && (
                 <FormRow label="Branch">
+                  {lockedBranchId ? (
+                    <Input
+                      className="h-8"
+                      value={branches.find((b) => b.id === lockedBranchId)?.branch_name || employee?.branch_name || "Assigned branch"}
+                      disabled
+                      data-testid="hr-emp-branch"
+                    />
+                  ) : (
+                    <>
                   {/* All Branches is offered here too, or an employee posted to every
                       branch from New Structure would open this form showing "Not picked" —
                       the stored value matching no option — and be cleared by the next save. */}
@@ -2170,6 +2239,8 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                     labels={{ "": "— Not picked —", [ALL_BRANCHES]: "All Branches", ...Object.fromEntries(branchOptions.map((b) => [b.id, b.branch_name])) }}
                     testid="hr-emp-branch"
                   />
+                    </>
+                  )}
                 </FormRow>
               )}
             </div>
