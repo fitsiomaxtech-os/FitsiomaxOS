@@ -899,6 +899,10 @@ export const hrApprovals = async (params = {}) => (await api.get("/hr/approvals"
 export const hrCreateApproval = async (payload) => (await api.post("/hr/approvals", payload)).data;
 export const hrDecideApproval = async (id, decision, note = "") => (await api.patch(`/hr/approvals/${id}`, { decision, note })).data;
 export const hrDeleteApproval = async (id) => (await api.delete(`/hr/approvals/${id}`)).data;
+// The header bell: the signed-in person's own notifications (routers/v3_notifications.py).
+export const myNotifications = async () => (await api.get("/notifications")).data;
+export const readAllNotifications = async () => (await api.post("/notifications/read-all")).data;
+export const clearNotifications = async () => (await api.delete("/notifications")).data;
 // BDE > Permission: leave and permission requests with the requester's role and branch.
 export const hrStaffRequests = async () => (await api.get("/hr/staff-requests")).data;
 

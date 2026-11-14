@@ -59,6 +59,7 @@ import { ClockWidget } from "@/components/ClockWidget";
 import { HeaderThemePicker } from "@/components/ThemeAppearance";
 import { useDevZone, openDevZone, lockDevZone } from "@/lib/devZone";
 import { SessionPaymentBell } from "@/components/SessionPaymentBell";
+import { NotificationBell } from "@/components/NotificationBell";
 import { displayPhone } from "@/lib/phone";
 
 /**
@@ -1115,6 +1116,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 <button type="button" onClick={() => setShowTimeOff(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" aria-label="Time Off" title="Time Off" data-testid="physio-mobile-header-timeoff">
                   <CalendarOff className="h-5 w-5" />
                 </button>
+                <NotificationBell iconClass="h-5 w-5" />
                 {/* No profile or logout here: the bottom bar's Profile opens My Profile, and
                     Logout sits on its Security tab. */}
               </div>
@@ -1150,6 +1152,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                     Branch Admin is one of the two roles that can act on it — the same
                     prop the desktop header hands it below. */}
                 {canSeeSessionPayments && <SessionPaymentBell canDecide />}
+                <NotificationBell iconClass="h-5 w-5" />
                 {canReadFeedback && (
                   <button
                     type="button"
@@ -1192,6 +1195,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               <div className="flex shrink-0 items-center gap-1">
                 <ClockWidget />
                 <HeaderThemePicker userId={auth.user.id} />
+                <NotificationBell iconClass="h-5 w-5" />
               </div>
             </div>
           )}
@@ -1308,6 +1312,8 @@ export const CRMPage = ({ auth, onLogout }) => {
                   Only the roles the endpoint answers for: a bell shown to a physio would
                   count nothing and open a 403. */}
               {canSeeSessionPayments && <SessionPaymentBell canDecide={showSuperAdminBoard || showBranchBoard} mobilePage={showSuperAdminBoard} />}
+              {/* The person's own notifications -- a leave or permission decided. Everyone. */}
+              <NotificationBell />
               {canReadFeedback && (
                 <button
                   type="button"

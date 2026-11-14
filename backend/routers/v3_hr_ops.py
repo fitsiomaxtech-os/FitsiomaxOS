@@ -1215,6 +1215,13 @@ async def decide_approval(
         "decision_note": (payload.note or "").strip(),
     }})
     updated = await v3_col("approvals").find_one({"id": approval_id}, {"_id": 0})
+    # The person's header bell. Imported here, not at the top, to keep this module's
+    # imports one-way; a failed notice must never undo a decision already saved.
+    try:
+        from routers.v3_notifications import notify_request_decision
+        await notify_request_decision(updated, decision, user.full_name, payload.note or "")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[notify] request decision {approval_id}: {exc}")
     return {**updated, "attendance_days_changed": marks}
 
 
