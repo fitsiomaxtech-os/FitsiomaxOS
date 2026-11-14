@@ -69,7 +69,7 @@ const prettyMoment = (iso) => {
 const SECURITY_FRAME = "mx-auto h-[550px] w-full max-w-[720px] space-y-3 overflow-y-auto rounded-[4px] border border-slate-200 bg-white p-3 shadow-sm";
 
 const Panel = ({ title, icon: Icon, children, right, testid }) => (
-  <section className="rounded-[4px] border border-slate-200 bg-white p-4 shadow-sm" data-testid={testid}>
+  <section className="bg-white p-4" data-testid={testid}>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         {Icon && <Icon className="h-4 w-4 text-slate-400" />}
@@ -114,7 +114,7 @@ const SecretInput = ({ value, onChange, placeholder, testid, autoComplete }) => 
 
 // ---------- password ----------
 
-const PasswordPanel = ({ changedAt, onChanged }) => {
+const PasswordPanel = ({ onChanged }) => {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [busy, setBusy] = useState(false);
@@ -158,13 +158,7 @@ const PasswordPanel = ({ changedAt, onChanged }) => {
         </Button>
       )}
     >
-      {!open ? (
-        <p className="hidden text-sm text-slate-500 md:block" data-testid="my-security-password-summary">
-          {changedAt
-            ? `Last changed ${prettyMoment(changedAt)}.`
-            : "You haven't changed your password since this account was created."}
-        </p>
-      ) : (
+      {open && (
         <form className="max-w-md space-y-3" onSubmit={submit} data-testid="my-security-password-form">
           <div>
             <Label>Current password</Label>
@@ -279,21 +273,12 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
         </span>
       }
     >
-      {/* Below md the panel keeps its heading, switch and warnings; the explanatory
-          sentences (here and across this tab) are desktop-only, to keep the phone short. */}
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <div className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-700">Email code</p>
-            <p className="hidden text-xs text-slate-500 md:block" data-testid="my-security-2fa-blurb">
-              {enabled
-                ? `Every sign-in asks for a 6-digit code sent to ${emailMasked}.`
-                : `A 6-digit code will be sent to ${emailMasked} at every sign-in, after your password.`}
-            </p>
-            {enabled && state?.enabled_at && (
-              <p className="mt-1 hidden text-[11px] text-slate-400 md:block">On since {prettyMoment(state.enabled_at)}.</p>
-            )}
+            <p className="text-xs text-slate-500" data-testid="my-security-2fa-blurb">{emailMasked}</p>
           </div>
         </div>
 
@@ -302,7 +287,7 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
             it and read the failure in a red toast — the fix belongs to an administrator,
             not to the person looking at the screen, and nothing they do will change it. */}
         {!emailConfigured ? (
-          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5" data-testid="my-security-2fa-unavailable">
+          <div className="flex items-start gap-3 rounded-lg bg-amber-50 px-3 py-2.5" data-testid="my-security-2fa-unavailable">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-amber-800">
@@ -325,14 +310,6 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
             >
               {busy ? "Sending code…" : enabled ? "Turn off two-factor" : "Turn on two-factor"}
             </Button>
-            {/* The one thing worth knowing before switching this on, said where the switch
-                is. Nobody but the account holder can take 2FA off again, so an address
-                that cannot be read is a locked account rather than an inconvenience. */}
-            <p className="hidden text-xs text-slate-400 md:block" data-testid="my-security-2fa-note">
-              {enabled
-                ? "We'll email a code to confirm before switching this off."
-                : "Make sure you can read that inbox — you'll need a code from it to sign in, and to switch this off again."}
-            </p>
           </div>
         ) : (
           <div className="max-w-xs space-y-3" data-testid="my-security-2fa-verify">
@@ -403,12 +380,9 @@ const SessionsPanel = ({ sessions, lastLoginAt, onChanged }) => {
       <div className="space-y-1">
         <p className="text-sm text-slate-700" data-testid="my-security-sessions-count">
           {sessions?.total === 1
-            ? "This browser is the only place this account is signed in."
-            : `This account is signed in on ${sessions?.total || 0} browsers or devices, including this one.`}
+            ? "1 active session (this browser)"
+            : `${sessions?.total || 0} active sessions (including this browser)`}
         </p>
-        {sessions?.current_started_at && (
-          <p className="hidden text-xs text-slate-400 md:block">This session started {prettyMoment(sessions.current_started_at)}.</p>
-        )}
         {lastLoginAt && (
           <p className="hidden items-center gap-1.5 text-xs text-slate-400 md:flex" data-testid="my-security-last-login">
             <Check className="h-3 w-3" /> Last sign-in {prettyMoment(lastLoginAt)}.
@@ -479,14 +453,11 @@ export const SecurityTab = ({ onLogout } = {}) => {
 
   return (
     <div className={SECURITY_FRAME} data-testid="my-security-tab">
-      <PasswordPanel changedAt={data.password_changed_at} onChanged={load} />
+      <PasswordPanel onChanged={load} />
       <TwoFactorPanel state={data.two_factor} emailMasked={data.email_masked} onChanged={load} />
       <SessionsPanel sessions={data.sessions} lastLoginAt={data.last_login_at} onChanged={load} />
       {logoutButton}
 
-      <p className="hidden text-center text-xs text-slate-400 md:block" data-testid="my-security-footnote">
-        These settings are yours alone — nobody else can change them for you. If you're locked out, ask HR to reset your password from Credentials.
-      </p>
     </div>
   );
 };
