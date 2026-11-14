@@ -119,9 +119,9 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
       </div>
 
       <div className="overflow-hidden rounded-[4px] border border-slate-200 bg-white">
-        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+        <div className="grid grid-cols-7 border-b border-slate-500 bg-slate-500">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">{w}</div>
+            <div key={w} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white">{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
