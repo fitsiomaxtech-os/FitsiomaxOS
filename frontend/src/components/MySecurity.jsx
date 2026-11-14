@@ -69,7 +69,7 @@ const prettyMoment = (iso) => {
 const SECURITY_FRAME = "mx-auto h-[550px] w-full max-w-[720px] space-y-3 overflow-y-auto rounded-[4px] border border-slate-200 bg-white p-3 shadow-sm";
 
 const Panel = ({ title, icon: Icon, children, right, testid }) => (
-  <section className="bg-white p-4" data-testid={testid}>
+  <section className="rounded-[4px] border border-slate-200 bg-white p-4" data-testid={testid}>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         {Icon && <Icon className="h-4 w-4 text-slate-400" />}
@@ -274,7 +274,7 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
       }
     >
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
+        <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-700">Email code</p>
@@ -287,7 +287,7 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
             it and read the failure in a red toast — the fix belongs to an administrator,
             not to the person looking at the screen, and nothing they do will change it. */}
         {!emailConfigured ? (
-          <div className="flex items-start gap-3 rounded-lg bg-amber-50 px-3 py-2.5" data-testid="my-security-2fa-unavailable">
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5" data-testid="my-security-2fa-unavailable">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-amber-800">
