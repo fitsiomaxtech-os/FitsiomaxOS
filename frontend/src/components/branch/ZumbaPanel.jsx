@@ -2217,7 +2217,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
             </ul>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[64rem] text-left text-sm">
-                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
                   {/* One fact per column, every header and cell on a single line. */}
                   <tr className="whitespace-nowrap">
                     <th className="w-[4%] px-3 py-2.5">S.No</th>
