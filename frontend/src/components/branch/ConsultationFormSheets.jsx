@@ -53,7 +53,7 @@ export const paperBranch = (name) => {
 
 // A dotted rule under every line: one dot every 5px, sat on the line's baseline.
 const dotted = {
-  backgroundImage: "radial-gradient(circle at 1px 1px, #64748b 0.9px, transparent 1.1px)",
+  backgroundImage: "radial-gradient(circle at 1px 1px, #cbd5e1 0.9px, transparent 1.1px)",
   backgroundSize: `5px ${LINE}px`,
   backgroundPosition: `0 ${LINE - 4}px`,
   lineHeight: `${LINE}px`,

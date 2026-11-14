@@ -43,7 +43,7 @@ const STYLES = `
   .val{color:#0f2a6b;font-size:15px}
   .one{display:flex;align-items:flex-end;gap:6px;margin-top:8px}
   .one>.lbl{line-height:22px;padding-bottom:1.6px}
-  .one .val{flex:1;min-width:0;border-bottom:1.6px dotted #475569;min-height:24px;line-height:22px;padding:0 4px;word-break:break-word}
+  .one .val{flex:1;min-width:0;border-bottom:1.6px dotted #cbd5e1;min-height:24px;line-height:22px;padding:0 4px;word-break:break-word}
   .row{display:flex;gap:14px}
   .row .one{flex:1}
   .branches{display:flex;align-items:center;gap:28px;margin:16px 0 6px;font-size:15px;color:#334155}
@@ -55,10 +55,10 @@ const STYLES = `
   .box{position:relative}
   .txt{position:relative;z-index:1;line-height:${STEP}px;white-space:pre-wrap;word-break:break-word;padding:0 4px}
   .txt .lbl{padding-right:6px}
-  .ln{position:absolute;left:0;right:0;border-top:1.6px dotted #475569}
+  .ln{position:absolute;left:0;right:0;border-top:1.6px dotted #cbd5e1}
   .sign{text-align:center;margin:56px auto 0;width:440px}
   .sign .lbl{display:block;color:${BLUE};font-weight:700;font-size:19px}
-  .sign .val{display:block;border-bottom:1.6px dotted #475569;min-height:30px;line-height:30px;margin-top:6px}
+  .sign .val{display:block;border-bottom:1.6px dotted #cbd5e1;min-height:30px;line-height:30px;margin-top:6px}
   /* The PDF only: html2canvas sets text lower in a tall line box than a browser does --
      about half the line's extra leading -- which ran the dotted rules through the words.
      Lifted back by that much, so the file matches the printed sheet. */
