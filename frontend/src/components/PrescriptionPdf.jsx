@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Eye, Printer, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
@@ -7,7 +8,9 @@ import { toast } from "@/components/ui/sonner";
 import { downloadPdf, sharePdf, whatsappPdf } from "@/lib/pdf";
 import { buildPrescription, prescriptionData, prescriptionMissing, printPrescription } from "@/lib/prescription";
 
-export const PrescriptionPdf = ({ lead, branch }) => {
+// `actionsSlot`: a DOM node (the popup's footer band) to draw the icon row in, instead of
+// under the status line.
+export const PrescriptionPdf = ({ lead, branch, actionsSlot }) => {
   const serialized = JSON.stringify(prescriptionData(lead, branch));
   const data = useMemo(() => JSON.parse(serialized), [serialized]);
   const missing = prescriptionMissing(data);
@@ -40,28 +43,31 @@ export const PrescriptionPdf = ({ lead, branch }) => {
     tab.opener = null;
     printPrescription(tab, built.result.pages);
   };
+  const actions = (
+    <div className={`flex flex-wrap gap-2 ${actionsSlot ? "mr-auto" : ""}`} data-testid="prescription-actions">
+      {[
+        ["View PDF", Eye, view, "view"],
+        ["Download", Download, () => downloadPdf(pdf, filename), "download"],
+        ["WhatsApp", WhatsAppIcon, () => whatsappPdf(pdf, filename, title, data.phone), "whatsapp"],
+        ["Print", Printer, print, "print"],
+        ["Share", Share2, () => sharePdf(pdf, filename, title), "share"],
+      ].map(([label, Icon, onClick, id]) => (
+        <Button key={id} type="button" size="icon" variant="outline" className="h-8 w-8" disabled={!ready} onClick={onClick}
+          title={label} aria-label={label} data-testid={`prescription-${id}`}>
+          <Icon className="h-4 w-4" />
+        </Button>
+      ))}
+    </div>
+  );
   return (
-    <div className="space-y-3" data-testid="prescription-pdf">
+    <div className="mt-2 space-y-3 empty:hidden" data-testid="prescription-pdf">
       {!ready && (
         <p className="text-xs text-slate-600" role="status">
           {missing || error || "Preparing prescription PDF…"}
         </p>
       )}
       {error && <Button size="sm" variant="outline" onClick={() => setRetry((n) => n + 1)}>Retry</Button>}
-      <div className="flex flex-wrap gap-2">
-        {[
-          ["View PDF", Eye, view, "view"],
-          ["Download", Download, () => downloadPdf(pdf, filename), "download"],
-          ["WhatsApp", WhatsAppIcon, () => whatsappPdf(pdf, filename, title, data.phone), "whatsapp"],
-          ["Print", Printer, print, "print"],
-          ["Share", Share2, () => sharePdf(pdf, filename, title), "share"],
-        ].map(([label, Icon, onClick, id]) => (
-          <Button key={id} type="button" size="icon" variant="outline" disabled={!ready} onClick={onClick}
-            title={label} aria-label={label} data-testid={`prescription-${id}`}>
-            <Icon className="h-4 w-4" />
-          </Button>
-        ))}
-      </div>
+      {actionsSlot ? createPortal(actions, actionsSlot) : actions}
       <DocumentPreview preview={preview} onClose={closePreview} testid="prescription-preview" />
     </div>
   );

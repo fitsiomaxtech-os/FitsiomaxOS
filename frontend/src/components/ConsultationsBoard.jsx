@@ -10207,16 +10207,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const DocumentsBody = (
                   <div className="space-y-4" data-testid="cons-documents-body">
                     <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-prescription-block">
-                      <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
                           <FileText className="h-3.5 w-3.5" />Prescription
                           <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700">Optional</span>
                         </p>
                       </div>
+                      {/* The icon row sits in the popup's footer band, not in this card. */}
                       <PrescriptionPdf
                         key={selectedLead.id}
                         lead={selectedLead}
                         branch={prescriptionBranches[selectedLead.branch_id]}
+                        actionsSlot={footSlot}
                       />
                     </div>
                   </div>
