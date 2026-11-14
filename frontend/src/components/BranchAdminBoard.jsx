@@ -105,6 +105,7 @@ import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { AppointmentMessageEditor } from "@/components/branch/AppointmentMessageEditor";
+import { ConsultationFormDialog } from "@/components/branch/ConsultationFormDialog";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
 import { PhysioSessionSettings } from "@/components/branch/PhysioSessionSettings";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
@@ -1027,6 +1028,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   // The same gear → Appointment Msg Editor: the WhatsApp welcome Pre Sales sends.
   const [apptMsgOpen, setApptMsgOpen] = useState(false);
+  const [consultFormOpen, setConsultFormOpen] = useState(false);
   // Which tab of that popup is up. Only the Physiotherapist Calendar's gear has more than
   // Time Management's three parts: its Treatment Session Duration and Per slot sit beside
   // them, all five in one row.
@@ -2112,6 +2114,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setConsultFormOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-consult-form">
+                <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -2136,6 +2142,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       )}
 
       {apptMsgOpen && <AppointmentMessageEditor branchId={branchId} onClose={() => setApptMsgOpen(false)} />}
+
+      {consultFormOpen && <ConsultationFormDialog branchId={branchId} onClose={() => setConsultFormOpen(false)} />}
 
       {profileOpen && (
         <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
@@ -2859,6 +2867,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <DropdownMenuItem onSelect={() => setApptMsgOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-appt-msg">
                     <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setConsultFormOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-consult-form">
+                    <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
                   </DropdownMenuItem>
                   {/* The phone's copy of the Consultation tab's Add New Lead -- the row's
                       own button waits for sm (see its note). */}
