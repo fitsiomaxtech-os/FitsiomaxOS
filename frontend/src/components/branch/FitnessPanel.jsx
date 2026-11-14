@@ -725,7 +725,7 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
             </ul>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[60rem] text-left text-sm">
-                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
                   {/* The Zumba list's columns, less Master — the gym has no class masters.
                       One fact per column, every header and cell on a single line. */}
                   <tr className="whitespace-nowrap">
