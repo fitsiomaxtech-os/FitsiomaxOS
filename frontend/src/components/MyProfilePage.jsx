@@ -616,7 +616,7 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
           </div>)}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[60rem] text-left text-sm" data-testid="my-attendance-table">
-              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
                 <tr className="whitespace-nowrap">
                   <th className="px-4 py-2.5">Date</th>
                   {!branchAdmin && <th className="px-3 py-2.5">Day</th>}
