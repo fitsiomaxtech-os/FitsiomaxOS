@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarCheck, CalendarX, ChevronLeft, ChevronRight, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
@@ -20,7 +21,9 @@ const shortDate = (s) => new Date(`${s}T00:00:00`).toLocaleDateString("en-GB", {
 //
 // Changed by the branch's Branch Admin, Super Admin and BDE only — the server says which
 // through `can_edit`, and everyone else sees it read-only.
-export const BranchMonthlyCalendar = ({ branchId }) => {
+// `toolbarTarget`: a DOM node to draw the month switcher and the counts into instead of
+// above the grid -- My Profile puts them on the same row as its tabs.
+export const BranchMonthlyCalendar = ({ branchId, toolbarTarget = null }) => {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -82,9 +85,49 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
     setSaving(false);
   };
 
+  const actions = (
+    <>
+      {canEdit && picked.length > 0 && (
+        <div className="flex items-center gap-2" data-testid="mcal-actions">
+          <span className="whitespace-nowrap text-sm font-semibold text-slate-700">{picked.length} day{picked.length === 1 ? "" : "s"} selected</span>
+          <button type="button" onClick={() => setPicked([])} className="rounded-full p-1 text-slate-400 hover:bg-slate-100" title="Clear selection" data-testid="mcal-clear"><X className="h-4 w-4" /></button>
+          <Button size="sm" disabled={saving} onClick={() => apply("working")} className="rounded-[4px] bg-emerald-600 text-white hover:bg-emerald-700" data-testid="mcal-mark-working">
+            <CalendarCheck className="mr-1.5 h-4 w-4" />Working
+          </Button>
+          <Button size="sm" disabled={saving} onClick={() => apply("leave")} className="rounded-[4px] bg-rose-600 text-white hover:bg-rose-700" data-testid="mcal-mark-leave">
+            <CalendarX className="mr-1.5 h-4 w-4" />Leave
+          </Button>
+        </div>
+      )}
+      {!canEdit && data && (
+        <span className="inline-flex items-center gap-1 rounded-[4px] bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-500"><Lock className="h-3 w-3" />View only</span>
+      )}
+      <span className="inline-flex items-baseline gap-1.5 rounded-[4px] border border-emerald-200 bg-emerald-50 px-3 py-1.5" data-testid="mcal-working-count">
+        <span className="text-base font-bold leading-none text-emerald-700">{workingCount}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Working days</span>
+      </span>
+      <span className="inline-flex items-baseline gap-1.5 rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-1.5" data-testid="mcal-leave-count">
+        <span className="text-base font-bold leading-none text-rose-600">{leaveCount}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-500">Leave days</span>
+      </span>
+    </>
+  );
+  // The one-row version: the same box-with-arrows month bar as the Attendance tab beside it.
+  const inlineBar = (
+    <div className="flex flex-wrap items-center justify-end gap-2" data-testid="mcal-toolbar">
+      <div className="inline-flex items-center gap-5 rounded-[4px] border border-slate-200 bg-white p-1">
+        <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-[4px] border p-1.5 hover:bg-slate-50" data-testid="mcal-prev"><ChevronLeft className="h-4 w-4" /></button>
+        <span className="text-sm font-semibold" data-testid="mcal-month">{monthLabel}</span>
+        <button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-[4px] border p-1.5 hover:bg-slate-50" data-testid="mcal-next"><ChevronRight className="h-4 w-4" /></button>
+      </div>
+      {actions}
+    </div>
+  );
+
   return (
     <div className="space-y-4" data-testid="branch-monthly-calendar">
       {/* Month switcher on the left, the month's totals on the right. */}
+      {toolbarTarget ? createPortal(inlineBar, toolbarTarget) : (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
           <Button size="sm" variant="outline" onClick={() => shiftMonth(-1)} className="rounded-[4px]" data-testid="mcal-prev"><ChevronLeft className="h-4 w-4" /></Button>
@@ -92,31 +135,10 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
           <Button size="sm" variant="outline" onClick={() => shiftMonth(1)} className="rounded-[4px]" data-testid="mcal-next"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex w-full flex-wrap items-center justify-center gap-2 text-xs sm:w-auto sm:justify-end">
-          {canEdit && picked.length > 0 && (
-            <div className="flex items-center gap-2" data-testid="mcal-actions">
-              <span className="whitespace-nowrap text-sm font-semibold text-slate-700">{picked.length} day{picked.length === 1 ? "" : "s"} selected</span>
-              <button type="button" onClick={() => setPicked([])} className="rounded-full p-1 text-slate-400 hover:bg-slate-100" title="Clear selection" data-testid="mcal-clear"><X className="h-4 w-4" /></button>
-              <Button size="sm" disabled={saving} onClick={() => apply("working")} className="rounded-[4px] bg-emerald-600 text-white hover:bg-emerald-700" data-testid="mcal-mark-working">
-                <CalendarCheck className="mr-1.5 h-4 w-4" />Working
-              </Button>
-              <Button size="sm" disabled={saving} onClick={() => apply("leave")} className="rounded-[4px] bg-rose-600 text-white hover:bg-rose-700" data-testid="mcal-mark-leave">
-                <CalendarX className="mr-1.5 h-4 w-4" />Leave
-              </Button>
-            </div>
-          )}
-          {!canEdit && data && (
-            <span className="inline-flex items-center gap-1 rounded-[4px] bg-slate-100 px-2.5 py-1.5 font-semibold text-slate-500"><Lock className="h-3 w-3" />View only</span>
-          )}
-          <span className="inline-flex items-baseline gap-1.5 rounded-[4px] border border-emerald-200 bg-emerald-50 px-3 py-1.5" data-testid="mcal-working-count">
-            <span className="text-base font-bold leading-none text-emerald-700">{workingCount}</span>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Working days</span>
-          </span>
-          <span className="inline-flex items-baseline gap-1.5 rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-1.5" data-testid="mcal-leave-count">
-            <span className="text-base font-bold leading-none text-rose-600">{leaveCount}</span>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-500">Leave days</span>
-          </span>
+          {actions}
         </div>
       </div>
+      )}
 
       <div className="overflow-hidden rounded-[4px] border border-slate-200 bg-white">
         <div className="grid grid-cols-7 border-b border-slate-500 bg-slate-500">

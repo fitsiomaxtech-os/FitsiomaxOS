@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -651,7 +652,7 @@ const MonthTable = ({ rows, compactLayout = false }) => {
 
 // `view`: "all" draws the whole month on one screen (desktop). On a phone the history is a
 // screen of its own behind a View History button, so it is "summary" or "history" there.
-const AttendanceTab = ({ view = "all", canRequest = true }) => {
+const AttendanceTab = ({ view = "all", canRequest = true, toolbarTarget = null }) => {
   // Every dashboard uses the compact attendance layout introduced for Branch Admin.
   const compactLayout = true;
   const [month, setMonth] = useState(thisMonth);
@@ -714,24 +715,30 @@ const AttendanceTab = ({ view = "all", canRequest = true }) => {
   // "summary" and "history" are only ever the phone's screens; "all" is the desktop's.
   const phone = view !== "all";
 
+  const attendanceToolbar = compactLayout && (
+    <div className="flex flex-wrap items-center gap-2" data-testid="attendance-toolbar">
+      <div className="inline-flex items-center gap-5 rounded-[4px] border border-slate-200 bg-white p-1">
+        <button type="button" aria-label="Previous month" onClick={() => changeMonth(shiftMonth(month, -1))} className="rounded-[4px] border p-1.5"><ChevronLeft className="h-4 w-4" /></button>
+        <span className="text-sm font-semibold">{monthLabel(month)}</span>
+        <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+      </div>
+      <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
+      {canRequest && <button type="button" onClick={() => setTimeOffOpen(true)} className={`${toolbarTarget ? "" : "ml-auto "}flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium`} data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>}
+      {canRequest && <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
+        <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-[4px] sm:rounded-[4px] [&_*]:!rounded-[4px]">
+          <DialogHeader><DialogTitle>Request</DialogTitle></DialogHeader>
+          <TimeOffTab compact />
+        </DialogContent>
+      </Dialog>}
+    </div>
+  );
+
   return (
     <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
       {compactLayout ? (
-        <div className="flex flex-wrap items-center gap-2" data-testid="attendance-toolbar">
-          <div className="inline-flex items-center gap-5 rounded-[4px] border border-slate-200 bg-white p-1">
-            <button type="button" aria-label="Previous month" onClick={() => changeMonth(shiftMonth(month, -1))} className="rounded-[4px] border p-1.5"><ChevronLeft className="h-4 w-4" /></button>
-            <span className="text-sm font-semibold">{monthLabel(month)}</span>
-            <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
-          </div>
-          <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
-          {canRequest && <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>}
-          {canRequest && <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
-            <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-[4px] sm:rounded-[4px] [&_*]:!rounded-[4px]">
-              <DialogHeader><DialogTitle>Request</DialogTitle></DialogHeader>
-              <TimeOffTab compact />
-            </DialogContent>
-          </Dialog>}
-        </div>
+        // On desktop the toolbar is drawn on the tab row itself (toolbarTarget), so the
+        // tabs and the month sit on one line.
+        toolbarTarget ? createPortal(attendanceToolbar, toolbarTarget) : attendanceToolbar
       ) : phone ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white p-0.5 shadow-sm">
           <button
@@ -1080,7 +1087,7 @@ const ProfileTab = ({ roleLabel }) => {
 const ORG_WIDE = ["super_admin", "business_dev"];
 
 /** My branch's Working / Leave days. Super Admin and BDE run every branch, so they pick one. */
-const MonthlyCalendarTab = ({ user }) => {
+const MonthlyCalendarTab = ({ user, toolbarTarget = null }) => {
   const orgWide = ORG_WIDE.includes(String(user?.role || "").trim().toLowerCase());
   const own = [...new Set([user?.branch_id, ...(user?.branch_ids || [])].filter(Boolean))];
   const [branches, setBranches] = useState([]);
@@ -1117,7 +1124,7 @@ const MonthlyCalendarTab = ({ user }) => {
           {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name || b.name || b.id}</option>)}
         </select>
       )}
-      <BranchMonthlyCalendar branchId={branchId} />
+      <BranchMonthlyCalendar branchId={branchId} toolbarTarget={toolbarTarget} />
     </div>
   );
 };
@@ -1294,6 +1301,9 @@ const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: "icon" }));
 // `phoneMenu` swaps the tabs for PhoneProfileMenu below md, for every host.
 export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true }) => {
   const [tab, setTab] = useState("attendance");
+  // The tab's own tools (month, counts, Request) are portalled into this slot, on the
+  // same row as the tabs.
+  const [toolsEl, setToolsEl] = useState(null);
   const phone = usePhone();
   if (phoneMenu && phone) {
     return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} onBack={keepBack || !phoneBar ? onBack : null} />;
@@ -1301,7 +1311,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
 
   return (
     <div className="space-y-4" data-testid="my-profile-page">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className={`min-w-0 items-center gap-3 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}>
           {/* Back as a bare chevron, no box round it. The name that sat beside
               it is gone: the header above already says whose page this is. It hops left
@@ -1317,25 +1327,22 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             <ChevronLeft className="h-5 w-5 motion-safe:animate-[nudge-left_1s_ease-in-out_infinite]" />
           </button>
         </div>
-        {/* Full width on a phone, where the bar is its own row. From sm up it stretches
-            over everything right of the name, the tabs sharing it equally. Sized to its
-            labels it still came out "Monthly …" and "Attendan…"; stretched, every tab has
-            room for its whole label. The 48rem basis is what five full labels need: on a
-            window narrower than name plus that, the row wraps and the bar takes a row of
-            its own rather than squeezing the labels back into an ellipsis. */}
-        <div className="w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:basis-[48rem]" data-testid="my-profile-tabs-wrap">
+        {/* One row: Back, the tabs sized to their labels, then the open tab's tools
+            pushed right. On a window too narrow for both, the tools wrap below. */}
+        <div className="w-full sm:w-auto sm:min-w-0" data-testid="my-profile-tabs-wrap">
           {phoneBar
-            ? <SegmentedTabs tabs={PHONE_BAR_TABS} value={tab} onChange={setTab} testid="my-profile-tabs" />
-            : <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} />}
+            ? <SegmentedTabs tabs={PHONE_BAR_TABS} value={tab} onChange={setTab} testid="my-profile-tabs" fit />
+            : <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} fit />}
         </div>
+        <div ref={setToolsEl} className="flex flex-wrap items-center justify-end gap-2 empty:hidden sm:ml-auto" data-testid="my-profile-tab-tools" />
       </div>
 
       {/* Both tabs stay mounted once opened would mean two months of requests for a screen
           somebody opened to read one thing, so each is mounted only while it is the tab.
           Switching back re-reads, which is right for a page whose whole subject is what
           happened today. */}
-      {tab === "calendar" ? <MonthlyCalendarTab user={user} />
-        : tab === "attendance" ? <AttendanceTab canRequest={user?.role !== "super_admin"} />
+      {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
+        : tab === "attendance" ? <AttendanceTab canRequest={user?.role !== "super_admin"} toolbarTarget={toolsEl} />
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
             : <ProfileTab roleLabel={roleLabel} />}
     </div>
