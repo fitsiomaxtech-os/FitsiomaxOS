@@ -114,7 +114,7 @@ export const SegmentedTabs = ({ tabs, value, onChange, testid = "segmented-tabs"
             aria-current={active ? "page" : undefined}
             title={t.phone === "icon" ? t.label : undefined}
             aria-label={t.phone === "icon" ? t.label : undefined}
-            className={`flex min-w-0 items-center justify-center ${iconGap} rounded-lg font-semibold transition ${fit ? "sm:shrink-0 sm:whitespace-nowrap" : "sm:flex-1"} sm:gap-1.5 ${mobileCols ? "" : "flex-1"} ${pad} ${
+            className={`flex min-w-0 items-center justify-center ${iconGap} rounded-lg font-semibold transition ${fit ? "sm:min-w-max sm:shrink-0 sm:whitespace-nowrap" : "sm:flex-1"} sm:gap-1.5 ${mobileCols ? "" : "flex-1"} ${pad} ${
               active
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-800"
