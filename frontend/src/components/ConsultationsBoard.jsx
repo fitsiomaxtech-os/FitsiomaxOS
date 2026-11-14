@@ -8092,10 +8092,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   appointment's day and time after the phone. No Expert (that is the
                   Consultant reading it) and no Consultation Paid / Pending chip.
 
+                  Consultation Booked takes the Visit row too: the booked slot is in the
+                  Overview banner right under it, so the header needs no second line.
+
                   On a phone the Consultant's row drops under its "Treatment Prescription"
                   and X line and takes the full width, rather than being squeezed into a
                   column beside the name. */}
-              {flatFeeStyle || isConsultant ? (
+              {flatFeeStyle || isConsultant || (bookedDetail && selectedLead.consultation_stage === "Consultation Booked") ? (
               <div className={`min-w-0 flex-1 self-center ${isConsultant ? "order-last basis-full sm:order-none sm:basis-0" : ""}`}>
                 {/* The Consultant's row is one face end to end, its "Treatment Prescription"
                     too: 14px Manrope (the app's body font) in #64748B (slate-500), medium. */}
