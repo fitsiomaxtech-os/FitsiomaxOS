@@ -236,22 +236,22 @@ const StatusChip = ({ row, className = "" }) => {
 
 /** A heading over a strip of cards: an icon in the board's blue, the title, and whatever
  *  belongs on the right of that line. */
-const DeskSection = ({ title, icon: Icon, aside, children, testid }) => (
+const DeskSection = ({ title, icon: Icon, aside, children, testid, hideHeading = false }) => (
   <section data-testid={testid}>
-    <div className="mb-2 flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
+    {!hideHeading && <div className="mb-2 flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         <Icon className="h-4 w-4 text-sky-600" />
         {title}
       </h3>
       {aside}
-    </div>
+    </div>}
     {children}
   </section>
 );
 
 /** Today: the day as it stands right now — when the clock went in and out, how many times,
  *  and how long it has run. The status rides on the heading line beside the standard day. */
-const TodayStrip = ({ row, standard, today }) => {
+const TodayStrip = ({ row, standard, today, hideHeading = false }) => {
   const when = today ? new Date(`${today}T00:00:00`) : null;
   return (
     <DeskSection
@@ -277,6 +277,7 @@ const TodayStrip = ({ row, standard, today }) => {
         </div>
       }
       testid="my-attendance-today"
+      hideHeading={hideHeading}
     >
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile label="Login" value={prettyTime(row?.clock_in) || "—"} arrow="desk" color={HEX.emerald} testid="my-attendance-today-in" />
@@ -346,6 +347,7 @@ const MonthSummary = ({ totals, month, today, todayStrip, workload, branchAdmin 
           title={<>This month <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
           icon={CalendarDays}
           testid="my-attendance-counts"
+          hideHeading={branchAdmin}
         >
           <div className={`grid gap-3 ${branchAdmin ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
             <StatTile label="Working days" value={totals?.working_days ?? 0} arrow="desk" color={HEX.slate} testid="my-attendance-working-days" />
@@ -840,7 +842,7 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
                 totals={data?.totals}
                 month={month}
                 today={data?.today}
-                todayStrip={isThisMonth && <TodayStrip row={todayRow} standard={data?.standard} today={data?.today} />}
+                todayStrip={isThisMonth && <TodayStrip hideHeading={branchAdmin} row={todayRow} standard={data?.standard} today={data?.today} />}
                 workload={!branchAdmin && isThisMonth && <TodayWorkload workload={data?.workload} />}
               />
             </>
