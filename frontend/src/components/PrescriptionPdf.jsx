@@ -42,9 +42,11 @@ export const PrescriptionPdf = ({ lead, branch }) => {
   };
   return (
     <div className="space-y-3" data-testid="prescription-pdf">
-      <p className="text-xs text-slate-600" role="status">
-        {missing || error || (ready ? "From the consultant’s saved Treatment Prescription." : "Preparing prescription PDF…")}
-      </p>
+      {!ready && (
+        <p className="text-xs text-slate-600" role="status">
+          {missing || error || "Preparing prescription PDF…"}
+        </p>
+      )}
       {error && <Button size="sm" variant="outline" onClick={() => setRetry((n) => n + 1)}>Retry</Button>}
       <div className="flex flex-wrap gap-2">
         {[
@@ -54,8 +56,9 @@ export const PrescriptionPdf = ({ lead, branch }) => {
           ["Print", Printer, print, "print"],
           ["Share", Share2, () => sharePdf(pdf, filename, title), "share"],
         ].map(([label, Icon, onClick, id]) => (
-          <Button key={id} type="button" size="sm" variant="outline" disabled={!ready} onClick={onClick} data-testid={`prescription-${id}`}>
-            <Icon className="mr-1.5 h-3.5 w-3.5" />{label}
+          <Button key={id} type="button" size="icon" variant="outline" disabled={!ready} onClick={onClick}
+            title={label} aria-label={label} data-testid={`prescription-${id}`}>
+            <Icon className="h-4 w-4" />
           </Button>
         ))}
       </div>
