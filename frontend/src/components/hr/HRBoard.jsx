@@ -1243,7 +1243,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
       <CardContent className="p-0">
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <thead className="bg-slate-500 text-left text-xs uppercase text-white">
               <tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">Employee</th><th className="px-3 py-2">Dept</th><th className="px-3 py-2">Designation</th><th className="px-3 py-2">Work Type</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Joining</th><th className="px-3 py-2">Salary</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr>
             </thead>
             <tbody>
