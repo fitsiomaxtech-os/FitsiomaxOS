@@ -1197,13 +1197,13 @@ const MonthlyCalendarTab = ({ user }) => {
 
   if (!branchId) {
     return (
-      <p className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400" data-testid="my-calendar-no-branch">
+      <p className="rounded-[4px] border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400" data-testid="my-calendar-no-branch">
         You are not posted to a branch yet, so there is no branch calendar to show.
       </p>
     );
   }
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4" data-testid="my-calendar-tab">
+    <div className="space-y-3 rounded-[4px] border border-slate-200 bg-white p-3 sm:p-4" data-testid="my-calendar-tab">
       {branches.length > 1 && (
         <select
           value={branchId}
