@@ -26,7 +26,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Banknote,
   BriefcaseBusiness,
   CalendarDays,
   CalendarOff,
@@ -37,13 +36,11 @@ import {
   ClipboardList,
   Clock,
   FileText,
-  Home,
   KeyRound,
   Layers,
   Loader2,
   LogIn,
   LogOut,
-  ShieldAlert,
   ShieldCheck,
   UserRound,
   Users,
@@ -167,29 +164,6 @@ const STATUS_STYLES = {
 const statusOf = (row) => STATUS_STYLES[row.status || row.state] || STATUS_STYLES.out;
 
 // ---------- the small pieces ----------
-
-/** One fact off the record: what it is called, and what it says.
- *
- *  A missing value is a dash rather than an empty space, so a half-filled record reads as
- *  a record with gaps in it — which is a thing to go and get filled in — rather than as a
- *  screen that failed to load.
- */
-const Field = ({ label, value, testid }) => (
-  <div data-testid={testid}>
-    <p className="text-[11px] text-slate-400">{label}</p>
-    <p className="mt-0.5 break-words text-sm font-medium text-slate-700">{value || "—"}</p>
-  </div>
-);
-
-const Panel = ({ title, icon: Icon, children, className = "", testid }) => (
-  <section className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${className}`} data-testid={testid}>
-    <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
-      {Icon && <Icon className="h-4 w-4 text-slate-400" />}
-      {title}
-    </h3>
-    {children}
-  </section>
-);
 
 // ---------- attendance, on a desktop ----------
 //
@@ -1021,7 +995,7 @@ const PROFILE_SECTIONS = [
 ];
 
 // Match the employee view dialog while keeping the profile in its existing page.
-const BranchProfileView = ({ data, roleLabel, photo }) => {
+const ProfileView = ({ data, roleLabel, photo }) => {
   const [section, setSection] = useState("personal");
   const account = data.account || {};
   const rows = {
@@ -1073,7 +1047,7 @@ const BranchProfileView = ({ data, roleLabel, photo }) => {
   );
 };
 
-const ProfileTab = ({ roleLabel, branchAdmin = false }) => {
+const ProfileTab = ({ roleLabel }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1099,182 +1073,7 @@ const ProfileTab = ({ roleLabel, branchAdmin = false }) => {
     );
   }
 
-  const account = data?.account || {};
-  const hasBank = data.bank_name || data.bank_account || data.ifsc;
-
-  if (branchAdmin) return <BranchProfileView data={data} roleLabel={roleLabel} photo={photo} />;
-
-  return (
-    <div className="space-y-4" data-testid="my-profile-profile-tab">
-      {!data.linked && (
-        <p className="hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 md:block" data-testid="my-profile-unlinked">
-          This login is not linked to an employee record, so only what the account itself carries is shown below.
-          Ask HR to link it from Credentials.
-        </p>
-      )}
-
-      {/* Top-aligned, so a shorter panel keeps its own height rather than stretching to
-          match the one beside it and trailing empty space under its last field. The two
-          full-width rows — the address, which runs long, and the two money/contact panels
-          that are short — keep the grid from ending on a ragged single cell. */}
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <Panel title="Personal information" icon={UserRound} testid="my-profile-personal">
-          <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
-            {photo.elements}
-            <PhotoAvatar person={data} size={64} photo={photo} />
-            <div className="min-w-0">
-              <p className="truncate text-base font-semibold text-slate-800" data-testid="my-profile-name">{data.full_name}</p>
-              <p className="truncate text-xs text-slate-500">{data.designation || roleLabel}</p>
-              {data.employee_code && (
-                <span className="mt-1 inline-block rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" data-testid="my-profile-code">
-                  {data.employee_code}
-                </span>
-              )}
-              <PhotoActions person={data} photo={photo} className="mt-1.5" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <Field label="Email" value={data.email} testid="my-profile-email" />
-            <Field label="Phone" value={displayPhone(data.phone)} testid="my-profile-phone" />
-            <Field label="Date of birth" value={prettyDate(data.dob)} />
-            <Field label="Gender" value={titleCase(data.gender)} />
-            <Field label="Blood group" value={data.blood_group} />
-            <Field label="Marital status" value={titleCase(data.marital_status)} />
-            <Field label="Father's name" value={data.father_name} />
-            <Field label="Mother's name" value={data.mother_name} />
-          </div>
-        </Panel>
-
-        <Panel title="Employment details" icon={BriefcaseBusiness} testid="my-profile-employment">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            {/* The employee code where there is one, and the login's own short id where
-                there is not — the header dialog called that the Employee ID for a year,
-                and an account with nobody on the books behind it still has to answer
-                "which id am I". */}
-            <Field label="Employee ID" value={data.employee_code || account.short_id} testid="my-profile-employee-id" />
-            <Field label="Role" value={roleLabel || titleCase(account.role)} testid="my-profile-role" />
-            <Field label="Designation" value={data.designation} />
-            <Field label="Department" value={data.department} />
-            <Field label="Branch" value={account.branch_name} testid="my-profile-branch" />
-            <Field label="Works" value={[WORK_TYPES[data.work_type], SERVICES[data.service]].filter(Boolean).join(" · ")} />
-            <Field label="Joining date" value={prettyDate(data.joining_date)} testid="my-profile-joining" />
-            <Field label="Reporting to" value={data.reporting_to} />
-            <Field label="Status" value={titleCase(data.status)} />
-            <Field label="Account created" value={prettyDate(String(account.created_at || "").slice(0, 10))} />
-            {/* Masked to the last four by the server, so the full number never reaches the
-                browser — see _masked in backend/routers/v3_me.py. Enough to confirm which
-                document HR has on file, which is what this row is read for. */}
-            <Field label="PAN" value={data.pan} />
-            <Field label="Aadhaar" value={data.aadhar} />
-          </div>
-        </Panel>
-
-        <Panel title="Address" icon={Home} className="lg:col-span-2" testid="my-profile-address">
-          <p className="whitespace-pre-line break-words text-sm font-medium text-slate-700" data-testid="my-profile-address-value">
-            {data.address || "—"}
-          </p>
-        </Panel>
-
-        <Panel title="Emergency contact" icon={ShieldAlert} testid="my-profile-emergency">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <Field label="Contact name" value={data.emergency_contact_name} />
-            <Field label="Contact phone" value={data.emergency_contact_phone} />
-          </div>
-        </Panel>
-
-        <Panel title="Bank details" icon={Banknote} testid="my-profile-bank">
-          {hasBank ? (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              <Field label="Bank name" value={data.bank_name} />
-              <Field label="Account number" value={data.bank_account} />
-              <Field label="IFSC" value={data.ifsc} />
-            </div>
-          ) : (
-            <p className="text-sm text-slate-400">Nothing on file.<span className="hidden md:inline"> HR adds this on your employee record.</span></p>
-          )}
-        </Panel>
-      </div>
-
-      {/* Where a correction goes. Everything above is HR's to write — a page that shows a
-          wrong phone number and says nothing about how to fix it makes the reader hunt for
-          somebody to tell. */}
-      <p className="hidden text-center text-xs text-slate-400 md:block" data-testid="my-profile-footnote">
-        Apart from your photo, these details are held by HR. Anything wrong here is corrected on your employee record — ask HR to update it.
-      </p>
-    </div>
-  );
-};
-
-/** Profile on a phone: no panels, one label/value line after another. */
-const PhoneProfileList = () => {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-  const photo = useMyPhoto(setData);
-
-  useEffect(() => {
-    let live = true;
-    myProfile()
-      .then((d) => { if (live) setData(d); })
-      .catch((e) => { if (live) setError(e?.response?.data?.detail || "Could not load your profile"); });
-    return () => { live = false; };
-  }, []);
-
-  if (error) {
-    return (
-      <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" data-testid="my-profile-error">
-        {error}
-      </p>
-    );
-  }
-  if (!data) {
-    return <p className="py-16 text-center text-sm text-slate-400" data-testid="my-profile-loading">Loading your profile…</p>;
-  }
-
-  const account = data.account || {};
-  const active = String(data.status || "").toLowerCase() === "active";
-  const rows = [
-    ["Name", data.full_name, "my-profile-name"],
-    ["Date of Birth", prettyDate(data.dob)],
-    ["Employee ID", data.employee_code || account.short_id, "my-profile-employee-id"],
-    ["Branch", account.branch_name, "my-profile-branch"],
-    ["Designation", data.designation],
-    ["Department", data.department],
-    ["Email", data.email, "my-profile-email"],
-    ["Gender", titleCase(data.gender)],
-    ["Marital Status", titleCase(data.marital_status)],
-  ];
-
-  return (
-    <div data-testid="my-profile-profile-tab">
-      <div className="flex flex-col items-center gap-2 border-b border-slate-100 pb-4 pt-1">
-        {photo.elements}
-        <PhotoAvatar person={data} size={88} photo={photo} />
-        <PhotoActions person={data} photo={photo} className="text-sm" />
-      </div>
-      <dl className="divide-y divide-slate-100 px-1">
-        {rows.map(([label, value, testid]) => (
-          <div key={label} className="flex gap-2 py-3 text-sm">
-            <dt className="w-32 shrink-0 text-slate-500">{label}</dt>
-            <dd className="min-w-0 flex-1 break-all font-medium text-slate-800" data-testid={testid}>{value || "—"}</dd>
-          </div>
-        ))}
-        <div className="flex items-center gap-2 py-3 text-sm">
-          <dt className="w-32 shrink-0 text-slate-500">Status</dt>
-          <dd className="min-w-0 flex-1">
-            {data.status ? (
-              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                {titleCase(data.status)}
-              </span>
-            ) : <span className="font-medium text-slate-800">—</span>}
-          </dd>
-        </div>
-        <div className="flex gap-2 py-3 text-sm">
-          <dt className="w-32 shrink-0 text-slate-500">Joining Date</dt>
-          <dd className="min-w-0 flex-1 font-medium text-slate-800" data-testid="my-profile-joining">{prettyDate(data.joining_date) || "—"}</dd>
-        </div>
-      </dl>
-    </div>
-  );
+  return <ProfileView data={data} roleLabel={roleLabel} photo={photo} />;
 };
 
 // ---------- monthly calendar ----------
@@ -1356,7 +1155,7 @@ const MENU_ITEMS = [
  * across a phone is five glyphs to learn; a list says what each one is.
  */
 // `onBack` is for a host with no bottom bar to leave by: the menu then carries its own way out.
-const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
+const PhoneProfileMenu = ({ roleLabel, user, onLogout, hideTimeOff, onBack }) => {
   const [open, setOpen] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
@@ -1394,7 +1193,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
           : history ? <AttendanceTab view="history" branchAdmin={user?.role === "branch_admin"} />
           : open === "timeoff" ? <TimeOffTab />
             : open === "security" ? <SecurityTab />
-              : user?.role === "branch_admin" ? <ProfileTab branchAdmin roleLabel="Branch Admin" /> : <PhoneProfileList />}
+              : <ProfileTab roleLabel={roleLabel} />}
       </div>
     );
   }
@@ -1510,7 +1309,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
   const phoneTabs = hideTimeOff || user?.role === "branch_admin" ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
 
   if (phoneMenu && phone) {
-    return <PhoneProfileMenu user={user} onLogout={onLogout} hideTimeOff={hideTimeOff || timeOffInHeader || user?.role === "branch_admin"} onBack={keepBack || !phoneBar ? onBack : null} />;
+    return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} hideTimeOff={hideTimeOff || timeOffInHeader || user?.role === "branch_admin"} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
 
   return (
@@ -1552,7 +1351,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
         : tab === "attendance" ? <AttendanceTab branchAdmin={user?.role === "branch_admin"} />
         : tab === "timeoff" && !hideTimeOff ? <TimeOffTab />
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
-            : <ProfileTab roleLabel={roleLabel} branchAdmin={user?.role === "branch_admin"} />}
+            : <ProfileTab roleLabel={roleLabel} />}
     </div>
   );
 };
