@@ -13,6 +13,7 @@ import { StageTabBar } from "@/components/ui/stage-tab";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
+import { PrescriptionPdf } from "@/components/PrescriptionPdf";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { advanceForLabel, preBookConsultOwed, preBookOf, preBookWhen } from "@/lib/preBook";
@@ -2995,12 +2996,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // from the branch list, keyed by the lead's own branch_id rather than this board's
   // branchId, because a Head Physio's board runs across every branch at once.
   const [branchNames, setBranchNames] = useState({});
+  const [prescriptionBranches, setPrescriptionBranches] = useState({});
   useEffect(() => {
     let alive = true;
     getBranches()
       .then((rows) => {
         if (!alive) return;
         setBranchNames(Object.fromEntries((rows || []).map((b) => [b.id, b.branch_name])));
+        setPrescriptionBranches(Object.fromEntries((rows || []).map((b) => [b.id, b])));
       })
       .catch(() => {});
     return () => { alive = false; };
@@ -3292,7 +3295,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // "rehab". A tab selects a view outright — pressing the lit one again used to hide it
   // and drop the reader back onto a different panel, which is not what a tab does.
   const [programmeDetail, setProgrammeDetail] = useState("own");
-  const [leadRxCount, setLeadRxCount] = useState(null);
+  const [, setLeadRxCount] = useState(null);
   // Bumped by the uploaders whenever anything is filed or removed, which is what makes the
   // count above a live figure instead of the one that happened to be true when the
   // card was opened. Without it the tab said "Documents (0)" with the page the reader had
@@ -10201,8 +10204,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 );
                 const PhysioDetailBody = physioBody(<div className="flex flex-wrap gap-1.5 pt-0.5">{PhysioActions}</div>);
 
-                const hasRx = (leadRxCount || 0) > 0;
-
                 const DocumentsBody = (
                   <div className="space-y-4" data-testid="cons-documents-body">
                     <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-prescription-block">
@@ -10211,14 +10212,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <FileText className="h-3.5 w-3.5" />Prescription
                           <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700">Optional</span>
                         </p>
-                        {hasRx && <span className="shrink-0 text-[11px] font-semibold text-emerald-600" data-testid="cons-prescription-done">On file</span>}
                       </div>
-                      <LeadDocuments
-                        leadId={selectedLead.id}
-                        kind="prescription"
-                        fixedLabel="Prescription"
-                        canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
-                        onChanged={notePrescriptionCount}
+                      <PrescriptionPdf
+                        key={selectedLead.id}
+                        lead={selectedLead}
+                        branch={prescriptionBranches[selectedLead.branch_id]}
                       />
                     </div>
                   </div>
@@ -11219,11 +11217,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         )}
                         tabs={
                           <>
-                            {/* The order is the order it happens in: the paperwork is filed,
-                                then the money is taken against it. Documents leads because it
-                                is the step that gates the other one — a row that opens on a
-                                payment it will not let you take is a row that reads as
-                                broken. */}
+                            {/* The optional prescription is generated from the Consultant's
+                                saved record and can be viewed or shared before collecting fees. */}
                             <Button
                               size="sm"
                               variant="outline"
@@ -11234,7 +11229,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               data-testid="cons-open-documents"
                             >
                               <FileText className="mr-1 h-3.5 w-3.5" />
-                              <Lbl full={!hasRx ? "Prescription (optional)" : `Prescription (${leadRxCount})`} short="Rx" />
+                              <Lbl full="Prescription (optional)" short="Rx" />
                             </Button>
                             <OwnTab
                               label={consultationPaid ? "Payment" : "Collect Fees"}
@@ -11248,9 +11243,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </>
                         }
                       >
-                        {/* Each tab is its own step and shows only that step. The fees do not
-                            appear over the uploader: somebody filing a scan is filing a scan,
-                            and a figure on that screen is a figure they cannot act on yet. */}
+                        {/* Keep prescription actions and fee collection in their own tabs. */}
                         {detailBody || FeeSteps}
                       </StagePanel>
                     );
