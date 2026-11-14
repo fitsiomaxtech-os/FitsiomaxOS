@@ -87,11 +87,7 @@ const TABS = [
   // First: the month the branch is open, which is the frame the other tabs are read in.
   { key: "calendar", label: "Monthly Calendar", short: "Calendar", icon: CalendarDays },
   { key: "attendance", label: "Attendance", short: "Hours", icon: Clock },
-  // Between the two, because that is the order the questions come in: what did I work,
-  // what am I asking for, and who am I on the books. What Time Off writes also lands on
-  // the tab to its left -- an approved leave marks those days, an approved permission
-  // notes its hours on one of them.
-  { key: "timeoff", label: "Time Off", short: "Leave", icon: CalendarOff },
+  // Leave requests are available from Attendance's Request button.
   { key: "profile", label: "My Profile", short: "Profile", icon: UserRound },
   // Last, because it is the tab opened on purpose rather than in passing. The three before
   // it are read — what did I work, what did I ask for, what do they have on me — and this
@@ -1149,7 +1145,6 @@ const MENU_ITEMS = [
   { key: "security", title: "Account", icon: KeyRound },
   { key: "attendance", title: "Attendance", icon: Clock },
   { key: "calendar", title: "Monthly Calendar", icon: CalendarDays },
-  { key: "timeoff", title: "Time Off", icon: CalendarOff },
 ];
 
 /**
@@ -1158,11 +1153,11 @@ const MENU_ITEMS = [
  * across a phone is five glyphs to learn; a list says what each one is.
  */
 // `onBack` is for a host with no bottom bar to leave by: the menu then carries its own way out.
-const PhoneProfileMenu = ({ roleLabel, user, onLogout, hideTimeOff, onBack }) => {
+const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack }) => {
   const [open, setOpen] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
-  const items = hideTimeOff ? MENU_ITEMS.filter((i) => i.key !== "timeoff") : MENU_ITEMS;
+  const items = MENU_ITEMS;
 
   if (open) {
     const history = open === "attendance-history";
@@ -1194,7 +1189,6 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, hideTimeOff, onBack }) =>
         {open === "calendar" ? <MonthlyCalendarTab user={user} />
           : open === "attendance" ? <AttendanceTab view="summary" canRequest={user?.role !== "super_admin"} />
           : history ? <AttendanceTab view="history" canRequest={user?.role !== "super_admin"} />
-          : open === "timeoff" ? <TimeOffTab />
             : open === "security" ? <SecurityTab />
               : <ProfileTab roleLabel={roleLabel} />}
       </div>
@@ -1281,17 +1275,14 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, hideTimeOff, onBack }) =>
 
 // ---------- the page ----------
 
-// The Physio board's phone bar: five tabs in one row, so four go to their glyph and Leave
-// goes to its word. Leave is the one kept in words because no glyph says "leave" as
-// plainly as the word does.
-const PHONE_BAR_MODES = { calendar: "icon", attendance: "icon", timeoff: "text", profile: "icon", security: "icon" };
-const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: PHONE_BAR_MODES[t.key] }));
+// Hosts with a phone bar show the four profile sections as icons.
+const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: "icon" }));
 
 /**
  * `phoneBar` is for a host that already frames this page on a phone — the Physio board,
  * which opens it from its own bottom bar. Below sm it drops the Back button and the name
  * (the bar underneath is the way out, and the header above already carries the name) and
- * puts all five tabs on one row. From sm up, and for every other host, the page is as it was.
+ * puts all four tabs on one row. From sm up, and for every other host, the page is as it was.
  */
 /**
  * `onLogout` is for a host whose phone header no longer carries a logout — Super Admin,
@@ -1301,18 +1292,11 @@ const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: PHONE_BAR_MODES[t.key] })
 // `keepBack` keeps Back on a phone with the one-row bar, for a host with no bottom bar to
 // leave by (BDE, Accountant open this from the header).
 // `phoneMenu` swaps the tabs for PhoneProfileMenu below md, for every host.
-// `timeOffInHeader` is for a host whose phone header carries Time Off as its own button
-// (Physio, Consultant): the phone menu then leaves the row out, so it is not in two places.
-// The desktop tabs keep it — the header button is phones only.
-export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, hideTimeOff = false, phoneMenu = true, timeOffInHeader = false }) => {
+export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true }) => {
   const [tab, setTab] = useState("attendance");
   const phone = usePhone();
-  // Super Admin has no one above them to ask for leave, so the tab is not offered.
-  const tabs = hideTimeOff || user?.role === "branch_admin" ? TABS.filter((t) => t.key !== "timeoff") : TABS;
-  const phoneTabs = hideTimeOff || user?.role === "branch_admin" ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
-
   if (phoneMenu && phone) {
-    return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} hideTimeOff={hideTimeOff || timeOffInHeader || user?.role === "branch_admin"} onBack={keepBack || !phoneBar ? onBack : null} />;
+    return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
 
   return (
@@ -1341,8 +1325,8 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             its own rather than squeezing the labels back into an ellipsis. */}
         <div className="w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:basis-[48rem]" data-testid="my-profile-tabs-wrap">
           {phoneBar
-            ? <SegmentedTabs tabs={phoneTabs} value={tab} onChange={setTab} testid="my-profile-tabs" />
-            : <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} />}
+            ? <SegmentedTabs tabs={PHONE_BAR_TABS} value={tab} onChange={setTab} testid="my-profile-tabs" />
+            : <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} />}
         </div>
       </div>
 
@@ -1352,7 +1336,6 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           happened today. */}
       {tab === "calendar" ? <MonthlyCalendarTab user={user} />
         : tab === "attendance" ? <AttendanceTab canRequest={user?.role !== "super_admin"} />
-        : tab === "timeoff" && !hideTimeOff ? <TimeOffTab />
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
             : <ProfileTab roleLabel={roleLabel} />}
     </div>
