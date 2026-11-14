@@ -1018,6 +1018,7 @@ export const CRMPage = ({ auth, onLogout }) => {
       more: [
         bdStop("branch_control", "Branch Control", LayoutDashboard),
         bdStop("finance", "Finance", BadgeIndianRupee),
+        bdStop("permission", "Permission", CalendarOff),
         bdStop("hr", "HR Admin", Users),
         bdStop("management", "Management", Building2),
         bdStop("packages", "Services and Products", Store),

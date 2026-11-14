@@ -9,6 +9,7 @@ import {
   BadgeIndianRupee,
   BarChart3,
   Building2,
+  CalendarOff,
   ChevronRight,
   Headphones,
   LayoutDashboard,
@@ -83,6 +84,8 @@ const HRBoard = lazyWithRetry(() => import("@/components/hr/HRBoard").then((m) =
 const PackagesBoard = lazyWithRetry(() => import("@/components/PackagesBoard").then((m) => ({ default: m.PackagesBoard })));
 const MarketingBoard = lazyWithRetry(() => import("@/components/marketing/MarketingBoard").then((m) => ({ default: m.MarketingBoard })));
 const PipelineStageManagement = lazyWithRetry(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
+// Permission -- every staff leave and permission request. This desk's alone.
+const StaffRequestsPanel = lazyWithRetry(() => import("@/components/hr/StaffRequestsPanel").then((m) => ({ default: m.StaffRequestsPanel })));
 
 /**
  * What sits under the tab strip while one of those chunks is on the wire.
@@ -132,6 +135,7 @@ const TABS = [
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
   { key: "sales_view", label: "Sales View", icon: Headphones },
   { key: "finance", label: "Finance", icon: BadgeIndianRupee },
+  { key: "permission", label: "Permission", icon: CalendarOff },
   { key: "hr", label: "HR Admin", icon: Users },
   { key: "management", label: "Management", icon: Building2 },
   // Treatments and Physiotherapy Treatment are sub-tabs inside it, not peers of it --
@@ -165,7 +169,7 @@ const isTabActive = (view, key) => (key === "settings" ? SETTINGS_SUB_VIEWS.incl
 // Where the strip's own Refresh is not drawn -- see the note on the button itself. Dashboard
 // because its toolbar carries the same one, and the three mounted boards because each
 // carries its own and this one would not touch what they show.
-const REFRESH_WITHHELD_TABS = ["dashboard", "finance", "hr", "packages"];
+const REFRESH_WITHHELD_TABS = ["dashboard", "finance", "permission", "hr", "packages"];
 
 /**
  * The toolbar's date range as the two query params both BD endpoints already take.
@@ -465,6 +469,10 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
       <Suspense fallback={<BoardFallback />}>
         {activeTab === "finance" && (
           <FinanceWiseBoard branches={branches} />
+        )}
+
+        {activeTab === "permission" && (
+          <StaffRequestsPanel />
         )}
 
         {activeTab === "hr" && (

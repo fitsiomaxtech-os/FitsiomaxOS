@@ -899,6 +899,8 @@ export const hrApprovals = async (params = {}) => (await api.get("/hr/approvals"
 export const hrCreateApproval = async (payload) => (await api.post("/hr/approvals", payload)).data;
 export const hrDecideApproval = async (id, decision, note = "") => (await api.patch(`/hr/approvals/${id}`, { decision, note })).data;
 export const hrDeleteApproval = async (id) => (await api.delete(`/hr/approvals/${id}`)).data;
+// BDE > Permission: leave and permission requests with the requester's role and branch.
+export const hrStaffRequests = async () => (await api.get("/hr/staff-requests")).data;
 
 export const hrPayroll = async (month) => (await api.get("/hr/payroll", { params: month ? { month } : {} })).data;
 export const hrGeneratePayroll = async (month) => (await api.post("/hr/payroll/generate", { month })).data;

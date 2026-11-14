@@ -1109,6 +1109,48 @@ async def list_approvals(
     return {"approvals": rows, "counts": counts}
 
 
+@router.get("/staff-requests")
+async def list_staff_requests(user: V3UserOut = Depends(require_hr)):
+    """Leave and permission requests, each with the role and branch of the person asking.
+
+    The Business Development Executive's Permission tab. The same rows as /approvals,
+    narrowed to the two kinds staff raise, with the login's role and branch put beside
+    each so the screen can group them by desk -- an approval row carries the employee,
+    not the account. Decided through PATCH /approvals/{id} like every other request.
+    """
+    if (user.role or "").strip().lower() not in ("super_admin", "business_dev"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    rows = await v3_col("approvals").find(
+        {"kind": {"$in": [LEAVE_KIND, PERMISSION_KIND]}}, {"_id": 0},
+    ).sort("requested_at", -1).to_list(2000)
+
+    emp_ids = list({r.get("employee_id") for r in rows if r.get("employee_id")})
+    user_ids = list({r.get("requested_by_user_id") for r in rows
+                     if r.get("source") == SOURCE_SELF and r.get("requested_by_user_id")})
+    fields = {"_id": 0, "id": 1, "role": 1, "branch_id": 1, "employee_id": 1}
+    accounts = await v3_col("users").find(
+        {"$or": [{"employee_id": {"$in": emp_ids}}, {"id": {"$in": user_ids}}]}, fields,
+    ).to_list(5000)
+    by_user = {a["id"]: a for a in accounts}
+    by_emp = {a["employee_id"]: a for a in accounts if a.get("employee_id")}
+
+    emps = await v3_col("employees").find(
+        {"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "branch_id": 1},
+    ).to_list(5000)
+    emp_branch = {e["id"]: e.get("branch_id") or "" for e in emps}
+    branch_docs = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500)
+    bmap = {b["id"]: b.get("branch_name", "") for b in branch_docs}
+
+    for r in rows:
+        acct = (by_user.get(r.get("requested_by_user_id")) if r.get("source") == SOURCE_SELF else None) \
+            or by_emp.get(r.get("employee_id")) or {}
+        branch_id = acct.get("branch_id") or emp_branch.get(r.get("employee_id")) or ""
+        r["role"] = acct.get("role") or ""
+        r["branch_name"] = bmap.get(branch_id, "")
+    return {"requests": rows}
+
+
 @router.post("/approvals")
 async def create_approval(payload: ApprovalCreate, user: V3UserOut = Depends(require_hr)):
     """HR logging a request on somebody's behalf -- the phone call at seven in the morning.
