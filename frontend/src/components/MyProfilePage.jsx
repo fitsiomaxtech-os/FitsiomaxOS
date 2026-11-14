@@ -307,7 +307,7 @@ const TodayWorkload = ({ workload }) => {
 /** The month's counts, and then its hours. Two strips because they answer two questions —
  *  how many days, and how many hours — and one strip of twelve cards answers neither.
  *  `todayStrip` is Today's strip, set beside the counts on a wide screen. */
-const MonthSummary = ({ totals, month, today, todayStrip, workload, branchAdmin = false }) => {
+const MonthSummary = ({ totals, month, today, todayStrip, workload, compactLayout = false }) => {
   const behind = (totals?.balance_minutes || 0) < 0;
   // Only when there is some. A "0.0h" permission card on every month of every person who
   // has never asked for an hour off would be a card explaining a feature rather than a
@@ -321,20 +321,20 @@ const MonthSummary = ({ totals, month, today, todayStrip, workload, branchAdmin 
           title={<>This month <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
           icon={CalendarDays}
           testid="my-attendance-counts"
-          hideHeading={branchAdmin}
+          hideHeading={compactLayout}
         >
-          <div className={`grid gap-3 ${branchAdmin ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
+          <div className={`grid gap-3 ${compactLayout ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
             <StatTile label="Working days" value={totals?.working_days ?? 0} arrow="desk" color={HEX.slate} testid="my-attendance-working-days" />
             <StatTile label="Present days" value={totals?.present_days ?? 0} arrow="desk" color={HEX.sky} testid="my-attendance-present-days" />
             <StatTile label="Absent" value={totals?.absent_days ?? 0} arrow="desk" color={totals?.absent_days ? HEX.rose : HEX.slate} testid="my-attendance-absent-days" />
-            {!branchAdmin && <StatTile label="On leave" value={totals?.leave_days ?? 0} arrow="desk" color={HEX.violet} testid="my-attendance-leave-days" />}
+            {!compactLayout && <StatTile label="On leave" value={totals?.leave_days ?? 0} arrow="desk" color={HEX.violet} testid="my-attendance-leave-days" />}
           </div>
         </DeskSection>
       </div>
 
       {workload}
 
-      {!branchAdmin && <DeskSection
+      {!compactLayout && <DeskSection
         title={<>Hours <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
         icon={Clock}
         testid="my-attendance-hours"
@@ -454,13 +454,13 @@ const PhoneToday = ({ row, today }) => {
   );
 };
 
-const PhoneMonthCounts = ({ totals, branchAdmin = false }) => (
+const PhoneMonthCounts = ({ totals, compactLayout = false }) => (
   <PhoneCard title="This Month" icon={CalendarDays} testid="my-attendance-counts">
-    <div className={`grid gap-1.5 ${branchAdmin ? "grid-cols-3" : "grid-cols-4"}`}>
+    <div className={`grid gap-1.5 ${compactLayout ? "grid-cols-3" : "grid-cols-4"}`}>
       <PhoneStat icon={CalendarDays} tone="bg-sky-100 text-sky-600" label="Working days" value={totals?.working_days ?? 0} className="bg-sky-50/70" testid="my-attendance-working-days" />
       <PhoneStat icon={UserRound} tone="bg-emerald-100 text-emerald-600" label="Present days" value={totals?.present_days ?? 0} className="bg-emerald-50/70" testid="my-attendance-present-days" />
       <PhoneStat icon={X} tone="bg-rose-100 text-rose-600" label="Absent" value={totals?.absent_days ?? 0} className="bg-rose-50/70" testid="my-attendance-absent-days" />
-      {!branchAdmin && <PhoneStat icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />}
+      {!compactLayout && <PhoneStat icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />}
     </div>
   </PhoneCard>
 );
@@ -532,7 +532,8 @@ const PhoneHours = ({ totals, today }) => {
  *  phone at any font size, and the usual answer — a horizontally scrolling table — hides
  *  the columns most worth reading (what was worked, and whether it was behind).
  */
-const MonthTable = ({ rows, branchAdmin = false }) => {
+const MonthTable = ({ rows, compactLayout = false }) => {
+  const hasBookingCounts = rows.some((row) => row.appointments != null || row.consultations != null);
   if (!rows.length) {
     return (
       <p className="rounded-md border border-dashed border-slate-200 bg-white py-10 text-center text-sm text-slate-400 sm:rounded-xl" data-testid="my-attendance-empty">
@@ -579,9 +580,9 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
       </ul>
 
       {/* Desktop: a Card holding the slate-headed table the Branch Admin lists use. */}
-      <Card className={`hidden overflow-hidden border-slate-200 shadow-sm sm:block ${branchAdmin ? "rounded-[4px]" : ""}`}>
+      <Card className={`hidden overflow-hidden border-slate-200 shadow-sm sm:block ${compactLayout ? "rounded-[4px]" : ""}`}>
         <CardContent className="p-0">
-          {!branchAdmin && (<div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          {!compactLayout && (<div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <ClipboardList className="h-4 w-4 text-sky-600" />
               Day by day
@@ -593,24 +594,24 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
               <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
                 <tr className="whitespace-nowrap">
                   <th className="px-4 py-2.5">Date</th>
-                  {!branchAdmin && <th className="px-3 py-2.5">Day</th>}
+                  {!compactLayout && <th className="px-3 py-2.5">Day</th>}
                   <th className="px-3 py-2.5 text-center">Sessions</th>
                   <th className="px-3 py-2.5">Login</th>
                   <th className="px-3 py-2.5">Logout</th>
-                  {!branchAdmin && <th className="px-3 py-2.5">On the clock</th>}
+                  {!compactLayout && <th className="px-3 py-2.5">On the clock</th>}
                   <th className="px-3 py-2.5">Break</th>
-                  {!branchAdmin && <th className="px-3 py-2.5">Work hrs</th>}
-                  {!branchAdmin && <th className="px-3 py-2.5">Balance</th>}
-                  {branchAdmin && <><th className="px-3 py-2.5">Appointments</th><th className="px-3 py-2.5">Consultations</th></>}
+                  {!compactLayout && <th className="px-3 py-2.5">Work hrs</th>}
+                  {!compactLayout && <th className="px-3 py-2.5">Balance</th>}
+                  {compactLayout && hasBookingCounts && <><th className="px-3 py-2.5">Appointments</th><th className="px-3 py-2.5">Consultations</th></>}
                   <th className="px-3 py-2.5">Status</th>
-                  {!branchAdmin && <th className="px-4 py-2.5">Note</th>}
+                  {!compactLayout && <th className="px-4 py-2.5">Note</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
                   <tr key={r.date} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`my-attendance-row-${r.date}`}>
                     <td className="px-4 py-3 text-sm font-semibold leading-5 text-slate-800">{dayNumber(r.date)}</td>
-                    {!branchAdmin && <td className="px-3 py-3 text-xs leading-5 text-slate-500">{r.weekday}</td>}
+                    {!compactLayout && <td className="px-3 py-3 text-xs leading-5 text-slate-500">{r.weekday}</td>}
                     <td className="px-3 py-3 text-center">
                       <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-[5px] border border-slate-200 bg-slate-50 px-1 text-[10px] font-bold text-slate-600">
                         {r.sessions}
@@ -618,22 +619,22 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
                     </td>
                     <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_in) || "—"}</td>
                     <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_out) || "—"}</td>
-                    {!branchAdmin && <td className="px-3 py-3 text-xs leading-5 text-slate-600">{hours(r.login_minutes)}</td>}
+                    {!compactLayout && <td className="px-3 py-3 text-xs leading-5 text-slate-600">{hours(r.login_minutes)}</td>}
                     <td className="px-3 py-3 text-xs leading-5 text-amber-600">
                       {r.break_minutes ? duration(r.break_minutes) : "—"}
                       {r.break_count > 1 && <span className="ml-1 text-[11px] text-slate-400">({r.break_count})</span>}
                     </td>
-                    {!branchAdmin && <td className="px-3 py-3 text-xs font-semibold leading-5 text-emerald-700">{hours(r.worked_minutes)}</td>}
-                    {!branchAdmin && <td className={`px-3 py-3 text-xs font-semibold leading-5 ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {!compactLayout && <td className="px-3 py-3 text-xs font-semibold leading-5 text-emerald-700">{hours(r.worked_minutes)}</td>}
+                    {!compactLayout && <td className={`px-3 py-3 text-xs font-semibold leading-5 ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
                       {signedHours(r.balance_minutes)}
                     </td>}
-                    {branchAdmin && <><td className="px-3 py-3 text-xs">{r.appointments ?? 0}</td><td className="px-3 py-3 text-xs">{r.consultations ?? 0}</td></>}
+                    {compactLayout && hasBookingCounts && <><td className="px-3 py-3 text-xs">{r.appointments ?? 0}</td><td className="px-3 py-3 text-xs">{r.consultations ?? 0}</td></>}
                     <td className="px-3 py-3"><StatusChip row={r} /></td>
                     {/* A short day with an approved permission on it is a short day on
                         purpose, and this column is where a day says why. The permission
                         leads: it is the answer to the question the balance beside it
                         raises. */}
-                    {!branchAdmin && <td className="max-w-[16rem] truncate px-4 py-3 text-xs leading-5 text-slate-400" title={[r.permission ? `Permission ${r.permission.from}–${r.permission.to}${r.permission.reason ? `: ${r.permission.reason}` : ""}` : "", r.note].filter(Boolean).join(" · ")}>
+                    {!compactLayout && <td className="max-w-[16rem] truncate px-4 py-3 text-xs leading-5 text-slate-400" title={[r.permission ? `Permission ${r.permission.from}–${r.permission.to}${r.permission.reason ? `: ${r.permission.reason}` : ""}` : "", r.note].filter(Boolean).join(" · ")}>
                       {r.permission && (
                         <span className="mr-1.5 whitespace-nowrap rounded-[5px] border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-700" data-testid={`my-attendance-permission-${r.date}`}>
                           {duration(r.permission.minutes)} permission
@@ -654,7 +655,9 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
 
 // `view`: "all" draws the whole month on one screen (desktop). On a phone the history is a
 // screen of its own behind a View History button, so it is "summary" or "history" there.
-const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
+const AttendanceTab = ({ view = "all", canRequest = true }) => {
+  // Every dashboard uses the compact attendance layout introduced for Branch Admin.
+  const compactLayout = true;
   const [month, setMonth] = useState(thisMonth);
   const [dateFilter, setDateFilter] = useState(null);
   const [timeOffOpen, setTimeOffOpen] = useState(false);
@@ -673,7 +676,7 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
     setLoading(true);
     setError("");
     const months = [month];
-    if (branchAdmin && filterFrom && filterTo) {
+    if (compactLayout && filterFrom && filterTo) {
       for (let m = filterFrom.slice(0, 7); m <= filterTo.slice(0, 7); m = shiftMonth(m, 1)) {
         if (!months.includes(m)) months.push(m);
       }
@@ -686,7 +689,7 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
       setData({ ...primary, filteredDays });
     }).catch((e) => { if (id === requestId.current) setError(e?.response?.data?.detail || "Could not load your attendance"); })
       .finally(() => { if (id === requestId.current) setLoading(false); });
-  }, [month, branchAdmin, filterFrom, filterTo]);
+  }, [month, compactLayout, filterFrom, filterTo]);
 
   useEffect(() => { load(); return () => { requestId.current += 1; }; }, [load]);
 
@@ -717,7 +720,7 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
 
   return (
     <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
-      {branchAdmin ? (
+      {compactLayout ? (
         <div className="flex flex-wrap items-center gap-2" data-testid="attendance-toolbar">
           <div className="inline-flex items-center gap-5 rounded-[4px] border border-slate-200 bg-white p-1">
             <button type="button" aria-label="Previous month" onClick={() => changeMonth(shiftMonth(month, -1))} className="rounded-[4px] border p-1.5"><ChevronLeft className="h-4 w-4" /></button>
@@ -725,13 +728,13 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
             <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
           </div>
           <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
-          <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>
-          <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
+          {canRequest && <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>}
+          {canRequest && <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
             <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-[4px] sm:rounded-[4px] [&_*]:!rounded-[4px]">
               <DialogHeader><DialogTitle>Request</DialogTitle></DialogHeader>
               <TimeOffTab compact />
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
       ) : phone ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white p-0.5 shadow-sm">
@@ -804,24 +807,24 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
           {view === "summary" && (
             <>
               {isThisMonth && <PhoneToday row={todayRow} today={data?.today} />}
-              <PhoneMonthCounts totals={data?.totals} branchAdmin={branchAdmin} />
-              {!branchAdmin && isThisMonth && <PhoneWorkload workload={data?.workload} />}
+              <PhoneMonthCounts totals={data?.totals} compactLayout={compactLayout} />
+              {!compactLayout && isThisMonth && <PhoneWorkload workload={data?.workload} />}
             </>
           )}
-          {view === "history" && !branchAdmin && <PhoneHours totals={data?.totals} today={data?.today} />}
+          {view === "history" && !compactLayout && <PhoneHours totals={data?.totals} today={data?.today} />}
           {view === "all" && (
             <>
               <MonthSummary
-                branchAdmin={branchAdmin}
+                compactLayout={compactLayout}
                 totals={data?.totals}
                 month={month}
                 today={data?.today}
-                todayStrip={isThisMonth && <TodayStrip hideHeading={branchAdmin} row={todayRow} standard={data?.standard} today={data?.today} />}
-                workload={!branchAdmin && isThisMonth && <TodayWorkload workload={data?.workload} />}
+                todayStrip={isThisMonth && <TodayStrip hideHeading={compactLayout} row={todayRow} standard={data?.standard} today={data?.today} />}
+                workload={!compactLayout && isThisMonth && <TodayWorkload workload={data?.workload} />}
               />
             </>
           )}
-          {view !== "summary" && <MonthTable rows={branchAdmin ? data?.filteredDays || [] : rows} branchAdmin={branchAdmin} />}
+          {view !== "summary" && <MonthTable rows={compactLayout ? data?.filteredDays || [] : rows} compactLayout={compactLayout} />}
           {/* Said once, at the foot, rather than as a banner over the figures: the hours
               above are real either way — they are what this person pressed — and only the
               marks (leave, absent, half day) are missing without the link. */}
@@ -1189,8 +1192,8 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, hideTimeOff, onBack }) =>
           )}
         </div>
         {open === "calendar" ? <MonthlyCalendarTab user={user} />
-          : open === "attendance" ? <AttendanceTab view="summary" branchAdmin={user?.role === "branch_admin"} />
-          : history ? <AttendanceTab view="history" branchAdmin={user?.role === "branch_admin"} />
+          : open === "attendance" ? <AttendanceTab view="summary" canRequest={user?.role !== "super_admin"} />
+          : history ? <AttendanceTab view="history" canRequest={user?.role !== "super_admin"} />
           : open === "timeoff" ? <TimeOffTab />
             : open === "security" ? <SecurityTab />
               : <ProfileTab roleLabel={roleLabel} />}
@@ -1348,7 +1351,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           Switching back re-reads, which is right for a page whose whole subject is what
           happened today. */}
       {tab === "calendar" ? <MonthlyCalendarTab user={user} />
-        : tab === "attendance" ? <AttendanceTab branchAdmin={user?.role === "branch_admin"} />
+        : tab === "attendance" ? <AttendanceTab canRequest={user?.role !== "super_admin"} />
         : tab === "timeoff" && !hideTimeOff ? <TimeOffTab />
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
             : <ProfileTab roleLabel={roleLabel} />}
