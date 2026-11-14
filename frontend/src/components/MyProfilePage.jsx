@@ -330,7 +330,7 @@ const TodayWorkload = ({ workload }) => {
 /** The month's counts, and then its hours. Two strips because they answer two questions —
  *  how many days, and how many hours — and one strip of twelve cards answers neither.
  *  `todayStrip` is Today's strip, set beside the counts on a wide screen. */
-const MonthSummary = ({ totals, month, today, todayStrip, workload }) => {
+const MonthSummary = ({ totals, month, today, todayStrip, workload, branchAdmin = false }) => {
   const behind = (totals?.balance_minutes || 0) < 0;
   // Only when there is some. A "0.0h" permission card on every month of every person who
   // has never asked for an hour off would be a card explaining a feature rather than a
@@ -345,18 +345,18 @@ const MonthSummary = ({ totals, month, today, todayStrip, workload }) => {
           icon={CalendarDays}
           testid="my-attendance-counts"
         >
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className={`grid gap-3 ${branchAdmin ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
             <StatTile label="Working days" value={totals?.working_days ?? 0} arrow="desk" color={HEX.slate} testid="my-attendance-working-days" />
             <StatTile label="Present days" value={totals?.present_days ?? 0} arrow="desk" color={HEX.sky} testid="my-attendance-present-days" />
             <StatTile label="Absent" value={totals?.absent_days ?? 0} arrow="desk" color={totals?.absent_days ? HEX.rose : HEX.slate} testid="my-attendance-absent-days" />
-            <StatTile label="On leave" value={totals?.leave_days ?? 0} arrow="desk" color={HEX.violet} testid="my-attendance-leave-days" />
+            {!branchAdmin && <StatTile label="On leave" value={totals?.leave_days ?? 0} arrow="desk" color={HEX.violet} testid="my-attendance-leave-days" />}
           </div>
         </DeskSection>
       </div>
 
       {workload}
 
-      <DeskSection
+      {!branchAdmin && <DeskSection
         title={<>Hours <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
         icon={Clock}
         testid="my-attendance-hours"
@@ -406,7 +406,7 @@ const MonthSummary = ({ totals, month, today, todayStrip, workload }) => {
             testid="my-attendance-balance"
           />
         </div>
-      </DeskSection>
+      </DeskSection>}
     </>
   );
 };
@@ -476,13 +476,13 @@ const PhoneToday = ({ row, today }) => {
   );
 };
 
-const PhoneMonthCounts = ({ totals }) => (
+const PhoneMonthCounts = ({ totals, branchAdmin = false }) => (
   <PhoneCard title="This Month" icon={CalendarDays} testid="my-attendance-counts">
-    <div className="grid grid-cols-4 gap-1.5">
+    <div className={`grid gap-1.5 ${branchAdmin ? "grid-cols-3" : "grid-cols-4"}`}>
       <PhoneStat icon={CalendarDays} tone="bg-sky-100 text-sky-600" label="Working days" value={totals?.working_days ?? 0} className="bg-sky-50/70" testid="my-attendance-working-days" />
       <PhoneStat icon={UserRound} tone="bg-emerald-100 text-emerald-600" label="Present days" value={totals?.present_days ?? 0} className="bg-emerald-50/70" testid="my-attendance-present-days" />
       <PhoneStat icon={X} tone="bg-rose-100 text-rose-600" label="Absent" value={totals?.absent_days ?? 0} className="bg-rose-50/70" testid="my-attendance-absent-days" />
-      <PhoneStat icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />
+      {!branchAdmin && <PhoneStat icon={BriefcaseBusiness} tone="bg-violet-100 text-violet-600" label="On leave" value={totals?.leave_days ?? 0} className="bg-violet-50/70" testid="my-attendance-leave-days" />}
     </div>
   </PhoneCard>
 );
@@ -554,7 +554,7 @@ const PhoneHours = ({ totals, today }) => {
  *  phone at any font size, and the usual answer — a horizontally scrolling table — hides
  *  the columns most worth reading (what was worked, and whether it was behind).
  */
-const MonthTable = ({ rows }) => {
+const MonthTable = ({ rows, branchAdmin = false }) => {
   if (!rows.length) {
     return (
       <p className="rounded-md border border-dashed border-slate-200 bg-white py-10 text-center text-sm text-slate-400 sm:rounded-xl" data-testid="my-attendance-empty">
@@ -601,15 +601,15 @@ const MonthTable = ({ rows }) => {
       </ul>
 
       {/* Desktop: a Card holding the slate-headed table the Branch Admin lists use. */}
-      <Card className="hidden overflow-hidden border-slate-200 shadow-sm sm:block">
+      <Card className={`hidden overflow-hidden border-slate-200 shadow-sm sm:block ${branchAdmin ? "rounded-[4px]" : ""}`}>
         <CardContent className="p-0">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          {!branchAdmin && (<div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <ClipboardList className="h-4 w-4 text-sky-600" />
               Day by day
             </h4>
             <span className="text-xs text-slate-400">{rows.length} day{rows.length === 1 ? "" : "s"}</span>
-          </div>
+          </div>)}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[60rem] text-left text-sm" data-testid="my-attendance-table">
               <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -674,7 +674,7 @@ const MonthTable = ({ rows }) => {
 
 // `view`: "all" draws the whole month on one screen (desktop). On a phone the history is a
 // screen of its own behind a View History button, so it is "summary" or "history" there.
-const AttendanceTab = ({ view = "all" }) => {
+const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
   const [month, setMonth] = useState(thisMonth);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -789,14 +789,15 @@ const AttendanceTab = ({ view = "all" }) => {
           {view === "summary" && (
             <>
               {isThisMonth && <PhoneToday row={todayRow} today={data?.today} />}
-              <PhoneMonthCounts totals={data?.totals} />
+              <PhoneMonthCounts totals={data?.totals} branchAdmin={branchAdmin} />
               {isThisMonth && <PhoneWorkload workload={data?.workload} />}
             </>
           )}
-          {view === "history" && <PhoneHours totals={data?.totals} today={data?.today} />}
+          {view === "history" && !branchAdmin && <PhoneHours totals={data?.totals} today={data?.today} />}
           {view === "all" && (
             <>
               <MonthSummary
+                branchAdmin={branchAdmin}
                 totals={data?.totals}
                 month={month}
                 today={data?.today}
@@ -805,7 +806,7 @@ const AttendanceTab = ({ view = "all" }) => {
               />
             </>
           )}
-          {view !== "summary" && <MonthTable rows={rows} />}
+          {view !== "summary" && <MonthTable rows={rows} branchAdmin={branchAdmin} />}
           {/* Said once, at the foot, rather than as a banner over the figures: the hours
               above are real either way — they are what this person pressed — and only the
               marks (leave, absent, half day) are missing without the link. */}
@@ -1285,8 +1286,8 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
           )}
         </div>
         {open === "calendar" ? <MonthlyCalendarTab user={user} />
-          : open === "attendance" ? <AttendanceTab view="summary" />
-          : history ? <AttendanceTab view="history" />
+          : open === "attendance" ? <AttendanceTab view="summary" branchAdmin={user?.role === "branch_admin"} />
+          : history ? <AttendanceTab view="history" branchAdmin={user?.role === "branch_admin"} />
           : open === "timeoff" ? <TimeOffTab />
             : open === "security" ? <SecurityTab />
               : <PhoneProfileList />}
@@ -1444,7 +1445,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           Switching back re-reads, which is right for a page whose whole subject is what
           happened today. */}
       {tab === "calendar" ? <MonthlyCalendarTab user={user} />
-        : tab === "attendance" ? <AttendanceTab />
+        : tab === "attendance" ? <AttendanceTab branchAdmin={user?.role === "branch_admin"} />
         : tab === "timeoff" && !hideTimeOff ? <TimeOffTab />
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
             : <ProfileTab roleLabel={roleLabel} />}
