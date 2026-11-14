@@ -749,10 +749,10 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
             <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
           </div>
           <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
-          <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Time Off</button>
+          <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>
           <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
             <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
-              <DialogHeader><DialogTitle>Time Off</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Request</DialogTitle></DialogHeader>
               <TimeOffTab />
             </DialogContent>
           </Dialog>
