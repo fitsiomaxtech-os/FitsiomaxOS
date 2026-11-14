@@ -13,6 +13,7 @@ import { StageTabBar } from "@/components/ui/stage-tab";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
+import { ConsultationFormDialog } from "@/components/branch/ConsultationFormDialog";
 import { PrescriptionPdf } from "@/components/PrescriptionPdf";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
@@ -2892,6 +2893,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [dateFilter, setDateFilter] = useState(null); // { from, to, label, key } | null — filters by appointment date
   const [search, setSearch] = useState("");
   const [selectedLead, setSelectedLead] = useState(null);
+  const [consultationFormLead, setConsultationFormLead] = useState(null);
   // What a row button asked for — `{ id, fee }` for a payment, `{ id, view }` for the
   // programme view a blocked one sends you to — held across the draft reset that selecting
   // its patient triggers. See openRowFee, which parks it, and the effect that picks it up.
@@ -2910,8 +2912,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Quit opens in it too, drawn the Fee Collected way (FEE_FLAT_STAGES).
   // Held rather than read off the stage live, so a fee taken or a physio assigned with the
   // popup still up does not resize the card under the hand that just pressed the button.
-  // At Consultation Booked the card is narrower still, 514 wide: all it holds is the booked
-  // slot and Reschedule / Lost, and the 1024px sheet around two buttons was mostly white.
+  // Consultation Booked uses a 550px card with automatic height for its form and booking.
   const [detailFrame, setDetailFrame] = useState({ id: null, compact: false, booked: false });
   const programmeFeeStyle = !isConsultant && FEE_FLAT_PILLS.includes(stageFilter);
   const flatFeeStyle = FEE_FLAT_STAGES.includes(selectedLead?.consultation_stage) || programmeFeeStyle;
@@ -8070,10 +8071,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               The narrow card (compactDetail) opens at 570 × 610 from sm up, on every tab;
               it still gives way to a smaller window, and only its body scrolls.
 
-              At Consultation Booked (bookedDetail) it is 514 wide, and on Overview its
-              content ends at about 235 tall; other tabs grow it up to the same 660 cap. */}
+              At Consultation Booked (bookedDetail) it is 550 wide with automatic height;
+              other tabs grow it up to the same 660 cap. */}
           <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5 ${bookedDetail
-            ? "max-w-[514px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
+            ? "max-w-[550px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
             : compactDetail
             ? "max-w-[570px] sm:h-[min(610px,calc(100dvh-1rem))] sm:max-h-none"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
@@ -11176,6 +11177,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         ? `${selectedLead.appointment_date}${selectedLead.appointment_time ? ` at ${selectedLead.appointment_time}` : ""}`
                         : null;
                     return (
+                      <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3" data-testid="cons-consultation-forms">
+                        <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><ClipboardList className="h-4 w-4 text-sky-600" />Consultation Forms</p>
+                        <Button size="sm" className="bg-sky-600 text-xs text-white hover:bg-sky-700" onClick={() => setConsultationFormLead(selectedLead)} data-testid="cons-fill-details">Fill Details</Button>
+                      </div>
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="cons-stage-panel-followup">
                         <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-700">
                           <Bell className="h-3.5 w-3.5" /> Consultation Booked
@@ -11201,6 +11207,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </Button>
                           {ExitButton}
                         </div>
+                      </div>
                       </div>
                     );
                   }
@@ -15554,6 +15561,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             )}
           </div>
         </div>
+      )}
+
+      {consultationFormLead && (
+        <ConsultationFormDialog
+          branchId={consultationFormLead.branch_id || branchId}
+          initialLead={consultationFormLead}
+          onClose={() => setConsultationFormLead(null)}
+        />
       )}
 
       {/* Payment receipt — the acknowledgement the client is handed. Rendered here rather

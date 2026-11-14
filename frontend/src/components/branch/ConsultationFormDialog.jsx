@@ -132,15 +132,26 @@ const RequestPanel = ({ busy, onSend, onClose }) => {
 
 const iconBtn = "rounded p-1.5 text-slate-400 transition hover:bg-sky-50 hover:text-sky-700";
 
-export const ConsultationFormDialog = ({ branchId, onClose }) => {
-  const [view, setView] = useState("list"); // "list" | "form"
+export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }) => {
+  const [initialForm] = useState(() => initialLead ? {
+    ...EMPTY_FORM,
+    name: initialLead.name || "",
+    age: String(initialLead.age ?? ""),
+    sex: initialLead.gender || "",
+    contact_no: initialLead.phone || "",
+    mail_id: initialLead.email || "",
+    nature_of_job: initialLead.occupation || "",
+    place: [initialLead.city, initialLead.state].filter(Boolean).join(", "),
+    date: todayIso(),
+  } : EMPTY_FORM);
+  const [view, setView] = useState(initialLead ? "form" : "list"); // "list" | "form"
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [q, setQ] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [meta, setMeta] = useState(null); // the open form's client_status and stamps
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saved, setSaved] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(initialForm);
+  const [saved, setSaved] = useState(initialForm);
   const [formLoading, setFormLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [homeBranch, setHomeBranch] = useState("");
@@ -153,10 +164,18 @@ export const ConsultationFormDialog = ({ branchId, onClose }) => {
   useEffect(() => {
     let live = true;
     getBranches()
-      .then((list) => { if (live) setHomeBranch(paperBranch((list || []).find((b) => b.id === branchId)?.name)); })
+      .then((list) => {
+        if (!live) return;
+        const branch = paperBranch((list || []).find((b) => b.id === branchId)?.name);
+        setHomeBranch(branch);
+        if (initialLead) {
+          setForm((current) => current.branch ? current : { ...current, branch });
+          setSaved((current) => current === initialForm ? { ...current, branch } : current);
+        }
+      })
       .catch(() => {});
     return () => { live = false; };
-  }, [branchId]);
+  }, [branchId, initialLead, initialForm]);
 
   const load = useCallback(async (term) => {
     setListLoading(true);
