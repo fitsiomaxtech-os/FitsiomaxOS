@@ -29,6 +29,7 @@ const ResetPasswordPage = lazyWithRetry(() => import("@/pages/ResetPasswordPage"
 const PatientPortalPage = lazyWithRetry(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })));
 const TestimonialsPage = lazyWithRetry(() => import("@/pages/TestimonialsPage").then((m) => ({ default: m.TestimonialsPage })));
 const LegalPage = lazyWithRetry(() => import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage })));
+const ClientConsultationFormPage = lazyWithRetry(() => import("@/pages/ClientConsultationFormPage").then((m) => ({ default: m.ClientConsultationFormPage })));
 
 /**
  * What a route shows while its chunk is on the wire.
@@ -125,6 +126,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/portal" element={<PatientPortalPage />} />
           <Route path="/testimonials" element={<TestimonialsPage />} />
+          {/* The patient's own Consultation Form link (Branch Admin > Settings > Consultation Form). */}
+          <Route path="/consult-form/:token" element={<ClientConsultationFormPage />} />
           {/* Public whether signed in or not: Google sign-in and Meta lead forms both need a
               link anybody can open. */}
           <Route path="/terms" element={<LegalPage kind="terms" />} />

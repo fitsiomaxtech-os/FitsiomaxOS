@@ -285,6 +285,10 @@ export const getConsultationForm = async (branchId, id) => (await api.get(`/bran
 export const createConsultationForm = async (branchId, fields) => (await api.post(`/branches/${branchId}/consultation-forms`, { fields })).data;
 export const updateConsultationForm = async (branchId, id, fields) => (await api.put(`/branches/${branchId}/consultation-forms/${id}`, { fields })).data;
 export const deleteConsultationForm = async (branchId, id) => (await api.delete(`/branches/${branchId}/consultation-forms/${id}`)).data;
+// The patient's link: a blank form sent to fill, or an existing one opened to them again.
+export const requestConsultationForm = async (branchId, fields) => (await api.post(`/branches/${branchId}/consultation-forms/request`, { fields })).data;
+export const shareConsultationForm = async (branchId, id) => (await api.post(`/branches/${branchId}/consultation-forms/${id}/share`)).data;
+export const consultationFormLink = (token) => `${window.location.origin}/consult-form/${token}`;
 // `mine` narrows the board to the consultations booked to the caller — what My
 // Consultation needs and what Operations, reading a whole branch, must not send.
 // `headChief` narrows it to the consultations booked to a Super Admin instead — Branch
