@@ -36,7 +36,7 @@ permission notes the hours on a day still worked. This adds a door, not a second
 """
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -396,6 +396,24 @@ async def _today_workload(user: V3UserOut, on: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+async def _branch_daily_workload(branch_id: str, first: str, last: str) -> Dict[str, dict]:
+    """Daily booking counts for this branch, excluding cancelled bookings."""
+    counts: Dict[str, dict] = {}
+    if not branch_id:
+        return counts
+    query = {"branch_id": branch_id, "slot_time": {"$gte": first, "$lt": (date.fromisoformat(last) + timedelta(days=1)).isoformat()},
+             "status": {"$ne": "cancelled"}}
+    for collection in ("appointments", "sessions", "rehab_sessions"):
+        records = await v3_col(collection).find(query, {"_id": 0, "slot_time": 1, "appt_kind": 1}).to_list(None)
+        for record in records:
+            day = str(record.get("slot_time") or "")[:10]
+            row = counts.setdefault(day, {"appointments": 0, "consultations": 0})
+            row["appointments"] += 1
+            if collection == "appointments" and record.get("appt_kind") != "diet":
+                row["consultations"] += 1
+    return counts
+
+
 @router.get("/attendance")
 async def my_attendance(
     month: Optional[str] = Query(None),
@@ -456,6 +474,11 @@ async def my_attendance(
         _row(d, clock_by.get(d), marks.get(d) or {}, now_at, rules, today, bool(employee_id))
         for d in shown
     ]
+
+    if is_branch_admin_role(user.role):
+        daily_work = await _branch_daily_workload((user.branch_id or "").strip(), first, last)
+        for row in rows:
+            row.update(daily_work.get(row["date"], {"appointments": 0, "consultations": 0}))
 
     # Counted off the same rows the table draws, so a tile and the column under it cannot
     # disagree. The expected figure is the whole month; the balance is measured only

@@ -67,6 +67,8 @@ import { CLOCK_CHANGED_EVENT } from "@/components/ClockWidget";
 // The third tab, in its own file. Same reason HROpsTabs.jsx lives beside HRBoard.jsx: this
 // page is already six hundred lines of two tabs, and the one that writes is the one most
 // likely to be edited on its own.
+import { DateFilterPopover } from "@/components/DateFilterPopover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TimeOffTab } from "@/components/MyTimeOff";
 // And the fourth, split out for the same reason — it is the other tab that writes, and
 // what it writes is the login itself.
@@ -615,23 +617,24 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
               <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 <tr className="whitespace-nowrap">
                   <th className="px-4 py-2.5">Date</th>
-                  <th className="px-3 py-2.5">Day</th>
+                  {!branchAdmin && <th className="px-3 py-2.5">Day</th>}
                   <th className="px-3 py-2.5 text-center">Sessions</th>
                   <th className="px-3 py-2.5">Login</th>
                   <th className="px-3 py-2.5">Logout</th>
-                  <th className="px-3 py-2.5">On the clock</th>
+                  {!branchAdmin && <th className="px-3 py-2.5">On the clock</th>}
                   <th className="px-3 py-2.5">Break</th>
-                  <th className="px-3 py-2.5">Work hrs</th>
-                  <th className="px-3 py-2.5">Balance</th>
+                  {!branchAdmin && <th className="px-3 py-2.5">Work hrs</th>}
+                  {!branchAdmin && <th className="px-3 py-2.5">Balance</th>}
+                  {branchAdmin && <><th className="px-3 py-2.5">Appointments</th><th className="px-3 py-2.5">Consultations</th></>}
                   <th className="px-3 py-2.5">Status</th>
-                  <th className="px-4 py-2.5">Note</th>
+                  {!branchAdmin && <th className="px-4 py-2.5">Note</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
                   <tr key={r.date} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`my-attendance-row-${r.date}`}>
                     <td className="px-4 py-3 text-sm font-semibold leading-5 text-slate-800">{dayNumber(r.date)}</td>
-                    <td className="px-3 py-3 text-xs leading-5 text-slate-500">{r.weekday}</td>
+                    {!branchAdmin && <td className="px-3 py-3 text-xs leading-5 text-slate-500">{r.weekday}</td>}
                     <td className="px-3 py-3 text-center">
                       <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-[5px] border border-slate-200 bg-slate-50 px-1 text-[10px] font-bold text-slate-600">
                         {r.sessions}
@@ -639,28 +642,29 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
                     </td>
                     <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_in) || "—"}</td>
                     <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_out) || "—"}</td>
-                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{hours(r.login_minutes)}</td>
+                    {!branchAdmin && <td className="px-3 py-3 text-xs leading-5 text-slate-600">{hours(r.login_minutes)}</td>}
                     <td className="px-3 py-3 text-xs leading-5 text-amber-600">
                       {r.break_minutes ? duration(r.break_minutes) : "—"}
                       {r.break_count > 1 && <span className="ml-1 text-[11px] text-slate-400">({r.break_count})</span>}
                     </td>
-                    <td className="px-3 py-3 text-xs font-semibold leading-5 text-emerald-700">{hours(r.worked_minutes)}</td>
-                    <td className={`px-3 py-3 text-xs font-semibold leading-5 ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {!branchAdmin && <td className="px-3 py-3 text-xs font-semibold leading-5 text-emerald-700">{hours(r.worked_minutes)}</td>}
+                    {!branchAdmin && <td className={`px-3 py-3 text-xs font-semibold leading-5 ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
                       {signedHours(r.balance_minutes)}
-                    </td>
+                    </td>}
+                    {branchAdmin && <><td className="px-3 py-3 text-xs">{r.appointments ?? 0}</td><td className="px-3 py-3 text-xs">{r.consultations ?? 0}</td></>}
                     <td className="px-3 py-3"><StatusChip row={r} /></td>
                     {/* A short day with an approved permission on it is a short day on
                         purpose, and this column is where a day says why. The permission
                         leads: it is the answer to the question the balance beside it
                         raises. */}
-                    <td className="max-w-[16rem] truncate px-4 py-3 text-xs leading-5 text-slate-400" title={[r.permission ? `Permission ${r.permission.from}–${r.permission.to}${r.permission.reason ? `: ${r.permission.reason}` : ""}` : "", r.note].filter(Boolean).join(" · ")}>
+                    {!branchAdmin && <td className="max-w-[16rem] truncate px-4 py-3 text-xs leading-5 text-slate-400" title={[r.permission ? `Permission ${r.permission.from}–${r.permission.to}${r.permission.reason ? `: ${r.permission.reason}` : ""}` : "", r.note].filter(Boolean).join(" · ")}>
                       {r.permission && (
                         <span className="mr-1.5 whitespace-nowrap rounded-[5px] border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-700" data-testid={`my-attendance-permission-${r.date}`}>
                           {duration(r.permission.minutes)} permission
                         </span>
                       )}
                       {r.note || (r.permission ? "" : "—")}
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -676,20 +680,39 @@ const MonthTable = ({ rows, branchAdmin = false }) => {
 // screen of its own behind a View History button, so it is "summary" or "history" there.
 const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
   const [month, setMonth] = useState(thisMonth);
+  const [dateFilter, setDateFilter] = useState(null);
+  const [timeOffOpen, setTimeOffOpen] = useState(false);
+  const requestId = useRef(0);
+  const isoDate = (date) => date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : "";
+  const filterFrom = isoDate(dateFilter?.from);
+  const filterTo = isoDate(dateFilter?.to || dateFilter?.from);
+  const changeMonth = (next) => { setDateFilter(null); setMonth(next); };
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
+    const id = ++requestId.current;
     setLoading(true);
     setError("");
-    myAttendance(month)
-      .then(setData)
-      .catch((e) => setError(e?.response?.data?.detail || "Could not load your attendance"))
-      .finally(() => setLoading(false));
-  }, [month]);
+    const months = [month];
+    if (branchAdmin && filterFrom && filterTo) {
+      for (let m = filterFrom.slice(0, 7); m <= filterTo.slice(0, 7); m = shiftMonth(m, 1)) {
+        if (!months.includes(m)) months.push(m);
+      }
+    }
+    Promise.all(months.map((m) => myAttendance(m))).then((results) => {
+      if (id !== requestId.current) return;
+      const primary = results[0];
+      const filteredDays = filterFrom ? results.flatMap((r) => r.days || [])
+        .filter((r) => r.date >= filterFrom && r.date <= filterTo).sort((a, b) => b.date.localeCompare(a.date)) : primary.days;
+      setData({ ...primary, filteredDays });
+    }).catch((e) => { if (id === requestId.current) setError(e?.response?.data?.detail || "Could not load your attendance"); })
+      .finally(() => { if (id === requestId.current) setLoading(false); });
+  }, [month, branchAdmin, filterFrom, filterTo]);
 
-  useEffect(load, [load]);
+  useEffect(() => { load(); return () => { requestId.current += 1; }; }, [load]);
 
   // Clock In, Clock Out and the breaks are pressed in the header, not here, so the month is
   // read again after each press -- and when the tab is come back to -- instead of showing
@@ -718,7 +741,23 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
 
   return (
     <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
-      {phone ? (
+      {branchAdmin ? (
+        <div className="flex flex-wrap items-center gap-2" data-testid="attendance-toolbar">
+          <div className="inline-flex items-center gap-5 rounded-[4px] border border-slate-200 bg-white p-1">
+            <button type="button" aria-label="Previous month" onClick={() => changeMonth(shiftMonth(month, -1))} className="rounded-[4px] border p-1.5"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="text-sm font-semibold">{monthLabel(month)}</span>
+            <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+          <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
+          <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Time Off</button>
+          <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
+            <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+              <DialogHeader><DialogTitle>Time Off</DialogTitle></DialogHeader>
+              <TimeOffTab />
+            </DialogContent>
+          </Dialog>
+        </div>
+      ) : phone ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white p-0.5 shadow-sm">
           <button
             type="button"
@@ -782,7 +821,7 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
         </p>
       )}
 
-      {loading && !data ? (
+      {loading ? (
         <p className="py-16 text-center text-sm text-slate-400" data-testid="my-attendance-loading">Loading your month…</p>
       ) : (
         <>
@@ -790,7 +829,7 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
             <>
               {isThisMonth && <PhoneToday row={todayRow} today={data?.today} />}
               <PhoneMonthCounts totals={data?.totals} branchAdmin={branchAdmin} />
-              {isThisMonth && <PhoneWorkload workload={data?.workload} />}
+              {!branchAdmin && isThisMonth && <PhoneWorkload workload={data?.workload} />}
             </>
           )}
           {view === "history" && !branchAdmin && <PhoneHours totals={data?.totals} today={data?.today} />}
@@ -802,11 +841,11 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
                 month={month}
                 today={data?.today}
                 todayStrip={isThisMonth && <TodayStrip row={todayRow} standard={data?.standard} today={data?.today} />}
-                workload={isThisMonth && <TodayWorkload workload={data?.workload} />}
+                workload={!branchAdmin && isThisMonth && <TodayWorkload workload={data?.workload} />}
               />
             </>
           )}
-          {view !== "summary" && <MonthTable rows={rows} branchAdmin={branchAdmin} />}
+          {view !== "summary" && <MonthTable rows={branchAdmin ? data?.filteredDays || [] : rows} branchAdmin={branchAdmin} />}
           {/* Said once, at the foot, rather than as a banner over the figures: the hours
               above are real either way — they are what this person pressed — and only the
               marks (leave, absent, half day) are missing without the link. */}
@@ -1402,11 +1441,11 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
   const [tab, setTab] = useState("attendance");
   const phone = usePhone();
   // Super Admin has no one above them to ask for leave, so the tab is not offered.
-  const tabs = hideTimeOff ? TABS.filter((t) => t.key !== "timeoff") : TABS;
-  const phoneTabs = hideTimeOff ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
+  const tabs = hideTimeOff || user?.role === "branch_admin" ? TABS.filter((t) => t.key !== "timeoff") : TABS;
+  const phoneTabs = hideTimeOff || user?.role === "branch_admin" ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
 
   if (phoneMenu && phone) {
-    return <PhoneProfileMenu user={user} onLogout={onLogout} hideTimeOff={hideTimeOff || timeOffInHeader} onBack={keepBack || !phoneBar ? onBack : null} />;
+    return <PhoneProfileMenu user={user} onLogout={onLogout} hideTimeOff={hideTimeOff || timeOffInHeader || user?.role === "branch_admin"} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
 
   return (
