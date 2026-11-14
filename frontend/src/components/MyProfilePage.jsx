@@ -1012,7 +1012,68 @@ const PhotoActions = ({ person, photo, className = "" }) => (
   </div>
 );
 
-const ProfileTab = ({ roleLabel }) => {
+const PROFILE_SECTIONS = [
+  ["personal", "Personal"],
+  ["employment", "Employment"],
+  ["documents", "ID & Documents"],
+  ["address", "Address & Emergency"],
+  ["bank", "Bank Details"],
+];
+
+// Match the employee view dialog while keeping the profile in its existing page.
+const BranchProfileView = ({ data, roleLabel, photo }) => {
+  const [section, setSection] = useState("personal");
+  const account = data.account || {};
+  const rows = {
+    personal: [["Full Name", data.full_name], ["Email", data.email], ["Phone", displayPhone(data.phone)],
+      ["Date of Birth", prettyDate(data.dob)], ["Gender", titleCase(data.gender)],
+      ["Blood Group", data.blood_group], ["Marital Status", titleCase(data.marital_status)],
+      ["Father's Name", data.father_name], ["Mother's Name", data.mother_name]],
+    employment: [["Employee ID", data.employee_code || account.short_id], ["Role", roleLabel || titleCase(account.role)],
+      ["Designation", data.designation], ["Department", data.department], ["Branch", account.branch_name],
+      ["Works", [WORK_TYPES[data.work_type], SERVICES[data.service]].filter(Boolean).join(" \u00b7 ")],
+      ["Joining Date", prettyDate(data.joining_date)], ["Reporting To", data.reporting_to],
+      ["Status", titleCase(data.status)], ["Account Created", prettyDate(String(account.created_at || "").slice(0, 10))]],
+    documents: [["PAN", data.pan], ["Aadhaar", data.aadhar]],
+    address: [["Address", data.address], ["Emergency Contact", data.emergency_contact_name],
+      ["Emergency Phone", displayPhone(data.emergency_contact_phone)]],
+    bank: [["Bank Name", data.bank_name], ["Account Number", data.bank_account], ["IFSC", data.ifsc]],
+  };
+  return (
+    <section className="mx-auto w-full max-w-[720px] overflow-hidden rounded-[4px] border border-slate-200 bg-white shadow-sm" data-testid="branch-profile-view">
+      {photo.elements}
+      <header className="flex items-center gap-2 border-b border-slate-200 px-5 py-3">
+        <h2 className="min-w-0 break-words text-base font-semibold text-slate-900">{data.full_name || "My Profile"}</h2>
+        {data.status && <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${data.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{titleCase(data.status)}</span>}
+      </header>
+      {!data.linked && <p className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-xs text-amber-800">This login is not linked to an employee record. Ask HR to link it from Credentials.</p>}
+      <div className="flex min-h-[430px] flex-col sm:flex-row">
+        <nav aria-label="Profile sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:border-b-0 sm:border-r">
+          {PROFILE_SECTIONS.map(([key, label]) => (
+            <button type="button" key={key} onClick={() => setSection(key)} aria-current={section === key ? "page" : undefined}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${section === key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
+              data-testid={`branch-profile-section-${key}`}>{label}</button>
+          ))}
+        </nav>
+        <div className="min-w-0 flex-1 px-5 py-3" aria-label={PROFILE_SECTIONS.find(([key]) => key === section)[1]}>
+          {section === "personal" && <div className="mb-1 flex items-center gap-3 border-b border-slate-100 pb-3">
+            <PhotoAvatar person={data} size={40} photo={photo} />
+            <PhotoActions person={data} photo={photo} />
+          </div>}
+          {rows[section].map(([label, value]) => (
+            <div key={label} className="flex flex-col gap-1 border-b border-slate-100 py-1 last:border-0 sm:flex-row sm:items-start sm:gap-3">
+              <span className="shrink-0 text-xs text-slate-500 sm:w-36 sm:pt-2">{label}</span>
+              <span className="min-h-8 min-w-0 flex-1 whitespace-pre-wrap break-words rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-[7px] text-xs font-medium text-slate-800">{value || "\u2014"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <footer className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500">You can update your photo. For changes to your employee details, contact HR.</footer>
+    </section>
+  );
+};
+
+const ProfileTab = ({ roleLabel, branchAdmin = false }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1040,6 +1101,8 @@ const ProfileTab = ({ roleLabel }) => {
 
   const account = data?.account || {};
   const hasBank = data.bank_name || data.bank_account || data.ifsc;
+
+  if (branchAdmin) return <BranchProfileView data={data} roleLabel={roleLabel} photo={photo} />;
 
   return (
     <div className="space-y-4" data-testid="my-profile-profile-tab">
@@ -1331,7 +1394,7 @@ const PhoneProfileMenu = ({ user, onLogout, hideTimeOff, onBack }) => {
           : history ? <AttendanceTab view="history" branchAdmin={user?.role === "branch_admin"} />
           : open === "timeoff" ? <TimeOffTab />
             : open === "security" ? <SecurityTab />
-              : <PhoneProfileList />}
+              : user?.role === "branch_admin" ? <ProfileTab branchAdmin roleLabel="Branch Admin" /> : <PhoneProfileList />}
       </div>
     );
   }
@@ -1489,7 +1552,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
         : tab === "attendance" ? <AttendanceTab branchAdmin={user?.role === "branch_admin"} />
         : tab === "timeoff" && !hideTimeOff ? <TimeOffTab />
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
-            : <ProfileTab roleLabel={roleLabel} />}
+            : <ProfileTab roleLabel={roleLabel} branchAdmin={user?.role === "branch_admin"} />}
     </div>
   );
 };
