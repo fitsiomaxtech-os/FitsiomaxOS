@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarCheck, CalendarX, ChevronLeft, ChevronRight, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { getBranchMonthCalendar, setBranchDayStatus } from "@/lib/api";
 
@@ -26,7 +25,6 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [picked, setPicked] = useState([]);
-  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -42,7 +40,7 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
   }, [branchId, month]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPicked([]); setNote(""); }, [branchId, month]);
+  useEffect(() => { setPicked([]); }, [branchId, month]);
 
   const canEdit = !!data?.can_edit;
   const days = data?.days || [];
@@ -66,7 +64,7 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
     )) return;
     setSaving(true);
     try {
-      const res = await setBranchDayStatus(branchId, picked, status, status === "leave" ? note : undefined);
+      const res = await setBranchDayStatus(branchId, picked, status);
       if (status === "leave") {
         const parts = [`${label} marked Leave`];
         if (res?.slots_removed) parts.push(`${res.slots_removed} open slot${res.slots_removed === 1 ? "" : "s"} removed`);
@@ -77,7 +75,6 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
         toast.success(`${label} marked Working${staff ? ` · ${staff} staff available across their shift timings` : ""}`);
       }
       setPicked([]);
-      setNote("");
       await load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not update the calendar");
@@ -95,6 +92,18 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
           <Button size="sm" variant="outline" onClick={() => shiftMonth(1)} className="rounded-[4px]" data-testid="mcal-next"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex w-full flex-wrap items-center justify-center gap-2 text-xs sm:w-auto sm:justify-end">
+          {canEdit && picked.length > 0 && (
+            <div className="flex items-center gap-2" data-testid="mcal-actions">
+              <span className="whitespace-nowrap text-sm font-semibold text-slate-700">{picked.length} day{picked.length === 1 ? "" : "s"} selected</span>
+              <button type="button" onClick={() => setPicked([])} className="rounded-full p-1 text-slate-400 hover:bg-slate-100" title="Clear selection" data-testid="mcal-clear"><X className="h-4 w-4" /></button>
+              <Button size="sm" disabled={saving} onClick={() => apply("working")} className="rounded-[4px] bg-emerald-600 text-white hover:bg-emerald-700" data-testid="mcal-mark-working">
+                <CalendarCheck className="mr-1.5 h-4 w-4" />Working
+              </Button>
+              <Button size="sm" disabled={saving} onClick={() => apply("leave")} className="rounded-[4px] bg-rose-600 text-white hover:bg-rose-700" data-testid="mcal-mark-leave">
+                <CalendarX className="mr-1.5 h-4 w-4" />Leave
+              </Button>
+            </div>
+          )}
           {!canEdit && data && (
             <span className="inline-flex items-center gap-1 rounded-[4px] bg-slate-100 px-2.5 py-1.5 font-semibold text-slate-500"><Lock className="h-3 w-3" />View only</span>
           )}
@@ -158,24 +167,6 @@ export const BranchMonthlyCalendar = ({ branchId }) => {
       </div>
 
       {loading && <p className="text-center text-xs text-slate-400">Loading…</p>}
-
-      {canEdit && picked.length > 0 && (
-        <div className="sticky bottom-20 z-10 flex flex-col gap-2 rounded-[4px] border border-sky-200 bg-white p-3 shadow-lg sm:flex-row sm:items-center md:bottom-3" data-testid="mcal-actions">
-          <div className="flex items-center gap-2">
-            <span className="whitespace-nowrap text-sm font-semibold text-slate-700">{picked.length} day{picked.length === 1 ? "" : "s"} selected</span>
-            <button type="button" onClick={() => setPicked([])} className="rounded-full p-1 text-slate-400 hover:bg-slate-100" title="Clear selection" data-testid="mcal-clear"><X className="h-4 w-4" /></button>
-          </div>
-          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Leave reason (optional), e.g. Diwali" className="h-9 sm:flex-1" data-testid="mcal-note" />
-          <div className="flex gap-2">
-            <Button size="sm" disabled={saving} onClick={() => apply("working")} className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700" data-testid="mcal-mark-working">
-              <CalendarCheck className="mr-1.5 h-4 w-4" />Working
-            </Button>
-            <Button size="sm" disabled={saving} onClick={() => apply("leave")} className="flex-1 bg-rose-600 text-white hover:bg-rose-700" data-testid="mcal-mark-leave">
-              <CalendarX className="mr-1.5 h-4 w-4" />Leave
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
