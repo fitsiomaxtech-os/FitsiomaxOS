@@ -1528,7 +1528,6 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
   const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   // The phone toolbar's calendar, so the date dropdown's Custom can open it.
   const phoneCalendar = useRef(null);
-  const [modeFilter, setModeFilter] = useState(""); // "" = every mode, including none
   // The same shape Branch Leads keeps: { key, label, from, to } with Dates on the ends,
   // or null for no filter. The presets and the typed range both come from the one
   // control, so there is no From/To bar of this tab's own to keep in step with it.
@@ -1671,9 +1670,8 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
     if (q) {
       list = list.filter((r) => (r.name || "").toLowerCase().includes(q) || (r.phone || "").includes(q));
     }
-    if (modeFilter) list = list.filter((r) => r.payment_mode === modeFilter);
     return list;
-  }, [rows, card, search, dateFilter, modeFilter]);
+  }, [rows, card, search, dateFilter]);
 
   /**
    * The lines behind the Payment Done card: everyone who has handed something over.
@@ -2047,14 +2045,6 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                     testid="zumba-date-custom-phone"
                   />
                 </span>
-                <PhoneFilterSelect
-                  value={modeFilter || "all"}
-                  onChange={(v) => setModeFilter(v === "all" ? "" : v)}
-                  options={MODE_FILTERS.map(([key, text]) => [key || "all", text])}
-                  allValue="all"
-                  label="Payment mode"
-                  testid="zumba-mode-phone"
-                />
                 <Button
                   size="sm"
                   className="h-8 w-8 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
@@ -2108,24 +2098,6 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                   testid="zumba-date-custom"
                 />
               </span>
-            </div>
-            <span className="hidden h-6 w-px bg-slate-200 xl:block" aria-hidden="true" />
-            <div className="flex flex-wrap items-center gap-1.5" data-testid="zumba-mode-filter">
-              {MODE_FILTERS.map(([key, label]) => (
-                <button
-                  key={key || "all"}
-                  type="button"
-                  onClick={() => setModeFilter(key)}
-                  className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
-                    modeFilter === key
-                      ? "border-sky-600 bg-sky-600 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
-                  }`}
-                  data-testid={`zumba-mode-${key || "all"}`}
-                >
-                  {label}
-                </button>
-              ))}
             </div>
             <div className="ml-auto flex items-center gap-2">
               <Input
