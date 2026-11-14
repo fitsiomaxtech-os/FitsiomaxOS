@@ -305,11 +305,10 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
       {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
           on a 5px corner, matching the Fitness, Patients and Review strips. Each one
           filters the list below -- see CARD_FILTERS. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <SummaryCard label="Total Outstanding" value={fmt(totals.totalOutstanding)} sub={plural(totals.pendingClients, "client")} arrow color="#d97706" active={card === "all"} onClick={() => pickCard("all")} />
         <SummaryCard label="Overdue Amount" value={fmt(totals.overdue)} sub={plural(totals.overdueClients, "client")} arrow color="#e11d48" active={card === "overdue"} onClick={() => pickCard("overdue")} />
         <SummaryCard label="Due Today" value={fmt(totals.dueToday)} sub={plural(totals.dueTodayClients, "client")} arrow color="#0284c7" active={card === "due_today"} onClick={() => pickCard("due_today")} />
-        <SummaryCard label="Pending Clients" value={totals.pendingClients} sub="still owing something" arrow color="#7c3aed" active={card === "pending"} onClick={() => pickCard("pending")} />
       </div>
 
       <Card className={squareTable ? "rounded-[4px]" : ""} data-testid="accountant-manage-outstanding">
@@ -449,7 +448,7 @@ export const OutstandingAmountBoard = ({ rows, onView, onCollect, canCollect = (
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[64rem] text-left text-sm">
-                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
                     {/* One fact per column, every header and cell on a single line. */}
                     <tr className="whitespace-nowrap">
                       <th className="w-[4%] px-3 py-2.5">S.No</th>
