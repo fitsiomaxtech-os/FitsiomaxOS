@@ -88,7 +88,7 @@ const Tile = ({ label, value, sub, tone = "text-slate-800", testid }) => (
  * tab are somebody checking whether last week's request was decided, and a form in front
  * of that is a form in the way.
  */
-const RequestForm = ({ limits, today, busy, onSubmit, onCancel }) => {
+const RequestForm = ({ limits, today, busy, onSubmit, onCancel, compact = false }) => {
   const [kind, setKind] = useState("leave");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -146,7 +146,7 @@ const RequestForm = ({ limits, today, busy, onSubmit, onCancel }) => {
               <span className={`flex items-center gap-1.5 text-sm font-bold ${on ? "text-sky-700" : "text-slate-600"}`}>
                 <Icon className="h-4 w-4" />{k.label}
               </span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{k.blurb}</span>
+              {!compact && <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{k.blurb}</span>}
             </button>
           );
         })}
@@ -211,7 +211,7 @@ const RequestForm = ({ limits, today, busy, onSubmit, onCancel }) => {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={2}
-          placeholder="Whoever decides this is reading it cold — say what it's for."
+          placeholder={compact ? "Enter reason" : "Whoever decides this is reading it cold — say what it's for."}
           className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-1 focus:ring-sky-300"
           data-testid="my-timeoff-reason"
         />
@@ -223,9 +223,9 @@ const RequestForm = ({ limits, today, busy, onSubmit, onCancel }) => {
           {busy ? "Sending…" : "Send to HR"}
         </Button>
       </div>
-      <p className="mt-2 text-center text-[11px] text-slate-500">
+      {!compact && <p className="mt-2 text-center text-[11px] text-slate-500">
         {today ? `Today is ${prettyDate(today)}. ` : ""}HR decides this — nothing is booked until they do.
-      </p>
+      </p>}
     </div>
   );
 };
@@ -280,7 +280,7 @@ const RequestRow = ({ row, onWithdraw }) => {
   );
 };
 
-export const TimeOffTab = () => {
+export const TimeOffTab = ({ compact = false }) => {
   const [year, setYear] = useState(thisYear);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -354,13 +354,14 @@ export const TimeOffTab = () => {
           counting it here would tell somebody they had spent days they may still be
           refused. */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Tile label="Leave taken" value={`${taken.leave_days || 0}d`} sub="Approved" tone="text-sky-600" testid="my-timeoff-leave-days" />
-        <Tile label="Permission" value={duration(taken.permission_minutes || 0)} sub={`${taken.permission_count || 0} times`} tone="text-violet-600" testid="my-timeoff-perm" />
-        <Tile label="Waiting" value={counts.pending || 0} sub="With HR" tone={counts.pending ? "text-amber-600" : "text-slate-400"} testid="my-timeoff-pending" />
+        <Tile label="Leave taken" value={`${taken.leave_days || 0}d`} sub={compact ? null : "Approved"} tone="text-sky-600" testid="my-timeoff-leave-days" />
+        <Tile label="Permission" value={duration(taken.permission_minutes || 0)} sub={compact ? null : `${taken.permission_count || 0} times`} tone="text-violet-600" testid="my-timeoff-perm" />
+        <Tile label="Waiting" value={counts.pending || 0} sub={compact ? null : "With HR"} tone={counts.pending ? "text-amber-600" : "text-slate-400"} testid="my-timeoff-pending" />
       </div>
 
       {asking ? (
         <RequestForm
+          compact={compact}
           limits={data?.permission_limits}
           today={data?.today}
           busy={busy}
@@ -369,18 +370,18 @@ export const TimeOffTab = () => {
         />
       ) : (
         <Button onClick={() => setAsking(true)} className="w-full bg-sky-600 text-white hover:bg-sky-700" data-testid="my-timeoff-new">
-          <Plus className="h-4 w-4" />Ask for leave or permission
+          <Plus className="h-4 w-4" />{compact ? "New request" : "Ask for leave or permission"}
         </Button>
       )}
 
       {loading && !data ? (
         <p className="py-8 text-center text-sm text-slate-400">Loading…</p>
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 ? (compact && asking ? null : (
         <p className="rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center text-sm text-slate-400" data-testid="my-timeoff-empty">
           <AlarmClock className="mx-auto mb-2 h-5 w-5 text-slate-300" />
-          Nothing asked for in {year}.
+          {compact ? "No requests" : `Nothing asked for in ${year}.`}
         </p>
-      ) : (
+      )) : (
         <ul className="space-y-2" data-testid="my-timeoff-list">
           {rows.map((r) => <RequestRow key={r.id} row={r} onWithdraw={withdraw} />)}
         </ul>

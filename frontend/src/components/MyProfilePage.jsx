@@ -751,9 +751,9 @@ const AttendanceTab = ({ view = "all", branchAdmin = false }) => {
           <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
           <button type="button" onClick={() => setTimeOffOpen(true)} className="ml-auto flex items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-sm font-medium" data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>
           <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
-            <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+            <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-[4px] sm:rounded-[4px] [&_*]:!rounded-[4px]">
               <DialogHeader><DialogTitle>Request</DialogTitle></DialogHeader>
-              <TimeOffTab />
+              <TimeOffTab compact />
             </DialogContent>
           </Dialog>
         </div>
