@@ -66,7 +66,6 @@ import { CLOCK_CHANGED_EVENT } from "@/components/ClockWidget";
 // page is already six hundred lines of two tabs, and the one that writes is the one most
 // likely to be edited on its own.
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TimeOffTab } from "@/components/MyTimeOff";
 // And the fourth, split out for the same reason — it is the other tab that writes, and
 // what it writes is the login itself.
@@ -87,8 +86,10 @@ import { displayPhone } from "@/lib/phone";
 const TABS = [
   // First: the month the branch is open, which is the frame the other tabs are read in.
   { key: "calendar", label: "Monthly Calendar", short: "Calendar", icon: CalendarDays },
+  // Leave and permission requests: what was the Attendance tab's Request popup, as a tab.
+  // Not offered to Super Admin, who has no one above them to ask.
+  { key: "timeoff", label: "Permission Request", short: "Request", icon: CalendarOff },
   { key: "attendance", label: "Attendance", short: "Hours", icon: Clock },
-  // Leave requests are available from Attendance's Request button.
   { key: "profile", label: "My Profile", short: "Profile", icon: UserRound },
   // Last, because it is the tab opened on purpose rather than in passing. The three before
   // it are read — what did I work, what did I ask for, what do they have on me — and this
@@ -652,12 +653,11 @@ const MonthTable = ({ rows, compactLayout = false }) => {
 
 // `view`: "all" draws the whole month on one screen (desktop). On a phone the history is a
 // screen of its own behind a View History button, so it is "summary" or "history" there.
-const AttendanceTab = ({ view = "all", canRequest = true, toolbarTarget = null }) => {
+const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
   // Every dashboard uses the compact attendance layout introduced for Branch Admin.
   const compactLayout = true;
   const [month, setMonth] = useState(thisMonth);
   const [dateFilter, setDateFilter] = useState(null);
-  const [timeOffOpen, setTimeOffOpen] = useState(false);
   const requestId = useRef(0);
   const isoDate = (date) => date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : "";
   const filterFrom = isoDate(dateFilter?.from);
@@ -723,13 +723,6 @@ const AttendanceTab = ({ view = "all", canRequest = true, toolbarTarget = null }
         <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
       </div>
       <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
-      {canRequest && <button type="button" onClick={() => setTimeOffOpen(true)} className={`${toolbarTarget ? "" : "ml-auto "}flex items-center gap-2 rounded-[4px] border border-orange-500 bg-orange-500 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-orange-600`} data-testid="attendance-time-off"><CalendarOff className="h-4 w-4" />Request</button>}
-      {canRequest && <Dialog open={timeOffOpen} onOpenChange={setTimeOffOpen}>
-        <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-[4px] sm:rounded-[4px] [&_*]:!rounded-[4px]">
-          <DialogHeader><DialogTitle>Request</DialogTitle></DialogHeader>
-          <TimeOffTab compact />
-        </DialogContent>
-      </Dialog>}
     </div>
   );
 
@@ -1152,6 +1145,7 @@ const MENU_ITEMS = [
   { key: "security", title: "Account", icon: KeyRound },
   { key: "attendance", title: "Attendance", icon: Clock },
   { key: "calendar", title: "Monthly Calendar", icon: CalendarDays },
+  { key: "timeoff", title: "Permission Request", icon: CalendarOff },
 ];
 
 /**
@@ -1160,11 +1154,11 @@ const MENU_ITEMS = [
  * across a phone is five glyphs to learn; a list says what each one is.
  */
 // `onBack` is for a host with no bottom bar to leave by: the menu then carries its own way out.
-const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack }) => {
+const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack, hideTimeOff = false }) => {
   const [open, setOpen] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
-  const items = MENU_ITEMS;
+  const items = hideTimeOff ? MENU_ITEMS.filter((i) => i.key !== "timeoff") : MENU_ITEMS;
 
   if (open) {
     const history = open === "attendance-history";
@@ -1194,8 +1188,9 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack }) => {
           )}
         </div>
         {open === "calendar" ? <MonthlyCalendarTab user={user} />
-          : open === "attendance" ? <AttendanceTab view="summary" canRequest={user?.role !== "super_admin"} />
-          : history ? <AttendanceTab view="history" canRequest={user?.role !== "super_admin"} />
+          : open === "attendance" ? <AttendanceTab view="summary" />
+          : history ? <AttendanceTab view="history" />
+          : open === "timeoff" && !hideTimeOff ? <TimeOffTab compact />
             : open === "security" ? <SecurityTab />
               : <ProfileTab roleLabel={roleLabel} />}
       </div>
@@ -1282,7 +1277,7 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack }) => {
 
 // ---------- the page ----------
 
-// Hosts with a phone bar show the four profile sections as icons.
+// Hosts with a phone bar show the profile sections as icons.
 const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: "icon" }));
 
 /**
@@ -1299,14 +1294,20 @@ const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: "icon" }));
 // `keepBack` keeps Back on a phone with the one-row bar, for a host with no bottom bar to
 // leave by (BDE, Accountant open this from the header).
 // `phoneMenu` swaps the tabs for PhoneProfileMenu below md, for every host.
-export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true }) => {
+// `hideTimeOff` drops Permission Request (Super Admin). `timeOffInHeader` is for a host
+// whose phone header already carries Time Off as its own button (Physio, Consultant): the
+// phone menu then leaves the row out, so it is not in two places. The desktop tabs keep it.
+export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false }) => {
   const [tab, setTab] = useState("attendance");
-  // The tab's own tools (month, counts, Request) are portalled into this slot, on the
-  // same row as the tabs.
+  // The tab's own tools (month, counts) are portalled into this slot, on the same row as
+  // the tabs.
   const [toolsEl, setToolsEl] = useState(null);
   const phone = usePhone();
+  const noTimeOff = hideTimeOff || user?.role === "super_admin";
+  const tabs = noTimeOff ? TABS.filter((t) => t.key !== "timeoff") : TABS;
+  const phoneTabs = noTimeOff ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
   if (phoneMenu && phone) {
-    return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} onBack={keepBack || !phoneBar ? onBack : null} />;
+    return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} hideTimeOff={noTimeOff || timeOffInHeader} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
 
   return (
@@ -1331,8 +1332,8 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             pushed right. On a window too narrow for both, the tools wrap below. */}
         <div className="w-full sm:w-auto sm:shrink-0" data-testid="my-profile-tabs-wrap">
           {phoneBar
-            ? <SegmentedTabs tabs={PHONE_BAR_TABS} value={tab} onChange={setTab} testid="my-profile-tabs" fit />
-            : <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} fit />}
+            ? <SegmentedTabs tabs={phoneTabs} value={tab} onChange={setTab} testid="my-profile-tabs" fit />
+            : <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} fit />}
         </div>
         <div ref={setToolsEl} className="flex flex-wrap items-center justify-end gap-2 empty:hidden sm:ml-auto" data-testid="my-profile-tab-tools" />
       </div>
@@ -1342,7 +1343,8 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           Switching back re-reads, which is right for a page whose whole subject is what
           happened today. */}
       {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
-        : tab === "attendance" ? <AttendanceTab canRequest={user?.role !== "super_admin"} toolbarTarget={toolsEl} />
+        : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
+        : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><TimeOffTab compact /></div>
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
             : <ProfileTab roleLabel={roleLabel} />}
     </div>
