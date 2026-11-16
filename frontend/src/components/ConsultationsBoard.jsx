@@ -6525,20 +6525,34 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     if (room <= 0) { toast.error(`All ${daysToBook} ${waitToPayDays > 0 ? "paid " : ""}${dayNoun}s are already fixed — clear some first`); return; }
     // Open-ended rehab has no count to stop at, so it stops at the end of the month in view.
     const monthEnd = isoDate(pickerYear, pickerMonth, new Date(pickerYear, pickerMonth + 1, 0).getDate());
+    // A physio can publish different times on different days (half-hourly one day, on the
+    // hour the next). Where the chosen time isn't open, that day takes its nearest open
+    // time rather than being skipped, so the paid days always fill.
+    const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const want = toMin(time);
     const added = [];
+    let moved = 0;
     for (const d of Object.keys(physioSlotsByDate).sort()) {
       if (added.length >= room) break;
       if (d < startDate || fixedDays.has(d)) continue;
       if (openEndedRehab && d > monthEnd) break;
       if (skipSundays && new Date(`${d}T00:00:00`).getDay() === 0) continue;
-      const slot = `${d}T${time}`;
-      if (!physioSlotsByDate[d].includes(time) || slotFull(slot)) continue;
-      added.push(slot);
+      const open = physioSlotsByDate[d].filter((t) => !slotFull(`${d}T${t}`));
+      if (open.length === 0) continue;
+      const best = open.includes(time)
+        ? time
+        : open.reduce((a, b) => (Math.abs(toMin(b) - want) < Math.abs(toMin(a) - want) ? b : a));
+      if (best !== time) moved += 1;
+      added.push(`${d}T${best}`);
     }
-    if (added.length === 0) { toast.error(`${to12h(time)} is not open on any unfixed day from here`); return; }
+    if (added.length === 0) { toast.error(`No open day left from ${dayLabel(startDate)} to fill`); return; }
     setPickedSessionSlots([...pickedSessionSlots, ...added]);
     const short = openEndedRehab ? 0 : room - added.length;
-    toast.success(`${added.length} ${dayNoun}${added.length === 1 ? "" : "s"} fixed at ${to12h(time)}${short > 0 ? ` · ${short} still need a time (that hour isn't open on enough days)` : ""}`);
+    toast.success(
+      `${added.length} ${dayNoun}${added.length === 1 ? "" : "s"} fixed at ${to12h(time)}`
+      + (moved > 0 ? ` · ${moved} at the nearest open time` : "")
+      + (short > 0 ? ` · ${short} still need a day (no open days left)` : ""),
+    );
   };
 
   // Opening the picker for the physio this lead is already with pre-loads the sessions
