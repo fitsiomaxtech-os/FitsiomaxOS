@@ -420,7 +420,9 @@ const TicketPane = ({ client, ticket, onPickTicket, onMove, onSend, moving, send
  * above the thread. Merging them into one conversation would be the opposite mistake:
  * answering about the parking would close the complaint about the Physio.
  */
-export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false, developerAccess = false }) => {
+// `embedded` puts the desk inside a host (the header bell's Client Feedback tab) rather
+// than over the whole screen: it fills its parent and drops the back arrow.
+export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false, developerAccess = false, embedded = false }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState(null);
@@ -739,7 +741,7 @@ export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false,
   ];
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-slate-50" data-testid="feedback-board">
+    <div className={embedded ? "flex h-full min-h-0 flex-col bg-slate-50" : "fixed inset-0 z-[70] flex flex-col bg-slate-50"} data-testid="feedback-board">
       {/* A page of its own rather than a card laid over the board behind it. There can be
           dozens of these, each a complaint somebody wrote about their care, and working
           through them is the job for as long as it takes — not a glance at a dialog with
@@ -749,20 +751,24 @@ export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false,
           is a pixel the conversation does not get. */}
       <header className="shrink-0 border-b border-slate-200 bg-white">
         <div className="flex w-full items-center gap-3 px-4 py-3 sm:px-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
-            aria-label="Back"
-            data-testid="feedback-close"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
-            <Bell className="h-5 w-5 text-amber-600" />
-          </div>
+          {!embedded && (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
+                aria-label="Back"
+                data-testid="feedback-close"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <Bell className="h-5 w-5 text-amber-600" />
+              </div>
+            </>
+          )}
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold text-slate-800">Patient Feedback</h2>
+            <h2 className="truncate text-base font-semibold text-slate-800">{embedded ? "Client Feedback" : "Patient Feedback"}</h2>
             <p className="truncate text-xs text-slate-400">What patients have written about their care</p>
           </div>
           {developerAccess && !devPassword && !askingPassword && (
@@ -905,6 +911,29 @@ export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false,
             {/* The five counts across one row, the full width of the screen. Four to a row
                 wrapped Resolved onto a line of its own, where a tile sitting alone above the
                 feedback reads as a heading for it rather than as the last of the five. */}
+            {/* Inside the bell's popup five tiles break their labels mid-word, so the same
+                five filters come as one row of chips there. */}
+            {embedded ? (
+              <div className="flex flex-wrap gap-1.5" data-testid="feedback-summary">
+                {[{ key: "all", label: "All", color: "#7c3aed" }, ...COLUMNS].map((c) => {
+                  const on = filter === c.key;
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => setFilter(c.key === "all" || on ? "all" : c.key)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${on ? "border-transparent text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                      style={on ? { backgroundColor: c.color } : undefined}
+                      aria-pressed={on}
+                      data-testid={`feedback-card-${c.key}`}
+                    >
+                      {c.label}
+                      <span className="font-bold" style={on ? undefined : { color: c.color }}>{counts[c.key]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5" data-testid="feedback-summary">
               <StatTile
                 label="All"
@@ -930,6 +959,7 @@ export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false,
                 />
               ))}
             </div>
+            )}
           </div>
 
           {/* The desk itself: who is waiting on the left, what they said on the right. Both

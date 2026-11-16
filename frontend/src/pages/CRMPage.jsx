@@ -57,7 +57,6 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { ClockWidget } from "@/components/ClockWidget";
 import { HeaderThemePicker } from "@/components/ThemeAppearance";
 import { useDevZone, openDevZone, lockDevZone } from "@/lib/devZone";
-import { SessionPaymentBell } from "@/components/SessionPaymentBell";
 import { NotificationBell } from "@/components/NotificationBell";
 import { displayPhone } from "@/lib/phone";
 
@@ -101,7 +100,6 @@ const MyConsultationBoard = lazyWithRetry(() => import("@/components/MyConsultat
 const OperationsBoard = lazyWithRetry(() => import("@/components/OperationsBoard").then((m) => ({ default: m.OperationsBoard })));
 const AccountantBoard = lazyWithRetry(() => import("@/components/finance/AccountantBoard").then((m) => ({ default: m.AccountantBoard })));
 const ZumbaMasterBoard = lazyWithRetry(() => import("@/components/ZumbaMasterBoard").then((m) => ({ default: m.ZumbaMasterBoard })));
-const FeedbackBoard = lazyWithRetry(() => import("@/components/branch/FeedbackBoard").then((m) => ({ default: m.FeedbackBoard })));
 // Everybody's own page — their month, and their record. Lazy like the boards it stands in
 // for: it is opened from the header a few times a month, and it is the only screen here
 // that every single role can reach, so bundling it would put it in front of every first
@@ -590,7 +588,6 @@ export const CRMPage = ({ auth, onLogout }) => {
   const [presalesView, setPresalesView] = useState("leads");
   // BDE's board tab, held here so the phone footer can switch it.
   const [bdTab, setBdTab] = useState("dashboard");
-  const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackUnread, setFeedbackUnread] = useState(0);
 
   const [superAdminView, setSuperAdminView] = useState(() => {
@@ -987,6 +984,22 @@ export const CRMPage = ({ auth, onLogout }) => {
   }, [canReadFeedback, role, auth?.user?.branch_id]);
   const showHumanResourceBoard = isHumanResourceRole(role);
 
+  // The header bell's tabs. Client Feedback: only a Branch Admin is pinned to a branch;
+  // Super Admin reads unscoped and narrows from inside. headOffice is said outright, since a
+  // consultant has no branch either. Developer Access is Super Admin's and the BDE's only --
+  // the two roles the server's developer-password gate lets through. Session payments: only
+  // Branch Admin and Super Admin may extend a due date.
+  const bellProps = {
+    feedback: canReadFeedback ? {
+      branchId: isBranchAdminRole(role) ? auth?.user?.branch_id : undefined,
+      headOffice: showSuperAdminBoard,
+      developerAccess: role === "super_admin" || role === "business_dev",
+    } : null,
+    feedbackUnread,
+    onFeedbackCounts: (data) => setFeedbackUnread(data?.unread || 0),
+    sessionPayments: canSeeSessionPayments ? { canDecide: showSuperAdminBoard || showBranchBoard } : null,
+  };
+
   // Phones: who reaches My Profile from their bottom bar rather than the header, and whose
   // Logout lives on My Profile's Security tab rather than in the header. BDE and Accountant
   // have no bottom bar, so they keep the header avatar and lose only the logout beside it.
@@ -1147,11 +1160,9 @@ export const CRMPage = ({ auth, onLogout }) => {
               <div className="flex shrink-0 items-center gap-1">
                 <ClockWidget />
                 <HeaderThemePicker userId={auth.user.id} />
-                {/* Clients whose sessions have run out owing money. canDecide, because a
-                    Branch Admin is one of the two roles that can act on it — the same
-                    prop the desktop header hands it below. */}
-                {canSeeSessionPayments && <SessionPaymentBell canDecide />}
-                <NotificationBell iconClass="h-5 w-5" feedbackUnread={feedbackUnread} onOpenFeedback={canReadFeedback ? () => setShowFeedback(true) : null} />
+                {/* One bell: Notifications, Client Feedback and Session payments due as
+                    tabs of the one popup -- the same props the desktop header hands it. */}
+                <NotificationBell iconClass="h-5 w-5" {...bellProps} />
                 {/* No account menu: the bottom bar's Profile opens My Profile, and Logout
                     sits on its Security tab. */}
               </div>
@@ -1284,17 +1295,11 @@ export const CRMPage = ({ auth, onLogout }) => {
                   <CalendarOff className="h-4 w-4" />
                 </button>
               )}
-              {/* One bell, one place, for everyone who has post to read. It used to sit in
-                  the header for Super Admin and down inside the tab strip on the Branch
-                  Admin board, so the same thing lived in two places and only one of them
-                  was where a person looks for it.
-
-                  Only the roles the endpoint answers for: a bell shown to a physio would
-                  count nothing and open a 403. */}
-              {canSeeSessionPayments && <SessionPaymentBell canDecide={showSuperAdminBoard || showBranchBoard} mobilePage={showSuperAdminBoard} />}
-              {/* The person's own notifications -- a leave or permission decided. Everyone.
-                  Client feedback rides on the same bell for the roles that read it. */}
-              <NotificationBell feedbackUnread={feedbackUnread} onOpenFeedback={canReadFeedback ? () => setShowFeedback(true) : null} />
+              {/* One bell, one place. The person's own notifications -- a leave or
+                  permission decided -- for everyone, with Client Feedback and Session
+                  payments due as tabs of the same popup, only for the roles whose
+                  endpoints answer them (a physio would get a 403). */}
+              <NotificationBell {...bellProps} />
               <button
                 type="button"
                 onClick={() => setShowProfile(true)}
@@ -1334,22 +1339,6 @@ export const CRMPage = ({ auth, onLogout }) => {
             arrives a beat after the click is better than a spinner in the middle
             of a page for something that has not opened yet. */}
         <Suspense fallback={null}>
-
-        {showFeedback && (
-          <FeedbackBoard
-            // Only a Branch Admin is pinned to a branch. Super Admin opens it unscoped and
-            // narrows from inside, which is what reading every branch's post requires.
-            branchId={isBranchAdminRole(role) ? auth?.user?.branch_id : undefined}
-            // Who is reading, said outright. A consultant has no branch either, so the
-            // board cannot work this out from the absence of one.
-            headOffice={showSuperAdminBoard}
-            // Developer Access is Super Admin's and the BDE's only -- the same two roles
-            // the server's developer-password gate lets through.
-            developerAccess={role === "super_admin" || role === "business_dev"}
-            onClose={() => setShowFeedback(false)}
-            onCounts={(data) => setFeedbackUnread(data?.unread || 0)}
-          />
-        )}
 
         {showPhysioBoard && showPhysioCalendar && (
           <PhysioCalendarPage onClose={() => setShowPhysioCalendar(false)} />

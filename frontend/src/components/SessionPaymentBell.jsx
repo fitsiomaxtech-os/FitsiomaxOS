@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, IndianRupee } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/sonner";
 import { approveSessionPaymentExtension, getSessionPaymentAlerts, rejectSessionPaymentExtension } from "@/lib/api";
 
@@ -9,47 +7,29 @@ import { approveSessionPaymentExtension, getSessionPaymentAlerts, rejectSessionP
 export const SESSION_PAYMENT_REFRESH_EVENT = "session-payment-alerts:refresh";
 
 const REFRESH_MS = 5 * 60 * 1000;
-const PHONE_QUERY = "(max-width: 767px)";
+const EMPTY = { alerts: [], due: 0, last_paid: 0, extension_requests: 0 };
 
-// Below md -- the same line the Super Admin bottom nav appears at.
-function useIsPhone() {
-  const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.matchMedia(PHONE_QUERY).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(PHONE_QUERY);
-    const onChange = () => setPhone(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return phone;
-}
 const rs = (n) => `Rs.${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 /**
- * The header's rupee bell: clients whose paid treatment sessions have been used up (or have
- * one left) while a Treatment Fee balance is still owing. Shown to Super Admin, Branch Admin
- * and BDE only; the backend narrows a Branch Admin's list to their own branch.
+ * Clients whose paid treatment sessions have been used up (or have one left) while a
+ * Treatment Fee balance is still owing. Super Admin, Branch Admin and BDE only; the backend
+ * narrows a Branch Admin's list to their own branch. `enabled` false asks nothing.
  *
- * Red with a count when anyone is past what they paid for, amber when it is only heads-ups.
- * The first load of a browser session also says so in a toast, since a bell is easy to miss.
- *
- * Past the paid sessions the next day is held until the balance is paid. `canDecide` (Branch
- * Admin, Super Admin) adds the way out: approve the client's request for more time, or grant
- * it at the desk, by picking the date the balance now falls due.
+ * `status` is "loading" until the first answer and "error" when the last fetch failed, so a
+ * list that could not be fetched never reads as "nobody owes anything". The first load of a
+ * browser session also says so in a toast, since a count on a bell is easy to miss.
  */
-export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
-  const [data, setData] = useState({ alerts: [], due: 0, last_paid: 0, extension_requests: 0 });
-  // "loading" until the first answer, "error" when the last fetch failed -- so a list that
-  // could not be fetched never reads as "nobody owes anything".
+export function useSessionPaymentAlerts(enabled) {
+  const [data, setData] = useState(EMPTY);
   const [status, setStatus] = useState("loading");
-  const [open, setOpen] = useState(false);
-  const isPhone = useIsPhone();
-  const asPage = mobilePage && isPhone;
   const announced = useRef(false);
 
   const load = useCallback(() => {
+    if (!enabled) return;
     getSessionPaymentAlerts()
       .then((res) => {
-        const next = res || { alerts: [], due: 0, last_paid: 0, extension_requests: 0 };
+        const next = res || EMPTY;
         setData(next);
         setStatus("ok");
         if (announced.current) return;
@@ -57,17 +37,19 @@ export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
         let seen = false;
         try { seen = sessionStorage.getItem("session-payment-alerts-announced") === "1"; } catch { /* private window */ }
         if (!seen && next.due > 0) {
+          // Keyed: the phone header and the desktop header can both be mounted.
           toast.warning(
             `${next.due} client${next.due === 1 ? " has" : "s have"} used up their paid sessions — balance due`,
-            { duration: 10000, description: "Open the ₹ bell at the top to see who." },
+            { id: "session-payment-due", duration: 10000, description: "Open the bell at the top, Session payments due." },
           );
           try { sessionStorage.setItem("session-payment-alerts-announced", "1"); } catch { /* ignore */ }
         }
       })
       .catch(() => setStatus("error"));
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     load();
     const timer = setInterval(load, REFRESH_MS);
     window.addEventListener(SESSION_PAYMENT_REFRESH_EVENT, load);
@@ -75,136 +57,70 @@ export function SessionPaymentBell({ canDecide = false, mobilePage = false }) {
       clearInterval(timer);
       window.removeEventListener(SESSION_PAYMENT_REFRESH_EVENT, load);
     };
-  }, [load]);
+  }, [enabled, load]);
 
-  const count = data.due || data.last_paid;
-  const urgent = data.due > 0;
+  const retry = useCallback(() => { setStatus("loading"); load(); }, [load]);
+  return { data, status, load, retry, count: data.due || data.last_paid, urgent: data.due > 0 };
+}
 
-  const trigger = (
-    <button
-      type="button"
-      className={`relative shrink-0 rounded-md p-2 transition ${
-        urgent ? "text-rose-600 hover:bg-rose-50" : count ? "text-amber-600 hover:bg-amber-50" : "text-slate-400 hover:bg-slate-50"
-      }`}
-      title={urgent ? `${data.due} client(s) with payment due` : "Session payments"}
-      aria-label={urgent ? `${data.due} client(s) with payment due` : "Session payments"}
-      data-testid="session-payment-bell"
-      {...(asPage ? { onClick: () => { setOpen(true); load(); } } : {})}
-    >
-      <IndianRupee className="h-4 w-4" />
-      {count > 0 && (
-        <span
-          className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${urgent ? "bg-rose-500" : "bg-amber-500"}`}
-          data-testid="session-payment-bell-count"
-        >
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
-    </button>
-  );
-
-  const intro = (
-    <>
-      <p className="text-[11px] text-slate-500">Clients who have used up, or are about to use up, their paid sessions with a balance still owing. Past the last paid session the next one is on hold until paid or extended.</p>
-      {data.extension_requests > 0 && (
-        <p className="mt-1 text-[11px] font-semibold text-violet-700" data-testid="session-payment-extension-count">
-          {data.extension_requests} request{data.extension_requests === 1 ? "" : "s"} for more time waiting
-        </p>
-      )}
-    </>
-  );
-
-  const alertRow = (a, card) => (
-    <div
-      key={a.lead_id}
-      className={card ? "rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm" : "border-b px-4 py-3 last:border-b-0"}
-      data-testid={`session-payment-alert-${a.lead_id}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">{a.name}</p>
-          <p className="truncate text-[10px] text-slate-400">
-            {[a.patient_number, a.branch_name, a.physio_name && `Physio: ${a.physio_name}`].filter(Boolean).join(" · ")}
-          </p>
-        </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-          a.level === "due" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"
-        }`}>
-          {a.level === "due" ? "Payment due" : "1 paid session left"}
-        </span>
-      </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-        <div><p className="text-slate-400">Completed</p><p className="font-semibold text-slate-800">{a.completed_sessions} / {a.total_sessions}</p></div>
-        <div><p className="text-slate-400">Paid for</p><p className="font-semibold text-slate-800">{a.paid_sessions}</p></div>
-        <div><p className="text-slate-400">Balance</p><p className="font-semibold text-rose-600">{rs(a.balance)}</p></div>
-      </div>
-      <p className="mt-2 text-[11px] leading-snug text-slate-600">{a.message}</p>
-      {a.balance_due_date && <p className="mt-1 text-[10px] text-slate-400">Balance installment due {a.balance_due_date}</p>}
-      <ExtensionRow alert={a} canDecide={canDecide} onDecided={load} />
-    </div>
-  );
-
-  const empty = data.alerts.length > 0 ? null : status === "loading" ? (
-    <p className="px-4 py-6 text-center text-xs text-slate-400">Loading…</p>
-  ) : status === "error" ? (
-    <div className="px-4 py-6 text-center text-xs" data-testid="session-payment-error">
-      <p className="text-rose-600">Could not load session payments.</p>
-      <button type="button" onClick={() => { setStatus("loading"); load(); }} className="mt-2 rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-700 hover:bg-slate-50">
-        Retry
-      </button>
-    </div>
-  ) : (
-    <p className="px-4 py-6 text-center text-xs text-slate-400">No client has run out of paid sessions.</p>
-  );
-
-  // On a phone, `mobilePage` hosts get the list as its own screen: a popover narrower than
-  // the phone cannot hold a card a client, and the page lets every one of them be read.
-  if (asPage) {
-    return (
-      <>
-        {trigger}
-        {open && (
-          <div className="fixed inset-0 z-[60] flex flex-col bg-slate-50" data-testid="session-payment-page">
-            <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-slate-100"
-                aria-label="Back"
-                data-testid="session-payment-page-back"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold text-slate-900">Session payments due</p>
-                <p className="text-[11px] text-slate-500">
-                  {data.alerts.length} client{data.alerts.length === 1 ? "" : "s"}
-                </p>
-              </div>
-            </div>
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-              <div className="px-1">{intro}</div>
-              {data.alerts.length === 0 ? empty : data.alerts.map((a) => alertRow(a, true))}
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
-
+/**
+ * The Session payments due list, as the bell's tab shows it. Past the paid sessions the next
+ * day is held until the balance is paid. `canDecide` (Branch Admin, Super Admin) adds the way
+ * out: approve the client's request for more time, or grant it at the desk.
+ */
+export function SessionPaymentList({ data, status, onReload, onRetry, canDecide = false }) {
+  const alerts = data.alerts || [];
   return (
-    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (v) load(); }}>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="end" className="w-[min(92vw,380px)] p-0" data-testid="session-payment-popover">
-        <div className="border-b px-4 py-3">
-          <p className="text-sm font-semibold text-slate-900">Session payments due</p>
-          {intro}
+    <div className="space-y-3" data-testid="session-payment-list">
+      <div>
+        <p className="text-xs text-slate-500">Clients who have used up, or are about to use up, their paid sessions with a balance still owing. Past the last paid session the next one is on hold until paid or extended.</p>
+        {data.extension_requests > 0 && (
+          <p className="mt-1 text-xs font-semibold text-violet-700" data-testid="session-payment-extension-count">
+            {data.extension_requests} request{data.extension_requests === 1 ? "" : "s"} for more time waiting
+          </p>
+        )}
+      </div>
+      {alerts.length > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {alerts.map((a) => (
+            <div key={a.lead_id} className="rounded-[4px] border border-slate-200 bg-white px-4 py-3" data-testid={`session-payment-alert-${a.lead_id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">{a.name}</p>
+                  <p className="truncate text-[10px] text-slate-400">
+                    {[a.patient_number, a.branch_name, a.physio_name && `Physio: ${a.physio_name}`].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  a.level === "due" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"
+                }`}>
+                  {a.level === "due" ? "Payment due" : "1 paid session left"}
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                <div><p className="text-slate-400">Completed</p><p className="font-semibold text-slate-800">{a.completed_sessions} / {a.total_sessions}</p></div>
+                <div><p className="text-slate-400">Paid for</p><p className="font-semibold text-slate-800">{a.paid_sessions}</p></div>
+                <div><p className="text-slate-400">Balance</p><p className="font-semibold text-rose-600">{rs(a.balance)}</p></div>
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-slate-600">{a.message}</p>
+              {a.balance_due_date && <p className="mt-1 text-[10px] text-slate-400">Balance installment due {a.balance_due_date}</p>}
+              <ExtensionRow alert={a} canDecide={canDecide} onDecided={onReload} />
+            </div>
+          ))}
         </div>
-        <div className="max-h-[60vh] overflow-y-auto">
-          {data.alerts.length === 0 ? empty : data.alerts.map((a) => alertRow(a, false))}
+      ) : status === "loading" ? (
+        <p className="py-10 text-center text-sm text-slate-400">Loading…</p>
+      ) : status === "error" ? (
+        <div className="py-10 text-center text-sm" data-testid="session-payment-error">
+          <p className="text-rose-600">Could not load session payments.</p>
+          <button type="button" onClick={onRetry} className="mt-2 rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            Retry
+          </button>
         </div>
-      </PopoverContent>
-    </Popover>
+      ) : (
+        <p className="py-10 text-center text-sm text-slate-400" data-testid="session-payment-empty">No client has run out of paid sessions.</p>
+      )}
+    </div>
   );
 }
 
