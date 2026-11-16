@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Activity, ChevronLeft, ClipboardCheck, Dumbbell, Music, Settings, Stethoscope, User, UserCog } from "lucide-react";
+import { Activity, ChevronLeft, ClipboardCheck, Dumbbell, Music, Settings, Stethoscope, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ZumbaPanel } from "@/components/branch/ZumbaPanel";
 import { FitnessPanel } from "@/components/branch/FitnessPanel";
 import { BranchReviewPanel } from "@/components/branch/BranchReviewPanel";
 import { ZumbaMastersPanel } from "@/components/branch/ZumbaMastersPanel";
 import { PatientsPortalPanel } from "@/components/branch/PatientsPortalPanel";
-import { BranchDetailPage } from "@/components/branch/BranchDetailPage";
 import { TeamPanel } from "@/components/branch/TeamPanel";
 import { PortalControlsButton } from "@/components/branch/PortalControlsButton";
 import { TabDotFor, useTabDot, useTabDotClick } from "@/components/ui/tab-dot";
@@ -15,7 +14,7 @@ import { useStageBack } from "@/components/ui/phone-back";
 
 /**
  * The branch's Activity Care tab: Zumba, Fitness and Review, which used to be top-level tabs
- * of their own, Patients and Manager, which used to be Management's, and the branch's two
+ * of their own, Patients, which used to be Management's, and the branch's two
  * teams, as sub-tabs under one.
  */
 const SUB_TABS = [
@@ -28,8 +27,6 @@ const SUB_TABS = [
   { key: "review", label: "Review", icon: ClipboardCheck },
   // The branch's registered patients, from the Client Portal.
   { key: "patients", label: "Patients", icon: User },
-  // The branch's details and its manager, read-only.
-  { key: "manager", label: "Manager", icon: UserCog },
   // Every consultant and every physio across the organisation, filtered by branch and gender.
   { key: "team_consultants", label: "Team Consultants", short: "Consultants", icon: Stethoscope },
   { key: "team_physio", label: "Team Physio", short: "Physio", icon: Activity },
@@ -143,7 +140,7 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
       )}
 
       {/* The same underlined strip as Records' sub-tabs, with Zumba's or Patients' gear at its end. On a
-          phone the tabs share the width, icon over a short label; seven are more than the
+          phone the tabs share the width, icon over a short label; six are more than the
           narrowest phones hold, so each keeps its own width and the strip scrolls as a last
           resort. From sm up they sit in a row with full labels, as Records' do. */}
       <div className="hidden items-center gap-2 border-b border-slate-200 sm:flex">
@@ -196,8 +193,6 @@ export const ActivityCarePanel = ({ branchId, withoutRoom = false }) => {
         <FitnessPanel branchId={branchId} onPhoneListChange={setFitnessListOpen} />
       ) : active === "patients" ? (
         <PatientsPortalPanel branchId={branchId} onPhoneListChange={setPatientsListOpen} />
-      ) : active === "manager" ? (
-        <BranchDetailPage branchId={branchId} readOnly />
       ) : active === "team_consultants" ? (
         <TeamPanel kind="consultants" branchId={branchId} toolbarSlot={toolbar} />
       ) : active === "team_physio" ? (
