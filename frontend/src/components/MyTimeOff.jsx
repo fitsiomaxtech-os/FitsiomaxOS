@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlarmClock, Ban, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Hourglass, Palmtree, Plus, Send, Trash2, X } from "lucide-react";
+import { AlarmClock, Ban, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Hourglass, Plus, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -38,7 +38,7 @@ const KINDS = [
   {
     key: "leave",
     label: "Leave",
-    icon: Palmtree,
+    icon: CalendarDays,
     blurb: "Whole days off. Approved, they go on the register as leave.",
     timed: false,
   },
