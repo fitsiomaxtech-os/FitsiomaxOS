@@ -111,7 +111,7 @@ export const StaffRequestsPanel = () => {
 
   return (
     <div className="space-y-3" data-testid="bd-permission-tab">
-      <div className="flex flex-wrap items-center gap-2 rounded-[4px] border border-slate-200 bg-white p-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-[4px] bg-white p-2" data-testid="bd-perm-toolbar">
         {STATUSES.map((s) => (
           <Pill key={s.key} active={status === s.key} onClick={() => setStatus(s.key)} testid={`bd-perm-status-${s.key}`}>
             {s.label}
