@@ -52,12 +52,13 @@ export const PrescriptionPdf = ({ lead, branch, actionsSlot }) => {
         ["Print", Printer, print, "print"],
         ["Share", Share2, () => sharePdf(pdf, filename, title), "share"],
       ].map(([label, Icon, onClick, id]) => (
-        // Icon and name, in the footer band's button style (Assign Physio / Add Due).
+        // Icon and name in violet, 4px corners. The button itself does not change on hover;
+        // only its icon does (grows on hover, dips on press).
         <Button key={id} type="button" size="sm" variant="outline"
-          className="border-slate-200 bg-white px-2 text-[11px] text-slate-700 shadow-sm hover:bg-sky-50 hover:text-sky-700 sm:px-3 sm:text-xs"
+          className="group rounded-[4px] border-slate-200 bg-white px-2 text-[11px] text-[#8b5cf6] shadow-sm hover:bg-white hover:text-[#8b5cf6] sm:px-3 sm:text-xs"
           disabled={!ready} onClick={onClick}
           title={label} aria-label={label} data-testid={`prescription-${id}`}>
-          <Icon className="mr-1 h-3.5 w-3.5" />
+          <Icon className="mr-1 h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-125 group-active:translate-y-0 group-active:scale-90" />
           {label}
         </Button>
       ))}
