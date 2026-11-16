@@ -66,7 +66,7 @@ import { CLOCK_CHANGED_EVENT } from "@/components/ClockWidget";
 // page is already six hundred lines of two tabs, and the one that writes is the one most
 // likely to be edited on its own.
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { TimeOffTab } from "@/components/MyTimeOff";
+import { PermissionRequestBoard, TimeOffTab } from "@/components/MyTimeOff";
 // And the fourth, split out for the same reason — it is the other tab that writes, and
 // what it writes is the login itself.
 import { SecurityTab } from "@/components/MySecurity";
@@ -1344,7 +1344,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           happened today. */}
       {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
         : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
-        : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><TimeOffTab compact /></div>
+        : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>
           : tab === "security" ? <SecurityTab onLogout={onLogout} />
             : <ProfileTab roleLabel={roleLabel} />}
     </div>
