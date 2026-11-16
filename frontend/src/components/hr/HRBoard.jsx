@@ -1952,6 +1952,12 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
   const [credEmail, setCredEmail] = useState(null);
   const [credPwd, setCredPwd] = useState("");
   const [credConfirm, setCredConfirm] = useState("");
+  // Read-only until somebody clicks into one of these. The browser fills a saved login
+  // into any username + password pair it finds, and here that was the signed-in Branch
+  // Admin's own sign-in, which Save would then have handed to the new employee.
+  // autoComplete alone is not enough: Chrome ignores "off" on a username box.
+  const [credArmed, setCredArmed] = useState(false);
+  const armCred = { readOnly: !credArmed, onFocus: () => setCredArmed(true) };
   const loginEmail = String(credEmail ?? (account?.email || form.email) ?? "").trim();
 
   // The picked photo is held here and only uploaded when the form is submitted — the same
@@ -2368,9 +2374,9 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                 <p className="py-3 text-xs text-slate-400" data-testid="hr-emp-login-loading">Loading login…</p>
               ) : (
                 <>
-                  <FormRow label="Username (Email)"><Input className="h-8" value={credEmail ?? (account?.email || form.email || "")} onChange={(e) => setCredEmail(e.target.value)} placeholder="user@company.com" data-testid="hr-emp-login-email" /></FormRow>
-                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} testid="hr-emp-login-pwd" /></FormRow>
-                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" testid="hr-emp-login-confirm" /></FormRow>
+                  <FormRow label="Username (Email)"><Input className="h-8" value={credEmail ?? (account?.email || form.email || "")} onChange={(e) => setCredEmail(e.target.value)} placeholder="user@company.com" autoComplete="off" name="hr-new-employee-login" {...armCred} data-testid="hr-emp-login-email" /></FormRow>
+                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} autoComplete="new-password" {...armCred} testid="hr-emp-login-pwd" /></FormRow>
+                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" {...armCred} testid="hr-emp-login-confirm" /></FormRow>
                   <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>
                   <FormRow label="Login Status"><Input className="h-8" value={account ? (account.is_active === false ? "Deactivated" : "Active") : login.failed ? "Could not load" : "No login yet"} disabled data-testid="hr-emp-login-status" /></FormRow>
                   <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
@@ -5027,12 +5033,15 @@ const FormRow = ({ label, children }) => (
 // A password box that can be read back. Whoever sets a password here has to pass it on
 // to the person it belongs to, so being unable to check what was typed is how an account
 // gets handed over with a credential nobody can log in with.
-const PasswordInput = ({ value, onChange, placeholder, testid, className = "" }) => {
+const PasswordInput = ({ value, onChange, placeholder, testid, className = "", autoComplete, readOnly, onFocus }) => {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
       <Input
         type={show ? "text" : "password"}
+        autoComplete={autoComplete}
+        readOnly={readOnly}
+        onFocus={onFocus}
         placeholder={placeholder}
         value={value}
         onChange={onChange}
