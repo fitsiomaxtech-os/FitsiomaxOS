@@ -6344,11 +6344,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return map;
   }, [physioCalendarData]);
 
-  const openSlotCount = useMemo(
-    () => (physioCalendarData?.slots || []).filter((s) => !slotFull(s)).length,
-    [physioCalendarData, slotFull],
-  );
-
   // Re-opening this for the physio the lead is already with: start from the sessions they
   // already hold rather than a blank picker, so a reschedule only means moving the few
   // that actually change.
@@ -14742,38 +14737,34 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       survive that background -- white on 15% white, text at 70% opacity --
                       so each is restated in slate against the page, with a rule taking over
                       the job the dark fill was doing of ending the header. */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-slate-900 sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-2.5">
-                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ring-1 ring-slate-200 sm:h-8 sm:w-8 sm:text-sm">
-                        {(physioCalendarData?.doctor_name || physioOptions.find((p) => p.id === physioPick)?.full_name || "P").charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-semibold leading-tight text-slate-900 sm:text-[15px]" data-testid="cons-slot-picker-physio">
-                          {selectedLead.name} <span className="font-normal text-slate-400">with</span>{" "}
-                          {physioCalendarData?.doctor_name || physioOptions.find((p) => p.id === physioPick)?.full_name || "Physio"}
-                        </p>
-                        <p className="text-[10px] leading-snug text-slate-500 sm:text-[11px]">
-                          {courseName}{totalSessionsNeeded ? ` · ${totalSessionsNeeded} ${dayNoun}s` : ""} ·
-                          {" "}{isRehabAssign ? "one a day" : "one session a day"} · {sessionMinutes} min each · {openSlotCount} slots open
-                        </p>
-                        {/* Where these days will be held, on the screen that fixes them.
-                            A link rather than plain text: whoever is booking can check the
-                            room opens before six days are committed to it. The patient is
-                            given the same address by the portal, so this is a check, not a
-                            copy to send. */}
-                        {pickedMeetLink && (
-                          <a
-                            href={pickedMeetLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-0.5 inline-flex max-w-full items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700 hover:bg-sky-100 sm:text-[10px]"
-                            data-testid="cons-slot-picker-meet-link"
-                          >
-                            <Video className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{pickedMeetLink.replace(/^https?:\/\//, "")}</span>
-                          </a>
-                        )}
-                      </div>
+                  {/* One row: patient with physio, the focused date and its legend, close. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 bg-white px-3 py-2 text-slate-900 sm:flex-nowrap sm:px-4 sm:py-2.5">
+                    <p className="min-w-0 truncate text-[13px] font-semibold leading-tight text-slate-900 sm:text-[15px]" data-testid="cons-slot-picker-physio">
+                      {selectedLead.name} <span className="font-normal text-slate-400">with</span>{" "}
+                      {physioCalendarData?.doctor_name || physioOptions.find((p) => p.id === physioPick)?.full_name || "Physio"}
+                    </p>
+                    {/* Where these days will be held: a link so the room can be checked
+                        before days are committed to it. */}
+                    {pickedMeetLink && (
+                      <a
+                        href={pickedMeetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-w-0 max-w-[14rem] shrink items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700 hover:bg-sky-100 sm:text-[10px]"
+                        data-testid="cons-slot-picker-meet-link"
+                      >
+                        <Video className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{pickedMeetLink.replace(/^https?:\/\//, "")}</span>
+                      </a>
+                    )}
+                    {pickerDate && (
+                      <span className="shrink-0 border-l border-slate-200 pl-3 text-[13px] font-bold text-slate-800 sm:text-[15px]" data-testid="cons-slot-picker-date">{longDate(pickerDate)}</span>
+                    )}
+                    <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2.5 text-[11px] font-semibold text-slate-400">
+                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-emerald-400 bg-white" /> Open</span>
+                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-600" /> Paid day</span>
+                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500" /> Unpaid day</span>
+                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" /> Booked</span>
                     </div>
                     <button onClick={() => setShowSlotPicker(false)} className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid="cons-slot-picker-close">
                       <X className="h-4 w-4" />
@@ -14929,16 +14920,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           </div>
                         ) : (
                           <>
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <h4 className="text-base font-bold text-slate-800" data-testid="cons-slot-picker-date">{longDate(pickerDate)}</h4>
-                              <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-semibold text-slate-400">
-                                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-emerald-400 bg-white" /> Open</span>
-                                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-600" /> Paid day</span>
-                                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500" /> Unpaid day</span>
-                                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" /> Booked</span>
-                              </div>
-                            </div>
-
                             {/* Bulk select: the same hour on every open day from this date
                                 on, instead of one click per day for a 28-day package. */}
                             {(physioSlotsByDate[pickerDate] || []).length > 0 && (
@@ -15148,35 +15129,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     </div>
                   )}
 
-                  {/* Stacked on a phone. On one line the two buttons take what they need
-                      and the note beside them is left a column barely a word wide. */}
-                  <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4 sm:py-2.5">
-                    <div className="text-[11px] leading-snug text-slate-500 sm:text-[12px]">
-                      <p className="font-bold text-slate-700">
-                        {allSessionsPicked
-                          ? `All ${totalSessionsNeeded} ${dayNoun}s are fixed${treatmentPlan.length > 0 ? ` · ${dayLabel(treatmentPlan[0].date)} to ${dayLabel(treatmentPlan[treatmentPlan.length - 1].date)}` : ""}.`
-                          : `${totalSessionsNeeded - sortedPickedSlots.length} more ${dayNoun}${totalSessionsNeeded - sortedPickedSlots.length === 1 ? "" : "s"} still need a date and time.`}
-                      </p>
-                      {sessionPayment.unpaid > 0 && (
-                        <p className="mt-1 font-bold text-rose-600" data-testid="cons-slot-picker-unpaid-note">
-                          Day {sessionPayment.paid + 1}–{sessionPayment.total} are booked against an unpaid balance of Rs.{sessionPayment.dueAmount}
-                          {sessionPayment.dueDate ? ` · due ${dayLabel(sessionPayment.dueDate)}` : ""}.
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Button variant="outline" className="h-8 flex-1 px-3 text-[12px] sm:flex-none" onClick={() => setShowSlotPicker(false)} data-testid="cons-slot-picker-back">
-                        Back
-                      </Button>
-                      <Button
-                        className="h-8 flex-[2] bg-emerald-600 px-3 text-[12px] hover:bg-emerald-700 sm:flex-none"
-                        onClick={submitPhysioAssign}
-                        disabled={assigningPhysio || !allSessionsPicked}
-                        data-testid="cons-slot-picker-submit"
-                      >
-                        {assigningPhysio ? "Assigning..." : `Assign & Book ${openEndedRehab ? sortedPickedSlots.length : totalSessionsNeeded} ${isRehabAssign ? "Rehab Days" : "Sessions"}`}
-                      </Button>
-                    </div>
+                  <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-3 py-2 sm:px-4 sm:py-2.5">
+                    <Button
+                      className="h-8 w-full bg-emerald-600 px-4 text-[12px] hover:bg-emerald-700 sm:w-auto"
+                      onClick={submitPhysioAssign}
+                      disabled={assigningPhysio || !allSessionsPicked}
+                      data-testid="cons-slot-picker-submit"
+                    >
+                      {assigningPhysio ? "Booking..." : "Book Slots"}
+                    </Button>
                   </div>
                 </div>
               </div>
