@@ -25,6 +25,7 @@ import { AlarmClock, Ban, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { duration, prettyTime } from "@/lib/clock";
 import { myRequests, raiseMyRequest, withdrawMyRequest } from "@/lib/api";
 
@@ -284,10 +285,7 @@ const RequestPopup = ({ onClose, ...formProps }) => createPortal(
       data-testid="my-timeoff-popup"
     >
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
-        <div className="min-w-0">
-          <h2 id="my-timeoff-popup-title" className="text-base font-semibold text-slate-800">New Request</h2>
-          <p className="text-xs text-slate-500">Leave or permission, sent to HR to approve.</p>
-        </div>
+        <h2 id="my-timeoff-popup-title" className="min-w-0 text-base font-semibold text-slate-800">New Request</h2>
         <button
           type="button"
           onClick={onClose}
@@ -298,7 +296,8 @@ const RequestPopup = ({ onClose, ...formProps }) => createPortal(
           <X className="h-4 w-4" />
         </button>
       </div>
-      <RequestForm popup onCancel={onClose} {...formProps} />
+      {/* compact: no blurbs under Leave / Permission, no footnote, "Enter reason". */}
+      <RequestForm popup compact onCancel={onClose} {...formProps} />
     </div>
   </div>,
   document.body,
@@ -489,11 +488,11 @@ const BoardTile = ({ label, value, sub, tone, testid }) => (
   <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center shadow-sm" data-testid={testid}>
     <span className="block truncate text-xs text-slate-600">{label}</span>
     <span className={`mt-1 block text-2xl font-bold leading-tight ${tone}`}>{value}</span>
-    <span className="mt-0.5 block truncate text-[11px] text-slate-500">{sub}</span>
+    {sub && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{sub}</span>}
   </div>
 );
 
-const selectCls = "h-9 rounded-md border border-slate-200 bg-white px-3 pr-8 text-sm font-medium text-slate-700 shadow-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-300";
+const MONTH_OPTIONS = MONTHS.map((m, i) => ({ value: String(i), label: m }));
 
 /** One request as a table row of the board. */
 const BoardRow = ({ row, onWithdraw }) => {
@@ -601,7 +600,6 @@ export const PermissionRequestBoard = () => {
 
   const monthStart = toIso(new Date(Number(year), month, 1));
   const monthEnd = toIso(new Date(Number(year), month + 1, 0));
-  const monthLabel = `${MONTHS[month]} ${year}`;
 
   const inMonth = useMemo(
     () => (data?.requests || []).filter((r) => r.from_date && r.from_date <= monthEnd && (r.to_date || r.from_date) >= monthStart),
@@ -635,7 +633,7 @@ export const PermissionRequestBoard = () => {
     <button
       type="button"
       onClick={() => setAsking(true)}
-      className={`inline-flex items-center gap-2 rounded-md bg-emerald-500 font-semibold text-white shadow-sm transition hover:bg-emerald-600 ${small ? "px-3.5 py-1.5 text-sm" : "px-4 py-2 text-sm"}`}
+      className={`inline-flex items-center gap-2 rounded-md border border-orange-500 bg-orange-500 font-semibold text-white shadow-sm transition hover:bg-orange-600 ${small ? "px-3.5 py-1.5 text-sm" : "px-4 py-2 text-sm"}`}
       data-testid={testid}
     >
       {!small && <Send className="h-4 w-4" />}New Request
@@ -646,22 +644,33 @@ export const PermissionRequestBoard = () => {
     <div className="space-y-4" data-testid="my-timeoff-board">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className={selectCls} aria-label="Month" data-testid="my-timeoff-month">
-            {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-          </select>
-          <select value={year} onChange={(e) => setYear(e.target.value)} className={selectCls} aria-label="Year" data-testid="my-timeoff-year">
-            {years.map((y) => <option key={y} value={String(y)}>{y}</option>)}
-          </select>
+          {/* The OS's own list, not the browser's blue one. */}
+          <ThemedSelect
+            value={String(month)}
+            onChange={(v) => setMonth(Number(v))}
+            options={MONTH_OPTIONS}
+            title="Month"
+            className="h-9 w-[140px] font-medium"
+            testid="my-timeoff-month"
+          />
+          <ThemedSelect
+            value={year}
+            onChange={setYear}
+            options={years.map((y) => String(y))}
+            title="Year"
+            className="h-9 w-[96px] font-medium"
+            testid="my-timeoff-year"
+          />
         </div>
         {newButton("my-timeoff-new")}
       </div>
 
       {/* Approved only for the two "taken" figures: a pending leave is not time off yet. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <BoardTile label="Leave Taken" value={`${leaveDays}d`} sub={monthLabel} tone="text-indigo-500" testid="my-timeoff-leave-days" />
-        <BoardTile label="Permission" value={duration(permissionMinutes)} sub={`${permissions.length} ${permissions.length === 1 ? "time" : "times"}`} tone="text-orange-500" testid="my-timeoff-perm" />
-        <BoardTile label="Waiting" value={counts.pending} sub="With HR" tone="text-rose-500" testid="my-timeoff-pending" />
-        <BoardTile label="Total Requests" value={inMonth.length} sub="This Month" tone="text-emerald-500" testid="my-timeoff-total" />
+        <BoardTile label="Leave Taken" value={`${leaveDays}d`} tone="text-indigo-500" testid="my-timeoff-leave-days" />
+        <BoardTile label="Permission" value={duration(permissionMinutes)} tone="text-orange-500" testid="my-timeoff-perm" />
+        <BoardTile label="Waiting" value={counts.pending} tone="text-rose-500" testid="my-timeoff-pending" />
+        <BoardTile label="Total Requests" value={inMonth.length} tone="text-emerald-500" testid="my-timeoff-total" />
       </div>
 
       <div className="flex flex-wrap gap-2" data-testid="my-timeoff-status-tabs">
@@ -703,7 +712,7 @@ export const PermissionRequestBoard = () => {
                 <tr>
                   <td colSpan={6} className="py-8 text-center" data-testid="my-timeoff-empty">
                     <CalendarDays className="mx-auto mb-2 h-10 w-10 text-slate-400" strokeWidth={1.5} />
-                    <p className="text-sm text-slate-600">No {tabLabel.toLowerCase()} requests in {monthLabel}</p>
+                    <p className="text-sm text-slate-600">No {tabLabel.toLowerCase()} requests</p>
                     {tab === "pending" && <div className="mt-3">{newButton("my-timeoff-empty-new", true)}</div>}
                   </td>
                 </tr>
