@@ -14769,7 +14769,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 bg-white px-3 py-2 text-slate-900 sm:flex-nowrap sm:px-4 sm:py-2.5">
                     <p className="min-w-0 truncate text-[13px] font-semibold leading-tight text-slate-900 sm:text-[15px]" data-testid="cons-slot-picker-physio">
                       {selectedLead.name} <span className="font-normal text-slate-400">with</span>{" "}
-                      {physioCalendarData?.doctor_name || physioOptions.find((p) => p.id === physioPick)?.full_name || "Physio"}
+                      <span className="text-[#8b5cf6]">{physioCalendarData?.doctor_name || physioOptions.find((p) => p.id === physioPick)?.full_name || "Physio"}</span>
                     </p>
                     {/* Where these days will be held: a link so the room can be checked
                         before days are committed to it. */}
