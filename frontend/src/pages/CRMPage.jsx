@@ -24,7 +24,6 @@ import {
   Users,
   Workflow,
   X,
-  Bell,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1152,26 +1151,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                     Branch Admin is one of the two roles that can act on it — the same
                     prop the desktop header hands it below. */}
                 {canSeeSessionPayments && <SessionPaymentBell canDecide />}
-                <NotificationBell iconClass="h-5 w-5" />
-                {canReadFeedback && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFeedback(true)}
-                    className="relative shrink-0 rounded-md p-2 text-slate-500 transition hover:bg-amber-50 hover:text-amber-600"
-                    aria-label={feedbackUnread > 0 ? `${feedbackUnread} new client feedback` : "Client feedback"}
-                    data-testid="branch-mobile-header-feedback"
-                  >
-                    <Bell className="h-5 w-5" />
-                    {feedbackUnread > 0 && (
-                      <span
-                        className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white"
-                        data-testid="branch-mobile-header-feedback-count"
-                      >
-                        {feedbackUnread > 99 ? "99+" : feedbackUnread}
-                      </span>
-                    )}
-                  </button>
-                )}
+                <NotificationBell iconClass="h-5 w-5" feedbackUnread={feedbackUnread} onOpenFeedback={canReadFeedback ? () => setShowFeedback(true) : null} />
                 {/* No account menu: the bottom bar's Profile opens My Profile, and Logout
                     sits on its Security tab. */}
               </div>
@@ -1312,28 +1292,9 @@ export const CRMPage = ({ auth, onLogout }) => {
                   Only the roles the endpoint answers for: a bell shown to a physio would
                   count nothing and open a 403. */}
               {canSeeSessionPayments && <SessionPaymentBell canDecide={showSuperAdminBoard || showBranchBoard} mobilePage={showSuperAdminBoard} />}
-              {/* The person's own notifications -- a leave or permission decided. Everyone. */}
-              <NotificationBell />
-              {canReadFeedback && (
-                <button
-                  type="button"
-                  onClick={() => setShowFeedback(true)}
-                  className="relative shrink-0 rounded-md p-2 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
-                  title={feedbackUnread > 0 ? `${feedbackUnread} new client feedback` : "Client feedback"}
-                  aria-label={feedbackUnread > 0 ? `${feedbackUnread} new client feedback` : "Client feedback"}
-                  data-testid="super-admin-feedback-bell"
-                >
-                  <Bell className="h-4 w-4" />
-                  {feedbackUnread > 0 && (
-                    <span
-                      className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white"
-                      data-testid="super-admin-feedback-count"
-                    >
-                      {feedbackUnread > 99 ? "99+" : feedbackUnread}
-                    </span>
-                  )}
-                </button>
-              )}
+              {/* The person's own notifications -- a leave or permission decided. Everyone.
+                  Client feedback rides on the same bell for the roles that read it. */}
+              <NotificationBell feedbackUnread={feedbackUnread} onOpenFeedback={canReadFeedback ? () => setShowFeedback(true) : null} />
               <button
                 type="button"
                 onClick={() => setShowProfile(true)}

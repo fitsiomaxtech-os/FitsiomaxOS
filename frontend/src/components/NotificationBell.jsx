@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CheckCircle2, XCircle } from "lucide-react";
+import { Bell, CheckCircle2, ChevronRight, MessageCircle, XCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/sonner";
 import { clearNotifications, myNotifications, readAllNotifications } from "@/lib/api";
@@ -32,8 +32,12 @@ const whenOf = (n) => {
  * Today that is a leave or permission being approved or rejected. Polled every minute;
  * a notice that arrives while the page is open also pops a toast. Opening the bell marks
  * everything read.
+ *
+ * Client feedback rides on the same bell for the roles that read it (onOpenFeedback set):
+ * its unread count adds to the badge and a row at the top of the list opens the board,
+ * so there is one bell in the header rather than two side by side.
  */
-export function NotificationBell({ className = "", iconClass = "h-4 w-4" }) {
+export function NotificationBell({ className = "", iconClass = "h-4 w-4", feedbackUnread = 0, onOpenFeedback = null }) {
   const [data, setData] = useState({ notifications: [], unread: 0 });
   const [open, setOpen] = useState(false);
   const seen = useRef(null);
@@ -84,21 +88,24 @@ export function NotificationBell({ className = "", iconClass = "h-4 w-4" }) {
   };
 
   const list = data.notifications || [];
+  const feedbackCount = onOpenFeedback ? feedbackUnread : 0;
+  const total = data.unread + feedbackCount;
+  const openFeedback = () => { onOpenChange(false); onOpenFeedback(); };
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`relative shrink-0 rounded-md p-2 transition ${data.unread ? "text-sky-600 hover:bg-sky-50" : "text-slate-400 hover:bg-slate-50"} ${className}`}
+          className={`relative shrink-0 rounded-md p-2 transition ${total ? "text-sky-600 hover:bg-sky-50" : "text-slate-400 hover:bg-slate-50"} ${className}`}
           title="Notifications"
-          aria-label={data.unread ? `${data.unread} new notifications` : "Notifications"}
+          aria-label={total ? `${total} new notifications` : "Notifications"}
           data-testid="notification-bell"
         >
           <Bell className={iconClass} />
-          {data.unread > 0 && (
+          {total > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white" data-testid="notification-bell-count">
-              {data.unread > 99 ? "99+" : data.unread}
+              {total > 99 ? "99+" : total}
             </span>
           )}
         </button>
@@ -112,6 +119,26 @@ export function NotificationBell({ className = "", iconClass = "h-4 w-4" }) {
             </button>
           )}
         </div>
+        {onOpenFeedback && (
+          <button
+            type="button"
+            onClick={openFeedback}
+            className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left transition hover:bg-amber-50 ${feedbackCount ? "bg-amber-50/60" : ""}`}
+            data-testid="notification-feedback-row"
+          >
+            <MessageCircle className="h-5 w-5 shrink-0 text-amber-600" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-slate-900">Client feedback</span>
+              <span className="block text-xs text-slate-500">{feedbackCount ? `${feedbackCount} new` : "No new feedback"}</span>
+            </span>
+            {feedbackCount > 0 && (
+              <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white" data-testid="notification-feedback-count">
+                {feedbackCount > 99 ? "99+" : feedbackCount}
+              </span>
+            )}
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+          </button>
+        )}
         <div className="max-h-[60vh] overflow-y-auto">
           {list.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-slate-400">No notifications</p>
