@@ -1021,10 +1021,14 @@ const ProfileView = ({ data, roleLabel, photo }) => {
       </header>
       {!data.linked && <p className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-xs text-amber-800">This login is not linked to an employee record. Ask HR to link it from Credentials.</p>}
       <div className="flex min-h-[430px] flex-col sm:flex-row">
-        <nav aria-label="Profile sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:border-b-0 sm:border-r">
-          {PROFILE_SECTIONS.map(([key, label]) => (
+        {/* Below sm the five sections sit in a 3 + 2 grid, every one on screen: as one
+            scrolling row, Address & Emergency and Bank Details sat past the right edge. A
+            label too long for its cell on a narrow phone wraps rather than clipping. From
+            sm up it is the list down the left, as before. */}
+        <nav aria-label="Profile sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs max-sm:grid max-sm:grid-cols-6 max-sm:overflow-visible sm:w-48 sm:flex-col sm:border-b-0 sm:border-r" data-testid="branch-profile-sections">
+          {PROFILE_SECTIONS.map(([key, label], i) => (
             <button type="button" key={key} onClick={() => setSection(key)} aria-current={section === key ? "page" : undefined}
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${section === key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 max-sm:min-w-0 max-sm:whitespace-normal max-sm:px-2 max-sm:text-center max-sm:leading-tight ${i < 3 ? "max-sm:col-span-2" : "max-sm:col-span-3"} ${section === key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
               data-testid={`branch-profile-section-${key}`}>{label}</button>
           ))}
         </nav>
