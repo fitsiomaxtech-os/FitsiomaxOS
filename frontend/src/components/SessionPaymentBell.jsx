@@ -72,14 +72,11 @@ export function SessionPaymentList({ data, status, onReload, onRetry, canDecide 
   const alerts = data.alerts || [];
   return (
     <div className="space-y-3" data-testid="session-payment-list">
-      <div>
-        <p className="text-xs text-slate-500">Clients who have used up, or are about to use up, their paid sessions with a balance still owing. Past the last paid session the next one is on hold until paid or extended.</p>
-        {data.extension_requests > 0 && (
-          <p className="mt-1 text-xs font-semibold text-violet-700" data-testid="session-payment-extension-count">
-            {data.extension_requests} request{data.extension_requests === 1 ? "" : "s"} for more time waiting
-          </p>
-        )}
-      </div>
+      {data.extension_requests > 0 && (
+        <p className="text-xs font-semibold text-violet-700" data-testid="session-payment-extension-count">
+          {data.extension_requests} request{data.extension_requests === 1 ? "" : "s"} for more time waiting
+        </p>
+      )}
       {alerts.length > 0 ? (
         <div className="grid gap-3 lg:grid-cols-2">
           {alerts.map((a) => (

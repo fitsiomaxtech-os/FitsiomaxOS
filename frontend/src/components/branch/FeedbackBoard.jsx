@@ -767,9 +767,14 @@ export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false,
               </div>
             </>
           )}
+          {/* The bell's tab already names it, so embedded keeps only the buttons. */}
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold text-slate-800">{embedded ? "Client Feedback" : "Patient Feedback"}</h2>
-            <p className="truncate text-xs text-slate-400">What patients have written about their care</p>
+            {!embedded && (
+              <>
+                <h2 className="truncate text-base font-semibold text-slate-800">Patient Feedback</h2>
+                <p className="truncate text-xs text-slate-400">What patients have written about their care</p>
+              </>
+            )}
           </div>
           {developerAccess && !devPassword && !askingPassword && (
             <Button
@@ -877,7 +882,7 @@ export const FeedbackBoard = ({ branchId, onClose, onCounts, headOffice = false,
         <p className="flex-1 py-12 text-center text-sm text-slate-400">Loading…</p>
       ) : rows.length === 0 ? (
         <p className="flex-1 py-12 text-center text-sm text-slate-400" data-testid="feedback-empty">
-          No feedback yet. It arrives here when a patient leaves some in their portal.
+          {embedded ? "No feedback yet" : "No feedback yet. It arrives here when a patient leaves some in their portal."}
         </p>
       ) : (
         <>
