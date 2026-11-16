@@ -52,9 +52,13 @@ export const PrescriptionPdf = ({ lead, branch, actionsSlot }) => {
         ["Print", Printer, print, "print"],
         ["Share", Share2, () => sharePdf(pdf, filename, title), "share"],
       ].map(([label, Icon, onClick, id]) => (
-        <Button key={id} type="button" size="icon" variant="outline" className="h-8 w-8" disabled={!ready} onClick={onClick}
+        // Icon and name, in the footer band's button style (Assign Physio / Add Due).
+        <Button key={id} type="button" size="sm" variant="outline"
+          className="border-slate-200 bg-white px-2 text-[11px] text-slate-700 shadow-sm hover:bg-sky-50 hover:text-sky-700 sm:px-3 sm:text-xs"
+          disabled={!ready} onClick={onClick}
           title={label} aria-label={label} data-testid={`prescription-${id}`}>
-          <Icon className="h-4 w-4" />
+          <Icon className="mr-1 h-3.5 w-3.5" />
+          {label}
         </Button>
       ))}
     </div>
