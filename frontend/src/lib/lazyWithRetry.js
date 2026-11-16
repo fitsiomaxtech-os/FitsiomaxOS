@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { probeConnection, reportMaybeOffline, waitForConnection } from "@/lib/connection";
 
 // React.lazy() with a safety net for ChunkLoadError.
 //
@@ -40,6 +41,15 @@ export async function importWithRetry(factory) {
     } catch (err) {
       lastErr = err;
       if (!isChunkError(err)) throw err;
+      // No internet is not a stale chunk. Retrying would fail the same way, and the reload
+      // below would land on Chrome's own offline page: the blank OS. Instead wait for the
+      // line to come back (OfflineScreen covers the wait), then try this attempt again.
+      if (!(await probeConnection())) {
+        reportMaybeOffline();
+        await waitForConnection();
+        attempt -= 1;
+        continue;
+      }
       if (attempt < RETRIES) await wait(RETRY_DELAY_MS * (attempt + 1));
     }
   }

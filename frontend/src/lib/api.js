@@ -1,5 +1,6 @@
 import axios from "axios";
 import { loadSession, clearSession } from "@/lib/session";
+import { reportMaybeOffline } from "@/lib/connection";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -43,6 +44,9 @@ api.interceptors.response.use(
   (resp) => resp,
   (error) => {
     const status = error?.response?.status;
+    // No answer at all (not a refusal, not a cancel): maybe the internet is gone. The
+    // offline screen checks the line itself before it shows.
+    if (!error?.response && !axios.isCancel(error)) reportMaybeOffline();
     if (error?.response?.data && typeof error.response.data === "object") {
       const flat = detailToText(error.response.data.detail);
       if (flat !== error.response.data.detail) error.response.data.detail = flat;
