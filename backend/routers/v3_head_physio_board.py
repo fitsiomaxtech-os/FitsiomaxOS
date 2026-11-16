@@ -1360,7 +1360,29 @@ async def hp_assign_physio_with_sessions(
     sorted_slots = sorted(set(payload.slot_times))
     if len(sorted_slots) != len(payload.slot_times):
         raise HTTPException(status_code=400, detail="Duplicate session slot times were submitted")
-    if len(sorted_slots) != to_book:
+    # Only paid days are booked. While a Treatment Fee balance is owed the booking stops at
+    # the last paid day; the rest wait to pay and are booked here once it is collected.
+    # Up to that many rather than exactly: the picker counts paid days its own way (an
+    # Offline <-> Online swap prices days differently) and may land one short.
+    from routers.v3_session_payment import sessions_paid_for
+    owing = sessions_paid_for(lead, total_sessions)
+    if owing:
+        bookable = max(0, min(to_book, owing["paid_sessions"] - done))
+        if bookable == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No paid treatment days left to book — collect the balance of Rs.{owing['balance']:,.0f} first",
+            )
+        if not 1 <= len(sorted_slots) <= bookable:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Only {bookable} paid treatment day{'s' if bookable != 1 else ''} can be booked "
+                    f"(got {len(sorted_slots)}) — the other {to_book - bookable} wait for the balance of "
+                    f"Rs.{owing['balance']:,.0f}"
+                ),
+            )
+    elif len(sorted_slots) != to_book:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -1501,8 +1523,9 @@ async def hp_assign_physio_with_sessions(
             f"{done} of {total_sessions} days already completed, {len(session_docs)} rebooked"
             if handover else
             "Assigned " + physio["full_name"] + " and booked " + (
-                f"all {total_sessions} sessions" if not done
-                else f"the remaining {len(session_docs)} of {total_sessions} sessions"
+                f"all {total_sessions} sessions" if not done and len(session_docs) == total_sessions
+                else f"the remaining {len(session_docs)} of {total_sessions} sessions" if done + len(session_docs) == total_sessions
+                else f"{len(session_docs)} paid of {total_sessions} sessions (the rest wait for the balance)"
             )
         ),
         "created_by": user.full_name,

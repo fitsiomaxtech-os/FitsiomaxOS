@@ -6344,43 +6344,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return map;
   }, [physioCalendarData]);
 
-  // Re-opening this for the physio the lead is already with: start from the sessions they
-  // already hold rather than a blank picker, so a reschedule only means moving the few
-  // that actually change.
-  useEffect(() => {
-    // Rehab starts from a blank plan: the calendar's booked map now carries this lead's
-    // treatment days as well as their rehab days, and pre-loading would quietly seed a
-    // rehab course with the dates of the treatment one. Re-assigning rehab replaces the
-    // course outright anyway — the backend clears the old days first.
-    if (isRehabAssign) return;
-    if (!physioCalendarData || !selectedLead || physioPick !== selectedLead.assigned_physio_id) return;
-    const seenDays = new Set();
-    const mine = Object.entries(physioCalendarData.booked || {})
-      .filter(([, b]) => b.lead_id === selectedLead.id)
-      .map(([slot]) => slot)
-      .sort()
-      // Keep one a day, matching the rule the picker now enforces. Sessions booked before
-      // that rule existed can sit several to a day; those extra days come back as unfixed
-      // rather than being carried forward as a plan that could no longer be built here.
-      .filter((slot) => {
-        const day = slot.split("T")[0];
-        if (seenDays.has(day)) return false;
-        seenDays.add(day);
-        return true;
-      });
-    if (mine.length === 0) return;
-    setPickedSessionSlots((prev) => (prev.length === 0 ? mine.slice(0, selectedLead.session_package_sessions || 0) : prev));
-  }, [physioCalendarData, physioPick, selectedLead, isRehabAssign]);
-
   const sortedPickedSlots = useMemo(() => [...pickedSessionSlots].sort(), [pickedSessionSlots]);
   // A Rehab course entered without a day count leaves nothing to count towards. Rather than
   // a disabled button and no way forward, the branch fixes as many days as it sold and the
   // course is however many that is — the backend accepts that case for the same reason.
   // Treatment is never open-ended: its package always states its session count.
   const openEndedRehab = isRehabAssign && totalSessionsNeeded === 0;
-  const allSessionsPicked = openEndedRehab
-    ? sortedPickedSlots.length > 0
-    : totalSessionsNeeded > 0 && sortedPickedSlots.length === totalSessionsNeeded;
 
   // How much of this package the patient has actually paid for, in sessions. The Treatment
   // Fee can be collected for only some of the sessions up front (e.g. 6 of 9, balance due
@@ -6445,6 +6414,46 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Days are numbered in date order, so the first `paid` of them are the ones covered.
   const isPaidSession = (dayNumber) => dayNumber <= sessionPayment.paid;
 
+  // Only paid days can be booked. While a balance is owed the picker stops at the last
+  // paid day; the rest wait to pay and open here once the balance is collected. The
+  // backend holds the same line.
+  const daysToBook = openEndedRehab ? 0 : sessionPayment.unpaid > 0
+    ? Math.max(0, Math.min(totalSessionsNeeded, sessionPayment.paid - sessionsAlreadyDone))
+    : totalSessionsNeeded;
+  const waitToPayDays = openEndedRehab ? 0 : totalSessionsNeeded - daysToBook;
+  const allSessionsPicked = openEndedRehab
+    ? sortedPickedSlots.length > 0
+    : daysToBook > 0 && sortedPickedSlots.length === daysToBook;
+
+  // Re-opening this for the physio the lead is already with: start from the sessions they
+  // already hold rather than a blank picker, so a reschedule only means moving the few
+  // that actually change.
+  useEffect(() => {
+    // Rehab starts from a blank plan: the calendar's booked map now carries this lead's
+    // treatment days as well as their rehab days, and pre-loading would quietly seed a
+    // rehab course with the dates of the treatment one. Re-assigning rehab replaces the
+    // course outright anyway — the backend clears the old days first.
+    if (isRehabAssign) return;
+    if (!physioCalendarData || !selectedLead || physioPick !== selectedLead.assigned_physio_id) return;
+    const seenDays = new Set();
+    const mine = Object.entries(physioCalendarData.booked || {})
+      .filter(([, b]) => b.lead_id === selectedLead.id)
+      .map(([slot]) => slot)
+      .sort()
+      // Keep one a day, matching the rule the picker now enforces. Sessions booked before
+      // that rule existed can sit several to a day; those extra days come back as unfixed
+      // rather than being carried forward as a plan that could no longer be built here.
+      .filter((slot) => {
+        const day = slot.split("T")[0];
+        if (seenDays.has(day)) return false;
+        seenDays.add(day);
+        return true;
+      });
+    if (mine.length === 0) return;
+    // Paid days only: unpaid days booked before this rule come back unfixed.
+    setPickedSessionSlots((prev) => (prev.length === 0 ? mine.slice(0, daysToBook) : prev));
+  }, [physioCalendarData, physioPick, selectedLead, isRehabAssign, daysToBook]);
+
   // The plan itself: one treatment session per day, numbered Day 1, Day 2 … in date order
   // and stamped with the week it falls in — the same week rule the backend records, kept
   // in step with the rows it writes even though the preview lists the days straight through.
@@ -6486,8 +6495,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const sameDay = prev.find((s) => s.startsWith(`${day}T`));
     if (sameDay) { setPickedSessionSlots([...prev.filter((s) => s !== sameDay), slot]); return; }
 
-    if (!openEndedRehab && prev.length >= totalSessionsNeeded) {
-      toast.error(`All ${totalSessionsNeeded} ${dayNoun}s are already fixed — remove one first`);
+    if (!openEndedRehab && prev.length >= daysToBook) {
+      toast.error(waitToPayDays > 0
+        ? `Only ${daysToBook} paid ${dayNoun}${daysToBook === 1 ? "" : "s"} can be booked — ${waitToPayDays} wait to pay`
+        : `All ${daysToBook} ${dayNoun}s are already fixed — remove one first`);
       return;
     }
     const next = [...prev, slot];
@@ -6498,7 +6509,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // going back to the calendar between every session. Moving an already-fixed day
     // deliberately doesn't advance: that's a correction, and the result should stay in
     // view. Neither does the last one, so the finished plan can be checked over.
-    if (openEndedRehab || next.length < totalSessionsNeeded) {
+    if (openEndedRehab || next.length < daysToBook) {
       const nextDate = nextOpenDateAfter(day, new Set(next.map((s) => s.split("T")[0])));
       if (nextDate) {
         const [y, m] = nextDate.split("-").map(Number);
@@ -6516,8 +6527,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const bulkFillFrom = (startDate, time, skipSundays) => {
     if (!startDate || !time) return;
     const fixedDays = new Set(pickedSessionSlots.map((s) => s.split("T")[0]));
-    const room = openEndedRehab ? Infinity : totalSessionsNeeded - pickedSessionSlots.length;
-    if (room <= 0) { toast.error(`All ${totalSessionsNeeded} ${dayNoun}s are already fixed — clear some first`); return; }
+    const room = openEndedRehab ? Infinity : daysToBook - pickedSessionSlots.length;
+    if (room <= 0) { toast.error(`All ${daysToBook} ${waitToPayDays > 0 ? "paid " : ""}${dayNoun}s are already fixed — clear some first`); return; }
     // Open-ended rehab has no count to stop at, so it stops at the end of the month in view.
     const monthEnd = isoDate(pickerYear, pickerMonth, new Date(pickerYear, pickerMonth + 1, 0).getDate());
     const added = [];
@@ -6548,7 +6559,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const submitPhysioAssign = async () => {
     if (!physioPick) { toast.error("Choose a physio"); return; }
     if (!allSessionsPicked) {
-      toast.error(`Pick a date and time for all ${totalSessionsNeeded} ${dayNoun}s (${sortedPickedSlots.length} placed so far)`);
+      toast.error(daysToBook === 0
+        ? `No paid ${dayNoun}s to book — collect the balance first`
+        : `Pick a date and time for all ${daysToBook} ${waitToPayDays > 0 ? "paid " : ""}${dayNoun}s (${sortedPickedSlots.length} placed so far)`);
       return;
     }
     setAssigningPhysio(true);
@@ -14713,7 +14726,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {assigningPhysio
                       ? "Assigning..."
                       : allSessionsPicked
-                      ? `Assign & Book ${openEndedRehab ? sortedPickedSlots.length : totalSessionsNeeded} ${isRehabAssign ? "Rehab Days" : "Sessions"}`
+                      ? `Assign & Book ${openEndedRehab ? sortedPickedSlots.length : daysToBook} ${isRehabAssign ? "Rehab Days" : "Sessions"}`
                       : isRehabAssign ? "Choose Rehab Dates & Times" : "Choose Treatment Dates & Times"}
                   </Button>
                 </div>
@@ -14792,6 +14805,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             <span className="ml-2 font-medium text-rose-500">Day {sessionPayment.paid + 1}–{sessionPayment.total}</span>
                             <span className="ml-2 font-medium text-rose-500">{sessionPayment.unpaid} Day{sessionPayment.unpaid === 1 ? "" : "s"}</span>
                           </span>
+                          {waitToPayDays > 0 && (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 sm:px-3 sm:text-[12px]"
+                              title="These days open for booking once the balance is paid"
+                              data-testid="cons-payment-wait"
+                            >
+                              <Lock className="h-3 w-3" /> Wait to Pay · {waitToPayDays} Day{waitToPayDays === 1 ? "" : "s"}
+                            </span>
+                          )}
                           {sessionPayment.dueDate && (
                             <span className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 sm:px-3 sm:text-[12px]" data-testid="cons-payment-due">
                               due {dayLabel(sessionPayment.dueDate)}
@@ -14943,13 +14965,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                   <button
                                     type="button"
                                     onClick={() => bulkFillFrom(pickerDate, bulkTime, bulkSkipSun)}
-                                    disabled={!(physioSlotsByDate[pickerDate] || []).includes(bulkTime) || (!openEndedRehab && sortedPickedSlots.length >= totalSessionsNeeded)}
+                                    disabled={!(physioSlotsByDate[pickerDate] || []).includes(bulkTime) || (!openEndedRehab && sortedPickedSlots.length >= daysToBook)}
                                     className="h-7 rounded bg-violet-600 px-2.5 text-[12px] font-bold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                                     data-testid="cons-slot-bulk-apply"
                                   >
                                     {openEndedRehab
                                       ? "Fill this month"
-                                      : `Fill ${Math.max(0, totalSessionsNeeded - sortedPickedSlots.length)} day${totalSessionsNeeded - sortedPickedSlots.length === 1 ? "" : "s"}`}
+                                      : `Fill ${Math.max(0, daysToBook - sortedPickedSlots.length)} day${daysToBook - sortedPickedSlots.length === 1 ? "" : "s"}`}
                                   </button>
                                   {sortedPickedSlots.length > 0 && (
                                     <button
