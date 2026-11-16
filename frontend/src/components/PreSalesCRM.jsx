@@ -28,7 +28,8 @@ import { PhoneExitConfirm, usePhoneBackState, useStageBack } from "@/components/
 import { ProfileNavGlyph } from "@/components/ui/employee-avatar";
 import { MyProfilePage } from "@/components/MyProfilePage";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { QuickDateFilterBar, QUICK_DATE_PRESETS, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
+import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
+import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
@@ -1036,36 +1037,8 @@ const phoneStageRank = (name) => {
   return i === -1 ? PHONE_STAGE_ORDER.length : i;
 };
 
-// The rep's phone ranges, one row of six; the custom pick is the toolbar's calendar.
-const PHONE_RANGE_KEYS = ["all", "today", "yesterday", "this_week", "this_month", "last_90"];
-const PHONE_RANGE_PILL = "h-10 w-full min-w-0 truncate rounded-md px-0.5 text-[11px] font-medium transition";
-const phoneRangeTone = (on) => (on ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 active:bg-slate-50");
-
-/**
- * One stage in the rep's phone grid, two to a row: the stage's glyph and its count on top,
- * the name under them. The count box and the red waiting dot are the inline NotifyCard's,
- * so the grid and the All Stages row under it read as one set.
- */
-const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-pressed={active}
-    className={`relative flex h-full min-h-[72px] w-full min-w-0 flex-col justify-between gap-2 rounded-xl bg-white text-left shadow-md transition active:scale-[0.99] ${active ? "border-2 border-slate-400 p-[9px]" : "border border-slate-200 p-2.5"}`}
-    data-testid={testid}
-  >
-    <span className="flex items-center justify-between gap-1">
-      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500 opacity-70" />
-      <span className="inline-flex h-6 min-w-[2rem] items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-1.5 text-sm font-medium tabular-nums text-orange-700" data-testid={`${testid}-badge`}>
-        {count}
-      </span>
-    </span>
-    <span className="truncate text-[11px] font-medium text-slate-900 opacity-75" title={label}>{label}</span>
-    {count > 0 && (
-      <span aria-hidden className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white motion-safe:animate-dot-pop" />
-    )}
-  </button>
-);
+// The rep's phone grid tile and the range row under it live in ui/phone-stage-grid,
+// shared with Branch Admin > Branch Leads' phone so the two grids stay one look.
 
 /**
  * A lead on the rep's phone, drawn to the wireframe and to the inline stage rows: initials
@@ -2310,25 +2283,12 @@ export const PreSalesCRM = ({
 
             {/* The ranges on one row, six equal buttons. A date picked on the toolbar's
                 calendar sets this row back to All, as on the desk. */}
-            <div className="grid grid-cols-6 gap-1" data-testid="presales-phone-quick-date">
-              {PHONE_RANGE_KEYS.map((key) => {
-                const p = QUICK_DATE_PRESETS.find((x) => x.key === key);
-                const on = key === "all" ? !quickDate && !customDate : quickDate?.key === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => { setCustomDate(null); setQuickDate(quickDatePreset(key)); }}
-                    aria-pressed={on}
-                    title={p.label}
-                    className={`${PHONE_RANGE_PILL} ${phoneRangeTone(on)}`}
-                    data-testid={`presales-phone-quick-date-preset-${key}`}
-                  >
-                    {p.short}
-                  </button>
-                );
-              })}
-            </div>
+            <PhoneRangeRow
+              value={quickDate}
+              calendarSet={!!customDate}
+              onChange={(next) => { setCustomDate(null); setQuickDate(next); }}
+              testid="presales-phone-quick-date"
+            />
 
             {/* The list, with no title over it: the lit summary card already says which
                 stage this is and how many. */}

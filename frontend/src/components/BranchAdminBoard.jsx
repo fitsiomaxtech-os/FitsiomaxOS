@@ -70,6 +70,7 @@ import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookFixedByPreSales, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import { NotifyCard } from "@/components/ui/notify-card";
+import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import {
   scheduleBranchAppointment,
   getBranches,
@@ -239,6 +240,13 @@ const leadStageIcon = (name) => {
   const n = String(name || "").toLowerCase();
   return LEAD_STAGE_ICONS.find(([word]) => n.includes(word))?.[1] || LayoutDashboard;
 };
+
+// The order of Branch Leads' phone grid after the opening stage, as Pre Sales' phone grid
+// has it: RNR, Follow Up, Pre Book, Appointment, Not a prospect, Lost. By role rather than
+// name, so a renamed stage keeps its place; a stage with none of these goes after them.
+const PHONE_LEAD_STAGE_ORDER = [
+  STAGE_ROLE_RNR, STAGE_ROLE_FOLLOW_UP, STAGE_ROLE_PRE_BOOK, STAGE_ROLE_APPOINTMENT, STAGE_ROLE_NOT_A_PROSPECT, STAGE_ROLE_LOST,
+];
 
 // Does this stage row carry `role`? Trusts the stamp where there is one, so a stage renamed
 // to something that happens to match another role's old name is still itself.
@@ -1391,6 +1399,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       && !s.is_final
     ));
   }, [stages, mirrorStage, realEntryStage]);
+  // The same stages in the phone grid's order (see PHONE_LEAD_STAGE_ORDER): the opening
+  // first -- the Leads pill, or a Pre-Sales-fed branch's own entry stage -- then the roles
+  // in Pre Sales' order. The sort is stable, so stages that tie keep the server's order.
+  const phoneLeadTiles = useMemo(() => {
+    const rank = (s) => {
+      if (s.mirrors_stage || s.name === realEntryStage?.name) return -1;
+      const i = PHONE_LEAD_STAGE_ORDER.findIndex((role) => stageHasRole(s, role));
+      return i === -1 ? PHONE_LEAD_STAGE_ORDER.length : i;
+    };
+    return [...leadPillStages].sort((a, b) => rank(a) - rank(b));
+  }, [leadPillStages, realEntryStage]);
 
   // The two bars used to be one. Branch Leads carried both pipelines end to end, which put
   // thirteen pills on a strip where the first six answer "has this lead been picked up"
@@ -1408,11 +1427,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // of its own rather than under them. House Visit wears the same stack and back bar, since
   // it is the same board over the same stages; every width from sm keeps the strip.
   //
-  // Branch Leads now wears the same stack below sm, drawn in the shared card grey with
-  // only its corner badge coloured (see PHONE_CARD_HEX): its summary cards were already
-  // cards, only too small in a row to read or to hit, and a list of them is the same
-  // answer Consultation settled on. A tap opens that stage's list the same way, and from
-  // sm up the strip is still there.
+  // Branch Leads below sm wears Pre Sales' phone grid instead (see ui/phone-stage-grid):
+  // the stages three across as summary tiles, the ranges under them, and the open stage's
+  // list right below on the same screen. A tap on a tile narrows that list, and tapping
+  // the open tile again goes back to All Stages. From sm up the strip is still there.
   //
   // Holds the tab the list is open on rather than a bare flag, so that leaving the tab
   // closes it -- coming back to Consultation lands on the cards again -- while a lead popup
@@ -1445,13 +1463,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     phoneStageList !== null || !!selectedLead || profileOpen || showMoreMenu || !!timeMgmtFor || showCreateLead,
     phoneBack,
   );
-  // Both card tabs share the back bar. The cards themselves stay told apart: the
-  // consultation board's own hiding is keyed to phoneStageCards, and it must not be told
-  // the leads stack is up over it.
+  // Both tabs hide the strip on a phone. Only the Consultation tabs open a stage's list on
+  // a screen of its own with the back bar; Branch Leads' grid keeps its list underneath.
   const onPhoneCardTab = onConsultationTab || activeView === "pipeline";
   const phoneStageCards = onConsultationTab && phoneStageList !== activeView;
-  const phoneLeadStageCards = activeView === "pipeline" && phoneStageList !== activeView;
-  const phoneStageListOpen = onPhoneCardTab && phoneStageList === activeView;
+  const phoneLeadGrid = activeView === "pipeline";
+  const phoneStageListOpen = onConsultationTab && phoneStageList === activeView;
   // The Management tab answers the same way on a phone: its nine sub-tabs as the same
   // stack, one tap opening the chosen panel on a screen of its own with the way back
   // above it — Consultant Calendar alone reads as its Select Consultant, not as a card
@@ -1608,8 +1625,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // Tomorrow is only offered over the consultation tabs (leads are read by created date,
   // where it would always be empty), so leaving them with it picked falls back to Today
   // rather than stranding an unlit, empty range on Branch Leads.
+  // Last 90 Days is the other way round: only Branch Leads' phone row offers it, so the
+  // Consultation tabs, whose row has no 90d, fall back to All rather than sit on a range
+  // no button names.
   useEffect(() => {
     if (!onConsultationTab && quickDate?.key === "tomorrow") setQuickDate(quickDatePreset("today"));
+    if (onConsultationTab && quickDate?.key === "last_90") setQuickDate(null);
   }, [onConsultationTab, quickDate]);
 
   const filteredLeads = useMemo(() => {
@@ -2369,43 +2390,36 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             // under the header. House Visit keeps its cards.
             phoneFlush={!onHomeVisitTab}
             // The Consultation tab's phone wears its stages as cards instead (see
-            // phoneStageCards, House Visit too) and Branch Leads its colourless stack
-            // (phoneLeadStageCards), so the strip is desk-only on all three.
+            // phoneStageCards, House Visit too) and Branch Leads Pre Sales' tile grid
+            // (phoneLeadGrid), so the strip is desk-only on all three.
             className={onPhoneCardTab ? "max-sm:hidden" : ""}
             testid="branch-metric"
             plain
           />
 
-          {/* Phone, with one stage's list open: where the strip sat, flush under the header,
-              the way back to the cards, the stage's count and its name, and on the right a
-              menu of the tab's other stages — so going from New Leads to RNR is one tap
-              into the menu rather than back out to the cards and in again. The count box
-              alone keeps the stage's colour, so the bar still says which card it came
-              from — and on Branch Leads it may have been opened on All Stages, which is a
-              card there rather than a stage. */}
+          {/* Phone, Consultation tabs, with one stage's list open: where the strip sat,
+              flush under the header, the way back to the cards, the stage's count and its
+              name, and on the right a menu of the tab's other stages — so going from one
+              stage to the next is one tap into the menu rather than back out to the cards
+              and in again. The count box alone keeps the stage's colour, so the bar still
+              says which card it came from. Branch Leads has no such screen: its grid keeps
+              the list underneath. */}
           {phoneStageListOpen && (() => {
-            const onLeadsList = activeView === "pipeline";
-            // Colour only in the count box — the strip's own blue where the stage is All Stages.
-            const stageHex = onLeadsList
-              ? (stageFilter ? notifyHex(leadPillStages.find((s) => s.name === stageFilter)?.color) : "#0ea5e9")
-              : notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
-            const count = onLeadsList
-              ? (stageFilter ? salesCounts[stageFilter] || 0 : totalLeads)
-              : (consultationCounts[stageFilter] || 0);
+            const stageHex = notifyHex(consultationOnlyStages.find((s) => s.name === stageFilter)?.color);
+            const count = consultationCounts[stageFilter] || 0;
             const label = stageFilter || "All Stages";
-            // The same stages the cards offer, less the one already open. All Stages is left
-            // to the back arrow: it is the cards' summary, not a stage to work.
-            const otherStages = (onLeadsList ? leadPillStages : consultationOnlyStages).filter((s) => s.name !== stageFilter);
-            const countFor = (name) => (onLeadsList ? salesCounts[name] : consultationCounts[name]) || 0;
-            const iconFor = onLeadsList ? leadStageIcon : consultationStageIcon;
+            // The same stages the cards offer, less the one already open.
+            const otherStages = consultationOnlyStages.filter((s) => s.name !== stageFilter);
+            const countFor = (name) => consultationCounts[name] || 0;
+            const iconFor = consultationStageIcon;
             return (
-              <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid={onLeadsList ? "branch-leads-phone-back" : "branch-consult-phone-back"}>
+              <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-consult-phone-back">
                 <button
                   type="button"
                   onClick={() => setPhoneStageList(null)}
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
                   aria-label="Back to the stage cards"
-                  data-testid={onLeadsList ? "branch-leads-phone-back-btn" : "branch-consult-phone-back-btn"}
+                  data-testid="branch-consult-phone-back-btn"
                 >
                   {/* Nudges left every 1.5s (tailwind.config's nudge-left), so the way back
                       to the cards is seen. motion-safe: a phone set to reduce motion gets
@@ -2423,7 +2437,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                         type="button"
                         className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
                         aria-label="Switch stage"
-                        data-testid={onLeadsList ? "branch-leads-phone-stage-menu" : "branch-consult-phone-stage-menu"}
+                        data-testid="branch-consult-phone-stage-menu"
                       >
                         <Menu aria-hidden className="h-5 w-5" />
                       </button>
@@ -2436,7 +2450,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             key={s.id}
                             onSelect={() => { setStageFilter(s.name); window.scrollTo({ top: 0 }); }}
                             className="gap-2.5 py-2"
-                            data-testid={`${onLeadsList ? "branch-leads" : "branch-consult"}-phone-stage-menu-${s.name}`}
+                            data-testid={`branch-consult-phone-stage-menu-${s.name}`}
                           >
                             <StageIcon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
                             <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{s.name}</span>
@@ -2908,8 +2922,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               five ranges a branch actually asks for; everything else on the calendar.
               Folded into effectiveDateFilter either way, which feeds the stage counts on
               the bar above and, on the Consultation tab, the ConsultationsBoard underneath
-              too — so a pill's number always describes the list that pill opens. */}
-          <div className="lg:hidden">
+              too — so a pill's number always describes the list that pill opens.
+
+              Not on Branch Leads' phone, which has its own six under the stage grid. */}
+          <div className={`lg:hidden ${phoneLeadGrid ? "max-sm:hidden" : ""}`}>
             <QuickDateFilterBar
               value={quickDate}
               onChange={setQuickDate}
@@ -2948,48 +2964,41 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </div>
           )}
 
-          {/* Phone, Branch Leads tab: the summary strip as the same stack — one grey for
-              every row, with colour only in the corner notification badge, which carries
-              the stage's own hue. A tap opens that stage's list on its own screen (see
-              phoneStageList), exactly as Consultation's cards do. All Stages is a card of
-              its own up front because there it is a real answer — the whole branch — and
-              the strip it replaces had one too. */}
-          {phoneLeadStageCards && (
-            <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-leads-phone-cards">
-              <NotifyCard
-                icon={LayoutGrid}
-                label="All Stages"
-                value={totalLeads}
-                color={PHONE_CARD_HEX}
-                // The strip's own blue — the one colour on this card.
-                badgeColor="#0ea5e9"
-                active={stageFilter === null}
-                onClick={() => {
-                  setStageFilter(null);
-                  setPhoneStageList(activeView);
-                  window.scrollTo({ top: 0 });
-                }}
-                testid="branch-leads-phone-card-all-stages"
-                inline
-              />
-              {leadPillStages.map((s) => (
-                <NotifyCard
-                  key={s.id}
-                  icon={leadStageIcon(s.name)}
-                  label={s.name}
-                  value={salesCounts[s.name] || 0}
-                  color={PHONE_CARD_HEX}
-                  badgeColor={notifyHex(s.color)}
-                  active={stageFilter === s.name}
-                  onClick={() => {
-                    setStageFilter(s.name);
-                    setPhoneStageList(activeView);
-                    window.scrollTo({ top: 0 });
-                  }}
-                  testid={`branch-leads-phone-card-${s.name}`}
-                  inline
+          {/* Phone, Branch Leads tab: Pre Sales' phone grid (see ui/phone-stage-grid). The
+              summary tiles three across, every one the same height -- All Stages first,
+              the whole branch, then the stages in Pre Sales' order (phoneLeadTiles) -- and
+              the six ranges under them. A tap narrows the list right below on this same
+              screen, and the open tile tapped again goes back to All Stages. A range
+              pressed here clears the toolbar's calendar, as on Pre Sales' phone. */}
+          {phoneLeadGrid && (
+            <div className="space-y-3 sm:hidden" data-testid="branch-leads-phone-summary">
+              <div className="grid auto-rows-fr grid-cols-3 gap-2" data-testid="branch-leads-phone-grid">
+                <PhoneStageTile
+                  icon={LayoutGrid}
+                  label="All Stages"
+                  count={totalLeads}
+                  active={stageFilter === null}
+                  onClick={() => setStageFilter(null)}
+                  testid="branch-leads-phone-card-all-stages"
                 />
-              ))}
+                {phoneLeadTiles.map((s) => (
+                  <PhoneStageTile
+                    key={s.id}
+                    icon={leadStageIcon(s.name)}
+                    label={s.name}
+                    count={salesCounts[s.name] || 0}
+                    active={stageFilter === s.name}
+                    onClick={() => setStageFilter(stageFilter === s.name ? null : s.name)}
+                    testid={`branch-leads-phone-card-${s.name}`}
+                  />
+                ))}
+              </div>
+              <PhoneRangeRow
+                value={quickDate}
+                calendarSet={!!dateFilter}
+                onChange={(next) => { setDateFilter(null); setQuickDate(next); }}
+                testid="branch-leads-phone-quick-date"
+              />
             </div>
           )}
 
@@ -3066,10 +3075,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           {/* Phone list — six columns can't be read at 430px whichever way they're sized,
               so below md the same rows are stacked as cards instead of being pushed off
               the side of a horizontally-scrolling table. */}
-          {/* max-sm:hidden joins while the colourless stage stack is up (cards mode): the
-              stack is the screen then, and this list is what a card opens — the same
-              give-and-take Consultation's board has with its own cards above it. */}
-          <div className={`${LEAD_ROW_LIST} md:hidden ${phoneLeadStageCards ? "max-sm:hidden" : ""}`} data-testid="branch-list-mobile">
+          {/* On a phone this sits right under the stage grid, narrowed by its open tile. */}
+          <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-list-mobile">
             {(() => {
               const visible = (stageFilter ? filteredLeads.filter((l) => matchesBranchStage(l, stages.find((s) => s.name === stageFilter), isConsultationOnlyStage, consultationOpeningStage)) : filteredLeads);
               if (visible.length === 0) {
