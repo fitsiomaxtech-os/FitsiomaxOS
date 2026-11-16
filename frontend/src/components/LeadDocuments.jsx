@@ -106,7 +106,7 @@ const fmtWhen = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice
 // caller that never mentions it keeps the panel it always had. Separate because a screen
 // can want the list, the share flag and the bin while having no business adding pages:
 // the Consultant reads a patient's file, the branch that ordered the reports files them.
-export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kind = "general", fixedLabel = "", hint, onChanged }) => {
+export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kind = "general", fixedLabel = "", hint, onChanged, compact = false }) => {
   const [docs, setDocs] = useState([]);
   const [sharing, setSharing] = useState(null); // the doc whose share flag is in flight
   const [loading, setLoading] = useState(true);
@@ -320,6 +320,65 @@ export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kin
     else open(d);
   };
 
+  // Camera and Choose File (and the label box when there is no fixed label). Drawn under
+  // the title, or beside it on one row when `compact`.
+  const buttonRow = (
+    <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
+      {!fixedLabel && (
+        <Input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="What is it? e.g. MRI report"
+          className="h-9 min-w-0 flex-1 bg-white sm:max-w-xs"
+          data-testid="lead-doc-label"
+        />
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp,.pdf"
+        className="hidden"
+        onChange={pick}
+        data-testid="lead-doc-input"
+      />
+      {/* capture="environment" asks for the rear camera, which is the one pointed at
+          a sheet of paper. A desktop browser has no camera to open and falls back to
+          its file picker, so the button is never a dead end — it is just the slower
+          of the two routes there. Images only: there is no such thing as
+          photographing a PDF. */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={pick}
+        data-testid="lead-doc-camera-input"
+      />
+      <Button
+        size="sm"
+        className="bg-sky-600 hover:bg-sky-700"
+        disabled={busy}
+        onClick={() => cameraRef.current?.click()}
+        data-testid="lead-doc-camera"
+      >
+        <Camera className="mr-1.5 h-4 w-4" />
+        {busy ? "Uploading…" : "Camera"}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-sky-200 text-sky-700 hover:bg-sky-50"
+        disabled={busy}
+        onClick={() => fileRef.current?.click()}
+        data-testid="lead-doc-choose"
+      >
+        <Upload className="mr-1.5 h-4 w-4" />
+        {busy ? "Uploading…" : "Choose File"}
+      </Button>
+    </div>
+  );
+
   return (
     <div className="space-y-3" data-testid="lead-documents">
       {canUpload && (
@@ -329,8 +388,12 @@ export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kin
           onDrop={(e) => { e.preventDefault(); setDragging(false); if (!busy) take(e.dataTransfer?.files?.[0]); }}
           className={`rounded-xl border p-3 transition ${dragging ? "border-sky-400 bg-sky-100/70 ring-2 ring-sky-200" : "border-sky-100 bg-sky-50/60"}`}
         >
+          {/* `compact`: the title and the two buttons on one row, no hint line under it. */}
+          <div className={compact ? "flex flex-wrap items-center justify-between gap-2" : ""}>
           <p className="text-[11px] font-bold uppercase tracking-wider text-sky-700">{fixedLabel ? `Upload ${fixedLabel.toLowerCase()} pages` : "Upload a document"}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">{dragging ? "Drop it to file it." : (hint || "Drop a file here, or choose one · JPG, PNG, WEBP or PDF")}</p>
+          {!compact && <p className="mt-0.5 text-[11px] text-slate-500">{dragging ? "Drop it to file it." : (hint || "Drop a file here, or choose one · JPG, PNG, WEBP or PDF")}</p>}
+          {compact && buttonRow}
+          </div>
           {/* What is about to be filed, before it is. Named rather than counted, because
               "1 file" is not something anybody can check against the folder they took it
               from. */}
@@ -351,60 +414,7 @@ export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kin
               </Button>
             </div>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {!fixedLabel && (
-              <Input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="What is it? e.g. MRI report"
-                className="h-9 min-w-0 flex-1 bg-white sm:max-w-xs"
-                data-testid="lead-doc-label"
-              />
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,.pdf"
-              className="hidden"
-              onChange={pick}
-              data-testid="lead-doc-input"
-            />
-            {/* capture="environment" asks for the rear camera, which is the one pointed at
-                a sheet of paper. A desktop browser has no camera to open and falls back to
-                its file picker, so the button is never a dead end — it is just the slower
-                of the two routes there. Images only: there is no such thing as
-                photographing a PDF. */}
-            <input
-              ref={cameraRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={pick}
-              data-testid="lead-doc-camera-input"
-            />
-            <Button
-              size="sm"
-              className="bg-sky-600 hover:bg-sky-700"
-              disabled={busy}
-              onClick={() => cameraRef.current?.click()}
-              data-testid="lead-doc-camera"
-            >
-              <Camera className="mr-1.5 h-4 w-4" />
-              {busy ? "Uploading…" : "Camera"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-sky-200 text-sky-700 hover:bg-sky-50"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-              data-testid="lead-doc-choose"
-            >
-              <Upload className="mr-1.5 h-4 w-4" />
-              {busy ? "Uploading…" : "Choose File"}
-            </Button>
-          </div>
+          {!compact && buttonRow}
         </div>
       )}
 

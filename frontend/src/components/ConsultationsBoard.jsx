@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Upload } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10225,34 +10225,25 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const PhysioDetailBody = physioBody(<div className="flex flex-wrap gap-1.5 pt-0.5">{PhysioActions}</div>);
 
                 const DocumentsBody = (
-                  <div className="space-y-4" data-testid="cons-documents-body">
-                    <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-prescription-block">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
-                          <FileText className="h-3.5 w-3.5" />Prescription
-                          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700">Optional</span>
-                        </p>
-                      </div>
-                      {/* The icon row sits in the popup's footer band, not in this card. */}
-                      <PrescriptionPdf
-                        key={selectedLead.id}
-                        lead={selectedLead}
-                        branch={prescriptionBranches[selectedLead.branch_id]}
-                        actionsSlot={footSlot}
-                      />
-                    </div>
+                  <div className="space-y-3" data-testid="cons-documents-body">
+                    {/* No heading: the generated prescription's icon row sits in the popup's
+                        footer band, so this only shows a status line while it is being made. */}
+                    <PrescriptionPdf
+                      key={selectedLead.id}
+                      lead={selectedLead}
+                      branch={prescriptionBranches[selectedLead.branch_id]}
+                      actionsSlot={footSlot}
+                    />
                     {/* A signed or handwritten prescription, filed beside the generated one.
-                        Same "prescription" kind the Documents tab lists. */}
-                    <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-prescription-upload-block">
-                      <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
-                        <Upload className="h-3.5 w-3.5" />Upload Prescription
-                        <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700">Optional</span>
-                      </p>
+                        Same "prescription" kind the Documents tab lists. One row: label left,
+                        Camera and Choose File right. */}
+                    <div data-testid="cons-prescription-upload-block">
                       <LeadDocuments
                         key={`rx-upload-${selectedLead.id}`}
                         leadId={selectedLead.id}
                         kind="prescription"
                         fixedLabel="Prescription"
+                        compact
                         canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
                         onChanged={notePrescriptionCount}
                       />
