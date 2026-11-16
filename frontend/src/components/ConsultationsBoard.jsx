@@ -2899,6 +2899,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // its patient triggers. See openRowFee, which parks it, and the effect that picks it up.
   const pendingRowFeeRef = useRef(null);
   const [detailTab, setDetailTab] = useState("overview");
+  // On the Branch Admin's Consultation Visit stage the Documents tab is the Prescription
+  // tab: the generated prescription's View PDF / Download / WhatsApp / Print / Share in
+  // the footer, the uploaded pages, and Camera / Choose File to add more.
+  const prescriptionTab = !!selectedLead && !isConsultant && selectedLead.consultation_stage === "Consultation Visit";
   // The consultation's write-up — the pre-sales note, the two boxes the Consultant fills
   // and the plan they confirmed — folded away for everybody except the Consultant who
   // writes it. A branch opens a patient to act on the stage panel, and four read-only
@@ -8210,7 +8214,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // next call is theirs to schedule. A Consultant is here to write up the
                 // consultation in front of them.
                 ...(isConsultant ? [] : [{ key: "followup", label: "Follow up" }]),
-                { key: "documents", label: "Documents" },
+                { key: "documents", label: prescriptionTab ? "Prescription" : "Documents" },
                 // The four uploads a case sheet closes on, and the only screen that can
                 // verify them -- the Branch Admin's; the Consultant only reads it. The
                 // physio delivering the course gathers the clips, and checking their own
@@ -11596,7 +11600,30 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {/* Physio and Nutrition Coach can read a patient's documents but not add or
                   remove them — a report is ordered and filed by the branch or the Head
                   Physio, and a treating clinician deleting one is not a workflow. */}
-              {detailTab === "documents" && (
+              {detailTab === "documents" && prescriptionTab && (
+                <div className="flex flex-col gap-3 [&>[data-testid=prescription-pdf]]:mt-0" data-testid="cons-prescription-tab">
+                  {/* The same tools as the Overview's Prescription (optional) view: the
+                      generated prescription's actions go to the footer band. */}
+                  <PrescriptionPdf
+                    key={`rx-tab-${selectedLead.id}`}
+                    lead={selectedLead}
+                    branch={prescriptionBranches[selectedLead.branch_id]}
+                    actionsSlot={footSlot}
+                  />
+                  <div data-testid="cons-prescription-tab-pages">
+                    <LeadDocuments
+                      key={`rx-tab-pages-${selectedLead.id}`}
+                      leadId={selectedLead.id}
+                      kind="prescription"
+                      fixedLabel="Prescription"
+                      compact
+                      canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
+                      onChanged={notePrescriptionCount}
+                    />
+                  </div>
+                </div>
+              )}
+              {detailTab === "documents" && !prescriptionTab && (
                 <div className="space-y-4">
                 {/* The prescription is filed from the stage panel's Collect a Payment step
                     under a kind of its own, so the general list below never showed it —
