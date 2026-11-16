@@ -5,13 +5,18 @@
  * Consultant, Masters (Zumba) and Accountant -- in one table, decided in place. Reads
  * GET /hr/staff-requests (role and branch beside each row) and decides through the same
  * PATCH /hr/approvals/{id} HR Admin > Approvals uses, so both screens act on one record.
+ *
+ * The calendar beside Refresh keeps the requests whose Date / Time touches the picked day
+ * or range: a leave from the 10th to the 14th shows under the 12th.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Ban, Check, RefreshCw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { hrDecideApproval, hrStaffRequests } from "@/lib/api";
 import { duration, prettyTime } from "@/lib/clock";
+import { toIso } from "@/lib/dateRange";
 
 const GROUPS = [
   { key: "branch_admin", label: "Branch Admin", roles: ["branch_admin", "branch_admin_physio", "branch_admin_fitness", "branch_admin_physio_fitness", "online_physio_admin", "online_fitness_admin"] },
@@ -75,6 +80,7 @@ export const StaffRequestsPanel = () => {
   const [status, setStatus] = useState("pending");
   const [kind, setKind] = useState("all");
   const [group, setGroup] = useState("all");
+  const [dateFilter, setDateFilter] = useState(null); // { key, label, from, to } | null
   const [busy, setBusy] = useState("");
 
   const load = useCallback(() => {
@@ -86,18 +92,22 @@ export const StaffRequestsPanel = () => {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const byGroupKind = useMemo(
-    () => rows.filter((r) => (group === "all" || GROUP_OF[r.role]?.key === group) && (kind === "all" || r.kind === kind)),
-    [rows, group, kind],
-  );
+  // Everything but the status, so the status pills count what the other filters leave.
+  const scoped = useMemo(() => {
+    const from = dateFilter?.from ? toIso(dateFilter.from) : "";
+    const to = dateFilter?.to ? toIso(dateFilter.to) : "";
+    return rows.filter((r) => (group === "all" || GROUP_OF[r.role]?.key === group)
+      && (kind === "all" || r.kind === kind)
+      && (!from || (!!r.from_date && r.from_date <= to && (r.to_date || r.from_date) >= from)));
+  }, [rows, group, kind, dateFilter]);
   const counts = useMemo(() => {
-    const c = { pending: 0, approved: 0, rejected: 0, all: byGroupKind.length };
-    byGroupKind.forEach((r) => { if (c[r.status] !== undefined) c[r.status] += 1; });
+    const c = { pending: 0, approved: 0, rejected: 0, all: scoped.length };
+    scoped.forEach((r) => { if (c[r.status] !== undefined) c[r.status] += 1; });
     return c;
-  }, [byGroupKind]);
+  }, [scoped]);
   const shown = useMemo(
-    () => (status === "all" ? byGroupKind : byGroupKind.filter((r) => r.status === status)),
-    [byGroupKind, status],
+    () => (status === "all" ? scoped : scoped.filter((r) => r.status === status)),
+    [scoped, status],
   );
 
   const decide = async (row, decision) => {
@@ -131,16 +141,21 @@ export const StaffRequestsPanel = () => {
           <option value="all">All Staff</option>
           {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
         </select>
-        <Button
-          onClick={load}
-          disabled={loading}
-          title="Refresh"
-          aria-label="Refresh"
-          className="ml-auto h-9 w-9 shrink-0 rounded-[4px] bg-slate-500 p-0 text-white hover:bg-slate-600"
-          data-testid="bd-perm-refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+        {/* Pre Sales' pair at this toolbar's 36px: an outlined calendar, then Refresh on a
+            light slate wash rather than a solid fill. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="bd-perm-date-filter" centered iconOnly snug />
+          <Button
+            onClick={load}
+            disabled={loading}
+            title="Refresh"
+            aria-label="Refresh"
+            className="h-9 w-9 shrink-0 rounded-[4px] border border-slate-200 bg-slate-100 p-0 text-slate-600 shadow-none hover:bg-slate-200"
+            data-testid="bd-perm-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-[4px] border border-slate-200 bg-white">
