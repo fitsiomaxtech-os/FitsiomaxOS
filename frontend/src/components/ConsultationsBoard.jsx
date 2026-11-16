@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -3328,22 +3328,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // otherwise read as the new patient's, with the previous one's figures still in it.
   useEffect(() => { setProgrammeDetail("own"); setCaseRecordOpen(false); }, [selectedLead?.id]);
 
-  const lastRxCount = useRef(null);
-  useEffect(() => { lastRxCount.current = null; }, [selectedLead?.id]);
   const notePrescriptionCount = (count) => {
-    const had = lastRxCount.current;
-    lastRxCount.current = count;
     setLeadRxCount(count);
     // And the row on the list behind the popup, so its Collect button unlocks with the
     // upload rather than on the next reload.
     if (selectedLead?.id) noteRxFiled(selectedLead.id, count > 0);
     // A prescription is a document like any other, so filing one moves the general count
     // too — the uploader only reports its own kind, and the tab beside it counts them all.
+    // No jump to Collect Fees after an upload: the prescription is optional, and the
+    // page just filed stays on screen under the uploader.
     noteDocsChanged();
-    // Nothing to move on to once the fee is in: the tab is a receipt then, not a step.
-    if (had === 0 && count > 0 && selectedLead?.package_paid == null) {
-      setProgrammeDetail((cur) => (cur === "documents" ? "own" : cur));
-    }
   };
   const [assignTrack, setAssignTrack] = useState("treatment"); // "treatment" | "rehab"
   // Offline <-> Online swap (Branch Admin). swapDraft is the popup: the mode being swapped
@@ -10231,6 +10225,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         lead={selectedLead}
                         branch={prescriptionBranches[selectedLead.branch_id]}
                         actionsSlot={footSlot}
+                      />
+                    </div>
+                    {/* A signed or handwritten prescription, filed beside the generated one.
+                        Same "prescription" kind the Documents tab lists. */}
+                    <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-prescription-upload-block">
+                      <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
+                        <Upload className="h-3.5 w-3.5" />Upload Prescription
+                        <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700">Optional</span>
+                      </p>
+                      <LeadDocuments
+                        key={`rx-upload-${selectedLead.id}`}
+                        leadId={selectedLead.id}
+                        kind="prescription"
+                        fixedLabel="Prescription"
+                        canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
+                        onChanged={notePrescriptionCount}
                       />
                     </div>
                   </div>
