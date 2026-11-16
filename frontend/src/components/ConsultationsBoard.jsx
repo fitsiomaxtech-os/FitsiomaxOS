@@ -14774,45 +14774,33 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {/* Treatment Fee standing — which of these treatment days are actually paid
                       for. The balance sessions still get scheduled, but they're marked unpaid
                       so nobody books them believing the money is in. */}
-                  {/* One status strip, and one line of it. The heading and the amount used
-                      to hold a row of their own above the chips, so a strip that is five
-                      short phrases long took two rows off the top of a modal whose whole
-                      subject is the calendar underneath it. It reads left to right now --
-                      which fee, how much of it is fixed, how much is paid -- with the total
-                      collected held out at the right edge. Nothing wraps: on a screen too
-                      narrow to hold the row it scrolls sideways, rather than folding a
-                      chip's amount away from the day range it belongs to. */}
+                  {/* Short status strip: PAID, UNPAID, and the due date. Scrolls sideways
+                      on a narrow screen rather than wrapping. */}
                   <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 sm:px-4 sm:py-2" data-testid="cons-slot-picker-payment">
                     <div className="flex items-stretch gap-2 overflow-x-auto whitespace-nowrap sm:gap-2.5">
-                      <span className="hidden shrink-0 self-center text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:inline">{assignFeeLabel}</span>
-                      <span
-                        className="shrink-0 rounded-md border border-emerald-900 bg-emerald-700 px-2.5 py-1 text-[11px] font-bold text-white sm:px-3 sm:text-[12px]"
-                        data-testid="cons-slot-picker-count"
-                      >
-                        {openEndedRehab ? `${sortedPickedSlots.length} ${dayNoun}${sortedPickedSlots.length === 1 ? "" : "s"} fixed` : `${sortedPickedSlots.length} of ${totalSessionsNeeded} ${dayNoun}s fixed`}
-                      </span>
-                      <span className="hidden shrink-0 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 sm:inline sm:px-3 sm:text-[12px]" data-testid="cons-payment-paid">
-                        {sessionPayment.paid} {dayNoun}{sessionPayment.paid === 1 ? "" : "s"} PAID
+                      <span className="shrink-0 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 sm:px-3 sm:text-[12px]" data-testid="cons-payment-paid">
+                        PAID
                         {sessionPayment.paidAmount > 0 && <span className="ml-2 font-semibold text-emerald-600">Rs.{sessionPayment.paidAmount}</span>}
                         {sessionPayment.paid > 0 && <span className="ml-2 font-medium text-emerald-500">Day 1–{sessionPayment.paid}</span>}
+                        <span className="ml-2 font-medium text-emerald-500">{sessionPayment.paid} Day{sessionPayment.paid === 1 ? "" : "s"}</span>
                       </span>
                       {sessionPayment.unpaid > 0 ? (
-                        <span className="hidden shrink-0 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 sm:inline sm:px-3 sm:text-[12px]" data-testid="cons-payment-unpaid">
-                          {sessionPayment.unpaid} {dayNoun}{sessionPayment.unpaid === 1 ? "" : "s"} UNPAID
-                          {sessionPayment.dueAmount > 0 && <span className="ml-2 font-semibold text-rose-600">Rs.{sessionPayment.dueAmount}</span>}
-                          <span className="ml-2 font-medium text-rose-500">
-                            Day {sessionPayment.paid + 1}–{sessionPayment.total}
-                            {sessionPayment.dueDate ? ` · due ${dayLabel(sessionPayment.dueDate)}` : ""}
+                        <>
+                          <span className="shrink-0 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 sm:px-3 sm:text-[12px]" data-testid="cons-payment-unpaid">
+                            UNPAID
+                            {sessionPayment.dueAmount > 0 && <span className="ml-2 font-semibold text-rose-600">Rs.{sessionPayment.dueAmount}</span>}
+                            <span className="ml-2 font-medium text-rose-500">Day {sessionPayment.paid + 1}–{sessionPayment.total}</span>
+                            <span className="ml-2 font-medium text-rose-500">{sessionPayment.unpaid} Day{sessionPayment.unpaid === 1 ? "" : "s"}</span>
                           </span>
-                        </span>
+                          {sessionPayment.dueDate && (
+                            <span className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 sm:px-3 sm:text-[12px]" data-testid="cons-payment-due">
+                              due {dayLabel(sessionPayment.dueDate)}
+                            </span>
+                          )}
+                        </>
                       ) : (
-                        <span className="hidden shrink-0 rounded-md border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 sm:inline sm:px-3 sm:text-[12px]">
-                          Package fully paid
-                        </span>
-                      )}
-                      {sessionPayment.price > 0 && (
-                        <span className="ml-auto shrink-0 self-center pl-1 text-[11px] font-bold text-slate-600 sm:text-[12px]">
-                          Rs.{sessionPayment.paidAmount} of Rs.{sessionPayment.price} collected
+                        <span className="shrink-0 rounded-md border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 sm:px-3 sm:text-[12px]">
+                          FULLY PAID
                         </span>
                       )}
                     </div>
@@ -14924,7 +14912,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 on, instead of one click per day for a 28-day package. */}
                             {(physioSlotsByDate[pickerDate] || []).length > 0 && (
                               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[12px] font-semibold text-violet-900" data-testid="cons-slot-bulk">
-                                <span className="font-bold uppercase tracking-wider text-[10px] text-violet-700">Bulk select</span>
                                 <select
                                   value={(physioSlotsByDate[pickerDate] || []).includes(bulkTime) ? bulkTime : ""}
                                   onChange={(e) => setBulkTime(e.target.value)}
@@ -14936,10 +14923,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     <option key={t} value={t}>{slotRange12h(t, minutesAt(pickerDate, t))}</option>
                                   ))}
                                 </select>
-                                <span className="font-normal text-violet-800">every day from {dayLabel(pickerDate)}</span>
                                 <label className="flex cursor-pointer items-center gap-1 font-normal text-violet-800">
                                   <input type="checkbox" checked={bulkSkipSun} onChange={(e) => setBulkSkipSun(e.target.checked)} className="h-3.5 w-3.5 accent-violet-600" data-testid="cons-slot-bulk-skip-sun" />
-                                  Skip Sundays
+                                  Skip Sunday
                                 </label>
                                 <div className="ml-auto flex items-center gap-1.5">
                                   <button
@@ -14957,10 +14943,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     <button
                                       type="button"
                                       onClick={() => setPickedSessionSlots([])}
-                                      className="h-7 rounded border border-violet-300 bg-white px-2.5 text-[12px] font-bold text-violet-700 hover:bg-violet-100"
+                                      className="flex h-7 w-7 items-center justify-center rounded border border-violet-300 bg-white text-violet-700 hover:bg-violet-100"
+                                      title="Clear all"
+                                      aria-label="Clear all"
                                       data-testid="cons-slot-bulk-clear"
                                     >
-                                      Clear all
+                                      <X className="h-4 w-4" />
                                     </button>
                                   )}
                                 </div>
