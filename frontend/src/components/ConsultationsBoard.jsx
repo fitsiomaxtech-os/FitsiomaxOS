@@ -14912,17 +14912,29 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 on, instead of one click per day for a 28-day package. */}
                             {(physioSlotsByDate[pickerDate] || []).length > 0 && (
                               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[12px] font-semibold text-violet-900" data-testid="cons-slot-bulk">
-                                <select
+                                {/* The Date Filter's milk-white list, not the OS's blue one. */}
+                                <Select
                                   value={(physioSlotsByDate[pickerDate] || []).includes(bulkTime) ? bulkTime : ""}
-                                  onChange={(e) => setBulkTime(e.target.value)}
-                                  className="h-7 rounded border border-violet-300 bg-white px-1.5 text-[12px] font-semibold text-slate-800"
-                                  data-testid="cons-slot-bulk-time"
+                                  onValueChange={setBulkTime}
                                 >
-                                  <option value="">Pick a time…</option>
-                                  {(physioSlotsByDate[pickerDate] || []).map((t) => (
-                                    <option key={t} value={t}>{slotRange12h(t, minutesAt(pickerDate, t))}</option>
-                                  ))}
-                                </select>
+                                  <SelectTrigger
+                                    className="h-7 w-auto min-w-[11rem] gap-2 rounded-[4px] border-[#EFEAE0] bg-[#FDFCF8] px-2 text-[12px] font-semibold text-slate-800 shadow-none hover:bg-[#F3EFE6] focus:ring-1 focus:ring-amber-400 data-[placeholder]:text-slate-400"
+                                    data-testid="cons-slot-bulk-time"
+                                  >
+                                    <SelectValue placeholder="Pick a time…" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[200] max-h-72 rounded-[4px] border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
+                                    {(physioSlotsByDate[pickerDate] || []).map((t) => (
+                                      <SelectItem
+                                        key={t}
+                                        value={t}
+                                        className="rounded-[4px] text-[13px] text-slate-700 focus:bg-[#F3EFE6] focus:text-slate-900 data-[state=checked]:bg-amber-100 data-[state=checked]:font-semibold data-[state=checked]:text-amber-800"
+                                      >
+                                        {slotRange12h(t, minutesAt(pickerDate, t))}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                                 <label className="flex cursor-pointer items-center gap-1 font-normal text-violet-800">
                                   <input type="checkbox" checked={bulkSkipSun} onChange={(e) => setBulkSkipSun(e.target.checked)} className="h-3.5 w-3.5 accent-violet-600" data-testid="cons-slot-bulk-skip-sun" />
                                   Skip Sunday
