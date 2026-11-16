@@ -2981,6 +2981,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Treatment Summary box goes from this popup — unless a summary was already written,
   // which stays readable — and Move to Admin stops asking for one.
   const treatmentsHidden = useFeatureHidden("treatments");
+  // Developer Zone > Features: Off skips the confirm before Collect on the fee popup.
+  const feeConfirmOff = useFeatureHidden("consultation_fee_confirm");
 
   // Collect Fee popup (Branch Admin only) — at the Consultation Fee stage
   const [collectFeeDraft, setCollectFeeDraft] = useState(null); // { consultation_item_id, payment_mode, ... } | null
@@ -5188,6 +5190,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // The Collect button on the Consultation Fee section. Everything the chosen method
   // needs is filled in on that section, so what is left to ask is a plain yes -- the
   // browser's own OK, naming the package, the fee and the method, before anything moves.
+  // Developer Zone > Features can switch that OK off (consultation_fee_confirm); every
+  // check before it still runs.
   //
   // The methods that settle now take the package's price less any discount typed under
   // the Payment Mode. There is no part payment on this screen, so a collection here never
@@ -5248,7 +5252,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const question = mode === "partial"
       ? `Save a payment schedule of ${payload.partial_installments.length} installments for the Consultation Fee of ${fee} (${pkg})?`
       : `Collect the Consultation Fee of ${fee}${off} by ${paymentModeName(mode)} for ${pkg}?`;
-    if (!window.confirm(question)) return;
+    if (!feeConfirmOff && !window.confirm(question)) return;
     submitConsultationFee(payload);
   };
 

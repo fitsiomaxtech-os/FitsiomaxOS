@@ -32,13 +32,18 @@ SETTING_ID = "hidden_features"
 # Before & After and Testimonial each have a file, and Close Case Sheet waits until all
 # four are uploaded and verified. Optional (hidden): neither waits. The tab shows it as
 # Mandatory / Optional — hidden is Optional.
-FEATURE_KEYS = ("treatments", "past_day_appointments", "progression_mandatory")
+#
+# consultation_fee_confirm: the "Collect the Consultation Fee of Rs.X by <mode>?" browser
+# confirm on the Collect Consultation Fee popup (Branch Leads). Screen-only: the tab shows
+# it as On / Off — hidden is Off, and Collect saves at once.
+FEATURE_KEYS = ("treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm")
 
 # What a missing row means. "treatments" ships hidden: this install asked for the tab and
 # the Treatment Summary dropdown to be off out of the box, and Show in Hide Features is how
 # it comes back. "past_day_appointments" ships blocked, which is how the calendar has
 # always behaved. "progression_mandatory" ships Optional, so turning it on is a decision
 # rather than a deploy locking Mark Treatment Complete on patients mid-course.
+# "consultation_fee_confirm" ships On, which is how Collect has always behaved.
 DEFAULT_HIDDEN = ("treatments", "past_day_appointments", "progression_mandatory")
 
 # The keys a row decided on before rows carried `known` — every key that existed then. A

@@ -72,6 +72,20 @@ const HIDE_FEATURE_ROWS = [
     hiddenToast: "Progression Uploads are optional",
     shownToast: "Progression Uploads are mandatory",
   },
+  {
+    // Hidden is Off. Only the browser confirm before Collect on the Collect Consultation
+    // Fee popup; the cash count and every other check still run.
+    key: "consultation_fee_confirm",
+    label: "Consultation Fee Collect Confirmation",
+    on: "ON",
+    off: "OFF",
+    confirmHide:
+      "Turn off the Consultation Fee confirmation?\n\nCollect on the Collect Consultation Fee popup saves at once, without asking \"Collect the Consultation Fee of Rs.X?\" first.",
+    confirmShow:
+      "Turn on the Consultation Fee confirmation?\n\nCollect on the Collect Consultation Fee popup asks \"Collect the Consultation Fee of Rs.X?\" before it saves.",
+    hiddenToast: "Consultation Fee confirmation is off",
+    shownToast: "Consultation Fee confirmation is on",
+  },
 ];
 
 // The four pages inside the zone, all behind the same developer password.

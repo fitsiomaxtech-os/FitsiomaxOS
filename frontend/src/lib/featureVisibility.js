@@ -18,6 +18,8 @@ import { getFeatureVisibility } from "@/lib/api";
 //   progression_mandatory — whether the progression uploads hold up Mark Treatment
 //                           Complete and Close Case Sheet. Shown as Mandatory / Optional;
 //                           hidden is Optional. The server answers it on /progression too.
+//   consultation_fee_confirm — the browser confirm before Collect on the Collect
+//                           Consultation Fee popup. Shown as ON / OFF; hidden is OFF.
 let hiddenFeatures = [];
 let loaded = false;
 // Whether the list has actually come back, as opposed to `loaded`, which is set as soon
