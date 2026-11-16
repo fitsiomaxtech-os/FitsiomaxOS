@@ -691,8 +691,7 @@ export const PermissionRequestBoard = () => {
         })}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" data-testid="my-timeoff-table-card">
-        <h3 className="mb-3 text-sm font-semibold text-slate-800">{tabLabel} Requests</h3>
+      <div className="rounded-xl border border-slate-200 bg-white px-5 pb-5 pt-2 shadow-sm" data-testid="my-timeoff-table-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm" data-testid="my-timeoff-table">
             <thead>
