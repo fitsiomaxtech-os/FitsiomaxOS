@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, uploadEmployeePhoto,
+  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount,
   hrUsers, hrCreateUser, hrUpdateUser, hrResetPassword, hrEmailStatus, hrEmailTest, hrDeactivateUser, hrActivateUser, hrDeleteUserPermanent, hrMeta, hrAddCustomRole,
   hrDepartments, hrCreateDepartment, hrRenameDepartment, hrDeleteDepartment, hrAddDesignation, hrRenameDesignation, hrDeleteDesignation, hrReorderDesignations,
   getBranches, getVerticals,
@@ -1483,6 +1483,8 @@ const VIEW_TABS = [
   { key: "id_docs", label: "ID & Documents" },
   { key: "address", label: "Address & Emergency" },
   { key: "salary", label: "Salary & Bank" },
+  { key: "credentials", label: "Credentials" },
+  { key: "structure", label: "Department & Designation" },
 ];
 
 /**
@@ -1491,10 +1493,19 @@ const VIEW_TABS = [
  * position is how the wrong person gets removed; here the whole record is on screen
  * first.
  */
-const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
+const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete }) => {
   // The dialog remounts on every open ({viewing && ...} above), so this always starts
   // on the first tab rather than the one the last employee viewed was left on.
   const [tab, setTab] = useState("personal");
+  // The login behind the record, fetched once the dialog opens. A record read out of
+  // History hands its accounts in instead — the employee is gone, so there is nothing
+  // left to fetch it by.
+  const [login, setLogin] = useState(accounts ? { account: accounts[0] || null } : null);
+  useEffect(() => {
+    if (accounts || !e.id) return;
+    hrEmployeeAccount(e.id).then(setLogin).catch(() => setLogin({ account: null, failed: true }));
+  }, [accounts, e.id]);
+  const acct = login?.account;
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
@@ -1514,7 +1525,7 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
             one down the right, at a fixed height — so the read and the write of a record
             look like one form in two moods. */}
         <div className="flex h-[430px] max-h-[70vh] flex-col sm:flex-row">
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-view-tabs">
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-52 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-view-tabs">
             {VIEW_TABS.map((t) => (
               <button
                 key={t.key}
@@ -1553,8 +1564,6 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
           {tab === "employment" && (
             <ViewSection>
               <ViewRow label="Employee Code" value={e.employee_code} />
-              <ViewRow label="Department" value={e.department} />
-              <ViewRow label="Designation" value={e.designation} />
               <ViewRow label="Work Type" value={MODE_LABELS[modeValue(e.work_type)]} />
               <ViewRow label="Service" value={e.service ? (SERVICE_LABELS[e.service] || e.service) : ""} />
               <ViewRow label="Branch" value={e.branch_name} />
@@ -1586,6 +1595,42 @@ const EmployeeViewModal = ({ employee: e, onClose, onEdit, onDelete }) => {
               <ViewRow label="Bank Name" value={e.bank_name} />
               <ViewRow label="Account Number" value={e.bank_account} />
               <ViewRow label="IFSC" value={e.ifsc} />
+            </ViewSection>
+          )}
+
+          {tab === "credentials" && (
+            <ViewSection>
+              {login === null ? (
+                <p className="py-2 text-xs text-slate-400" data-testid="hr-emp-view-login-loading">Loading login…</p>
+              ) : acct ? (
+                <>
+                  <ViewRow label="Username (Email)" value={acct.email} />
+                  <ViewRow label="Password" value="••••••••" />
+                  <ViewRow label="Role" value={acct.role ? roleLabel(acct.role) : ""} />
+                  <ViewRow label="Login Status" value={acct.is_active === false ? "Deactivated" : "Active"} />
+                  {acct.branches && <ViewRow label="Branches" value={acct.branches.map((b) => b.name).join(", ")} />}
+                  {"last_login_at" in acct && <ViewRow label="Last Login" value={acct.last_login_at ? dashDate(acct.last_login_at) : ""} />}
+                </>
+              ) : (
+                <>
+                  <ViewRow label="Username (Email)" value="" />
+                  <ViewRow label="Password" value="" />
+                  <ViewRow label="Login Status" value={login.failed ? "Could not load" : "No login yet"} />
+                  {!accounts && !login.failed && (
+                    <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500" data-testid="hr-emp-view-no-login">
+                      {onEdit ? <>No sign-in for this employee yet. Open <b>Edit</b> → <b>Credentials</b> to create one.</> : "No sign-in for this employee."}
+                    </p>
+                  )}
+                </>
+              )}
+            </ViewSection>
+          )}
+
+          {tab === "structure" && (
+            <ViewSection>
+              <ViewRow label="Department" value={e.department} />
+              <ViewRow label="Designation" value={e.designation} />
+              <ViewRow label="Access Role" value={acct?.role ? roleLabel(acct.role) : login?.designation_role ? roleLabel(login.designation_role) : ""} />
             </ViewSection>
           )}
         </div>
@@ -1685,7 +1730,7 @@ const EmployeeHistoryModal = ({ onClose }) => {
                 {shown.map((r) => {
                   const e = r.employee || {};
                   return (
-                    <tr key={r.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setViewing(e)} data-testid="hr-emp-history-row">
+                    <tr key={r.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setViewing(r)} data-testid="hr-emp-history-row">
                       <td className="px-3 py-2">
                         <p className="font-medium text-slate-900">{e.full_name || "—"}</p>
                         <p className="text-xs text-slate-500">{e.employee_code || "No code"}</p>
@@ -1714,7 +1759,7 @@ const EmployeeHistoryModal = ({ onClose }) => {
         </div>
       </div>
 
-      {viewing && <EmployeeViewModal employee={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <EmployeeViewModal employee={viewing.employee || {}} accounts={viewing.accounts || []} onClose={() => setViewing(null)} />}
     </div>
   );
 };
@@ -1814,6 +1859,9 @@ const EMP_TABS = [
   // straight over the figure that timeline had put on the employee. Two doors onto one
   // number, and the one with no history behind it won.
   { key: "bank", label: "Bank & PAN" },
+  // The employee's sign-in, set on the record itself rather than only from Credentials.
+  { key: "credentials", label: "Credentials" },
+  { key: "structure", label: "Department & Designation" },
 ];
 
 const blankEmployee = {
@@ -1891,6 +1939,20 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
       ...(lockedBranchId ? { branch_id: lockedBranchId, branch_ids: [lockedBranchId] } : {}),
     });
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  // Credentials. The login already on the record is fetched on an edit; a new employee has
+  // none. credEmail stays null until typed in, and until then follows the account's own
+  // username, or the employee's Email for a login not made yet.
+  const [login, setLogin] = useState(employee?.id ? null : { account: null });
+  useEffect(() => {
+    if (!employee?.id) return;
+    hrEmployeeAccount(employee.id).then(setLogin).catch(() => setLogin({ account: null, failed: true }));
+  }, [employee?.id]);
+  const account = login?.account || null;
+  const [credEmail, setCredEmail] = useState(null);
+  const [credPwd, setCredPwd] = useState("");
+  const [credConfirm, setCredConfirm] = useState("");
+  const loginEmail = String(credEmail ?? (account?.email || form.email) ?? "").trim();
 
   // The picked photo is held here and only uploaded when the form is submitted — the same
   // order the store's item images use. Abandoning the dialog then costs nothing at all,
@@ -1998,8 +2060,18 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
 
   const submit = async () => {
     if (!form.full_name.trim()) { toast.error("Full name required"); setTab("personal"); return; }
-    if (!form.department) { toast.error("Pick a Department"); setTab("employment"); return; }
-    if (!form.designation) { toast.error("Pick a Designation"); setTab("employment"); return; }
+    if (!form.department) { toast.error("Pick a Department"); setTab("structure"); return; }
+    if (!form.designation) { toast.error("Pick a Designation"); setTab("structure"); return; }
+    // Checked before the employee is written, so a typo in the password does not leave a
+    // saved record behind a failed login. A blank password on a new employee is no login.
+    const wantsPwd = Boolean(credPwd || credConfirm);
+    const emailChanged = Boolean(account && loginEmail && loginEmail !== account.email);
+    const saveLogin = wantsPwd || emailChanged;
+    if (saveLogin) {
+      if (!loginEmail) { toast.error("Enter the login username (email)"); setTab("credentials"); return; }
+      if (wantsPwd && credPwd.length < 6) { toast.error("Password must be at least 6 characters"); setTab("credentials"); return; }
+      if (wantsPwd && credPwd !== credConfirm) { toast.error("Passwords do not match"); setTab("credentials"); return; }
+    }
     // Online is two arms — Online Physiotherapy and Online Fitness — and Service is what
     // says which of them this person works. Offline does not ask: a room is chosen by name
     // in the Branch field below, which Online does not have.
@@ -2043,8 +2115,27 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
         const role = await resolveRole(form.designation);
         if (role) payload.account_role = role;
       }
+      let savedId = employee?.id;
       if (employee) { await hrUpdateEmployee(employee.id, payload); toast.success("Employee updated"); }
-      else { await hrCreateEmployee(payload); toast.success("Employee created"); }
+      else { savedId = (await hrCreateEmployee(payload))?.id; toast.success("Employee created"); }
+      // The login goes second: it hangs off the employee's id, and its role is read off the
+      // designation just saved. A refusal here leaves the employee saved and says so, so
+      // the login can be tried again from Edit -> Credentials.
+      if (saveLogin && savedId) {
+        try {
+          // Org-wide HR resolves (and if need be mints) the role the way Create User does;
+          // a Branch Admin's is read off the designation on the server.
+          const role = !account && !lockedBranchId ? await resolveRole(form.designation) : "";
+          await hrSaveEmployeeAccount(savedId, {
+            email: loginEmail,
+            ...(wantsPwd ? { password: credPwd } : {}),
+            ...(role ? { role } : {}),
+          });
+          toast.success(account ? "Login updated" : "Login created");
+        } catch (err) {
+          toast.error(`Employee saved, but the login was not: ${err?.response?.data?.detail || "failed"}`);
+        }
+      }
       onSaved();
     } catch (e) { toast.error(e?.response?.data?.detail || "Save failed"); }
   };
@@ -2062,7 +2153,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
             each — the same rows the View popup reads in. The fixed height is the tallest
             tab's (Personal), so no tab scrolls and the dialog doesn't jump between them. */}
         <div className="flex h-[430px] max-h-[70vh] flex-col sm:flex-row">
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-52 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
             {EMP_TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
             ))}
@@ -2146,8 +2237,6 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
           {tab === "employment" && (
             <div className="px-5 py-1">
               <FormRow label="Employee Code"><Input className="h-8" value={form.employee_code} onChange={(e) => set("employee_code", e.target.value)} placeholder="Auto-generated" data-testid="hr-emp-code" /></FormRow>
-              <FormRow label="Department *"><OsSelect value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></FormRow>
-              <FormRow label="Designation *"><OsSelect value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></FormRow>
               {/* Joining Date, Reporting To and Status are not asked here. Joining Date is
                   stamped when the employee's login is created (create_user_account); all
                   three still ride along in the form, so an edit saves them back unchanged. */}
@@ -2270,6 +2359,35 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                 Salary is set in <b>Payroll Management</b>, on the employee's own salary
                 record — each figure filed with the reason for it and the month it starts,
                 so what somebody was on in any given month has an answer.
+              </p>
+            </div>
+          )}
+          {tab === "credentials" && (
+            <div className="px-5 py-1">
+              {login === null ? (
+                <p className="py-3 text-xs text-slate-400" data-testid="hr-emp-login-loading">Loading login…</p>
+              ) : (
+                <>
+                  <FormRow label="Username (Email)"><Input className="h-8" value={credEmail ?? (account?.email || form.email || "")} onChange={(e) => setCredEmail(e.target.value)} placeholder="user@company.com" data-testid="hr-emp-login-email" /></FormRow>
+                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} testid="hr-emp-login-pwd" /></FormRow>
+                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" testid="hr-emp-login-confirm" /></FormRow>
+                  <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>
+                  <FormRow label="Login Status"><Input className="h-8" value={account ? (account.is_active === false ? "Deactivated" : "Active") : login.failed ? "Could not load" : "No login yet"} disabled data-testid="hr-emp-login-status" /></FormRow>
+                  <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+                    {account
+                      ? "A new password signs them out everywhere. Leave both boxes blank to keep the current one."
+                      : "Set a password to give this employee a sign-in. Leave it blank to save them without one."}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+          {tab === "structure" && (
+            <div className="px-5 py-1">
+              <FormRow label="Department *"><OsSelect value={form.department} onChange={changeDepartment} options={["", ...meta.departments]} testid="hr-emp-dept" uppercase /></FormRow>
+              <FormRow label="Designation *"><OsSelect value={form.designation} onChange={(v) => set("designation", v)} options={designationOptions} testid="hr-emp-designation" uppercase /></FormRow>
+              <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+                The designation is the employee's role: their login signs in with the access it gives.
               </p>
             </div>
           )}
@@ -4909,7 +5027,7 @@ const FormRow = ({ label, children }) => (
 // A password box that can be read back. Whoever sets a password here has to pass it on
 // to the person it belongs to, so being unable to check what was typed is how an account
 // gets handed over with a credential nobody can log in with.
-const PasswordInput = ({ value, onChange, placeholder, testid }) => {
+const PasswordInput = ({ value, onChange, placeholder, testid, className = "" }) => {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
@@ -4918,7 +5036,7 @@ const PasswordInput = ({ value, onChange, placeholder, testid }) => {
         placeholder={placeholder}
         value={value}
         onChange={onChange}
-        className="pr-10"
+        className={`pr-10 ${className}`}
         data-testid={testid}
       />
       <button

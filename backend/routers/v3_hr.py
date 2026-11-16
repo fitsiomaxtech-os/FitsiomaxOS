@@ -1641,6 +1641,159 @@ async def _apply_role(user_id: str, role: str) -> bool:
     return True
 
 
+# ---------- an employee's own login (the popups' Credentials tab) ----------
+#
+# The Employee popups show and set the login on the record itself, so a Branch Admin can
+# hand a new hire their sign-in without the org-wide Credentials screen, which they do not
+# hold. Scoped exactly as editing the employee is, and narrower on roles: a Branch Admin
+# cannot mint or reset a login that would outrank their own desk.
+
+BRANCH_ADMIN_BARRED_ROLES = frozenset({
+    "super_admin", "super_admin_pro", "business_dev", "accountant", "hr_admin",
+    "marketing_head", "sales_head",
+}) | BRANCH_ADMIN_ROLES
+
+
+class EmployeeAccountSave(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None
+    # Only honoured from org-wide HR, which resolves (and may mint) the role in the browser
+    # the way Create User does. A Branch Admin's comes off the designation, server side.
+    role: Optional[str] = None
+
+
+async def _scoped_employee(emp_id: str, user: V3UserOut) -> dict:
+    employee = await v3_col("employees").find_one({"id": emp_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    branch_scope = _branch_admin_scope(user)
+    if branch_scope is not None:
+        _require_employee_branch_scope(await _employee_branch_ids_with_account(employee), branch_scope)
+    return employee
+
+
+async def _role_for_designation(designation: str) -> str:
+    """The role slug the employee's designation names, or "" when none is assignable."""
+    if not str(designation or "").strip():
+        return ""
+    names = await _all_role_names()
+    slug = _slugify_role(designation)
+    by_key = {str(n).strip().lower(): n for n in names}
+    if slug in by_key:
+        return by_key[slug]
+    # A custom role is matched on its label too, the way the browser's map reads it.
+    key = re.sub(r"[^a-z0-9]", "", str(designation).lower())
+    for r in await _custom_roles():
+        if re.sub(r"[^a-z0-9]", "", str(r.get("label") or "").lower()) == key and r.get("name"):
+            return r["name"]
+    return ""
+
+
+def _account_out(u: dict, bmap: dict) -> dict:
+    ids = u.get("branch_ids") or ([u["branch_id"]] if u.get("branch_id") else [])
+    return {
+        "id": u.get("id"),
+        "email": u.get("email") or "",
+        "role": u.get("role") or "",
+        "is_active": u.get("is_active", True) is not False,
+        "branches": [{"id": i, "name": bmap.get(i) or "Unknown branch"} for i in ids if i],
+        "created_at": u.get("created_at"),
+        "password_changed_at": u.get("password_changed_at"),
+    }
+
+
+@router.get("/employees/{emp_id}/account")
+async def get_employee_account(
+    emp_id: str,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "marketing_head", "business_dev", "branch_admin")),
+):
+    """The login linked to this employee, never with its password hash. account is null
+    when they have none yet; designation_role is the role one would be created on."""
+    employee = await _scoped_employee(emp_id, user)
+    row = await v3_col("users").find_one({"employee_id": emp_id}, {"_id": 0, "password": 0}, sort=[("created_at", 1)])
+    account = None
+    if row:
+        branch_docs = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500)
+        account = _account_out(row, {b["id"]: b.get("branch_name", "") for b in branch_docs})
+        last = await v3_col("login_history").find_one(
+            {"user_id": row["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)],
+        )
+        account["last_login_at"] = (last or {}).get("created_at")
+    return {"account": account, "designation_role": await _role_for_designation(employee.get("designation"))}
+
+
+@router.put("/employees/{emp_id}/account")
+async def save_employee_account(
+    emp_id: str,
+    payload: EmployeeAccountSave,
+    user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """Create this employee's login, or change its username or password.
+
+    With no login yet, both email and password are required and the role is the
+    designation's. With one, a blank password leaves it as it is, and a new one ends the
+    login's live sessions exactly as Reset Password does.
+    """
+    employee = await _scoped_employee(emp_id, user)
+    is_branch_admin = _branch_admin_scope(user) is not None
+    email = str(payload.email or "").strip()
+    password = payload.password or ""
+    if password and len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    existing = await v3_col("users").find_one({"employee_id": emp_id}, {"_id": 0}, sort=[("created_at", 1)])
+    if existing:
+        if existing.get("role") == "super_admin" and user.role != "super_admin":
+            raise HTTPException(status_code=403, detail="Only a Super Admin can change a Super Admin account")
+        if is_branch_admin and existing.get("role") in BRANCH_ADMIN_BARRED_ROLES:
+            raise HTTPException(status_code=403, detail="Branch Admins cannot change this login")
+        updates: Dict[str, Any] = {}
+        if email and email != existing.get("email"):
+            clash = await v3_col("users").find_one({"email": email, "id": {"$ne": existing["id"]}}, {"_id": 0, "id": 1})
+            if clash:
+                raise HTTPException(status_code=409, detail="Email already in use")
+            updates["email"] = email
+        if password:
+            updates["password"] = hash_password(password)
+            updates["password_changed_at"] = now_iso()
+        if not updates:
+            raise HTTPException(status_code=400, detail="Nothing to change")
+        await v3_col("users").update_one({"id": existing["id"]}, {"$set": updates})
+        if password:
+            await v3_col("sessions").delete_many({"user_id": existing["id"]})
+        return {"message": "Login updated", "created": False}
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required to create a login")
+    role = ""
+    if payload.role and not is_branch_admin:
+        role = payload.role
+    else:
+        role = await _role_for_designation(employee.get("designation"))
+    if not role:
+        raise HTTPException(status_code=400, detail=f"No role matches the designation \"{employee.get('designation') or ''}\" — add it under Credentials first")
+    if is_branch_admin and role in BRANCH_ADMIN_BARRED_ROLES:
+        raise HTTPException(status_code=403, detail="Branch Admins cannot create a login for this designation")
+    # The account covers what the employee does. ALL_BRANCHES is an employee's marker for
+    # everywhere; on a login that is an empty list, so it does not survive the copy.
+    branches = [b for b in _employee_branch_ids(employee) if b != ALL_BRANCHES]
+    primary = employee.get("branch_id") if employee.get("branch_id") in branches else (branches[0] if branches else None)
+    ordered = ([primary] if primary else []) + [b for b in branches if b != primary]
+    await create_user_account(
+        UserAccountCreate(
+            full_name=employee.get("full_name") or email.split("@")[0],
+            email=email,
+            password=password,
+            role=role,
+            employee_id=emp_id,
+            branch_id=primary,
+            branch_ids=ordered or None,
+        ),
+        user,
+    )
+    return {"message": "Login created", "created": True}
+
+
 # ---------- email delivery ----------
 #
 # Every code this OS sends — a sign-in code, a password reset link, a reset OTP — leaves
