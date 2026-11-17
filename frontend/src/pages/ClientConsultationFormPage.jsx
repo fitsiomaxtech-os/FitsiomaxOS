@@ -3,6 +3,7 @@ import axios from "axios";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { CLIENT_FIELDS, ConsultationFormSheets, EMPTY_FORM, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { ClientDetailsPopup, DETAIL_KEYS } from "@/components/branch/ClientDetailsPopup";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -18,6 +19,7 @@ export const ClientConsultationFormPage = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [details, setDetails] = useState(true); // the Fill Your Details popup, asked first
 
   useEffect(() => {
     document.title = "Consultation Form · Fitsiomax";
@@ -33,8 +35,7 @@ export const ClientConsultationFormPage = () => {
   const set = (key, v) => { setError(""); setForm((cur) => ({ ...cur, [key]: v })); };
 
   const submit = async () => {
-    if (!form.name.trim()) { setError("Please enter your name."); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-    if (!form.contact_no.trim()) { setError("Please enter your contact number."); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (!form.name.trim() || !form.contact_no.trim()) { setDetails(true); return; }
     setSending(true);
     setError("");
     try {
@@ -74,7 +75,7 @@ export const ClientConsultationFormPage = () => {
       <div className="mx-auto max-w-3xl">
         <p className="mb-3 text-center text-sm text-slate-600">Please fill in your details before your visit and tap <b>Submit</b> at the end.</p>
         {error && <p className="mb-3 rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-consult-form-error">{error}</p>}
-        <ConsultationFormSheets f={form} set={set} client />
+        <ConsultationFormSheets f={form} set={set} client detailKeys={DETAIL_KEYS} onEditDetails={() => setDetails(true)} />
         {error && <p className="mt-3 rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
         <button
           type="button"
@@ -87,6 +88,12 @@ export const ClientConsultationFormPage = () => {
         </button>
         <p className="mt-4 text-center text-xs text-slate-400">Fitsio_Max · Physio Care &amp; Fitness Centre · +91 75388 36030</p>
       </div>
+      {details && (
+        <ClientDetailsPopup
+          form={form}
+          onDone={(v) => { setError(""); setForm((cur) => ({ ...cur, ...v })); setDetails(false); window.scrollTo({ top: 0 }); }}
+        />
+      )}
     </div>
   );
 };

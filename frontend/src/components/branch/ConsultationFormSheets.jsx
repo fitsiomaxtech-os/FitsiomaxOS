@@ -61,17 +61,25 @@ const dotted = {
 
 const inputCls = "w-full min-w-0 bg-transparent px-1 text-[15px] text-slate-900 outline-none placeholder:text-slate-300 focus:bg-sky-50/60";
 
-/** One line: "Label: ......" with the dots filling the rest of the row. */
-const Line = ({ label, value, onChange, className = "", testid, ...rest }) => (
+/**
+ * One line: "Label: ......" with the dots filling the rest of the row. With `onOpen` the
+ * line is read-only and a tap calls it instead -- the client link's details popup.
+ */
+const Line = ({ label, value, onChange, className = "", testid, onOpen, ...rest }) => (
   <label className={`flex min-w-0 items-end gap-1 ${className}`}>
     <span className="shrink-0 whitespace-nowrap text-[15px] text-slate-700" style={{ lineHeight: `${LINE}px` }}>{label}</span>
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`${inputCls} h-8 flex-1`}
+      className={`${inputCls} h-8 flex-1 ${onOpen ? "cursor-pointer" : ""}`}
       style={dotted}
       data-testid={testid}
       {...rest}
+      {...(onOpen ? {
+        readOnly: true,
+        onClick: onOpen,
+        onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } },
+      } : {})}
     />
   </label>
 );
@@ -133,8 +141,18 @@ const Page = ({ n, children }) => (
   </div>
 );
 
-export const ConsultationFormSheets = ({ f, set, client = false }) => {
-  const bind = (key) => ({ value: f[key], onChange: (v) => set(key, v), testid: `consultation-form-${key}` });
+/**
+ * `detailKeys` are fields another popup owns (the client link's details popup): they show
+ * read-only here, and a tap on one calls `onEditDetails`.
+ */
+export const ConsultationFormSheets = ({ f, set, client = false, detailKeys = [], onEditDetails }) => {
+  const owned = (key) => Boolean(onEditDetails) && detailKeys.includes(key);
+  const bind = (key) => ({
+    value: f[key],
+    onChange: (v) => set(key, v),
+    testid: `consultation-form-${key}`,
+    ...(owned(key) ? { onOpen: onEditDetails } : {}),
+  });
   return (
     <div className="flex flex-col gap-4">
       {/* Page 1 */}
@@ -177,7 +195,7 @@ export const ConsultationFormSheets = ({ f, set, client = false }) => {
                 type="button"
                 role="radio"
                 aria-checked={on}
-                onClick={() => set("branch", on ? "" : b)}
+                onClick={() => (owned("branch") ? onEditDetails() : set("branch", on ? "" : b))}
                 className="flex items-center gap-2 text-[15px] text-slate-700"
                 data-testid={`consultation-form-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
               >
