@@ -9355,22 +9355,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         going away with, and any combination of those is valid, including
                         none of them.
 
-                        Two columns: the shelf on the left, what has actually been chosen on
-                        the right, and the pickers themselves over the form in a popup. They
-                        used to unroll under the shelf, one block per ticked service, so a
-                        patient going away with three things meant three stacked pickers and
-                        a Confirm button below all of them — picking the third service was a
-                        scroll past the answers to the first two. Only one service is ever
-                        being answered at a time, so only one picker is ever on screen, and
-                        the form stays the height of its two short columns. */}
-                    <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                        The five services in one row, each group's label over its own tiles;
+                        what has been chosen listed below, and the pickers over the form in a
+                        popup, one service at a time. On a phone the row is four across, so
+                        Others wraps to a second line. */}
+                    <div className="mb-3 space-y-4">
                       <div>
-                        {/* Tiles, three to a row, under each group's own heading. */}
-                        <div className="space-y-3" data-testid="cons-decision-plan-options">
+                        {/* The outer gap matches each group's inner one, so all five tiles come
+                            out the same width. */}
+                        <div className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-5" data-testid="cons-decision-plan-options">
                           {CONSULTATION_ADDON_GROUPS.map((g) => (
-                            <div key={g.label} data-testid={`cons-decision-plan-group-${g.keys[0]}`}>
-                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</p>
-                              <div className="grid grid-cols-3 gap-2">
+                            <div
+                              key={g.label}
+                              className="min-w-0"
+                              style={{ gridColumn: `span ${g.keys.length} / span ${g.keys.length}` }}
+                              data-testid={`cons-decision-plan-group-${g.keys[0]}`}
+                            >
+                              <p className="mb-1.5 truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</p>
+                              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${g.keys.length}, minmax(0, 1fr))` }}>
                                 {CONSULTATION_ADDONS.filter((p) => g.keys.includes(p.key)).map((p) => {
                                   const selected = !!decisionDraft[p.key];
                                   const Icon = p.icon;
@@ -9380,7 +9382,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                       type="button"
                                       onClick={() => pickAddon(p.key)}
                                       aria-pressed={selected}
-                                      className="relative flex h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-[13px] font-semibold text-slate-800 transition hover:brightness-95"
+                                      className="relative flex h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px]"
                                       style={selected
                                         ? { background: `${p.tone}1f`, borderColor: p.tone, boxShadow: `inset 0 0 0 1px ${p.tone}` }
                                         : { background: `${p.tone}12`, borderColor: `${p.tone}38` }}
@@ -9405,8 +9407,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </div>
                       </div>
 
-                      {/* The answers, one row per ticked service, in the shelf's own order so
-                          the rows read down in the order the services read down opposite. A
+                      {/* The answers, one row per ticked service, in the shelf's own order. A
                           row is the way back into its picker; the × beside it is the only way
                           an optional service comes off, which puts removing one next to the
                           choice being thrown away rather than on the chip that turned it on.
