@@ -6073,8 +6073,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const physioMode = track === "treatment"
       ? (swapTo || listMode || (selectedLead?.session_mode_plan?.length ? (selectedLead.session_package_mode || "offline") : null))
       : null;
+    // On the every-branch board (Business Development Executive's Consultation View) there
+    // is no branch to list, so the patient's own branch is the one asked for.
+    const physioBranchId = branchId === "all" ? (selectedLead?.branch_id || branchId) : branchId;
     try {
-      const rows = await getDoctors(physioMode ? { branch_id: branchId, physio_mode: physioMode } : { branch_id: branchId });
+      const rows = await getDoctors(physioMode ? { branch_id: physioBranchId, physio_mode: physioMode } : { branch_id: physioBranchId });
       physios = (rows || []).filter((d) => d.profile_type === "physio");
     } catch {
       physios = [];

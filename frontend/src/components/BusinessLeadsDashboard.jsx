@@ -19,6 +19,7 @@ import {
   Search,
   Settings,
   Star,
+  Stethoscope,
   Store,
   UserPlus,
   Users,
@@ -87,6 +88,8 @@ const MarketingBoard = lazyWithRetry(() => import("@/components/marketing/Market
 const PipelineStageManagement = lazyWithRetry(() => import("@/components/PipelineStageManagement").then((m) => ({ default: m.PipelineStageManagement })));
 // Permission -- every staff leave and permission request. This desk's alone.
 const StaffRequestsPanel = lazyWithRetry(() => import("@/components/hr/StaffRequestsPanel").then((m) => ({ default: m.StaffRequestsPanel })));
+// Consultation View -- Branch Admin's Consultation tab across every branch.
+const BdConsultationView = lazyWithRetry(() => import("@/components/BdConsultationView").then((m) => ({ default: m.BdConsultationView })));
 
 /**
  * What sits under the tab strip while one of those chunks is on the wire.
@@ -137,6 +140,8 @@ const TABS = [
   { key: "presales_view", label: "Pre Sales View", icon: PhoneCall },
   { key: "branch_control", label: "Branch Control", icon: LayoutDashboard },
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
+  // Consultation View: every branch's Consultation tab, its stage cards and its toolbar.
+  { key: "consultation_view", label: "Consultation View", icon: Stethoscope },
   { key: "sales_view", label: "Sales View", icon: Headphones },
   { key: "finance", label: "Finance", icon: BadgeIndianRupee },
   { key: "permission", label: "Permission", icon: CalendarOff },
@@ -173,9 +178,9 @@ const isTabActive = (view, key) => (key === "settings" ? SETTINGS_SUB_VIEWS.incl
 // Where the strip's own Refresh is not drawn -- see the note on the button itself. Dashboard
 // because its toolbar carries the same one, and the three mounted boards because each
 // carries its own and this one would not touch what they show.
-const REFRESH_WITHHELD_TABS = ["dashboard", "presales_view", "finance", "permission", "hr", "packages"];
+const REFRESH_WITHHELD_TABS = ["dashboard", "presales_view", "consultation_view", "finance", "permission", "hr", "packages"];
 // Where the strip's Add Lead is not drawn: the tab's own toolbar carries it.
-const ADD_LEAD_WITHHELD_TABS = ["presales_view"];
+const ADD_LEAD_WITHHELD_TABS = ["presales_view", "consultation_view"];
 
 /**
  * The toolbar's date range as the two query params both BD endpoints already take.
@@ -486,6 +491,11 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
 
         {activeTab === "permission" && (
           <StaffRequestsPanel />
+        )}
+
+        {/* Its Add Patient opens this board's Add Lead form; drillTick reloads it after. */}
+        {activeTab === "consultation_view" && (
+          <BdConsultationView onAddPatient={() => setShowCreateLead(true)} reloadToken={drillTick} />
         )}
 
         {activeTab === "hr" && (
