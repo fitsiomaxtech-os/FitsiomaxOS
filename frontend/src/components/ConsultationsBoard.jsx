@@ -9435,20 +9435,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               return (
                                 <div
                                   key={a.key}
-                                  className="flex min-w-0 items-start gap-1 rounded-xl border py-2 pl-3 pr-1.5"
+                                  className="relative min-w-0 rounded-xl border px-2.5 py-2"
                                   style={{ background: `${a.tone}12`, borderColor: `${a.tone}2e` }}
                                   data-testid={`cons-decision-detail-${a.key}`}
                                 >
+                                  {/* Two lines, always: the name, then the details on one line
+                                      under it (cut short with … if too long, in full on hover).
+                                      The × sits in the corner so the details get the full width. */}
                                   <button
                                     type="button"
                                     onClick={() => pickAddon(a.key)}
                                     disabled={!hasPicker(a.key)}
-                                    className="min-w-0 flex-1 text-left disabled:cursor-default"
+                                    className="block w-full min-w-0 text-left disabled:cursor-default"
                                     data-testid={`cons-decision-selected-${a.key}`}
                                   >
-                                    <span className="block text-[13px] font-semibold text-slate-800">{a.label}</span>
+                                    <span className="block truncate pr-6 text-[13px] font-semibold text-slate-800">{a.label}</span>
                                     <span
-                                      className={`block break-words text-[11px] ${summary.incomplete ? "font-medium text-rose-600" : "text-slate-600"}`}
+                                      className={`block truncate text-[11px] ${summary.incomplete ? "font-medium text-rose-600" : "text-slate-600"}`}
                                       title={summary.text}
                                     >
                                       {summary.text}
@@ -9457,7 +9460,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                   <button
                                     type="button"
                                     onClick={() => clearAddon(a.key)}
-                                    className="shrink-0 rounded-md p-1 transition hover:bg-white/70"
+                                    className="absolute right-1.5 top-1.5 rounded-md p-1 transition hover:bg-white/70"
                                     style={{ color: a.tone }}
                                     title={`Remove ${a.label}`}
                                     data-testid={`cons-decision-remove-${a.key}`}
