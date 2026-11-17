@@ -459,7 +459,9 @@ const PaymentModes = ({ tx }) => {
 // Applied, Closing Balance, Close Books) with 4px corners — the Branch Admin's own login.
 // `canDeleteClients`: Branch Admin's board hands down its Branch Leads bin rule -- the role
 // and the Danger Zone switch -- so Payment Schedule's bin is offered exactly where that one is.
-export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = false, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false, canDeleteClients = false }) => {
+// `filterDropdowns`: Summary's payment modes and revenue cards as two dropdowns in the
+// toolbar, from sm up -- the Branch Admin's own login.
+export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = false, verticalModeFilter = false, approvedOnly = false, scoped = false, toolbarTarget = null, phoneCards = false, squareTable = false, canDeleteClients = false, filterDropdowns = false }) => {
   const stickyRootRef = useRef(null);
   const toolbarRef = useRef(null);
   const ledgerCardsRef = useRef(null);
@@ -1125,6 +1127,32 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                 {PAYMENT_MODES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </FilterSelect>
             )}
+            {/* Branch Admin (filterDropdowns): the six modes as one dropdown, and the eight
+                revenue cards under the pile as a second one beside it -- the bar reads tabs,
+                mode, revenue, range. The revenue one only over an income pile, the one
+                place those cards stood. */}
+            {filterDropdowns ? (
+              <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2 sm:flex" data-testid="accountant-manage-payment-mode-filter">
+                <ThemedSelect
+                  value={paymentModeFilter}
+                  onChange={setPaymentModeFilter}
+                  options={PAYMENT_MODES.map(([value, label]) => ({ value, label }))}
+                  title="Payment mode"
+                  className="h-10 w-36 px-2.5 text-xs font-semibold min-[1900px]:text-sm"
+                  testid="accountant-manage-payment-mode-dropdown"
+                />
+                {ledger === "income" && (
+                  <ThemedSelect
+                    value={revenueView}
+                    onChange={setRevenueView}
+                    options={REVENUE_VIEWS.map((v) => ({ value: v.key, label: `${v.short} · ${fmt(sums.totals[v.key])}` }))}
+                    title="Revenue"
+                    className="h-10 w-52 px-2.5 text-xs font-semibold min-[1900px]:w-60 min-[1900px]:text-sm"
+                    testid="accountant-manage-revenue-view-select"
+                  />
+                )}
+              </div>
+            ) : (
             <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2 sm:flex" data-testid="accountant-manage-payment-mode-filter">
               {PAYMENT_MODES.map(([key, label]) => (
                 <button
@@ -1140,6 +1168,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                 </button>
               ))}
             </div>
+            )}
           </>
         )}
         {!toolbarTarget && dateControls}
@@ -1326,7 +1355,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
 
               The same card as the five above (ui/ledger-card), so the two rows read as one
               set: white at rest, the picked one filled solid in its own colour. */}
-          <div ref={revenueCardsRef} className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${stickyRevenueClass} ${phoneHide(false)}`}>
+          {/* With filterDropdowns the toolbar's revenue dropdown is these from sm up; a phone
+              still has them (or its own drill), as the dropdown is not drawn there. */}
+          <div ref={revenueCardsRef} className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-8 ${stickyRevenueClass} ${filterDropdowns ? "sm:hidden" : ""} ${phoneHide(false)}`}>
             {REVENUE_VIEWS.map((v) => (
               <LedgerCard
                 key={v.key}
