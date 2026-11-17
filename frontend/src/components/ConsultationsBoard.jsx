@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, Layers, Check } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9331,7 +9331,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 return (
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid="cons-decision-form">
                     <p className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-800">
-                      <ClipboardCheck className="h-4 w-4 text-sky-600" /> Treatment
+                      <ClipboardCheck className="h-4 w-4 text-sky-600" /> Treatment Service
                     </p>
                     {/* The thing standing between this form and Save, so it is a block that
                         stops the eye rather than a coloured line of text among other lines.
@@ -9365,9 +9365,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         the form stays the height of its two short columns. */}
                     <div className="mb-3 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                          <Layers aria-hidden className="h-4 w-4 text-emerald-600" /> Services
-                        </p>
                         {/* Tiles, three to a row, under each group's own heading. */}
                         <div className="space-y-3" data-testid="cons-decision-plan-options">
                           {CONSULTATION_ADDON_GROUPS.map((g) => (
