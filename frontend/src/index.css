@@ -154,7 +154,7 @@ code {
 }
 
 /* The bottom-edge loading bar: the filled stretch sweeps along the track
-   while the board's data is on its way (indeterminate -- there is no real percentage to
+   while the page's data is on its way, on every page -- components/LoadingBar.jsx (indeterminate -- there is no real percentage to
    show). Holds a part-filled bar for a desk set to reduce motion. */
 @keyframes loading-bar-sweep {
     from {

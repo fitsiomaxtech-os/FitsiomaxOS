@@ -1,12 +1,19 @@
 import axios from "axios";
 import { loadSession, clearSession } from "@/lib/session";
 import { reportMaybeOffline } from "@/lib/connection";
+import { QUIET, trackLoading } from "@/lib/loadingBar";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const api = axios.create({
   baseURL: `${BACKEND_URL}/api/v3`,
 });
+
+// The bottom loading bar counts this client's reads. Added before the token interceptor
+// on purpose -- see trackLoading. The plain axios instance is counted too: the public
+// testimonials and client form pages read through it directly.
+trackLoading(api);
+trackLoading(axios);
 
 api.interceptors.request.use((config) => {
   const token = loadSession()?.token;
@@ -482,7 +489,7 @@ export const getBranchFinance = async (params = {}) => {
 };
 
 // ---- Finance: Approvals / Expenses / Profit (Accountant) ----
-export const getFinanceApprovals = async (params = {}) => (await api.get("/finance/approvals", { params })).data;
+export const getFinanceApprovals = async (params = {}, opts = {}) => (await api.get("/finance/approvals", { params, ...opts })).data;
 // Behind the Developer Access delete switch; reverses the payment at its source.
 export const deleteTransaction = async (id) => (await api.delete(`/finance/transactions/${id}`)).data;
 // payload: { confirmed_amount } for Cash, { transaction_ref } for Bank Transfer/UPI,
@@ -494,7 +501,7 @@ export const unapproveTransaction = async (activityId) => (await api.post(`/fina
 // are approved with who and when and nothing to check against. Weaker than the popup
 // above on purpose; the caller is expected to say so before using it.
 export const bulkApproveTransactions = async (activityIds) => (await api.post("/finance/transactions/bulk-approve", { activity_ids: activityIds })).data;
-export const getFinanceExpenses = async (params = {}) => (await api.get("/finance/expenses", { params })).data;
+export const getFinanceExpenses = async (params = {}, opts = {}) => (await api.get("/finance/expenses", { params, ...opts })).data;
 export const createFinanceExpense = async (payload) => (await api.post("/finance/expenses", payload)).data;
 export const deleteFinanceExpense = async (expenseId) => (await api.delete(`/finance/expenses/${expenseId}`)).data;
 // Signing off a branch's expense, or turning it down with the reason. Neither is open to
@@ -835,14 +842,16 @@ export const hrEmployees = async (params = {}) => {
 // Everyone's own day, pressed by them. No id anywhere in here on purpose: each of these
 // answers for whoever the token belongs to, and there is no shape of request that reads
 // somebody else's — that is HR's register above.
-export const clockToday = async () => (await api.get("/clock/today")).data;
+// Header reads (clock, EOD, bell, tab dots, session alerts) are QUIET: they refresh on a
+// timer whatever page is open, and the bottom loading bar is for the page itself.
+export const clockToday = async () => (await api.get("/clock/today", QUIET)).data;
 export const clockIn = async () => (await api.post("/clock/in")).data;
 export const clockBreakOut = async (reason) => (await api.post("/clock/break-out", { reason })).data;
 export const clockBreakIn = async () => (await api.post("/clock/break-in")).data;
 export const clockOut = async () => (await api.post("/clock/out")).data;
 export const clockHistory = async (month) => (await api.get("/clock/history", { params: month ? { month } : {} })).data;
 // EOD Report — asked at Clock Out of Physios and Consultants; read by Super Admin in HR Admin.
-export const eodToday = async () => (await api.get("/eod/today")).data;
+export const eodToday = async () => (await api.get("/eod/today", QUIET)).data;
 export const eodSubmit = async (payload) => (await api.post("/eod/today", payload)).data;
 // Both ends optional; neither is every report ("All").
 export const eodReports = async ({ from, to } = {}) => (await api.get("/eod-reports", { params: { ...(from ? { date_from: from } : {}), ...(to ? { date_to: to } : {}) } })).data;
@@ -904,7 +913,7 @@ export const hrCreateApproval = async (payload) => (await api.post("/hr/approval
 export const hrDecideApproval = async (id, decision, note = "") => (await api.patch(`/hr/approvals/${id}`, { decision, note })).data;
 export const hrDeleteApproval = async (id) => (await api.delete(`/hr/approvals/${id}`)).data;
 // The header bell: the signed-in person's own notifications (routers/v3_notifications.py).
-export const myNotifications = async () => (await api.get("/notifications")).data;
+export const myNotifications = async () => (await api.get("/notifications", QUIET)).data;
 export const readAllNotifications = async () => (await api.post("/notifications/read-all")).data;
 export const clearNotifications = async () => (await api.delete("/notifications")).data;
 // BDE > Permission: leave and permission requests with the requester's role and branch.
@@ -1131,7 +1140,7 @@ export const getLeadTransferEligibility = async (leadId) => (await api.get(`/lea
 export const transferLeadBranch = async (leadId, payload) => (await api.post(`/leads/${leadId}/transfer-branch`, payload)).data;
 export const getBranchTransferRecords = async (branchId) => (await api.get(`/branch-admin/transfer-records/${branchId}`)).data;
 // When each Branch Admin tab last had something new in it -- the red dots on the tabs.
-export const getBranchTabActivity = async (branchId) => (await api.get(`/branch-admin/tab-activity/${branchId}`)).data;
+export const getBranchTabActivity = async (branchId) => (await api.get(`/branch-admin/tab-activity/${branchId}`, QUIET)).data;
 // Rehab — a parallel course on the same physio's calendar. Its own endpoint and its own
 // collection: a rehab day is not a day of the treatment package (see backend/v3_rehab).
 export const assignRehab = async (payload) => (await api.post("/branch/assign-rehab", payload)).data;
@@ -1185,7 +1194,7 @@ export const recruitmentReorderStages = async (ids) => (await api.post("/recruit
 export const getDashboardClients = async (branchId) => (await api.get("/dashboard/clients", { params: branchId ? { branch_id: branchId } : {} })).data;
 // Clients whose paid treatment sessions have run out (or have one left) with a Treatment
 // Fee balance still owing -- the header's rupee bell. Scoped per role by the backend.
-export const getSessionPaymentAlerts = async () => (await api.get("/session-payment-alerts")).data;
+export const getSessionPaymentAlerts = async () => (await api.get("/session-payment-alerts", QUIET)).data;
 // A Branch Admin letting the remaining sessions go ahead unpaid by moving the balance's due
 // date, or turning down the client's request for more time.
 export const approveSessionPaymentExtension = async (leadId, extendedDueDate, note) =>

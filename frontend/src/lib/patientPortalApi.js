@@ -1,4 +1,5 @@
 import axios from "axios";
+import { trackLoading } from "@/lib/loadingBar";
 
 // Deliberately separate from lib/api.js's `api` instance: that one auto-attaches the
 // STAFF session token and, on any 401, clears the staff session and reloads the page.
@@ -8,6 +9,8 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const PORTAL_SESSION_KEY = "fitsiomax_patient_portal_session";
 
 const portalApi = axios.create({ baseURL: `${BACKEND_URL}/api/v3` });
+// The patient's pages get the same bottom loading bar as the staff ones.
+trackLoading(portalApi);
 
 export const loadPortalSession = () => {
   try {

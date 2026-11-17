@@ -8,6 +8,7 @@ import { ExpenseBoard } from "@/components/finance/ExpenseBoard";
 import { ProfitBoard } from "@/components/finance/ProfitBoard";
 import { VendorPanel } from "@/components/branch/VendorPanel";
 import { getFinanceApprovals, getFinanceExpenses } from "@/lib/api";
+import { QUIET } from "@/lib/loadingBar";
 
 // How often the Approvals badge asks again. A branch sends a day up while this board sits
 // open on some other tab, and a minute is soon enough to hear about it without asking the
@@ -170,8 +171,9 @@ export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => 
   const [pending, setPending] = useState({ income: 0, expenses: 0 });
   const refreshPending = useCallback(async () => {
     const [income, expenses] = await Promise.all([
-      getFinanceApprovals({ approved: false }).catch(() => null),
-      getFinanceExpenses({}).catch(() => null),
+      // QUIET: a badge count on a one-minute timer, not the page loading.
+      getFinanceApprovals({ approved: false }, QUIET).catch(() => null),
+      getFinanceExpenses({}, QUIET).catch(() => null),
     ]);
     // A failed read keeps the last count rather than dropping to zero: a badge that
     // vanishes on a network blip says the queue emptied when nothing was approved.

@@ -7,6 +7,7 @@ import { clearSession, loadSession, saveSession } from "@/lib/session";
 import { apiMe, MY_PHOTO_CHANGED_EVENT } from "@/lib/api";
 import { AppThemeController } from "@/components/ThemeAppearance";
 import { OfflineScreen } from "@/components/OfflineScreen";
+import { LoadingBar } from "@/components/LoadingBar";
 
 /**
  * Everything behind the login screen is split out of the first download.
@@ -103,6 +104,8 @@ function App() {
       <AppThemeController userId={auth?.user?.id} />
       {/* Outside Suspense and static: it has to draw when no chunk can be fetched. */}
       <OfflineScreen />
+      {/* The bottom-edge loading bar, for every page -- see lib/loadingBar.js. */}
+      <LoadingBar />
       {/* One boundary around the table rather than one per route: only ever a single route
           is resolving, and five identical fallbacks would say the same thing five times. */}
       <Suspense fallback={<RouteFallback />}>

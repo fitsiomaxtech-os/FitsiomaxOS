@@ -3781,11 +3781,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       )}
       </div>
 
-      {loading && (
-        <div role="status" aria-label="Loading" className="pointer-events-none fixed inset-x-0 bottom-0 z-50 h-0.5 overflow-hidden bg-blue-100">
-          <div className="loading-bar-sweep h-full w-1/2 bg-blue-600" />
-        </div>
-      )}
+      {/* The bottom loading bar that sat here is now App.js's <LoadingBar />, on every
+          page; this board's reads drive it like any other. */}
 
       {/* Back-to-top arrow over the lists, phone and desktop (Branch Leads, Consultation,
           House Visit, Activity Care for its Review) -- the screens where the user scrolls a

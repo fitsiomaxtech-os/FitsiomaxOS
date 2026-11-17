@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import { probeConnection, reportMaybeOffline, waitForConnection } from "@/lib/connection";
+import { beginLoading, endLoading } from "@/lib/loadingBar";
 
 // React.lazy() with a safety net for ChunkLoadError.
 //
@@ -62,6 +63,12 @@ export async function importWithRetry(factory) {
   throw lastErr;
 }
 
+// A board's chunk on the wire is the page loading too, so it runs the bottom loading bar
+// (lib/loadingBar.js) for as long as the import takes. lazy() calls this once per
+// component, so a chunk already downloaded never shows it again.
 export function lazyWithRetry(factory) {
-  return lazy(() => importWithRetry(factory));
+  return lazy(() => {
+    beginLoading();
+    return importWithRetry(factory).finally(endLoading);
+  });
 }
