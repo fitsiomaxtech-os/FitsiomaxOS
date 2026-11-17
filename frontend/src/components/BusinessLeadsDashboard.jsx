@@ -917,7 +917,14 @@ const CARD_GROUPS = [
 // Marketing and Sales are left off this desk's copy: the BDE board doesn't read them.
 // Super Admin's own Dashboard still draws both.
 const HIDDEN_DASH_TABS = ["marketing", "sales"];
-const DASH_SUB_TABS = [...CARD_GROUPS, ...DASH_TABS.filter((t) => !HIDDEN_DASH_TABS.includes(t.key))];
+// Analytics leads the strip, ahead of Summary: Analytics | Summary | Revenue | Team | Clients.
+// Only the order moves -- the tab the Dashboard opens on is still Summary (openGroup below).
+const SHOWN_DASH_TABS = DASH_TABS.filter((t) => !HIDDEN_DASH_TABS.includes(t.key));
+const DASH_SUB_TABS = [
+  ...SHOWN_DASH_TABS.filter((t) => t.key === "analytics"),
+  ...CARD_GROUPS,
+  ...SHOWN_DASH_TABS.filter((t) => t.key !== "analytics"),
+];
 const CARD_GROUP_KEYS = CARD_GROUPS.map((g) => g.key);
 
 // The two tabs this desk reads as a table of rows rather than as Super Admin's row of
