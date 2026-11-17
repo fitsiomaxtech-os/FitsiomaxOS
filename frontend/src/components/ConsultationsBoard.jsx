@@ -9386,7 +9386,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                         type="button"
                                         onClick={() => pickAddon(p.key)}
                                         aria-pressed={selected}
-                                        className="flex h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px]"
+                                        className="flex h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-[4px] border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px]"
                                         style={{ background: `${p.tone}${selected ? "1f" : "12"}`, borderColor: `${p.tone}38` }}
                                         data-testid={`cons-decision-plan-${p.key}`}
                                       >
@@ -9397,11 +9397,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                         <button
                                           type="button"
                                           onClick={() => clearAddon(p.key)}
-                                          className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white transition hover:bg-slate-950"
+                                          className="absolute right-1 top-1 p-1 text-slate-800 transition hover:text-black"
                                           title={`Remove ${p.label}`}
                                           data-testid={`cons-decision-plan-remove-${p.key}`}
                                         >
-                                          <X aria-hidden className="h-3 w-3" strokeWidth={3} />
+                                          <X aria-hidden className="h-4 w-4" strokeWidth={2.5} />
                                         </button>
                                       )}
                                     </div>
@@ -9441,7 +9441,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               return (
                                 <div
                                   key={a.key}
-                                  className="relative min-w-0 rounded-xl border px-2.5 py-2"
+                                  className="relative min-w-0 rounded-[4px] border px-2.5 py-2"
                                   style={{ background: `${a.tone}12`, borderColor: `${a.tone}2e` }}
                                   data-testid={`cons-decision-detail-${a.key}`}
                                 >
