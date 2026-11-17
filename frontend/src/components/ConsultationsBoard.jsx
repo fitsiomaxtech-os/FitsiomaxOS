@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, Check } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9376,29 +9376,35 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                 {CONSULTATION_ADDONS.filter((p) => g.keys.includes(p.key)).map((p) => {
                                   const selected = !!decisionDraft[p.key];
                                   const Icon = p.icon;
+                                  // Picked or not, the border stays the same; a picked tile is
+                                  // told apart by the dark × in its corner, which takes it off.
+                                  // The × is a sibling rather than inside the tile, since a
+                                  // button cannot hold a button.
                                   return (
-                                    <button
-                                      key={p.key}
-                                      type="button"
-                                      onClick={() => pickAddon(p.key)}
-                                      aria-pressed={selected}
-                                      className="relative flex h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px]"
-                                      style={selected
-                                        ? { background: `${p.tone}1f`, borderColor: p.tone, boxShadow: `inset 0 0 0 1px ${p.tone}` }
-                                        : { background: `${p.tone}12`, borderColor: `${p.tone}38` }}
-                                      data-testid={`cons-decision-plan-${p.key}`}
-                                    >
+                                    <div key={p.key} className="relative min-w-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => pickAddon(p.key)}
+                                        aria-pressed={selected}
+                                        className="flex h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px]"
+                                        style={{ background: `${p.tone}${selected ? "1f" : "12"}`, borderColor: `${p.tone}38` }}
+                                        data-testid={`cons-decision-plan-${p.key}`}
+                                      >
+                                        <Icon aria-hidden className="h-7 w-7 shrink-0" style={{ color: p.tone }} />
+                                        <span className="max-w-full truncate">{p.label}</span>
+                                      </button>
                                       {selected && (
-                                        <span
-                                          className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-white"
-                                          style={{ background: p.tone }}
+                                        <button
+                                          type="button"
+                                          onClick={() => clearAddon(p.key)}
+                                          className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white transition hover:bg-slate-950"
+                                          title={`Remove ${p.label}`}
+                                          data-testid={`cons-decision-plan-remove-${p.key}`}
                                         >
-                                          <Check aria-hidden className="h-3 w-3" strokeWidth={3} />
-                                        </span>
+                                          <X aria-hidden className="h-3 w-3" strokeWidth={3} />
+                                        </button>
                                       )}
-                                      <Icon aria-hidden className="h-7 w-7 shrink-0" style={{ color: p.tone }} />
-                                      <span className="max-w-full truncate">{p.label}</span>
-                                    </button>
+                                    </div>
                                   );
                                 })}
                               </div>
