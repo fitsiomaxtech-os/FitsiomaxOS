@@ -1397,16 +1397,24 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           icon={Briefcase}
         />
         <WorkTypeFilterSelect value={workType} onChange={setWorkType} className="sm:hidden" testid="hr-emp-worktype-filter-select" />
-        <div className="hidden items-center gap-2 sm:flex" data-testid="hr-emp-worktype-filter">
-          <TabPill active={workType === ""} onClick={() => setWorkType("")} testid="hr-emp-worktype-filter-all">
-            All
-          </TabPill>
-          <TabPill active={workType === "online"} onClick={() => setWorkType("online")} testid="hr-emp-worktype-filter-online">
-            Online
-          </TabPill>
-          <TabPill active={workType === "offline"} onClick={() => setWorkType("offline")} testid="hr-emp-worktype-filter-offline">
-            Offline
-          </TabPill>
+        {/* The OS's toolbar segmented control (Dashboard's All / Offline / Online group,
+            ModeBranchScope): one white, rounded, 40px box like the dropdowns beside it,
+            the lit option solid sky inside it. */}
+        <div className="hidden h-10 shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 sm:flex" data-testid="hr-emp-worktype-filter">
+          {WORK_TYPE_FILTERS.map((w) => (
+            <button
+              key={w.key || "all"}
+              type="button"
+              onClick={() => setWorkType(w.key)}
+              aria-pressed={workType === w.key}
+              className={`h-full shrink-0 rounded px-3.5 text-sm font-medium transition ${
+                workType === w.key ? "bg-sky-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              }`}
+              data-testid={`hr-emp-worktype-filter-${w.key || "all"}`}
+            >
+              {w.label}
+            </button>
+          ))}
         </div>
         {/* History sits with Add Employee at the far end: both are about the list as a
             whole rather than a filter on it. */}
