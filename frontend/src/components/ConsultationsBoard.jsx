@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8183,15 +8183,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {flatFeeStyle || isConsultant || (bookedDetail && selectedLead.consultation_stage === "Consultation Booked") ? (
               <div className={`min-w-0 flex-1 self-center ${isConsultant ? "order-last basis-full sm:order-none sm:basis-0" : ""}`}>
                 {/* The Consultant's row is one face end to end, its "Treatment Prescription"
-                    too: 14px Manrope (the app's body font) in #64748B (slate-500), medium. */}
-                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-slate-500" : "text-base font-semibold text-slate-900"}`} data-testid="cons-detail-title">
+                    too: 14px Manrope (the app's body font) in rgb(100 116 139), medium.
+                    A fixed colour rather than text-slate-500: Theme Appearance remaps the
+                    slate scale, so slate-500 drew darker than #64748B on a Multi theme. */}
+                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-[rgb(100,116,139)]" : "text-base font-semibold text-slate-900"}`} data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
-                    <span className={`shrink-0 rounded bg-slate-100 px-1.5 py-0.5 ${isConsultant ? "text-sm font-medium text-slate-500" : "font-mono text-[11px] font-semibold text-slate-500"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                    <span className={`shrink-0 rounded bg-slate-100 px-1.5 py-0.5 ${isConsultant ? "text-sm font-medium text-[rgb(100,116,139)]" : "font-mono text-[11px] font-semibold text-slate-500"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
-                  <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
+                  <span className={`shrink-0 text-sm font-medium ${isConsultant ? "text-[rgb(100,116,139)]" : "text-slate-500"}`} data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
                   {isConsultant && selectedLead.appointment_date && (
-                    <span className="shrink-0 text-sm font-medium text-slate-500" data-testid="cons-detail-appt-slot">
+                    <span className="shrink-0 text-sm font-medium text-[rgb(100,116,139)]" data-testid="cons-detail-appt-slot">
                       {apptDayLabel(selectedLead.appointment_date)}
                       {selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}
                     </span>
@@ -8243,7 +8245,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               )}
               {/* The Consultant's popup names itself at the far right, just before the X. */}
               {isConsultant && (
-                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-medium text-slate-500 [font-family:Manrope,sans-serif]" data-testid="cons-detail-popup-name">
+                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-medium text-[rgb(100,116,139)] [font-family:Manrope,sans-serif]" data-testid="cons-detail-popup-name">
                   Treatment Prescription
                 </span>
               )}
@@ -8262,21 +8264,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 row whose underline floats in the middle of the band.
 
                 Centred on the Consultant's Treatment Report popup. Safe centring, so a
-                row too wide for a phone falls back to the start and still scrolls. */}
-            <div className={`flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden ${isConsultant ? "[justify-content:safe_center]" : ""}`} data-testid="cons-detail-tabs">
+                row too wide for a phone falls back to the start and still scrolls.
+
+                The Consultant's tabs are shaded pills with an icon each: the selected one
+                sits on a pale blue fill in blue, the rest in slate with no fill. */}
+            <div className={`flex shrink-0 flex-nowrap items-center overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden ${isConsultant ? "gap-x-2 py-1.5 [justify-content:safe_center]" : "gap-x-4"}`} data-testid="cons-detail-tabs">
               {[
-                { key: "overview", label: "Overview" },
+                { key: "overview", label: "Overview", icon: House },
                 // Not for the Consultant, for the same reason the Timeline is not: chasing
                 // a patient who did not pick up is the branch's errand, and scheduling the
                 // next call is theirs to schedule. A Consultant is here to write up the
                 // consultation in front of them.
                 ...(isConsultant ? [] : [{ key: "followup", label: "Follow up" }]),
-                { key: "documents", label: prescriptionTab ? "Prescription" : "Documents" },
+                { key: "documents", label: prescriptionTab ? "Prescription" : "Documents", icon: FileText },
                 // The four uploads a case sheet closes on, and the only screen that can
                 // verify them -- the Branch Admin's; the Consultant only reads it. The
                 // physio delivering the course gathers the clips, and checking their own
                 // work would make the requirement prove nothing.
-                { key: "progression", label: "Progression" },
+                { key: "progression", label: "Progression", icon: ChartLine },
                 // Not for the Consultant. The timeline is every stage move, call attempt
                 // and save on the lead — a branch's working record of how the patient got
                 // here, and the people who wrote it are the ones who read it back. A
@@ -8284,8 +8289,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // rows of "Branch stage: 'Branch Assign' -> 'RNR'" is not the case they
                 // are being asked about.
                 ...(isConsultant ? [] : [{ key: "timeline", label: "Timeline" }]),
-                { key: "profile", label: "Profile" },
-              ].map((t) => (
+                { key: "profile", label: "Profile", icon: User },
+              ].map((t) => isConsultant ? (
+                <button
+                  key={t.key}
+                  onClick={() => setDetailTab(t.key)}
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${detailTab === t.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"}`}
+                  data-testid={`cons-detail-tab-${t.key}`}
+                >
+                  <t.icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                  {t.label}
+                </button>
+              ) : (
                 <button
                   key={t.key}
                   onClick={() => setDetailTab(t.key)}
@@ -8714,6 +8729,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             placeholder="What treatment should be given to the patient..."
                             presetKind="treatment_summary"
                             choices={treatmentTypes}
+                            statusInHead
                             testPrefix="cons-treatment-summary"
                           />
                         )}
@@ -16454,10 +16470,21 @@ function TreatmentChecklist({ options, value, onChange, testPrefix }) {
 function LockableTextBox({
   icon: Icon, label, value, onChange, editing, locked, savedText,
   saving, canEdit, onEdit, onUnlock, rows, placeholder, testPrefix, presetKind,
-  choices, lockNote,
+  choices, lockNote, statusInHead,
 }) {
   const showEditor = canEdit && (editing || !savedText);
   const hasChoices = Array.isArray(choices) && choices.length > 0;
+  // The save status renders only when it has something to say -- otherwise an empty
+  // strip would hold the space. statusInHead puts it at the right of the heading row
+  // (Treatment Summary) instead of on a line of its own under the box.
+  const showStatus = showEditor && (saving || !!value.trim());
+  const status = (
+    <span className="flex items-center gap-1 text-[11px] text-slate-400">
+      {saving ? "Saving..." : (
+        <><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-saved</>
+      )}
+    </span>
+  );
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid={testPrefix}>
@@ -16465,6 +16492,9 @@ function LockableTextBox({
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           <Icon className="h-3.5 w-3.5" /> {label}
         </p>
+        {statusInHead && showStatus && (
+          <div className="ml-auto flex items-center" data-testid={`${testPrefix}-autosave-status`}>{status}</div>
+        )}
         {/* Both kinds of shut, under one padlock. `locked` is the Consultant's own lock,
             which their Edit button reopens; `lockNote` is a shut this card cannot reopen
             at all, and reading as unlocked would be the wrong picture of it. */}
@@ -16503,14 +16533,8 @@ function LockableTextBox({
               the popup closes, so there was nothing for it to do that wasn't already
               happening. The status line renders only when it has something to say —
               otherwise an empty strip would hold the space the button used to. */}
-          {(saving || value.trim()) && (
-            <div className="mt-1.5 flex items-center" data-testid={`${testPrefix}-autosave-status`}>
-              <span className="flex items-center gap-1 text-[11px] text-slate-400">
-                {saving ? "Saving..." : (
-                  <><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-saved</>
-                )}
-              </span>
-            </div>
+          {!statusInHead && showStatus && (
+            <div className="mt-1.5 flex items-center" data-testid={`${testPrefix}-autosave-status`}>{status}</div>
           )}
         </>
       ) : savedText ? (
