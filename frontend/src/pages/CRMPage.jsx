@@ -1066,9 +1066,13 @@ export const CRMPage = ({ auth, onLogout }) => {
   // The BDE's Dashboard on a phone sits flush under the header. Its own tab strip is
   // hidden there (the footer above carries the tabs), so all that stood between the header
   // and the Dashboard's sub-tabs was this page's top padding plus the space-y gap the fixed
-  // footer -- a sibling ahead of the board -- leaves on it. Below sm only: from sm up the
-  // strip is back and so is the room above it.
+  // footer -- a sibling ahead of the board -- leaves on it.
   const bdPhoneFlush = showBusinessDevBoard && bdTab === "dashboard" && !showProfile;
+  // Every other BDE screen, and the Dashboard from sm up, keeps the tab strip close under the
+  // header, as Branch Admin's does (pt-1): no top padding (py-6) and no space-y gap (the
+  // fixed footer is still a sibling ahead of the board on a desktop, just display:none),
+  // which together left 48px of empty page between the header and the tabs.
+  const bdFlush = showBusinessDevBoard && !showProfile;
 
   const filteredAppointmentsForPhysioBoards = appointments;
 
@@ -1363,7 +1367,7 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         </Suspense>
 
-        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : "space-y-4"} px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 ${showBranchBoard ? "md:pt-1" : ""} ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
+        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : bdFlush ? "space-y-0 pt-1" : "space-y-4"} px-3 py-4 ${bdFlush ? "sm:pt-1" : "sm:space-y-6"} sm:px-6 sm:py-6 ${showBranchBoard ? "md:pt-1" : ""} ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
 
         {showSuperAdminBoard && (
           <div className="hidden flex-wrap items-center gap-2 border-b border-slate-200 pb-2 md:flex" data-testid="super-admin-nav">
