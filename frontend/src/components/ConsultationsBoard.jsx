@@ -8166,7 +8166,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 Each line wraps rather than squeezes: on a phone whatever sits at the end
                 drops under the start of its line and lines up on the left with it, rather
                 than hanging off the right edge on a row of its own. */}
-            <div className={`flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap sm:flex-nowrap" : ""}`}>
+            <div className={`flex shrink-0 items-start gap-3 border-b px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap border-slate-500 bg-slate-500 sm:flex-nowrap" : "border-slate-200"}`}>
               {/* Consultation Visit and Fee Collected: one row -- name, patient number, phone,
                   no icons. The expert and the appointment's day are left to the Overview below it.
 
@@ -8182,18 +8182,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   column beside the name. */}
               {flatFeeStyle || isConsultant || (bookedDetail && selectedLead.consultation_stage === "Consultation Booked") ? (
               <div className={`min-w-0 flex-1 self-center ${isConsultant ? "order-last basis-full sm:order-none sm:basis-0" : ""}`}>
-                {/* The Consultant's row is one face end to end, its "Treatment Prescription"
-                    too: 14px Manrope (the app's body font) in rgb(100 116 139), medium.
-                    A fixed colour rather than text-slate-500: Theme Appearance remaps the
-                    slate scale, so slate-500 drew darker than #64748B on a Multi theme. */}
-                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-[rgb(100,116,139)]" : "text-base font-semibold text-slate-900"}`} data-testid="cons-detail-title">
+                {/* The Consultant's header is a grey band -- bg-slate-500, rgb(100 116 139),
+                    the same grey as the board's table header -- with the row in white:
+                    14px Manrope (the app's body font), medium, "Treatment Prescription" and
+                    the X too. bg-slate-500 is not remapped by any Theme Appearance, so the
+                    band is that grey on every theme. */}
+                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-white" : "text-base font-semibold text-slate-900"}`} data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
-                    <span className={`shrink-0 rounded bg-slate-100 px-1.5 py-0.5 ${isConsultant ? "text-sm font-medium text-[rgb(100,116,139)]" : "font-mono text-[11px] font-semibold text-slate-500"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 ${isConsultant ? "bg-[rgba(255,255,255,0.18)] text-sm font-medium text-white" : "bg-slate-100 font-mono text-[11px] font-semibold text-slate-500"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
-                  <span className={`shrink-0 text-sm font-medium ${isConsultant ? "text-[rgb(100,116,139)]" : "text-slate-500"}`} data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
+                  <span className={`shrink-0 text-sm font-medium ${isConsultant ? "text-white" : "text-slate-500"}`} data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
                   {isConsultant && selectedLead.appointment_date && (
-                    <span className="shrink-0 text-sm font-medium text-[rgb(100,116,139)]" data-testid="cons-detail-appt-slot">
+                    <span className="shrink-0 text-sm font-medium text-white" data-testid="cons-detail-appt-slot">
                       {apptDayLabel(selectedLead.appointment_date)}
                       {selectedLead.appointment_time ? ` · ${to12h(selectedLead.appointment_time)}` : ""}
                     </span>
@@ -8245,12 +8246,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               )}
               {/* The Consultant's popup names itself at the far right, just before the X. */}
               {isConsultant && (
-                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-medium text-[rgb(100,116,139)] [font-family:Manrope,sans-serif]" data-testid="cons-detail-popup-name">
+                <span className="ml-auto shrink-0 self-center whitespace-nowrap text-sm font-medium text-white [font-family:Manrope,sans-serif]" data-testid="cons-detail-popup-name">
                   Treatment Prescription
                 </span>
               )}
-              {/* A plain bold X, no circle, on every stage of the popup. */}
-              <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-black hover:bg-slate-100" data-testid="cons-detail-close">
+              {/* A plain bold X, no circle, on every stage of the popup -- white on the
+                  Consultant's grey band. */}
+              <button onClick={() => setSelectedLead(null)} className={`shrink-0 rounded p-1 ${isConsultant ? "text-white hover:bg-[rgba(255,255,255,0.15)]" : "text-black hover:bg-slate-100"}`} data-testid="cons-detail-close">
                 <X className="h-5 w-5" strokeWidth={3} />
               </button>
             </div>
