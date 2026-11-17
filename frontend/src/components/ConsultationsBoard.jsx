@@ -16315,7 +16315,6 @@ function TreatmentChecklist({ options, value, onChange, testPrefix }) {
   const numbered = options.map((o, i) => ({ ...o, n: i + 1 }));
   const q = query.trim().toLowerCase();
   const shown = q ? numbered.filter((o) => (o.name || "").toLowerCase().includes(q)) : numbered;
-  const numberOf = (name) => (numbered.find((o) => o.name === name)?.n) || "";
 
   // Operates on what is on screen. With no search that is the whole catalogue; with one
   // it is the matches, which is what "select all" means when a filter is showing.
@@ -16426,20 +16425,20 @@ function TreatmentChecklist({ options, value, onChange, testPrefix }) {
         </div>
       )}
 
-      {/* What is selected, under the bar rather than inside it, one per line. Stacked
-          rather than wrapped into chips so a long name reads whole and the list can be
-          counted down at a glance — which is what someone about to Move to Admin is
-          doing. Every one of them shows: with a row each there is no need to hide the
-          fourth behind a "+N", and it scrolls past eight rather than growing the card. */}
+      {/* What is selected, under the bar rather than inside it: chips in rows of four,
+          each with its own x, so the whole catalogue of twenty sits in five rows. A long
+          name wraps inside its chip rather than being cut, and the chips in a row share
+          its height. Two to a row on a phone. Every one shows, no "+N" and no scroll.
+          Names only, no catalogue number; the dropdown above still numbers them. */}
       {picked.length > 0 ? (
-        <div className="mt-2 max-h-40 space-y-1 overflow-y-auto" data-testid={`${testPrefix}-selected`}>
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4" data-testid={`${testPrefix}-selected`}>
           {picked.map((n) => (
             <div
               key={n}
-              className="flex items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1.5"
+              className="flex min-w-0 items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 py-1 pl-2 pr-1"
               data-testid={`${testPrefix}-selected-${n}`}
             >
-              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-indigo-800">{numberOf(n)}. {n}</span>
+              <span className="min-w-0 flex-1 break-words text-[11px] font-semibold leading-tight text-indigo-800" title={n}>{n}</span>
               <button
                 type="button"
                 onClick={() => toggle(n)}
@@ -16447,7 +16446,7 @@ function TreatmentChecklist({ options, value, onChange, testPrefix }) {
                 aria-label={`Remove ${n}`}
                 data-testid={`${testPrefix}-remove-${n}`}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3 w-3" />
               </button>
             </div>
           ))}
