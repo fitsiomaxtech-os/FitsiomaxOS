@@ -16427,18 +16427,26 @@ function TreatmentChecklist({ options, value, onChange, testPrefix }) {
 
       {/* What is selected, under the bar rather than inside it: chips in rows of four,
           each with its own x, so the whole catalogue of twenty sits in five rows. A long
-          name wraps inside its chip rather than being cut, and the chips in a row share
-          its height. Two to a row on a phone. Every one shows, no "+N" and no scroll.
-          Names only, no catalogue number; the dropdown above still numbers them. */}
+          name wraps inside its chip, two lines at most: the side padding and the gap to
+          the x are kept tight so the longest name in the catalogue ("Post-Knee & Hip
+          Rehabilitation") fits in two, and line-clamp-2 caps anything longer, with the
+          full name on hover. The chips in a row share its height.
+
+          Four columns at most, and never a chip under 111px -- that name's two lines
+          (87px of text plus the chip's 24px of padding, x and border). The full-width
+          popup's box is 470px, which is four; a narrower window drops to three, a phone
+          to two, rather than squeezing a name onto a third line. Every one shows, no
+          "+N" and no scroll. Names only, no catalogue number; the dropdown above still
+          numbers them. */}
       {picked.length > 0 ? (
-        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4" data-testid={`${testPrefix}-selected`}>
+        <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(max(111px,calc((100%_-_19px)/4)),1fr))] gap-1.5" data-testid={`${testPrefix}-selected`}>
           {picked.map((n) => (
             <div
               key={n}
-              className="flex min-w-0 items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 py-1 pl-2 pr-1"
+              className="flex min-w-0 items-center gap-0.5 rounded-md border border-indigo-200 bg-indigo-50 py-1 pl-1.5 pr-0.5"
               data-testid={`${testPrefix}-selected-${n}`}
             >
-              <span className="min-w-0 flex-1 break-words text-[11px] font-semibold leading-tight text-indigo-800" title={n}>{n}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 break-words text-[11px] font-semibold leading-tight text-indigo-800" title={n}>{n}</span>
               <button
                 type="button"
                 onClick={() => toggle(n)}
