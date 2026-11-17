@@ -411,6 +411,9 @@ class V3LeadOut(BaseModel):
     # between Offline and Online — see backend/session_mode_swap.py. Absent on a course
     # that was never swapped, which reads as one run at session_package_mode.
     session_mode_plan: Optional[List[Dict[str, Any]]] = None
+    # Unpaid: Allow on the slot picker — the days the balance still owes for are booked and
+    # given anyway (partial payment / EMI). The balance is still chased; only the hold lifts.
+    unpaid_days_allowed: Optional[bool] = None
     # Money paid over the Treatment Fee after a swap made the course cheaper than what had
     # already come in — for the branch to refund or carry. Used first if a later swap makes
     # it dearer again.
@@ -1071,6 +1074,10 @@ class V3AssignPhysioSessionsInput(BaseModel):
     # When the swap makes the course dearer and nothing is still owed, the new balance
     # needs a due date for the Payment Schedule.
     swap_due_date: Optional[str] = None
+    # The slot picker's Unpaid: Allow | No Allow. Allow books the days the Treatment Fee
+    # balance has not paid for yet too (a partial payment / EMI patient), and lets them go
+    # ahead. Left out, whatever the lead already holds stands.
+    allow_unpaid: Optional[bool] = None
 
 
 class V3AssignBranchInput(BaseModel):

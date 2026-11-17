@@ -167,6 +167,10 @@ def payment_hold(lead: dict, completed: int, total_sessions: int = 0, today: Opt
     paid = sessions_paid_for(lead, total_sessions)
     if not paid or completed < paid["paid_sessions"] or extension_active(lead, today):
         return None
+    # Unpaid: Allow on the slot picker (partial payment / EMI) — the unpaid days were
+    # booked to be given, so they are not held. The balance alert still runs.
+    if lead.get("unpaid_days_allowed"):
+        return None
     return {
         **paid,
         "completed_sessions": completed,

@@ -109,3 +109,10 @@ def test_no_hold_once_balance_is_paid():
         {"amount": 1600, "paid": True, "sessions": 2},
     ])
     assert payment_hold(lead, 12) is None
+
+
+def test_unpaid_allowed_releases_the_hold_but_keeps_the_alert():
+    lead = {**BALA, "unpaid_days_allowed": True}
+    assert payment_hold(lead, 12) is None
+    assert payment_hold(lead, 13) is None
+    assert payment_alert(lead, 12)["level"] == "due"

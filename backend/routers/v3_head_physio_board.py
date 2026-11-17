@@ -1364,9 +1364,12 @@ async def hp_assign_physio_with_sessions(
     # the last paid day; the rest wait to pay and are booked here once it is collected.
     # Up to that many rather than exactly: the picker counts paid days its own way (an
     # Offline <-> Online swap prices days differently) and may land one short.
+    # Unpaid: Allow (partial payment / EMI) books the unpaid days as well, so the whole of
+    # what is left is placed, the same as a course paid in full.
     from routers.v3_session_payment import sessions_paid_for
     owing = sessions_paid_for(lead, total_sessions)
-    if owing:
+    allow_unpaid = payload.allow_unpaid if payload.allow_unpaid is not None else bool(lead.get("unpaid_days_allowed"))
+    if owing and not allow_unpaid:
         bookable = max(0, min(to_book, owing["paid_sessions"] - done))
         if bookable == 0:
             raise HTTPException(
@@ -1501,6 +1504,7 @@ async def hp_assign_physio_with_sessions(
             "consultation_stage": "Physio Assign",
             "updated_at": now,
             **swap_fields,
+            **({"unpaid_days_allowed": allow_unpaid} if payload.allow_unpaid is not None else {}),
         },
         **handover,
     })
@@ -1527,6 +1531,9 @@ async def hp_assign_physio_with_sessions(
                 else f"the remaining {len(session_docs)} of {total_sessions} sessions" if done + len(session_docs) == total_sessions
                 else f"{len(session_docs)} paid of {total_sessions} sessions (the rest wait for the balance)"
             )
+        ) + (
+            f" · Unpaid days allowed ({total_sessions - owing['paid_sessions']} unpaid, balance Rs.{owing['balance']:,.0f})"
+            if owing and allow_unpaid else ""
         ),
         "created_by": user.full_name,
         "created_by_role": user.role,

@@ -3466,6 +3466,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [pickerDate, setPickerDate] = useState(null); // "YYYY-MM-DD"
   const [bulkTime, setBulkTime] = useState(""); // "HH:MM" — the slot picker's bulk select
   const [bulkSkipSun, setBulkSkipSun] = useState(false);
+  // Unpaid: Allow | No Allow — whether the days the Treatment Fee balance hasn't paid for
+  // yet can be booked too (partial payment / EMI). Starts from what this lead was last
+  // booked with; the backend saves it with the booking.
+  const [allowUnpaid, setAllowUnpaid] = useState(false);
+  useEffect(() => {
+    setAllowUnpaid(!!selectedLead?.unpaid_days_allowed);
+  }, [selectedLead?.id, selectedLead?.unpaid_days_allowed]);
   const [storeSessionMinutes, setStoreSessionMinutes] = useState(FALLBACK_SESSION_MINUTES);
   // How long this physio's sessions run: their own Treatment Session Duration, set on
   // MANAGEMENT → Physiotherapist Calendar, else FITSIO STORE's. This picker used to read
@@ -6459,10 +6466,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
   // Only paid days can be booked. While a balance is owed the picker stops at the last
   // paid day; the rest wait to pay and open here once the balance is collected. The
-  // backend holds the same line.
-  const daysToBook = openEndedRehab ? 0 : sessionPayment.unpaid > 0
-    ? Math.max(0, Math.min(totalSessionsNeeded, sessionPayment.paid - sessionsAlreadyDone))
+  // backend holds the same line. Unpaid: Allow (partial payment / EMI) lifts it, and every
+  // day left is booked as if paid in full.
+  const paidDaysToBook = Math.max(0, Math.min(totalSessionsNeeded, sessionPayment.paid - sessionsAlreadyDone));
+  const unpaidOwed = !openEndedRehab && sessionPayment.unpaid > 0;
+  const daysToBook = openEndedRehab ? 0 : unpaidOwed && !allowUnpaid
+    ? paidDaysToBook
     : totalSessionsNeeded;
+  // Back to No Allow drops the unpaid days already placed, keeping the paid ones.
+  const chooseAllowUnpaid = (allow) => {
+    setAllowUnpaid(allow);
+    if (!allow) setPickedSessionSlots((prev) => [...prev].sort().slice(0, paidDaysToBook));
+  };
   const waitToPayDays = openEndedRehab ? 0 : totalSessionsNeeded - daysToBook;
   const allSessionsPicked = openEndedRehab
     ? sortedPickedSlots.length > 0
@@ -6631,6 +6646,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
         : await assignPhysioWithSessions(selectedLead.id, {
           physio_id: physioPick,
           slot_times: sortedPickedSlots,
+          ...(unpaidOwed ? { allow_unpaid: allowUnpaid } : {}),
           // The Offline <-> Online swap rides on this booking — see openSwapDraft.
           ...(swapMode ? { swap_mode: swapMode, swap_due_date: swapDraft?.dueDate || null } : {}),
         });
@@ -14907,6 +14923,33 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             <span className="ml-2 font-medium text-rose-500">Day {sessionPayment.paid + 1}–{sessionPayment.total}</span>
                             <span className="ml-2 font-medium text-rose-500">{sessionPayment.unpaid} Day{sessionPayment.unpaid === 1 ? "" : "s"}</span>
                           </span>
+                          {/* Partial payment / EMI: Allow books the unpaid days too. */}
+                          <span
+                            className="inline-flex shrink-0 items-stretch overflow-hidden rounded-md border border-slate-300 bg-white text-[11px] font-bold sm:text-[12px]"
+                            role="group"
+                            aria-label="Unpaid days"
+                            data-testid="cons-unpaid-allow"
+                          >
+                            <span className="flex items-center px-2.5 text-slate-600 sm:px-3">Unpaid</span>
+                            <button
+                              type="button"
+                              onClick={() => chooseAllowUnpaid(true)}
+                              aria-pressed={allowUnpaid}
+                              className={`border-l border-slate-300 px-2.5 py-1 transition-colors sm:px-3 ${allowUnpaid ? "bg-emerald-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                              data-testid="cons-unpaid-allow-yes"
+                            >
+                              Allow
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => chooseAllowUnpaid(false)}
+                              aria-pressed={!allowUnpaid}
+                              className={`border-l border-slate-300 px-2.5 py-1 transition-colors sm:px-3 ${!allowUnpaid ? "bg-slate-700 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                              data-testid="cons-unpaid-allow-no"
+                            >
+                              No Allow
+                            </button>
+                          </span>
                           {waitToPayDays > 0 && (
                             <span
                               className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 sm:px-3 sm:text-[12px]"
@@ -15089,21 +15132,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                   )}
                                 </div>
                               </div>
-                            )}
-
-                            {planByDate[pickerDate] && (
-                              <p
-                                className={`mb-2 rounded-md border px-3 py-1.5 text-[12px] font-semibold ${
-                                  isPaidSession(planByDate[pickerDate].day)
-                                    ? "border-emerald-400 bg-emerald-50 text-emerald-800"
-                                    : "border-rose-400 bg-rose-50 text-rose-800"
-                                }`}
-                                data-testid="cons-slot-day-fixed"
-                              >
-                                <b>Day {planByDate[pickerDate].day}</b> is fixed for {to12h(planByDate[pickerDate].time)} – {endTime12h(planByDate[pickerDate].time, minutesAt(pickerDate, planByDate[pickerDate].time))} ·{" "}
-                                {isPaidSession(planByDate[pickerDate].day) ? "PAID" : "UNPAID"}.
-                                <span className="ml-1 font-normal">Pick another time to move it, or click it again to free the day.</span>
-                              </p>
                             )}
 
                             {(physioSlotsByDate[pickerDate] || []).length === 0 ? (
