@@ -872,6 +872,11 @@ async def finance_approvals(
         split = _parse_payment_split(details)
         if split:
             ref["split"] = split
+        # What the cash was counted out in, so the desk can check the notes it is handed
+        # against the count the branch took. Empty when nobody counted.
+        notes = _parse_cash_notes(details)
+        if notes:
+            ref["cash_notes"] = notes
         return ref
 
     mode_branch_ids = None
@@ -1894,6 +1899,54 @@ def _parse_payment_reference(details: str) -> dict:
     return {k: v for k, v in out.items() if v}
 
 
+# The notes a cash payment was counted out in, as _notes_label wrote them onto the line:
+# " · Counted 2xRs.500 + 1xRs.200" for a lone cash payment, and "Rs.8000 cash [4xRs.2000]"
+# for the cash tender of a split.
+_COUNTED_RE = re.compile(r"·\s*Counted\s+([^·]+)")
+_SPLIT_NOTES_RE = re.compile(r"\[([^\]]+)\]")
+_NOTE_RE = re.compile(r"(\d+)\s*x\s*Rs\.?\s*(\d+)", re.IGNORECASE)
+
+
+def _add_notes(into: dict, label: str) -> None:
+    for count, note in _NOTE_RE.findall(label or ""):
+        into[note] = into.get(note, 0) + int(count)
+
+
+def _parse_cash_notes(details: str) -> dict:
+    """{"500": 2, "200": 1} for a cash payment somebody counted, {} for one nobody did."""
+    out: dict = {}
+    if not details:
+        return out
+    m = _COUNTED_RE.search(details)
+    if m:
+        _add_notes(out, m.group(1))
+    split = re.search(r"·\s*Split:\s*([^·]+)", details)
+    if split:
+        for label in _SPLIT_NOTES_RE.findall(split.group(1)):
+            _add_notes(out, label)
+    return out
+
+
+def _registration_notes(reg: dict) -> dict:
+    """The same count for a Zumba or Fitness registration, added up over every cash line it
+    holds: Zumba keeps them all on payment_lines, Fitness on each payment's own lines."""
+    lines = list(reg.get("payment_lines") or [])
+    for pay in reg.get("payments") or []:
+        lines.extend((pay or {}).get("lines") or [])
+    out: dict = {}
+    for ln in lines:
+        if str((ln or {}).get("mode") or "").lower() != "cash":
+            continue
+        for note, count in ((ln or {}).get("denominations") or {}).items():
+            try:
+                n = int(count)
+            except (TypeError, ValueError):
+                continue
+            if n > 0:
+                out[str(note)] = out.get(str(note), 0) + n
+    return out
+
+
 def _registration_reference(reg: dict, mode: str) -> dict:
     """The reference on a Zumba or Fitness registration, in the shape the activity-line
     rows use. One typed field there rather than the several a fee collection writes, so a
@@ -1910,6 +1963,9 @@ def _registration_reference(reg: dict, mode: str) -> dict:
     split = _lines_to_split(reg.get("payment_lines"))
     if split:
         out["split"] = split
+    notes = _registration_notes(reg)
+    if notes:
+        out["cash_notes"] = notes
     return out
 
 

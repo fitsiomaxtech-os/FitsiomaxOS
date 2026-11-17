@@ -209,6 +209,79 @@ const referenceColumns = (tx) => {
   return { route: ["", ""], account: ["", ""], txn: [ref.reference || "", ""] };
 };
 
+// The notes the branch counted a cash payment out in, biggest note first: [[500, 2], [200, 1]].
+// Empty when nobody counted. Read off payment_ref.cash_notes -- see _parse_cash_notes.
+const cashNoteRows = (tx) => Object.entries((tx.payment_ref || {}).cash_notes || {})
+  .map(([d, n]) => [Number(d), Number(n)])
+  .filter(([d, n]) => d > 0 && n > 0)
+  .sort((a, b) => b[0] - a[0]);
+
+// Whether any of the money came in as cash, alone or as one tender of a split.
+const tookCash = (tx) => tx.payment_mode === "cash"
+  || (Array.isArray((tx.payment_ref || {}).split) && tx.payment_ref.split.some((t) => t.mode === "cash"));
+
+// How much of the payment was cash: the whole of it, or the cash tenders of a split.
+const cashAmount = (tx) => {
+  const split = Array.isArray((tx.payment_ref || {}).split) ? tx.payment_ref.split : [];
+  return tx.payment_mode === "cash" || split.length === 0
+    ? Number(tx.amount) || 0
+    : split.filter((t) => t.mode === "cash").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+};
+
+/** "2×Rs.500 + 1×Rs.200" under a cash row's mode, or an amber "Not counted". */
+const CashNotesLine = ({ tx, testId }) => {
+  const rows = cashNoteRows(tx);
+  return rows.length > 0 ? (
+    <p className="text-[11px] leading-snug text-slate-500" data-testid={testId}>
+      {rows.map(([d, n]) => `${n}×Rs.${d}`).join(" + ")}
+    </p>
+  ) : (
+    <p className="text-[11px] leading-snug text-amber-600" data-testid={testId}>Not counted</p>
+  );
+};
+
+/**
+ * The branch's cash count, note by note, in the Approve popup: what to check the notes
+ * handed over against before signing the payment off.
+ */
+const CashCount = ({ tx }) => {
+  const rows = cashNoteRows(tx);
+  const counted = rows.reduce((s, [d, n]) => s + d * n, 0);
+  const coins = Math.round((cashAmount(tx) - counted) * 100) / 100;
+  return (
+    <div className="rounded-lg border border-slate-200 p-4" data-testid="finance-approve-cash-count">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Cash Count</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-amber-700">The branch did not count the notes for this payment.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <tbody className="divide-y divide-slate-100">
+            {rows.map(([d, n]) => (
+              <tr key={d}>
+                <td className="py-1.5 font-medium text-slate-700">Rs.{d}</td>
+                <td className="py-1.5 text-center text-slate-500">× {n}</td>
+                <td className="py-1.5 text-right text-slate-700">{fmt(d * n)}</td>
+              </tr>
+            ))}
+            {coins > 0 && (
+              <tr>
+                <td className="py-1.5 font-medium text-slate-700">Coins</td>
+                <td />
+                <td className="py-1.5 text-right text-slate-700">{fmt(coins)}</td>
+              </tr>
+            )}
+            <tr>
+              <td className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Total</td>
+              <td />
+              <td className="pt-2 text-right font-bold text-emerald-600">{fmt(counted + Math.max(coins, 0))}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
 // What each of the three reference columns is called for a given mode. The table heads
 // them for UPI, the mode most of the queue is; in the popup there is room to name them
 // for the row actually being signed off.
@@ -318,6 +391,7 @@ const ApproveModal = ({ tx, onClose, onApproved }) => {
         </div>
         <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
           <PaymentDetails tx={tx} />
+          {tookCash(tx) && <CashCount tx={tx} />}
           {needsAmount && (
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Re-enter the amount collected</label>
@@ -516,6 +590,9 @@ const PendingTable = ({ rows, selected, onToggle, onApprove, onDelete, busyId })
                     {split.map((t) => `${fmt(t.amount)} ${modeLabel(t.mode)}`).join(" + ")}
                   </p>
                 )}
+                {/* The notes the branch counted the cash out in, so the desk can check
+                    what it is handed without opening each row. */}
+                {tookCash(tx) && <CashNotesLine tx={tx} testId={`finance-approval-notes-${tx.id}`} />}
               </td>
               <RefCell lead={cols.route[0]} sub={cols.route[1]} testId={`finance-approval-route-${tx.id}`} />
               <RefCell lead={cols.account[0]} sub={cols.account[1]} testId={`finance-approval-account-${tx.id}`} />
