@@ -9428,14 +9428,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             No services picked — this patient moves to Admin as Consultation only.
                           </p>
                         ) : (
-                          <div className="space-y-2" data-testid="cons-decision-details">
+                          // Side by side, five across like the tiles above (two on a phone).
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" data-testid="cons-decision-details">
                             {selectedAddons.map((a) => {
                               const summary = addonSummary(a.key);
-                              const Icon = a.icon;
                               return (
                                 <div
                                   key={a.key}
-                                  className="flex items-center gap-2 rounded-xl border py-2.5 pl-3 pr-2"
+                                  className="flex min-w-0 items-start gap-1 rounded-xl border py-2 pl-3 pr-1.5"
                                   style={{ background: `${a.tone}12`, borderColor: `${a.tone}2e` }}
                                   data-testid={`cons-decision-detail-${a.key}`}
                                 >
@@ -9443,29 +9443,26 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     type="button"
                                     onClick={() => pickAddon(a.key)}
                                     disabled={!hasPicker(a.key)}
-                                    className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+                                    className="min-w-0 flex-1 text-left disabled:cursor-default"
                                     data-testid={`cons-decision-selected-${a.key}`}
                                   >
-                                    <Icon aria-hidden className="h-6 w-6 shrink-0" style={{ color: a.tone }} />
-                                    <span className="min-w-0">
-                                      <span className="block text-[13px] font-semibold text-slate-800">{a.label}</span>
-                                      <span
-                                        className={`block truncate text-[11px] ${summary.incomplete ? "font-medium text-rose-600" : "text-slate-600"}`}
-                                        title={summary.text}
-                                      >
-                                        {summary.text}
-                                      </span>
+                                    <span className="block text-[13px] font-semibold text-slate-800">{a.label}</span>
+                                    <span
+                                      className={`block break-words text-[11px] ${summary.incomplete ? "font-medium text-rose-600" : "text-slate-600"}`}
+                                      title={summary.text}
+                                    >
+                                      {summary.text}
                                     </span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => clearAddon(a.key)}
-                                    className="shrink-0 rounded-md p-1.5 transition hover:bg-white/70"
+                                    className="shrink-0 rounded-md p-1 transition hover:bg-white/70"
                                     style={{ color: a.tone }}
                                     title={`Remove ${a.label}`}
                                     data-testid={`cons-decision-remove-${a.key}`}
                                   >
-                                    <Trash2 aria-hidden className="h-4 w-4" />
+                                    <X aria-hidden className="h-4 w-4" />
                                   </button>
                                 </div>
                               );
