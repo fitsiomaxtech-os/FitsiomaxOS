@@ -2090,6 +2090,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {/* Keep the sticky wrapper outside the zoomed strip so its header offset stays in viewport pixels. */}
       <div ref={navRef} className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50"}`}>
       <div className="show-scrollbar hidden items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:flex" style={{ zoom: 0.9 }} data-testid="branch-view-tabs">
+        {/* flex-auto on each tab: the width the labels leave over is shared out between
+            them, so the strip is filled edge to edge with even spacing rather than every
+            tab packed left and a gap after the last one. shrink-0 still lets a narrow
+            window scroll the strip instead of squeezing a label. */}
         {VIEW_TABS.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -2097,7 +2101,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               key={tab.key}
               type="button"
               onClick={() => { setProfileOpen(false); setActiveView(tab.key); tabDots.click(tab.key); }}
-              className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
+              className={`relative flex flex-auto shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                 activeView === tab.key
                   ? "bg-sky-600 text-white shadow-sm"
                   : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
