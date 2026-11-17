@@ -14,6 +14,7 @@ import {
   Headphones,
   LayoutDashboard,
   Megaphone,
+  PhoneCall,
   RefreshCw,
   Search,
   Settings,
@@ -131,6 +132,9 @@ const BoardFallback = () => (
 // panel (Overview, Analytics, MANAGER). CRMPage's phone footer mirrors these keys.
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
+  // Pre Sales View: the Pre Sales desk's own board across every branch, its stage cards
+  // and its toolbar. Between Dashboard and Branch Control, as asked.
+  { key: "presales_view", label: "Pre Sales View", icon: PhoneCall },
   { key: "branch_control", label: "Branch Control", icon: LayoutDashboard },
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
   { key: "sales_view", label: "Sales View", icon: Headphones },
@@ -169,7 +173,9 @@ const isTabActive = (view, key) => (key === "settings" ? SETTINGS_SUB_VIEWS.incl
 // Where the strip's own Refresh is not drawn -- see the note on the button itself. Dashboard
 // because its toolbar carries the same one, and the three mounted boards because each
 // carries its own and this one would not touch what they show.
-const REFRESH_WITHHELD_TABS = ["dashboard", "finance", "permission", "hr", "packages"];
+const REFRESH_WITHHELD_TABS = ["dashboard", "presales_view", "finance", "permission", "hr", "packages"];
+// Where the strip's Add Lead is not drawn: the tab's own toolbar carries it.
+const ADD_LEAD_WITHHELD_TABS = ["presales_view"];
 
 /**
  * The toolbar's date range as the two query params both BD endpoints already take.
@@ -380,7 +386,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           );
         })}
         <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 pb-1.5 pl-2">
-          <Button size="sm" onClick={() => setShowCreateLead(true)} className={`bg-sky-600 hover:bg-sky-700 ${activeTab === "dashboard" ? "hidden sm:inline-flex" : ""}`} data-testid="bd-quick-add-lead-btn">
+          <Button size="sm" onClick={() => setShowCreateLead(true)} className={`bg-sky-600 hover:bg-sky-700 ${ADD_LEAD_WITHHELD_TABS.includes(activeTab) ? "hidden" : activeTab === "dashboard" ? "hidden sm:inline-flex" : ""}`} data-testid="bd-quick-add-lead-btn">
             <UserPlus className="mr-1 h-4 w-4" /> Add Lead
           </Button>
           {/* The same Refresh as Branch Admin > Branch Leads: grey, icon-only, square,
@@ -447,6 +453,13 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           Both are `leadsOnly` and `branchFilterInToolbar`: no Leads / Analytics switch,
           and All/Online/Offline plus the branch pills as two dropdowns in the toolbar
           rather than two rows above the cards, as Super Admin's two master views have. */}
+      {/* Pre Sales View — the Pre Sales desk's board for every branch: the rep's stage cards
+          (`stageView`), one Branch dropdown, and the leads the Pre Sales desk holds. Sales
+          Head's role for the same reason as Sales View below. */}
+      {activeTab === "presales_view" && (
+        <PreSalesCRM role="sales_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar stageView />
+      )}
+
       {activeTab === "marketing_view" && (
         <PreSalesCRM role="marketing_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar />
       )}

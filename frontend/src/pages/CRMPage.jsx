@@ -11,6 +11,7 @@ import {
   CalendarOff,
   Headphones,
   LayoutDashboard,
+  PhoneCall,
   LogOut,
   Megaphone,
   Menu,
@@ -1031,6 +1032,7 @@ export const CRMPage = ({ auth, onLogout }) => {
       // Mirrors BusinessLeadsDashboard's TABS; that module is lazy, so it is not imported here.
       stops: [bdStop("dashboard", "Dashboard", BarChart3), bdStop("marketing_view", "Marketing View", Megaphone), bdStop("sales_view", "Sales View", Headphones)],
       more: [
+        bdStop("presales_view", "Pre Sales View", PhoneCall),
         bdStop("branch_control", "Branch Control", LayoutDashboard),
         bdStop("finance", "Finance", BadgeIndianRupee),
         bdStop("permission", "Permission", CalendarOff),

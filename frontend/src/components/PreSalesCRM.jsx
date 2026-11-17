@@ -31,6 +31,7 @@ import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDateFilterBar";
 import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -1113,6 +1114,32 @@ const PHONE_ICON = "h-4 w-4 max-sm:h-3.5 max-sm:w-3.5";
 
 const PRESALES_CRM_LOCKED = false;
 
+// The Business Development Executive's Pre Sales View (stageView): the stage cards in this
+// order, after All Stages. By name, so a stage added in CI/CD ROOTS still gets a card, after these.
+const STAGE_VIEW_ORDER = ["New Leads", "RNR", "Follow Up", "Appointment", "Not a prospect", "Pre Book", "Lost"];
+const stageViewRank = (name) => {
+  const i = STAGE_VIEW_ORDER.indexOf(name);
+  return i === -1 ? STAGE_VIEW_ORDER.length : i;
+};
+// Its two toolbar dropdowns, in the OS theme's list (ThemedSelect).
+const STAGE_VIEW_SORT_OPTIONS = [
+  { value: "newest", label: "New to Old" },
+  { value: "oldest", label: "Old to New" },
+];
+const stageViewSelectClass = (narrowed) => `h-10 shrink-0 px-2.5 text-xs font-medium ${
+  narrowed ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-50" : "text-slate-600"
+}`;
+const StageViewBranchSelect = ({ value, onChange, branches, testid }) => (
+  <ThemedSelect
+    value={value || "all"}
+    onChange={(v) => onChange(v === "all" ? "" : v)}
+    options={[{ value: "all", label: "All Branches" }, ...branches.map((b) => ({ value: b.id, label: branchLabel(b) }))]}
+    title="Branch"
+    className={`w-44 ${stageViewSelectClass(!!value)}`}
+    testid={testid}
+  />
+);
+
 /**
  * The Pre-Sales pipeline.
  *
@@ -1156,6 +1183,10 @@ export const PreSalesCRM = ({
   // rows.
   leadsOnly = false,
   branchFilterInToolbar = false,
+  // The Business Development Executive's Pre Sales View: the Pre Sales desk's own book
+  // across every branch, on the rep's stage cards (STAGE_VIEW_ORDER) rather than the
+  // master views' KPI cards, with one Branch dropdown in the toolbar.
+  stageView = false,
 }) => {
   const [stages, setStages] = useState([]);
   // Consultation Visit's colour as Branch Admin's Consultation list has it, for its card and chip.
@@ -1170,7 +1201,7 @@ export const PreSalesCRM = ({
   // everything already worked. A master view opens on All: its cards are not a worklist,
   // and "all" is the key every one of those rows uses for the unfiltered card.
   const [stageFilter, setStageFilter] = useState(() => (
-    ["marketing_head", "super_admin", "sales_head"].includes(role) ? "all" : "New Leads"
+    stageView ? "All" : ["marketing_head", "super_admin", "sales_head"].includes(role) ? "all" : "New Leads"
   ));
   const [sourceFilter, setSourceFilter] = useState("");
   // The range row and the calendar are two separate controls, each with its own state, so
@@ -1247,7 +1278,7 @@ export const PreSalesCRM = ({
   // Super Admin's and Sales Head's card row: the five counts and two revenue figures, not
   // the live Pre-Sales stage list. An individual rep keeps that list — New Leads / RNR /
   // Follow Up is how they work their own book, and these seven answer a different question.
-  const isSalesMasterCards = isSuperAdminMasterView && !isMarketingHeadFunnel;
+  const isSalesMasterCards = isSuperAdminMasterView && !isMarketingHeadFunnel && !stageView;
   // Marketing Head's board only, as asked for. Every master view carries both desks' leads
   // and tags each row HANDLED BY, so this would read the same on Super Admin's and Sales
   // Head's — flipping this one flag is all it would take to give it to them too.
@@ -1289,13 +1320,14 @@ export const PreSalesCRM = ({
       // picture across every branch, so it shows both halves at once (each row tagged
       // Branch Admin or Pre-Sales) instead of picking one side the way the Pre-Sales
       // role's own board and a branch's embedded board still do.
-      setLeads(isSuperAdminMasterView ? ldList : ldList.filter((l) => handledBy(l, branchControlled ? "branch_admin" : "pre_sales")));
+      // The Pre Sales View is the Pre Sales desk's half, as the rep's board is.
+      setLeads(isSuperAdminMasterView && !stageView ? ldList : ldList.filter((l) => handledBy(l, branchControlled ? "branch_admin" : "pre_sales")));
       // If a lead is currently open in the detail dialog, refresh its reference
       // so saved edits show up immediately.
       setEditing((prev) => prev ? (ldList.find((l) => l.id === prev.id) || prev) : prev);
     } catch (e) { toast.error("Failed to load"); }
     setLoading(false);
-  }, [branchControlled, branchId, isSuperAdminMasterView]);
+  }, [branchControlled, branchId, isSuperAdminMasterView, stageView]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { getBranches().then(setBranches).catch(() => {}); }, []);
@@ -1316,7 +1348,8 @@ export const PreSalesCRM = ({
   const showRowPurge = canPurgeLeads && !isSuperAdminMasterView && (stageFilter === "All" || stageFilter === "New Leads");
 
   // Phone, the rep's own board: Branch Leads' phone screen. The master views keep theirs.
-  const phoneCards = !isMarketingHeadFunnel && !isSalesMasterCards;
+  // The Pre Sales View keeps the master views' phone screen, which carries its Branch dropdown.
+  const phoneCards = !isMarketingHeadFunnel && !isSalesMasterCards && !stageView;
   const openPhoneStage = (key) => { setStageFilter(key); setPhoneStageList(true); window.scrollTo({ top: 0 }); };
   // The Pre Sales rep's own page on a phone takes the wireframe layout: the stages as a
   // two-across grid with All Stages under it, the ranges four-and-three, and the leads
@@ -1462,10 +1495,13 @@ export const PreSalesCRM = ({
 
   // The summary cards' list: the live stages, then Consultation Visit after Lost. Only the
   // card rows read this -- a lead's chip and the stage pills still go by `stages`.
-  const cardStages = useMemo(() => [
-    ...stages,
-    { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: consultVisitHex },
-  ], [stages, consultVisitHex]);
+  // The Pre Sales View has no Consultation Visit card, and its own order (STAGE_VIEW_ORDER).
+  const cardStages = useMemo(() => (stageView
+    ? stages.map((s, i) => [s, i]).sort(([a, ai], [b, bi]) => stageViewRank(a.name) - stageViewRank(b.name) || ai - bi).map(([s]) => s)
+    : [
+      ...stages,
+      { id: "consultation-visit", name: CONSULTATION_VISIT_STAGE, color: consultVisitHex },
+    ]), [stages, consultVisitHex, stageView]);
   // Consultation Visit is the branch's stage, so Pre Sales only reads its list: the table has
   // no row click, the phone rows are given no onOpen, and each row shows its View locked.
   const onConsultVisitTab = stageFilter === CONSULTATION_VISIT_STAGE;
@@ -1745,12 +1781,14 @@ export const PreSalesCRM = ({
       <div className="flex flex-wrap items-center gap-3" data-testid="presales-toolbar">
         <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leads by name, email, phone..." className="h-10 pl-9" data-testid="presales-search" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={stageView ? "Search patients..." : "Search leads by name, email, phone..."} className="h-10 pl-9" data-testid="presales-search" />
         </div>
         <div className="shrink-0">
-          <QuickDateFilterBar value={quickDate} onChange={setQuickDate} testid="presales-leads-range" inline showCustom={false} />
+          <QuickDateFilterBar value={quickDate} onChange={setQuickDate} testid="presales-leads-range" inline showCustom={false} omit={stageView ? ["last_90"] : []} />
         </div>
-        {isSuperAdminMasterView && branchFilterInToolbar && branches.length > 0 && (
+        {stageView ? (
+          <StageViewBranchSelect value={sourceFilter} onChange={setSourceFilter} branches={branches} testid="presales-toolbar-branch" />
+        ) : isSuperAdminMasterView && branchFilterInToolbar && branches.length > 0 && (
           <BranchScopeSelects
             mode={modeFilter}
             onMode={pickMode}
@@ -1784,6 +1822,16 @@ export const PreSalesCRM = ({
             and bordered, uncoloured until one is switched on; the three actions after them
             carry the same border, each on a light wash of its own colour. */}
         <div className="ml-auto flex shrink-0 items-center gap-3">
+          {stageView ? (
+            <ThemedSelect
+              value={sortOrder}
+              onChange={setSortOrder}
+              options={STAGE_VIEW_SORT_OPTIONS}
+              title="Order the list by date"
+              className={`w-[124px] ${stageViewSelectClass(false)}`}
+              testid="presales-sort-order"
+            />
+          ) : (
           <Select value={sortOrder} onValueChange={setSortOrder}>
             <SelectTrigger
               title="Order the list by date"
@@ -1798,6 +1846,7 @@ export const PreSalesCRM = ({
               <SelectItem value="oldest" className="text-xs text-slate-700">Old to New</SelectItem>
             </SelectContent>
           </Select>
+          )}
           {/* Pressing the lit one clears it, so the same control narrows and returns. */}
           <button
             type="button"
@@ -1838,8 +1887,8 @@ export const PreSalesCRM = ({
           </Button>
           <Button
             onClick={() => setShowCreate(true)}
-            title="Create Lead"
-            aria-label="Create Lead"
+            title={stageView ? "Add Patient" : "Create Lead"}
+            aria-label={stageView ? "Add Patient" : "Create Lead"}
             className="h-10 w-10 shrink-0 border border-slate-200 bg-sky-50 p-0 text-sky-600 shadow-none hover:bg-sky-100"
             data-testid="presales-create-lead-btn"
           >
@@ -2614,7 +2663,7 @@ export const PreSalesCRM = ({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search leads..."
+              placeholder={stageView ? "Search patients..." : "Search leads..."}
               className="h-8 min-w-0 flex-1 border-0 p-0 focus-visible:ring-0"
               data-testid="presales-mobile-search"
             />
@@ -2649,7 +2698,19 @@ export const PreSalesCRM = ({
               )}
               {/* The desk toolbar's two dropdowns, on a line of their own: the search row
                   above has no room left for them. */}
-              {branchFilterInToolbar && branches.length > 0 && (
+              {stageView ? (
+                <div className="flex flex-wrap items-center gap-2" data-testid="presales-mobile-branch-selects">
+                  <StageViewBranchSelect value={sourceFilter} onChange={setSourceFilter} branches={branches} testid="presales-mobile-toolbar-branch" />
+                  <ThemedSelect
+                    value={sortOrder}
+                    onChange={setSortOrder}
+                    options={STAGE_VIEW_SORT_OPTIONS}
+                    title="Order the list by date"
+                    className={`w-[124px] ${stageViewSelectClass(false)}`}
+                    testid="presales-mobile-sort-order"
+                  />
+                </div>
+              ) : branchFilterInToolbar && branches.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2" data-testid="presales-mobile-branch-selects">
                   <BranchScopeSelects
                     mode={modeFilter}
@@ -2700,10 +2761,39 @@ export const PreSalesCRM = ({
                 <Cog className="h-4 w-4" />
               </Button>
             )}
+            {/* The Pre Sales View's two marks, as its desk toolbar carries them. */}
+            {stageView && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMarkFilter((m) => (m === "vip" ? "" : "vip"))}
+                  aria-label="Show VIP clients only"
+                  aria-pressed={markFilter === "vip"}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                    markFilter === "vip" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                  data-testid="presales-mobile-filter-vip"
+                >
+                  <Star className={`h-4 w-4 ${markFilter === "vip" ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMarkFilter((m) => (m === "attention" ? "" : "attention"))}
+                  aria-label="Show patients needing attention only"
+                  aria-pressed={markFilter === "attention"}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                    markFilter === "attention" ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                  data-testid="presales-mobile-filter-attention"
+                >
+                  <AlertCircle className={`h-4 w-4 ${markFilter === "attention" ? "fill-rose-500 text-white" : "text-slate-400"}`} />
+                </button>
+              </>
+            )}
             <Button
               onClick={() => setShowCreate(true)}
-              title="Create Lead"
-              aria-label="Create Lead"
+              title={stageView ? "Add Patient" : "Create Lead"}
+              aria-label={stageView ? "Add Patient" : "Create Lead"}
               variant="outline"
               className="h-10 w-10 shrink-0 p-0"
               data-testid="presales-mobile-create-lead-btn"
@@ -2717,7 +2807,11 @@ export const PreSalesCRM = ({
             <PreSalesAnalyticsPanel sourceFilter={sourceFilter} groupBranchIds={modeBranchIds} role={role} />
           ) : (
           <>
-          {/* Same range row the desk gets, above the stage bar it narrows. */}
+          {/* Same range row the desk gets, above the stage bar it narrows. The Pre Sales
+              View's is the desk's own five, All to This Month. */}
+          {stageView ? (
+            <QuickDateFilterBar value={quickDate} onChange={setQuickDate} testid="presales-mobile-leads-range" showCustom={false} omit={["last_90"]} />
+          ) : (
           <PreSalesRangePills
             value={quickDate}
             onChange={setQuickDate}
@@ -2725,6 +2819,7 @@ export const PreSalesCRM = ({
             handledBy={showHandledByFilter ? handledByFilter : undefined}
             onHandledByChange={showHandledByFilter ? setHandledByFilter : undefined}
           />
+          )}
           {/* A master view's cards are not stages, so the stage bar cannot carry them — its
               pills would set a filter the card logic does not recognise and quietly do
               nothing. Those boards get the same card row the desk shows; a rep's board,
