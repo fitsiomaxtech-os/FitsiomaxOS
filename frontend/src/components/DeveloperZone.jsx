@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, EyeOff, Lock, Palette, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, EyeOff, Lock, Palette, PanelTopClose, Trash2, Wallet, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -88,9 +88,24 @@ const HIDE_FEATURE_ROWS = [
   },
 ];
 
-// The four pages inside the zone, all behind the same developer password.
+// The Hide Tab page: whole tabs a developer can take off one desk's strip, by desk. Each key
+// is a FEATURE_KEYS entry (feature_visibility.py), so it rides the same hidden-features list
+// and switch as the Features page. Screen-only; nothing on the records changes.
+const HIDE_TAB_GROUPS = [
+  {
+    key: "bd",
+    label: "Business Development Executive",
+    tabs: [
+      { key: "bd_marketing_view", label: "Marketing View" },
+      { key: "bd_sales_view", label: "Sales View" },
+    ],
+  },
+];
+
+// The five pages inside the zone, all behind the same developer password.
 const SUB_TABS = [
   { key: "hide_features", label: "Features", icon: EyeOff, tone: "text-amber-600", activeBg: "bg-amber-50" },
+  { key: "hide_tab", label: "Hide Tab", icon: PanelTopClose, tone: "text-teal-600", activeBg: "bg-teal-50" },
   { key: "payment_modes", label: "Payment Modes", icon: Wallet, tone: "text-sky-600", activeBg: "bg-sky-50" },
   { key: "theme", label: "Appearance", icon: Palette, tone: "text-violet-600", activeBg: "bg-violet-50" },
   { key: "danger", label: "Danger Zone", icon: AlertTriangle, tone: "text-red-600", activeBg: "bg-red-50" },
@@ -379,6 +394,21 @@ export const DeveloperZone = () => {
     setSavingFeature(null);
   };
 
+  // Hide Tab: no confirm, like Payment Modes -- a hidden tab is one flip from coming back.
+  const toggleTab = async (tab) => {
+    const hide = !hiddenFeatureKeys.includes(tab.key);
+    setSavingFeature(tab.key);
+    try {
+      const r = await setFeatureHidden(devPassword, tab.key, hide);
+      setHiddenFeatureKeys(r.hidden || []);
+      setHiddenFeatures(r.hidden || []);
+      toast.success(hide ? `${tab.label} tab is hidden` : `${tab.label} tab is shown`);
+    } catch (e) {
+      resetFailed(e);
+    }
+    setSavingFeature(null);
+  };
+
   const handleResetAllLeads = async () => {
     const step1 = window.confirm(
       "Reset EVERY lead in the whole OS back to a fresh, unassigned New Leads state?\n\n" +
@@ -597,6 +627,47 @@ export const DeveloperZone = () => {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Whole tabs off one desk's strip, grouped by desk. A hidden tab is gone from that
+            desk's tab bar and phone footer; its data is untouched. */}
+        {subTab === "hide_tab" && (
+          <Card data-testid="hide-tab-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <PanelTopClose className="h-4 w-4 text-teal-600" /> Hide Tab
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {HIDE_TAB_GROUPS.map((group) => (
+                <div key={group.key} data-testid={`hide-tab-group-${group.key}`}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</p>
+                  <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                    {group.tabs.map((tab) => {
+                      const shown = hiddenFeatureKeys ? !hiddenFeatureKeys.includes(tab.key) : null;
+                      return (
+                        <label key={tab.key} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50" data-testid={`hide-tab-${tab.key}-row`}>
+                          <span className="min-w-0 text-sm font-medium text-slate-800">{tab.label}</span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className={`text-[10px] font-bold uppercase ${shown ? "text-emerald-600" : "text-slate-400"}`}>
+                              {shown === null ? "…" : savingFeature === tab.key ? "Saving" : shown ? "Show" : "Hide"}
+                            </span>
+                            <Switch
+                              checked={!!shown}
+                              disabled={shown === null || !!savingFeature}
+                              onCheckedChange={() => toggleTab(tab)}
+                              className="data-[state=checked]:bg-emerald-600"
+                              data-testid={`hide-tab-${tab.key}-toggle`}
+                            />
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

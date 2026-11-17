@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { getFeatureVisibility } from "@/lib/api";
 
 // ------------------------------------------------- Hide Features
@@ -20,6 +20,8 @@ import { getFeatureVisibility } from "@/lib/api";
 //                           hidden is Optional. The server answers it on /progression too.
 //   consultation_fee_confirm — the browser confirm before Collect on the Collect
 //                           Consultation Fee popup. Shown as ON / OFF; hidden is OFF.
+//   bd_marketing_view / bd_sales_view — the Business Development Executive's Marketing
+//                           View and Sales View tabs, on the Developer Zone's Hide Tab page.
 let hiddenFeatures = [];
 let loaded = false;
 // Whether the list has actually come back, as opposed to `loaded`, which is set as soon
@@ -48,6 +50,16 @@ export const useHiddenFeatures = () => useSyncExternalStore(subscribe, () => hid
 
 /** Whether one feature is hidden, re-rendering the caller when that changes. */
 export const useFeatureHidden = (feature) => useHiddenFeatures().includes(feature);
+
+// The Business Development Executive's tabs the Hide Tab page can hide, tab key -> feature
+// key. Read by BusinessLeadsDashboard's strip and CRMPage's BD phone footer alike.
+export const BD_TAB_FEATURES = { marketing_view: "bd_marketing_view", sales_view: "bd_sales_view" };
+
+/** A test for whether one BD tab key is hidden, re-rendering the caller when that changes. */
+export const useBdTabHidden = () => {
+  const hidden = useHiddenFeatures();
+  return useCallback((tabKey) => !!BD_TAB_FEATURES[tabKey] && hidden.includes(BD_TAB_FEATURES[tabKey]), [hidden]);
+};
 
 /**
  * Whether one feature is switched on (Allow / Show), for a feature that ships off: false

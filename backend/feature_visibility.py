@@ -36,7 +36,14 @@ SETTING_ID = "hidden_features"
 # consultation_fee_confirm: the "Collect the Consultation Fee of Rs.X by <mode>?" browser
 # confirm on the Collect Consultation Fee popup (Branch Leads). Screen-only: the tab shows
 # it as On / Off — hidden is Off, and Collect saves at once.
-FEATURE_KEYS = ("treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm")
+#
+# bd_marketing_view / bd_sales_view: the Business Development Executive's Marketing View and
+# Sales View tabs (BusinessLeadsDashboard's strip and CRMPage's phone footer). Listed on the
+# Developer Zone's Hide Tab page rather than Features. Screen-only, and shipped shown.
+FEATURE_KEYS = (
+    "treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm",
+    "bd_marketing_view", "bd_sales_view",
+)
 
 # What a missing row means. "treatments" ships hidden: this install asked for the tab and
 # the Treatment Summary dropdown to be off out of the box, and Show in Hide Features is how

@@ -58,6 +58,7 @@ import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { ClockWidget } from "@/components/ClockWidget";
 import { HeaderThemePicker } from "@/components/ThemeAppearance";
 import { useDevZone, openDevZone, lockDevZone } from "@/lib/devZone";
+import { useBdTabHidden } from "@/lib/featureVisibility";
 import { NotificationBell } from "@/components/NotificationBell";
 import { displayPhone } from "@/lib/phone";
 
@@ -591,6 +592,8 @@ export const CRMPage = ({ auth, onLogout }) => {
   const [presalesView, setPresalesView] = useState("leads");
   // BDE's board tab, held here so the phone footer can switch it.
   const [bdTab, setBdTab] = useState("dashboard");
+  // Marketing View / Sales View hidden by the Developer Zone's Hide Tab page: off the footer too.
+  const isBdTabHidden = useBdTabHidden();
   const [feedbackUnread, setFeedbackUnread] = useState(0);
 
   const [superAdminView, setSuperAdminView] = useState(() => {
@@ -1030,7 +1033,8 @@ export const CRMPage = ({ auth, onLogout }) => {
   const phoneFooter = !genericFooter ? null
     : showBusinessDevBoard ? {
       // Mirrors BusinessLeadsDashboard's TABS; that module is lazy, so it is not imported here.
-      stops: [bdStop("dashboard", "Dashboard", BarChart3), bdStop("marketing_view", "Marketing View", Megaphone), bdStop("sales_view", "Sales View", Headphones)],
+      stops: [bdStop("dashboard", "Dashboard", BarChart3), bdStop("marketing_view", "Marketing View", Megaphone), bdStop("sales_view", "Sales View", Headphones)]
+        .filter((s) => !isBdTabHidden(s.key)),
       more: [
         bdStop("presales_view", "Pre Sales View", PhoneCall),
         bdStop("branch_control", "Branch Control", LayoutDashboard),

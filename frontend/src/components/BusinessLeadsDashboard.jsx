@@ -73,6 +73,7 @@ import { DASH_TABS, DashboardTabPanel, ModeBranchScope, useDashboardData } from 
 // the file's own header for why the desk wants a table rather than tiles.
 import { BREAKDOWN_MODES, BdMarketingSources } from "@/components/BdMarketingSources";
 import { displayPhone } from "@/lib/phone";
+import { useBdTabHidden } from "@/lib/featureVisibility";
 // Finance, HR Admin, Services and Products, and the two Settings screens -- the same five
 // boards Super Admin reaches, mounted here as this desk's own tabs.
 //
@@ -223,6 +224,13 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
   const activeTab = tab ?? ownTab;
   const setActiveTab = onTabChange ?? setOwnTab;
   const phoneFooter = !!onTabChange;
+  // Marketing View / Sales View, when the Developer Zone's Hide Tab page has hidden them:
+  // off the strip, and a hidden tab that is open falls back to Dashboard.
+  const isTabHidden = useBdTabHidden();
+  const visibleTabs = useMemo(() => TABS.filter((t) => !isTabHidden(t.key)), [isTabHidden]);
+  useEffect(() => {
+    if (isTabHidden(activeTab)) setActiveTab("dashboard");
+  }, [activeTab, isTabHidden, setActiveTab]);
   const [loading, setLoading] = useState(false);
 
   const [summary, setSummary] = useState(null);
@@ -370,7 +378,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           and Add Lead and Refresh have moved into the Dashboard's own toolbar, so all that
           was left here was an empty rule and a gap above the tabs. */}
       <div className={`${phoneFooter && activeTab === "dashboard" ? "hidden sm:flex" : "flex"} items-center gap-1 overflow-x-auto border-b border-slate-200`} data-testid="bd-tab-bar">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = isTabActive(activeTab, tab.key);
           return (
@@ -466,11 +474,11 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
         <PreSalesCRM role="sales_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar stageView />
       )}
 
-      {activeTab === "marketing_view" && (
+      {activeTab === "marketing_view" && !isTabHidden("marketing_view") && (
         <PreSalesCRM role="marketing_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar />
       )}
 
-      {activeTab === "sales_view" && (
+      {activeTab === "sales_view" && !isTabHidden("sales_view") && (
         <PreSalesCRM role="sales_head" currentUser={currentUser} embedded leadsOnly branchFilterInToolbar />
       )}
 
