@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, Layers, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,16 +204,57 @@ const FALLBACK_SESSION_MINUTES = 30;
  * `consultation_decision === "consultation_treatment"` / `== "consultation_only"` check
  * in the codebase, where four flags read side by side break nothing.
  */
-// The icons are the ones the rest of the OS already gives these five — see the revenue
-// and category tables in branch/AccountantManageTab.jsx. Picked from there rather than
-// chosen fresh: a Salad meaning Diet on the money board and something else meaning it here
-// is two vocabularies for one clinic, and the icon stops being worth reading.
+// Lucide has no massage table, runner or flat dumbbell, so those three are drawn here on
+// lucide's own 24px grid and 2px stroke, to sit beside its Apple and Music unchanged.
+function LineIcon({ children, ...props }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      {children}
+    </svg>
+  );
+}
+function MassageTableIcon(props) {
+  return (
+    <LineIcon {...props}>
+      <circle cx="14" cy="4" r="2" />
+      <path d="M14 6v3.5" />
+      <path d="M14 7.5l-4 2.5" />
+      <circle cx="4.5" cy="10.5" r="1.5" />
+      <path d="M8 12h12" />
+      <path d="M2 15h20" />
+      <path d="M5 15v5M19 15v5" />
+    </LineIcon>
+  );
+}
+function RunnerIcon(props) {
+  return (
+    <LineIcon {...props}>
+      <circle cx="13.5" cy="4" r="1.5" />
+      <path d="M4 17l5 1l.75-1.5" />
+      <path d="M15 21v-4l-4-3l1-6" />
+      <path d="M7 12V9l5-1l3 3l3 1" />
+    </LineIcon>
+  );
+}
+function DumbbellFlatIcon(props) {
+  return (
+    <LineIcon {...props}>
+      <rect x="6" y="6" width="3" height="12" rx="1" />
+      <rect x="15" y="6" width="3" height="12" rx="1" />
+      <path d="M9 12h6" />
+      <path d="M6 9.5H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h2" />
+      <path d="M18 9.5h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-2" />
+    </LineIcon>
+  );
+}
+
+// The icons on the Consultant's Services tiles and Selected Services rows.
 const CONSULTATION_ADDONS = [
-  { key: "treatment", label: "Treatment", tone: "#1baf7a", icon: Activity },
-  { key: "diet", label: "Diet", tone: "#eb6834", icon: Salad },
-  { key: "rehab", label: "Rehab", tone: "#0891b2", icon: HeartPulse },
-  { key: "fitness", label: "Fitness", tone: "#7c3aed", icon: Dumbbell },
-  { key: "zumba", label: "Zumba", tone: "#db2777", icon: Music2 },
+  { key: "treatment", label: "Treatment", tone: "#1baf7a", icon: MassageTableIcon },
+  { key: "diet", label: "Diet", tone: "#eb6834", icon: Apple },
+  { key: "rehab", label: "Rehab", tone: "#0284c7", icon: DumbbellFlatIcon },
+  { key: "fitness", label: "Fitness", tone: "#7c3aed", icon: RunnerIcon },
+  { key: "zumba", label: "Zumba", tone: "#db2777", icon: Music },
 ];
 
 // How the Services column is headed up on the Move to Admin form. Every key in
@@ -9308,15 +9349,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         the form stays the height of its two short columns. */}
                     <div className="mb-3 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1.5 block text-[11px] font-medium text-slate-500">Services</label>
-                        {/* A column rather than the row of five this was, so each service
-                            lines up with its own answer opposite and the words are never
-                            squeezed to a fifth of half the panel. */}
-                        <div className="space-y-2.5" data-testid="cons-decision-plan-options">
+                        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                          <Layers aria-hidden className="h-4 w-4 text-emerald-600" /> Services
+                        </p>
+                        {/* Tiles, three to a row, under each group's own heading. */}
+                        <div className="space-y-3" data-testid="cons-decision-plan-options">
                           {CONSULTATION_ADDON_GROUPS.map((g) => (
                             <div key={g.label} data-testid={`cons-decision-plan-group-${g.keys[0]}`}>
-                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</p>
-                              <div className="space-y-1.5">
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</p>
+                              <div className="grid grid-cols-3 gap-2">
                                 {CONSULTATION_ADDONS.filter((p) => g.keys.includes(p.key)).map((p) => {
                                   const selected = !!decisionDraft[p.key];
                                   const Icon = p.icon;
@@ -9325,15 +9366,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                       key={p.key}
                                       type="button"
                                       onClick={() => pickAddon(p.key)}
-                                      className="flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold transition hover:brightness-95"
+                                      aria-pressed={selected}
+                                      className="relative flex h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-[13px] font-semibold text-slate-800 transition hover:brightness-95"
                                       style={selected
-                                        ? { background: `${p.tone}22`, color: p.tone, borderColor: p.tone, boxShadow: `inset 0 0 0 1px ${p.tone}` }
-                                        : { background: `${p.tone}14`, color: p.tone, borderColor: `${p.tone}33` }}
+                                        ? { background: `${p.tone}1f`, borderColor: p.tone, boxShadow: `inset 0 0 0 1px ${p.tone}` }
+                                        : { background: `${p.tone}12`, borderColor: `${p.tone}38` }}
                                       data-testid={`cons-decision-plan-${p.key}`}
                                     >
-                                      <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                                      <span className="truncate">{p.label}</span>
-                                      {selected && <CheckCircle2 aria-hidden className="ml-auto h-3.5 w-3.5 shrink-0" />}
+                                      {selected && (
+                                        <span
+                                          className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-white"
+                                          style={{ background: p.tone }}
+                                        >
+                                          <Check aria-hidden className="h-3 w-3" strokeWidth={3} />
+                                        </span>
+                                      )}
+                                      <Icon aria-hidden className="h-7 w-7 shrink-0" style={{ color: p.tone }} />
+                                      <span className="max-w-full truncate">{p.label}</span>
                                     </button>
                                   );
                                 })}
@@ -9354,7 +9403,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           cross there would be a button whose only outcome is a form that
                           cannot be submitted. */}
                       <div>
-                        <label className="mb-1.5 block text-[11px] font-medium text-slate-500">Selected Services</label>
+                        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700" data-testid="cons-decision-selected-heading">
+                          <List aria-hidden className="h-4 w-4 text-emerald-600" /> Selected Services ({selectedAddons.length})
+                        </p>
                         {selectedAddons.length === 0 ? (
                           <p
                             className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-3 py-3 text-[11px] text-slate-500"
@@ -9363,39 +9414,44 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             No services picked — this patient moves to Admin as Consultation only.
                           </p>
                         ) : (
-                          <div className="space-y-1.5" data-testid="cons-decision-details">
+                          <div className="space-y-2" data-testid="cons-decision-details">
                             {selectedAddons.map((a) => {
                               const summary = addonSummary(a.key);
+                              const Icon = a.icon;
                               return (
                                 <div
                                   key={a.key}
-                                  className="flex items-center gap-1.5 rounded-r-lg border-l-2 bg-slate-50/70 py-1.5 pl-2.5 pr-1.5"
-                                  style={{ borderLeftColor: a.tone }}
+                                  className="flex items-center gap-2 rounded-xl border py-2.5 pl-3 pr-2"
+                                  style={{ background: `${a.tone}12`, borderColor: `${a.tone}2e` }}
                                   data-testid={`cons-decision-detail-${a.key}`}
                                 >
                                   <button
                                     type="button"
                                     onClick={() => pickAddon(a.key)}
                                     disabled={!hasPicker(a.key)}
-                                    className="min-w-0 flex-1 text-left disabled:cursor-default"
+                                    className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
                                     data-testid={`cons-decision-selected-${a.key}`}
                                   >
-                                    <span className="block text-[11px] font-semibold" style={{ color: a.tone }}>{a.label}</span>
-                                    <span
-                                      className={`block truncate text-[11px] ${summary.incomplete ? "font-medium text-rose-600" : "text-slate-600"}`}
-                                      title={summary.text}
-                                    >
-                                      {summary.text}
+                                    <Icon aria-hidden className="h-6 w-6 shrink-0" style={{ color: a.tone }} />
+                                    <span className="min-w-0">
+                                      <span className="block text-[13px] font-semibold text-slate-800">{a.label}</span>
+                                      <span
+                                        className={`block truncate text-[11px] ${summary.incomplete ? "font-medium text-rose-600" : "text-slate-600"}`}
+                                        title={summary.text}
+                                      >
+                                        {summary.text}
+                                      </span>
                                     </span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => clearAddon(a.key)}
-                                    className="shrink-0 rounded p-1 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                                    className="shrink-0 rounded-md p-1.5 transition hover:bg-white/70"
+                                    style={{ color: a.tone }}
                                     title={`Remove ${a.label}`}
                                     data-testid={`cons-decision-remove-${a.key}`}
                                   >
-                                    <X aria-hidden className="h-3.5 w-3.5" />
+                                    <Trash2 aria-hidden className="h-4 w-4" />
                                   </button>
                                 </div>
                               );
