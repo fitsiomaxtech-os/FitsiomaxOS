@@ -32,6 +32,7 @@ import { QuickDateFilterBar, intersectDateFilters } from "@/components/QuickDate
 import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { sortBranchesForPicker } from "@/lib/branchOrder";
 import { StageTabBar } from "@/components/ui/stage-tab";
 import { BottomNavTab } from "@/components/ui/bottom-nav-tab";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -1129,25 +1130,13 @@ const STAGE_VIEW_SORT_OPTIONS = [
 const stageViewSelectClass = (narrowed) => `h-10 shrink-0 px-2.5 text-xs font-medium ${
   narrowed ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-50" : "text-slate-600"
 }`;
-// The Branch dropdown's order, as asked: Anna Nagar, Parrys, ECR, T Nagar, Trichy, then the
-// rest -- offline before online, A to Z. Matched on the name's letters, so "T.Nagar" and
-// "T Nagar Branch" are the same branch. Anna Nagar is tested before T Nagar.
-const STAGE_VIEW_BRANCH_ORDER = ["annanagar", "parry", "ecr", "tnagar", "trichy"];
-const stageViewBranchRank = (b) => {
-  const n = branchLabel(b).toLowerCase().replace(/[^a-z]/g, "");
-  const i = STAGE_VIEW_BRANCH_ORDER.findIndex((key) => n.includes(key));
-  return i === -1 ? STAGE_VIEW_BRANCH_ORDER.length : i;
-};
-const sortStageViewBranches = (list) => [...(list || [])].sort((a, b) => (
-  stageViewBranchRank(a) - stageViewBranchRank(b)
-  || Number(isOnlineVertical(a.vertical)) - Number(isOnlineVertical(b.vertical))
-  || branchLabel(a).localeCompare(branchLabel(b))
-));
+// The Branch dropdown's order: Anna Nagar, Parrys, ECR, T Nagar, Trichy, then the rest
+// (lib/branchOrder, shared with the Consultation View).
 const StageViewBranchSelect = ({ value, onChange, branches, testid }) => (
   <ThemedSelect
     value={value || "all"}
     onChange={(v) => onChange(v === "all" ? "" : v)}
-    options={[{ value: "all", label: "All Branches" }, ...sortStageViewBranches(branches).map((b) => ({ value: b.id, label: branchLabel(b) }))]}
+    options={[{ value: "all", label: "All Branches" }, ...sortBranchesForPicker(branches).map((b) => ({ value: b.id, label: branchLabel(b) }))]}
     title="Branch"
     className={`w-44 ${stageViewSelectClass(!!value)}`}
     testid={testid}

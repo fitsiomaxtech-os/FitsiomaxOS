@@ -99,8 +99,9 @@ const BdConsultationView = lazyWithRetry(() => import("@/components/BdConsultati
  * board loading rather than the page going away.
  */
 const BoardFallback = () => (
-  <div className="flex items-center justify-center py-20" data-testid="bd-board-loading">
+  <div className="flex flex-col items-center justify-center gap-3 py-20" data-testid="bd-board-loading">
     <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600" />
+    <p className="whitespace-nowrap text-sm text-slate-500">Loading your board…</p>
   </div>
 );
 
@@ -495,7 +496,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
 
         {/* Its Add Patient opens this board's Add Lead form; drillTick reloads it after. */}
         {activeTab === "consultation_view" && (
-          <BdConsultationView onAddPatient={() => setShowCreateLead(true)} reloadToken={drillTick} />
+          <BdConsultationView branches={branches} onAddPatient={() => setShowCreateLead(true)} reloadToken={drillTick} />
         )}
 
         {activeTab === "hr" && (

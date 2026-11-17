@@ -20,6 +20,7 @@ import { QuickDateFilterBar, intersectDateFilters, quickDatePreset } from "@/com
 import { ConsultationsBoard } from "@/components/ConsultationsBoard";
 import { downloadListReportPdf, downloadListWorkbookXlsx } from "@/components/branch/leadsReport";
 import { stagesList } from "@/lib/api";
+import { branchNameOf, sortBranchesForPicker } from "@/lib/branchOrder";
 import { callTimeStamp, dateStampFull } from "@/lib/time";
 
 // The card the view sits on when nothing else is picked, as Branch Admin's Consultation tab
@@ -36,13 +37,21 @@ const ALL_BRANCHES = "All Branches";
 /**
  * The Business Development Executive's Consultation View: every branch's Consultation tab
  * at once -- the same stage cards and the same ConsultationsBoard Branch Admin works, read
- * across all branches (branch_id "all").
+ * across all branches (branch_id "all"), or the one the Branch dropdown picks.
  *
+ * @param branches     the host's branch list, for the Branch dropdown
  * @param onAddPatient opens the host's Add Lead form
  * @param reloadToken  bumped by the host after a lead is added
  */
-export const BdConsultationView = ({ onAddPatient, reloadToken = 0 }) => {
+export const BdConsultationView = ({ branches = [], onAddPatient, reloadToken = 0 }) => {
   const [stages, setStages] = useState([]);
+  // "" is All Branches. A picked branch is asked of the server, so the board is that
+  // branch's own board -- the same rows and popups its Branch Admin has.
+  const [branchId, setBranchId] = useState("");
+  const branchOptions = useMemo(() => [
+    { value: "all", label: ALL_BRANCHES },
+    ...sortBranchesForPicker(branches).map((b) => ({ value: b.id, label: branchNameOf(b) })),
+  ], [branches]);
   const [stageFilter, setStageFilter] = useState(null);
   const [search, setSearch] = useState("");
   const [quickDate, setQuickDate] = useState(() => quickDatePreset("today"));
@@ -112,15 +121,16 @@ export const BdConsultationView = ({ onAddPatient, reloadToken = 0 }) => {
     };
     const now = new Date();
     const generated = `${dateStampFull(now)}, ${callTimeStamp(now)}`;
+    const branchName = data.branch || ALL_BRANCHES;
     const slug = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const asList = (d) => ({
       title: "CONSULTATION REPORT",
       sheetTitle: `FITSIOMAX — Consultation — ${d.stage}`,
       sheetName: d.stage,
-      branch: ALL_BRANCHES,
+      branch: branchName,
       generated,
-      meta: [["Branch", ALL_BRANCHES], ["Stage", d.stage], ["Period", period], ["Showing", showing(d.rows.length, d.feeView)]],
-      strip: [ALL_BRANCHES, d.stage, period],
+      meta: [["Branch", branchName], ["Stage", d.stage], ["Period", period], ["Showing", showing(d.rows.length, d.feeView)]],
+      strip: [branchName, d.stage, period],
       listLabel: `${d.stage} — Patient List`,
       empty: "No patients in this stage for the selected period.",
       columns: d.columns,
@@ -129,11 +139,11 @@ export const BdConsultationView = ({ onAddPatient, reloadToken = 0 }) => {
     setExporting(true);
     try {
       if (kind === "pdf") {
-        await downloadListReportPdf(asList(data), ["consultation", "all-branches", slug(data.stage), slug(dates)].filter(Boolean).join("-") + ".pdf");
+        await downloadListReportPdf(asList(data), ["consultation", slug(branchName), slug(data.stage), slug(dates)].filter(Boolean).join("-") + ".pdf");
       } else {
         downloadListWorkbookXlsx(
           stages.map((st) => asList(build(st.name))),
-          ["consultation-all-stages", "all-branches", slug(dates)].filter(Boolean).join("-") + ".xlsx",
+          ["consultation-all-stages", slug(branchName), slug(dates)].filter(Boolean).join("-") + ".xlsx",
         );
       }
     } catch {
@@ -180,6 +190,16 @@ export const BdConsultationView = ({ onAddPatient, reloadToken = 0 }) => {
         </div>
 
         <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5">
+          <ThemedSelect
+            value={branchId || "all"}
+            onChange={(v) => setBranchId(v === "all" ? "" : v)}
+            options={branchOptions}
+            title="Branch"
+            className={`h-10 w-40 shrink-0 px-2.5 text-xs font-medium ${
+              branchId ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-50" : "text-slate-600"
+            }`}
+            testid="bd-consult-branch"
+          />
           {/* Phone: the order as one arrow that flips it; the dropdown from sm up. */}
           <button
             type="button"
@@ -295,9 +315,9 @@ export const BdConsultationView = ({ onAddPatient, reloadToken = 0 }) => {
         />
       </div>
 
-      {/* Branch Admin's Consultation tab, every branch at once. */}
+      {/* Branch Admin's Consultation tab: every branch at once, or the one picked. */}
       <ConsultationsBoard
-        branchId="all"
+        branchId={branchId || "all"}
         viewerRole="branch_admin"
         homeVisitScope="exclude"
         externalStageFilter={stageFilter}
