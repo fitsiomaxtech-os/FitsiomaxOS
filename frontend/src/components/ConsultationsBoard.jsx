@@ -3466,7 +3466,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [pickerDate, setPickerDate] = useState(null); // "YYYY-MM-DD"
   const [bulkTime, setBulkTime] = useState(""); // "HH:MM" — the slot picker's bulk select
   const [bulkSkipSun, setBulkSkipSun] = useState(false);
-  // Unpaid: Allow | No Allow — whether the days the Treatment Fee balance hasn't paid for
+  // Unpaid days: Allow | Not Allow — whether the days the Treatment Fee balance hasn't paid for
   // yet can be booked too (partial payment / EMI). Starts from what this lead was last
   // booked with; the backend saves it with the booking.
   const [allowUnpaid, setAllowUnpaid] = useState(false);
@@ -6473,7 +6473,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const daysToBook = openEndedRehab ? 0 : unpaidOwed && !allowUnpaid
     ? paidDaysToBook
     : totalSessionsNeeded;
-  // Back to No Allow drops the unpaid days already placed, keeping the paid ones.
+  // Back to Not Allow drops the unpaid days already placed, keeping the paid ones.
   const chooseAllowUnpaid = (allow) => {
     setAllowUnpaid(allow);
     if (!allow) setPickedSessionSlots((prev) => [...prev].sort().slice(0, paidDaysToBook));
@@ -14927,12 +14927,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             aria-label="Unpaid days"
                             data-testid="cons-unpaid-allow"
                           >
-                            <span className="flex items-center px-2.5 text-slate-600 sm:px-3">Unpaid</span>
                             <button
                               type="button"
                               onClick={() => chooseAllowUnpaid(true)}
                               aria-pressed={allowUnpaid}
-                              className={`border-l border-slate-300 px-2.5 py-1 transition-colors sm:px-3 ${allowUnpaid ? "bg-emerald-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                              className={`px-2.5 py-1 transition-colors sm:px-3 ${allowUnpaid ? "bg-emerald-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
                               data-testid="cons-unpaid-allow-yes"
                             >
                               Allow
@@ -14941,10 +14940,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               type="button"
                               onClick={() => chooseAllowUnpaid(false)}
                               aria-pressed={!allowUnpaid}
-                              className={`border-l border-slate-300 px-2.5 py-1 transition-colors sm:px-3 ${!allowUnpaid ? "bg-slate-700 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                              className={`border-l border-slate-300 px-2.5 py-1 transition-colors sm:px-3 ${!allowUnpaid ? "bg-rose-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
                               data-testid="cons-unpaid-allow-no"
                             >
-                              No Allow
+                              Not Allow
                             </button>
                           </span>
                           {waitToPayDays > 0 && (
