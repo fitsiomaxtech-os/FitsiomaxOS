@@ -5034,8 +5034,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           short tab -- Overview, with just the contact and the move buttons -- sitting on a
           block of blank card. */}
       <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
-        {/* A light sky tint, not the old gradient: enough to set the name row apart from
-            the tabs and cards below, quiet enough that the chips still read. The gradient made this the loudest thing on a screen whose
+        {/* Solid #0284C7, the board's own sky-600, with the name, ID and stage in white and
+            the Transfer and Edit buttons kept as white tiles so they still read as buttons.
+            One flat colour, not the old three-colour gradient: the gradient made this the loudest thing on a screen whose
             subject is the cards underneath — the patient's name and their stage are the
             information here, and they read better on white than reversed out of three
             colours. Every chip in it had been picked to survive that background: white on
@@ -5043,7 +5044,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
             set against the page now instead. */}
         {/* The name block and the buttons share one centre line, 8px above and below;
             the side padding is the same 16px the tabs and cards below start at. */}
-        <div className="relative border-b border-sky-100 bg-sky-50 px-4 py-2 sm:px-5">
+        <div className="relative border-b border-sky-700 bg-[#0284C7] px-4 py-2 sm:px-5">
           {/* One row: name, ID and stage chip side by side, the buttons on the same
               centre line. On a phone that is two rows instead: name and buttons on the
               first, ID and stage on the second — the chips run under the buttons too, so
@@ -5054,12 +5055,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:flex sm:justify-between sm:gap-3">
             <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-3">
               <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
-                <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-slate-900" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
+                <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-white" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
                 <div className="col-span-2 col-start-1 row-start-2 flex flex-wrap items-center gap-1.5">
                   {lead.patient_number && (
-                    <span className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
+                    <span className="rounded-[5px] bg-white/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
                   )}
-                  <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 sm:px-2.5" data-testid="branch-lead-stage">
+                  <span className="rounded-[5px] border border-white/40 bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white sm:px-2.5" data-testid="branch-lead-stage">
                     {/* Named the same way the row that opened this popup was: opened from
                         Leads it reads Leads, and the pipeline below highlights Leads too. */}
                     {headerStageName ? headerStageName : "No Stage"}
@@ -5074,7 +5075,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                       type="button"
                       onClick={openApptCard}
                       disabled={loadingApptCard}
-                      className="shrink-0 text-teal-400 transition hover:text-teal-600 disabled:opacity-50"
+                      className="shrink-0 text-white/80 transition hover:text-white disabled:opacity-50"
                       title="Open the appointment confirmation — print, send or download it again"
                       aria-label="Appointment Card"
                       data-testid="branch-lead-open-appt-card"
@@ -5111,7 +5112,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               >
                 <Pencil className="h-5 w-5" />
               </button>
-              <button onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="branch-lead-close">
+              <button onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-2 text-white/80 transition hover:bg-white/15 hover:text-white" data-testid="branch-lead-close">
                 <X className="h-5 w-5" />
               </button>
             </div>
