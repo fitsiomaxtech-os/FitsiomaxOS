@@ -1,14 +1,16 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, Loader2 } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { PAPER_BRANCHES, todayIso } from "@/components/branch/ConsultationFormSheets";
 
 /**
  * The client link (pages/ClientConsultationFormPage), asked as five short steps instead of
  * the paper: details, about you, history, symptoms and muscles, previous consultations.
- * Only Name and Mobile Number must be filled. The last step sends the lot, and the client
- * sees only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin opens it
- * as a read-only report).
+ * Only Name and Mobile Number must be filled. The last step can show every answer as a
+ * plain list first (Preview, optional), then sends the lot; the client sees only a
+ * thank-you -- the filled paper is for the clinic's eyes (Branch Admin opens it as a
+ * read-only report). The popup is a fixed 1280 x 620 from tablet width up, the progress
+ * bar above it.
  */
 
 const STAGES = 5;
@@ -105,16 +107,16 @@ const Text = ({ id, label, value, onChange, error, required, ...rest }) => (
   </Field>
 );
 
-const Area = ({ id, label, value, onChange }) => (
+const Area = ({ id, label, value, onChange, rows = 8 }) => (
   <Field label={label} htmlFor={id}>
     <textarea
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      rows={3}
+      rows={rows}
       maxLength={5000}
       placeholder={label}
-      className={`${box(false)} resize-y py-2.5 leading-relaxed`}
+      className={`${box(false)} resize-none py-2.5 leading-relaxed`}
       data-testid={`client-stage-${id}`}
     />
   </Field>
@@ -151,9 +153,33 @@ const TRIM_KEYS = [
   "previous_diagnosis", "previous_physiotherapy",
 ];
 
+// Preview before Submit: every answer as a plain list, not the paper's layout.
+const PREVIEW = [
+  ["Name", (d) => d.name],
+  ["Mobile Number", (d) => (d.number ? `+${d.code} ${d.number}` : "")],
+  ["Email ID", (d) => d.mail_id],
+  ["Age", (d) => d.age],
+  ["Gender", (d) => d.sex],
+  ["Your Place", (d) => d.place],
+  ["Branch", (d) => d.branch],
+  ["Source", (d) => d.source_of_reference],
+  ["Nature of Job", (d) => d.nature_of_job],
+  ["Past Medical History", (d) => d.past_medical_history],
+  ["Any Medication", (d) => d.any_medication],
+  ["Symptoms / Root Cause", (d) => d.symptoms_root_cause],
+  ["Primary Muscles", (d) => d.primary_muscles],
+  ["Secondary Muscles", (d) => d.secondary_muscles],
+  ["Previous Medical Consultations", (d) => d.previous_medical_consultations],
+  ["Previous Diagnosis", (d) => d.previous_diagnosis],
+  ["Previous Physiotherapy", (d) => d.previous_physiotherapy],
+];
+
+const backCls = "flex h-11 items-center gap-1.5 rounded-[8px] border border-[#c7cdea] bg-white px-5 text-[15px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60";
+
 export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }) => {
   const [d, setD] = useState(() => startFrom(form));
   const [stage, setStage] = useState(0);
+  const [preview, setPreview] = useState(false);
   // Errors show from a step's first Continue on, then follow the typing. Not on blur: an
   // error appearing as a box loses focus pushes Continue down under a click on its way.
   const [tried, setTried] = useState(false);
@@ -196,20 +222,57 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
     });
   };
 
+  const submitBtn = (
+    <button
+      type="submit"
+      disabled={sending}
+      className="flex h-11 items-center gap-1.5 rounded-[8px] px-6 text-[15px] font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
+      style={{ background: BLUE }}
+      data-testid={last ? "client-stage-submit" : "client-stage-continue"}
+    >
+      {last ? (
+        <>{sending && <Loader2 className="h-4 w-4 animate-spin" />}Submit</>
+      ) : (
+        <>Continue<ArrowRight className="h-4 w-4" /></>
+      )}
+    </button>
+  );
+
   return (
-    <div className="flex min-h-screen items-start justify-center bg-[#eef1f8] px-4 py-6 sm:items-center sm:py-10" data-testid="client-stages">
-      <form onSubmit={next} noValidate autoComplete="off" className="w-full max-w-[700px] rounded-[8px] bg-white p-6 shadow-xl sm:p-10" data-testid={`client-stage-${stage + 1}`}>
-        <div className="flex gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={STAGES} aria-valuenow={stage + 1} aria-label="Progress">
-          {Array.from({ length: STAGES }, (_, i) => (
-            <span key={i} className="h-1.5 flex-1 rounded-full transition-colors" style={{ background: i <= stage ? BLUE : "#e2e8f0" }} />
-          ))}
-        </div>
+    <div className="flex min-h-screen flex-col items-center justify-start bg-[#eef1f8] px-4 py-6 md:justify-center md:py-10" data-testid="client-stages">
+      {/* The progress sits above the popup, not in it. */}
+      <div className="mb-4 flex w-full max-w-[1280px] gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={STAGES} aria-valuenow={stage + 1} aria-label="Progress" data-testid="client-stage-progress">
+        {Array.from({ length: STAGES }, (_, i) => (
+          <span key={i} className="h-1.5 flex-1 rounded-full transition-colors" style={{ background: i <= stage ? BLUE : "#dfe4ee" }} />
+        ))}
+      </div>
 
-        <h1 className="mt-6 text-[26px] font-semibold text-[#6b7aa6] sm:text-[28px]">Enter Your Details</h1>
+      <form
+        onSubmit={next}
+        noValidate
+        autoComplete="off"
+        className="flex w-full max-w-[1280px] flex-col rounded-[15px] bg-white shadow-xl md:h-[620px]"
+        data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
+      >
+        <h1 className="px-6 pt-6 text-[26px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-8 sm:text-[28px]">{preview ? "Preview" : "Enter Your Details"}</h1>
 
-        <div className="mt-5 flex flex-col gap-5">
-          {stage === 0 && (
-            <>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-10">
+          {preview && (
+            <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 md:grid-cols-3" data-testid="client-preview-list">
+              {PREVIEW.map(([label, read]) => {
+                const value = String(read(d) || "").trim();
+                return (
+                  <div key={label} className="min-w-0">
+                    <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
+                    <dd className={`mt-0.5 whitespace-pre-wrap break-words text-[15px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
+
+          {!preview && stage === 0 && (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8">
               <Field label="Enter your Name" htmlFor="cs-name" required error={err("name")}>
                 <input
                   id="cs-name"
@@ -266,28 +329,26 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
                 onChange={(v) => set("mail_id")(v.replace(/\s/g, ""))}
                 error={err("mail_id")}
               />
-            </>
+            </div>
           )}
 
-          {stage === 1 && (
-            <>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
-                <Field label="Gender" htmlFor="cs-gender">
-                  <ThemedSelect
-                    value={d.sex}
-                    onChange={set("sex")}
-                    options={GENDERS}
-                    placeholder="Gender"
-                    className="h-11 rounded-[8px] border-[#c7cdea] px-4 text-[15px] data-[placeholder]:text-[#8a93b8]"
-                    testid="client-stage-cs-gender"
-                  />
-                </Field>
-              </div>
+          {!preview && stage === 1 && (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8">
+              <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
+              <Field label="Gender" htmlFor="cs-gender">
+                <ThemedSelect
+                  value={d.sex}
+                  onChange={set("sex")}
+                  options={GENDERS}
+                  placeholder="Gender"
+                  className="h-11 rounded-[8px] border-[#c7cdea] px-4 text-[15px] data-[placeholder]:text-[#8a93b8]"
+                  testid="client-stage-cs-gender"
+                />
+              </Field>
               <Text id="cs-place" label="Your Place" autoComplete="address-level2" maxLength={60} value={d.place} onChange={(v) => set("place")(cityChars(v))} error={err("place")} />
               <div className="flex flex-col gap-2">
                 <span className="text-[15px] font-medium text-slate-900" id="cs-branch">Branch</span>
-                <div role="radiogroup" aria-labelledby="cs-branch" className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-4">
+                <div role="radiogroup" aria-labelledby="cs-branch" className="grid min-h-11 grid-cols-2 items-center gap-x-4 gap-y-2.5 sm:grid-cols-4">
                   {PAPER_BRANCHES.map((b) => {
                     const on = d.branch === b;
                     return (
@@ -309,65 +370,61 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
                   })}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
-                <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
+              <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
+              <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
+            </div>
+          )}
+
+          {!preview && stage === 2 && (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8">
+              <Area id="cs-history" label="Past Medical History" rows={9} value={d.past_medical_history} onChange={set("past_medical_history")} />
+              <Area id="cs-medication" label="Any Medication" rows={9} value={d.any_medication} onChange={set("any_medication")} />
+            </div>
+          )}
+
+          {!preview && stage === 3 && (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-x-6">
+              <Area id="cs-symptoms" label="Symptoms / Root Cause" rows={9} value={d.symptoms_root_cause} onChange={set("symptoms_root_cause")} />
+              <Area id="cs-primary" label="Primary Muscles" rows={9} value={d.primary_muscles} onChange={set("primary_muscles")} />
+              <Area id="cs-secondary" label="Secondary Muscles" rows={9} value={d.secondary_muscles} onChange={set("secondary_muscles")} />
+            </div>
+          )}
+
+          {!preview && stage === 4 && (
+            <>
+              <p className="mb-4 text-[14px] font-semibold text-slate-400">Previous Consultations</p>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-x-6">
+                <Area id="cs-prev-consult" label="Previous Medical Consultations" rows={8} value={d.previous_medical_consultations} onChange={set("previous_medical_consultations")} />
+                <Area id="cs-prev-diagnosis" label="Previous Diagnosis" rows={8} value={d.previous_diagnosis} onChange={set("previous_diagnosis")} />
+                <Area id="cs-prev-physio" label="Previous Physiotherapy" rows={8} value={d.previous_physiotherapy} onChange={set("previous_physiotherapy")} />
               </div>
-            </>
-          )}
-
-          {stage === 2 && (
-            <>
-              <Area id="cs-history" label="Past Medical History" value={d.past_medical_history} onChange={set("past_medical_history")} />
-              <Area id="cs-medication" label="Any Medication" value={d.any_medication} onChange={set("any_medication")} />
-            </>
-          )}
-
-          {stage === 3 && (
-            <>
-              <Area id="cs-symptoms" label="Symptoms / Root Cause" value={d.symptoms_root_cause} onChange={set("symptoms_root_cause")} />
-              <Area id="cs-primary" label="Primary Muscles" value={d.primary_muscles} onChange={set("primary_muscles")} />
-              <Area id="cs-secondary" label="Secondary Muscles" value={d.secondary_muscles} onChange={set("secondary_muscles")} />
-            </>
-          )}
-
-          {stage === 4 && (
-            <>
-              <p className="-mb-1 text-[14px] font-semibold text-slate-400">Previous Consultations</p>
-              <Area id="cs-prev-consult" label="Previous Medical Consultations" value={d.previous_medical_consultations} onChange={set("previous_medical_consultations")} />
-              <Area id="cs-prev-diagnosis" label="Previous Diagnosis" value={d.previous_diagnosis} onChange={set("previous_diagnosis")} />
-              <Area id="cs-prev-physio" label="Previous Physiotherapy" value={d.previous_physiotherapy} onChange={set("previous_physiotherapy")} />
             </>
           )}
         </div>
 
-        {error && <p className="mt-5 rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-stage-send-error">{error}</p>}
-
-        <div className="mt-8 flex items-center justify-between gap-3">
-          {stage > 0 ? (
-            <button
-              type="button"
-              onClick={() => go(stage - 1)}
-              disabled={sending}
-              className="flex h-11 items-center gap-1.5 rounded-[8px] border border-[#c7cdea] bg-white px-5 text-[15px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-              data-testid="client-stage-back"
-            >
-              <ArrowLeft className="h-4 w-4" />Back
-            </button>
-          ) : <span />}
-          <button
-            type="submit"
-            disabled={sending}
-            className="flex h-11 items-center gap-1.5 rounded-[8px] px-6 text-[15px] font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
-            style={{ background: BLUE }}
-            data-testid={last ? "client-stage-submit" : "client-stage-continue"}
-          >
-            {last ? (
-              <>{sending && <Loader2 className="h-4 w-4 animate-spin" />}Submit</>
-            ) : (
-              <>Continue<ArrowRight className="h-4 w-4" /></>
-            )}
-          </button>
+        <div className="px-6 pb-6 sm:px-10 sm:pb-8">
+          {error && <p className="mb-4 rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-stage-send-error">{error}</p>}
+          <div className="flex items-center justify-between gap-3">
+            {preview || stage > 0 ? (
+              <button
+                type="button"
+                onClick={() => (preview ? setPreview(false) : go(stage - 1))}
+                disabled={sending}
+                className={backCls}
+                data-testid={preview ? "client-preview-back" : "client-stage-back"}
+              >
+                <ArrowLeft className="h-4 w-4" />Back
+              </button>
+            ) : <span />}
+            <div className="flex items-center gap-3">
+              {last && !preview && (
+                <button type="button" onClick={() => setPreview(true)} disabled={sending} className={backCls} data-testid="client-stage-preview">
+                  <Eye className="h-4 w-4" />Preview
+                </button>
+              )}
+              {submitBtn}
+            </div>
+          </div>
         </div>
       </form>
     </div>
