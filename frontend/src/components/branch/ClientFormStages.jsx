@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Eye, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, Loader2, X } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SpellTextarea } from "@/components/ui/spell-textarea";
@@ -18,6 +18,10 @@ import { loadSpelling } from "@/lib/spellcheck";
  * move slides the whole popup: Next sends it off the screen to the left, then the next
  * step's popup comes in from the right (Previous the other way round); the progress bar
  * stays put and fills (or empties) as the new popup comes in.
+ *
+ * `onClose` puts the same steps over the app instead of a page of their own: Branch Admin's
+ * lead popup opens it from its Form button (LeadConsultationFormPopup), and the card gets
+ * a close cross. The overlay around it scrolls, so it is the one put back at the top.
  */
 
 const STAGES = 8;
@@ -202,10 +206,17 @@ const PREVIEW = [
 const outlineCls = "flex h-10 items-center gap-1.5 rounded-[8px] border bg-white px-5 text-[15px] font-medium transition hover:bg-slate-50 disabled:opacity-60";
 const outlineStyle = { borderColor: ACCENT, color: ACCENT };
 
-export const ClientFormStages = ({ form, branches: liveBranches, sending = false, error = "", onSubmit }) => {
+export const ClientFormStages = ({ form, branches: liveBranches, sending = false, error = "", onSubmit, onClose }) => {
   // The live offline branches from the link's own fetch; the paper's four should none come.
   const branches = liveBranches?.length ? liveBranches : PAPER_BRANCHES;
   const [d, setD] = useState(() => startFrom(form, branches));
+  // What it opened with, so the close cross asks first only when something was changed.
+  const [opened] = useState(d);
+  const close = () => {
+    if (sending) return;
+    if (JSON.stringify(d) !== JSON.stringify(opened) && !window.confirm("Close the form? What you changed will be lost.")) return;
+    onClose();
+  };
   const [stage, setStage] = useState(0);
   const [preview, setPreview] = useState(false);
   // Errors show from a step's first Next on, then follow the typing. Not on blur: an
@@ -243,6 +254,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
     setTried(false);
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
     window.scrollTo({ top: 0 });
+    cardRef.current?.closest("[data-cs-scroll]")?.scrollTo?.({ top: 0 });
   };
 
   const go = (to) => {
@@ -332,7 +344,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
     // that its body scrolls. Clipped at its sides, so a popup off the screen mid-move adds
     // no sideways scroll.
     <div
-      className="flex min-h-screen flex-col items-center justify-start overflow-x-clip bg-[#eef1f8] px-4 py-6 md:pb-10 md:pt-[var(--cs-top)] md:[--cs-top:max(2.5rem,calc(50vh_-_271px))]"
+      className={`flex flex-col items-center justify-start overflow-x-clip ${onClose ? "min-h-full" : "min-h-screen bg-[#eef1f8]"} px-4 py-6 md:pb-10 md:pt-[var(--cs-top)] md:[--cs-top:max(2.5rem,calc(50vh_-_271px))]`}
       data-testid="client-stages"
     >
       {/* The progress sits above the popup, not in it, and stays put as the popup moves.
@@ -354,9 +366,22 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
         onSubmit={next}
         noValidate
         autoComplete="off"
-        className="flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
+        className="relative flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
+        {onClose && (
+          <button
+            type="button"
+            onClick={close}
+            disabled={sending}
+            className="absolute right-4 top-4 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50 sm:right-5 sm:top-5"
+            aria-label="Close"
+            title="Close"
+            data-testid="client-stage-close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
         <h1 className="px-6 pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]" style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Preview" : "Consultation Form"}</h1>
 
         {/* Rows only: one field under another. The body is as tall as its step, the

@@ -44,6 +44,31 @@ export const showDate = (iso) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || "—";
 };
+const text = (v) => (v === null || v === undefined ? "" : String(v).trim());
+const titleWords = (v) => text(v).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * A new form opened from a lead: everything the lead already holds, written into the
+ * paper's boxes. What the lead never had stays blank for the desk to fill -- all optional.
+ */
+export const formFromLead = (lead) => {
+  const months = Number(lead.months_of_pain);
+  const pain = months > 0 ? `${months} ${months === 1 ? "month" : "months"}` : "";
+  return {
+    ...EMPTY_FORM,
+    name: text(lead.name),
+    age: text(lead.age),
+    sex: titleWords(lead.gender),
+    contact_no: text(lead.phone),
+    mail_id: text(lead.email),
+    // "Manual" only says it was typed in at the desk -- no reference to write down.
+    source_of_reference: [text(lead.source_tab), titleWords(lead.source_type)].find((s) => s && !/^manual/i.test(s)) || "",
+    nature_of_job: text(lead.occupation),
+    place: [lead.city, lead.state].map(text).filter(Boolean).join(", ") || text(lead.location) || text(lead.address),
+    symptoms_root_cause: [text(lead.condition), pain && `Pain for ${pain}`].filter(Boolean).join(" — "),
+    date: todayIso(),
+  };
+};
 // The Branch boxes are the live offline branches, in the pickers' order. A branch is
 // written as the form shows it: "Anna Nagar Branch" -> "Anna Nagar". Stray spaces and
 // invisible characters around the name (as typed into Branch Management) go first, or

@@ -18,7 +18,7 @@ import {
 } from "@/lib/api";
 import { waNumber } from "@/lib/phone";
 import { claimPrintWindow, downloadConsultationForm, printConsultationForm } from "@/lib/consultationFormPrint";
-import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, formBranchName, formBranchesFrom, showDate, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, formBranchName, formBranchesFrom, formFromLead, showDate, todayIso } from "@/components/branch/ConsultationFormSheets";
 import { branchNameOf } from "@/lib/branchOrder";
 
 /**
@@ -35,31 +35,6 @@ import { branchNameOf } from "@/lib/branchOrder";
  */
 
 const fillFrom = (r) => Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, r?.[k] || ""]));
-const text = (v) => (v === null || v === undefined ? "" : String(v).trim());
-const titleWords = (v) => text(v).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-
-/**
- * A new form opened from a lead: everything the lead already holds, written into the
- * paper's boxes. What the lead never had stays blank for the desk to fill -- all optional.
- */
-const formFromLead = (lead) => {
-  const months = Number(lead.months_of_pain);
-  const pain = months > 0 ? `${months} ${months === 1 ? "month" : "months"}` : "";
-  return {
-    ...EMPTY_FORM,
-    name: text(lead.name),
-    age: text(lead.age),
-    sex: titleWords(lead.gender),
-    contact_no: text(lead.phone),
-    mail_id: text(lead.email),
-    // "Manual" only says it was typed in at the desk -- no reference to write down.
-    source_of_reference: [text(lead.source_tab), titleWords(lead.source_type)].find((s) => s && !/^manual/i.test(s)) || "",
-    nature_of_job: text(lead.occupation),
-    place: [lead.city, lead.state].map(text).filter(Boolean).join(", ") || text(lead.location) || text(lead.address),
-    symptoms_root_cause: [text(lead.condition), pain && `Pain for ${pain}`].filter(Boolean).join(" — "),
-    date: todayIso(),
-  };
-};
 const showStamp = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);

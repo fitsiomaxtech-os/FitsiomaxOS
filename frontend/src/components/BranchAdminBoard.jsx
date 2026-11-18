@@ -108,6 +108,7 @@ import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { AppointmentMessageEditor } from "@/components/branch/AppointmentMessageEditor";
 import { ConsultationFormDialog } from "@/components/branch/ConsultationFormDialog";
+import { LeadConsultationFormPopup } from "@/components/branch/LeadConsultationFormPopup";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
 import { PhysioSessionSettings } from "@/components/branch/PhysioSessionSettings";
 import { LeadBranchTransferDialog } from "@/components/branch/LeadBranchTransferDialog";
@@ -4132,7 +4133,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // belongs beside the name it fixes rather than as a sixth tab among the four.
   const [editing, setEditing] = useState(false);
   const [transferring, setTransferring] = useState(false);
-  // Header's Form: the Consultation Form, filled from this lead (or its saved one reopened).
+  // Header's Form: the Consultation Form's steps, filled from this lead (or its saved form).
   const [fillingForm, setFillingForm] = useState(false);
 
   const [apptDraft, setApptDraft] = useState(null); // { appointment_date, appointment_time, physio_id, notes, final_stage, duration, visit_type, visit_package_id, step } | null
@@ -7120,11 +7121,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           onSaved={onUpdate}
         />
       )}
+      {/* The Consultation Form's steps, filled from this lead; the paper is only its report. */}
       {fillingForm && (
-        <ConsultationFormDialog
+        <LeadConsultationFormPopup
           branchId={lead.branch_id || branchId}
           // City as the Lead Details tab reads it: the mapped field or the sheet's own column.
-          initialLead={{ ...lead, city: cityAnswer(lead) || lead.city }}
+          lead={{ ...lead, city: cityAnswer(lead) || lead.city }}
           onClose={() => setFillingForm(false)}
         />
       )}
