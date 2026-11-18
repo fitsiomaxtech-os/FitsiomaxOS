@@ -8,24 +8,31 @@ import { loadSpelling } from "@/lib/spellcheck";
 
 /**
  * The client link (pages/ClientConsultationFormPage), asked as eight short steps instead of
- * the paper, one field per row. Only Name and Mobile Number must be filled. The last step
+ * the paper, one field per row. Name, Mobile Number and Branch must be filled. The last step
  * can show every answer as a plain list first (Preview, optional), then sends the lot; the
  * client sees only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin
  * opens it as a read-only report). The popup is 1020 wide and as tall as its step, so
  * Previous / Next sit the same gap under the last field on every step; its top stays put
- * (where a 520-high popup would sit centred) and only its foot moves. The progress bar is
- * above it. Each step is headed "Consultation Form", centred; the date is picked in the
- * OS's own calendar. Every move slides: Next pushes the step out to the left and brings the
- * next one in from the right, Previous the other way round, while the popup's foot glides
- * to the new step's height and the progress bar fills (or empties) in step with it.
+ * (where a 520-high popup would sit centred). The progress bar is above it. Each step is
+ * headed "Consultation Form", centred; the date is picked in the OS's own calendar. Every
+ * move slides the whole popup: Next sends it off the screen to the left, then the next
+ * step's popup comes in from the right (Previous the other way round); the progress bar
+ * stays put and fills (or empties) as the new popup comes in.
  */
 
 const STAGES = 8;
 const BLUE = "#0066ff";
-// The slide between steps; the 600ms double-tap guard below outlasts it. The progress
-// bar's fill repeats both in its classes (duration-[400ms], ease-[...]).
-const SLIDE_MS = 400;
-const SLIDE_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
+// The popup's heading and its buttons.
+const ACCENT = "rgb(26 162 231 / 76%)";
+// A move: the popup goes out (speeding up), then the next one comes in (slowing down).
+// Moves are refused until both are over. The progress bar's fill repeats the way in, in
+// its classes (duration-[400ms], ease-[...]).
+const OUT_MS = 300;
+const OUT_EASE = "cubic-bezier(0.32, 0, 0.67, 0)";
+const IN_MS = 400;
+const IN_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
+// Past the screen's edge by this much, so the shadow goes too.
+const OFF_EDGE = 40;
 
 // India first, as the default; the rest are where the clinic's patients most often live or work.
 const COUNTRY_CODES = [
@@ -84,6 +91,7 @@ const check = (stage, d) => {
   if (stage === 1) {
     const place = d.place.trim();
     if (place && !CITY_OK.test(place)) errors.place = "Please enter a valid city name";
+    if (!d.branch) errors.branch = "Please select your branch";
   }
   if (stage === 2) {
     if (d.age && (Number(d.age) < 1 || Number(d.age) > 120)) errors.age = "Please enter a valid age";
@@ -91,7 +99,7 @@ const check = (stage, d) => {
   return errors;
 };
 // Where a failed Next takes the client: the first box with an error, in form order.
-const FIELD_IDS = { name: "cs-name", contact_no: "cs-contact", mail_id: "cs-mail", place: "cs-place", age: "cs-age" };
+const FIELD_IDS = { name: "cs-name", contact_no: "cs-contact", mail_id: "cs-mail", place: "cs-place", branch: "cs-branch-first", age: "cs-age" };
 
 const boxCls = "w-full rounded-[8px] border bg-white px-4 text-[15px] text-slate-800 outline-none placeholder:text-[#8a93b8] focus:ring-2";
 const box = (bad) => `${boxCls} ${bad ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : "border-[#c7cdea] focus:border-[#0066ff] focus:ring-[#0066ff]/15"}`;
@@ -190,7 +198,8 @@ const PREVIEW = [
   ["Previous Physiotherapy", (d) => d.previous_physiotherapy],
 ];
 
-const outlineCls = "flex h-10 items-center gap-1.5 rounded-[8px] border border-[#c7cdea] bg-white px-5 text-[15px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60";
+const outlineCls = "flex h-10 items-center gap-1.5 rounded-[8px] border bg-white px-5 text-[15px] font-medium transition hover:bg-slate-50 disabled:opacity-60";
+const outlineStyle = { borderColor: ACCENT, color: ACCENT };
 
 export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }) => {
   const [d, setD] = useState(() => startFrom(form));
@@ -219,59 +228,61 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
 
   // What the popup shows: steps 0-7, then Preview as one step more.
   const view = preview ? STAGES : stage;
-  // The step sliding out: kept on screen, inert, only while the slide runs. Moves wait for
-  // the slide to end, so a double tap on Next cannot skip a step.
-  const [leaving, setLeaving] = useState(null);
+  // A move under way: { to, dir, phase: "out" | "in" }. Next, Previous and Preview wait
+  // for it to end, so a double tap on Next cannot skip a step.
+  const [moving, setMoving] = useState(null);
   const bodyRef = useRef(null);
-  const trackRef = useRef(null);
-  const gridRef = useRef(null);
-  const inRef = useRef(null);
-  const outRef = useRef(null);
 
-  const go = (to) => {
-    if (leaving || to === view) return;
-    movedAt.current = Date.now();
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    setLeaving(calm ? null : {
-      view,
-      dir: to > view ? 1 : -1,
-      top: bodyRef.current ? bodyRef.current.scrollTop : 0,
-      // The card is as tall as its step, so its height glides with the slide.
-      glide: true,
-    });
+  // The new step, put in while the popup is off the screen.
+  const show = (to) => {
     setPreview(to === STAGES);
     if (to < STAGES) setStage(to);
     setTried(false);
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
     window.scrollTo({ top: 0 });
   };
 
-  // One track the width of the card: the new step comes in at one edge as the old one goes
-  // out at the other, a gutter apart. Started before paint, so no frame shows both at rest.
+  const go = (to) => {
+    if (moving || to === view) return;
+    movedAt.current = Date.now();
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (calm || typeof cardRef.current?.animate !== "function") { show(to); return; }
+    setMoving({ to, dir: to > view ? 1 : -1, phase: "out" });
+  };
+
+  // The whole popup moves, one way then the other: out past one edge of the screen, the
+  // step swapped while nothing shows, then in from the other edge. Each half starts before
+  // paint, so the popup never shows at rest in between.
   useLayoutEffect(() => {
-    if (!leaving) return undefined;
-    // The body goes back to its top; the old step holds its scrolled place (marginTop below).
-    if (bodyRef.current) bodyRef.current.scrollTop = 0;
-    const dist = trackRef.current ? trackRef.current.clientWidth : 0;
-    const timing = { duration: SLIDE_MS, easing: SLIDE_EASE };
-    const can = (el) => el && typeof el.animate === "function";
-    const slide = (el, from, to, fill) => (can(el)
-      ? el.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }], { ...timing, fill })
-      : null);
-    slide(inRef.current, leaving.dir * dist, 0, "backwards");
-    const exit = slide(outRef.current, 0, -leaving.dir * dist, "forwards");
-    // From the old step's height to the new one's, so the buttons under it glide, not jump.
-    // Held at the end until the old step is gone, or the taller one would flash back.
-    const grid = gridRef.current;
-    const glide = leaving.glide && can(grid) && outRef.current && inRef.current
-      ? grid.animate([{ height: `${outRef.current.offsetHeight}px` }, { height: `${inRef.current.offsetHeight}px` }], { ...timing, fill: "forwards" })
-      : null;
-    const done = () => setLeaving((cur) => (cur === leaving ? null : cur));
-    if (!exit) { done(); return undefined; }
-    exit.onfinish = done;
-    // Should the finish never come (a hidden tab), the old step still goes.
-    const timer = window.setTimeout(done, SLIDE_MS + 300);
-    return () => { window.clearTimeout(timer); exit.cancel(); if (glide) glide.cancel(); };
-  }, [leaving]);
+    const card = cardRef.current;
+    if (!moving || !card) return undefined;
+    const box = card.getBoundingClientRect();
+    const screen = document.documentElement.clientWidth;
+    // How far each way takes the popup clear of the screen.
+    const toLeft = -(box.right + OFF_EDGE);
+    const toRight = screen - box.left + OFF_EDGE;
+    const goingOut = moving.phase === "out";
+    const away = goingOut ? (moving.dir > 0 ? toLeft : toRight) : (moving.dir > 0 ? toRight : toLeft);
+    const anim = card.animate(
+      goingOut
+        ? [{ transform: "translateX(0)" }, { transform: `translateX(${away}px)` }]
+        : [{ transform: `translateX(${away}px)` }, { transform: "translateX(0)" }],
+      goingOut
+        ? { duration: OUT_MS, easing: OUT_EASE, fill: "forwards" }
+        : { duration: IN_MS, easing: IN_EASE, fill: "backwards" },
+    );
+    let ended = false;
+    const done = () => {
+      if (ended) return;
+      ended = true;
+      if (goingOut) { show(moving.to); setMoving({ ...moving, phase: "in" }); } else setMoving(null);
+    };
+    anim.onfinish = done;
+    // Should the finish never come (a hidden tab), the move still ends.
+    const timer = window.setTimeout(done, (goingOut ? OUT_MS : IN_MS) + 300);
+    return () => { ended = true; window.clearTimeout(timer); anim.cancel(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moving]);
 
   const setNumber = (raw) => {
     let digits = raw.replace(/\D/g, "");
@@ -282,7 +293,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
 
   const next = (e) => {
     e.preventDefault();
-    if (sending || leaving) return;
+    if (sending || moving) return;
     setTried(true);
     const first = Object.keys(errors)[0];
     if (first) { document.getElementById(FIELD_IDS[first])?.focus(); return; }
@@ -304,6 +315,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
       onClick={() => go(view - 1)}
       disabled={sending}
       className={outlineCls}
+      style={outlineStyle}
       data-testid={preview ? "client-preview-back" : "client-stage-back"}
     >
       <ArrowLeft className="h-4 w-4" />Previous
@@ -314,13 +326,15 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
     // From tablet width up the top is held where a 520-high popup would sit centred, half
     // the screen less 271px (half of the bar's 22 and the 520): a shorter or taller step
     // moves only the popup's foot. The popup stops 40px above the screen's foot; beyond
-    // that its body scrolls.
+    // that its body scrolls. Clipped at its sides, so a popup off the screen mid-move adds
+    // no sideways scroll.
     <div
-      className="flex min-h-screen flex-col items-center justify-start bg-[#eef1f8] px-4 py-6 md:pb-10 md:pt-[var(--cs-top)] md:[--cs-top:max(2.5rem,calc(50vh_-_271px))]"
+      className="flex min-h-screen flex-col items-center justify-start overflow-x-clip bg-[#eef1f8] px-4 py-6 md:pb-10 md:pt-[var(--cs-top)] md:[--cs-top:max(2.5rem,calc(50vh_-_271px))]"
       data-testid="client-stages"
     >
-      {/* The progress sits above the popup, not in it. Each bar fills from its left as its
-          step slides in, and empties back as it slides out. */}
+      {/* The progress sits above the popup, not in it, and stays put as the popup moves.
+          Each bar fills from its left as its step's popup comes in, and empties back when
+          Previous brings the step before it in. */}
       <div className="mb-4 flex w-full max-w-[1020px] gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={STAGES} aria-valuenow={stage + 1} aria-label="Progress" data-testid="client-stage-progress">
         {Array.from({ length: STAGES }, (_, i) => (
           <span key={i} className="relative h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "#dfe4ee" }}>
@@ -340,199 +354,191 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
         className="flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
-        <h1 className="px-6 pt-6 text-center text-[24px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-7 sm:text-[26px]">{preview ? "Preview" : "Consultation Form"}</h1>
+        <h1 className="px-6 pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]" style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Preview" : "Consultation Form"}</h1>
 
         {/* Rows only: one field under another. The body is as tall as its step, the
             buttons a set gap under it; past the screen's height it scrolls (Preview's 18
             rows) and the buttons stay in view. */}
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
-          {/* The slide track: as wide as the card, gutters included, clipped at its edges --
-              and at its foot too while a height glides. */}
-          <div ref={trackRef} className={`-mx-6 px-6 sm:-mx-10 sm:px-10 ${leaving?.glide ? "overflow-clip" : "overflow-x-clip"}`}>
-            <div ref={gridRef} className="grid grid-cols-1 items-start">
-              {(leaving ? [leaving.view, view].sort((x, y) => x - y) : [view]).map((v) => {
-                const out = leaving !== null && v === leaving.view;
-                return (
-                  <div
-                    key={v}
-                    ref={out ? outRef : inRef}
-                    inert={out}
-                    className="col-start-1 row-start-1 flex min-w-0 flex-col gap-3.5"
-                    style={out && leaving.top ? { marginTop: -leaving.top } : undefined}
-                    data-testid={out ? "client-stage-panel-out" : "client-stage-panel"}
-                  >
-                    {v === STAGES && (
-                      <dl className="divide-y divide-slate-100 rounded-[8px] border border-slate-100" data-testid="client-preview-list">
-                        {PREVIEW.map(([label, read]) => {
-                          const value = String(read(d) || "").trim();
-                          return (
-                            <div key={label} className="flex gap-4 px-4 py-2">
-                              <dt className="w-[230px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
-                              <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
-                            </div>
-                          );
-                        })}
-                      </dl>
-                    )}
+          <div
+            key={view}
+            inert={moving !== null}
+            className="flex min-w-0 flex-col gap-3.5"
+            data-testid="client-stage-panel"
+          >
+            {view === STAGES && (
+              <dl className="divide-y divide-slate-100 rounded-[8px] border border-slate-100" data-testid="client-preview-list">
+                {PREVIEW.map(([label, read]) => {
+                  const value = String(read(d) || "").trim();
+                  return (
+                    <div key={label} className="flex gap-4 px-4 py-2">
+                      <dt className="w-[230px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
+                      <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            )}
 
-                    {v === 0 && (
-                      <>
-                        <Field label="Enter your Name" htmlFor="cs-name" required error={err("name")}>
-                          <input
-                            id="cs-name"
-                            name="cs-fullname"
-                            value={d.name}
-                            onChange={(e) => { if (typedByHand(e)) set("name")(lettersOnly(e.target.value)); }}
-                            onPaste={blockEvent}
-                            onDrop={blockEvent}
-                            onCopy={blockEvent}
-                            onCut={blockEvent}
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="words"
-                            spellCheck={false}
-                            maxLength={60}
-                            placeholder="Name"
-                            className={`${box(err("name"))} h-10`}
-                            data-testid="client-stage-cs-name"
-                          />
-                        </Field>
-                        <Field label="Mobile Number" htmlFor="cs-contact" required error={err("contact_no")}>
-                          <div className="flex gap-3">
-                            <ThemedSelect
-                              value={d.code}
-                              onChange={(code) => setD((cur) => {
-                                const c = code || "91";
-                                return { ...cur, code: c, number: c === "91" ? cur.number.slice(0, 10) : cur.number };
-                              })}
-                              options={CODE_OPTIONS}
-                              className="h-10 w-[120px] shrink-0 rounded-[8px] border-[#c7cdea] px-4 text-[15px]"
-                              testid="client-stage-code"
-                            />
-                            <input
-                              id="cs-contact"
-                              type="tel"
-                              inputMode="numeric"
-                              value={d.number}
-                              onChange={(e) => setNumber(e.target.value)}
-                              autoComplete="tel-national"
-                              placeholder="Mobile Number"
-                              className={`${box(err("contact_no"))} h-10 min-w-0 flex-1`}
-                              data-testid="client-stage-cs-contact"
-                            />
-                          </div>
-                        </Field>
-                        <Text
-                          id="cs-mail"
-                          label="Email ID"
-                          type="email"
-                          inputMode="email"
-                          autoComplete="email"
-                          maxLength={100}
-                          value={d.mail_id}
-                          onChange={(v) => set("mail_id")(v.replace(/\s/g, ""))}
-                          error={err("mail_id")}
-                        />
-                      </>
-                    )}
-
-                    {v === 1 && (
-                      <>
-                        <Field label="Gender" htmlFor="cs-gender">
-                          <ThemedSelect
-                            value={d.sex}
-                            onChange={set("sex")}
-                            options={GENDERS}
-                            placeholder="Gender"
-                            className="h-10 rounded-[8px] border-[#c7cdea] px-4 text-[15px] data-[placeholder]:text-[#8a93b8]"
-                            testid="client-stage-cs-gender"
-                          />
-                        </Field>
-                        <Text id="cs-place" label="Your Place" autoComplete="address-level2" maxLength={60} value={d.place} onChange={(v) => set("place")(cityChars(v))} error={err("place")} />
-                        <div className="flex flex-col gap-1.5">
-                          <span className="text-[15px] font-medium text-slate-900" id="cs-branch">Branch</span>
-                          <div role="radiogroup" aria-labelledby="cs-branch" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            {PAPER_BRANCHES.map((b) => {
-                              const on = d.branch === b;
-                              return (
-                                <button
-                                  key={b}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={on}
-                                  onClick={() => set("branch")(on ? "" : b)}
-                                  className={`flex h-10 w-full min-w-0 items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : "border-[#c7cdea] text-slate-700 hover:bg-slate-50"}`}
-                                  data-testid={`client-stage-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
-                                >
-                                  <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2" style={{ borderColor: on ? BLUE : "#94a3b8" }}>
-                                    {on && <span className="h-2 w-2 rounded-full" style={{ background: BLUE }} />}
-                                  </span>
-                                  {b}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {v === 2 && (
-                      <>
-                        <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
-                        <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
-                        <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
-                        <Field label="Date" htmlFor="cs-date">
-                          <MilkDateInput
-                            id="cs-date"
-                            value={d.date}
-                            onChange={(e) => set("date")(e.target.value || todayIso())}
-                            accent="sky"
-                            besideRef={cardRef}
-                            title="Date"
-                            // `!`: MilkDateInput appends this after its own h-9 / rounded-md /
-                            // border-input rather than merging, so the plain classes lost.
-                            className="!h-10 !rounded-[8px] !border-[#c7cdea] !px-4 !text-[15px] !shadow-none"
-                            data-testid="client-stage-cs-date"
-                          />
-                        </Field>
-                      </>
-                    )}
-
-                    {v === 3 && (
-                      <>
-                        <Area id="cs-history" label="Past Medical History" value={d.past_medical_history} onChange={set("past_medical_history")} />
-                        <Area id="cs-medication" label="Any Medication" value={d.any_medication} onChange={set("any_medication")} />
-                      </>
-                    )}
-
-                    {v === 4 && (
-                      <>
-                        <Area id="cs-symptoms" label="Symptoms / Root Cause" value={d.symptoms_root_cause} onChange={set("symptoms_root_cause")} />
-                        <Area id="cs-primary" label="Primary Muscles" value={d.primary_muscles} onChange={set("primary_muscles")} />
-                      </>
-                    )}
-
-                    {v === 5 && (
-                      <Area id="cs-secondary" label="Secondary Muscles" rows={10} value={d.secondary_muscles} onChange={set("secondary_muscles")} />
-                    )}
-
-                    {v === 6 && (
-                      <>
-                        <p className="text-[14px] font-semibold text-slate-400">Previous Consultations</p>
-                        <Area id="cs-prev-consult" label="Previous Medical Consultations" rows={9} value={d.previous_medical_consultations} onChange={set("previous_medical_consultations")} />
-                      </>
-                    )}
-
-                    {v === 7 && (
-                      <>
-                        <Area id="cs-prev-diagnosis" label="Previous Diagnosis" value={d.previous_diagnosis} onChange={set("previous_diagnosis")} />
-                        <Area id="cs-prev-physio" label="Previous Physiotherapy" value={d.previous_physiotherapy} onChange={set("previous_physiotherapy")} />
-                      </>
-                    )}
+            {view === 0 && (
+              <>
+                <Field label="Enter your Name" htmlFor="cs-name" required error={err("name")}>
+                  <input
+                    id="cs-name"
+                    name="cs-fullname"
+                    value={d.name}
+                    onChange={(e) => { if (typedByHand(e)) set("name")(lettersOnly(e.target.value)); }}
+                    onPaste={blockEvent}
+                    onDrop={blockEvent}
+                    onCopy={blockEvent}
+                    onCut={blockEvent}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="words"
+                    spellCheck={false}
+                    maxLength={60}
+                    placeholder="Name"
+                    className={`${box(err("name"))} h-10`}
+                    data-testid="client-stage-cs-name"
+                  />
+                </Field>
+                <Field label="Mobile Number" htmlFor="cs-contact" required error={err("contact_no")}>
+                  <div className="flex gap-3">
+                    <ThemedSelect
+                      value={d.code}
+                      onChange={(code) => setD((cur) => {
+                        const c = code || "91";
+                        return { ...cur, code: c, number: c === "91" ? cur.number.slice(0, 10) : cur.number };
+                      })}
+                      options={CODE_OPTIONS}
+                      className="h-10 w-[120px] shrink-0 rounded-[8px] border-[#c7cdea] px-4 text-[15px]"
+                      testid="client-stage-code"
+                    />
+                    <input
+                      id="cs-contact"
+                      type="tel"
+                      inputMode="numeric"
+                      value={d.number}
+                      onChange={(e) => setNumber(e.target.value)}
+                      autoComplete="tel-national"
+                      placeholder="Mobile Number"
+                      className={`${box(err("contact_no"))} h-10 min-w-0 flex-1`}
+                      data-testid="client-stage-cs-contact"
+                    />
                   </div>
-                );
-              })}
-            </div>
+                </Field>
+                <Text
+                  id="cs-mail"
+                  label="Email ID"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  maxLength={100}
+                  value={d.mail_id}
+                  onChange={(v) => set("mail_id")(v.replace(/\s/g, ""))}
+                  error={err("mail_id")}
+                />
+              </>
+            )}
+
+            {view === 1 && (
+              <>
+                <Field label="Gender" htmlFor="cs-gender">
+                  <ThemedSelect
+                    value={d.sex}
+                    onChange={set("sex")}
+                    options={GENDERS}
+                    placeholder="Gender"
+                    className="h-10 rounded-[8px] border-[#c7cdea] px-4 text-[15px] data-[placeholder]:text-[#8a93b8]"
+                    testid="client-stage-cs-gender"
+                  />
+                </Field>
+                <Text id="cs-place" label="Your Place" autoComplete="address-level2" maxLength={60} value={d.place} onChange={(v) => set("place")(cityChars(v))} error={err("place")} />
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[15px] font-medium text-slate-900" id="cs-branch">
+                    Branch<span className="ml-1 text-rose-600">*</span>
+                  </span>
+                  {/* Required: a pick can be changed, not cleared. */}
+                  <div role="radiogroup" aria-labelledby="cs-branch" aria-required="true" aria-invalid={Boolean(err("branch"))} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {PAPER_BRANCHES.map((b, i) => {
+                      const on = d.branch === b;
+                      return (
+                        <button
+                          key={b}
+                          id={i === 0 ? "cs-branch-first" : undefined}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => set("branch")(b)}
+                          className={`flex h-10 w-full min-w-0 items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : `${err("branch") ? "border-rose-300" : "border-[#c7cdea]"} text-slate-700 hover:bg-slate-50`}`}
+                          data-testid={`client-stage-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
+                        >
+                          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2" style={{ borderColor: on ? BLUE : "#94a3b8" }}>
+                            {on && <span className="h-2 w-2 rounded-full" style={{ background: BLUE }} />}
+                          </span>
+                          {b}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {err("branch") && <p className="text-xs text-rose-600" data-testid="client-stage-error-cs-branch">{err("branch")}</p>}
+                </div>
+              </>
+            )}
+
+            {view === 2 && (
+              <>
+                <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
+                <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
+                <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
+                <Field label="Date" htmlFor="cs-date">
+                  <MilkDateInput
+                    id="cs-date"
+                    value={d.date}
+                    onChange={(e) => set("date")(e.target.value || todayIso())}
+                    accent="sky"
+                    besideRef={cardRef}
+                    title="Date"
+                    // `!`: MilkDateInput appends this after its own h-9 / rounded-md /
+                    // border-input rather than merging, so the plain classes lost.
+                    className="!h-10 !rounded-[8px] !border-[#c7cdea] !px-4 !text-[15px] !shadow-none"
+                    data-testid="client-stage-cs-date"
+                  />
+                </Field>
+              </>
+            )}
+
+            {view === 3 && (
+              <>
+                <Area id="cs-history" label="Past Medical History" value={d.past_medical_history} onChange={set("past_medical_history")} />
+                <Area id="cs-medication" label="Any Medication" value={d.any_medication} onChange={set("any_medication")} />
+              </>
+            )}
+
+            {view === 4 && (
+              <>
+                <Area id="cs-symptoms" label="Symptoms / Root Cause" value={d.symptoms_root_cause} onChange={set("symptoms_root_cause")} />
+                <Area id="cs-primary" label="Primary Muscles" value={d.primary_muscles} onChange={set("primary_muscles")} />
+              </>
+            )}
+
+            {view === 5 && (
+              <Area id="cs-secondary" label="Secondary Muscles" rows={10} value={d.secondary_muscles} onChange={set("secondary_muscles")} />
+            )}
+
+            {view === 6 && (
+              <>
+                <p className="text-[14px] font-semibold text-slate-400">Previous Consultations</p>
+                <Area id="cs-prev-consult" label="Previous Medical Consultations" rows={9} value={d.previous_medical_consultations} onChange={set("previous_medical_consultations")} />
+              </>
+            )}
+
+            {view === 7 && (
+              <>
+                <Area id="cs-prev-diagnosis" label="Previous Diagnosis" value={d.previous_diagnosis} onChange={set("previous_diagnosis")} />
+                <Area id="cs-prev-physio" label="Previous Physiotherapy" value={d.previous_physiotherapy} onChange={set("previous_physiotherapy")} />
+              </>
+            )}
           </div>
 
           {error && <p className="mt-4 rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-stage-send-error">{error}</p>}
@@ -543,7 +549,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
           <div className="flex flex-wrap items-center gap-4">
             {backButton}
             {last && !preview && (
-              <button type="button" onClick={() => { if (settled()) go(STAGES); }} disabled={sending} className={outlineCls} data-testid="client-stage-preview">
+              <button type="button" onClick={() => { if (settled()) go(STAGES); }} disabled={sending} className={outlineCls} style={outlineStyle} data-testid="client-stage-preview">
                 <Eye className="h-4 w-4" />Preview
               </button>
             )}
@@ -551,7 +557,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
               type="submit"
               disabled={sending}
               className="flex h-10 items-center gap-1.5 rounded-[8px] px-6 text-[15px] font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
-              style={{ background: BLUE }}
+              style={{ background: ACCENT }}
               data-testid={last ? "client-stage-submit" : "client-stage-continue"}
             >
               {last ? (
