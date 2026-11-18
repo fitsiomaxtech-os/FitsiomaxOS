@@ -127,6 +127,22 @@ const EntryDetail = ({ row, partyLabel, onClose, onDelete, deleting }) => {
  *  Income & Expense delete switch; a branch's payment only while still in To Verify, under
  *  Before Verify Transactions). onDeleted: told after one goes, so the figures above are
  *  read again. */
+// "2026-11-14" -> "14 Nov 2026", the way dates read across the rest of the app.
+const entryDay = (d) => {
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(String(d))) return d || "—";
+  return new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+// Where a movement stands, in the colours the payment piles use.
+const statusPill = (s) => {
+  const v = String(s).toLowerCase();
+  if (v.includes("verify")) return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  if (v.includes("await") || v.includes("transit") || v.includes("pending")) return "border-amber-200 bg-amber-50 text-amber-700";
+  if (v.includes("approv") || v.includes("received") || v.includes("paid")) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (v.includes("reject")) return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+};
+
 export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onDeleted }) => {
   const [rows, setRows] = useState(null);
   const [type, setType] = useState(ALL);
@@ -217,17 +233,17 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
       {rows && shown.length === 0 && <p className="py-8 text-center text-xs text-slate-400">Nothing here yet.</p>}
       {rows && shown.length > 0 && (
         <div className="max-h-[420px] overflow-auto">
-          <table className="w-full min-w-[640px] text-xs">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="sticky top-0 bg-slate-500 text-[11px] text-white">
               <tr>
-                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Date</th>
-                {showBranch && <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Branch</th>}
-                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Type</th>
-                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">{partyLabel}</th>
-                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Detail</th>
-                <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wide">Status</th>
-                <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide">Amount</th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wide">Action</th>
+                <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider">Date</th>
+                {showBranch && <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider">Branch</th>}
+                <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider">Type</th>
+                <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider">{partyLabel}</th>
+                <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider">Detail</th>
+                <th className="px-4 py-3 text-left font-semibold uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-right font-semibold uppercase tracking-wider">Amount</th>
+                <th className="w-24 px-4 py-3 text-center font-semibold uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -238,14 +254,21 @@ export const EntriesPanel = ({ kind, branchId, showBranch, onClose, toolbar, onD
                   className="cursor-pointer border-t border-slate-100 transition-colors hover:bg-slate-50"
                   data-testid={`branch-cash-entry-${r.id}`}
                 >
-                  <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-500">{r.date}</td>
-                  {showBranch && <td className="px-3 py-2 text-slate-600">{r.branch_name}</td>}
-                  <td className="px-3 py-2"><span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{r.type}</span></td>
-                  <td className="px-3 py-2 text-slate-700">{r.party || "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{r.detail || "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{r.status || "—"}</td>
-                  <td className={`px-3 py-2 text-right font-semibold tabular-nums ${r.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(r.amount)}</td>
-                  <td className="px-3 py-1.5 text-center">
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-slate-600">{entryDay(r.date)}</td>
+                  {showBranch && <td className="px-4 py-3 text-slate-600">{r.branch_name}</td>}
+                  {/* Money in green, money out red, so the sign reads before the figure. */}
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${r.amount < 0 ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{r.type}</span>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{r.party || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600">{r.detail || "—"}</td>
+                  <td className="px-4 py-3">
+                    {r.status
+                      ? <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusPill(r.status)}`}>{r.status}</span>
+                      : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className={`whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums ${r.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{fmt(r.amount)}</td>
+                  <td className="px-4 py-2 text-center">
                     {/* The bin, a bare icon, beside the one arrow -- the To Verify row's shape. */}
                     <div className="flex items-center justify-center gap-1">
                       {r.can_delete ? (

@@ -44,7 +44,7 @@ export const LedgerCard = ({ label, value, sub, color = "#0284c7", active = fals
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
       title={title}
-      className={corner ? "block h-full w-full p-3 text-left sm:p-4" : `${chrome} p-3 sm:p-4`}
+      className={corner ? "flex h-full w-full flex-col justify-start p-3 text-left sm:p-4" : `${chrome} flex flex-col justify-start p-3 sm:p-4`}
       style={corner ? undefined : fill}
       data-testid={testid}
     >
