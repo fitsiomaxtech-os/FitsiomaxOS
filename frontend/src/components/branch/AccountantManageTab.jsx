@@ -2109,6 +2109,12 @@ const RevenueDetailTable = ({ rows, onOpen, onDelete, onUndoPayment, busy, verif
   );
 };
 
+// "2026-11-11" → "11 Nov 2026", the way dates read across the rest of the app.
+const prettyDay = (iso) => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "";
+  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+};
+
 const STAGE_BADGE = {
   collected: { label: "To Verify", className: "border-indigo-200 bg-indigo-50 text-indigo-700" },
   requested: { label: "Awaiting Approval", className: "border-amber-200 bg-amber-50 text-amber-700" },
@@ -2151,17 +2157,18 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
         aria-labelledby="payment-details-name"
         className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        {/* The name band, in the same blue as the other popups. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-5 py-3.5">
           <div className="min-w-0">
-            <h3 id="payment-details-name" className="truncate text-lg font-bold text-slate-900">
+            <h3 id="payment-details-name" className="truncate text-base font-semibold text-white">
               {head.client_name || "Unknown"}
               {head.old_client && <OldClientTag />}
             </h3>
-            <p className="mt-0.5 truncate text-sm text-slate-600">{[displayPhone(head.phone), head.branch].filter(Boolean).join(" · ") || "—"}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-sky-100">{[displayPhone(head.phone), head.branch].filter(Boolean).join(" · ") || "—"}</p>
           </div>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close"
-            className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/80 transition hover:bg-white/15 hover:text-white"
             data-testid="payment-details-close"
           >
             <X className="h-5 w-5" />
@@ -2169,10 +2176,11 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
         </div>
         {/* The total and its count on one line with Send all / Undo all, so the whole
             client can be moved without scrolling past the payments first. */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3">
           <div className="flex items-center gap-2">
-            <p className="font-mono text-base font-bold tabular-nums text-emerald-600" data-testid="payment-details-total">{fmt(total)}</p>
-            <span className="inline-flex rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold text-slate-600">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total</span>
+            <p className="text-base font-bold tabular-nums text-emerald-600" data-testid="payment-details-total">{fmt(total)}</p>
+            <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
               {countLabel(payments.length, "payment")}
             </span>
           </div>
@@ -2184,7 +2192,7 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
           )}
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-4">
           {payments.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">These payments are no longer on the list.</p>
           ) : payments.map((t) => {
@@ -2194,22 +2202,22 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
             const canMove = verify && stage !== "approved";
             const canUndoPayment = onUndoPayment && stage === "collected";
             return (
-              <div key={t.id} className="rounded-lg border border-slate-200 bg-white px-3.5 py-3" data-testid={`payment-details-row-${t.id}`}>
+              <div key={t.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3" data-testid={`payment-details-row-${t.id}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800">
                       {RECEIPT_PAID_FOR[t.source] || titleCase(t.source || "")}
                       {t.instalment_number ? ` · Instalment #${t.instalment_number}` : ""}
                     </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
-                      <span>{dayOf(t.date) || "—"}</span>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
+                      <span>{prettyDay(dayOf(t.date)) || "—"}</span>
                       <PaymentModes tx={t} />
                       {t.transaction_id && <span className="font-mono text-[11px] text-slate-500">{t.transaction_id}</span>}
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="font-mono text-sm font-bold tabular-nums text-slate-900">{fmt(t.gross)}</p>
-                    <span className={`mt-1 inline-flex rounded-[5px] border px-1.5 py-px text-[10px] font-semibold ${badge.className}`} data-testid={`payment-details-stage-${t.id}`}>
+                    <p className="text-sm font-bold tabular-nums text-slate-900">{fmt(t.gross)}</p>
+                    <span className={`mt-1.5 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.className}`} data-testid={`payment-details-stage-${t.id}`}>
                       {badge.label}
                     </span>
                   </div>
@@ -2219,9 +2227,9 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
                     Listed {fmt(Number(t.original_amount) || (Number(t.gross) || 0) + off)} · {fmt(off)} off
                   </p>
                 )}
-                <p className="mt-1 text-[11px] text-slate-500">{stageLine(t)}</p>
+                <p className="mt-1.5 text-xs text-slate-500">{stageLine(t)}</p>
                 {(canMove || t.transaction_id) && (
-                  <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2.5">
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
                     {canUndoPayment && (
                       <UndoPaymentChip
                         onClick={() => onUndoPayment(t)}
