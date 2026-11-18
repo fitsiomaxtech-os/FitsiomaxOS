@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { getLeadsAnalytics } from "@/lib/api";
+import { LedgerCard } from "@/components/ui/ledger-card";
 
 /**
  * Marketing Head's leads dashboard — eight cards, each answering one decision.
@@ -59,13 +60,43 @@ const shortPeriod = (p) => {
   return `${m} ${String(parts[0]).slice(2)}`;
 };
 
+/** The server sends only days (or months) that had leads. A line drawn through those
+ *  alone runs straight from Monday to Thursday as though Tuesday and Wednesday never
+ *  happened, so the gaps are put back as zeros, first bucket to last. */
+const fillTrend = (rows, grain) => {
+  if (rows.length < 2) return rows;
+  const have = new Map(rows.map((r) => [r.period, r]));
+  const out = [];
+  if (grain === "month") {
+    let [y, m] = rows[0].period.split("-").map(Number);
+    const [ey, em] = rows[rows.length - 1].period.split("-").map(Number);
+    while (y < ey || (y === ey && m <= em)) {
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      out.push(have.get(key) || { period: key, leads: 0, offline: 0, online: 0 });
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+    return out;
+  }
+  const d = new Date(`${rows[0].period}T00:00:00Z`);
+  const end = new Date(`${rows[rows.length - 1].period}T00:00:00Z`);
+  while (d <= end) {
+    const key = d.toISOString().slice(0, 10);
+    out.push(have.get(key) || { period: key, leads: 0, offline: 0, online: 0 });
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
+};
+
 /* ── chrome ─────────────────────────────────────────────────────────────────────── */
 
 const Card = ({ title, sub, children, className = "", testid }) => (
-  <div className={`rounded-xl border border-slate-200 bg-white p-4 ${className}`} data-testid={testid}>
-    <p className="text-sm font-semibold text-slate-800">{title}</p>
-    {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
-    <div className="mt-3">{children}</div>
+  <div className={`flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm ${className}`} data-testid={testid}>
+    <div className="border-b border-slate-100 px-5 py-3.5">
+      <p className="text-sm font-semibold text-slate-800">{title}</p>
+      {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
+    </div>
+    <div className="flex-1 px-5 py-4">{children}</div>
   </div>
 );
 
@@ -254,7 +285,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
 
   const total = Number(data?.total || 0);
   const booked = Number(data?.booked || 0);
-  const trend = data?.trend || [];
+  const trend = fillTrend(data?.trend || [], data?.grain);
   const bySource = data?.by_source || [];
   const byBranch = data?.by_branch || [];
   const byVertical = data?.by_vertical || [];
@@ -263,20 +294,30 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const conversion = data?.conversion_by_source || [];
   const grainLabel = data?.grain === "month" ? "by month" : "by day";
   const hasOnline = trend.some((t) => Number(t.online || 0) > 0);
+  const offlineTotal = trend.reduce((n, t) => n + Number(t.offline || 0), 0);
+  const onlineTotal = trend.reduce((n, t) => n + Number(t.online || 0), 0);
+  const bookingRate = total > 0 ? Math.round((booked / total) * 1000) / 10 : 0;
+  // One or two buckets (Today, Yesterday) make a line of a single dot that reads as an
+  // empty chart; columns show the same counts as something that can be seen.
+  const fewPoints = trend.length <= 2;
 
   return (
     // Held at reduced opacity while refetching rather than swapped for a skeleton: the
     // layout stays put and the previous answer stays readable.
     <div className={`space-y-4 transition-opacity ${loading ? "opacity-60" : ""}`} data-testid="leads-analytics-dashboard">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-600">
-          <span className="font-semibold text-slate-800">{nf(total)}</span> leads in this range
-          {total > 0 && <> · <span className="font-semibold text-slate-800">{nf(booked)}</span> reached a booking</>}
-        </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="leads-analytics-kpis">
+        <LedgerCard label="Leads" value={nf(total)} sub="in this range" testid="leads-analytics-kpi-total" />
+        <LedgerCard label="Reached a booking" value={nf(booked)} sub="have an appointment date" testid="leads-analytics-kpi-booked" />
+        <LedgerCard label="Booking rate" value={`${bookingRate}%`} sub="booked ÷ leads" testid="leads-analytics-kpi-rate" />
+        <LedgerCard label="Offline" value={nf(offlineTotal)} sub="clinic services" muted={!offlineTotal} testid="leads-analytics-kpi-offline" />
+        <LedgerCard label="Online" value={nf(onlineTotal)} sub="online services" muted={!onlineTotal} testid="leads-analytics-kpi-online" />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <button
           type="button"
           onClick={() => setAsTable((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
           data-testid="leads-analytics-toggle-table"
         >
           {asTable ? <><ChartIcon className="h-3.5 w-3.5" />Charts</> : <><Table2 className="h-3.5 w-3.5" />Numbers</>}
@@ -302,6 +343,24 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
                 <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORICAL[1] }} />Online</span>
               </div>
             )}
+            {fewPoints ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={trend} margin={{ top: 20, right: 12, bottom: 4, left: 0 }}>
+                  <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
+                  <XAxis dataKey="period" tickFormatter={shortPeriod} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: INK.axis }} />
+                  <YAxis allowDecimals={false} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
+                  <Tooltip content={<VizTooltip labelFormat={shortPeriod} />} cursor={{ fill: "rgba(11,11,11,0.04)" }} />
+                  <Bar dataKey="offline" name="Offline" fill={CATEGORICAL[0]} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+                    <LabelList dataKey="offline" position="top" offset={6} className="fill-slate-600" style={{ fontSize: 11, fontWeight: 600 }} formatter={nf} />
+                  </Bar>
+                  {hasOnline && (
+                    <Bar dataKey="online" name="Online" fill={CATEGORICAL[1]} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+                      <LabelList dataKey="online" position="top" offset={6} className="fill-slate-600" style={{ fontSize: 11, fontWeight: 600 }} formatter={nf} />
+                    </Bar>
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trend} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
                 <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
@@ -310,12 +369,13 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
                 <Tooltip content={<VizTooltip labelFormat={shortPeriod} />} />
                 {/* 2px, no marker per point — a dot on every day is noise at this density;
                     the active dot carries the hover, ringed in the surface colour. */}
-                <Line type="monotone" dataKey="offline" name="Offline" stroke={CATEGORICAL[0]} strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4, fill: CATEGORICAL[0], stroke: SURFACE, strokeWidth: 2 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="offline" name="Offline" stroke={CATEGORICAL[0]} strokeWidth={2} strokeLinecap="round" dot={trend.length <= 31 ? { r: 2.5, fill: CATEGORICAL[0], strokeWidth: 0 } : false} activeDot={{ r: 4, fill: CATEGORICAL[0], stroke: SURFACE, strokeWidth: 2 }} isAnimationActive={false} />
                 {hasOnline && (
-                  <Line type="monotone" dataKey="online" name="Online" stroke={CATEGORICAL[1]} strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4, fill: CATEGORICAL[1], stroke: SURFACE, strokeWidth: 2 }} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="online" name="Online" stroke={CATEGORICAL[1]} strokeWidth={2} strokeLinecap="round" dot={trend.length <= 31 ? { r: 2.5, fill: CATEGORICAL[1], strokeWidth: 0 } : false} activeDot={{ r: 4, fill: CATEGORICAL[1], stroke: SURFACE, strokeWidth: 2 }} isAnimationActive={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
+            )}
           </>
         )}
       </Card>
