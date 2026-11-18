@@ -87,13 +87,13 @@ const BreakReasonSheet = ({ presets, busy, onStart, onClose }) => {
   const reason = (typed.trim() || picked).trim();
   return (
     <Sheet title="Going on a break" subtitle="Say what it is for — it goes on your record for the day." onClose={onClose} testid="clock-break-sheet">
-      <div className="flex flex-wrap gap-2" data-testid="clock-break-presets">
+      <div className="grid grid-cols-2 gap-2" data-testid="clock-break-presets">
         {(presets || []).map((r) => (
           <button
             key={r}
             type="button"
             onClick={() => { setPicked(r); setTyped(""); }}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+            className={`w-full rounded-full border px-3 py-2 text-center text-xs font-semibold transition ${
               picked === r && !typed.trim()
                 ? "border-amber-500 bg-amber-500 text-white"
                 : "border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50"
