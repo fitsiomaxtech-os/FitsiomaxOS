@@ -252,13 +252,13 @@ export const OldClientInstalmentDialog = ({ branchId = "", branches = [], startW
       onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
       data-testid="old-client-dialog"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="old-client-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-white">
+      <div role="dialog" aria-modal="true" aria-labelledby="old-client-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-sky-700 bg-[#0284C7] px-5 py-3.5 text-white">
           <div className="flex min-w-0 items-center gap-2">
             <History className="h-5 w-5 shrink-0" />
             <p id="old-client-title" className="min-w-0 truncate text-base font-semibold">Old Client Instalment</p>
           </div>
-          <button type="button" onClick={() => !saving && onClose()} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" aria-label="Close" data-testid="old-client-close">
+          <button type="button" onClick={() => !saving && onClose()} className="rounded-md p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close" data-testid="old-client-close">
             <X className="h-4 w-4" />
           </button>
         </div>

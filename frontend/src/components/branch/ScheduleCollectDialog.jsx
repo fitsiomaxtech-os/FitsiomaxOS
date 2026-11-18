@@ -101,13 +101,13 @@ export const ScheduleCollectDialog = ({ row, onClose, onCollected }) => {
       onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
       data-testid="schedule-collect-dialog"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="schedule-collect-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3.5 text-white">
+      <div role="dialog" aria-modal="true" aria-labelledby="schedule-collect-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-sky-700 bg-[#0284C7] px-5 py-3.5 text-white">
           <div className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
             <p id="schedule-collect-title" className="text-base font-semibold">Collect Payment</p>
           </div>
-          <button type="button" onClick={() => !saving && onClose()} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" aria-label="Close" data-testid="schedule-collect-close">
+          <button type="button" onClick={() => !saving && onClose()} className="rounded-md p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close" data-testid="schedule-collect-close">
             <X className="h-4 w-4" />
           </button>
         </div>

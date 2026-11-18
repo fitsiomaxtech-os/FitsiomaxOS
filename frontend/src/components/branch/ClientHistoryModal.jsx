@@ -511,29 +511,29 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-history-name"
-        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
       >
         {/* ---- header: who this is, in one row at 14px — name, status, then phone,
             branch and file number. Each part is dropped rather than shown blank when
             absent; a phone wraps the identity under the name rather than squeezing it. ---- */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-4 py-3 sm:px-5">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[14px] sm:flex-nowrap">
-            <h3 id="client-history-name" className="min-w-0 max-w-full truncate text-[14px] font-bold text-slate-900 sm:max-w-[45%] sm:shrink-0" data-testid="client-history-name">{client?.name || "Loading..."}</h3>
+            <h3 id="client-history-name" className="min-w-0 max-w-full truncate text-base font-semibold text-white sm:max-w-[45%] sm:shrink-0" data-testid="client-history-name">{client?.name || "Loading..."}</h3>
             {client && (
-              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[14px] font-semibold leading-5 ${STATUS_STYLES[status]}`} data-testid="client-history-status">
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold leading-5 ${STATUS_STYLES[status]}`} data-testid="client-history-status">
                 <span className={`h-1.5 w-1.5 rounded-full ${status === "done" ? "bg-emerald-500" : "bg-amber-500"}`} />
                 {status === "done" ? "Completed" : "In Progress"}
               </span>
             )}
             {client && (
-              <span className="min-w-0 truncate text-[14px] text-slate-600" data-testid="client-history-meta">
+              <span className="min-w-0 truncate text-[13px] font-medium text-sky-100" data-testid="client-history-meta">
                 {[
                   displayPhone(client.phone),
                   client.branch_name,
                   client.patient_number && <span key="pn" className="tabular-nums">{client.patient_number}</span>,
                 ].filter(Boolean).map((part, i) => (
                   <span key={i}>
-                    {i > 0 && <span className="mx-1.5 text-slate-300">·</span>}
+                    {i > 0 && <span className="mx-1.5 text-sky-200">·</span>}
                     {part}
                   </span>
                 ))}
@@ -542,7 +542,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
           </div>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close"
-            className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/80 transition hover:bg-white/15 hover:text-white"
             data-testid="client-history-close"
           >
             <X className="h-5 w-5" />
@@ -817,13 +817,13 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
           onClick={(e) => { if (e.target === e.currentTarget && !recording) setCollectDraft(null); }}
           data-testid="client-collect-modal"
         >
-          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3.5 text-white">
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sky-700 bg-[#0284C7] px-5 py-3.5 text-white">
               <div className="flex items-center gap-2">
                 <Wallet className="h-5 w-5" />
                 <p className="text-base font-semibold">Collect Payment</p>
               </div>
-              <button onClick={() => !recording && setCollectDraft(null)} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" data-testid="client-collect-close">
+              <button onClick={() => !recording && setCollectDraft(null)} className="rounded-md p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close" data-testid="client-collect-close">
                 <X className="h-4 w-4" />
               </button>
             </div>
