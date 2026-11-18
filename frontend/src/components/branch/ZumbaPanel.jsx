@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
-import { StatTile } from "@/components/ui/stat-tile";
+import { StageTab } from "@/components/ui/stage-tab";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -688,8 +688,8 @@ const CARDS = [
   // details back. The list underneath has a column for none of what the figure is made of.
   //
   // Every card on the strip wears the Fitness tab's card (ui/stat-tile with `arrow`).
-  { key: "payment_done", label: "Payment Done", color: "#059669", money: "fee_total", count: "fee_collected", countSub: (n) => `collected from ${n}` },
-  { key: "due_payment", label: "Due Payment", color: "#d97706", money: "due_total", count: "due_payment", countSub: (n) => `owed by ${n}` },
+  { key: "payment_done", label: "Payment Done", color: "#059669", money: "fee_total", count: "fee_collected" },
+  { key: "due_payment", label: "Due Payment", color: "#d97706", money: "due_total", count: "due_payment" },
   // One card, not two: Discontinue and Leave are both "not turning up", and splitting
   // them across the row asked the branch to read two numbers to learn one thing. The
   // distinction survives where it is actually useful — on the row, which says which — and
@@ -1833,9 +1833,6 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
     return {
       label: stage?.name || c.label,
       value: c.money ? rupees(summary?.[c.money]) : people,
-      // A caption only where it carries a figure: the customer count behind a money
-      // card. The guide lines the count cards used to wear are gone.
-      sub: c.countSub && c.countSub(pluralCustomers(people)),
       color: hex || c.color,
       people,
     };
@@ -1943,26 +1940,31 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
         </div>
       )}
 
+      {/* Desk: Branch Leads' stage strip -- white cards on the sky -> indigo -> violet
+          tray, the name and figure centred, the picked card ringed with the nudging arrow. */}
       <div
-        className="hidden items-stretch gap-3 sm:grid sm:grid-cols-4 lg:grid-cols-7"
+        className="hidden rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 p-1 shadow-[0_1px_2px_0_rgb(15_23_42/0.04),0_4px_12px_-4px_rgb(99_102_241/0.12)] sm:block"
         data-testid="zumba-summary"
       >
-        {CARDS.map((c) => {
-          const { people, ...props } = cardProps(c);
-          return (
-            <StatTile
-              titleCase
-              key={c.key}
-              {...props}
-              active={c.key === "payment_done" ? paymentDoneOpen : card === c.key}
-              onClick={() => (c.key === "payment_done"
-                ? setPaymentDoneOpen(true)
-                : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)))}
-              testid={`zumba-card-${c.key}`}
-              arrow="desk"
-            />
-          );
-        })}
+        <div className="flex flex-nowrap gap-2">
+          {CARDS.map((c) => {
+            const p = cardProps(c);
+            return (
+              <StageTab
+                key={c.key}
+                label={p.label}
+                count={p.value}
+                active={c.key === "payment_done" ? paymentDoneOpen : card === c.key}
+                onClick={() => (c.key === "payment_done"
+                  ? setPaymentDoneOpen(true)
+                  : setCard(c.key === "all" ? "all" : (card === c.key ? "all" : c.key)))}
+                testid={`zumba-card-${c.key}`}
+                gridded
+                plain
+              />
+            );
+          })}
+        </div>
       </div>
 
       {/* The class settings belong with the cards on a phone, not with one card's list. */}
