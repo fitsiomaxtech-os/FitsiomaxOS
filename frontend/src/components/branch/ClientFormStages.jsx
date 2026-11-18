@@ -469,13 +469,34 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
   );
 };
 
-/** After the last step: the clinic's mark and a thank-you, nothing else. */
+/** After the last step: a 680 x 280 card, blue top strip, the thank-you on the left, a faded logo on the right. */
 export const ClientThankYou = () => (
   <div className="flex min-h-screen items-center justify-center bg-[#eef1f8] px-4" data-testid="client-consult-form-done">
-    <div className="w-full max-w-[420px] rounded-[8px] bg-white px-6 py-12 text-center shadow-xl">
-      <img src="/logo-icon-192.png" alt="" className="mx-auto h-20 w-20 object-contain" />
-      <p className="mt-3 text-xl font-bold text-slate-800">Fitsiomax Clinic</p>
-      <p className="mt-8 text-2xl font-semibold" style={{ color: BLUE }}>Thank you</p>
+    <div
+      className="relative flex w-full max-w-[680px] flex-col overflow-hidden rounded-[4px] bg-white shadow-xl sm:h-[280px]"
+      data-testid="client-thanks-card"
+    >
+      <div className="h-3 shrink-0" style={{ background: BLUE }} />
+      {/* The PNG carries wide padding, so the box is large; the mark itself is ~165px. */}
+      <img
+        src="/logo-icon-192.png"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-[63px] top-[calc(50%+6px)] hidden h-[350px] w-[350px] -translate-y-1/2 select-none object-contain opacity-[0.13] sm:block"
+      />
+      <div className="relative flex flex-1 flex-col justify-center px-7 py-8 sm:px-11 sm:py-0">
+        <p className="text-[22px] font-bold leading-tight text-[#0b1a44] sm:text-[28px]">
+          Fitsiomax <span style={{ color: BLUE }}>OS</span>
+        </p>
+        <p className="mt-3 text-[40px] font-extrabold leading-none tracking-tight sm:text-[54px]" style={{ color: BLUE }}>
+          Thank You!
+        </p>
+        <p className="mt-5 text-[16px] leading-[1.45] text-slate-600 sm:text-[19px]">
+          Your details have been submitted successfully.
+          <br />
+          Our team will get in touch with you shortly.
+        </p>
+      </div>
     </div>
   </div>
 );
