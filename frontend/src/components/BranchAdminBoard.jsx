@@ -5119,10 +5119,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           </div>
         </div>
 
-        {/* Pill tabs. On a phone each wrapped row stretches its pills to the full width,
+        {/* Pill tabs, left-aligned from sm up so they start on the same edge as the name
+            above and the cards below. On a phone each wrapped row stretches its pills to the full width,
             so the two rows end on the same edge as the cards below instead of stopping
             wherever the labels happen to run out. */}
-        <div className="flex flex-wrap justify-center gap-1.5 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5" data-testid="branch-lead-tabs">
+        <div className="flex flex-wrap justify-start gap-1.5 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5" data-testid="branch-lead-tabs">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -5436,8 +5437,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               <div className="overflow-hidden rounded-[3px] border border-violet-100 bg-white shadow-sm" data-testid="branch-lead-pipeline">
                 {/* Three equal columns on a phone, so the six pills sit in two even rows
                     instead of wrapping wherever their widths happen to break. From sm up
-                    they go back to a wrapping row of natural widths. */}
-                <div className="grid grid-cols-3 gap-1.5 px-4 py-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-1.5 sm:px-[5px]">
+                    they go back to a wrapping row of natural widths, left-aligned on the
+                    same 16px edge as the CONTACT heading in the card above. */}
+                <div className="grid grid-cols-3 gap-1.5 px-4 py-3 sm:flex sm:flex-wrap sm:justify-start sm:gap-1.5">
                   {(pipelineStages || []).map((s) => {
                     const stage = s.name;
                     // "Appointment Date & Time" is too long for a third of a phone, so
