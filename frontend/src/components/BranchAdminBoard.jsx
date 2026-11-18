@@ -124,6 +124,9 @@ import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk
 import { isCourseComplete } from "@/lib/leadStage";
 import { displayPhone } from "@/lib/phone";
 
+
+// Rows drawn per page of the Branch Leads list (see leadsPage).
+const LEADS_PAGE_SIZE = 250;
 const BranchEmployeesPanel = lazyWithRetry(() => import("@/components/hr/HRBoard").then((m) => ({ default: m.BranchEmployeesPanel })));
 
 // Ranges this board's row leaves out. Last 90 Days went so the search beside the
@@ -1865,6 +1868,25 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     [visibleLeads, picked],
   );
 
+  // Pages of LEADS_PAGE_SIZE. Every lead still loads at once -- the stage cards, the
+  // filter dropdowns and the downloads all count the whole board -- but drawing 1,500
+  // rows at a time made the list slow to scroll and hard to work through, so the table
+  // and the phone list show one page and the bar under them steps through the rest.
+  // Back to page 1 whenever what is on screen is replaced (stage, dates, search, marks,
+  // filters, order), and clamped if a reload leaves fewer pages than the one open.
+  const [leadsPage, setLeadsPage] = useState(1);
+  useEffect(() => { setLeadsPage(1); }, [stageFilter, effectiveDateFilter, searchQuery, activeView, markFilter, listFilters, sortOrder]);
+  const leadsPageCount = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
+  const leadsPageNow = Math.min(leadsPage, leadsPageCount);
+  const pageLeads = useMemo(
+    () => visibleLeads.slice((leadsPageNow - 1) * LEADS_PAGE_SIZE, leadsPageNow * LEADS_PAGE_SIZE),
+    [visibleLeads, leadsPageNow],
+  );
+  // A new page starts at its first row, not wherever the last one was scrolled to.
+  useEffect(() => {
+    try { document.querySelector('[data-testid="branch-list"]')?.scrollTo({ top: 0 }); } catch (e) { /* noop */ }
+  }, [leadsPageNow]);
+
   // No per-row tick any more, so nothing calls a toggle. The rest of the selection is
   // left standing: pickedVisible, the count bar and the bulk-delete dialog are whole and
   // correct, and want only a control to set the selection from. Deleting them would be
@@ -3082,7 +3104,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           {/* On a phone this sits right under the stage grid, narrowed by its open tile. */}
           <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-list-mobile">
             {(() => {
-              const visible = (stageFilter ? filteredLeads.filter((l) => matchesBranchStage(l, stages.find((s) => s.name === stageFilter), isConsultationOnlyStage, consultationOpeningStage)) : filteredLeads);
+              const visible = pageLeads;
               if (visible.length === 0) {
                 return (
                   <p className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-mobile-empty">
@@ -3335,7 +3357,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(() => {
-                  const visible = visibleLeads;
+                  const visible = pageLeads;
                   // Never on an arm's board, and not at the entry stages of a branch's --
                   // the header above draws the same two cases, and a row that disagreed
                   // with it would slide every cell after this one a column to the left.
@@ -3645,6 +3667,49 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               </tbody>
             </table>
           </div>
+
+          {/* Pager: under both the phone list and the desk table, only once there is more
+              than one page to step through. */}
+          {leadsPageCount > 1 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2" data-testid="branch-leads-pager">
+              <p className="text-xs text-slate-500 sm:text-sm" data-testid="branch-leads-pager-range">
+                Showing <span className="font-semibold text-slate-800">{(leadsPageNow - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(leadsPageNow * LEADS_PAGE_SIZE, visibleLeads.length)}</span> of <span className="font-semibold text-slate-800">{visibleLeads.length}</span> leads
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={leadsPageNow <= 1}
+                  onClick={() => setLeadsPage(leadsPageNow - 1)}
+                  data-testid="branch-leads-pager-prev"
+                >
+                  <ChevronLeft className="h-4 w-4" />Previous
+                </Button>
+                {Array.from({ length: leadsPageCount }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setLeadsPage(n)}
+                    className={`hidden h-8 min-w-8 rounded-md border px-2 text-sm font-semibold transition sm:inline-block ${n === leadsPageNow ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    aria-current={n === leadsPageNow ? "page" : undefined}
+                    data-testid={`branch-leads-pager-page-${n}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <span className="px-1 text-xs font-semibold text-slate-600 sm:hidden">{leadsPageNow} / {leadsPageCount}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={leadsPageNow >= leadsPageCount}
+                  onClick={() => setLeadsPage(leadsPageNow + 1)}
+                  data-testid="branch-leads-pager-next"
+                >
+                  Next<ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
 
       {/* The row's Collect Advance popup. Refreshes the list behind it, so Total Advance
           and Status read what was paid once the receipt is closed. */}
