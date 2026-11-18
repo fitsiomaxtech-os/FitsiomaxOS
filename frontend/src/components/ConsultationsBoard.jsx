@@ -11847,28 +11847,41 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               )}
 
               {detailTab === "profile" && (
-                <div className="space-y-3" data-testid="cons-lead-profile">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Contact</p>
-                    <div className="space-y-1.5 text-xs text-slate-700">
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Phone</span><span className="font-medium">{displayPhone(selectedLead.phone) || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Alternative Phone</span><span className="font-medium">{displayPhone(selectedLead.alternative_phone) || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><span className="font-medium">{selectedLead.email || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Address</span><span className="font-medium">{selectedLead.address || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">City / State</span><span className="font-medium">{[selectedLead.city, selectedLead.state].filter(Boolean).join(", ") || "—"}</span></div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Profile</p>
-                    <div className="space-y-1.5 text-xs text-slate-700">
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Age</span><span className="font-medium">{selectedLead.age ?? "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Gender</span><span className="font-medium">{selectedLead.gender || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Occupation</span><span className="font-medium">{selectedLead.occupation || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Department</span><span className="font-medium">{serviceTypeTitle(selectedLead.department) || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Condition</span><span className="font-medium">{selectedLead.condition || "—"}</span></div>
-                      <div className="flex items-center justify-between"><span className="text-slate-500">Months of Pain</span><span className="font-medium">{selectedLead.months_of_pain ?? "—"}</span></div>
-                    </div>
-                  </div>
+                // Two framed cards side by side, each a label column and a value column, so every
+                // value starts on one line down the card instead of drifting to the far edge.
+                <div className="grid gap-3 md:grid-cols-2" data-testid="cons-lead-profile">
+                  {[
+                    ["Contact", [
+                      ["Phone", displayPhone(selectedLead.phone)],
+                      ["Alternative Phone", displayPhone(selectedLead.alternative_phone)],
+                      ["Email", selectedLead.email],
+                      ["Address", selectedLead.address],
+                      ["City / State", [selectedLead.city, selectedLead.state].filter(Boolean).join(", ")],
+                    ]],
+                    ["Profile", [
+                      ["Age", selectedLead.age],
+                      ["Gender", selectedLead.gender ? String(selectedLead.gender).replace(/^./, (c) => c.toUpperCase()) : ""],
+                      ["Occupation", selectedLead.occupation],
+                      ["Department", serviceTypeTitle(selectedLead.department)],
+                      ["Condition", selectedLead.condition],
+                      ["Months of Pain", selectedLead.months_of_pain],
+                    ]],
+                  ].map(([heading, rows]) => (
+                    <section key={heading} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <h4 className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{heading}</h4>
+                      <dl className="divide-y divide-slate-100">
+                        {rows.map(([label, value]) => {
+                          const has = value !== null && value !== undefined && String(value).trim() !== "";
+                          return (
+                            <div key={label} className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 text-sm">
+                              <dt className="text-slate-500">{label}</dt>
+                              <dd className={`break-words ${has ? "font-medium text-slate-800" : "text-slate-400"}`}>{has ? value : "—"}</dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    </section>
+                  ))}
                 </div>
               )}
             </div>
