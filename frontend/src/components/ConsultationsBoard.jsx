@@ -8159,8 +8159,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             : compactDetail
             ? "max-w-[570px] sm:h-[min(610px,calc(100dvh-1rem))] sm:max-h-none"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
-            {/* The name row is a #0284C7 band on every stage tab, name and details in white;
-                the Consultant's own popup keeps its grey one.
+            {/* The name row is a #0284C7 band on every stage tab and on the Consultant's own
+                popup too, name and details in white.
                 Two lines, each read across to its far end: who this is and the expert
                 seeing them, then how to reach them and when. The expert used to sit in a column of its
                 own behind a rule, which cost the card a third of its width for one name.
@@ -8168,7 +8168,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 Each line wraps rather than squeezes: on a phone whatever sits at the end
                 drops under the start of its line and lines up on the left with it, rather
                 than hanging off the right edge on a row of its own. */}
-            <div className={`flex shrink-0 items-start gap-3 border-b px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap border-slate-500 bg-slate-500 sm:flex-nowrap" : "border-sky-700 bg-[#0284C7]"}`}>
+            <div className={`flex shrink-0 items-start gap-3 border-b px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap border-sky-700 bg-[#0284C7] sm:flex-nowrap" : "border-sky-700 bg-[#0284C7]"}`}>
               {/* Consultation Visit and Fee Collected: one row -- name, patient number, phone,
                   no icons. The expert and the appointment's day are left to the Overview below it.
 
@@ -8184,11 +8184,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   column beside the name. */}
               {flatFeeStyle || isConsultant || (bookedDetail && selectedLead.consultation_stage === "Consultation Booked") ? (
               <div className={`min-w-0 flex-1 self-center ${isConsultant ? "order-last basis-full sm:order-none sm:basis-0" : ""}`}>
-                {/* The Consultant's header is a grey band -- bg-slate-500, rgb(100 116 139),
-                    the same grey as the board's table header -- with the row in white:
-                    14px Manrope (the app's body font), medium, "Treatment Prescription" and
-                    the X too. bg-slate-500 is not remapped by any Theme Appearance, so the
-                    band is that grey on every theme. */}
+                {/* The Consultant's header is the same #0284C7 band as every stage's, with
+                    the row in white: 14px Manrope (the app's body font), medium,
+                    "Treatment Prescription" and the X too. */}
                 <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-white" : "text-base font-semibold text-white"}`} data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
@@ -8253,7 +8251,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </span>
               )}
               {/* A plain bold X, no circle, on every stage of the popup -- white on the
-                  Consultant's grey band and on everyone else's #0284C7 one. */}
+                  #0284C7 band, the Consultant's and everyone else's. */}
               <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-white hover:bg-[rgba(255,255,255,0.15)]" data-testid="cons-detail-close">
                 <X className="h-5 w-5" strokeWidth={3} />
               </button>
@@ -9358,9 +9356,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 }
 
                 return (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid="cons-decision-form">
-                    <p className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-800">
-                      <ClipboardCheck className="h-4 w-4 text-sky-600" /> Treatment Service
+                  // Same frame and heading as the Diagnosis Report and Treatment Summary
+                  // boxes above it (LockableTextBox): 8px corners, 12px in, an 11px grey
+                  // heading -- so the three sections line up on one left edge and read as
+                  // one set rather than this one shouting over the other two.
+                  <div className="rounded-lg border border-slate-200 bg-white p-3" data-testid="cons-decision-form">
+                    <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      <ClipboardCheck className="h-3.5 w-3.5" /> Treatment Service
                     </p>
                     {/* The thing standing between this form and Save, so it is a block that
                         stops the eye rather than a coloured line of text among other lines.
