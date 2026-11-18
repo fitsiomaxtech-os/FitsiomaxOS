@@ -1369,8 +1369,9 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
   // flex+gap, not space-y — the desktop table below is hidden by class on mobile.
   return (
     <div className="flex flex-col gap-3" data-testid="hr-employees-tab">
-      {/* One toolbar: Search, A → Z, Department, Designation, Work Type, then Add Employee
-          pushed to the far end. Department and Designation are the same pair of dropdowns
+      {/* One toolbar, split in two: the filters on the left (Search, Department,
+          Designation, Work Type), and A → Z, History and a + for Add Employee pushed to the
+          far right. Department and Designation are the same pair of dropdowns
           Credentials uses — picking a department narrows the designations beside it.
           "Unassigned" is offered only when somebody actually has no department. Work Type
           has no Both pill: somebody who works the two modes already appears under each.
@@ -1380,17 +1381,6 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           what the row has left. */}
       <div className="flex flex-nowrap items-center gap-1 sm:flex-wrap sm:gap-2" data-testid="hr-emp-toolbar">
         <SearchIconInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." testid="hr-emp-search" compact />
-        <button
-          type="button"
-          onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
-          title="Sort by name"
-          aria-label={sortAZ === "desc" ? "Sort Z to A" : "Sort A to Z"}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-medium transition sm:h-10 sm:w-auto sm:px-3 ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
-          data-testid="hr-emp-sort-az"
-        >
-          {sortAZ === "desc" ? <ArrowUpZA className="h-4 w-4 sm:hidden" /> : <ArrowDownAZ className="h-4 w-4 sm:hidden" />}
-          <span className="hidden sm:inline">{sortAZ === "desc" ? "Z → A" : "A → Z"}</span>
-        </button>
         <DepartmentFilterSelect
           value={department}
           onChange={(d) => { setDepartment(d); setDesignation(""); }}
@@ -1425,26 +1415,38 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
             </button>
           ))}
         </div>
-        {/* History sits with Add Employee at the far end: both are about the list as a
-            whole rather than a filter on it. */}
+        {/* The right-hand group: A → Z, History and Add Employee are about the list as a
+            whole rather than a filter on it. ml-auto on the first of them is the split. */}
+        <button
+          type="button"
+          onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
+          title="Sort by name"
+          aria-label={sortAZ === "desc" ? "Sort Z to A" : "Sort A to Z"}
+          className={`ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-medium transition sm:h-10 sm:w-auto sm:px-3 ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+          data-testid="hr-emp-sort-az"
+        >
+          {sortAZ === "desc" ? <ArrowUpZA className="h-4 w-4 sm:hidden" /> : <ArrowDownAZ className="h-4 w-4 sm:hidden" />}
+          <span className="hidden sm:inline">{sortAZ === "desc" ? "Z → A" : "A → Z"}</span>
+        </button>
         {!branchId && <button
           type="button"
           onClick={() => setShowHistory(true)}
           title="Deleted employees"
           aria-label="Deleted employees"
-          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-800 sm:h-10 sm:w-10"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-800 sm:h-10 sm:w-10"
           data-testid="hr-emp-history-btn"
         >
           <History className="h-4 w-4" />
         </button>}
+        {/* Only the + — the name is in the hover and for screen readers. */}
         <Button
           onClick={() => { setEditing(null); setShowAdd(true); }}
           title="Add Employee"
           aria-label="Add Employee"
-          className="h-9 w-9 shrink-0 bg-sky-600 px-0 hover:bg-sky-700 sm:w-auto sm:px-4"
+          className="h-9 w-9 shrink-0 bg-sky-600 px-0 hover:bg-sky-700 sm:h-10 sm:w-10"
           data-testid="hr-emp-add-btn"
         >
-          <Plus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Add Employee</span>
+          <Plus className="h-4 w-4" />
         </Button>
       </div>
 
