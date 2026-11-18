@@ -1115,7 +1115,7 @@ export const CRMPage = ({ auth, onLogout }) => {
       )}
 
       <div className="w-full" data-testid="role-board-full-width-wrap">
-        <header ref={headerRef} className="sticky top-0 z-20 w-full border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-6 sm:py-4" data-testid="role-board-header">
+        <header ref={headerRef} className="sticky top-0 z-20 w-full border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-6 sm:py-2.5" data-testid="role-board-header">
           {/* Physio, mobile only: name + FitsiomaxOS subline on the left, Calendar /
               Profile / Logout icons on the right — replaces the desktop header below,
               which stays exactly as-is for every other role and at sm:+ for physio. */}
