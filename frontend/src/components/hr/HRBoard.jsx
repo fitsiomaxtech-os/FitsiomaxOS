@@ -1241,9 +1241,18 @@ const EmployeeDirectory = ({ employees, onView }) => (
 
     <Card className="hidden overflow-hidden rounded-[4px] md:block">
       <CardContent className="p-0">
-        <div className="overflow-auto">
+        {/* The rows scroll, the header does not: a sticky header sticks to its nearest
+            scrolling ancestor, so this box is capped to what the screen has left under the
+            role header, the branch nav and the toolbar, and scrolls on its own. */}
+        <div
+          className="overflow-auto"
+          style={{ maxHeight: "max(16rem, calc(100dvh - var(--role-header-height, 89px) - var(--branch-nav-height, 42px) - 96px))" }}
+          tabIndex={0}
+          role="region"
+          aria-label="Employees"
+        >
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-500 text-left text-xs uppercase text-white">
+            <thead className="sticky top-0 z-10 bg-slate-500 text-left text-xs uppercase text-white">
               <tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">Employee</th><th className="px-3 py-2">Dept</th><th className="px-3 py-2">Designation</th><th className="px-3 py-2">Work Type</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Joining</th><th className="px-3 py-2">Salary</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr>
             </thead>
             <tbody>
