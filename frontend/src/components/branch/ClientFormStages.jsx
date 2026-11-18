@@ -263,10 +263,10 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
       >
         <h1 className="px-6 pt-6 text-[24px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-7 sm:text-[26px]">{preview ? "Preview" : "Offline Consultation Form"}</h1>
 
-        {/* Rows only: one field under another, and the buttons under the fields. */}
-        <div className={`min-h-0 flex-1 px-6 pb-6 pt-4 sm:px-10 sm:pb-7 ${preview ? "flex flex-col" : "overflow-y-auto"}`} data-testid="client-stage-body">
-          {/* Preview's 18 rows scroll on their own, so Previous and Submit stay in sight. */}
-          <div className={preview ? "min-h-0 flex-1 overflow-y-auto" : "flex flex-col gap-3.5"}>
+        {/* Rows only: one field under another. The body scrolls if it must (Preview's 18
+            rows); the buttons below it never move. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
+          <div className="flex flex-col gap-3.5">
             {preview && (
               <dl className="divide-y divide-slate-100 rounded-[8px] border border-slate-100" data-testid="client-preview-list">
                 {PREVIEW.map(([label, read]) => {
@@ -438,8 +438,11 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
           </div>
 
           {error && <p className="mt-4 rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-stage-send-error">{error}</p>}
+        </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-4">
+        {/* Fixed at the foot of the popup, the same place on every step. */}
+        <div className="shrink-0 px-6 pb-6 pt-3 sm:px-10 sm:pb-7" data-testid="client-stage-footer">
+          <div className="flex flex-wrap items-center gap-4">
             {backButton}
             {last && !preview && (
               <button type="button" onClick={() => { if (settled()) setPreview(true); }} disabled={sending} className={outlineCls} data-testid="client-stage-preview">
