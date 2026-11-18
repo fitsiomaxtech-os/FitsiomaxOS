@@ -211,10 +211,11 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
           the window without scrolling. Capped at the window height all the same, so on a
           short one only the fields scroll and Create Lead stays in sight. On a phone the
           card is nine tenths of the screen each way, the backdrop showing round it. */}
-      <div className="flex max-h-full w-full max-w-4xl flex-col rounded bg-white shadow-2xl max-sm:max-h-[90%] max-sm:w-[90%]">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-3.5 max-sm:px-4 max-sm:py-2.5">
-          <h3 className="text-xl font-bold text-slate-900 max-sm:text-lg">Add New Lead</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="lead-create-close"><X className="h-5 w-5" /></button>
+      <div className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl max-sm:max-h-[90%] max-sm:w-[90%]">
+        {/* The name band, in the same blue as the other popups. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-6 py-3.5 max-sm:px-4 max-sm:py-2.5">
+          <h3 className="text-base font-semibold text-white">Add New Lead</h3>
+          <button onClick={onClose} className="shrink-0 rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close" data-testid="lead-create-close"><X className="h-5 w-5" /></button>
         </div>
 
         {/* Only a Super Admin gets a second tab, so for everyone else the form stays the
@@ -248,6 +249,8 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
             tab away from mid-entry. */}
         <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 max-sm:space-y-3 max-sm:px-4 max-sm:py-3 ${tab === "details" ? "" : "hidden"}`} data-testid="lead-create-panel-details">
           {/* Standard fields */}
+          <section className="rounded-lg border border-slate-200 p-4 max-sm:p-3">
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 max-sm:mb-2">Contact details</h4>
           <div className={GRID}>
             <Field label="Name *" className={PHONE_WIDE}><Input className={PHONE_CONTROL} value={form.name} onChange={(e) => set("name", e.target.value)} data-testid="lead-create-name" /></Field>
             <Field label="Phone *"><Input className={PHONE_CONTROL} value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="lead-create-phone" /></Field>
@@ -270,9 +273,11 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
             <Field label="City"><Input className={PHONE_CONTROL} value={form.city} onChange={(e) => set("city", e.target.value)} data-testid="lead-create-city" /></Field>
             <Field label="State"><Input className={PHONE_CONTROL} value={form.state} onChange={(e) => set("state", e.target.value)} data-testid="lead-create-state" /></Field>
           </div>
+          </section>
 
           {/* Physio Patient Details */}
           <div className="rounded-lg border border-slate-200 p-4 max-sm:p-3">
+            <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 max-sm:mb-2">Patient details</h4>
             <div className={GRID}>
               <Field label="Department" className={PHONE_WIDE}>
                 {/* Shown rather than hidden where it is fixed: the department decides which
@@ -385,9 +390,9 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
           </div>
         )}
 
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 max-sm:px-4 max-sm:py-3">
-          <Button variant="outline" onClick={onClose} className="max-sm:h-8" data-testid="lead-create-cancel">Cancel</Button>
-          <Button onClick={submit} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 max-sm:h-8" data-testid="lead-create-submit">{saving ? "Creating…" : "Create Lead"}</Button>
+        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-3 max-sm:px-4 max-sm:py-3">
+          <Button variant="outline" onClick={onClose} className="min-w-[6rem] bg-white max-sm:h-8" data-testid="lead-create-cancel">Cancel</Button>
+          <Button onClick={submit} disabled={saving} className="min-w-[8rem] bg-[#0284C7] text-white hover:bg-sky-700 max-sm:h-8" data-testid="lead-create-submit">{saving ? "Creating…" : "Create Lead"}</Button>
         </div>
       </div>
     </div>
@@ -396,7 +401,7 @@ export const CreateLeadModal = ({ onClose, onSaved, branchId = null, lockedDepar
 
 const Field = ({ label, children, className = "" }) => (
   <div className={`space-y-1 ${className}`}>
-    <label className="text-xs font-medium text-slate-700">{label}</label>
+    <label className="block text-xs font-medium text-slate-600">{label}</label>
     {children}
   </div>
 );
