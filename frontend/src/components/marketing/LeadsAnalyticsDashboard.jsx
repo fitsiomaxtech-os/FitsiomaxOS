@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -37,16 +37,6 @@ const CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#00
 
 /* Single-series hue: categorical slot 1. */
 const SERIES = CATEGORICAL[0];
-
-/* The blue ordinal ramp for the funnel — its stages are an ordered scale, the one place a
-   value-ordered colour belongs. Starts at step 250; nothing lighter clears 2:1 on white.
-   Validated at four stages: monotone lightness, visible step gaps, light end 2.11:1. */
-const BLUE_STEPS = ["#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281"];
-const ordinalRamp = (n) => {
-  if (n <= 1) return [SERIES];
-  const step = (BLUE_STEPS.length - 1) / (n - 1);
-  return Array.from({ length: n }, (_v, i) => BLUE_STEPS[Math.round(i * step)]);
-};
 
 const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 
@@ -271,8 +261,6 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  const byStage = data?.by_stage || [];
-  const stageRamp = useMemo(() => ordinalRamp(byStage.length), [byStage.length]);
 
   if (loading && !data) return <p className="py-10 text-center text-sm text-slate-400">Loading…</p>;
   if (failed) {
@@ -286,8 +274,8 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const total = Number(data?.total || 0);
   const booked = Number(data?.booked || 0);
   const trend = fillTrend(data?.trend || [], data?.grain);
-  const bySource = data?.by_source || [];
   const byBranch = data?.by_branch || [];
+  const apptByBranch = data?.appointments_by_branch || [];
   const byVertical = data?.by_vertical || [];
   const byWeekday = data?.by_weekday || [];
   const byOwner = data?.by_owner || [];
@@ -370,24 +358,21 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* 2 — where the book stands */}
-        <Card title="Pipeline stages" sub="Where those leads stand now" testid="leads-analytics-stages">
-          {byStage.length === 0 ? <Empty>No stages configured.</Empty> : asTable ? (
-            <ValueTable rows={byStage} firstHeading="Stage" />
+        {/* 2 — which branches the demand lands on */}
+        <Card title="Leads by branch" sub="How many leads came into each branch · including any not yet assigned" testid="leads-analytics-branches">
+          {byBranch.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
+            <ValueTable rows={byBranch} firstHeading="Branch" />
           ) : (
-            // Pipeline order, never sorted by count: a funnel sorted by size stops being a
-            // funnel, and an empty stage holds its place or the shape misreports where
-            // leads are dropping.
-            <RankedBars rows={byStage} ramp={stageRamp} />
+            <RankedBars rows={byBranch} />
           )}
         </Card>
 
-        {/* 3 — which channels bring the volume */}
-        <Card title="Where leads came from" sub="Share by source; the tail is grouped as Other" testid="leads-analytics-sources">
-          {bySource.length === 0 ? <Empty>No sources recorded in this range.</Empty> : asTable ? (
-            <ValueTable rows={bySource} firstHeading="Source" />
+        {/* 3 — where those leads have an appointment fixed */}
+        <Card title="Appointments by branch" sub="Leads with an appointment fixed, per branch" testid="leads-analytics-appointments-branch">
+          {apptByBranch.length === 0 ? <Empty>No appointments fixed in this range.</Empty> : asTable ? (
+            <ValueTable rows={apptByBranch} firstHeading="Branch" />
           ) : (
-            <DonutWithLegend rows={bySource} total={total} />
+            <DonutWithLegend rows={apptByBranch} total={booked} />
           )}
         </Card>
 
@@ -412,15 +397,6 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
             // The rate is the bar; leads and booked ride the tooltip and the table, so a
             // strong rate off a handful of leads can always be checked.
             <RankedBars rows={conversion} valueKey="rate" suffix="%" />
-          )}
-        </Card>
-
-        {/* 6 — which branches the demand lands on */}
-        <Card title="Leads by branch" sub="Including any not yet assigned to one" testid="leads-analytics-branches">
-          {byBranch.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
-            <ValueTable rows={byBranch} firstHeading="Branch" />
-          ) : (
-            <RankedBars rows={byBranch} />
           )}
         </Card>
 

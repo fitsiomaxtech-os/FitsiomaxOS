@@ -1088,6 +1088,9 @@ async def v3_dashboard_leads_analytics(
     # ready-made percentage: a rate on its own hides that it came off four leads, and the
     # card needs both to say whether a source is good or merely lucky.
     booked_by_source: dict = {}
+    # Leads with an appointment fixed, per branch -- the same "reached a booking" test the
+    # headline count uses, so the branch split adds up to it.
+    booked_by_branch: dict = {}
     for lead in leads:
         stage = lead.get("stage")
         if stage in stage_counts:
@@ -1100,6 +1103,8 @@ async def v3_dashboard_leads_analytics(
             booked_by_source[source] = booked_by_source.get(source, 0) + 1
         bid = lead.get("branch_id") or ""
         by_branch[bid] = by_branch.get(bid, 0) + 1
+        if str(lead.get("appointment_date") or "").strip():
+            booked_by_branch[bid] = booked_by_branch.get(bid, 0) + 1
         by_vertical[_vertical_label(lead.get("vertical"))] = by_vertical.get(_vertical_label(lead.get("vertical")), 0) + 1
         weekday = _weekday_of(lead.get("created_at"))
         if weekday:
@@ -1132,6 +1137,7 @@ async def v3_dashboard_leads_analytics(
         # slices, whatever the palette can hold.
         "by_source": _ranked(by_source, 6),
         "by_branch": _ranked(_named_branch_counts(by_branch, branch_names), 8),
+        "appointments_by_branch": _ranked(_named_branch_counts(booked_by_branch, branch_names), 6),
         "by_vertical": _ranked(by_vertical, 6),
         # Calendar order, not ranked — the question is which days run hot, and a bar chart
         # sorted by volume can't be read as a week.
