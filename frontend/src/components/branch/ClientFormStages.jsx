@@ -1,24 +1,29 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, Loader2 } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
+import { SpellTextarea } from "@/components/ui/spell-textarea";
 import { PAPER_BRANCHES, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { loadSpelling } from "@/lib/spellcheck";
 
 /**
  * The client link (pages/ClientConsultationFormPage), asked as eight short steps instead of
  * the paper, one field per row. Only Name and Mobile Number must be filled. The last step
  * can show every answer as a plain list first (Preview, optional), then sends the lot; the
  * client sees only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin
- * opens it as a read-only report). The popup is a fixed 1020 x 520 from tablet width up,
- * the progress bar above it, Previous / Next under the fields. Each step is headed
- * "Offline Consultation Form", as the paper is; the date is picked in the OS's own calendar.
- * Every move slides: Next pushes the step out to the left and brings the next one in from
- * the right, Previous the other way round.
+ * opens it as a read-only report). The popup is 1020 wide and as tall as its step, so
+ * Previous / Next sit the same gap under the last field on every step; its top stays put
+ * (where a 520-high popup would sit centred) and only its foot moves. The progress bar is
+ * above it. Each step is headed "Consultation Form", centred; the date is picked in the
+ * OS's own calendar. Every move slides: Next pushes the step out to the left and brings the
+ * next one in from the right, Previous the other way round, while the popup's foot glides
+ * to the new step's height and the progress bar fills (or empties) in step with it.
  */
 
 const STAGES = 8;
 const BLUE = "#0066ff";
-// The slide between steps; the 600ms double-tap guard below outlasts it.
+// The slide between steps; the 600ms double-tap guard below outlasts it. The progress
+// bar's fill repeats both in its classes (duration-[400ms], ease-[...]).
 const SLIDE_MS = 400;
 const SLIDE_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
 
@@ -115,19 +120,20 @@ const Text = ({ id, label, value, onChange, error, required, placeholder, ...res
   </Field>
 );
 
+// The free-text answers: spelling and grammar are checked inside the box, medical words first.
 const Area = ({ id, label, value, onChange, rows = 4 }) => (
-  <Field label={label} htmlFor={id}>
-    <textarea
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      rows={rows}
-      maxLength={5000}
-      placeholder={label}
-      className={`${box(false)} resize-none py-2 leading-relaxed`}
-      data-testid={`client-stage-${id}`}
-    />
-  </Field>
+  <SpellTextarea
+    id={id}
+    label={label}
+    labelClassName="text-[15px] font-medium text-slate-900"
+    value={value}
+    onChange={onChange}
+    rows={rows}
+    maxLength={5000}
+    placeholder={label}
+    className={`${box(false)} resize-none py-2 leading-relaxed`}
+    testid={`client-stage-${id}`}
+  />
 );
 
 const startFrom = (form) => {
@@ -204,6 +210,12 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
   // be clipped by the popup's scrolling body.
   const cardRef = useRef(null);
   const settled = () => Date.now() - movedAt.current >= 600;
+  // The spell check's word list, fetched in the background while the first steps are
+  // filled, so the free-text steps check from their first word.
+  useEffect(() => {
+    const t = window.setTimeout(loadSpelling, 1500);
+    return () => window.clearTimeout(t);
+  }, []);
 
   // What the popup shows: steps 0-7, then Preview as one step more.
   const view = preview ? STAGES : stage;
@@ -224,8 +236,8 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
       view,
       dir: to > view ? 1 : -1,
       top: bodyRef.current ? bodyRef.current.scrollTop : 0,
-      // Below md the card is as tall as its step (md:h-[520px] above): its height glides too.
-      glide: !window.matchMedia?.("(min-width: 768px)")?.matches,
+      // The card is as tall as its step, so its height glides with the slide.
+      glide: true,
     });
     setPreview(to === STAGES);
     if (to < STAGES) setStage(to);
@@ -299,11 +311,24 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
   );
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start bg-[#eef1f8] px-4 py-6 md:justify-center md:py-10" data-testid="client-stages">
-      {/* The progress sits above the popup, not in it. */}
+    // From tablet width up the top is held where a 520-high popup would sit centred, half
+    // the screen less 271px (half of the bar's 22 and the 520): a shorter or taller step
+    // moves only the popup's foot. The popup stops 40px above the screen's foot; beyond
+    // that its body scrolls.
+    <div
+      className="flex min-h-screen flex-col items-center justify-start bg-[#eef1f8] px-4 py-6 md:pb-10 md:pt-[var(--cs-top)] md:[--cs-top:max(2.5rem,calc(50vh_-_271px))]"
+      data-testid="client-stages"
+    >
+      {/* The progress sits above the popup, not in it. Each bar fills from its left as its
+          step slides in, and empties back as it slides out. */}
       <div className="mb-4 flex w-full max-w-[1020px] gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={STAGES} aria-valuenow={stage + 1} aria-label="Progress" data-testid="client-stage-progress">
         {Array.from({ length: STAGES }, (_, i) => (
-          <span key={i} className="h-1.5 flex-1 rounded-full transition-colors" style={{ background: i <= stage ? BLUE : "#dfe4ee" }} />
+          <span key={i} className="relative h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "#dfe4ee" }}>
+            <span
+              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-[400ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none"
+              style={{ width: i <= stage ? "100%" : "0%", background: BLUE }}
+            />
+          </span>
         ))}
       </div>
 
@@ -312,13 +337,14 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
         onSubmit={next}
         noValidate
         autoComplete="off"
-        className="flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:h-[520px]"
+        className="flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
-        <h1 className="px-6 pt-6 text-[24px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-7 sm:text-[26px]">{preview ? "Preview" : "Offline Consultation Form"}</h1>
+        <h1 className="px-6 pt-6 text-center text-[24px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-7 sm:text-[26px]">{preview ? "Preview" : "Consultation Form"}</h1>
 
-        {/* Rows only: one field under another. The body scrolls if it must (Preview's 18
-            rows); the buttons below it never move. */}
+        {/* Rows only: one field under another. The body is as tall as its step, the
+            buttons a set gap under it; past the screen's height it scrolls (Preview's 18
+            rows) and the buttons stay in view. */}
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
           {/* The slide track: as wide as the card, gutters included, clipped at its edges --
               and at its foot too while a height glides. */}
@@ -512,7 +538,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
           {error && <p className="mt-4 rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-stage-send-error">{error}</p>}
         </div>
 
-        {/* Fixed at the foot of the popup, the same place on every step. */}
+        {/* At the foot of the popup, the same gap under the last field on every step. */}
         <div className="shrink-0 px-6 pb-6 pt-3 sm:px-10 sm:pb-7" data-testid="client-stage-footer">
           <div className="flex flex-wrap items-center gap-4">
             {backButton}
