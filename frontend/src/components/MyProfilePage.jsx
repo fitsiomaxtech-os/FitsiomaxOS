@@ -313,7 +313,7 @@ const MonthSummary = ({ totals, month, today, todayStrip, workload, compactLayou
   const permission = (totals?.permission_minutes || 0) > 0;
   return (
     <>
-      <div className={`grid gap-4 ${todayStrip ? "xl:grid-cols-2" : ""}`}>
+      <div className={`grid ${compactLayout ? "gap-3" : "gap-4"} ${todayStrip ? (compactLayout ? "xl:grid-cols-[4fr_3fr]" : "xl:grid-cols-2") : ""}`}>
         {todayStrip}
         <DeskSection
           title={<>This month <span className="font-normal text-slate-500">· {monthLabel(month)}</span></>}
@@ -578,7 +578,7 @@ const MonthTable = ({ rows, compactLayout = false }) => {
       </ul>
 
       {/* Desktop: a Card holding the slate-headed table the Branch Admin lists use. */}
-      <Card className={`hidden overflow-hidden border-slate-200 shadow-sm sm:block ${compactLayout ? "rounded-[4px]" : ""}`}>
+      <Card className={`hidden overflow-hidden border-slate-200 shadow-sm sm:block ${compactLayout ? "rounded-lg" : ""}`}>
         <CardContent className="p-0">
           {!compactLayout && (<div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -589,36 +589,36 @@ const MonthTable = ({ rows, compactLayout = false }) => {
           </div>)}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[60rem] text-left text-sm" data-testid="my-attendance-table">
-              <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
+              <thead className="bg-slate-500 text-[11px] font-bold uppercase tracking-wider text-white">
                 <tr className="whitespace-nowrap">
-                  <th className="px-4 py-2.5">Date</th>
+                  <th className="w-[14%] px-5 py-3">Date</th>
                   {!compactLayout && <th className="px-3 py-2.5">Day</th>}
-                  <th className="px-3 py-2.5 text-center">Sessions</th>
-                  <th className="px-3 py-2.5">Login</th>
-                  <th className="px-3 py-2.5">Logout</th>
+                  <th className="w-[10%] px-3 py-3 text-center">Sessions</th>
+                  <th className="w-[12%] px-3 py-3">Login</th>
+                  <th className="w-[12%] px-3 py-3">Logout</th>
                   {!compactLayout && <th className="px-3 py-2.5">On the clock</th>}
-                  <th className="px-3 py-2.5">Break</th>
+                  <th className="w-[10%] px-3 py-3">Break</th>
                   {!compactLayout && <th className="px-3 py-2.5">Work hrs</th>}
                   {!compactLayout && <th className="px-3 py-2.5">Balance</th>}
-                  {compactLayout && hasBookingCounts && <><th className="px-3 py-2.5">Appointments</th><th className="px-3 py-2.5">Consultations</th></>}
-                  <th className="px-3 py-2.5">Status</th>
+                  {compactLayout && hasBookingCounts && <><th className="w-[13%] px-3 py-3 text-center">Appointments</th><th className="w-[13%] px-3 py-3 text-center">Consultations</th></>}
+                  <th className="px-5 py-3 text-center">Status</th>
                   {!compactLayout && <th className="px-4 py-2.5">Note</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
                   <tr key={r.date} className="whitespace-nowrap align-middle hover:bg-slate-50/60" data-testid={`my-attendance-row-${r.date}`}>
-                    <td className="px-4 py-3 text-sm font-semibold leading-5 text-slate-800">{dayNumber(r.date)}</td>
+                    <td className="px-5 py-3 text-sm font-semibold leading-5 text-slate-800">{dayNumber(r.date)}</td>
                     {!compactLayout && <td className="px-3 py-3 text-xs leading-5 text-slate-500">{r.weekday}</td>}
                     <td className="px-3 py-3 text-center">
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-[5px] border border-slate-200 bg-slate-50 px-1 text-[10px] font-bold text-slate-600">
+                      <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-xs font-bold text-slate-600">
                         {r.sessions}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_in) || "—"}</td>
-                    <td className="px-3 py-3 text-xs leading-5 text-slate-600">{prettyTime(r.clock_out) || "—"}</td>
+                    <td className="px-3 py-3 text-sm leading-5 text-slate-700">{prettyTime(r.clock_in) || "—"}</td>
+                    <td className="px-3 py-3 text-sm leading-5 text-slate-700">{prettyTime(r.clock_out) || "—"}</td>
                     {!compactLayout && <td className="px-3 py-3 text-xs leading-5 text-slate-600">{hours(r.login_minutes)}</td>}
-                    <td className="px-3 py-3 text-xs leading-5 text-amber-600">
+                    <td className={`px-3 py-3 text-sm leading-5 ${r.break_minutes ? "text-amber-600" : "text-slate-400"}`}>
                       {r.break_minutes ? duration(r.break_minutes) : "—"}
                       {r.break_count > 1 && <span className="ml-1 text-[11px] text-slate-400">({r.break_count})</span>}
                     </td>
@@ -626,8 +626,8 @@ const MonthTable = ({ rows, compactLayout = false }) => {
                     {!compactLayout && <td className={`px-3 py-3 text-xs font-semibold leading-5 ${r.balance_minutes < 0 ? "text-rose-600" : "text-emerald-600"}`}>
                       {signedHours(r.balance_minutes)}
                     </td>}
-                    {compactLayout && hasBookingCounts && <><td className="px-3 py-3 text-xs">{r.appointments ?? 0}</td><td className="px-3 py-3 text-xs">{r.consultations ?? 0}</td></>}
-                    <td className="px-3 py-3"><StatusChip row={r} /></td>
+                    {compactLayout && hasBookingCounts && <><td className="px-3 py-3 text-center text-sm font-semibold text-slate-700">{r.appointments ?? 0}</td><td className="px-3 py-3 text-center text-sm font-semibold text-slate-700">{r.consultations ?? 0}</td></>}
+                    <td className="px-5 py-3 text-center"><StatusChip row={r} /></td>
                     {/* A short day with an approved permission on it is a short day on
                         purpose, and this column is where a day says why. The permission
                         leads: it is the answer to the question the balance beside it
