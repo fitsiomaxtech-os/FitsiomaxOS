@@ -1239,7 +1239,7 @@ const EmployeeDirectory = ({ employees, onView }) => (
       {employees.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">No employees.</p>}
     </div>
 
-    <Card className="hidden overflow-hidden md:block">
+    <Card className="hidden overflow-hidden rounded-[4px] md:block">
       <CardContent className="p-0">
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
