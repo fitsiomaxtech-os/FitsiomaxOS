@@ -531,7 +531,12 @@ const toolbarFiltersFor = (questions, trailing) => [
 
 // Built once per question set, so the dropdowns change with the columns they sit over.
 // The last one follows the third column: Source on a branch's board, City on an arm's.
-const BRANCH_TOOLBAR_FILTERS = toolbarFiltersFor(BRANCH_INTAKE_QUESTIONS, SOURCE_FILTER);
+// Pain Type keeps its column but has no dropdown: the branch asked for "All Pain Types"
+// to go from the toolbar (2026-11-18).
+const BRANCH_TOOLBAR_FILTERS = toolbarFiltersFor(
+  BRANCH_INTAKE_QUESTIONS.filter((q) => q.key !== "pain_type"),
+  SOURCE_FILTER,
+);
 const PHYSIO_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(PHYSIO_ARM_INTAKE_QUESTIONS, CITY_FILTER);
 const FITNESS_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(FITNESS_ARM_INTAKE_QUESTIONS, CITY_FILTER);
 
