@@ -30,7 +30,8 @@ import {
 // group branches.
 const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 
-// The same test ConsultationsBoard.jsx uses for its Chennai-only Collect Payment popup.
+// Chennai, matched by name as the branch list gives it: its code (CHE) is only the first
+// three letters and would match any "Che..." branch.
 const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
 
 // Every shelf here is editable with Super Admin's own dialog for it: the session form for

@@ -90,7 +90,7 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * -- an amount already typed short is a part payment somebody chose, and agreeing a
  * discount is no reason to quietly collect the rest of it.
  *
- * `rupeesOnly` leaves the percentage out, for Chennai's Collect Balance.
+ * `rupeesOnly` leaves the percentage out, for the Consultations board's Collect Balance.
  */
 export const BalanceDiscount = ({ due, discount, amount, onChange, testid = "balance", compact = false, rupeesOnly = false }) => {
   const owed = Number(due) || 0;

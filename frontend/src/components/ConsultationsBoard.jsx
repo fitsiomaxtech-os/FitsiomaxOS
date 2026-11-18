@@ -101,11 +101,6 @@ const PART_SESSION_MODES = ["cash", "upi", "card", "cheque", "account_transfer"]
 // at the desk today, so Cheque (which clears when it clears) and Partial Payment (a plan,
 // not a payment) are not pieces of one.
 const SPLIT_PAYMENT_MODES = STANDARD_PAYMENT_MODES.filter((m) => SETTLED_NOW_MODES.includes(m.value));
-// The branch the Treatment Fee's Collect Payment popup (package, sessions, amount and
-// discount first, then a Payment Mode dropdown) is switched on for. Every other branch
-// keeps the Collect Treatment Fee popup. Matched by name, as the branch list gives it:
-// its code (CHE) is only the first three letters and would match any "Che..." branch.
-const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
 // The per-tender half of a Collect popup: the fields that belong to the one payment being
 // entered, and nothing that belongs to the collection as a whole.
 //
@@ -3057,9 +3052,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return () => { alive = false; };
   }, []);
 
-  // Whether a lead's Treatment Fee is collected through the Chennai Collect Payment popup.
-  // Not a House Visit: its fee is priced per session on the mode popup, which this skips.
-  const chennaiCollectFor = (lead) => !!lead && lead.visit_type !== "home" && isChennaiBranch(branchNames[lead.branch_id]);
+  // Whether a lead's Treatment Fee is collected through the Collect Payment popup (package,
+  // sessions, amount and discount first, then a Payment Mode dropdown) -- every branch's
+  // default since it was Chennai's alone. Not a House Visit: its fee is priced per session
+  // on the Collect Treatment Fee popup, which this skips.
+  const chennaiCollectFor = (lead) => !!lead && lead.visit_type !== "home";
   const chennaiCollect = chennaiCollectFor(selectedLead);
   // Its first collection takes whatever amount is agreed for the sessions, and that money
   // comes off the package: the balance is the package less what was collected, whatever
@@ -12049,7 +12046,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               </div>
             )}
 
-            {/* Collect Payment popup (Chennai branch) — the Treatment Fee's Collect, in the
+            {/* Collect Payment popup (every branch, clinic visits) — the Treatment Fee's Collect, in the
                 order the desk works it: the package (its amount editable behind the pencil
                 while nothing is collected), the sessions, the amount, the discount, and the
                 Payment Mode last, from a dropdown. Picking a mode opens that mode's own
@@ -12241,7 +12238,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               );
             })()}
 
-            {/* Collect Treatment Fee popup (Branch Admin) — opened from the Treatment Fee's
+            {/* Collect Treatment Fee popup (Branch Admin, House Visits only now) — opened from the Treatment Fee's
                 Collect on the Fee Collected panel, after the Consultation Fee popup has
                 taken that fee and closed. 4px corners throughout, as that popup has. */}
             {treatmentFeeDraft && !collectFeeDraft && !chennaiCollect && (
@@ -12485,7 +12482,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </div>
                     )}
 
-                    {/* Chennai: the sessions, the amount and the discount were typed on the
+                    {/* Clinic visits: the sessions, the amount and the discount were typed on the
                         Collect Payment popup behind this one, so they are read back here
                         rather than asked for twice. Closing this popup is the way back to
                         change them. */}
@@ -12867,8 +12864,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const pickModes = allowed ? INSTALLMENT_PAYMENT_MODES.filter((m) => allowed.includes(m.value)) : INSTALLMENT_PAYMENT_MODES;
               const splitModes = allowed ? SPLIT_PAYMENT_MODES.filter((m) => allowed.includes(m.value)) : SPLIT_PAYMENT_MODES;
               const modeLabel = INSTALLMENT_PAYMENT_MODES.find((m) => m.value === mode)?.label || "";
-              // Chennai reads as its Collect Payment popup does: sessions, amount, discount.
-              const chennaiBranch = isChennaiBranch(branchNames[selectedLead?.branch_id]);
+              // Reads as the Collect Payment popup does: sessions, amount, discount -- the
+              // discount in rupees only, the order and the rupees Chennai had first.
               const amountBox = (
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-slate-500">Amount (₹) *</label>
@@ -12970,7 +12967,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       );
                     })()}
 
-                    {chennaiBranch && amountBox}
+                    {amountBox}
                     <BalanceDiscount
                       key={`sessions-${partialCollectDraft.sessions_now}`}
                       due={partialCollectDraft.due}
@@ -12979,9 +12976,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       onChange={(patch) => setPartialCollectDraft((d) => ({ ...d, ...patch }))}
                       testid="cons-partial-collect"
                       compact
-                      rupeesOnly={chennaiBranch}
+                      rupeesOnly
                     />
-                    {!chennaiBranch && amountBox}
 
                     {/* The one mode this installment came in — replaced by the lines
                         themselves once it turns out to have come in several. */}
