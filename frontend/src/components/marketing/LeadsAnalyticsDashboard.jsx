@@ -157,26 +157,29 @@ const ValueTable = ({ rows, firstHeading, labelFormat, columns }) => (
 
 /** Horizontal bars, one hue — the axis names each bar, so a hue per bar would only
  *  restate the length. `ramp` overrides it for an ordered scale (the funnel). */
-const RankedBars = ({ rows, ramp, valueKey = "value", suffix = "" }) => (
+const RankedBars = ({ rows, ramp, valueKey = "value", suffix = "", color = SERIES }) => (
   // Height grows with the rows rather than being fixed, so the axis band is never what
   // gets cut off and left in a nested scrollbar.
-  <ResponsiveContainer width="100%" height={Math.max(150, rows.length * 34 + 24)}>
+  <ResponsiveContainer width="100%" height={Math.max(150, rows.length * 40 + 24)}>
     <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 48, bottom: 4, left: 4 }}>
-      <CartesianGrid stroke={INK.grid} strokeWidth={1} horizontal={false} />
+      {/* No grid: the track behind each bar already gives the scale. */}
       <XAxis type="number" hide />
       <YAxis
         type="category"
         dataKey="name"
-        width={118}
-        tick={{ fill: INK.secondary, fontSize: 11 }}
+        // Wide enough that "Anna Nagar Branch" sits on one line rather than breaking in two.
+        width={150}
+        tick={{ fill: INK.secondary, fontSize: 12 }}
         tickLine={false}
-        axisLine={{ stroke: INK.axis }}
+        axisLine={false}
       />
       <Tooltip content={<VizTooltip unit={suffix ? "pct" : "lead"} />} cursor={{ fill: "rgba(11,11,11,0.04)" }} />
       {/* 4px round on the data end, square at the baseline; capped so a wide card leaves
           air in the band rather than one fat block. */}
-      <Bar dataKey={valueKey} radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false}>
-        {rows.map((r, i) => <Cell key={r.name} fill={ramp ? ramp[i] : SERIES} />)}
+      {/* A pale full-length track behind each bar, so every row reads against the same
+          scale and a short bar still shows where its row is. */}
+      <Bar dataKey={valueKey} radius={[0, 6, 6, 0]} maxBarSize={18} background={{ fill: "#f1f5f9", radius: 6 }} isAnimationActive={false}>
+        {rows.map((r, i) => <Cell key={r.name} fill={ramp ? ramp[i] : color} />)}
         {/* Outside the bar end — a short bar has no room inside, and a clipped label is
             worse than none. */}
         <LabelList
@@ -359,7 +362,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* 2 — which branches the demand lands on */}
-        <Card title="Leads by branch" sub="How many leads came into each branch · including any not yet assigned" testid="leads-analytics-branches">
+        <Card title="Leads by branch" sub={`How many leads came into each branch · ${nf(total)} in all, unassigned included`} testid="leads-analytics-branches">
           {byBranch.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
             <ValueTable rows={byBranch} firstHeading="Branch" />
           ) : (
@@ -368,11 +371,11 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         </Card>
 
         {/* 3 — where those leads have an appointment fixed */}
-        <Card title="Appointments by branch" sub="Leads with an appointment fixed, per branch" testid="leads-analytics-appointments-branch">
+        <Card title="Appointments by branch" sub={`Leads with an appointment fixed, per branch · ${nf(booked)} in all`} testid="leads-analytics-appointments-branch">
           {apptByBranch.length === 0 ? <Empty>No appointments fixed in this range.</Empty> : asTable ? (
             <ValueTable rows={apptByBranch} firstHeading="Branch" />
           ) : (
-            <DonutWithLegend rows={apptByBranch} total={booked} />
+            <RankedBars rows={apptByBranch} color={CATEGORICAL[2]} />
           )}
         </Card>
 
