@@ -44,7 +44,7 @@ const PAST_STATUS_META = {
 };
 
 const Badge = ({ meta }) => (
-  <span className={`inline-flex items-center rounded-[4px] border px-2 py-0.5 text-[11px] font-semibold ${meta.classes}`}>
+  <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${meta.classes}`}>
     {meta.label}
   </span>
 );
@@ -115,7 +115,7 @@ const StatRows = ({ rows }) => (
 
 const SectionTitle = ({ children, aside }) => (
   <div className="mb-2.5 flex items-baseline justify-between gap-3">
-    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">{children}</h4>
+    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{children}</h4>
     {aside}
   </div>
 );
@@ -127,21 +127,21 @@ const SectionTitle = ({ children, aside }) => (
  * inside rather than squeezing the row, so it is still one tap away.
  */
 const FoldCard = ({ open, onToggle, title, tag, sub, amount, amountTone = "text-slate-900", status, highlight, children, testid, toggleTestid }) => (
-  <div className={`overflow-hidden rounded-[4px] border ${highlight ? "border-rose-200 bg-rose-50/70" : "border-slate-200 bg-white"}`} data-testid={testid}>
+  <div className={`overflow-hidden rounded-lg border ${highlight ? "border-rose-200 bg-rose-50/70" : "border-slate-200 bg-white"}`} data-testid={testid}>
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left ${highlight ? "hover:bg-rose-50" : "hover:bg-slate-50"}`}
+      className={`flex w-full items-center gap-2 px-3.5 py-3 text-left ${highlight ? "hover:bg-rose-50" : "hover:bg-slate-50"}`}
       data-testid={toggleTestid}
     >
       <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "" : "-rotate-90"}`} />
       <span className="truncate text-sm font-semibold text-slate-800">{title}</span>
       {tag}
       {sub && <span className="hidden min-w-0 truncate text-xs text-slate-600 sm:inline"><span className="mr-1.5 text-slate-300">·</span>{sub}</span>}
-      <span className="ml-auto flex shrink-0 items-center gap-2 pl-1">
+      <span className="ml-auto flex shrink-0 items-center gap-3 pl-1">
         {amount && <span className={`text-sm font-bold tabular-nums ${amountTone}`}>{amount}</span>}
-        {status}
+        <span className="flex justify-end sm:w-[5.5rem]">{status}</span>
       </span>
     </button>
     {open && <div className="border-t border-slate-100 px-3.5 py-3">{children}</div>}
@@ -150,7 +150,7 @@ const FoldCard = ({ open, onToggle, title, tag, sub, amount, amountTone = "text-
 
 /** A payment's status on its card — every one here has been collected. */
 const PaidLabel = ({ children = "Paid", tone = "text-teal-700" }) => (
-  <span className={`text-[11px] font-bold uppercase tracking-wide ${tone}`}>{children}</span>
+  <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone === "text-teal-700" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>{children}</span>
 );
 
 /**
@@ -254,7 +254,7 @@ const DueRow = ({ title, sub, amount, meta, next, open, onToggle, children, test
     open={open}
     onToggle={onToggle}
     title={title}
-    tag={next && <span className="shrink-0 rounded-[4px] bg-rose-600 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white">Next</span>}
+    tag={next && <span className="shrink-0 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Next</span>}
     sub={sub}
     amount={fmt(amount)}
     status={<Badge meta={meta} />}
@@ -273,7 +273,7 @@ const ContactAction = ({ icon: Icon, label, onClick, className = "text-slate-700
     type="button"
     onClick={onClick}
     title={label}
-    className={`inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs font-semibold hover:bg-slate-50 ${className}`}
+    className={`inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold hover:bg-slate-50 ${className}`}
     data-testid={testid}
   >
     <Icon className="h-4 w-4" /> {label}
@@ -284,10 +284,10 @@ const ContactAction = ({ icon: Icon, label, onClick, className = "text-slate-700
  *  figure rather than squeezing it when the tile is narrow. Every word on a tile is Inter
  *  at 11px — label, figure and badge alike. */
 const MoneyTile = ({ label, value, aside, tone = "text-slate-900", className = "border-slate-200 bg-white", testid }) => (
-  <div className={`min-w-0 rounded-[4px] border px-2.5 py-2 font-['Inter',sans-serif] text-[11px] sm:px-3 ${className}`}>
-    <p className="text-[11px] font-semibold uppercase text-slate-500 sm:tracking-wide">{label}</p>
-    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-      <p className={`break-all text-[11px] font-bold tabular-nums ${tone}`} data-testid={testid}>{value}</p>
+  <div className={`min-w-0 rounded-lg border px-3 py-2.5 ${className}`}>
+    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <p className={`break-all text-base font-bold leading-tight tabular-nums ${tone}`} data-testid={testid}>{value}</p>
       {aside}
     </div>
   </div>
@@ -559,7 +559,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
             <div className="space-y-3 px-4 py-3.5 sm:px-5">
               {/* Balance first and widest — the whole row on a phone, with the other three
                   under it — since it is the one figure the desk opened this for. */}
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-[1.5fr_1fr_1fr_1fr]" data-testid="client-history-money-strip">
+              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4" data-testid="client-history-money-strip">
                 <MoneyTile
                   label={due > 0 ? "Balance due" : "Balance"}
                   value={fmt(due)}
@@ -587,7 +587,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   {collectKind && (
                     <button
                       type="button" onClick={openCollect} disabled={recording}
-                      className="flex h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
                       data-testid="client-history-record-payment"
                     >
                       <Wallet className="h-4 w-4" /> {recording ? "Saving..." : collectLabel}
@@ -596,7 +596,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   {feeCollect && (
                     <button
                       type="button" onClick={onCollect}
-                      className="flex h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 sm:w-auto"
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 sm:w-auto"
                       data-testid="client-history-collect-fee"
                     >
                       <Wallet className="h-4 w-4" /> Collect Consultation Fee
@@ -611,7 +611,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                       }}
                       aria-disabled={Boolean(undo.blocked)}
                       title={undo.blocked || `Undo ${noHash(undo.label)} — ${fmt(undo.amount)}`}
-                      className={`flex h-10 w-full items-center justify-center gap-2 rounded-[4px] border px-4 text-sm font-bold sm:w-auto ${
+                      className={`flex h-10 w-full items-center justify-center gap-2 rounded-md border px-4 text-sm font-semibold sm:w-auto ${
                         undo.blocked
                           ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
                           : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
@@ -641,7 +641,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
             </div>
 
             {/* ---- the record ---- */}
-            <div className="sticky top-0 z-10 flex gap-1 border-y border-slate-200 bg-white px-3 sm:px-4" role="tablist">
+            <div className="sticky top-0 z-10 flex gap-1 border-y border-slate-200 bg-white px-2 sm:px-3" role="tablist">
               {[
                 { key: "overview", label: "Overview", count: null },
                 { key: "transactions", label: "Transactions", count: transactions.length },
@@ -653,20 +653,20 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   role="tab"
                   aria-selected={tab === t.key}
                   onClick={() => setTab(t.key)}
-                  className={`-mb-px border-b-2 px-2.5 py-2.5 text-sm font-semibold transition ${tab === t.key ? "border-teal-600 text-teal-700" : "border-transparent text-slate-600 hover:text-slate-900"}`}
+                  className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition ${tab === t.key ? "border-[#0284C7] text-[#0284C7]" : "border-transparent text-slate-600 hover:text-slate-900"}`}
                   data-testid={`client-history-tab-${t.key}`}
                 >
                   {t.label}
                   {/* The count belongs on the tab: it says whether opening it is worth the
                       click, which the label alone never does. */}
                   {t.count != null && (
-                    <span className={`ml-1.5 rounded-[4px] px-1.5 py-px text-xs tabular-nums ${tab === t.key ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
+                    <span className={`ml-1.5 rounded-full px-1.5 py-px text-xs tabular-nums ${tab === t.key ? "bg-sky-50 text-[#0284C7]" : "bg-slate-100 text-slate-600"}`}>{t.count}</span>
                   )}
                 </button>
               ))}
             </div>
 
-            <div className="space-y-5 px-4 py-3.5 sm:px-5">
+            <div className="space-y-5 px-4 py-4 sm:px-5">
               {tab === "overview" ? (
                 <>
                   {/* What is still owed, row by row, in the order Collect takes it. */}
@@ -797,14 +797,14 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
         {/* The paperwork, in a footer that never scrolls away — it applies to the client,
             not to whichever tab happens to be open. */}
         {data && (
-          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5">
-            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex flex-1 items-center justify-center gap-1.5 rounded-[4px] bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none" data-testid="client-history-print">
+          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
+            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-[#0284C7] px-3 text-sm font-semibold text-white hover:bg-sky-700 sm:flex-none" data-testid="client-history-print">
               <Printer className="h-4 w-4 shrink-0" /> Print<span className="hidden sm:inline"> receipt</span>
             </button>
-            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex flex-1 items-center justify-center gap-1.5 rounded-[4px] border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
+            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
               <FileText className="h-4 w-4 shrink-0" /> <span className="hidden sm:inline">Download </span>Invoice
             </button>
-            <button type="button" onClick={onClose} className="ml-auto hidden rounded-[4px] border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
+            <button type="button" onClick={onClose} className="ml-auto hidden h-9 min-w-[6rem] rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
               Close
             </button>
           </div>
