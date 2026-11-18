@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Table2, BarChart3 as ChartIcon } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -33,7 +32,7 @@ const SURFACE = "#ffffff";
    colour-blindness. On white: worst adjacent CVD ΔE 9.1, worst adjacent normal-vision
    ΔE 19.6. Three slots (aqua, yellow, magenta) sit under 3:1 against white, which
    obligates visible labels — every chart using them carries a legend with values, and the
-   Numbers toggle is the table twin. */
+   value labels on the bars carry the figures. */
 const CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
 
 /* Single-series hue: categorical slot 1. */
@@ -253,7 +252,8 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [asTable, setAsTable] = useState(false);
+  // The charts only: the Numbers table toggle was taken off the toolbar at the desk's request.
+  const asTable = false;
 
   const branchKey = (branchIds || []).join(",");
 
@@ -311,17 +311,6 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <LedgerCard label="Booking rate" value={`${bookingRate}%`} sub="booked ÷ leads" testid="leads-analytics-kpi-rate" />
         <LedgerCard label="Offline" value={nf(offlineTotal)} sub="clinic services" muted={!offlineTotal} testid="leads-analytics-kpi-offline" />
         <LedgerCard label="Online" value={nf(onlineTotal)} sub="online services" muted={!onlineTotal} testid="leads-analytics-kpi-online" />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => setAsTable((v) => !v)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-          data-testid="leads-analytics-toggle-table"
-        >
-          {asTable ? <><ChartIcon className="h-3.5 w-3.5" />Charts</> : <><Table2 className="h-3.5 w-3.5" />Numbers</>}
-        </button>
       </div>
 
       {/* 1 — when leads arrive, offline against online */}
