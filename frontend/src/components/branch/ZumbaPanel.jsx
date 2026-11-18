@@ -875,7 +875,7 @@ const ClassMasters = ({ masters, onSet, busy }) => {
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2" data-testid="zumba-class-masters">
-      <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Who takes each class</span>
+      <span className="text-sm font-semibold text-slate-600">Who Takes Each Class</span>
       {TIME_SLOTS.map((slot) => {
         const holder = masters.find((m) => m.time_slot === slot);
         return (
@@ -1951,6 +1951,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
           const { people, ...props } = cardProps(c);
           return (
             <StatTile
+              titleCase
               key={c.key}
               {...props}
               active={c.key === "payment_done" ? paymentDoneOpen : card === c.key}

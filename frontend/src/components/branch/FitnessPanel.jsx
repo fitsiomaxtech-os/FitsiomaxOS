@@ -455,6 +455,7 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
       <div className="hidden grid-cols-2 gap-3 sm:grid md:grid-cols-3 xl:grid-cols-6">
         {CARDS.map((c) => (
           <StatTile
+            titleCase
             key={c.key}
             label={c.label}
             value={c.value ?? 0}

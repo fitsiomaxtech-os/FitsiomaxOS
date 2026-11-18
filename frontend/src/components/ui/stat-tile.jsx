@@ -46,6 +46,9 @@ import { ChevronRight } from "lucide-react";
 export const StatTile = ({
   label, value, sub, icon: Icon, color = "#0284c7", active = false, onClick, testid, footer, corner,
   compact = false, arrow = false,
+  // Title Case instead of capitals: the label as written ("Payment Done"), a size up and
+  // without the wide tracking capitals need. Activity Care's Zumba and Fitness cards.
+  titleCase = false,
 }) => {
   // With a footer or a corner the card cannot be one big button: both hold controls of
   // their own, and a button inside a button is invalid markup the browser unnests, which
@@ -111,7 +114,7 @@ export const StatTile = ({
           truncates instead of wrapping under a control it cannot see. The sm figure is
           that same reserve plus the 30px the control is inset by below — the two move
           together or the label slides under the thing the space was kept for. */}
-      <p className={`font-bold uppercase leading-tight tracking-wider text-slate-500 sm:text-[11px] ${compact ? "text-[9px] tracking-wide" : "text-[10px]"} ${
+      <p className={`leading-tight ${titleCase ? "font-semibold text-slate-600 sm:text-sm" : "font-bold uppercase tracking-wider text-slate-500 sm:text-[11px]"} ${titleCase ? (compact ? "text-[11px]" : "text-xs") : compact ? "text-[9px] tracking-wide" : "text-[10px]"} ${
         corner ? "truncate pr-[8.5rem] sm:pr-[10.375rem]" : compact ? `break-words ${phoneChevron ? "pr-3" : "pr-0"} sm:pr-9` : `break-words ${deskArrow ? "pr-0" : "pr-7"} sm:pr-9`
       }`}>{label}</p>
       <p className={`mt-1 font-extrabold sm:text-2xl ${compact && !phoneChevron ? "text-base" : "text-xl"}`} style={{ color }}>{value}</p>
