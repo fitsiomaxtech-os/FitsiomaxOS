@@ -1354,6 +1354,19 @@ async def list_employee_history(_: V3UserOut = Depends(v3_require_roles("super_a
     return await v3_col("employee_history").find({}, {"_id": 0}).sort("deleted_at", -1).to_list(2000)
 
 
+@router.delete("/employees/history/{hist_id}")
+async def delete_employee_history(hist_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+    """Remove a deleted employee's record from History for good.
+
+    The employee and their login are already gone by the time a row lands here, so this
+    erases the last copy — nothing else in the OS reads employee_history.
+    """
+    res = await v3_col("employee_history").delete_one({"id": hist_id})
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="History record not found")
+    return {"message": "Permanently deleted"}
+
+
 # ---------- Roles & Credentials ----------
 
 @router.get("/users")

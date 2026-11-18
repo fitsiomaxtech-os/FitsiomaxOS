@@ -995,6 +995,7 @@ export const uploadEmployeePhoto = async (file, branchId) => {
 };
 export const hrDeleteEmployee = async (id) => (await api.delete(`/hr/employees/${id}`)).data;
 export const hrEmployeeHistory = async () => (await api.get("/hr/employees/history")).data;
+export const hrDeleteEmployeeHistory = async (id) => (await api.delete(`/hr/employees/history/${id}`)).data;
 // The employee's own login, for the popups' Credentials tab. GET answers { account, designation_role };
 // PUT creates one ({ email, password }) or changes its username / password.
 export const hrEmployeeAccount = async (id) => (await api.get(`/hr/employees/${id}/account`)).data;

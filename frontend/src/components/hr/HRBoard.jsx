@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount,
+  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, hrDeleteEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount,
   hrUsers, hrCreateUser, hrUpdateUser, hrResetPassword, hrEmailStatus, hrEmailTest, hrDeactivateUser, hrActivateUser, hrDeleteUserPermanent, hrMeta, hrAddCustomRole,
   hrDepartments, hrCreateDepartment, hrRenameDepartment, hrDeleteDepartment, hrAddDesignation, hrRenameDesignation, hrDeleteDesignation, hrReorderDesignations,
   getBranches, getVerticals,
@@ -1514,7 +1514,7 @@ const VIEW_TABS = [
  * position is how the wrong person gets removed; here the whole record is on screen
  * first.
  */
-const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete }) => {
+const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, deleteLabel = "Delete" }) => {
   // The dialog remounts on every open ({viewing && ...} above), so this always starts
   // on the first tab rather than the one the last employee viewed was left on.
   const [tab, setTab] = useState("personal");
@@ -1658,15 +1658,15 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete })
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
-          {/* No Edit or Delete on a record read out of History: the employee it describes
-              no longer exists to be changed. */}
+          {/* No Edit on a record read out of History: the employee it describes no longer
+              exists to be changed. Its Delete erases the History record itself. */}
           {onDelete ? (
           <button
             onClick={onDelete}
             className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
             data-testid="hr-emp-view-delete"
           >
-            <Trash2 className="h-4 w-4" /> Delete
+            <Trash2 className="h-4 w-4" /> {deleteLabel}
           </button>
           ) : <span />}
           <div className="flex gap-2">
@@ -1687,9 +1687,9 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete })
 
 /**
  * Employees deleted from HR. Deleting one removes the record and its login for good, so
- * this is the only place what they were is still written down — read-only, opened from
- * the History icon on the Employees toolbar. A row opens the same View dialog the live
- * directory uses, minus Edit and Delete.
+ * this is the only place what they were is still written down — opened from the History
+ * icon on the Employees toolbar. A row opens the same View dialog the live directory
+ * uses, minus Edit; its Delete (and the row's trash icon) erases the History record.
  */
 const EmployeeHistoryModal = ({ onClose }) => {
   const [rows, setRows] = useState(null);
@@ -1702,6 +1702,20 @@ const EmployeeHistoryModal = ({ onClose }) => {
       setRows([]);
     });
   }, []);
+
+  // The employee and their login are already gone; this erases the last copy of them.
+  const removePermanent = async (r) => {
+    const name = r.employee?.full_name || "this employee";
+    if (!window.confirm(`Permanently delete ${name}?
+
+This removes their record from History for good. It cannot be undone.`)) return;
+    try {
+      await hrDeleteEmployeeHistory(r.id);
+      toast.success("Permanently deleted");
+      setRows((prev) => (prev || []).filter((x) => x.id !== r.id));
+      setViewing(null);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Delete failed"); }
+  };
 
   const q = search.trim().toLowerCase();
   const shown = (rows || []).filter((r) => {
@@ -1770,7 +1784,19 @@ const EmployeeHistoryModal = ({ onClose }) => {
                         <p className="text-slate-700">{dashDate(r.deleted_at)}</p>
                         <p className="text-slate-500">by {r.deleted_by?.full_name || "—"}</p>
                       </td>
-                      <td className="px-3 py-2 text-slate-400"><ChevronRight className="h-4 w-4" /></td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); removePermanent(r); }}
+                            title="Delete permanently"
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            data-testid="hr-emp-history-delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -1780,7 +1806,15 @@ const EmployeeHistoryModal = ({ onClose }) => {
         </div>
       </div>
 
-      {viewing && <EmployeeViewModal employee={viewing.employee || {}} accounts={viewing.accounts || []} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <EmployeeViewModal
+          employee={viewing.employee || {}}
+          accounts={viewing.accounts || []}
+          onClose={() => setViewing(null)}
+          onDelete={() => removePermanent(viewing)}
+          deleteLabel="Delete Permanently"
+        />
+      )}
     </div>
   );
 };
