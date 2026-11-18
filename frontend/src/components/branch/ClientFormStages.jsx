@@ -351,7 +351,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
                 <Text id="cs-place" label="Your Place" autoComplete="address-level2" maxLength={60} value={d.place} onChange={(v) => set("place")(cityChars(v))} error={err("place")} />
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[15px] font-medium text-slate-900" id="cs-branch">Branch</span>
-                  <div role="radiogroup" aria-labelledby="cs-branch" className="flex flex-col gap-1.5">
+                  <div role="radiogroup" aria-labelledby="cs-branch" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {PAPER_BRANCHES.map((b) => {
                       const on = d.branch === b;
                       return (
@@ -361,7 +361,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
                           role="radio"
                           aria-checked={on}
                           onClick={() => set("branch")(on ? "" : b)}
-                          className={`flex h-8 w-full items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : "border-[#c7cdea] text-slate-700 hover:bg-slate-50"}`}
+                          className={`flex h-10 w-full min-w-0 items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : "border-[#c7cdea] text-slate-700 hover:bg-slate-50"}`}
                           data-testid={`client-stage-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
                         >
                           <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2" style={{ borderColor: on ? BLUE : "#94a3b8" }}>
