@@ -27,7 +27,10 @@ import { ConsultationFormSheets, EMPTY_FORM, paperBranch, showDate, todayIso } f
  * themselves (pages/ClientConsultationFormPage); Print and Download give the filled
  * paper back (lib/consultationFormPrint).
  *
- * A plain overlay, like the other two popups in the same menu.
+ * A plain overlay by default (the Consultant's patient card opens it that way). `inline`
+ * draws the same card in the page instead, as a tab view: the Branch Admin's Settings gear
+ * opens it in the board's place, with no close button, held to the screen's height so the
+ * footer's Save stays in sight while the three pages scroll.
  */
 
 const fillFrom = (r) => Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, r?.[k] || ""]));
@@ -132,7 +135,7 @@ const RequestPanel = ({ busy, onSend, onClose }) => {
 
 const iconBtn = "rounded p-1.5 text-slate-400 transition hover:bg-sky-50 hover:text-sky-700";
 
-export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }) => {
+export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, inline = false }) => {
   const [initialForm] = useState(() => initialLead ? {
     ...EMPTY_FORM,
     name: initialLead.name || "",
@@ -326,9 +329,14 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
     try { await downloadConsultationForm(form); } finally { setPdfBusy(null); }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }} data-testid="consultation-form-dialog">
-      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
+  const card = (
+      <div
+        className={inline
+          // Phone: under the header, above the bottom nav. Desk: under the header and the tab strip.
+          ? "relative flex max-h-[calc(100dvh-var(--role-header-height,89px)-6.5rem)] min-h-[24rem] w-full flex-col overflow-hidden rounded-[4px] border border-slate-200 bg-white shadow-sm md:max-h-[calc(100dvh-var(--role-header-height,89px)-var(--branch-nav-height,42px)-2rem)]"
+          : "relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl"}
+        data-testid={inline ? "consultation-form-tab" : undefined}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-2">
             {view === "form" && (
@@ -341,7 +349,9 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
               {view === "list" ? "Consultation Forms" : report ? (saved.name || "Consultation Form") : editingId ? `Edit — ${saved.name || "Consultation Form"}` : "New Consultation Form"}
             </p>
           </div>
-          <button type="button" onClick={close} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="consultation-form-close"><X className="h-4 w-4" /></button>
+          {!inline && (
+            <button type="button" onClick={close} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="consultation-form-close"><X className="h-4 w-4" /></button>
+          )}
         </div>
 
         <div ref={scrollRef} className={`flex-1 overflow-y-auto ${view === "form" ? "bg-slate-100 p-3 sm:p-5" : "p-4"}`}>
@@ -426,7 +436,10 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
                   Filled by the client{meta.client_submitted_at ? ` on ${showStamp(meta.client_submitted_at)}` : ""}. Complete the clinic's part below.
                 </p>
               )}
-              <ConsultationFormSheets f={form} set={set} readOnly={report} />
+              {/* In a tab, the paper keeps the popup's width rather than stretching across the desk. */}
+              <div className={inline ? "mx-auto w-full max-w-4xl" : ""}>
+                <ConsultationFormSheets f={form} set={set} readOnly={report} />
+              </div>
             </>
           )}
         </div>
@@ -466,6 +479,12 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
         {requesting && <RequestPanel busy={requestBusy} onSend={sendRequest} onClose={() => setRequesting(false)} />}
         {share && <SharePanel share={share} onClose={() => setShare(null)} />}
       </div>
+  );
+
+  if (inline) return card;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }} data-testid="consultation-form-dialog">
+      {card}
     </div>
   );
 };

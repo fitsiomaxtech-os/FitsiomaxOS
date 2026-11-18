@@ -1003,6 +1003,8 @@ const readStoredBranchView = () => {
     return null;
   }
 };
+// Settings gear → Consultation Form's view: opened from the menu, not from the tab strip.
+const CONSULT_FORMS_VIEW = "consult_forms";
 const writeStoredBranchView = (view) => {
   try {
     window.sessionStorage.setItem(BRANCH_VIEW_STORAGE_KEY, view);
@@ -1047,7 +1049,15 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   // The same gear → Appointment Msg Editor: the WhatsApp welcome Pre Sales sends.
   const [apptMsgOpen, setApptMsgOpen] = useState(false);
-  const [consultFormOpen, setConsultFormOpen] = useState(false);
+  // The same gear → Consultation Form: a view of its own in the board's place, like a tab,
+  // though it has no button on the strip. Kept mounted once opened (hidden while another
+  // tab is up), so a half-filled form is still there on the way back.
+  const [consultFormsSeen, setConsultFormsSeen] = useState(activeView === CONSULT_FORMS_VIEW);
+  const openConsultForms = () => {
+    setProfileOpen(false);
+    setConsultFormsSeen(true);
+    setActiveView(CONSULT_FORMS_VIEW);
+  };
   // Which tab of that popup is up. Only the Physiotherapist Calendar's gear has more than
   // Time Management's three parts: its Treatment Session Duration and Per slot sit beside
   // them, all five in one row.
@@ -1463,12 +1473,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     setShowCreateLead(false);
     setShowBulkDelete(false);
     setRowDelete(null);
+    // The gear's Consultation Form view has no place on the bottom nav, so Back leaves it.
+    setActiveView((v) => (v === CONSULT_FORMS_VIEW ? "pipeline" : v));
     setBackEpoch((n) => n + 1);
     window.scrollTo({ top: 0 });
   }, []);
   const phoneBack = usePhoneBackState({ enabled: !embedded, onBack: resetToCards });
   useStageBack(
-    phoneStageList !== null || !!selectedLead || profileOpen || showMoreMenu || !!timeMgmtFor || showCreateLead,
+    phoneStageList !== null || !!selectedLead || profileOpen || showMoreMenu || !!timeMgmtFor || showCreateLead || activeView === CONSULT_FORMS_VIEW,
     phoneBack,
   );
   // Both tabs hide the strip on a phone. Only the Consultation tabs open a stage's list on
@@ -1990,7 +2002,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const onBottomBar = (key) => BOTTOM_NAV_KEYS.includes(key);
   // A stored tab that no longer exists (renamed since) falls through to Branch Leads.
   useEffect(() => {
-    if (!VIEW_TABS.some((t) => t.key === activeView)) setActiveView("pipeline");
+    if (activeView !== CONSULT_FORMS_VIEW && !VIEW_TABS.some((t) => t.key === activeView)) setActiveView("pipeline");
   }, [activeView]); // eslint-disable-line react-hooks/exhaustive-deps
   const bottomTabs = VIEW_TABS.filter((t) => onBottomBar(t.key));
   const moreTabs = VIEW_TABS.filter((t) => !onBottomBar(t.key));
@@ -2153,7 +2165,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
+              // Lit like a selected tab while its Consultation Form view is the one up.
+              className={`ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded shadow-sm transition-colors duration-300 ${
+                activeView === CONSULT_FORMS_VIEW
+                  ? "bg-sky-600 text-white hover:bg-sky-700"
+                  : "bg-white text-slate-500 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
+              }`}
               title="Settings"
               aria-label="Settings"
               data-testid={`branch-view-tab-settings-${activeView}`}
@@ -2172,7 +2189,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
               <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setConsultFormOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-consult-form">
+            <DropdownMenuItem onSelect={openConsultForms} className="gap-2.5 py-2" data-testid="branch-settings-menu-consult-form">
               <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
               <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
             </DropdownMenuItem>
@@ -2200,8 +2217,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
       {apptMsgOpen && <AppointmentMessageEditor branchId={branchId} onClose={() => setApptMsgOpen(false)} />}
 
-      {consultFormOpen && <ConsultationFormDialog branchId={branchId} onClose={() => setConsultFormOpen(false)} />}
-
       {profileOpen && (
         <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
       )}
@@ -2209,11 +2224,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {/* Hidden, not unmounted, while My Profile is open: `contents` keeps every view a
           flex child of the root as before, and the lists keep their state for the way back. */}
       <div key={backEpoch} className={profileOpen ? "hidden" : "contents"}>
+      {consultFormsSeen && (
+        <div className={activeView === CONSULT_FORMS_VIEW ? "contents" : "hidden"}>
+          <ConsultationFormDialog branchId={branchId} inline />
+        </div>
+      )}
       {/* flex+gap rather than space-y-4 inside the Management block: its children now show
           and hide by width and by which screen of the stack is open (cards, back bar,
           panel), and space-y counts a hidden first child — leaving the next one a stray
           16px below the top. A flex gap only spaces what is actually laid out. */}
-      {activeView === "consultations" ? (
+      {activeView === CONSULT_FORMS_VIEW ? null : activeView === "consultations" ? (
         <div className="flex flex-col gap-4" data-testid="branch-consultations-headphysio">
           {/* Phone, one sub-tab open: where the card list sat, the tab being read, and the
               way back to the cards — the same bar the stage stacks show, minus the count
@@ -2922,7 +2942,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setConsultFormOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-consult-form">
+                  <DropdownMenuItem onSelect={openConsultForms} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-consult-form">
                     <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
                   </DropdownMenuItem>
