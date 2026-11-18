@@ -345,61 +345,118 @@ export const ClockWidget = () => {
   const can = (a) => (day.actions || []).includes(a);
   const onBreak = day.state === "on_break";
 
+  // One console, ERP time-clock style: a status readout on the left -- a status light,
+  // ON DUTY / ON BREAK / OFF DUTY, and the times in tabular figures -- joined to flat
+  // action segments on the right, all inside one frame. The readout is still the way in
+  // to "Your day"; the segments are still only what the server says can be pressed.
+  const status = onBreak
+    ? { label: "On Break", dot: "bg-amber-500", ring: "bg-amber-400", text: "text-amber-700", bar: "bg-amber-500", pulse: true,
+        line: `Since ${prettyTime(day.breaks.find((b) => b.running)?.out) || "—"} · ${duration(live.onBreak)}` }
+    : day.state === "working"
+      ? { label: "On Duty", dot: "bg-emerald-500", ring: "bg-emerald-400", text: "text-emerald-700", bar: "bg-emerald-500", pulse: true,
+          line: `In ${prettyTime(day.clock_in)} · ${duration(live.worked)}` }
+      : day.state === "done"
+        ? { label: "Off Duty", dot: "bg-slate-400", text: "text-slate-500", bar: "bg-slate-400",
+            line: `Out ${prettyTime(day.clock_out)} · ${duration(live.worked)}` }
+        : { label: "Off Duty", dot: "bg-slate-300", text: "text-slate-500", bar: "bg-slate-300", line: "Not clocked in" };
+
+  const segment = "inline-flex shrink-0 items-center gap-1.5 border-l border-slate-200 px-2.5 text-[11px] font-bold uppercase tracking-wider transition disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5";
+
+  const readout = (
+    <>
+      <span className={`absolute inset-y-0 left-0 w-[3px] ${status.bar}`} aria-hidden />
+      <span className="flex flex-col items-start justify-center leading-none">
+        <span className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] ${status.text}`}>
+          <span className="relative flex h-2 w-2">
+            {status.pulse && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${status.ring}`} />}
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${status.dot}`} />
+          </span>
+          {status.label}
+        </span>
+        <span className="mt-1 font-mono text-xs font-semibold tabular-nums text-slate-800">{status.line}</span>
+      </span>
+    </>
+  );
+
   return (
     <>
-      {/* The pill: what the day is doing, and the way in to the rest of it. Its own
-          button so the actions beside it are never mis-tapped by somebody who only
-          wanted to look. */}
-      {day.state !== "out" && (
-        <button
-          type="button"
-          onClick={() => setSheet("today")}
-          title="Your day so far"
-          className={`hidden h-11 shrink-0 items-center gap-1.5 rounded-[2px] border px-3 text-xs font-semibold shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] transition sm:inline-flex ${
-            onBreak
-              ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-              : day.state === "done"
-                ? "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-          }`}
-          data-testid="clock-pill"
-        >
-          {onBreak ? <Coffee className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
-          {onBreak
-            ? `On break · ${duration(live.onBreak)}`
-            : day.state === "done"
-              ? `Out ${prettyTime(day.clock_out)} · ${duration(live.worked)}`
-              : `In ${prettyTime(day.clock_in)} · ${duration(live.worked)}`}
-        </button>
-      )}
+      <div
+        className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-[4px] border border-slate-300 bg-white shadow-[0_1px_2px_0_rgb(0_0_0/0.06)] sm:h-11"
+        role="group"
+        aria-label="Time clock"
+        data-testid="clock-console"
+      >
+        {/* The readout: what the day is doing, and the way in to the rest of it. Its own
+            button so the actions beside it are never mis-tapped by somebody who only
+            wanted to look. Hidden on a phone, where the header has no room for it. */}
+        {day.state !== "out" ? (
+          <button
+            type="button"
+            onClick={() => setSheet("today")}
+            title="Your day so far"
+            className="relative hidden min-w-[9.5rem] items-center bg-slate-50 pl-4 pr-3.5 text-left transition hover:bg-slate-100 sm:flex"
+            data-testid="clock-pill"
+          >
+            {readout}
+          </button>
+        ) : (
+          <div className="relative hidden min-w-[9.5rem] items-center bg-slate-50 pl-4 pr-3.5 sm:flex" data-testid="clock-pill-out">
+            {readout}
+          </div>
+        )}
 
-      {can("clock_in") && (
-        <Button size="sm" disabled={busy} onClick={() => act(clockIn, day.state === "done" ? "Clocked in again" : "Clocked in — have a good day")} className="shrink-0 rounded-[2px] sm:h-11 bg-emerald-500 px-2 hover:bg-emerald-600 sm:px-3" data-testid="clock-in-button">
-          <LogIn className="h-4 w-4" /><span className="hidden sm:inline">Clock In</span>
-        </Button>
-      )}
+        {can("clock_in") && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act(clockIn, day.state === "done" ? "Clocked in again" : "Clocked in — have a good day")}
+            className={`${segment} border-l-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 max-sm:border-l-0`}
+            data-testid="clock-in-button"
+          >
+            <LogIn className="h-4 w-4" /><span className="hidden sm:inline">Clock In</span>
+          </button>
+        )}
 
-      {can("break_out") && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => setSheet("break")} className="shrink-0 rounded-[2px] sm:h-11 border-amber-200 px-2 text-amber-700 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] hover:bg-amber-50 sm:px-3" data-testid="clock-break-out-button">
-          <Coffee className="h-4 w-4" /><span className="hidden sm:inline">Break Out</span>
-        </Button>
-      )}
+        {can("break_out") && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setSheet("break")}
+            className={`${segment} text-amber-700 hover:bg-amber-50 max-sm:border-l-0`}
+            data-testid="clock-break-out-button"
+          >
+            <Coffee className="h-4 w-4" /><span className="hidden sm:inline">Start Break</span>
+          </button>
+        )}
 
-      {can("break_in") && (
-        <Button size="sm" disabled={busy} onClick={() => act(clockBreakIn, "Welcome back")} className="shrink-0 rounded-[2px] sm:h-11 bg-amber-500 px-2 hover:bg-amber-600 sm:px-3" data-testid="clock-break-in-button">
-          <Play className="h-4 w-4" /><span className="hidden sm:inline">Break In</span>
-        </Button>
-      )}
+        {can("break_in") && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act(clockBreakIn, "Welcome back")}
+            className={`${segment} border-l-amber-500 bg-amber-500 text-white hover:bg-amber-600 max-sm:border-l-0`}
+            data-testid="clock-break-in-button"
+          >
+            <Play className="h-4 w-4" /><span className="hidden sm:inline">End Break</span>
+          </button>
+        )}
 
-      {can("clock_out") && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => act(clockOut, "Clocked out", async () => {
-          // The end-of-day report, for Physios and Consultants who have not filed one yet.
-          const info = await loadEod();
-          if (info?.eligible && !info.report) setSheet("eod");
-        })} className="shrink-0 rounded-[2px] sm:h-11 border-slate-200 px-2 text-slate-600 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] hover:bg-slate-50 sm:px-3" data-testid="clock-out-button">
-          <LogOut className="h-4 w-4" /><span className="hidden sm:inline">Clock Out</span>
-        </Button>
-      )}
+        {can("clock_out") && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act(clockOut, "Clocked out", async () => {
+              // The end-of-day report, for Physios and Consultants who have not filed one yet.
+              const info = await loadEod();
+              if (info?.eligible && !info.report) setSheet("eod");
+            })}
+            className={`${segment} text-rose-600 hover:bg-rose-50`}
+            data-testid="clock-out-button"
+          >
+            <LogOut className="h-4 w-4" /><span className="hidden sm:inline">Clock Out</span>
+          </button>
+        )}
+      </div>
 
       {sheet === "break" && (
         <BreakReasonSheet
