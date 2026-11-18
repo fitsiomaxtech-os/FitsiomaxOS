@@ -160,7 +160,9 @@ export const StageTab = ({ label, phoneLabel, count, active, onClick, color, hov
 // the cards themselves, each its own bordered box with the finance boards' 5px corner (see
 // ui/ledger-card and StageTab's flush), 4px apart. No zoom on it below sm -- the tray's
 // padding the 80% was paying for is gone, so the cards are drawn at full size instead.
-// Implies `plain`; from sm up the bar is the plain card strip unchanged.
+// Implies `plain`. From sm up it is the plain card strip on a soft sky -> indigo -> violet
+// gradient tray rather than flat grey -- opaque, so rows scrolling under the sticky bar
+// stay hidden without the backdrop blur the translucent grey needed.
 //
 // A flush bar that wraps (Consultation's, more stages than a row) keeps five to a row but
 // as a wrapping flex row rather than a grid, so a short last row sits centred under the
@@ -183,7 +185,7 @@ export const StageTabBar = ({ stages, stageFilter, setStageFilter, counts, total
       bare
         ? "bg-slate-50 py-1"
         : phoneFlush
-        ? "-mx-3 -mt-4 bg-slate-50 sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:border-slate-200 sm:bg-slate-100/95 sm:p-1 sm:shadow-sm sm:backdrop-blur sm:supports-[backdrop-filter]:bg-slate-100/80"
+        ? "-mx-3 -mt-4 bg-slate-50 sm:-mx-1 sm:mt-0 sm:rounded-xl sm:border sm:border-sky-100 sm:bg-gradient-to-r sm:from-sky-50 sm:via-indigo-50 sm:to-violet-50 sm:p-1 sm:shadow-[0_1px_2px_0_rgb(15_23_42/0.04),0_4px_12px_-4px_rgb(99_102_241/0.12)]"
         : `-mx-1 rounded-xl border border-slate-200 p-1 shadow-sm backdrop-blur ${
           // A plain card is white and borderless, so it can only read as its own card if
           // what lies between the cards is not also white — hence the grey strip under them.
