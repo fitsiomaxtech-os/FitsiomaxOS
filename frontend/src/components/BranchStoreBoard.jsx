@@ -70,7 +70,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
   };
 
   return (
-    <div className="space-y-3" data-testid={`${testidPrefix}-panel`}>
+    <div className="space-y-4" data-testid={`${testidPrefix}-panel`}>
       {canCreate && (
         <div className="flex items-center justify-end">
           <Button size="sm" onClick={() => setCreating(true)} data-testid={`${testidPrefix}-create-btn`}>
@@ -83,7 +83,7 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
           <CardContent className="p-8 text-center text-sm text-slate-400">{emptyLabel}</CardContent>
         </Card>
       ) : (
-        <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${squareFourUp ? "xl:grid-cols-4" : ""}`} data-testid={`${testidPrefix}-items-grid`}>
+        <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${squareFourUp ? "xl:grid-cols-4" : ""}`} data-testid={`${testidPrefix}-items-grid`}>
           {items.map((it) => (
             <Card key={it.id} className={squareFourUp ? "rounded-[4px]" : undefined} data-testid={`${testidPrefix}-item-${it.id}`}>
               <CardContent className="space-y-2 p-4">
@@ -197,7 +197,7 @@ export const BranchConsultationsPanel = ({ reloadToken, modeFilter = "all", bran
   const [sub, setSub] = useState("physiotherapy");
   return (
     <div className="space-y-4" data-testid="branch-store-panel-consultations">
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="branch-consultations-subtabs">
+      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm" data-testid="branch-consultations-subtabs">
         {CONSULTATIONS_SUBTABS.map((t) => {
           const Icon = t.icon;
           const active = sub === t.key;
@@ -248,7 +248,7 @@ export const BranchSessionsPanel = ({ reloadToken, modeFilter = "all", branchId,
   const [sub, setSub] = useState("physiotherapy");
   return (
     <div className="space-y-4" data-testid="branch-store-panel-sessions">
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="branch-sessions-subtabs">
+      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm" data-testid="branch-sessions-subtabs">
         {SESSIONS_SUBTABS.map((t) => {
           const Icon = t.icon;
           const active = sub === t.key;
@@ -337,7 +337,7 @@ export const BranchDietPanel = ({ reloadToken, modeFilter = "all", branchId }) =
   const shelf = DIET_SHELVES[current.kind];
   return (
     <div className="space-y-4" data-testid="branch-store-panel-diet">
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="branch-diet-subtabs">
+      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm" data-testid="branch-diet-subtabs">
         {DIET_SUBTABS.map((t) => {
           const Icon = t.icon;
           const active = sub === t.key;
@@ -391,7 +391,7 @@ const BranchHomeVisitPanel = ({ reloadToken, modeFilter = "all", branchId }) => 
   const current = HOME_VISIT_SUBTABS.find((t) => t.key === sub) || HOME_VISIT_SUBTABS[0];
   return (
     <div className="space-y-4" data-testid="branch-store-panel-home-visit">
-      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1" data-testid="branch-home-visit-subtabs">
+      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm" data-testid="branch-home-visit-subtabs">
         {HOME_VISIT_SUBTABS.map((t) => {
           const Icon = t.icon;
           const active = sub === t.key;
@@ -481,7 +481,10 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
   }, [mode, treatmentsHidden, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="space-y-4" data-testid="branch-store-board">
+    // flex+gap rather than space-y: the first child is the phone's dropdown, hidden from md
+    // up, and space-y still counted it -- the desk tab bar sat 16px further down than every
+    // other board's under the same menu.
+    <div className="flex flex-col gap-4" data-testid="branch-store-board">
       {/* A dropdown on a phone, as Accountant Manage uses: seven tabs wrapped to two rows
           and the shelf being browsed was the least prominent thing on screen. Desktop keeps
           the bar. */}
@@ -505,7 +508,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
         </Button>
       </div>
 
-      <div className="hidden flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1 md:flex" data-testid="branch-store-subtabs">
+      <div className="hidden flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm md:flex" data-testid="branch-store-subtabs">
         {branchStoreTabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.key;
