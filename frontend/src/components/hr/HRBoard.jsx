@@ -1416,10 +1416,12 @@ Their login account (if linked) is permanently deleted too, so they leave Employ
           ))}
         </div>
         {/* The right-hand group: A → Z, History and Add Employee are about the list as a
-            whole rather than a filter on it. ml-auto on the first of them is the split. */}
+            whole rather than a filter on it. ml-auto on the first of them is the split.
+            A → Z cycles three ways: A → Z, then Z → A, then off (the list as loaded). */}
         <button
           type="button"
-          onClick={() => setSortAZ((s) => (s === "asc" ? "desc" : "asc"))}
+          onClick={() => setSortAZ((s) => (s === null ? "asc" : s === "asc" ? "desc" : null))}
+          aria-pressed={sortAZ !== null}
           title="Sort by name"
           aria-label={sortAZ === "desc" ? "Sort Z to A" : "Sort A to Z"}
           className={`ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-medium transition sm:h-10 sm:w-auto sm:px-3 ${sortAZ ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
