@@ -24,13 +24,14 @@ const STAGES = 8;
 const BLUE = "#0066ff";
 // The popup's heading and its buttons.
 const ACCENT = "rgb(26 162 231 / 76%)";
-// A move: the popup goes out (speeding up), then the next one comes in (slowing down).
-// Moves are refused until both are over. The progress bar's fill repeats the way in, in
-// its classes (duration-[400ms], ease-[...]).
-const OUT_MS = 300;
-const OUT_EASE = "cubic-bezier(0.32, 0, 0.67, 0)";
-const IN_MS = 400;
-const IN_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
+// A move: the popup goes out gently speeding up, then the next one comes in gently slowing
+// down -- sine curves, whose top speed is half a cubic's, so the long trip off the screen
+// and back reads as one glide, with no snap at the edge. Moves are refused until both are
+// over. The progress bar's fill repeats the way in, in its classes (duration-[600ms], ease-[...]).
+const OUT_MS = 500;
+const OUT_EASE = "cubic-bezier(0.12, 0, 0.39, 0)";
+const IN_MS = 600;
+const IN_EASE = "cubic-bezier(0.61, 1, 0.88, 1)";
 // Past the screen's edge by this much, so the shadow goes too.
 const OFF_EDGE = 40;
 
@@ -339,7 +340,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
         {Array.from({ length: STAGES }, (_, i) => (
           <span key={i} className="relative h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "#dfe4ee" }}>
             <span
-              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-[400ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none"
+              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-[600ms] ease-[cubic-bezier(0.61,1,0.88,1)] motion-reduce:transition-none"
               style={{ width: i <= stage ? "100%" : "0%", background: BLUE }}
             />
           </span>
@@ -352,6 +353,9 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
         noValidate
         autoComplete="off"
         className="flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
+        // Kept on its own GPU layer for the whole move, out and in, so the swap between
+        // the halves does not redraw it; dropped at rest, where it would soften the text.
+        style={moving ? { willChange: "transform" } : undefined}
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
         <h1 className="px-6 pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]" style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Preview" : "Consultation Form"}</h1>
