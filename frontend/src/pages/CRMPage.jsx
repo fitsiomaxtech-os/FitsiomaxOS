@@ -1207,12 +1207,12 @@ export const CRMPage = ({ auth, onLogout }) => {
               so the two can never both be on screen. */}
           <div className={`flex flex-wrap items-center justify-between gap-2 ${showPhysioBoard || showBranchBoard || showPreSalesRep ? "hidden sm:flex" : ""}`}>
             <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-              <img src={LOGO_URL} alt="Fitsiomax" className="h-9 w-9 shrink-0 rounded-lg object-contain sm:h-14 sm:w-14" data-testid="header-left-logo" />
+              <img src={LOGO_URL} alt="Fitsiomax" className="h-9 w-9 shrink-0 rounded-lg object-contain sm:h-11 sm:w-11" data-testid="header-left-logo" />
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold tracking-wide text-sky-600 sm:text-xs" data-testid="role-board-brand-subtitle">
                   FitsiomaxOS
                 </p>
-                <h1 className="truncate text-base font-bold text-slate-900 sm:text-2xl" data-testid="role-board-title">
+                <h1 className="truncate text-base font-bold text-slate-900 sm:text-xl" data-testid="role-board-title">
                   {/* On a phone the board title is the least useful thing that could sit
                       here: whoever is holding it already knows which board they opened,
                       and what they cannot see is which account they are signed in as —
