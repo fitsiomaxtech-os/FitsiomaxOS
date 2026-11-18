@@ -150,6 +150,8 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
   const [q, setQ] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [meta, setMeta] = useState(null); // the open form's client_status and stamps
+  // A form the client sent back opens as a read-only report; Edit (or the row's pencil) unlocks it.
+  const [report, setReport] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [saved, setSaved] = useState(initialForm);
   const [formLoading, setFormLoading] = useState(false);
@@ -202,14 +204,16 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
     const start = { ...EMPTY_FORM, date: todayIso(), branch: homeBranch };
     setEditingId(null);
     setMeta(null);
+    setReport(false);
     setForm(start);
     setSaved(start);
     setView("form");
     top();
   };
 
-  const openEdit = async (id) => {
+  const openEdit = async (id, { edit = false } = {}) => {
     setEditingId(id);
+    setReport(false);
     setView("form");
     setFormLoading(true);
     top();
@@ -219,6 +223,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
       setForm(filled);
       setSaved(filled);
       setMeta({ client_status: r.client_status, client_submitted_at: r.client_submitted_at, share_token: r.share_token });
+      setReport(!edit && r.client_status === "submitted");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't open the form");
       setView("list");
@@ -333,7 +338,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
             )}
             <p className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-slate-800">
               <ClipboardList className="h-4 w-4 shrink-0 text-sky-600" />
-              {view === "list" ? "Consultation Forms" : editingId ? `Edit — ${saved.name || "Consultation Form"}` : "New Consultation Form"}
+              {view === "list" ? "Consultation Forms" : report ? (saved.name || "Consultation Form") : editingId ? `Edit — ${saved.name || "Consultation Form"}` : "New Consultation Form"}
             </p>
           </div>
           <button type="button" onClick={close} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close" data-testid="consultation-form-close"><X className="h-4 w-4" /></button>
@@ -396,7 +401,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
                               <button type="button" onClick={() => downloadRow(r.id)} disabled={pdfBusy === r.id} className={iconBtn} aria-label="Download PDF" title="Download PDF" data-testid={`consultation-form-download-${r.id}`}>
                                 {pdfBusy === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                               </button>
-                              <button type="button" onClick={() => openEdit(r.id)} className={iconBtn} aria-label="Edit" title="Edit" data-testid={`consultation-form-edit-${r.id}`}><Pencil className="h-4 w-4" /></button>
+                              <button type="button" onClick={() => openEdit(r.id, { edit: true })} className={iconBtn} aria-label="Edit" title="Edit" data-testid={`consultation-form-edit-${r.id}`}><Pencil className="h-4 w-4" /></button>
                               <button type="button" onClick={() => remove(r)} className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Delete" title="Delete" data-testid={`consultation-form-delete-${r.id}`}><Trash2 className="h-4 w-4" /></button>
                             </div>
                           </td>
@@ -421,7 +426,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
                   Filled by the client{meta.client_submitted_at ? ` on ${showStamp(meta.client_submitted_at)}` : ""}. Complete the clinic's part below.
                 </p>
               )}
-              <ConsultationFormSheets f={form} set={set} />
+              <ConsultationFormSheets f={form} set={set} readOnly={report} />
             </>
           )}
         </div>
@@ -442,10 +447,18 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null }
               </Button>
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={backToList} disabled={saving} className="rounded-[4px]">Cancel</Button>
-              <Button type="button" size="sm" onClick={save} disabled={formLoading || saving || (editingId && !dirty)} className="rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-save">
-                {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}{editingId ? "Update" : "Save"}
-              </Button>
+              {report ? (
+                <Button type="button" size="sm" onClick={() => setReport(false)} disabled={formLoading} className="gap-1.5 rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-unlock">
+                  <Pencil className="h-4 w-4" />Edit
+                </Button>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" size="sm" onClick={backToList} disabled={saving} className="rounded-[4px]">Cancel</Button>
+                  <Button type="button" size="sm" onClick={save} disabled={formLoading || saving || (editingId && !dirty)} className="rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-save">
+                    {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}{editingId ? "Update" : "Save"}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

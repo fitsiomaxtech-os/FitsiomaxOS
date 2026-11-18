@@ -9,9 +9,9 @@ touches its bill.
 
 Client link. The desk can send a form to the patient to fill themselves: Share mints an
 unguessable `share_token` and marks the form `client_status: "requested"`, and the public
-page at /consult-form/<token> shows the patient only CLIENT_FIELDS -- page 1's details and
-history and the Previous Consultations section. The diagnosis, the treatment plan and the
-muscles are the clinic's to write and never leave through the link. One submission per
+page at /consult-form/<token> asks the patient only CLIENT_FIELDS, in five short steps --
+page 1's details, history and muscles, and the Previous Consultations section. The diagnosis
+and the treatment plan are the clinic's to write and never leave through the link. One submission per
 request: once the patient sends it the link answers "already submitted" until the desk
 shares it again.
 """
@@ -53,6 +53,7 @@ CLIENT_FIELDS = (
     "name", "age", "sex", "contact_no", "mail_id", "source_of_reference", "nature_of_job",
     "branch", "date", "place",
     "past_medical_history", "any_medication", "symptoms_root_cause",
+    "primary_muscles", "secondary_muscles",
     "previous_medical_consultations", "previous_diagnosis", "previous_physiotherapy",
 )
 MAX_LEN = 5000

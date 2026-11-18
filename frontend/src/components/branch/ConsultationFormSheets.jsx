@@ -1,14 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 /**
- * The clinic's three-page paper Offline Consultation Form, as fillable sheets. Shared by
- * Branch Admin's Settings > Consultation Form and the patient's own link
- * (pages/ClientConsultationFormPage). Fields and their order are the paper's, page for page
- * -- the backend's FIELDS in routers/v3_consultation_forms.py is the same list.
+ * The clinic's three-page paper Offline Consultation Form, as fillable sheets, for Branch
+ * Admin's Settings > Consultation Form. Fields and their order are the paper's, page for
+ * page -- the backend's FIELDS in routers/v3_consultation_forms.py is the same list.
  *
- * `client` shows only what the patient fills through the link (CLIENT_FIELDS): page 1's
- * details and history and the Previous Consultations section. The muscles, the diagnosis
- * and the treatment plan are the clinic's to write.
+ * CLIENT_FIELDS are what the patient answers through the link, in steps of their own
+ * (ClientFormStages): page 1's details, history and muscles, and Previous Consultations.
+ * The diagnosis and the treatment plan are the clinic's to write. `readOnly` shows a filled
+ * form as a report, nothing editable.
  */
 
 export const LINE = 32; // px between the dotted rules, as on the paper
@@ -30,6 +30,7 @@ export const CLIENT_FIELDS = [
   "name", "age", "sex", "contact_no", "mail_id", "source_of_reference", "nature_of_job",
   "branch", "date", "place",
   "past_medical_history", "any_medication", "symptoms_root_cause",
+  "primary_muscles", "secondary_muscles",
   "previous_medical_consultations", "previous_diagnosis", "previous_physiotherapy",
 ];
 
@@ -61,25 +62,17 @@ const dotted = {
 
 const inputCls = "w-full min-w-0 bg-transparent px-1 text-[15px] text-slate-900 outline-none placeholder:text-slate-300 focus:bg-sky-50/60";
 
-/**
- * One line: "Label: ......" with the dots filling the rest of the row. With `onOpen` the
- * line is read-only and a tap calls it instead -- the client link's details popup.
- */
-const Line = ({ label, value, onChange, className = "", testid, onOpen, ...rest }) => (
+/** One line: "Label: ......" with the dots filling the rest of the row. */
+const Line = ({ label, value, onChange, className = "", testid, ...rest }) => (
   <label className={`flex min-w-0 items-end gap-1 ${className}`}>
     <span className="shrink-0 whitespace-nowrap text-[15px] text-slate-700" style={{ lineHeight: `${LINE}px` }}>{label}</span>
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`${inputCls} h-8 flex-1 ${onOpen ? "cursor-pointer" : ""}`}
+      className={`${inputCls} h-8 flex-1`}
       style={dotted}
       data-testid={testid}
       {...rest}
-      {...(onOpen ? {
-        readOnly: true,
-        onClick: onOpen,
-        onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } },
-      } : {})}
     />
   </label>
 );
@@ -88,7 +81,7 @@ const Line = ({ label, value, onChange, className = "", testid, onOpen, ...rest 
  * Several ruled lines. `inline` puts the label on the first line, the writing starting
  * after it, as most of the paper's boxes are; otherwise the label sits above.
  */
-const Lines = ({ label, rows, value, onChange, inline = false, testid }) => {
+const Lines = ({ label, rows, value, onChange, inline = false, testid, readOnly = false }) => {
   const labelRef = useRef(null);
   const boxRef = useRef(null);
   const [indent, setIndent] = useState(0);
@@ -115,6 +108,7 @@ const Lines = ({ label, rows, value, onChange, inline = false, testid }) => {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={rows}
+          readOnly={readOnly}
           aria-label={label.replace(/[\s:]+$/, "")}
           className={`${inputCls} block resize-none overflow-hidden`}
           style={{ ...dotted, minHeight: rows * LINE, textIndent: inline ? indent : 0, paddingTop: 0, paddingBottom: 0 }}
@@ -141,18 +135,8 @@ const Page = ({ n, children }) => (
   </div>
 );
 
-/**
- * `detailKeys` are fields another popup owns (the client link's details popup): they show
- * read-only here, and a tap on one calls `onEditDetails`.
- */
-export const ConsultationFormSheets = ({ f, set, client = false, detailKeys = [], onEditDetails }) => {
-  const owned = (key) => Boolean(onEditDetails) && detailKeys.includes(key);
-  const bind = (key) => ({
-    value: f[key],
-    onChange: (v) => set(key, v),
-    testid: `consultation-form-${key}`,
-    ...(owned(key) ? { onOpen: onEditDetails } : {}),
-  });
+export const ConsultationFormSheets = ({ f, set, readOnly = false }) => {
+  const bind = (key) => ({ value: f[key], onChange: (v) => set(key, v), testid: `consultation-form-${key}`, readOnly });
   return (
     <div className="flex flex-col gap-4">
       {/* Page 1 */}
@@ -195,7 +179,8 @@ export const ConsultationFormSheets = ({ f, set, client = false, detailKeys = []
                 type="button"
                 role="radio"
                 aria-checked={on}
-                onClick={() => (owned("branch") ? onEditDetails() : set("branch", on ? "" : b))}
+                onClick={() => { if (!readOnly) set("branch", on ? "" : b); }}
+                aria-readonly={readOnly || undefined}
                 className="flex items-center gap-2 text-[15px] text-slate-700"
                 data-testid={`consultation-form-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
               >
@@ -217,8 +202,8 @@ export const ConsultationFormSheets = ({ f, set, client = false, detailKeys = []
           <Lines label="Past Medical History:" rows={2} {...bind("past_medical_history")} />
           <Lines label="Any Medication:" rows={2} {...bind("any_medication")} />
           <Lines label="Symptoms / Root Cause :" rows={2} {...bind("symptoms_root_cause")} />
-          {!client && <Lines label="Primary Muscles:" rows={2} {...bind("primary_muscles")} />}
-          {!client && <Lines label="Secondary Muscles:" rows={2} {...bind("secondary_muscles")} />}
+          <Lines label="Primary Muscles:" rows={2} {...bind("primary_muscles")} />
+          <Lines label="Secondary Muscles:" rows={2} {...bind("secondary_muscles")} />
         </div>
       </Page>
 
@@ -228,39 +213,34 @@ export const ConsultationFormSheets = ({ f, set, client = false, detailKeys = []
         <Lines inline label="Previous Medical Consultations:" rows={5} {...bind("previous_medical_consultations")} />
         <Lines inline label="Previous Diagnosis:" rows={3} {...bind("previous_diagnosis")} />
         <Lines inline label="Previous Physiotherapy:" rows={5} {...bind("previous_physiotherapy")} />
-        {!client && (
-          <>
-            <div className="h-6" />
-            <SectionHead>Diagnosis &amp; Treatment Plan</SectionHead>
-            <Lines inline label="Fitsiomax Diagnosis:" rows={5} {...bind("fitsiomax_diagnosis")} />
-            <Lines inline label="Treatment Goals:" rows={10} {...bind("treatment_goals")} />
-          </>
-        )}
+        <div className="h-6" />
+        <SectionHead>Diagnosis &amp; Treatment Plan</SectionHead>
+        <Lines inline label="Fitsiomax Diagnosis:" rows={5} {...bind("fitsiomax_diagnosis")} />
+        <Lines inline label="Treatment Goals:" rows={10} {...bind("treatment_goals")} />
       </Page>
 
       {/* Page 3 -- the clinic's alone. */}
-      {!client && (
-        <Page n={3}>
-          <Lines inline label="Treatment Protocol:" rows={10} {...bind("treatment_protocol")} />
-          <Lines inline label="No of Sessions / Weeks Required:" rows={2} {...bind("sessions_weeks_required")} />
-          <Lines inline label="No of Sessions / Weeks (Online /Offline):" rows={2} {...bind("sessions_weeks_online_offline")} />
-          <Lines inline label="Short Term Goal :" rows={2} {...bind("short_term_goal")} />
-          <Lines inline label="Long Term Goal:" rows={2} {...bind("long_term_goal")} />
-          <Lines inline label="Do's & Don'ts:" rows={4} {...bind("dos_and_donts")} />
-          <Lines label="Special Instructions to the Therapist:" rows={5} {...bind("special_instructions")} />
-          <div className="mx-auto mt-10 w-full max-w-md text-center">
-            <p className="text-lg font-bold" style={{ color: FORM_BLUE }}>Therapist Name &amp; Sign:</p>
-            <input
-              value={f.therapist_name}
-              onChange={(e) => set("therapist_name", e.target.value)}
-              className={`${inputCls} h-8 text-center`}
-              style={dotted}
-              aria-label="Therapist Name & Sign"
-              data-testid="consultation-form-therapist_name"
-            />
-          </div>
-        </Page>
-      )}
+      <Page n={3}>
+        <Lines inline label="Treatment Protocol:" rows={10} {...bind("treatment_protocol")} />
+        <Lines inline label="No of Sessions / Weeks Required:" rows={2} {...bind("sessions_weeks_required")} />
+        <Lines inline label="No of Sessions / Weeks (Online /Offline):" rows={2} {...bind("sessions_weeks_online_offline")} />
+        <Lines inline label="Short Term Goal :" rows={2} {...bind("short_term_goal")} />
+        <Lines inline label="Long Term Goal:" rows={2} {...bind("long_term_goal")} />
+        <Lines inline label="Do's & Don'ts:" rows={4} {...bind("dos_and_donts")} />
+        <Lines label="Special Instructions to the Therapist:" rows={5} {...bind("special_instructions")} />
+        <div className="mx-auto mt-10 w-full max-w-md text-center">
+          <p className="text-lg font-bold" style={{ color: FORM_BLUE }}>Therapist Name &amp; Sign:</p>
+          <input
+            value={f.therapist_name}
+            onChange={(e) => set("therapist_name", e.target.value)}
+            readOnly={readOnly}
+            className={`${inputCls} h-8 text-center`}
+            style={dotted}
+            aria-label="Therapist Name & Sign"
+            data-testid="consultation-form-therapist_name"
+          />
+        </div>
+      </Page>
     </div>
   );
 };
