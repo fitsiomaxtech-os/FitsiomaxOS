@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, Loader2 } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -12,10 +12,15 @@ import { PAPER_BRANCHES, todayIso } from "@/components/branch/ConsultationFormSh
  * opens it as a read-only report). The popup is a fixed 1020 x 520 from tablet width up,
  * the progress bar above it, Previous / Next under the fields. Each step is headed
  * "Offline Consultation Form", as the paper is; the date is picked in the OS's own calendar.
+ * Every move slides: Next pushes the step out to the left and brings the next one in from
+ * the right, Previous the other way round.
  */
 
 const STAGES = 8;
 const BLUE = "#0066ff";
+// The slide between steps; the 600ms double-tap guard below outlasts it.
+const SLIDE_MS = 400;
+const SLIDE_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
 
 // India first, as the default; the rest are where the clinic's patients most often live or work.
 const COUNTRY_CODES = [
@@ -200,12 +205,60 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
   const cardRef = useRef(null);
   const settled = () => Date.now() - movedAt.current >= 600;
 
+  // What the popup shows: steps 0-7, then Preview as one step more.
+  const view = preview ? STAGES : stage;
+  // The step sliding out: kept on screen, inert, only while the slide runs. Moves wait for
+  // the slide to end, so a double tap on Next cannot skip a step.
+  const [leaving, setLeaving] = useState(null);
+  const bodyRef = useRef(null);
+  const trackRef = useRef(null);
+  const gridRef = useRef(null);
+  const inRef = useRef(null);
+  const outRef = useRef(null);
+
   const go = (to) => {
+    if (leaving || to === view) return;
     movedAt.current = Date.now();
-    setStage(to);
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    setLeaving(calm ? null : {
+      view,
+      dir: to > view ? 1 : -1,
+      top: bodyRef.current ? bodyRef.current.scrollTop : 0,
+      // Below md the card is as tall as its step (md:h-[520px] above): its height glides too.
+      glide: !window.matchMedia?.("(min-width: 768px)")?.matches,
+    });
+    setPreview(to === STAGES);
+    if (to < STAGES) setStage(to);
     setTried(false);
     window.scrollTo({ top: 0 });
   };
+
+  // One track the width of the card: the new step comes in at one edge as the old one goes
+  // out at the other, a gutter apart. Started before paint, so no frame shows both at rest.
+  useLayoutEffect(() => {
+    if (!leaving) return undefined;
+    // The body goes back to its top; the old step holds its scrolled place (marginTop below).
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+    const dist = trackRef.current ? trackRef.current.clientWidth : 0;
+    const timing = { duration: SLIDE_MS, easing: SLIDE_EASE };
+    const can = (el) => el && typeof el.animate === "function";
+    const slide = (el, from, to, fill) => (can(el)
+      ? el.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }], { ...timing, fill })
+      : null);
+    slide(inRef.current, leaving.dir * dist, 0, "backwards");
+    const exit = slide(outRef.current, 0, -leaving.dir * dist, "forwards");
+    // From the old step's height to the new one's, so the buttons under it glide, not jump.
+    const grid = gridRef.current;
+    const glide = leaving.glide && can(grid) && outRef.current && inRef.current
+      ? grid.animate([{ height: `${outRef.current.offsetHeight}px` }, { height: `${inRef.current.offsetHeight}px` }], timing)
+      : null;
+    const done = () => setLeaving((cur) => (cur === leaving ? null : cur));
+    if (!exit) { done(); return undefined; }
+    exit.onfinish = done;
+    // Should the finish never come (a hidden tab), the old step still goes.
+    const timer = window.setTimeout(done, SLIDE_MS + 300);
+    return () => { window.clearTimeout(timer); exit.cancel(); if (glide) glide.cancel(); };
+  }, [leaving]);
 
   const setNumber = (raw) => {
     let digits = raw.replace(/\D/g, "");
@@ -216,7 +269,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
 
   const next = (e) => {
     e.preventDefault();
-    if (sending) return;
+    if (sending || leaving) return;
     setTried(true);
     const first = Object.keys(errors)[0];
     if (first) { document.getElementById(FIELD_IDS[first])?.focus(); return; }
@@ -235,7 +288,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
   const backButton = (preview || stage > 0) && (
     <button
       type="button"
-      onClick={() => (preview ? setPreview(false) : go(stage - 1))}
+      onClick={() => go(view - 1)}
       disabled={sending}
       className={outlineCls}
       data-testid={preview ? "client-preview-back" : "client-stage-back"}
@@ -265,176 +318,194 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
 
         {/* Rows only: one field under another. The body scrolls if it must (Preview's 18
             rows); the buttons below it never move. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
-          <div className="flex flex-col gap-3.5">
-            {preview && (
-              <dl className="divide-y divide-slate-100 rounded-[8px] border border-slate-100" data-testid="client-preview-list">
-                {PREVIEW.map(([label, read]) => {
-                  const value = String(read(d) || "").trim();
-                  return (
-                    <div key={label} className="flex gap-4 px-4 py-2">
-                      <dt className="w-[230px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
-                      <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            )}
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
+          {/* The slide track: as wide as the card, gutters included, clipped at its edges --
+              and at its foot too while a height glides. */}
+          <div ref={trackRef} className={`-mx-6 px-6 sm:-mx-10 sm:px-10 ${leaving?.glide ? "overflow-clip" : "overflow-x-clip"}`}>
+            <div ref={gridRef} className="grid grid-cols-1 items-start">
+              {(leaving ? [leaving.view, view].sort((x, y) => x - y) : [view]).map((v) => {
+                const out = leaving !== null && v === leaving.view;
+                return (
+                  <div
+                    key={v}
+                    ref={out ? outRef : inRef}
+                    inert={out}
+                    className="col-start-1 row-start-1 flex min-w-0 flex-col gap-3.5"
+                    style={out && leaving.top ? { marginTop: -leaving.top } : undefined}
+                    data-testid={out ? "client-stage-panel-out" : "client-stage-panel"}
+                  >
+                    {v === STAGES && (
+                      <dl className="divide-y divide-slate-100 rounded-[8px] border border-slate-100" data-testid="client-preview-list">
+                        {PREVIEW.map(([label, read]) => {
+                          const value = String(read(d) || "").trim();
+                          return (
+                            <div key={label} className="flex gap-4 px-4 py-2">
+                              <dt className="w-[230px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
+                              <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    )}
 
-            {!preview && stage === 0 && (
-              <>
-                <Field label="Enter your Name" htmlFor="cs-name" required error={err("name")}>
-                  <input
-                    id="cs-name"
-                    name="cs-fullname"
-                    value={d.name}
-                    onChange={(e) => { if (typedByHand(e)) set("name")(lettersOnly(e.target.value)); }}
-                    onPaste={blockEvent}
-                    onDrop={blockEvent}
-                    onCopy={blockEvent}
-                    onCut={blockEvent}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="words"
-                    spellCheck={false}
-                    maxLength={60}
-                    placeholder="Name"
-                    className={`${box(err("name"))} h-10`}
-                    data-testid="client-stage-cs-name"
-                  />
-                </Field>
-                <Field label="Mobile Number" htmlFor="cs-contact" required error={err("contact_no")}>
-                  <div className="flex gap-3">
-                    <ThemedSelect
-                      value={d.code}
-                      onChange={(code) => setD((cur) => {
-                        const c = code || "91";
-                        return { ...cur, code: c, number: c === "91" ? cur.number.slice(0, 10) : cur.number };
-                      })}
-                      options={CODE_OPTIONS}
-                      className="h-10 w-[120px] shrink-0 rounded-[8px] border-[#c7cdea] px-4 text-[15px]"
-                      testid="client-stage-code"
-                    />
-                    <input
-                      id="cs-contact"
-                      type="tel"
-                      inputMode="numeric"
-                      value={d.number}
-                      onChange={(e) => setNumber(e.target.value)}
-                      autoComplete="tel-national"
-                      placeholder="Mobile Number"
-                      className={`${box(err("contact_no"))} h-10 min-w-0 flex-1`}
-                      data-testid="client-stage-cs-contact"
-                    />
+                    {v === 0 && (
+                      <>
+                        <Field label="Enter your Name" htmlFor="cs-name" required error={err("name")}>
+                          <input
+                            id="cs-name"
+                            name="cs-fullname"
+                            value={d.name}
+                            onChange={(e) => { if (typedByHand(e)) set("name")(lettersOnly(e.target.value)); }}
+                            onPaste={blockEvent}
+                            onDrop={blockEvent}
+                            onCopy={blockEvent}
+                            onCut={blockEvent}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="words"
+                            spellCheck={false}
+                            maxLength={60}
+                            placeholder="Name"
+                            className={`${box(err("name"))} h-10`}
+                            data-testid="client-stage-cs-name"
+                          />
+                        </Field>
+                        <Field label="Mobile Number" htmlFor="cs-contact" required error={err("contact_no")}>
+                          <div className="flex gap-3">
+                            <ThemedSelect
+                              value={d.code}
+                              onChange={(code) => setD((cur) => {
+                                const c = code || "91";
+                                return { ...cur, code: c, number: c === "91" ? cur.number.slice(0, 10) : cur.number };
+                              })}
+                              options={CODE_OPTIONS}
+                              className="h-10 w-[120px] shrink-0 rounded-[8px] border-[#c7cdea] px-4 text-[15px]"
+                              testid="client-stage-code"
+                            />
+                            <input
+                              id="cs-contact"
+                              type="tel"
+                              inputMode="numeric"
+                              value={d.number}
+                              onChange={(e) => setNumber(e.target.value)}
+                              autoComplete="tel-national"
+                              placeholder="Mobile Number"
+                              className={`${box(err("contact_no"))} h-10 min-w-0 flex-1`}
+                              data-testid="client-stage-cs-contact"
+                            />
+                          </div>
+                        </Field>
+                        <Text
+                          id="cs-mail"
+                          label="Email ID"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          maxLength={100}
+                          value={d.mail_id}
+                          onChange={(v) => set("mail_id")(v.replace(/\s/g, ""))}
+                          error={err("mail_id")}
+                        />
+                      </>
+                    )}
+
+                    {v === 1 && (
+                      <>
+                        <Field label="Gender" htmlFor="cs-gender">
+                          <ThemedSelect
+                            value={d.sex}
+                            onChange={set("sex")}
+                            options={GENDERS}
+                            placeholder="Gender"
+                            className="h-10 rounded-[8px] border-[#c7cdea] px-4 text-[15px] data-[placeholder]:text-[#8a93b8]"
+                            testid="client-stage-cs-gender"
+                          />
+                        </Field>
+                        <Text id="cs-place" label="Your Place" autoComplete="address-level2" maxLength={60} value={d.place} onChange={(v) => set("place")(cityChars(v))} error={err("place")} />
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[15px] font-medium text-slate-900" id="cs-branch">Branch</span>
+                          <div role="radiogroup" aria-labelledby="cs-branch" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {PAPER_BRANCHES.map((b) => {
+                              const on = d.branch === b;
+                              return (
+                                <button
+                                  key={b}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={on}
+                                  onClick={() => set("branch")(on ? "" : b)}
+                                  className={`flex h-10 w-full min-w-0 items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : "border-[#c7cdea] text-slate-700 hover:bg-slate-50"}`}
+                                  data-testid={`client-stage-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
+                                >
+                                  <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2" style={{ borderColor: on ? BLUE : "#94a3b8" }}>
+                                    {on && <span className="h-2 w-2 rounded-full" style={{ background: BLUE }} />}
+                                  </span>
+                                  {b}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {v === 2 && (
+                      <>
+                        <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
+                        <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
+                        <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
+                        <Field label="Date" htmlFor="cs-date">
+                          <MilkDateInput
+                            id="cs-date"
+                            value={d.date}
+                            onChange={(e) => set("date")(e.target.value || todayIso())}
+                            accent="sky"
+                            besideRef={cardRef}
+                            title="Date"
+                            // `!`: MilkDateInput appends this after its own h-9 / rounded-md /
+                            // border-input rather than merging, so the plain classes lost.
+                            className="!h-10 !rounded-[8px] !border-[#c7cdea] !px-4 !text-[15px] !shadow-none"
+                            data-testid="client-stage-cs-date"
+                          />
+                        </Field>
+                      </>
+                    )}
+
+                    {v === 3 && (
+                      <>
+                        <Area id="cs-history" label="Past Medical History" value={d.past_medical_history} onChange={set("past_medical_history")} />
+                        <Area id="cs-medication" label="Any Medication" value={d.any_medication} onChange={set("any_medication")} />
+                      </>
+                    )}
+
+                    {v === 4 && (
+                      <>
+                        <Area id="cs-symptoms" label="Symptoms / Root Cause" value={d.symptoms_root_cause} onChange={set("symptoms_root_cause")} />
+                        <Area id="cs-primary" label="Primary Muscles" value={d.primary_muscles} onChange={set("primary_muscles")} />
+                      </>
+                    )}
+
+                    {v === 5 && (
+                      <Area id="cs-secondary" label="Secondary Muscles" rows={10} value={d.secondary_muscles} onChange={set("secondary_muscles")} />
+                    )}
+
+                    {v === 6 && (
+                      <>
+                        <p className="text-[14px] font-semibold text-slate-400">Previous Consultations</p>
+                        <Area id="cs-prev-consult" label="Previous Medical Consultations" rows={9} value={d.previous_medical_consultations} onChange={set("previous_medical_consultations")} />
+                      </>
+                    )}
+
+                    {v === 7 && (
+                      <>
+                        <Area id="cs-prev-diagnosis" label="Previous Diagnosis" value={d.previous_diagnosis} onChange={set("previous_diagnosis")} />
+                        <Area id="cs-prev-physio" label="Previous Physiotherapy" value={d.previous_physiotherapy} onChange={set("previous_physiotherapy")} />
+                      </>
+                    )}
                   </div>
-                </Field>
-                <Text
-                  id="cs-mail"
-                  label="Email ID"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  maxLength={100}
-                  value={d.mail_id}
-                  onChange={(v) => set("mail_id")(v.replace(/\s/g, ""))}
-                  error={err("mail_id")}
-                />
-              </>
-            )}
-
-            {!preview && stage === 1 && (
-              <>
-                <Field label="Gender" htmlFor="cs-gender">
-                  <ThemedSelect
-                    value={d.sex}
-                    onChange={set("sex")}
-                    options={GENDERS}
-                    placeholder="Gender"
-                    className="h-10 rounded-[8px] border-[#c7cdea] px-4 text-[15px] data-[placeholder]:text-[#8a93b8]"
-                    testid="client-stage-cs-gender"
-                  />
-                </Field>
-                <Text id="cs-place" label="Your Place" autoComplete="address-level2" maxLength={60} value={d.place} onChange={(v) => set("place")(cityChars(v))} error={err("place")} />
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[15px] font-medium text-slate-900" id="cs-branch">Branch</span>
-                  <div role="radiogroup" aria-labelledby="cs-branch" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {PAPER_BRANCHES.map((b) => {
-                      const on = d.branch === b;
-                      return (
-                        <button
-                          key={b}
-                          type="button"
-                          role="radio"
-                          aria-checked={on}
-                          onClick={() => set("branch")(on ? "" : b)}
-                          className={`flex h-10 w-full min-w-0 items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : "border-[#c7cdea] text-slate-700 hover:bg-slate-50"}`}
-                          data-testid={`client-stage-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
-                        >
-                          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2" style={{ borderColor: on ? BLUE : "#94a3b8" }}>
-                            {on && <span className="h-2 w-2 rounded-full" style={{ background: BLUE }} />}
-                          </span>
-                          {b}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {!preview && stage === 2 && (
-              <>
-                <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
-                <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
-                <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
-                <Field label="Date" htmlFor="cs-date">
-                  <MilkDateInput
-                    id="cs-date"
-                    value={d.date}
-                    onChange={(e) => set("date")(e.target.value || todayIso())}
-                    accent="sky"
-                    besideRef={cardRef}
-                    title="Date"
-                    // `!`: MilkDateInput appends this after its own h-9 / rounded-md /
-                    // border-input rather than merging, so the plain classes lost.
-                    className="!h-10 !rounded-[8px] !border-[#c7cdea] !px-4 !text-[15px] !shadow-none"
-                    data-testid="client-stage-cs-date"
-                  />
-                </Field>
-              </>
-            )}
-
-            {!preview && stage === 3 && (
-              <>
-                <Area id="cs-history" label="Past Medical History" value={d.past_medical_history} onChange={set("past_medical_history")} />
-                <Area id="cs-medication" label="Any Medication" value={d.any_medication} onChange={set("any_medication")} />
-              </>
-            )}
-
-            {!preview && stage === 4 && (
-              <>
-                <Area id="cs-symptoms" label="Symptoms / Root Cause" value={d.symptoms_root_cause} onChange={set("symptoms_root_cause")} />
-                <Area id="cs-primary" label="Primary Muscles" value={d.primary_muscles} onChange={set("primary_muscles")} />
-              </>
-            )}
-
-            {!preview && stage === 5 && (
-              <Area id="cs-secondary" label="Secondary Muscles" rows={10} value={d.secondary_muscles} onChange={set("secondary_muscles")} />
-            )}
-
-            {!preview && stage === 6 && (
-              <>
-                <p className="text-[14px] font-semibold text-slate-400">Previous Consultations</p>
-                <Area id="cs-prev-consult" label="Previous Medical Consultations" rows={9} value={d.previous_medical_consultations} onChange={set("previous_medical_consultations")} />
-              </>
-            )}
-
-            {!preview && stage === 7 && (
-              <>
-                <Area id="cs-prev-diagnosis" label="Previous Diagnosis" value={d.previous_diagnosis} onChange={set("previous_diagnosis")} />
-                <Area id="cs-prev-physio" label="Previous Physiotherapy" value={d.previous_physiotherapy} onChange={set("previous_physiotherapy")} />
-              </>
-            )}
+                );
+              })}
+            </div>
           </div>
 
           {error && <p className="mt-4 rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-testid="client-stage-send-error">{error}</p>}
@@ -445,7 +516,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
           <div className="flex flex-wrap items-center gap-4">
             {backButton}
             {last && !preview && (
-              <button type="button" onClick={() => { if (settled()) setPreview(true); }} disabled={sending} className={outlineCls} data-testid="client-stage-preview">
+              <button type="button" onClick={() => { if (settled()) go(STAGES); }} disabled={sending} className={outlineCls} data-testid="client-stage-preview">
                 <Eye className="h-4 w-4" />Preview
               </button>
             )}
