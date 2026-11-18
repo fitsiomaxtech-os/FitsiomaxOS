@@ -57,12 +57,13 @@ const elapsed = (day, fetchedAt, now) => {
 const Sheet = ({ title, subtitle, onClose, children, wide, testid }) => createPortal(
   <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center" data-testid={testid}>
     <div className={`w-full ${wide ? "max-w-2xl" : "max-w-md"} rounded-xl bg-white shadow-2xl`}>
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
-        <div>
-          <h3 className="text-base font-semibold text-slate-800">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      {/* The name band, in the same blue as every other popup header. */}
+      <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-sky-700 bg-[#0284C7] px-5 py-3.5">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-white">{title}</h3>
+          {subtitle && <p className="mt-0.5 text-xs font-medium text-sky-100">{subtitle}</p>}
         </div>
-        <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100" aria-label="Close" data-testid={`${testid}-close`}>
+        <button onClick={onClose} className="shrink-0 rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close" data-testid={`${testid}-close`}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -129,24 +130,24 @@ const BreakReasonSheet = ({ presets, busy, onStart, onClose }) => {
 
 /** Today, in full: when it started, every break and why, and where the hours went. */
 const TodaySheet = ({ day, live, onClose, onHistory, onReport, reportFiled }) => (
-  <Sheet title="Your day" subtitle={day.date} onClose={onClose} testid="clock-today-sheet">
-    <div className="grid grid-cols-2 gap-2">
+  <Sheet title="Your day" subtitle={longDate(day.date)} onClose={onClose} testid="clock-today-sheet">
+    <div className="grid grid-cols-2 gap-3">
       <Figure label="Clocked in" value={prettyTime(day.clock_in) || "—"} testid="clock-today-in" />
       <Figure label="Clocked out" value={prettyTime(day.clock_out) || (day.state === "done" ? "—" : "Still on")} testid="clock-today-out" />
       <Figure label="Worked" value={duration(live.worked)} tone="text-emerald-600" testid="clock-today-worked" />
       <Figure label="On breaks" value={duration(day.break_minutes + live.onBreak)} tone="text-amber-600" testid="clock-today-breaks" />
     </div>
 
-    <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Breaks</p>
+    <p className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Breaks</p>
     {day.breaks.length === 0 ? (
-      <p className="mt-1 rounded-lg border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400">No breaks today.</p>
+      <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400">No breaks today.</p>
     ) : (
-      <ul className="mt-1 divide-y divide-slate-100" data-testid="clock-today-break-list">
+      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200" data-testid="clock-today-break-list">
         {day.breaks.map((b, i) => (
-          <li key={i} className="flex items-center justify-between gap-3 py-2" data-testid={`clock-today-break-${i}`}>
+          <li key={i} className="flex items-center justify-between gap-3 px-3 py-2.5" data-testid={`clock-today-break-${i}`}>
             <span className="min-w-0">
-              <span className="block truncate text-sm text-slate-700">{b.reason}</span>
-              <span className="block text-[11px] text-slate-400">
+              <span className="block truncate text-sm font-medium text-slate-700">{b.reason}</span>
+              <span className="mt-0.5 block text-[11px] text-slate-500">
                 {prettyTime(b.out)} → {b.running ? "still out" : prettyTime(b.in)}
               </span>
             </span>
@@ -158,24 +159,29 @@ const TodaySheet = ({ day, live, onClose, onHistory, onReport, reportFiled }) =>
       </ul>
     )}
 
-    <Button variant="outline" onClick={onHistory} className="mt-4 w-full" data-testid="clock-today-history">
+    <div className="mt-5 grid gap-2">
+    <Button variant="outline" onClick={onHistory} className="w-full" data-testid="clock-today-history">
       <CalendarDays className="h-4 w-4" />My attendance history
     </Button>
     {/* Physios and Consultants only: a report skipped at Clock Out can still be filed. */}
     {onReport && (
-      <Button variant="outline" onClick={onReport} className="mt-2 w-full" data-testid="clock-today-eod">
+      <Button variant="outline" onClick={onReport} className="w-full" data-testid="clock-today-eod">
         <ClipboardList className="h-4 w-4" />{reportFiled ? "Edit EOD report" : "Submit EOD report"}
       </Button>
     )}
+    </div>
   </Sheet>
 );
 
 const Figure = ({ label, value, tone = "text-slate-800", testid }) => (
-  <div className="rounded-lg border border-slate-200 px-3 py-2" data-testid={testid}>
-    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
-    <span className={`mt-0.5 block text-lg font-extrabold ${tone}`}>{value}</span>
+  <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3.5 py-2.5" data-testid={testid}>
+    <span className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+    <span className={`mt-1 block text-lg font-bold leading-tight ${tone}`}>{value}</span>
   </div>
 );
+
+// "2026-11-18" → "Wed, 18 Nov 2026", so the band reads as a day rather than a database key.
+const longDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "");
 
 const monthLabel = (m) => (m ? new Date(`${m}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "");
 const shiftMonth = (m, by) => {
