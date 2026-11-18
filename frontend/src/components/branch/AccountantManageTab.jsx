@@ -1046,7 +1046,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
           gap a scaled-down full-width row would. Not on a phone, where the bar is laid out
           to fit and 90% of 12px type was only harder to read. */}
       <div ref={toolbarRef} className={stickyTabs ? "md:sticky md:top-[calc(var(--role-header-height,89px)+var(--branch-nav-height,42px))] md:z-20 md:py-1.5 bg-slate-50" : ""}>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-1.5 shadow-sm sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm sm:gap-3 sm:p-2 sm:[zoom:0.9]" data-testid="accountant-manage-maintabs">
         {!fixedBranchId && !scoped && (
           <div className="flex w-full items-center gap-2 px-1.5 sm:w-auto sm:shrink-0 sm:border-r sm:border-slate-200 sm:pr-2 min-[1900px]:pr-3">
             <span className="text-xs font-medium text-slate-600">Branch:</span>
@@ -1079,7 +1079,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                 onClick={() => setTab(t.key)}
                 title={badge?.title}
                 aria-label={badge ? `${t.label} (${badge.title})` : undefined}
-                className={`relative h-11 min-w-0 grow basis-[30%] rounded-lg border-0 px-1.5 text-center text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:h-10 sm:shrink-0 sm:grow-0 sm:basis-auto sm:whitespace-nowrap sm:px-2.5 min-[1900px]:px-3.5 min-[1900px]:text-sm ${mainTabClasses(t, tab === t.key)}`}
+                className={`relative h-11 min-w-0 grow basis-[30%] rounded-lg border-0 px-1.5 text-center text-xs font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 sm:h-10 sm:shrink-0 sm:grow-0 sm:basis-auto sm:whitespace-nowrap sm:px-3.5 sm:text-sm min-[1900px]:px-4 min-[1900px]:text-base ${mainTabClasses(t, tab === t.key)}`}
                 data-testid={`accountant-manage-maintab-${t.key}`}
               >
                 {t.label}
@@ -1132,13 +1132,13 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                 mode, revenue, range. The revenue one only over an income pile, the one
                 place those cards stood. */}
             {filterDropdowns ? (
-              <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-2 sm:flex" data-testid="accountant-manage-payment-mode-filter">
+              <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-3 sm:flex" data-testid="accountant-manage-payment-mode-filter">
                 <ThemedSelect
                   value={paymentModeFilter}
                   onChange={setPaymentModeFilter}
                   options={PAYMENT_MODES.map(([value, label]) => ({ value, label }))}
                   title="Payment mode"
-                  className="h-10 w-36 px-2.5 text-xs font-semibold min-[1900px]:text-sm"
+                  className="h-10 w-36 px-2.5 text-sm font-semibold"
                   testid="accountant-manage-payment-mode-dropdown"
                 />
                 {ledger === "income" && (
@@ -1147,7 +1147,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                     onChange={setRevenueView}
                     options={REVENUE_VIEWS.map((v) => ({ value: v.key, label: `${v.short} · ${fmt(sums.totals[v.key])}` }))}
                     title="Revenue"
-                    className="h-10 w-52 px-2.5 text-xs font-semibold min-[1900px]:w-60 min-[1900px]:text-sm"
+                    className="h-10 w-56 px-2.5 text-sm font-semibold min-[1900px]:w-60"
                     testid="accountant-manage-revenue-view-select"
                   />
                 )}
