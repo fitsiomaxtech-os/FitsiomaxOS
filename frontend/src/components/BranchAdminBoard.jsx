@@ -2141,40 +2141,38 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         {/* The bell moved to the page header, where Super Admin's already was and where a
             person looks for it. One control, one place, rather than the same thing in two
             with only one of them findable. */}
-        {/* Settings, at the strip's right end, on Branch Leads and Consultation only. Its
-            menu holds Upcoming Appointments, moved here from Management > Calendar. Not
-            modal, for the same reason as phoneTimeGear's: it opens a popup as it shuts. */}
-        {["pipeline", "branch_consultation"].includes(activeView) && (
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
-                title="Settings"
-                aria-label="Settings"
-                data-testid={`branch-view-tab-settings-${activeView}`}
-              >
-                {/* Still: no turn on hover or while the menu is open. */}
-                <Settings className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            {/* Slower than the shared menu's 150ms, and eased out, so it unfolds from the gear. */}
-            <DropdownMenuContent align="end" className="w-60 duration-300 ease-out">
-              <DropdownMenuItem onSelect={() => setUpcomingOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-upcoming">
-                <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setApptMsgOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-appt-msg">
-                <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setConsultFormOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-consult-form">
-                <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {/* Settings, fixed at the strip's right end on every tab. Its menu holds Upcoming
+            Appointments, moved here from Management > Calendar. Not modal, for the same
+            reason as phoneTimeGear's: it opens a popup as it shuts. */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded bg-white text-slate-500 shadow-sm transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
+              title="Settings"
+              aria-label="Settings"
+              data-testid={`branch-view-tab-settings-${activeView}`}
+            >
+              {/* Still: no turn on hover or while the menu is open. */}
+              <Settings className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          {/* Slower than the shared menu's 150ms, and eased out, so it unfolds from the gear. */}
+          <DropdownMenuContent align="end" className="w-60 duration-300 ease-out">
+            <DropdownMenuItem onSelect={() => setUpcomingOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-upcoming">
+              <Clock aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Upcoming Appointments</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setApptMsgOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-appt-msg">
+              <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setConsultFormOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-consult-form">
+              <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       </div>
