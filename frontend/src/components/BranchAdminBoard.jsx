@@ -2110,10 +2110,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           bar stays flush with the board's edges instead of leaving the gap a scaled-down
           full-width row would. */}
       {/* Keep the sticky wrapper outside the zoomed strip so its header offset stays in viewport pixels. */}
-      <div ref={navRef} className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50 pt-3"}`}>
-      {/* pt-3: the page leaves this bar 4px under the header (md:pt-1) and the board's
-          gap-4 puts 16px under it, so 12px here makes it 16px on both sides -- and keeps
-          a 12px band between it and the header once it sticks. */}
+      <div ref={navRef} className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50 pt-2.5 md:-mb-0.5"}`}>
+      {/* 14px on both sides: the page leaves this bar 4px under the header (md:pt-1), so
+          pt-2.5 adds 10px above; the board's gap-4 puts 16px under it, and -mb-0.5 takes
+          2px of that back. Once it sticks, a 10px band stays between it and the header. */}
       <div className="show-scrollbar hidden items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 md:flex" style={{ zoom: 0.9 }} data-testid="branch-view-tabs">
         {/* flex-auto on each tab: the width the labels leave over is shared out between
             them, so the strip is filled edge to edge with even spacing rather than every
