@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Eye, Pencil, Clock, CalendarCheck, RefreshCw } from "lucide-react";
+import { Eye, Pencil, Clock, CalendarCheck, RefreshCw, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
@@ -35,8 +35,10 @@ const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
 
 // Every shelf here is editable with Super Admin's own dialog for it: the session form for
 // Sessions, Rehab, Zumba, Workshop and Home Visit, the consultation form for Consultations
-// and both Diet Details shelves. Edit only — create and delete stay with Super Admin,
-// and the server refuses a branch moving a package to another type or shelf.
+// and both Diet Details shelves. The server refuses a branch moving a package to another
+// type or shelf. Delete stays with Super Admin; create is the branch's too on the shelves
+// that pass `canCreate` (Rehab and Zumba Class), and what it creates there is that
+// branch's own package, listed for no other branch -- see create_store_item.
 //
 // With Services and Products per branch switched On (Developer Access), what is listed and
 // saved here is this branch's own copy — see store_branch_overrides.py. branchId is what
@@ -45,8 +47,9 @@ const isChennaiBranch = (name) => /^\s*chennai\b/i.test(name || "");
 // `squareFourUp`: four cards to a row on a wide screen (three on a laptop, two on a tablet)
 // and 4px corners on the card, its price boxes, image and buttons -- the Chennai branch's
 // Sessions > Treatment and Consultations > Physiotherapy shelves.
-const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", branchId, squareFourUp = false }) => {
+const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durationLabel = "Consultation Duration", reloadToken, modeFilter = "all", branchId, squareFourUp = false, canCreate = false }) => {
   const [items, setItems] = useState([]);
+  const [creating, setCreating] = useState(false);
   const [viewingItem, setViewingItem] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const isSession = itemType === "session";
@@ -67,6 +70,13 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
 
   return (
     <div className="space-y-3" data-testid={`${testidPrefix}-panel`}>
+      {canCreate && (
+        <div className="flex items-center justify-end">
+          <Button size="sm" onClick={() => setCreating(true)} data-testid={`${testidPrefix}-create-btn`}>
+            <Plus className="mr-1 h-4 w-4" />Create
+          </Button>
+        </div>
+      )}
       {items.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-slate-400">{emptyLabel}</CardContent>
@@ -148,6 +158,14 @@ const BranchItemsPanel = ({ category, itemType, emptyLabel, testidPrefix, durati
           kind={itemType}
           onClose={() => setViewingItem(null)}
           onEdit={() => { setEditingItem(viewingItem); setViewingItem(null); }}
+        />
+      )}
+      {creating && (
+        <CreateSessionPackageModal
+          category={category}
+          branchId={branchId}
+          onClose={() => setCreating(false)}
+          onSaved={loadItems}
         />
       )}
       {editingItem && (isSession ? (
@@ -360,8 +378,8 @@ export const BranchDietPanel = ({ reloadToken, modeFilter = "all", branchId }) =
  * stop being a placeholder — see BranchSessionsPanel above.
  */
 const SESSION_LIKE_TABS = {
-  rehab: { category: "rehab", empty: "No rehab packages available yet." },
-  zumba: { category: "zumba", empty: "No Zumba classes available yet." },
+  rehab: { category: "rehab", empty: "No rehab packages available yet.", canCreate: true },
+  zumba: { category: "zumba", empty: "No Zumba classes available yet.", canCreate: true },
   workshop: { category: "workshop", empty: "No workshops available yet." },
 };
 
@@ -515,6 +533,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
           category={SESSION_LIKE_TABS[tab].category}
           itemType="session"
           emptyLabel={SESSION_LIKE_TABS[tab].empty}
+          canCreate={Boolean(SESSION_LIKE_TABS[tab].canCreate)}
           testidPrefix={`branch-${tab}`}
           reloadToken={reloadTick}
           branchId={branchId}

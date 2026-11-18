@@ -129,7 +129,16 @@ class StoreItemOut(StoreItemIn):
     # True where the branch the list was read for keeps its own values for this package
     # (see store_branch_overrides). Absent on Super Admin's own catalogue.
     branch_override: Optional[bool] = None
+    # The branch that created this package, where a Branch Admin made it from their own
+    # board (see create_store_item). Absent on Super Admin's catalogue rows, which every
+    # branch reads. Set by the server only, never accepted from the client.
+    branch_id: Optional[str] = None
 
+
+# The shelves a Branch Admin may add a package to from their own Services and Products.
+# What they create there is their branch's alone (stamped with branch_id), so one branch
+# adding a Rehab or Zumba package never puts it on another branch's shelf.
+BRANCH_CREATABLE_CATEGORIES = ("rehab", "zumba")
 
 # The two desks that oversee every branch. Anyone else reads the store as their own branch.
 OFFICE_WIDE_ROLES = ("super_admin", "business_dev")
@@ -168,7 +177,14 @@ def _normalize_legacy_prices(doc: dict) -> dict:
 
 
 @router.post("/items", response_model=StoreItemOut)
-async def create_store_item(payload: StoreItemIn, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
+async def create_store_item(payload: StoreItemIn, user: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
+    owner_branch = None
+    if not role_satisfies(user.role, OFFICE_WIDE_ROLES):
+        if payload.category not in BRANCH_CREATABLE_CATEGORIES or payload.item_type != "session":
+            raise HTTPException(status_code=403, detail="A branch can only create Rehab and Zumba Class packages")
+        if not user.branch_id:
+            raise HTTPException(status_code=400, detail="This account has no branch assigned")
+        owner_branch = user.branch_id
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
     if payload.price_online < 0 or payload.price_offline < 0:
@@ -187,6 +203,7 @@ async def create_store_item(payload: StoreItemIn, _: V3UserOut = Depends(v3_requ
         raise HTTPException(status_code=400, detail="Offline sessions count must be at least 1")
     doc = payload.model_dump()
     doc["price_is_total"] = payload.category in PRICE_IS_TOTAL_CATEGORIES
+    doc["branch_id"] = owner_branch
     doc["id"] = str(uuid.uuid4())
     doc["created_at"] = _now()
     doc["updated_at"] = _now()
@@ -220,8 +237,9 @@ async def update_store_item(
     target_branch = _branch_for(user, branch_id)
     per_branch = bool(target_branch) and await store_branch_overrides.enabled()
     if not role_satisfies(user.role, OFFICE_WIDE_ROLES) or per_branch:
-        existing = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0, "item_type": 1, "category": 1})
-        if not existing:
+        existing = await v3_col("store_items").find_one({"id": item_id}, {"_id": 0, "item_type": 1, "category": 1, "branch_id": 1})
+        # Another branch's own package is not this branch's to edit.
+        if not existing or (existing.get("branch_id") and existing.get("branch_id") != target_branch):
             raise HTTPException(status_code=404, detail="Item not found")
         existing_type = existing.get("item_type") or "consultation"
         if (
@@ -279,12 +297,16 @@ async def list_store_items(
         q["item_type"] = {"$in": ["consultation", None]}
     elif item_type:
         q["item_type"] = item_type
-    docs = await v3_col("store_items").find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     # Every branch-side picker (booking, fee collection, Zumba, Fitness) reads through here,
     # so this one overlay is what makes a branch see its own prices and durations everywhere.
     # The accountant keeps every branch's books and has no branch of their own, so they
     # read whichever branch they name -- the same reading Super Admin gets, and only here.
     branch = (branch_id or None) if user.role == "accountant" else _branch_for(user, branch_id)
+    if branch:
+        # Super Admin's catalogue rows, plus the packages this branch created for itself --
+        # never another branch's own. With no branch (the catalogue itself) every row shows.
+        q["branch_id"] = {"$in": [None, branch]}
+    docs = await v3_col("store_items").find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     docs = await store_branch_overrides.overlay(docs, branch)
     return [_normalize_legacy_prices(d) for d in docs]
 
