@@ -511,12 +511,16 @@ const FormSelect = ({ value, onChange, children, testid }) => (
   <select
     value={value}
     onChange={(e) => onChange(e.target.value)}
-    className="h-10 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
     data-testid={testid}
   >
     {children}
   </select>
 );
+
+// The Lead Create form's text boxes, drawn as FormSelect's box -- same 40px height, padding,
+// border and focus ring -- so a row of a text box beside a dropdown lines up edge to edge.
+const FIELD_CLS = "h-10 border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-none focus-visible:border-sky-400 focus-visible:ring-sky-400 md:text-sm";
 
 const FieldLabel = ({ children }) => (
   <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</label>
@@ -2393,24 +2397,24 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                 scroll. The body still scrolls on a short window; Save and Cancel sit in
                 a footer outside it so they never scroll away. */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
                 <div className="space-y-1">
                   <FieldLabel>Name *</FieldLabel>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" data-testid="zumba-field-name" />
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" className={FIELD_CLS} data-testid="zumba-field-name" />
                 </div>
                 <div className="space-y-1">
                   <FieldLabel>Email</FieldLabel>
-                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@example.com" data-testid="zumba-field-email" />
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@example.com" className={FIELD_CLS} data-testid="zumba-field-email" />
                 </div>
 
                 <div className="space-y-1">
                   <FieldLabel>Phone Number</FieldLabel>
-                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="10-digit number" data-testid="zumba-field-phone" />
+                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="10-digit number" className={FIELD_CLS} data-testid="zumba-field-phone" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <FieldLabel>Age</FieldLabel>
-                    <Input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} placeholder="—" data-testid="zumba-field-age" />
+                    <Input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} placeholder="—" className={FIELD_CLS} data-testid="zumba-field-age" />
                   </div>
                   <div className="space-y-1">
                     <FieldLabel>Gender</FieldLabel>
@@ -2484,7 +2488,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                           value={newMaster}
                           onChange={(e) => setNewMaster(e.target.value)}
                           placeholder="New master's name"
-                          className="text-xs"
+                          className={FIELD_CLS}
                           data-testid="zumba-field-new-master"
                         />
                         <Button
@@ -2511,7 +2515,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                     type="date"
                     value={form.joined_on || ""}
                     onChange={(e) => setForm({ ...form, joined_on: e.target.value })}
-                    data-testid="zumba-field-joined"
+                    className={FIELD_CLS} data-testid="zumba-field-joined"
                   />
                 </div>
                 <div className="space-y-1">
@@ -2523,7 +2527,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                     value={finishPreview(form.joined_on, form.package_sessions)}
                     readOnly
                     title={form.package_sessions ? "Follows from the membership below." : "Pick a membership below to set this."}
-                    className="bg-slate-50"
+                    className={`${FIELD_CLS} bg-slate-50 text-slate-500`}
                     data-testid="zumba-field-finish"
                   />
                 </div>
@@ -2557,10 +2561,10 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
                     value={form.fee_amount}
                     onChange={(e) => setForm({ ...form, fee_amount: e.target.value })}
                     placeholder={pickedPrice ? String(pickedPrice) : "0"}
-                    data-testid="zumba-field-amount"
+                    className={FIELD_CLS} data-testid="zumba-field-amount"
                   />
                 </div>
-                <p className="self-end pb-1 text-[11px] text-slate-400">
+                <p className="flex min-h-10 items-center self-end text-[11px] leading-snug text-slate-400">
                   {pickedPrice
                     ? `Package price ${rupees(pickedPrice)} — edit to charge a different amount. Collect the fee from the row once registered.`
                     : "Pick a membership above, or type the fee. Collect the fee from the row once registered."}
