@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, QUICK_DATE_PRESETS, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
-import { StatTile } from "@/components/ui/stat-tile";
+import { StageTab } from "@/components/ui/stage-tab";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -502,19 +502,21 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
           `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
           on a 5px corner, matching the Fitness and Zumba strips. "desk": the chevron is
           sm-up only, a phone card is label and figure alone. */}
-      <div className="hidden grid-cols-3 gap-3 sm:grid" data-testid="branch-review-subtabs">
-        {SUB_TABS.map((t) => (
-          <StatTile
-            key={t.key}
-            label={t.label}
-            value={countFor(t.key)}
-            arrow="desk"
-            color={t.color}
-            active={sub === t.key}
-            onClick={() => { setSub(t.key); setDateFilter(null); }}
-            testid={`branch-review-subtab-${t.key}`}
-          />
-        ))}
+      <div className="hidden rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 p-1 shadow-[0_1px_2px_0_rgb(15_23_42/0.04),0_4px_12px_-4px_rgb(99_102_241/0.12)] sm:block" data-testid="branch-review-subtabs">
+        <div className="flex flex-nowrap gap-2">
+          {SUB_TABS.map((t) => (
+            <StageTab
+              key={t.key}
+              label={t.label}
+              count={countFor(t.key)}
+              active={sub === t.key}
+              onClick={() => { setSub(t.key); setDateFilter(null); }}
+              testid={`branch-review-subtab-${t.key}`}
+              gridded
+              plain
+            />
+          ))}
+        </div>
       </div>
 
       {/* No Card around this row any more. A bordered input sitting inside a bordered

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatTile } from "@/components/ui/stat-tile";
+import { StageTab } from "@/components/ui/stage-tab";
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { QuickDateFilterBar, QUICK_DATE_PRESETS, quickDatePreset } from "@/components/QuickDateFilterBar";
@@ -525,19 +525,21 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
           on a 5px corner — the same strip the Fitness tab carries, so the two boards read
           as one family beside the Zumba strip. "desk": the chevron is sm-up only, a phone
           card is label and figure alone. */}
-      <div className="hidden grid-cols-2 gap-3 sm:grid md:grid-cols-3 xl:grid-cols-6">
-        {CARDS.map((c) => (
-          <StatTile
-            key={c.key}
-            label={c.label}
-            value={counts[c.key] ?? 0}
-            arrow="desk"
-            color={c.color}
-            active={card === c.key}
-            onClick={() => setCard(c.key)}
-            testid={`branch-patients-card-${c.key}`}
-          />
-        ))}
+      <div className="hidden rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 p-1 shadow-[0_1px_2px_0_rgb(15_23_42/0.04),0_4px_12px_-4px_rgb(99_102_241/0.12)] sm:block">
+        <div className="flex flex-nowrap gap-2">
+          {CARDS.map((c) => (
+            <StageTab
+              key={c.key}
+              label={c.label}
+              count={counts[c.key] ?? 0}
+              active={card === c.key}
+              onClick={() => setCard(c.key)}
+              testid={`branch-patients-card-${c.key}`}
+              gridded
+              plain
+            />
+          ))}
+        </div>
       </div>
 
       {/* Which service, then when they joined, then who — three narrowings of one list on

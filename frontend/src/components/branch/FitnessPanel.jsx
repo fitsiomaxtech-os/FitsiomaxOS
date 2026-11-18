@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
-import { StatTile } from "@/components/ui/stat-tile";
+import { StageTab } from "@/components/ui/stage-tab";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -452,20 +452,21 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
         </div>
       )}
 
-      <div className="hidden grid-cols-2 gap-3 sm:grid md:grid-cols-3 xl:grid-cols-6">
-        {CARDS.map((c) => (
-          <StatTile
-            titleCase
-            key={c.key}
-            label={c.label}
-            value={c.value ?? 0}
-            arrow="desk"
-            color={c.color}
-            active={card === c.key}
-            onClick={() => setCard(c.key)}
-            testid={`fitness-card-${c.key}`}
-          />
-        ))}
+      <div className="hidden rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 p-1 shadow-[0_1px_2px_0_rgb(15_23_42/0.04),0_4px_12px_-4px_rgb(99_102_241/0.12)] sm:block">
+        <div className="flex flex-nowrap gap-2">
+          {CARDS.map((c) => (
+            <StageTab
+              key={c.key}
+              label={c.label}
+              count={c.value ?? 0}
+              active={card === c.key}
+              onClick={() => setCard(c.key)}
+              testid={`fitness-card-${c.key}`}
+              gridded
+              plain
+            />
+          ))}
+        </div>
       </div>
 
       <Card className={phoneList ? undefined : "hidden sm:block"}>
