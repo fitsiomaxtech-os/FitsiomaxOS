@@ -102,6 +102,7 @@ const MyConsultationBoard = lazyWithRetry(() => import("@/components/MyConsultat
 const OperationsBoard = lazyWithRetry(() => import("@/components/OperationsBoard").then((m) => ({ default: m.OperationsBoard })));
 const AccountantBoard = lazyWithRetry(() => import("@/components/finance/AccountantBoard").then((m) => ({ default: m.AccountantBoard })));
 const ZumbaMasterBoard = lazyWithRetry(() => import("@/components/ZumbaMasterBoard").then((m) => ({ default: m.ZumbaMasterBoard })));
+const ProductionEnvironmentBoard = lazyWithRetry(() => import("@/components/ProductionEnvironmentBoard").then((m) => ({ default: m.ProductionEnvironmentBoard })));
 // Everybody's own page — their month, and their record. Lazy like the boards it stands in
 // for: it is opened from the header a few times a month, and it is the only screen here
 // that every single role can reach, so bundling it would put it in front of every first
@@ -972,6 +973,7 @@ export const CRMPage = ({ auth, onLogout }) => {
   // Clients whose paid treatment sessions have run out with a balance owing: Branch Admin,
   // Super Admin and the BDE only.
   const canSeeSessionPayments = showSuperAdminBoard || showBranchBoard || showBusinessDevBoard;
+  const showProductionBoard = role === "production_environment";
 
   // What patients have sent past their branch, waiting to be read. Asked once when the
   // board opens rather than polled: feedback arrives at the pace people write it, and a
@@ -1656,6 +1658,19 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         {showAccountantBoard && <AccountantBoard />}
         {showZumbaBoard && <ZumbaMasterBoard />}
+
+        {showProductionBoard && (
+          <div className="space-y-4" data-testid="production-board-root">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Production Environment</h2>
+              <p className="text-sm text-slate-500">
+                What is live, what is waiting, and the button that releases it. Pushing to the
+                branch does not release anything on its own.
+              </p>
+            </div>
+            <ProductionEnvironmentBoard />
+          </div>
+        )}
 
         </Suspense>
 

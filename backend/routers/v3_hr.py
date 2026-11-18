@@ -115,9 +115,15 @@ def _require_employee_branch_scope(branches: set, allowed: set) -> None:
 #
 # Ordered by the department each belongs to, because this list is what the Designation and
 # Create User dropdowns render, and HR's own structure groups them the same way.
+#
+# "production_environment" is the Production Environment designation: it owns the deploy
+# button, and nothing else in the OS gates on it. Listed here rather than added as a custom
+# role so it is selectable in Create User Account on any install without someone having to
+# type the name identically twice.
 DEFAULT_ROLES = [
     # Management
     "super_admin", "super_admin_pro", "business_dev", "accountant", "hr_admin", "marketing_head",
+    "production_environment",
     # Sales Department
     "sales_head", "pre_sales",
     # Admins

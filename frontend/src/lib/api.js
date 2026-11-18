@@ -1201,6 +1201,9 @@ export const approveSessionPaymentExtension = async (leadId, extendedDueDate, no
   (await api.post(`/session-payment/${leadId}/extension/approve`, { extended_due_date: extendedDueDate, note })).data;
 export const rejectSessionPaymentExtension = async (leadId, note) =>
   (await api.post(`/session-payment/${leadId}/extension/reject`, { note })).data;
+// Production Environment — what is live, what is waiting, and the button that releases it.
+export const listDeployments = async () => (await api.get("/deployments")).data;
+export const startDeployment = async (payload) => (await api.post("/deployments/deploy", payload)).data;
 export const listBranchFeedback = async (branchId) => (await api.get("/branch/feedback", { params: branchId ? { branch_id: branchId } : {} })).data;
 export const moveBranchFeedback = async (feedbackId, status, reply, note) => (await api.patch(`/branch/feedback/${feedbackId}`, { status, reply, note })).data;
 // Writing back to the patient on their own thread. ask_resolved is how a branch closes one
