@@ -11847,9 +11847,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               )}
 
               {detailTab === "profile" && (
-                // Two framed cards side by side, each a label column and a value column, so every
-                // value starts on one line down the card instead of drifting to the far edge.
-                <div className="grid gap-3 md:grid-cols-2" data-testid="cons-lead-profile">
+                // Two framed cards, one under the other, each a label column and a value column,
+                // so every value starts on one line down the card instead of the far edge.
+                <div className="flex flex-col gap-3" data-testid="cons-lead-profile">
                   {[
                     ["Contact", [
                       ["Phone", displayPhone(selectedLead.phone)],
@@ -11873,7 +11873,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {rows.map(([label, value]) => {
                           const has = value !== null && value !== undefined && String(value).trim() !== "";
                           return (
-                            <div key={label} className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 text-sm">
+                            <div key={label} className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-4 px-4 py-2.5 text-sm">
                               <dt className="text-slate-500">{label}</dt>
                               <dd className={`break-words ${has ? "font-medium text-slate-800" : "text-slate-400"}`}>{has ? value : "—"}</dd>
                             </div>
