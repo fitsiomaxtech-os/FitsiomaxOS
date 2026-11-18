@@ -4966,7 +4966,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           short tab -- Overview, with just the contact and the move buttons -- sitting on a
           block of blank card. */}
       <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
-        {/* Plain header. The gradient made this the loudest thing on a screen whose
+        {/* A light sky tint, not the old gradient: enough to set the name row apart from
+            the tabs and cards below, quiet enough that the chips still read. The gradient made this the loudest thing on a screen whose
             subject is the cards underneath — the patient's name and their stage are the
             information here, and they read better on white than reversed out of three
             colours. Every chip in it had been picked to survive that background: white on
@@ -4974,7 +4975,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
             set against the page now instead. */}
         {/* The name block and the buttons share one centre line, 8px above and below;
             the side padding is the same 16px the tabs and cards below start at. */}
-        <div className="relative border-b border-slate-200 bg-white px-4 py-2 sm:px-5">
+        <div className="relative border-b border-sky-100 bg-sky-50 px-4 py-2 sm:px-5">
           {/* One row: name, ID and stage chip side by side, the buttons on the same
               centre line. On a phone that is two rows instead: name and buttons on the
               first, ID and stage on the second — the chips run under the buttons too, so
