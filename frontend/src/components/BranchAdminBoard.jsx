@@ -6939,6 +6939,18 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                 <label className="mb-1 block text-xs font-semibold text-slate-600">Time *</label>
                 <MilkTimeInput value={followUpMoveDraft.time} onChange={(e) => setFollowUpMoveDraft({ ...followUpMoveDraft, time: e.target.value })} data-testid="branch-followup-move-time" />
               </div>
+              {/* Saved on the follow-up itself and in the lead's activity line. */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Remarks</label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  placeholder="What was discussed, what to ask next time (optional)"
+                  value={followUpMoveDraft.remarks || ""}
+                  onChange={(e) => setFollowUpMoveDraft({ ...followUpMoveDraft, remarks: e.target.value })}
+                  data-testid="branch-followup-move-remarks"
+                />
+              </div>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5">
               <Button variant="outline" onClick={() => setFollowUpMoveDraft(null)} data-testid="branch-followup-move-cancel">Cancel</Button>
