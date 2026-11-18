@@ -8580,7 +8580,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           {/* Tinted, like the Appointment Card in the header. Grey on white it
                               read as a switch left off rather than as something to press. */}
                           {caseRecordOpen ? (
-                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition group-hover:border-slate-300 group-hover:bg-slate-100" data-testid="cons-case-record-close">
+                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 shadow-sm ring-1 ring-inset ring-sky-200 transition group-hover:bg-sky-100 group-hover:ring-sky-300" data-testid="cons-case-record-close">
                               <X className="h-3.5 w-3.5" /> Close
                             </span>
                           ) : (
