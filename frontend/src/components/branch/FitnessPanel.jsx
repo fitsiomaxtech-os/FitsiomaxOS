@@ -1015,14 +1015,16 @@ export const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSav
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-2xl" data-testid="fitness-member-dialog">
-        <div className="flex items-center justify-between border-b px-5 py-3.5">
-          <h3 className="text-base font-semibold text-slate-800">{isEdit ? `Edit ${member.name}` : "Add Gym Member"}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="fitness-dialog-close"><X className="h-4 w-4" /></button>
+        <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-sky-700 bg-[#0284C7] px-5 py-3.5">
+          <h3 className="truncate text-base font-semibold text-white">{isEdit ? `Edit ${member.name}` : "Add Gym Member"}</h3>
+          <button onClick={onClose} className="shrink-0 rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close" data-testid="fitness-dialog-close"><X className="h-4 w-4" /></button>
         </div>
 
         {/* Three to a row so the whole form fits on one screen, as the Zumba lead dialog
             does; it only scrolls on a window too short for it. */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <section className="rounded-lg border border-slate-200 p-4">
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Member details</h4>
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
               <FieldLabel>Full Name *</FieldLabel>
@@ -1050,7 +1052,12 @@ export const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSav
               <FieldLabel>Address</FieldLabel>
               <Input value={form.address} onChange={(e) => set("address", e.target.value)} data-testid="fitness-form-address" />
             </div>
+          </div>
+          </section>
 
+          <section className="rounded-lg border border-slate-200 p-4">
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Package &amp; payment</h4>
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
               <FieldLabel>Package</FieldLabel>
               <FormSelect value={form.package_id} onChange={pickPackage} testid="fitness-form-package">
@@ -1094,20 +1101,24 @@ export const FitnessMemberDialog = ({ member, packages, branchId, onClose, onSav
                 reference, notes counted, who took it and when; a box on this form would move
                 the balance with none of that behind it. The balance is shown read-only so
                 the figure is still in front of whoever is editing. */}
-            <div className="flex h-10 items-center justify-between gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3">
-              <span className="text-xs font-semibold text-slate-500">
-                Collected <b className="text-slate-700">{rupees(member?.fee_paid)}</b>
-              </span>
-              <span className={`text-sm font-extrabold ${due > 0 ? "text-rose-700" : "text-emerald-700"}`} data-testid="fitness-form-balance">
-                {due > 0 ? `${rupees(due)} due` : "Paid up"}
-              </span>
+            <div>
+              <FieldLabel>Balance</FieldLabel>
+              <div className="flex h-9 items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3">
+                <span className="text-xs font-semibold text-slate-500">
+                  Collected <b className="text-slate-700">{rupees(member?.fee_paid)}</b>
+                </span>
+                <span className={`text-sm font-bold ${due > 0 ? "text-rose-700" : "text-emerald-700"}`} data-testid="fitness-form-balance">
+                  {due > 0 ? `${rupees(due)} due` : "Paid up"}
+                </span>
+              </div>
             </div>
           </div>
+          </section>
         </div>
 
-        <div className="flex justify-end gap-2 border-t px-5 py-3">
-          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button size="sm" onClick={submit} disabled={saving || overpaid} className="bg-sky-600 text-white hover:bg-sky-700" data-testid="fitness-form-save">
+        <div className="flex justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-slate-50 px-5 py-3">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving} className="min-w-[6rem] bg-white">Cancel</Button>
+          <Button size="sm" onClick={submit} disabled={saving || overpaid} className="min-w-[9rem] bg-[#0284C7] text-white hover:bg-sky-700" data-testid="fitness-form-save">
             {saving ? "Saving..." : isEdit ? "Save Changes" : "Register Member"}
           </Button>
         </div>
