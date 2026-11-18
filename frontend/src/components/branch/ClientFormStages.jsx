@@ -461,8 +461,18 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
                   <span className="text-[15px] font-medium text-slate-900" id="cs-branch">
                     Branch<span className="ml-1 text-rose-600">*</span>
                   </span>
-                  {/* Required: a pick can be changed, not cleared. */}
-                  <div role="radiogroup" aria-labelledby="cs-branch" aria-required="true" aria-invalid={Boolean(err("branch"))} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {/* Required: a pick can be changed, not cleared. One row, a column per
+                      branch, however many the OS has (two branches: two halves; six: six
+                      sixths). A phone is too narrow for that, so there they go two a row. */}
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="cs-branch"
+                    aria-required="true"
+                    aria-invalid={Boolean(err("branch"))}
+                    className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(var(--cs-branches),minmax(0,1fr))]"
+                    style={{ "--cs-branches": branches.length }}
+                    data-testid="client-stage-branches"
+                  >
                     {branches.map((b, i) => {
                       const on = d.branch === b;
                       return (
@@ -473,13 +483,14 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
                           role="radio"
                           aria-checked={on}
                           onClick={() => set("branch")(b)}
-                          className={`flex h-10 w-full min-w-0 items-center gap-3 rounded-[8px] border px-4 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : `${err("branch") ? "border-rose-300" : "border-[#c7cdea]"} text-slate-700 hover:bg-slate-50`}`}
+                          title={b}
+                          className={`flex h-10 w-full min-w-0 items-center gap-2.5 rounded-[8px] border px-3 text-left text-[15px] transition ${on ? "border-[#0066ff] bg-[#0066ff]/[0.04] text-slate-900" : `${err("branch") ? "border-rose-300" : "border-[#c7cdea]"} text-slate-700 hover:bg-slate-50`}`}
                           data-testid={`client-stage-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
                         >
                           <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2" style={{ borderColor: on ? BLUE : "#94a3b8" }}>
                             {on && <span className="h-2 w-2 rounded-full" style={{ background: BLUE }} />}
                           </span>
-                          {b}
+                          <span className="min-w-0 truncate">{b}</span>
                         </button>
                       );
                     })}

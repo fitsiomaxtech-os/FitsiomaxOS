@@ -45,8 +45,14 @@ export const showDate = (iso) => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || "—";
 };
 // The Branch boxes are the live offline branches, in the pickers' order. A branch is
-// written as the form shows it: "Anna Nagar Branch" -> "Anna Nagar".
-export const formBranchName = (name) => String(name || "").replace(/\s+branch$/i, "").trim();
+// written as the form shows it: "Anna Nagar Branch" -> "Anna Nagar". Stray spaces and
+// invisible characters around the name (as typed into Branch Management) go first, or
+// the trailing "Branch" would not be at the end to strip.
+export const formBranchName = (name) => String(name || "")
+  .replace(/[\s​-‍⁠]+/g, " ")
+  .trim()
+  .replace(/[\s.,_-]*\bbranch\b[\s.]*$/i, "")
+  .trim();
 const branchLetters = (name) => formBranchName(name).toLowerCase().replace(/[^a-z]/g, "");
 // Letters only, so a form saved as "T.Nagar" still ticks the branch now called "T Nagar".
 export const sameBranch = (a, b) => Boolean(branchLetters(a)) && branchLetters(a) === branchLetters(b);
