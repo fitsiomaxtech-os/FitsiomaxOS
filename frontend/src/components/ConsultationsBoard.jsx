@@ -8500,11 +8500,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       value: oneLine(written || presales),
                       // Pre-sales' note goes under the Consultant's rather than in place of
                       // it, and says whose it is — the row's label names only the first.
+                      icon: Stethoscope,
+                      // In the same white panel the Plan's services sit in, so the three
+                      // cards of the record read as one set rather than two loose
+                      // paragraphs above a table.
                       full: (written || presales) && (
-                        <div className="space-y-2">
-                          <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">{written || presales}</p>
+                        <div className="divide-y divide-slate-100 rounded-md border border-slate-200 bg-white">
+                          <p className="whitespace-pre-wrap px-2.5 py-2 text-xs font-semibold leading-5 text-slate-800">{written || presales}</p>
                           {written && presales && (
-                            <div className="rounded-md bg-slate-50 px-2.5 py-1.5" data-testid="cons-case-record-diagnosis-presales">
+                            <div className="px-2.5 py-2" data-testid="cons-case-record-diagnosis-presales">
                               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pre-Sales</p>
                               <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-600">{presales}</p>
                             </div>
@@ -8519,19 +8523,20 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       value: oneLine(treatment),
                       // Numbered, one to a line, the way the Consultant ticked them — the
                       // row above runs them together with dots to fit one line.
+                      icon: ClipboardList,
+                      // One treatment to a row of the same white panel, each behind a
+                      // small round number, so the list lines up on one edge.
                       full: treatment && (() => {
                         const items = treatment.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-                        return items.length > 1 ? (
-                          <ol className="space-y-1">
+                        return (
+                          <ol className="divide-y divide-slate-100 rounded-md border border-slate-200 bg-white">
                             {items.map((t, i) => (
-                              <li key={i} className="flex gap-2 text-xs leading-5 text-slate-800">
-                                <span className="w-4 shrink-0 text-right font-semibold text-slate-400">{i + 1}.</span>
-                                <span className="min-w-0">{t}</span>
+                              <li key={i} className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-semibold leading-5 text-slate-800">
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-50 text-[10px] font-bold text-sky-700">{i + 1}</span>
+                                <span className="min-w-0 break-words">{t}</span>
                               </li>
                             ))}
                           </ol>
-                        ) : (
-                          <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">{treatment}</p>
                         );
                       })(),
                       testid: "cons-case-record-treatment",
@@ -8539,6 +8544,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {
                       key: "plan",
                       label: "Plan",
+                      icon: ClipboardCheck,
                       value: plan?.label || "",
                       full: plan && (
                         <>
@@ -8589,8 +8595,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           <div className="space-y-3 border-t border-slate-100 p-4" data-testid="cons-case-record-details">
                             {cells.map((c) => (
                               <div key={c.key} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3" data-testid={c.testid}>
-                                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{c.label}</p>
-                                {c.full || <p className="text-xs italic text-slate-400">Not written yet</p>}
+                                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                  {c.icon && <c.icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
+                                  {c.label}
+                                </p>
+                                {c.full || <p className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs italic text-slate-400">Not written yet</p>}
                               </div>
                             ))}
                           </div>
