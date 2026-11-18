@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
-import { CLIENT_FIELDS, EMPTY_FORM, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { CLIENT_FIELDS, EMPTY_FORM, formBranchesFrom, todayIso } from "@/components/branch/ConsultationFormSheets";
 import { ClientFormStages, ClientThankYou } from "@/components/branch/ClientFormStages";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -18,6 +18,8 @@ export const ClientConsultationFormPage = () => {
   const { token } = useParams();
   const [state, setState] = useState("loading"); // loading | open | done | submitted | invalid
   const [form, setForm] = useState(EMPTY_FORM);
+  // The Branch step's choices: every live offline branch, sent with the form.
+  const [branches, setBranches] = useState([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,6 +29,7 @@ export const ClientConsultationFormPage = () => {
       .get(`${BACKEND_URL}/api/v3/public/consultation-forms/${token}`)
       .then(({ data }) => {
         setForm({ ...EMPTY_FORM, ...data.fields, date: data.fields?.date || todayIso() });
+        setBranches(formBranchesFrom(data.branches));
         setState(data.status === "open" ? "open" : "submitted");
       })
       .catch(() => setState("invalid"));
@@ -69,5 +72,5 @@ export const ClientConsultationFormPage = () => {
   if (state === "done") return <ClientThankYou />;
   if (state === "submitted") return <Notice icon={CheckCircle2} tone="text-emerald-500" title="Already submitted" text="This form has already been filled. Contact the clinic if you need to change anything." />;
 
-  return <ClientFormStages form={form} sending={sending} error={error} onSubmit={submit} />;
+  return <ClientFormStages form={form} branches={branches} sending={sending} error={error} onSubmit={submit} />;
 };

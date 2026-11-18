@@ -26,7 +26,7 @@ from database import v3_col
 from deps import is_branch_admin_role, v3_require_roles
 from physio_scope import user_branch_ids
 from schemas.v3 import V3UserOut
-from utils import now_iso
+from utils import live_branch_query, now_iso
 
 router = APIRouter(prefix="/api/v3", tags=["consultation-forms"])
 
@@ -223,13 +223,27 @@ async def _by_token(token: str) -> dict:
     return row
 
 
+async def _offline_branch_names() -> list:
+    """The branches the patient can pick on the link: every live one a patient walks into.
+    Online branches are left out -- this is the Offline Consultation Form. Names only, no
+    ids or contacts: the link is public."""
+    rows = await v3_col("branches").find(
+        live_branch_query(), {"_id": 0, "branch_name": 1, "vertical": 1},
+    ).to_list(500)
+    return [
+        r["branch_name"] for r in rows
+        if r.get("branch_name") and not str(r.get("vertical") or "").startswith("online_")
+    ]
+
+
 @router.get("/public/consultation-forms/{token}")
 async def public_get_consultation_form(token: str):
     row = await _by_token(token)
-    branch = await v3_col("branches").find_one({"id": row["branch_id"]}, {"_id": 0, "name": 1}) or {}
+    branch = await v3_col("branches").find_one({"id": row["branch_id"]}, {"_id": 0, "branch_name": 1}) or {}
     status = row.get("client_status")
     return {
-        "branch_name": branch.get("name") or "",
+        "branch_name": branch.get("branch_name") or "",
+        "branches": await _offline_branch_names(),
         "status": "open" if status == "requested" else "submitted",
         "fields": {k: row.get(k) or "" for k in CLIENT_FIELDS},
     }

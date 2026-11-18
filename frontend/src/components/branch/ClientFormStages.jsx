@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Eye, Loader2 } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SpellTextarea } from "@/components/ui/spell-textarea";
-import { PAPER_BRANCHES, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { PAPER_BRANCHES, sameBranch, todayIso } from "@/components/branch/ConsultationFormSheets";
 import { loadSpelling } from "@/lib/spellcheck";
 
 /**
@@ -144,7 +144,7 @@ const Area = ({ id, label, value, onChange, rows = 4 }) => (
   />
 );
 
-const startFrom = (form) => {
+const startFrom = (form, branches) => {
   const phone = splitPhone(form.contact_no);
   const text = (k) => String(form[k] || "");
   return {
@@ -154,7 +154,8 @@ const startFrom = (form) => {
     mail_id: text("mail_id"),
     sex: GENDERS.includes(form.sex) ? form.sex : "",
     place: text("place"),
-    branch: PAPER_BRANCHES.includes(form.branch) ? form.branch : "",
+    // The pick the desk sent (its own branch), as the list spells it; else none.
+    branch: branches.find((b) => sameBranch(b, form.branch)) || "",
     age: text("age").replace(/\D/g, "").slice(0, 3),
     source_of_reference: text("source_of_reference"),
     nature_of_job: text("nature_of_job"),
@@ -201,8 +202,10 @@ const PREVIEW = [
 const outlineCls = "flex h-10 items-center gap-1.5 rounded-[8px] border bg-white px-5 text-[15px] font-medium transition hover:bg-slate-50 disabled:opacity-60";
 const outlineStyle = { borderColor: ACCENT, color: ACCENT };
 
-export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }) => {
-  const [d, setD] = useState(() => startFrom(form));
+export const ClientFormStages = ({ form, branches: liveBranches, sending = false, error = "", onSubmit }) => {
+  // The live offline branches from the link's own fetch; the paper's four should none come.
+  const branches = liveBranches?.length ? liveBranches : PAPER_BRANCHES;
+  const [d, setD] = useState(() => startFrom(form, branches));
   const [stage, setStage] = useState(0);
   const [preview, setPreview] = useState(false);
   // Errors show from a step's first Next on, then follow the typing. Not on blur: an
@@ -460,7 +463,7 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
                   </span>
                   {/* Required: a pick can be changed, not cleared. */}
                   <div role="radiogroup" aria-labelledby="cs-branch" aria-required="true" aria-invalid={Boolean(err("branch"))} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {PAPER_BRANCHES.map((b, i) => {
+                    {branches.map((b, i) => {
                       const on = d.branch === b;
                       return (
                         <button

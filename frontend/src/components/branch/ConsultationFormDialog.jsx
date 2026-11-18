@@ -18,7 +18,8 @@ import {
 } from "@/lib/api";
 import { waNumber } from "@/lib/phone";
 import { claimPrintWindow, downloadConsultationForm, printConsultationForm } from "@/lib/consultationFormPrint";
-import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, paperBranch, showDate, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, formBranchName, formBranchesFrom, showDate, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { branchNameOf } from "@/lib/branchOrder";
 
 /**
  * Settings > Consultation Form: the clinic's three-page paper Offline Consultation Form,
@@ -136,7 +137,7 @@ const RequestPanel = ({ busy, onSend, onClose }) => {
 const iconBtn = "rounded p-1.5 text-slate-400 transition hover:bg-sky-50 hover:text-sky-700";
 
 /** The row's arrow: page 1's Patient Details, read only, with the row's tools under them. */
-const DetailsPanel = ({ row, details, pdfBusy, onShare, onPrint, onDownload, onEdit, onDelete, onClose }) => (
+const DetailsPanel = ({ row, details, branches, pdfBusy, onShare, onPrint, onDownload, onEdit, onDelete, onClose }) => (
   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="consultation-form-details">
     <div className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-xl">
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -150,7 +151,7 @@ const DetailsPanel = ({ row, details, pdfBusy, onShare, onPrint, onDownload, onE
       <div className="flex-1 overflow-y-auto bg-slate-100 p-3 sm:p-4">
         {details ? (
           <div className="rounded-[4px] border border-slate-200 bg-white px-5 pb-4 pt-2 shadow-sm sm:px-8">
-            <div className="flex flex-col gap-1"><PatientDetailsSheet f={details} readOnly /></div>
+            <div className="flex flex-col gap-1"><PatientDetailsSheet f={details} branches={branches} readOnly /></div>
           </div>
         ) : (
           <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
@@ -207,6 +208,8 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const [formLoading, setFormLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [homeBranch, setHomeBranch] = useState("");
+  // The Branch boxes: the live offline branches (the paper's four until they come).
+  const [branchNames, setBranchNames] = useState([]);
   const [requesting, setRequesting] = useState(false);
   const [requestBusy, setRequestBusy] = useState(false);
   const [share, setShare] = useState(null); // { token, name, contact }
@@ -222,7 +225,8 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     getBranches()
       .then((list) => {
         if (!live) return;
-        const branch = paperBranch((list || []).find((b) => b.id === branchId)?.name);
+        setBranchNames(formBranchesFrom(list));
+        const branch = formBranchName(branchNameOf((list || []).find((b) => b.id === branchId)));
         setHomeBranch(branch);
         if (initialLead) {
           setForm((current) => current.branch ? current : { ...current, branch });
@@ -381,7 +385,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     const w = claimPrintWindow();
     if (!w) return;
     try {
-      printConsultationForm(fillFrom(await getConsultationForm(branchId, id)), w);
+      printConsultationForm(fillFrom(await getConsultationForm(branchId, id)), w, branchNames);
     } catch (e) {
       w.close();
       toast.error(e?.response?.data?.detail || "Couldn't open the form");
@@ -391,7 +395,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const downloadRow = async (id) => {
     setPdfBusy(id);
     try {
-      await downloadConsultationForm(fillFrom(await getConsultationForm(branchId, id)));
+      await downloadConsultationForm(fillFrom(await getConsultationForm(branchId, id)), branchNames);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't open the form");
     } finally {
@@ -401,7 +405,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
 
   const downloadOpen = async () => {
     setPdfBusy("open");
-    try { await downloadConsultationForm(form); } finally { setPdfBusy(null); }
+    try { await downloadConsultationForm(form, branchNames); } finally { setPdfBusy(null); }
   };
 
   const card = (
@@ -508,7 +512,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
               )}
               {/* In a tab, the paper keeps the popup's width rather than stretching across the desk. */}
               <div className={inline ? "mx-auto w-full max-w-4xl" : ""}>
-                <ConsultationFormSheets f={form} set={set} readOnly={report} />
+                <ConsultationFormSheets f={form} set={set} readOnly={report} branches={branchNames} />
               </div>
             </>
           )}
@@ -522,7 +526,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                   <Link2 className="h-4 w-4" /><span className="hidden sm:inline">Share Link</span>
                 </Button>
               )}
-              <Button type="button" variant="outline" size="sm" onClick={() => printConsultationForm(form)} disabled={formLoading} className="gap-1.5 rounded-[4px] px-2.5" title="Print" data-testid="consultation-form-footer-print">
+              <Button type="button" variant="outline" size="sm" onClick={() => printConsultationForm(form, null, branchNames)} disabled={formLoading} className="gap-1.5 rounded-[4px] px-2.5" title="Print" data-testid="consultation-form-footer-print">
                 <Printer className="h-4 w-4" /><span className="hidden sm:inline">Print</span>
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={downloadOpen} disabled={formLoading || pdfBusy === "open"} className="gap-1.5 rounded-[4px] px-2.5" title="Download PDF" data-testid="consultation-form-footer-download">
@@ -550,6 +554,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
           <DetailsPanel
             row={detailsRow}
             details={details}
+            branches={branchNames}
             pdfBusy={pdfBusy}
             onShare={() => shareRow(detailsRow)}
             onPrint={() => printRow(detailsRow.id)}

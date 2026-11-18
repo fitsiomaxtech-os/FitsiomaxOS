@@ -7,7 +7,7 @@
 // jsPDF and html2canvas are imported on first use, as lib/pdf.js does.
 import { toast } from "@/components/ui/sonner";
 import { escapeHtml } from "@/lib/printable";
-import { PAPER_BRANCHES, showDate } from "@/components/branch/ConsultationFormSheets";
+import { branchBoxes, sameBranch, showDate } from "@/components/branch/ConsultationFormSheets";
 
 const BLUE = "#3b7bbf";
 const STEP = 30; // px between the ruled lines
@@ -46,7 +46,7 @@ const STYLES = `
   .one .val{flex:1;min-width:0;border-bottom:1.6px dotted #cbd5e1;min-height:24px;line-height:22px;padding:0 4px;word-break:break-word}
   .row{display:flex;gap:14px}
   .row .one{flex:1}
-  .branches{display:flex;align-items:center;gap:28px;margin:16px 0 6px;font-size:15px;color:#334155}
+  .branches{display:flex;flex-wrap:wrap;align-items:center;gap:8px 28px;margin:16px 0 6px;font-size:15px;color:#334155}
   .branches i{display:inline-block;width:24px;height:24px;border:1.8px solid #475569;vertical-align:middle;margin-right:10px;
               text-align:center;line-height:21px;font-style:normal;font-weight:700;color:#fff}
   .branches i.on{background:${BLUE};border-color:${BLUE}}
@@ -87,7 +87,8 @@ const sheet = (n, body) => `
     <div class="pno">${n}</div>
   </div>`;
 
-export const consultationFormHtml = (f) => {
+// `branches`: the live branch names (ConsultationFormSheets' formBranchesFrom).
+export const consultationFormHtml = (f, branches) => {
   const logo = `${window.location.origin}/logo-icon-192.png`;
   const page1 = `
     <div class="head">
@@ -102,7 +103,7 @@ export const consultationFormHtml = (f) => {
     ${one("Mail Id:", f.mail_id)}
     ${one("Source of Reference:", f.source_of_reference)}
     ${one("Nature of Job:", f.nature_of_job)}
-    <div class="branches"><span>Branches :</span>${PAPER_BRANCHES.map((b) => `<span><i class="${f.branch === b ? "on" : ""}">${f.branch === b ? "&#10003;" : ""}</i>${escapeHtml(b)}</span>`).join("")}</div>
+    <div class="branches"><span>Branches :</span>${branchBoxes(branches, f.branch).map((b) => { const on = sameBranch(f.branch, b); return `<span><i class="${on ? "on" : ""}">${on ? "&#10003;" : ""}</i>${escapeHtml(b)}</span>`; }).join("")}</div>
     <div class="row">${one("Date:", f.date ? showDate(f.date) : "")}<div class="one" style="flex:2"><span class="lbl">Place:</span>${v(f.place)}</div></div>
     <div style="height:14px"></div>
     ${lines("Past Medical History:", f.past_medical_history, 2, false)}
@@ -163,10 +164,10 @@ export const claimPrintWindow = () => {
   return w;
 };
 
-export const printConsultationForm = (f, win = null) => {
+export const printConsultationForm = (f, win = null, branches) => {
   const w = win || claimPrintWindow();
   if (!w || w.closed) return;
-  w.document.write(consultationFormHtml(f));
+  w.document.write(consultationFormHtml(f, branches));
   w.document.close();
   layoutRules(w.document);
   w.focus();
@@ -176,7 +177,7 @@ export const printConsultationForm = (f, win = null) => {
   });
 };
 
-export const consultationFormPdf = async (f) => {
+export const consultationFormPdf = async (f, branches) => {
   const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
@@ -185,7 +186,7 @@ export const consultationFormPdf = async (f) => {
   try {
     const doc = frame.contentDocument;
     doc.open();
-    doc.write(consultationFormHtml(f));
+    doc.write(consultationFormHtml(f, branches));
     doc.close();
     await waitLoad(frame.contentWindow, doc);
     layoutRules(doc);
@@ -210,9 +211,9 @@ export const consultationFormPdf = async (f) => {
   }
 };
 
-export const downloadConsultationForm = async (f) => {
+export const downloadConsultationForm = async (f, branches) => {
   try {
-    const blob = await consultationFormPdf(f);
+    const blob = await consultationFormPdf(f, branches);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

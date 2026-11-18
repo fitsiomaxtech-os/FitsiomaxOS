@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { branchNameOf, sortBranchesForPicker } from "@/lib/branchOrder";
 
 /**
  * The clinic's three-page paper Offline Consultation Form, as fillable sheets, for Branch
@@ -13,6 +14,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 export const LINE = 32; // px between the dotted rules, as on the paper
 export const FORM_BLUE = "#3b7bbf";
+// The paper's own four boxes: only a fallback now, for when the live branch list hasn't come.
 export const PAPER_BRANCHES = ["Anna Nagar", "Parrys", "T.Nagar", "ECR"];
 
 export const EMPTY_FORM = {
@@ -42,14 +44,24 @@ export const showDate = (iso) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || "—";
 };
-// The branch's own name onto one of the paper's four boxes, so a new form starts ticked.
-export const paperBranch = (name) => {
-  const n = (name || "").toLowerCase().replace(/[^a-z]/g, "");
-  if (n.includes("annanagar")) return "Anna Nagar";
-  if (n.includes("parry")) return "Parrys";
-  if (n.includes("tnagar")) return "T.Nagar";
-  if (n.includes("ecr")) return "ECR";
-  return "";
+// The Branch boxes are the live offline branches, in the pickers' order. A branch is
+// written as the form shows it: "Anna Nagar Branch" -> "Anna Nagar".
+export const formBranchName = (name) => String(name || "").replace(/\s+branch$/i, "").trim();
+const branchLetters = (name) => formBranchName(name).toLowerCase().replace(/[^a-z]/g, "");
+// Letters only, so a form saved as "T.Nagar" still ticks the branch now called "T Nagar".
+export const sameBranch = (a, b) => Boolean(branchLetters(a)) && branchLetters(a) === branchLetters(b);
+// From branch rows ({ branch_name, vertical }) or plain names.
+export const formBranchesFrom = (rows) => {
+  const asRows = (rows || []).map((r) => (typeof r === "string" ? { branch_name: r } : r));
+  const offline = asRows.filter((r) => !String(r?.vertical || "").startsWith("online_"));
+  const names = sortBranchesForPicker(offline).map((r) => formBranchName(branchNameOf(r))).filter(Boolean);
+  return names.filter((n, i) => names.findIndex((m) => sameBranch(m, n)) === i);
+};
+// The boxes to draw: the live list (the paper's four until it comes), plus a saved pick no
+// longer on it, so an old form still shows its tick.
+export const branchBoxes = (branches, picked) => {
+  const list = branches?.length ? branches : PAPER_BRANCHES;
+  return picked && !list.some((b) => sameBranch(b, picked)) ? [...list, picked] : list;
 };
 
 // A dotted rule under every line: one dot every 5px, sat on the line's baseline.
@@ -141,7 +153,7 @@ const bindFor = (f, set, readOnly) => (key) => ({ value: f[key], onChange: (v) =
  * Page 1's Patient Details, heading to Place. Its own piece so the forms list's row popup
  * can show just this part. Sits in a `flex flex-col gap-1` column, as the Page's is.
  */
-export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false }) => {
+export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false, branches }) => {
   const bind = bindFor(f, set, readOnly);
   return (
     <>
@@ -158,8 +170,8 @@ export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false }) => 
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2" role="radiogroup" aria-label="Branches">
         <span className="text-[15px] text-slate-700">Branches :</span>
-        {PAPER_BRANCHES.map((b) => {
-          const on = f.branch === b;
+        {branchBoxes(branches, f.branch).map((b) => {
+          const on = sameBranch(f.branch, b);
           return (
             <button
               key={b}
@@ -188,7 +200,7 @@ export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false }) => 
   );
 };
 
-export const ConsultationFormSheets = ({ f, set, readOnly = false }) => {
+export const ConsultationFormSheets = ({ f, set, readOnly = false, branches }) => {
   const bind = bindFor(f, set, readOnly);
   return (
     <div className="flex flex-col gap-4">
@@ -211,7 +223,7 @@ export const ConsultationFormSheets = ({ f, set, readOnly = false }) => {
           OFFLINE CONSULTATION FORM
         </p>
 
-        <PatientDetailsSheet f={f} set={set} readOnly={readOnly} />
+        <PatientDetailsSheet f={f} set={set} readOnly={readOnly} branches={branches} />
 
         <div className="mt-3 flex flex-col gap-2">
           <Lines label="Past Medical History:" rows={2} {...bind("past_medical_history")} />
