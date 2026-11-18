@@ -59,11 +59,14 @@ CLIENT_FIELDS = (
 MAX_LEN = 5000
 LIST_FIELDS = {"_id": 0, "id": 1, "name": 1, "contact_no": 1, "date": 1, "therapist_name": 1,
                "branch": 1, "created_at": 1, "updated_at": 1, "created_by": 1,
-               "share_token": 1, "client_status": 1, "client_submitted_at": 1}
+               "share_token": 1, "client_status": 1, "client_submitted_at": 1, "lead_id": 1}
 
 
 class ConsultationFormInput(BaseModel):
     fields: Dict[str, Optional[str]] = {}
+    # The lead the form was opened from (the Branch Lead popup's Form button), so the same
+    # patient's form opens again there instead of a second one being started.
+    lead_id: Optional[str] = None
 
 
 def _guard(user: V3UserOut, branch_id: str) -> None:
@@ -100,10 +103,13 @@ async def _branch_exists(branch_id: str) -> None:
 async def list_consultation_forms(
     branch_id: str,
     q: Optional[str] = Query(None),
+    lead_id: Optional[str] = Query(None),
     user: V3UserOut = Depends(v3_require_roles(*ROLES)),
 ):
     _guard(user, branch_id)
     query: dict = {"branch_id": branch_id}
+    if lead_id:
+        query["lead_id"] = lead_id
     term = (q or "").strip()
     if term:
         rx = {"$regex": re.escape(term), "$options": "i"}
@@ -146,7 +152,8 @@ async def create_consultation_form(
 ):
     _guard(user, branch_id)
     await _branch_exists(branch_id)
-    return await _insert(branch_id, user, _clean(payload.fields))
+    lead_id = (payload.lead_id or "").strip()
+    return await _insert(branch_id, user, _clean(payload.fields), {"lead_id": lead_id} if lead_id else None)
 
 
 @router.post("/branches/{branch_id}/consultation-forms/request")

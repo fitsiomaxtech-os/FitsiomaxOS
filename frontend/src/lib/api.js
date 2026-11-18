@@ -291,9 +291,10 @@ export const publicAppointmentPdfUrl = (token) => `${BACKEND_URL}/api/v3/public/
 export const getAppointmentMessage = async (branchId) => (await api.get(`/branches/${branchId}/appointment-message`)).data;
 export const saveAppointmentMessage = async (branchId, template) => (await api.put(`/branches/${branchId}/appointment-message`, { template })).data;
 // Settings > Consultation Form: the paper Offline Consultation Form, kept per branch.
-export const listConsultationForms = async (branchId, q = "") => (await api.get(`/branches/${branchId}/consultation-forms`, { params: q ? { q } : {} })).data;
+export const listConsultationForms = async (branchId, q = "", { leadId } = {}) => (await api.get(`/branches/${branchId}/consultation-forms`, { params: { ...(q ? { q } : {}), ...(leadId ? { lead_id: leadId } : {}) } })).data;
 export const getConsultationForm = async (branchId, id) => (await api.get(`/branches/${branchId}/consultation-forms/${id}`)).data;
-export const createConsultationForm = async (branchId, fields) => (await api.post(`/branches/${branchId}/consultation-forms`, { fields })).data;
+// leadId ties the form to the lead it was opened from, so that lead's Form button finds it again.
+export const createConsultationForm = async (branchId, fields, { leadId } = {}) => (await api.post(`/branches/${branchId}/consultation-forms`, { fields, ...(leadId ? { lead_id: leadId } : {}) })).data;
 export const updateConsultationForm = async (branchId, id, fields) => (await api.put(`/branches/${branchId}/consultation-forms/${id}`, { fields })).data;
 export const deleteConsultationForm = async (branchId, id) => (await api.delete(`/branches/${branchId}/consultation-forms/${id}`)).data;
 // The patient's link: a blank form sent to fill, or an existing one opened to them again.

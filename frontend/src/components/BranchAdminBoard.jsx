@@ -4132,6 +4132,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // belongs beside the name it fixes rather than as a sixth tab among the four.
   const [editing, setEditing] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  // Header's Form: the Consultation Form, filled from this lead (or its saved one reopened).
+  const [fillingForm, setFillingForm] = useState(false);
 
   const [apptDraft, setApptDraft] = useState(null); // { appointment_date, appointment_time, physio_id, notes, final_stage, duration, visit_type, visit_package_id, step } | null
   // Days before today are greyed out on the Appointment calendar unless Developer Access >
@@ -5112,6 +5114,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               </div>
             </div>
             <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1.5">
+              {/* The Consultation Form, opened already filled from this lead. */}
+              <button
+                onClick={() => setFillingForm(true)}
+                title="Consultation Form"
+                aria-label="Consultation Form"
+                className="inline-flex items-center gap-1.5 rounded-[5px] bg-white px-2.5 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                data-testid="branch-lead-form"
+              >
+                <ClipboardList className="h-5 w-5" />Form
+              </button>
               {/* Super Admin only — the backend refuses anyone else, and the branch losing
                   the patient should not be the one deciding it. */}
               {canTransferBranch && !stageLocked && (
@@ -7106,6 +7118,14 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           allowBranchChange={false}
           onClose={() => setEditing(false)}
           onSaved={onUpdate}
+        />
+      )}
+      {fillingForm && (
+        <ConsultationFormDialog
+          branchId={lead.branch_id || branchId}
+          // City as the Lead Details tab reads it: the mapped field or the sheet's own column.
+          initialLead={{ ...lead, city: cityAnswer(lead) || lead.city }}
+          onClose={() => setFillingForm(false)}
         />
       )}
       {transferring && (

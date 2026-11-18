@@ -35,6 +35,31 @@ import { branchNameOf } from "@/lib/branchOrder";
  */
 
 const fillFrom = (r) => Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, r?.[k] || ""]));
+const text = (v) => (v === null || v === undefined ? "" : String(v).trim());
+const titleWords = (v) => text(v).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * A new form opened from a lead: everything the lead already holds, written into the
+ * paper's boxes. What the lead never had stays blank for the desk to fill -- all optional.
+ */
+const formFromLead = (lead) => {
+  const months = Number(lead.months_of_pain);
+  const pain = months > 0 ? `${months} ${months === 1 ? "month" : "months"}` : "";
+  return {
+    ...EMPTY_FORM,
+    name: text(lead.name),
+    age: text(lead.age),
+    sex: titleWords(lead.gender),
+    contact_no: text(lead.phone),
+    mail_id: text(lead.email),
+    // "Manual" only says it was typed in at the desk -- no reference to write down.
+    source_of_reference: [text(lead.source_tab), titleWords(lead.source_type)].find((s) => s && !/^manual/i.test(s)) || "",
+    nature_of_job: text(lead.occupation),
+    place: [lead.city, lead.state].map(text).filter(Boolean).join(", ") || text(lead.location) || text(lead.address),
+    symptoms_root_cause: [text(lead.condition), pain && `Pain for ${pain}`].filter(Boolean).join(" — "),
+    date: todayIso(),
+  };
+};
 const showStamp = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -184,17 +209,12 @@ const DetailsPanel = ({ row, details, branches, pdfBusy, onShare, onPrint, onDow
 );
 
 export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, inline = false }) => {
-  const [initialForm] = useState(() => initialLead ? {
-    ...EMPTY_FORM,
-    name: initialLead.name || "",
-    age: String(initialLead.age ?? ""),
-    sex: initialLead.gender || "",
-    contact_no: initialLead.phone || "",
-    mail_id: initialLead.email || "",
-    nature_of_job: initialLead.occupation || "",
-    place: [initialLead.city, initialLead.state].filter(Boolean).join(", "),
-    date: todayIso(),
-  } : EMPTY_FORM);
+  const [initialForm] = useState(() => initialLead ? formFromLead(initialLead) : EMPTY_FORM);
+  // Opened from a lead: that lead's saved form, if it has one, opens instead of a new copy.
+  const leadId = initialLead?.id || null;
+  const [leadLookup, setLeadLookup] = useState(Boolean(leadId));
+  // Whether the open form is that lead's: a form started or opened from the list is not.
+  const [leadForm, setLeadForm] = useState(Boolean(leadId));
   const [view, setView] = useState(initialLead ? "form" : "list"); // "list" | "form"
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -261,6 +281,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const openNew = () => {
     const start = { ...EMPTY_FORM, date: todayIso(), branch: homeBranch };
     setEditingId(null);
+    setLeadForm(false);
     setMeta(null);
     setReport(false);
     setForm(start);
@@ -269,8 +290,9 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     top();
   };
 
-  const openEdit = async (id, { edit = false } = {}) => {
+  const openEdit = async (id, { edit = false, lead = false } = {}) => {
     setEditingId(id);
+    setLeadForm(lead);
     setReport(false);
     setView("form");
     setFormLoading(true);
@@ -290,6 +312,22 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     }
   };
 
+  // The lead's own form, looked up once: found, it opens to edit; not found (or the lookup
+  // fails), the new form already filled from the lead stays up.
+  useEffect(() => {
+    if (!leadId) return undefined;
+    let live = true;
+    listConsultationForms(branchId, "", { leadId })
+      .then((r) => {
+        const mine = (r.forms || []).find((f) => f.lead_id === leadId);
+        if (live && mine) openEdit(mine.id, { edit: true, lead: true });
+      })
+      .catch(() => {})
+      .finally(() => { if (live) setLeadLookup(false); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, leadId]);
+
   const backToList = () => {
     if (dirty && !window.confirm("Discard the changes on this form?")) return;
     setView("list");
@@ -306,9 +344,11 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     setSaving(true);
     try {
       if (editingId) await updateConsultationForm(branchId, editingId, form);
-      else await createConsultationForm(branchId, form);
+      else await createConsultationForm(branchId, form, { leadId: leadForm ? leadId : null });
       toast.success(editingId ? "Consultation form updated" : "Consultation form saved");
       setSaved(form);
+      // Opened from a lead, the job is done: back to the lead, not to the branch's list.
+      if (leadForm) { onClose(); return; }
       setView("list");
       top();
       load(q.trim());
@@ -496,10 +536,15 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                 </div>
               )}
             </div>
-          ) : formLoading ? (
+          ) : formLoading || leadLookup ? (
             <div className="flex items-center justify-center py-24 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
           ) : (
             <>
+              {leadForm && !editingId && (
+                <p className="mb-3 rounded-[4px] border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800" data-testid="consultation-form-from-lead">
+                  Filled from the lead's details. Blank fields are optional — fill what you have.
+                </p>
+              )}
               {meta?.client_status === "requested" && (
                 <p className="mb-3 rounded-[4px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="consultation-form-status">
                   Sent to the client — waiting for them to fill their part.
@@ -540,8 +585,8 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                 </Button>
               ) : (
                 <>
-                  <Button type="button" variant="outline" size="sm" onClick={backToList} disabled={saving} className="rounded-[4px]">Cancel</Button>
-                  <Button type="button" size="sm" onClick={save} disabled={formLoading || saving || (editingId && !dirty)} className="rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-save">
+                  <Button type="button" variant="outline" size="sm" onClick={leadForm ? close : backToList} disabled={saving} className="rounded-[4px]">Cancel</Button>
+                  <Button type="button" size="sm" onClick={save} disabled={formLoading || leadLookup || saving || (editingId && !dirty)} className="rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-save">
                     {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}{editingId ? "Update" : "Save"}
                   </Button>
                 </>
