@@ -8159,14 +8159,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             : compactDetail
             ? "max-w-[570px] sm:h-[min(610px,calc(100dvh-1rem))] sm:max-h-none"
             : "sm:max-h-[calc(100vh-1rem)] sm:w-[96vw] sm:max-w-5xl"}`}>
-            {/* Two lines, each read across to its far end: who this is and the expert
+            {/* The name row is a #0284C7 band on every stage tab, name and details in white;
+                the Consultant's own popup keeps its grey one.
+                Two lines, each read across to its far end: who this is and the expert
                 seeing them, then how to reach them and when. The expert used to sit in a column of its
                 own behind a rule, which cost the card a third of its width for one name.
 
                 Each line wraps rather than squeezes: on a phone whatever sits at the end
                 drops under the start of its line and lines up on the left with it, rather
                 than hanging off the right edge on a row of its own. */}
-            <div className={`flex shrink-0 items-start gap-3 border-b px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap border-slate-500 bg-slate-500 sm:flex-nowrap" : "border-slate-200"}`}>
+            <div className={`flex shrink-0 items-start gap-3 border-b px-4 py-3 sm:px-5 ${isConsultant ? "flex-wrap border-slate-500 bg-slate-500 sm:flex-nowrap" : "border-sky-700 bg-[#0284C7]"}`}>
               {/* Consultation Visit and Fee Collected: one row -- name, patient number, phone,
                   no icons. The expert and the appointment's day are left to the Overview below it.
 
@@ -8187,12 +8189,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     14px Manrope (the app's body font), medium, "Treatment Prescription" and
                     the X too. bg-slate-500 is not remapped by any Theme Appearance, so the
                     band is that grey on every theme. */}
-                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-white" : "text-base font-semibold text-slate-900"}`} data-testid="cons-detail-title">
+                <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-white" : "text-base font-semibold text-white"}`} data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 ${isConsultant ? "bg-[rgba(255,255,255,0.18)] text-sm font-medium text-white" : "bg-slate-100 font-mono text-[11px] font-semibold text-slate-500"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 ${isConsultant ? "bg-[rgba(255,255,255,0.18)] text-sm font-medium text-white" : "bg-white/15 font-mono text-[11px] font-semibold text-white"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
-                  <span className={`shrink-0 text-sm font-medium ${isConsultant ? "text-white" : "text-slate-500"}`} data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
+                  <span className={`shrink-0 text-sm font-medium ${isConsultant ? "text-white" : "text-white/90"}`} data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
                   {isConsultant && selectedLead.appointment_date && (
                     <span className="shrink-0 text-sm font-medium text-white" data-testid="cons-detail-appt-slot">
                       {apptDayLabel(selectedLead.appointment_date)}
@@ -8206,10 +8208,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               ) : (
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h3 className="flex min-w-0 flex-auto items-center gap-2 text-base font-semibold text-slate-900" data-testid="cons-detail-title">
+                <h3 className="flex min-w-0 flex-auto items-center gap-2 text-base font-semibold text-white" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
                   {selectedLead.patient_number && (
-                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                    <span className="shrink-0 rounded bg-white/15 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
                 </h3>
                 {selectedLead.assigned_physio_name && (
@@ -8219,13 +8221,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         board uses for a settled fee — when it is only a field name and
                         its value. Labelled like a field now, and the name carries the
                         weight instead of the colour. */}
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Expert</span>
-                    <span className="truncate font-semibold text-slate-800">{selectedLead.assigned_physio_name}</span>
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-white/70">Expert</span>
+                    <span className="truncate font-semibold text-white">{selectedLead.assigned_physio_name}</span>
                   </p>
                 )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p className="flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                <p className="flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-white/90">
                   <span className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /> {displayPhone(selectedLead.phone) || "—"}</span>
                   {/* The same wording the row this was opened from now uses. The list
                       says "Wed, 9 Sept" and the header it opens said "2026-09-10", so one
@@ -8251,8 +8253,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </span>
               )}
               {/* A plain bold X, no circle, on every stage of the popup -- white on the
-                  Consultant's grey band. */}
-              <button onClick={() => setSelectedLead(null)} className={`shrink-0 rounded p-1 ${isConsultant ? "text-white hover:bg-[rgba(255,255,255,0.15)]" : "text-black hover:bg-slate-100"}`} data-testid="cons-detail-close">
+                  Consultant's grey band and on everyone else's #0284C7 one. */}
+              <button onClick={() => setSelectedLead(null)} className="shrink-0 rounded p-1 text-white hover:bg-[rgba(255,255,255,0.15)]" data-testid="cons-detail-close">
                 <X className="h-5 w-5" strokeWidth={3} />
               </button>
             </div>
@@ -11799,13 +11801,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       <div className="space-y-4">
                         {days.map((day) => (
                           <section key={day.key || "undated"} data-testid={`cons-timeline-day-${day.key}`}>
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{dayLabel(day.key)}</p>
+                            <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                              <span>{dayLabel(day.key)}</span>
+                              <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+                            </p>
                             <ol>
                               {day.items.map((h, i) => {
                                 const remark = h._kind === "remark";
                                 const lastInDay = i === day.items.length - 1;
                                 return (
                                   <li key={`${h._kind}-${h.id}`} className={`relative flex gap-3 ${lastInDay ? "" : "pb-2.5"}`} data-testid={`cons-timeline-${h._kind}-${h.id}`}>
+                                    {/* The time leads the row, in its own column, so the eye runs
+                                        down one edge of times before it reads what happened. */}
+                                    <span className="w-11 shrink-0 pt-[5px] text-right text-[11px] font-semibold tabular-nums text-slate-500">{h.created_at?.slice(11, 16) || "—"}</span>
                                     <div className="relative flex w-3 shrink-0 justify-center">
                                       {!lastInDay && <span className="absolute -bottom-2.5 top-4 w-0.5 bg-slate-200" aria-hidden="true" />}
                                       <span className={`relative mt-[7px] h-2.5 w-2.5 rounded-full ring-4 ring-white ${remark ? "bg-amber-400" : "bg-sky-500"}`} aria-hidden="true" />
@@ -11813,10 +11821,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     <div className={`min-w-0 flex-1 rounded-md px-3 py-2 ${remark ? "bg-amber-50" : "bg-slate-50"}`}>
                                       {remark && <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Remark</p>}
                                       <p className="break-words text-[13px] leading-snug text-slate-700">{remark ? h.text : h.details}</p>
-                                      <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-400">
-                                        <span className="truncate">{h.created_by || "—"}</span>
-                                        <span className="shrink-0 tabular-nums">{h.created_at?.slice(11, 16)}</span>
-                                      </div>
+                                      <p className="mt-1 truncate text-[11px] text-slate-400">{h.created_by || "—"}</p>
                                     </div>
                                   </li>
                                 );
