@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, Loader2 } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { PAPER_BRANCHES, todayIso } from "@/components/branch/ConsultationFormSheets";
 
 /**
@@ -9,7 +10,8 @@ import { PAPER_BRANCHES, todayIso } from "@/components/branch/ConsultationFormSh
  * can show every answer as a plain list first (Preview, optional), then sends the lot; the
  * client sees only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin
  * opens it as a read-only report). The popup is a fixed 1020 x 520 from tablet width up,
- * the progress bar above it, Previous / Next under the fields.
+ * the progress bar above it, Previous / Next under the fields. Each step is headed
+ * "Offline Consultation Form", as the paper is; the date is picked in the OS's own calendar.
  */
 
 const STAGES = 8;
@@ -193,6 +195,9 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
   // A double tap on step 7's Next must not also open Preview or send the form from step 8:
   // both sit under the pointer once the step changes.
   const movedAt = useRef(0);
+  // The date's calendar floats beside this card, in a portal: hung off the field it would
+  // be clipped by the popup's scrolling body.
+  const cardRef = useRef(null);
   const settled = () => Date.now() - movedAt.current >= 600;
 
   const go = (to) => {
@@ -249,13 +254,14 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
       </div>
 
       <form
+        ref={cardRef}
         onSubmit={next}
         noValidate
         autoComplete="off"
         className="flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:h-[520px]"
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
-        <h1 className="px-6 pt-6 text-[24px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-7 sm:text-[26px]">{preview ? "Preview" : "Enter Your Details"}</h1>
+        <h1 className="px-6 pt-6 text-[24px] font-semibold text-[#6b7aa6] sm:px-10 sm:pt-7 sm:text-[26px]">{preview ? "Preview" : "Offline Consultation Form"}</h1>
 
         {/* Rows only: one field under another, and the buttons under the fields. */}
         <div className={`min-h-0 flex-1 px-6 pb-6 pt-4 sm:px-10 sm:pb-7 ${preview ? "flex flex-col" : "overflow-y-auto"}`} data-testid="client-stage-body">
@@ -381,7 +387,20 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
                 <Text id="cs-age" label="Age" inputMode="numeric" value={d.age} onChange={(v) => set("age")(v.replace(/\D/g, "").slice(0, 3))} error={err("age")} />
                 <Text id="cs-source" label="Source" maxLength={100} value={d.source_of_reference} onChange={set("source_of_reference")} />
                 <Text id="cs-job" label="Nature of Job" maxLength={100} value={d.nature_of_job} onChange={set("nature_of_job")} />
-                <Text id="cs-date" label="Date" type="date" placeholder="" value={d.date} onChange={set("date")} />
+                <Field label="Date" htmlFor="cs-date">
+                  <MilkDateInput
+                    id="cs-date"
+                    value={d.date}
+                    onChange={(e) => set("date")(e.target.value || todayIso())}
+                    accent="sky"
+                    besideRef={cardRef}
+                    title="Date"
+                    // `!`: MilkDateInput appends this after its own h-9 / rounded-md /
+                    // border-input rather than merging, so the plain classes lost.
+                    className="!h-10 !rounded-[8px] !border-[#c7cdea] !px-4 !text-[15px] !shadow-none"
+                    data-testid="client-stage-cs-date"
+                  />
+                </Field>
               </>
             )}
 
