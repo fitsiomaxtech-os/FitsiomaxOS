@@ -839,6 +839,34 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
     return out;
   }, [transactions]);
 
+  // The three income cards' figures: stagePiles, narrowed to the revenue dropdown's
+  // category (Consultation, Session...) while one is picked over the income ledger, so
+  // "Consultation · Rs.9,501" makes To Verify read Rs.9,501 and Awaiting Approval and
+  // Income Approved read their own consultation money. The tab badge keeps stagePiles,
+  // which has to count everything still to verify whatever is picked here. Cash In Hand
+  // and Expenses are a drawer and spending, carried by no revenue category, so they stay
+  // whole.
+  const cardView = ledger === "income" && revenueView !== "collected" ? revenueView : null;
+  const cardPiles = useMemo(() => {
+    if (!cardView) return stagePiles;
+    const out = {
+      collected: { count: 0, total: 0 },
+      requested: { count: 0, total: 0 },
+      approved: { count: 0, total: 0 },
+    };
+    transactions.forEach((t) => {
+      if (t.source !== cardView) return;
+      const pile = out[stageOf(t)];
+      pile.count += 1;
+      pile.total += Number(t.gross) || 0;
+    });
+    return out;
+  }, [transactions, stagePiles, cardView]);
+  const cardViewShort = cardView ? REVENUE_VIEWS.find((v) => v.key === cardView)?.short : "";
+  const pileSub = (count) => (cardViewShort
+    ? countLabel(count, `${cardViewShort.toLowerCase()} payment`)
+    : countLabel(count, "payment"));
+
   const filteredTxns = useMemo(() => {
     if (paymentModeFilter === "all") return stagedTxns;
     return stagedTxns
@@ -1232,8 +1260,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
             <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="accountant-manage-phone-summary-cards">
               {summaryCards.map((c) => {
                 const pile = c.key === "approved" || c.key === "requested" || c.key === "collected";
-                const value = pile ? stagePiles[c.key].total : c.key === "cash" ? cashInHand : expenseTotals.approved_total;
-                const count = pile ? stagePiles[c.key].count : Number(expenseTotals.approved_count) || 0;
+                const value = pile ? cardPiles[c.key].total : c.key === "cash" ? cashInHand : expenseTotals.approved_total;
+                const count = pile ? cardPiles[c.key].count : Number(expenseTotals.approved_count) || 0;
                 return (
                   <NotifyCard
                     key={c.key}
@@ -1268,9 +1296,9 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
               const picked = pile ? ledger === "income" && incomeStage === c.key : ledger === c.key;
               const pendingExpense = Number(expenseTotals.pending_total) || 0;
               const card = {
-                collected: { value: stagePiles.collected.total, sub: countLabel(stagePiles.collected.count, "payment") },
-                approved: { value: stagePiles.approved.total, sub: countLabel(stagePiles.approved.count, "payment") },
-                requested: { value: stagePiles.requested.total, sub: countLabel(stagePiles.requested.count, "payment") },
+                collected: { value: cardPiles.collected.total, sub: pileSub(cardPiles.collected.count) },
+                approved: { value: cardPiles.approved.total, sub: pileSub(cardPiles.approved.count) },
+                requested: { value: cardPiles.requested.total, sub: pileSub(cardPiles.requested.count) },
                 cash: {
                   value: cashInHand,
                   color: cashInHand < 0 ? "#e11d48" : c.color,
