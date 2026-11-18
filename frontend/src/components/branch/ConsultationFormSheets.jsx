@@ -135,8 +135,61 @@ const Page = ({ n, children }) => (
   </div>
 );
 
+const bindFor = (f, set, readOnly) => (key) => ({ value: f[key], onChange: (v) => set(key, v), testid: `consultation-form-${key}`, readOnly });
+
+/**
+ * Page 1's Patient Details, heading to Place. Its own piece so the forms list's row popup
+ * can show just this part. Sits in a `flex flex-col gap-1` column, as the Page's is.
+ */
+export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false }) => {
+  const bind = bindFor(f, set, readOnly);
+  return (
+    <>
+      <SectionHead>Patient Details:</SectionHead>
+      <Line label="Name:" autoComplete="name" {...bind("name")} />
+      <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-[1fr_1.4fr_2.6fr]">
+        <Line label="Age:" inputMode="numeric" {...bind("age")} />
+        <Line label="Sex:" {...bind("sex")} />
+        <Line label="Contact no:" inputMode="tel" autoComplete="tel" {...bind("contact_no")} />
+      </div>
+      <Line label="Mail Id:" type="email" autoComplete="email" {...bind("mail_id")} />
+      <Line label="Source of Reference:" {...bind("source_of_reference")} />
+      <Line label="Nature of Job:" {...bind("nature_of_job")} />
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2" role="radiogroup" aria-label="Branches">
+        <span className="text-[15px] text-slate-700">Branches :</span>
+        {PAPER_BRANCHES.map((b) => {
+          const on = f.branch === b;
+          return (
+            <button
+              key={b}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => { if (!readOnly) set("branch", on ? "" : b); }}
+              aria-readonly={readOnly || undefined}
+              className="flex items-center gap-2 text-[15px] text-slate-700"
+              data-testid={`consultation-form-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
+            >
+              <span className={`flex h-6 w-6 items-center justify-center border-2 ${on ? "border-sky-600 bg-sky-600 text-white" : "border-slate-500 bg-white"}`}>
+                {on && <span className="text-sm font-bold leading-none">✓</span>}
+              </span>
+              {b}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-[1fr_2fr]">
+        <Line label="Date:" type="date" {...bind("date")} />
+        <Line label="Place:" {...bind("place")} />
+      </div>
+    </>
+  );
+};
+
 export const ConsultationFormSheets = ({ f, set, readOnly = false }) => {
-  const bind = (key) => ({ value: f[key], onChange: (v) => set(key, v), testid: `consultation-form-${key}`, readOnly });
+  const bind = bindFor(f, set, readOnly);
   return (
     <div className="flex flex-col gap-4">
       {/* Page 1 */}
@@ -158,45 +211,7 @@ export const ConsultationFormSheets = ({ f, set, readOnly = false }) => {
           OFFLINE CONSULTATION FORM
         </p>
 
-        <SectionHead>Patient Details:</SectionHead>
-        <Line label="Name:" autoComplete="name" {...bind("name")} />
-        <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-[1fr_1.4fr_2.6fr]">
-          <Line label="Age:" inputMode="numeric" {...bind("age")} />
-          <Line label="Sex:" {...bind("sex")} />
-          <Line label="Contact no:" inputMode="tel" autoComplete="tel" {...bind("contact_no")} />
-        </div>
-        <Line label="Mail Id:" type="email" autoComplete="email" {...bind("mail_id")} />
-        <Line label="Source of Reference:" {...bind("source_of_reference")} />
-        <Line label="Nature of Job:" {...bind("nature_of_job")} />
-
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2" role="radiogroup" aria-label="Branches">
-          <span className="text-[15px] text-slate-700">Branches :</span>
-          {PAPER_BRANCHES.map((b) => {
-            const on = f.branch === b;
-            return (
-              <button
-                key={b}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => { if (!readOnly) set("branch", on ? "" : b); }}
-                aria-readonly={readOnly || undefined}
-                className="flex items-center gap-2 text-[15px] text-slate-700"
-                data-testid={`consultation-form-branch-${b.replace(/[^A-Za-z]/g, "").toLowerCase()}`}
-              >
-                <span className={`flex h-6 w-6 items-center justify-center border-2 ${on ? "border-sky-600 bg-sky-600 text-white" : "border-slate-500 bg-white"}`}>
-                  {on && <span className="text-sm font-bold leading-none">✓</span>}
-                </span>
-                {b}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-[1fr_2fr]">
-          <Line label="Date:" type="date" {...bind("date")} />
-          <Line label="Place:" {...bind("place")} />
-        </div>
+        <PatientDetailsSheet f={f} set={set} readOnly={readOnly} />
 
         <div className="mt-3 flex flex-col gap-2">
           <Lines label="Past Medical History:" rows={2} {...bind("past_medical_history")} />
