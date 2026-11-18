@@ -102,11 +102,11 @@ export const BranchMonthlyCalendar = ({ branchId, toolbarTarget = null }) => {
       {!canEdit && data && (
         <span className="inline-flex items-center gap-1 rounded-[4px] bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-500"><Lock className="h-3 w-3" />View only</span>
       )}
-      <span className="inline-flex items-baseline gap-1.5 rounded-[4px] border border-emerald-200 bg-emerald-50 px-3 py-1.5" data-testid="mcal-working-count">
+      <span className="inline-flex h-10 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3" data-testid="mcal-working-count">
         <span className="text-base font-bold leading-none text-emerald-700">{workingCount}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Working days</span>
       </span>
-      <span className="inline-flex items-baseline gap-1.5 rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-1.5" data-testid="mcal-leave-count">
+      <span className="inline-flex h-10 items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-3" data-testid="mcal-leave-count">
         <span className="text-base font-bold leading-none text-rose-600">{leaveCount}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-500">Leave days</span>
       </span>
@@ -115,10 +115,10 @@ export const BranchMonthlyCalendar = ({ branchId, toolbarTarget = null }) => {
   // The one-row version: the same box-with-arrows month bar as the Attendance tab beside it.
   const inlineBar = (
     <div className="flex flex-wrap items-center justify-end gap-2" data-testid="mcal-toolbar">
-      <div className="inline-flex items-center gap-5 rounded-[4px] border border-slate-200 bg-white p-1">
-        <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-[4px] border p-1.5 hover:bg-slate-50" data-testid="mcal-prev"><ChevronLeft className="h-4 w-4" /></button>
-        <span className="text-sm font-semibold" data-testid="mcal-month">{monthLabel}</span>
-        <button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-[4px] border p-1.5 hover:bg-slate-50" data-testid="mcal-next"><ChevronRight className="h-4 w-4" /></button>
+      <div className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-1">
+        <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50" data-testid="mcal-prev"><ChevronLeft className="h-4 w-4" /></button>
+        <span className="w-36 text-center text-sm font-semibold text-slate-800" data-testid="mcal-month">{monthLabel}</span>
+        <button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50" data-testid="mcal-next"><ChevronRight className="h-4 w-4" /></button>
       </div>
       {actions}
     </div>
@@ -140,14 +140,14 @@ export const BranchMonthlyCalendar = ({ branchId, toolbarTarget = null }) => {
       </div>
       )}
 
-      <div className="overflow-hidden rounded-[4px] border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="grid grid-cols-7 border-b border-slate-500 bg-slate-500">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white">{w}</div>
+            <div key={w} className="py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white">{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
-          {Array.from({ length: leadBlanks }, (_, i) => <div key={`b-${i}`} className="min-h-[3.5rem] border-b border-r border-slate-100 bg-slate-50/40 sm:min-h-[6rem]" />)}
+          {Array.from({ length: leadBlanks }, (_, i) => <div key={`b-${i}`} className="min-h-[3.5rem] border-b border-r border-slate-100 bg-slate-50/60 sm:min-h-[5.5rem]" />)}
           {days.map((day) => {
             const n = Number(day.date.slice(8));
             const isLeave = day.status === "leave";
@@ -161,31 +161,34 @@ export const BranchMonthlyCalendar = ({ branchId, toolbarTarget = null }) => {
                 onClick={() => toggle(day.date)}
                 disabled={!canEdit}
                 title={isLeave ? `Leave${day.note ? ` — ${day.note}` : day.source === "weekly" ? " — weekly off" : ""}` : "Working"}
-                className={`relative flex min-h-[3.5rem] flex-col items-center gap-1 border-b border-r border-slate-100 p-1 text-center sm:items-start sm:gap-0.5 sm:text-left transition sm:min-h-[6rem] sm:p-2 ${
+                className={`relative flex min-h-[3.5rem] flex-col items-center gap-1 border-b border-r border-slate-100 p-1 text-center transition sm:min-h-[5.5rem] sm:items-stretch sm:gap-2 sm:p-3 sm:text-left ${
                   isPicked ? "bg-sky-100 ring-2 ring-inset ring-sky-500"
                     : isLeave ? "bg-rose-50/70" : "bg-white"
-                } ${canEdit ? "cursor-pointer hover:bg-sky-50" : "cursor-default"}`}
+                } ${canEdit && !isPicked ? "cursor-pointer hover:bg-sky-50" : canEdit ? "cursor-pointer" : "cursor-default"}`}
                 data-testid={`mcal-day-${day.date}`}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold sm:text-sm ${isToday ? "bg-orange-500 text-white" : isLeave ? "text-rose-600" : "text-slate-700"}`}>{n}</span>
-                {/* A phone cell is ~40px wide, where "WORKING" does not fit: a working day is
-                    a green dot there, and a leave day keeps its short word. */}
-                <span className={`rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none sm:text-[10px] ${isLeave ? "bg-rose-100 text-rose-600" : "hidden bg-emerald-100 text-emerald-700 sm:inline"}`}>
-                  {isLeave ? (day.source === "weekly" ? "Off" : "Leave") : "Working"}
+                {/* Number on the left and the day's word on the right of the same line, so
+                    every cell reads the same way. A phone cell is ~40px wide, where "WORKING"
+                    does not fit: a working day is a green dot there, a leave day keeps its word. */}
+                <span className="flex flex-col items-center gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold sm:text-sm ${isToday ? "bg-orange-500 text-white" : isLeave ? "text-rose-600" : "text-slate-700"}`}>{n}</span>
+                  <span className={`rounded px-1.5 py-1 text-[9px] font-bold uppercase leading-none tracking-wide sm:text-[10px] ${isLeave ? "bg-rose-100 text-rose-600" : "hidden bg-emerald-100 text-emerald-700 sm:inline"}`}>
+                    {isLeave ? (day.source === "weekly" ? "Off" : "Leave") : "Working"}
+                  </span>
                 </span>
                 {!isLeave && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 sm:hidden" />}
                 {day.note && <span className="hidden w-full break-words sm:line-clamp-2 text-[10px] font-medium text-rose-500">{day.note}</span>}
-                {chosen && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" title="Set on this calendar" />}
+                {chosen && <span className="absolute bottom-2 right-2 h-2 w-2 rounded-full bg-amber-400" title="Set on this calendar" />}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-500 sm:justify-start">
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-emerald-100" />Working</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-rose-100" />Leave / weekly off</span>
-        <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />Changed on this calendar</span>
+      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500 sm:justify-start">
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-emerald-200 bg-emerald-100" />Working</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded border border-rose-200 bg-rose-100" />Leave / weekly off</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />Changed on this calendar</span>
       </div>
 
       {loading && <p className="text-center text-xs text-slate-400">Loading…</p>}
