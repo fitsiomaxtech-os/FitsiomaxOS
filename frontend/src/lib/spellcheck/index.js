@@ -49,7 +49,8 @@ const bump = () => {
 // Most common words first, one a line, to "#"; then the rarer ones A to Z, each written as
 // the count of letters it shares with the word before it and the rest of it.
 const parseWords = (text) => {
-  const lines = text.split("\n");
+  // A Windows checkout may hand the file back with \r\n.
+  const lines = text.split(/\r?\n/);
   if (!lines[0].startsWith("#fitsiomax-words")) throw new Error("Not the word list");
   const known = new Set();
   const rank = new Map();
