@@ -11778,18 +11778,53 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       ...timelineActivity.map((a) => ({ ...a, _kind: "activity" })),
                     ].sort((x, y) => new Date(x.created_at) - new Date(y.created_at));
                     if (events.length === 0) return <p className="py-8 text-center text-sm text-slate-400">No timeline events yet</p>;
+                    // One heading per day, the events under it in the order they happened.
+                    // The rail is a filled bar, not a border: this popup is often drawn
+                    // .fee-flat, which strips every border inside it -- that is what left
+                    // the dots floating with nothing joining them.
+                    const days = [];
+                    events.forEach((h) => {
+                      const key = (h.created_at || "").slice(0, 10);
+                      const last = days[days.length - 1];
+                      if (last && last.key === key) last.items.push(h);
+                      else days.push({ key, items: [h] });
+                    });
+                    const dayLabel = (key) => {
+                      const d = key ? new Date(`${key}T00:00:00`) : null;
+                      return d && !Number.isNaN(d.getTime())
+                        ? d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+                        : "Undated";
+                    };
                     return (
-                      <ol className="ml-3 space-y-4 border-l-2 border-slate-200 py-1 pl-6">
-                        {events.map((h) => (
-                          <li key={`${h._kind}-${h.id}`} className="relative" data-testid={`cons-timeline-${h._kind}-${h.id}`}>
-                            <span className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white ${h._kind === "remark" ? "bg-amber-400" : "bg-sky-500"}`} />
-                            <div className={`rounded-lg border p-3 ${h._kind === "remark" ? "border-amber-100 bg-amber-50/50" : "border-slate-100 bg-slate-50"}`}>
-                              <p className="text-sm text-slate-700">{h._kind === "remark" ? h.text : h.details}</p>
-                              <p className="mt-1 text-[10px] text-slate-400">{h.created_by} · {h.created_at?.slice(0, 16).replace("T", " ")}</p>
-                            </div>
-                          </li>
+                      <div className="space-y-4">
+                        {days.map((day) => (
+                          <section key={day.key || "undated"} data-testid={`cons-timeline-day-${day.key}`}>
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{dayLabel(day.key)}</p>
+                            <ol>
+                              {day.items.map((h, i) => {
+                                const remark = h._kind === "remark";
+                                const lastInDay = i === day.items.length - 1;
+                                return (
+                                  <li key={`${h._kind}-${h.id}`} className={`relative flex gap-3 ${lastInDay ? "" : "pb-2.5"}`} data-testid={`cons-timeline-${h._kind}-${h.id}`}>
+                                    <div className="relative flex w-3 shrink-0 justify-center">
+                                      {!lastInDay && <span className="absolute -bottom-2.5 top-4 w-0.5 bg-slate-200" aria-hidden="true" />}
+                                      <span className={`relative mt-[7px] h-2.5 w-2.5 rounded-full ring-4 ring-white ${remark ? "bg-amber-400" : "bg-sky-500"}`} aria-hidden="true" />
+                                    </div>
+                                    <div className={`min-w-0 flex-1 rounded-md px-3 py-2 ${remark ? "bg-amber-50" : "bg-slate-50"}`}>
+                                      {remark && <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Remark</p>}
+                                      <p className="break-words text-[13px] leading-snug text-slate-700">{remark ? h.text : h.details}</p>
+                                      <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-400">
+                                        <span className="truncate">{h.created_by || "—"}</span>
+                                        <span className="shrink-0 tabular-nums">{h.created_at?.slice(11, 16)}</span>
+                                      </div>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          </section>
                         ))}
-                      </ol>
+                      </div>
                     );
                   })()}
                 </div>
