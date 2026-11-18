@@ -248,9 +248,10 @@ export const ClientFormStages = ({ form, sending = false, error = "", onSubmit }
     slide(inRef.current, leaving.dir * dist, 0, "backwards");
     const exit = slide(outRef.current, 0, -leaving.dir * dist, "forwards");
     // From the old step's height to the new one's, so the buttons under it glide, not jump.
+    // Held at the end until the old step is gone, or the taller one would flash back.
     const grid = gridRef.current;
     const glide = leaving.glide && can(grid) && outRef.current && inRef.current
-      ? grid.animate([{ height: `${outRef.current.offsetHeight}px` }, { height: `${inRef.current.offsetHeight}px` }], timing)
+      ? grid.animate([{ height: `${outRef.current.offsetHeight}px` }, { height: `${inRef.current.offsetHeight}px` }], { ...timing, fill: "forwards" })
       : null;
     const done = () => setLeaving((cur) => (cur === leaving ? null : cur));
     if (!exit) { done(); return undefined; }
