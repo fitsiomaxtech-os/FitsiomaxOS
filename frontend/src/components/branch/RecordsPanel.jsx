@@ -1345,6 +1345,29 @@ const LeadSourceRecords = ({ branchId }) => {
           <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="lead-source-date-filter" centered iconOnly phoneIconOnly />
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          {/* Every lead the date and search leave, as the Expense Request mini chip: sky
+              while no source card is pressed (the default), and pressing it goes back there. */}
+          <div className="flex items-center rounded-[2px] border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setSource("all")}
+              aria-pressed={source === "all"}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${
+                source === "all" ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"
+              }`}
+              title="Total Source · show all leads"
+              data-testid="lead-source-total"
+            >
+              <span className="hidden sm:inline">Total Source</span>
+              <span
+                className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                  source === "all" ? "bg-white/25 text-white" : "bg-slate-200/70 text-slate-600"
+                }`}
+              >
+                {dated.length}
+              </span>
+            </button>
+          </div>
           {buttonEnabled && (
           <Button
             variant="outline"
