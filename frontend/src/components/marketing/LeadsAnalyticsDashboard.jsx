@@ -238,6 +238,7 @@ const Dot = ({ color, children }) => (
 const LEADS_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_3.75rem_3.75rem_3.25rem]";
 const BranchLeadsList = ({ rows }) => {
   const max = Math.max(1, ...rows.map((r) => r.leads));
+  const maxBooked = Math.max(1, ...rows.map((r) => r.booked));
   const sum = rows.reduce((a, r) => ({ leads: a.leads + r.leads, booked: a.booked + r.booked }), { leads: 0, booked: 0 });
   return (
     <div className="flex flex-col">
@@ -256,22 +257,24 @@ const BranchLeadsList = ({ rows }) => {
           <li
             key={r.name}
             title={`${r.name}: ${nf(r.leads)} leads, ${nf(r.booked)} booked (${pctOf(r.booked, r.leads)})`}
-            className={`grid ${LEADS_COLS} items-center gap-x-4 py-3`}
+            className={`grid ${LEADS_COLS} items-center gap-x-4 py-2.5`}
           >
             <BranchName name={r.name} />
-            {/* The leads bar against the biggest branch, with the booked share drawn inside
-                it, so a branch's bookings read as a part of its own leads. */}
-            <span className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <span
-                className="relative block h-full overflow-hidden rounded-full"
-                style={{ width: `${Math.max(r.leads ? 1.5 : 0, (r.leads / max) * 100)}%`, background: r.name === "Unassigned" ? "#94a3b8" : SERIES }}
-              >
-                {r.booked > 0 && (
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full"
-                    style={{ width: `${Math.max(4, (r.booked / r.leads) * 100)}%`, background: BOOKED }}
-                  />
-                )}
+            {/* Two lines per branch: leads on top, booked underneath. Each line is scaled to
+                its own biggest branch -- on the leads scale a booking count of 6 would not
+                draw at all -- and the Rate column carries the booked-to-leads ratio. */}
+            <span className="flex flex-col gap-1.5">
+              <span className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <span
+                  className="block h-full rounded-full"
+                  style={{ width: `${r.leads ? Math.max(1.5, (r.leads / max) * 100) : 0}%`, background: r.name === "Unassigned" ? "#94a3b8" : SERIES }}
+                />
+              </span>
+              <span className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <span
+                  className="block h-full rounded-full"
+                  style={{ width: `${r.booked ? Math.max(1.5, (r.booked / maxBooked) * 100) : 0}%`, background: BOOKED }}
+                />
               </span>
             </span>
             <span className="text-right text-[13px] font-semibold tabular-nums text-slate-900">{nf(r.leads)}</span>
