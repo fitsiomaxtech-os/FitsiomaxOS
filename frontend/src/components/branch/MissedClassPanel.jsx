@@ -5,7 +5,7 @@ import { SeatDots } from "@/components/ui/seat-dots";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
 import { unscheduledSessions, scheduleSession, getDoctorCalendar, listStoreItems } from "@/lib/api";
-import { endTime12h, to12h } from "@/lib/time";
+import { slotRange12h, to12h } from "@/lib/time";
 import { displayPhone } from "@/lib/phone";
 
 /**
@@ -46,6 +46,15 @@ const longDate = (iso) => {
     : d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 };
 
+/** The picked day in the header, worded the way the assign Slot Picker words it. */
+const headerDate = (iso) => {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+};
+
 const shortDate = (iso) => {
   if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);
@@ -72,6 +81,9 @@ function SlotPicker({ session, onClose, onBooked }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [pickedDate, setPickedDate] = useState(null);
+  // The time chosen on that day. Booked from the footer, as the assign Slot Picker does,
+  // rather than on the tile click itself.
+  const [pickedSlot, setPickedSlot] = useState(null);
   const [saving, setSaving] = useState(false);
   const [sessionMinutes, setSessionMinutes] = useState(FALLBACK_SESSION_MINUTES);
   const [cursor, setCursor] = useState(() => {
@@ -202,103 +214,102 @@ function SlotPicker({ session, onClose, onBooked }) {
   };
 
   const dayTimes = pickedDate ? slotsByDate[pickedDate] || [] : [];
+  const dayNoun = session.track === "rehab" ? "Rehab Day" : "Day";
+
+  const pickDate = (d) => {
+    setPickedDate(pickedDate === d ? null : d);
+    setPickedSlot(null);
+  };
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-3 sm:p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3 sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="flex h-[calc(100vh-1.5rem)] max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:h-[84vh] sm:max-h-[84vh]"
         data-testid="missed-class-slot-picker"
       >
-        <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700">
-            {(session.physio_name || "?").trim().charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-bold text-slate-800">
-              {session.lead_name || "Unknown"}{" "}
-              <span className="font-medium text-slate-400">with</span>{" "}
-              {session.physio_name || "the physio"}
-            </h3>
-            <p className="truncate text-[11px] text-slate-400">
-              {session.track === "rehab" ? "Rehab day" : "Day"} {session.session_number} of{" "}
-              {session.total_sessions} · {sessionMinutes} min ·{" "}
-              {openSlotCount} slot{openSlotCount === 1 ? "" : "s"} open
-            </p>
-          </div>
+        {/* One row, as on the assign Slot Picker: patient with physio, the picked date, close. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 bg-white px-3 py-2 text-slate-900 sm:flex-nowrap sm:px-4 sm:py-2.5">
+          <p className="min-w-0 truncate text-[13px] font-semibold leading-tight text-slate-900 sm:text-[15px]" data-testid="missed-class-picker-title">
+            {session.lead_name || "Unknown"} <span className="font-normal text-slate-400">with</span>{" "}
+            <span className="text-[#8b5cf6]">{session.physio_name || "the physio"}</span>
+          </p>
+          {pickedDate && (
+            <span className="shrink-0 border-l border-slate-200 pl-3 text-[13px] font-bold text-slate-800 sm:text-[15px]" data-testid="missed-class-picked-date">
+              {headerDate(pickedDate)}
+            </span>
+          )}
+          <span className="ml-auto shrink-0 text-[13px] font-bold text-slate-800 sm:text-[15px]">Slot Picker</span>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             aria-label="Close"
             data-testid="missed-class-picker-dismiss"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Why this day is here, on one line that scrolls sideways rather than wrapping —
-            the absence the physio recorded is the only context for whether the patient is
-            likely to make a new day at all. */}
+        {/* Why this day is here, on one line that scrolls sideways rather than wrapping. */}
         <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 sm:px-4 sm:py-2">
           <div className="flex items-stretch gap-2 overflow-x-auto whitespace-nowrap sm:gap-2.5">
-            <span className="hidden shrink-0 self-center text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:inline">
-              Missed day
-            </span>
             <span
-              className="shrink-0 rounded-md border border-amber-800 bg-amber-700 px-2.5 py-1 text-[11px] font-bold text-white sm:px-3 sm:text-[12px]"
+              className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 sm:px-3 sm:text-[12px]"
               data-testid="missed-class-picker-day"
             >
-              Day {session.session_number} needs a date
+              MISSED
+              <span className="ml-2 font-medium text-amber-600">{dayNoun} {session.session_number}</span>
             </span>
             {session.last_absence && (
               <span className="hidden shrink-0 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 sm:inline sm:px-3 sm:text-[12px]">
-                Absent {shortDate(session.last_absence.date)}
+                ABSENT
+                <span className="ml-2 font-medium text-rose-500">{shortDate(session.last_absence.date)}</span>
                 {session.last_absence.remarks && (
                   <span className="ml-2 font-medium text-rose-500">{session.last_absence.remarks}</span>
                 )}
               </span>
             )}
-            {/* Why the calendar starts where it does. Without this the grid simply has no
-                dots on the next three weeks and reads as a physio with no free time, when
-                what it actually means is that the patient is booked until here. */}
+            {/* Why the calendar starts where it does: the patient is booked until here. */}
             {courseEnd && (
               <span
                 className="shrink-0 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 sm:px-3 sm:text-[12px]"
                 data-testid="missed-class-picker-course-end"
               >
-                Slots end {shortDate(courseEnd.split("T")[0])}
+                SLOTS END
+                <span className="ml-2 font-medium text-emerald-600">{shortDate(courseEnd.split("T")[0])}</span>
                 <span className="ml-2 font-medium text-emerald-600">{to12h(courseEnd.split("T")[1])}</span>
               </span>
             )}
-            <span className="ml-auto hidden shrink-0 self-center pl-1 text-[11px] font-bold text-slate-600 sm:inline sm:text-[12px]">
-              {capacity} patient{capacity === 1 ? "" : "s"} per slot
-            </span>
           </div>
         </div>
 
         {loading ? (
-          <p className="px-5 py-14 text-center text-sm text-slate-400">Loading this physio's calendar...</p>
+          <p className="flex-1 px-5 py-14 text-center text-sm text-slate-400">Loading this physio's calendar...</p>
         ) : failed ? (
-          <p className="m-4 rounded-lg border border-dashed border-slate-200 px-3 py-12 text-center text-sm text-slate-400">
-            Couldn't load {session.physio_name || "this physio"}'s calendar.
-          </p>
+          <div className="flex-1 p-4">
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-12 text-center text-sm text-slate-400">
+              Couldn't load {session.physio_name || "this physio"}'s calendar.
+            </p>
+          </div>
         ) : openDates.length === 0 ? (
-          <p className="m-4 rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-10 text-center text-sm text-amber-800" data-testid="missed-class-no-slots">
-            {session.physio_name || "This physio"} has no free slots published
-            {courseEnd
-              ? ` after ${longDate(courseEnd.split("T")[0])}, when ${session.lead_name || "this patient"}'s booked days run out.`
-              : " from today on."}
-            <span className="mt-1 block text-xs font-normal text-amber-700">
-              Open some days in MANAGEMENT → PHYSIO CALENDAR, then come back.
-            </span>
-          </p>
+          <div className="flex-1 p-4">
+            <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-10 text-center text-sm text-amber-800" data-testid="missed-class-no-slots">
+              {session.physio_name || "This physio"} has no free slots published
+              {courseEnd
+                ? ` after ${longDate(courseEnd.split("T")[0])}, when ${session.lead_name || "this patient"}'s booked days run out.`
+                : " from today on."}
+              <span className="mt-1 block text-xs font-normal text-amber-700">
+                Open some days in MANAGEMENT → PHYSIO CALENDAR, then come back.
+              </span>
+            </p>
+          </div>
         ) : (
           <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
             {/* Month grid — a dot marks a day this physio still has room on */}
-            <div className={`w-full flex-shrink-0 ${pickedDate ? "border-b" : "sm:border-b"} border-slate-100 p-3 sm:p-4 lg:w-[19.5rem] lg:border-b-0 lg:border-r lg:overflow-y-auto`}>
+            <div className="w-full flex-shrink-0 border-b border-slate-100 p-3 sm:p-4 lg:w-[19.5rem] lg:border-b-0 lg:border-r lg:overflow-y-auto">
               <div className="mb-2 flex items-center justify-between">
                 <button
                   type="button"
@@ -338,19 +349,18 @@ function SlotPicker({ session, onClose, onBooked }) {
                   const d = isoDate(cursor.y, cursor.m, day);
                   const dayOpen = openOn(d);
                   const isFocused = pickedDate === d;
-                  const isToday = d === today;
                   return (
                     <button
                       key={day}
                       type="button"
-                      onClick={() => setPickedDate(isFocused ? null : d)}
+                      onClick={() => pickDate(d)}
                       disabled={dayOpen === 0}
                       className={`relative h-9 rounded-md text-[13px] font-semibold transition-all ${
                         isFocused
                           ? "bg-violet-600 text-white shadow-md ring-2 ring-violet-300 ring-offset-1"
                           : dayOpen > 0
-                          ? `text-slate-600 hover:bg-slate-100 ${isToday ? "border border-amber-300" : ""}`
-                          : `cursor-not-allowed text-slate-300 ${isToday ? "border border-slate-200" : ""}`
+                          ? "text-slate-600 hover:bg-slate-100"
+                          : "cursor-not-allowed text-slate-300"
                       }`}
                       title={dayOpen > 0
                         ? `${dayOpen} slot${dayOpen > 1 ? "s" : ""} open`
@@ -366,10 +376,8 @@ function SlotPicker({ session, onClose, onBooked }) {
                 })}
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2.5 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-500">
+              <div className="mt-3 hidden flex-wrap items-center gap-2.5 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-500 sm:flex">
                 <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> Slots open</span>
-                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-600" /> Picked</span>
-                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-amber-300" /> Today</span>
               </div>
             </div>
 
@@ -385,78 +393,73 @@ function SlotPicker({ session, onClose, onBooked }) {
                     <p className="text-sm text-slate-400">Pick a date to see this physio's open times</p>
                   </div>
                 </div>
+              ) : dayTimes.length === 0 ? (
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-8 text-center text-sm text-slate-400">
+                  Nothing published on this day — open it in MANAGEMENT → PHYSIO CALENDAR first.
+                </p>
               ) : (
-                <>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-base font-bold text-slate-800" data-testid="missed-class-picked-date">
-                      {longDate(pickedDate)}
-                    </h4>
-                    <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-semibold text-slate-400">
-                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Open</span>
-                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" /> Taken</span>
-                    </div>
-                  </div>
-
-                  {dayTimes.length === 0 ? (
-                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-8 text-center text-sm text-slate-400">
-                      Nothing published on this day — open it in MANAGEMENT → PHYSIO CALENDAR first.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2" data-testid="missed-class-slot-grid">
-                      {dayTimes.map((time) => {
-                        const slot = `${pickedDate}T${time}`;
-                        const seats = seatsTaken(slot);
-                        const mine = ownSlot(slot);
-                        const shut = !slotOpen(slot);
-                        return (
-                          <button
-                            key={time}
-                            type="button"
-                            disabled={shut || saving}
-                            onClick={() => book(slot)}
-                            className={`overflow-hidden rounded-lg border-2 p-2 text-left transition-all sm:p-2.5 ${
-                              shut
-                                ? "cursor-not-allowed border-amber-300 bg-amber-50 opacity-70"
-                                : "border-emerald-200 bg-emerald-50 hover:border-emerald-400 hover:shadow-sm disabled:opacity-50"
-                            }`}
-                            title={mine
-                              ? `${session.lead_name || "This patient"} already has a day at ${to12h(time)} — pick another time`
-                              : shut
-                              ? `Full · ${seats} of ${capacity} taken`
-                              : `${to12h(time)} – ${endTime12h(time, sessionMinutes)} · ${seats} of ${capacity} taken`}
-                            data-testid={`missed-class-slot-${slot}`}
-                          >
-                            {/* Two lines, always: the time on its own so a long one like
-                                "10:00 AM" cannot break after the hour and turn one box into
-                                four lines while a short one beside it stays at two. */}
-                            <p className={`truncate text-[13px] font-bold sm:text-sm ${shut ? "text-amber-800" : "text-emerald-800"}`}>
-                              {to12h(time)}
-                            </p>
-                            {/* A slot says how full it is rather than who is in it — the
-                                physio takes several at once, so the seat count is what
-                                decides whether the day can go here. */}
-                            <p className={`mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium sm:text-xs ${shut ? "text-amber-600" : "text-emerald-600"}`}>
-                              <SeatDots taken={seats} capacity={capacity} />
-                              <span className="min-w-0 truncate">
-                                {mine ? "already here" : shut ? "full" : `ends ${endTime12h(time, sessionMinutes)}`}
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2 lg:grid-cols-3" data-testid="missed-class-slot-grid">
+                  {dayTimes.map((time) => {
+                    const slot = `${pickedDate}T${time}`;
+                    const seats = seatsTaken(slot);
+                    const mine = ownSlot(slot);
+                    const shut = !slotOpen(slot);
+                    const picked = pickedSlot === slot;
+                    const range = slotRange12h(time, sessionMinutes);
+                    return (
+                      <button
+                        key={time}
+                        type="button"
+                        disabled={shut || saving}
+                        onClick={() => setPickedSlot(picked ? null : slot)}
+                        className={`w-full overflow-hidden rounded-lg border-2 p-2 text-left transition-all ${
+                          shut
+                            ? "cursor-not-allowed border-amber-300 bg-amber-50 opacity-70"
+                            : picked
+                            ? "border-emerald-500 bg-emerald-100 shadow-md ring-2 ring-emerald-200"
+                            : "border-emerald-200 bg-white hover:border-emerald-400 hover:bg-emerald-50 hover:shadow-sm disabled:opacity-50"
+                        }`}
+                        title={mine
+                          ? `${session.lead_name || "This patient"} already has a day at ${to12h(time)} — pick another time`
+                          : shut
+                          ? `Full · ${seats}/${capacity}`
+                          : `${range} · ${seats}/${capacity} taken${picked ? " — click to unselect" : ""}`}
+                        data-testid={`missed-class-slot-${slot}`}
+                      >
+                        <p className={`flex items-center gap-1.5 text-[12px] font-bold ${shut ? "text-amber-800" : picked ? "text-emerald-900" : "text-emerald-800"}`}>
+                          <span className="min-w-0 truncate whitespace-nowrap">{range}</span>
+                          <SeatDots taken={seats} capacity={capacity} />
+                        </p>
+                        <div className={`mt-1 flex flex-wrap items-center gap-1 text-[10px] font-semibold ${shut ? "text-amber-700" : picked ? "text-emerald-800" : "text-emerald-700"}`}>
+                          {picked ? (
+                            <>
+                              <span>{dayNoun} {session.session_number}</span>
+                              <span className="inline-flex items-center gap-0.5 rounded border border-current px-1 py-0.5 leading-tight">
+                                <X className="h-2.5 w-2.5" />unselect
                               </span>
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
+                            </>
+                          ) : (
+                            <span className="font-medium opacity-60">{mine ? "already here" : shut ? "full" : "open"}</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-          <p className="hidden min-w-0 truncate text-[11px] text-slate-400 sm:block">
-            {pickedDate ? "Picking a time books this day straight away." : "Pick a day with a green dot."}
-          </p>
-          <Button variant="outline" size="sm" onClick={onClose} className="ml-auto shrink-0">Close</Button>
+        <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-3 py-2 sm:px-4 sm:py-2.5">
+          <Button
+            className="h-8 w-full bg-emerald-600 px-4 text-[12px] hover:bg-emerald-700 sm:w-auto"
+            onClick={() => pickedSlot && book(pickedSlot)}
+            disabled={saving || !pickedSlot}
+            data-testid="missed-class-picker-submit"
+          >
+            {saving ? "Booking..." : "Book Slot"}
+          </Button>
         </div>
       </div>
     </div>
