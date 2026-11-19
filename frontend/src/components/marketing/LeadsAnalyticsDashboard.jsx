@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { getLeadsAnalytics } from "@/lib/api";
@@ -75,6 +75,196 @@ const fillTrend = (rows, grain) => {
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return out;
+};
+
+/* ── over time, per branch ──────────────────────────────────────────────────────── */
+
+/** ₹ in the Indian grouping the desk reads: ₹45k, ₹1.6L, ₹2.3Cr on an axis; the full
+ *  ₹1,64,690 in the hover card. */
+const inr = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
+const inrShort = (n) => {
+  const v = Number(n || 0);
+  const trim = (x) => String(Math.round(x * 10) / 10).replace(/\.0$/, "");
+  if (v >= 1e7) return `₹${trim(v / 1e7)}Cr`;
+  if (v >= 1e5) return `₹${trim(v / 1e5)}L`;
+  if (v >= 1e3) return `₹${trim(v / 1e3)}k`;
+  return `₹${Math.round(v)}`;
+};
+const countShort = (n) => (n >= 1000 ? `${Math.round((n / 1000) * 10) / 10}k` : String(n));
+
+const longPeriod = (p) => {
+  const parts = String(p || "").split("-");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const m = months[Number(parts[1]) - 1] || "";
+  if (parts.length === 3) return `${Number(parts[2])} ${m} ${parts[0]}`;
+  return `${m} ${parts[0]}`;
+};
+
+/** The hover card for the over-time charts: the period on top, every branch that had
+ *  anything that day biggest first with its coloured dash, and the day's total beneath a
+ *  hairline. The highlighted branch, if one is picked in the legend, is lifted out. */
+const TrendTooltip = ({ active, payload, label, money, focus }) => {
+  if (!active || !payload?.length) return null;
+  const rows = payload
+    .filter((p) => Number(p.value) > 0)
+    .sort((a, b) => Number(b.value) - Number(a.value));
+  const total = payload.reduce((a, p) => a + Number(p.value || 0), 0);
+  const fmt = money ? inr : nf;
+  return (
+    <div className="min-w-[13rem] rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.22)] backdrop-blur-sm">
+      <p className="mb-2 text-xs font-medium text-slate-500">{longPeriod(label)}</p>
+      {rows.length === 0 ? (
+        <p className="text-[13px] text-slate-400">Nothing on this {String(label).length > 7 ? "day" : "month"}</p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {rows.map((p) => (
+            <div
+              key={p.dataKey}
+              className={`flex items-baseline gap-2 whitespace-nowrap rounded-md transition-opacity ${focus && focus !== p.dataKey ? "opacity-40" : ""}`}
+            >
+              <span className="inline-block h-[2px] w-3 shrink-0 translate-y-[-3px] rounded-full" style={{ background: p.color }} />
+              <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmt(p.value)}</span>
+              <span className="truncate text-[13px] text-slate-500">{p.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {payload.length > 1 && (
+        <div className="mt-2 flex items-baseline justify-between border-t border-slate-100 pt-2 text-xs">
+          <span className="text-slate-400">Total</span>
+          <span className="font-semibold tabular-nums text-slate-800">{fmt(total)}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+/** One over-time card. With several branches: a line each, and legend chips that carry
+ *  the branch's total -- hover a chip to lift its line out of the others, click it to take
+ *  the branch off the chart. With one branch: that branch alone, as a filled area. */
+const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single }) => {
+  const names = Object.keys(series || {});
+  const [hidden, setHidden] = useState(() => new Set());
+  const [focus, setFocus] = useState(null);
+  const color = (i) => CATEGORICAL[i % CATEGORICAL.length];
+  const shown = names.filter((n) => !hidden.has(n));
+  const rows = (periods || []).map((period, i) => {
+    const row = { period };
+    names.forEach((n) => { row[n] = series[n][i] || 0; });
+    return row;
+  });
+  const totals = Object.fromEntries(names.map((n) => [n, series[n].reduce((a, v) => a + v, 0)]));
+  const grand = shown.reduce((a, n) => a + totals[n], 0);
+  const fmt = money ? inr : nf;
+  const tick = money ? inrShort : countShort;
+  const toggle = (n) => setHidden((h) => {
+    const next = new Set(h);
+    if (next.has(n)) next.delete(n); else next.add(n);
+    return next;
+  });
+  const dense = rows.length > 31;
+  const axisProps = {
+    x: { dataKey: "period", tickFormatter: shortPeriod, tick: { fill: INK.muted, fontSize: 11 }, tickLine: false, axisLine: { stroke: INK.axis }, minTickGap: 24 },
+    y: { allowDecimals: false, tickFormatter: tick, tick: { fill: INK.muted, fontSize: 11 }, tickLine: false, axisLine: false, width: money ? 52 : 40 },
+  };
+  const cursor = { stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 4" };
+
+  return (
+    <Card title={title} sub={sub} testid={testid}>
+      {names.length === 0 || rows.length === 0 ? <Empty>{emptyText}</Empty> : (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{single ? names[0] : "All branches"}</p>
+              <p className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(grand)}</p>
+            </div>
+          </div>
+
+          {!single && (
+            <div className="flex flex-wrap gap-1.5" onMouseLeave={() => setFocus(null)}>
+              {names.map((n, i) => {
+                const off = hidden.has(n);
+                const lit = focus === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => toggle(n)}
+                    onMouseEnter={() => setFocus(off ? null : n)}
+                    aria-pressed={!off}
+                    title={off ? `Show ${n}` : `Hide ${n}`}
+                    className={`group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all duration-200 ${
+                      off
+                        ? "border-dashed border-slate-200 bg-white text-slate-400"
+                        : lit
+                          ? "border-transparent bg-white text-slate-900 shadow-[0_4px_14px_-4px_rgba(15,23,42,0.25)] ring-1 ring-slate-200"
+                          : "border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    <span className="inline-block h-2 w-2 rounded-full transition-transform duration-200 group-hover:scale-125" style={{ background: off ? "#cbd5e1" : color(i) }} />
+                    <span className={off ? "line-through" : ""}>{n}</span>
+                    <span className="font-semibold tabular-nums text-slate-400">{tick(totals[n])}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <ResponsiveContainer width="100%" height={240}>
+            {single ? (
+              <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+                <defs>
+                  <linearGradient id={`fill-${testid}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={money ? CATEGORICAL[2] : SERIES} stopOpacity={0.28} />
+                    <stop offset="100%" stopColor={money ? CATEGORICAL[2] : SERIES} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
+                <XAxis {...axisProps.x} />
+                <YAxis {...axisProps.y} />
+                <Tooltip content={<TrendTooltip money={money} />} cursor={cursor} />
+                <Area
+                  type="monotone"
+                  dataKey={names[0]}
+                  name={names[0]}
+                  stroke={money ? CATEGORICAL[2] : SERIES}
+                  strokeWidth={2.25}
+                  fill={`url(#fill-${testid})`}
+                  // Today or Yesterday is one point, and a line of one point draws nothing.
+                  dot={rows.length <= 2 ? { r: 4, fill: money ? CATEGORICAL[2] : SERIES, strokeWidth: 0 } : false}
+                  activeDot={{ r: 5, fill: money ? CATEGORICAL[2] : SERIES, stroke: SURFACE, strokeWidth: 2.5 }}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            ) : (
+              <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+                <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
+                <XAxis {...axisProps.x} />
+                <YAxis {...axisProps.y} />
+                <Tooltip content={<TrendTooltip money={money} focus={focus} />} cursor={cursor} />
+                {names.map((n, i) => (hidden.has(n) ? null : (
+                  <Line
+                    key={n}
+                    type="monotone"
+                    dataKey={n}
+                    name={n}
+                    stroke={color(i)}
+                    strokeWidth={focus === n ? 3 : 2}
+                    strokeOpacity={focus && focus !== n ? 0.18 : 1}
+                    strokeLinecap="round"
+                    dot={dense ? false : { r: 2.5, fill: color(i), strokeWidth: 0 }}
+                    activeDot={focus && focus !== n ? false : { r: 4.5, fill: color(i), stroke: SURFACE, strokeWidth: 2 }}
+                    isAnimationActive={false}
+                  />
+                )))}
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
+  );
 };
 
 /* ── chrome ─────────────────────────────────────────────────────────────────────── */
@@ -617,6 +807,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const trend = fillTrend(data?.trend || [], data?.grain);
   const byBranch = data?.by_branch || [];
   const branchFunnel = data?.branch_funnel || [];
+  const branchTrend = data?.branch_trend || { grain: "day", periods: [], leads: {}, revenue: {} };
   // The branch card lists real branches only. Leads with no branch are not a branch's
   // demand, and as the longest bar they squashed every row beneath them; their count is
   // said in the subtitle instead.
@@ -642,14 +833,9 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const byWeekday = data?.by_weekday || [];
   const byOwner = data?.by_owner || [];
   const conversion = data?.conversion_by_source || [];
-  const grainLabel = data?.grain === "month" ? "by month" : "by day";
-  const hasOnline = trend.some((t) => Number(t.online || 0) > 0);
   const offlineTotal = trend.reduce((n, t) => n + Number(t.offline || 0), 0);
   const onlineTotal = trend.reduce((n, t) => n + Number(t.online || 0), 0);
   const bookingRate = total > 0 ? Math.round((booked / total) * 1000) / 10 : 0;
-  // One or two buckets (Today, Yesterday) make a line of a single dot that reads as an
-  // empty chart; columns show the same counts as something that can be seen.
-  const fewPoints = trend.length <= 2;
 
   return (
     // Held at reduced opacity while refetching rather than swapped for a skeleton: the
@@ -663,61 +849,30 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <LedgerCard label="Online" value={nf(onlineTotal)} sub="online services" muted={!onlineTotal} testid="leads-analytics-kpi-online" />
       </div>
 
-      {/* 1 — when leads arrive, offline against online */}
-      <Card title="Leads over time" sub={`When they arrived, ${grainLabel}`} testid="leads-analytics-trend">
-        {trend.length === 0 ? <Empty>No leads arrived in this range.</Empty> : asTable ? (
-          <ValueTable
-            rows={trend}
-            firstHeading={data?.grain === "month" ? "Month" : "Day"}
-            labelFormat={shortPeriod}
-            columns={[{ key: "offline", label: "Offline" }, { key: "online", label: "Online" }, { key: "leads", label: "Total" }]}
-          />
-        ) : (
-          <>
-            {/* Two series, so a legend is not optional — identity never rests on
-                colour-matching alone. */}
-            {hasOnline && (
-              <div className="mb-2 flex items-center gap-4 text-xs text-slate-600">
-                <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORICAL[0] }} />Offline</span>
-                <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORICAL[1] }} />Online</span>
-              </div>
-            )}
-            {fewPoints ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={trend} margin={{ top: 20, right: 12, bottom: 4, left: 0 }}>
-                  <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
-                  <XAxis dataKey="period" tickFormatter={shortPeriod} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: INK.axis }} />
-                  <YAxis allowDecimals={false} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-                  <Tooltip content={<VizTooltip labelFormat={shortPeriod} />} cursor={{ fill: "rgba(11,11,11,0.04)" }} />
-                  <Bar dataKey="offline" name="Offline" fill={CATEGORICAL[0]} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
-                    <LabelList dataKey="offline" position="top" offset={6} className="fill-slate-600" style={{ fontSize: 11, fontWeight: 600 }} formatter={nf} />
-                  </Bar>
-                  {hasOnline && (
-                    <Bar dataKey="online" name="Online" fill={CATEGORICAL[1]} radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
-                      <LabelList dataKey="online" position="top" offset={6} className="fill-slate-600" style={{ fontSize: 11, fontWeight: 600 }} formatter={nf} />
-                    </Bar>
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={trend} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-                <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
-                <XAxis dataKey="period" tickFormatter={shortPeriod} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: INK.axis }} minTickGap={24} />
-                <YAxis allowDecimals={false} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-                <Tooltip content={<VizTooltip labelFormat={shortPeriod} />} />
-                {/* 2px, no marker per point — a dot on every day is noise at this density;
-                    the active dot carries the hover, ringed in the surface colour. */}
-                <Line type="monotone" dataKey="offline" name="Offline" stroke={CATEGORICAL[0]} strokeWidth={2} strokeLinecap="round" dot={trend.length <= 31 ? { r: 2.5, fill: CATEGORICAL[0], strokeWidth: 0 } : false} activeDot={{ r: 4, fill: CATEGORICAL[0], stroke: SURFACE, strokeWidth: 2 }} isAnimationActive={false} />
-                {hasOnline && (
-                  <Line type="monotone" dataKey="online" name="Online" stroke={CATEGORICAL[1]} strokeWidth={2} strokeLinecap="round" dot={trend.length <= 31 ? { r: 2.5, fill: CATEGORICAL[1], strokeWidth: 0 } : false} activeDot={{ r: 4, fill: CATEGORICAL[1], stroke: SURFACE, strokeWidth: 2 }} isAnimationActive={false} />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-            )}
-          </>
-        )}
-      </Card>
+      {/* 1 — leads and revenue over time, a line per branch (or the one branch picked) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BranchTrendCard
+          key={`leads-${branchKey}`}
+          title="Leads over time"
+          sub={`When they arrived, ${branchTrend.grain === "month" ? "by month" : "by day"}${oneBranch ? "" : " · per branch"}`}
+          periods={branchTrend.periods}
+          series={branchTrend.leads}
+          single={oneBranch}
+          emptyText="No leads arrived in this range."
+          testid="leads-analytics-trend"
+        />
+        <BranchTrendCard
+          key={`revenue-${branchKey}`}
+          title="Revenue over time"
+          sub={`Fees collected, on the day they were paid, ${branchTrend.grain === "month" ? "by month" : "by day"}${oneBranch ? "" : " · per branch"}`}
+          periods={branchTrend.periods}
+          series={branchTrend.revenue}
+          money
+          single={oneBranch}
+          emptyText="No fees collected in this range."
+          testid="leads-analytics-revenue-trend"
+        />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* 2 — which branches the demand lands on, and how much of it books; with one

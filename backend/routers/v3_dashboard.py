@@ -1192,6 +1192,104 @@ async def v3_dashboard_leads_analytics(
             rows.append({"name": "Other", "value": tail})
         return rows
 
+    # ---- Leads and revenue over time, one series per branch.
+    #
+    # Revenue is the fee trail on the leads -- the same REVENUE_ACTIONS lead_activity rows
+    # /dashboard/overview and the branch growth chart sum -- dated on the day the money was
+    # taken, not the day the lead arrived, and placed in a branch through its lead by the
+    # same _effective_branch rule as the leads, so the two charts split the business the
+    # same way. Zumba studio takings are kept on their own ledger rather than on a lead and
+    # are not in it.
+    #
+    # Leads with no branch are left off both: a line for "no branch" is not a branch's
+    # trend, and the branch card beside it leaves them off for the same reason.
+    today_day = clinic_day_of(datetime.now(timezone.utc).isoformat()) or "9999-12-31"
+    lead_by_day: dict = {}
+    for lead in leads:
+        day = clinic_day_of(lead.get("created_at"))
+        bid = lead.get("branch_id") or ""
+        # A lead stamped after today is a typed-in or imported date with the wrong year;
+        # drawing it ran the axis out years past today with nothing on it.
+        if not day or not bid or day > today_day:
+            continue
+        name = branch_names.get(bid, "Unassigned")
+        key = (day, name)
+        lead_by_day[key] = lead_by_day.get(key, 0) + 1
+
+    rev_by_day: dict = {}
+    activity_query = {"action": {"$in": REVENUE_ACTIONS}, **_utc_stamp_range_query("created_at", start_date, end_date)}
+    activities = await v3_col("lead_activity").find(
+        activity_query, {"_id": 0, "lead_id": 1, "details": 1, "created_at": 1},
+    ).to_list(100000)
+    act_lead_ids = list({a["lead_id"] for a in activities if a.get("lead_id")})
+    act_lead_branch = {}
+    if act_lead_ids:
+        for row in await v3_col("leads").find(
+            {"id": {"$in": act_lead_ids}}, {"_id": 0, "id": 1, "branch_id": 1, "vertical": 1},
+        ).to_list(100000):
+            act_lead_branch[row["id"]] = _effective_branch(row)
+    wanted_set_rev = set(wanted_branches)
+    for a in activities:
+        bid = act_lead_branch.get(a.get("lead_id")) or ""
+        if not bid or (wanted_set_rev and bid not in wanted_set_rev):
+            continue
+        day = clinic_day_of(a.get("created_at"))
+        if not day or day > today_day:
+            continue
+        amount = _parse_rs_amount(a.get("details", ""))
+        if not amount:
+            continue
+        key = (day, branch_names.get(bid, "Unassigned"))
+        rev_by_day[key] = rev_by_day.get(key, 0.0) + amount
+
+    all_days = sorted({d for d, _n in lead_by_day} | {d for d, _n in rev_by_day})
+    trend_grain = "day"
+    periods: list = []
+    if all_days:
+        # The picked range when there is one, so a quiet week still reads as a week of
+        # zeros; otherwise first to last day with anything on it. Never past today.
+        first = start_date[:10] if start_date and len(start_date) >= 10 else all_days[0]
+        last = min(end_date[:10] if end_date and len(end_date) >= 10 else all_days[-1], today_day)
+        if last < first:
+            last = first
+        d0 = datetime.fromisoformat(first).date()
+        d1 = datetime.fromisoformat(last).date()
+        if (d1 - d0).days > 92:
+            trend_grain = "month"
+            y, m = d0.year, d0.month
+            while (y, m) <= (d1.year, d1.month):
+                periods.append(f"{y}-{str(m).zfill(2)}")
+                m += 1
+                if m > 12:
+                    m, y = 1, y + 1
+        else:
+            d = d0
+            while d <= d1:
+                periods.append(d.isoformat())
+                d += timedelta(days=1)
+
+    def _series(by_day: dict, money: bool) -> dict:
+        index = {p: i for i, p in enumerate(periods)}
+        out: dict = {}
+        for (day, name), v in by_day.items():
+            key = day[:7] if trend_grain == "month" else day
+            i = index.get(key)
+            if i is None:
+                continue
+            row = out.setdefault(name, [0.0 if money else 0] * len(periods))
+            row[i] += v
+        if money:
+            out = {k: [round(x, 2) for x in v] for k, v in out.items()}
+        # Biggest branch first, so the legend and the colour order read the same way.
+        return dict(sorted(out.items(), key=lambda kv: -sum(kv[1])))
+
+    branch_trend = {
+        "grain": trend_grain,
+        "periods": periods,
+        "leads": _series(lead_by_day, False),
+        "revenue": _series(rev_by_day, True),
+    }
+
     # Re-keyed by branch name and summed where names meet, for the reason
     # _named_branch_counts gives; biggest first by leads.
     funnel_named: dict = {}
@@ -1210,6 +1308,7 @@ async def v3_dashboard_leads_analytics(
         "consulted": sum(f["consulted"] for f in funnel_by_branch.values()),
         "paid": sum(f["paid"] for f in funnel_by_branch.values()),
         "branch_funnel": branch_funnel,
+        "branch_trend": branch_trend,
         "booked": sum(booked_by_source.values()),
         "grain": grain,
         "trend": trend,
