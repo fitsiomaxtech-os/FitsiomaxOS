@@ -64,7 +64,7 @@ import { BranchControlTab, BranchManagementBoard } from "@/components/branch/Bra
 // other tabs on the nav above, and this one IS the Dashboard tab -- the tab this board
 // opens on. A lazy() could not carry useDashboardData in any case; a hook has to be
 // there when the component that calls it renders.
-import { DASH_TABS, DashboardTabPanel, ModeBranchScope, useDashboardData } from "@/components/DashboardBoard";
+import { DashboardTabPanel, ModeBranchScope, useDashboardData } from "@/components/DashboardBoard";
 // This desk's own Marketing tab -- every lead source in the range as a row, with the leads
 // behind any one of them a click away, in place of the row of per-channel totals
 // DashboardTabPanel draws for that key. Only this board swaps it; Super Admin's Dashboard
@@ -950,15 +950,6 @@ const CARD_GROUPS = [
 //
 // Marketing and Sales are left off this desk's copy: the BDE board doesn't read them.
 // Super Admin's own Dashboard still draws both.
-const HIDDEN_DASH_TABS = ["marketing", "sales"];
-// Analytics leads the strip, ahead of Summary: Analytics | Summary | Revenue | Team | Clients.
-// Only the order moves -- the tab the Dashboard opens on is still Summary (openGroup below).
-const SHOWN_DASH_TABS = DASH_TABS.filter((t) => !HIDDEN_DASH_TABS.includes(t.key));
-const DASH_SUB_TABS = [
-  ...SHOWN_DASH_TABS.filter((t) => t.key === "analytics"),
-  ...CARD_GROUPS,
-  ...SHOWN_DASH_TABS.filter((t) => t.key !== "analytics"),
-];
 const CARD_GROUP_KEYS = CARD_GROUPS.map((g) => g.key);
 
 // The two tabs this desk reads as a table of rows rather than as Super Admin's row of
@@ -1043,7 +1034,10 @@ function DashboardTab({
   // Which tab of the eight is on screen. OnBoarding, because this desk's own pipeline is
   // what it opens the board for; the six group-wide reads after it are the question behind
   // that one, not instead of it.
-  const [openGroup, setOpenGroup] = useState("onboarding");
+  // Analytics only, now: the Summary, Revenue, Team and Clients tabs and the strip that
+  // picked between them are gone, so the Dashboard opens straight on Leads over time and
+  // Revenue under the five headline cards.
+  const [openGroup] = useState("analytics");
 
   // The three toolbar controls that narrow and order the open list rather than re-asking
   // the server for it. Held here, not in the parent, because the list they describe is
@@ -1083,7 +1077,7 @@ function DashboardTab({
   // tab is open, because un-gating it on the way back to a card row would re-ask for the
   // whole overview every time somebody stepped out to OnBoarding and back. Once this desk
   // has shown it wants those figures, they stay live and follow the date range.
-  const [wantsPanels, setWantsPanels] = useState(false);
+  const [wantsPanels] = useState(true);
   const panelRange = effectiveDateFilter || ALL_DATES;
   const dash = useDashboardData(panelRange, openGroup, wantsPanels);
   // The same range again, in the two query params the BD endpoints take rather than as the
@@ -1135,27 +1129,6 @@ function DashboardTab({
   const cardGroups = summary ? buildCardGroups(summary) : [];
   const activeCardGroup = cardGroups.find((g) => g.key === openGroup);
 
-  // Leaving a tab closes the list under it. Those rows were opened by a card in the row
-  // being left, and only one row is on screen, so carrying them over would leave rows
-  // headed by one figure sitting under a row of four others -- or, switching to one of the
-  // six, under a board that never opened them at all.
-  const selectGroup = (key) => {
-    if (key === openGroup) return;
-    if (openMetric) onOpenCard(openMetric);
-    // Back on OnBoarding, Today's Leads opens again -- the same list the board arrives on.
-    if (key === "onboarding") onOpenCard("today");
-    if (!CARD_GROUP_KEYS.includes(key)) setWantsPanels(true);
-    // A name typed on one tab means nothing on the next, and left in the box it would
-    // narrow the new tab's list to nothing while reading as empty rather than as filtered.
-    // The branch scope is the opposite case and is deliberately carried: it means the same
-    // thing on all eight.
-    setSearch("");
-    // Marketing groups by source and Sales by stage, and neither key exists on the other
-    // tab -- carrying the pressed one across would ask the server for a grouping it would
-    // reject. The branch scope IS carried: it means the same thing on both.
-    if (BREAKDOWN_TABS[key]) setGroupBy(BREAKDOWN_TABS[key]);
-    setOpenGroup(key);
-  };
 
   // What Refresh re-asks for. This board's own summary always, and on one of the six also
   // the overview behind Revenue, Team and Analytics -- the same reload Super Admin's own
@@ -1188,29 +1161,6 @@ function DashboardTab({
           On a phone the pills wrapped onto three lines. Below sm they sit on one line as
           icons, and only the open tab spells out its name -- the strip still says where
           you are without costing three rows of a small screen. */}
-      <div className="flex flex-nowrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 sm:flex-wrap" data-testid="bd-dash-subtabs">
-        {DASH_SUB_TABS.map((g) => {
-          const Icon = g.icon;
-          const active = g.key === openGroup;
-          return (
-            <button
-              key={g.key}
-              type="button"
-              onClick={() => selectGroup(g.key)}
-              aria-pressed={active}
-              aria-label={g.label}
-              title={g.label}
-              className={`inline-flex min-w-0 flex-auto items-center justify-center whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium transition-all duration-500 ease-in-out sm:shrink-0 sm:flex-none sm:px-3 ${active ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50"}`}
-              data-testid={`bd-dash-subtab-${g.key}`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {/* Width and opacity rather than display, so the name slides open on the tab
-                  you pick and folds away on the one you left instead of snapping. */}
-              <span className={`overflow-hidden text-ellipsis transition-all duration-500 ease-in-out sm:ml-2 sm:max-w-none sm:opacity-100 ${active ? "ml-2 max-w-[9rem] opacity-100" : "ml-0 max-w-0 opacity-0"}`}>{g.label}</span>
-            </button>
-          );
-        })}
-      </div>
 
       {/* Tools. Read left to right: what to narrow the open list to, then which dates,
           then in what order, then what to do about it.
