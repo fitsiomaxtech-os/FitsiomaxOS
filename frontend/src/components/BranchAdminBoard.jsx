@@ -1966,7 +1966,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // `short` is what the bottom nav shows — six full labels will not fit across a phone,
   // and a truncated "Accountant Ma…" reads worse than a word chosen to be short.
   const VIEW_TABS = [
-    { key: "pipeline", label: "Branch Leads", short: "Leads", icon: LayoutDashboard },
+    { key: "pipeline", label: "Leads", short: "Leads", icon: LayoutDashboard },
     // Empty on purpose for now: the tab is the navigation going in ahead of what will sit
     // behind it, so the position is settled while the panel is still being decided.
     //
