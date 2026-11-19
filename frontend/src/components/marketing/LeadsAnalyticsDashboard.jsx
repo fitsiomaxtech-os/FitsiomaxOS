@@ -105,7 +105,7 @@ const ViewDataButton = ({ on, onClick, testid }) => (
     type="button"
     onClick={onClick}
     data-testid={testid}
-    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 shadow-[0_1px_2px_rgba(37,99,235,0.08)] transition-all duration-200 hover:border-transparent hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:shadow-[0_6px_16px_-6px_rgba(37,99,235,0.6)] active:scale-[0.98]"
   >
     {on ? <ChartIcon /> : <TableIcon />}
     {on ? "View chart" : "View data"}
@@ -117,8 +117,12 @@ const REVENUE_TYPE_LABEL = { consultation: "Consultation", session: "Session", d
 /* ── chrome ─────────────────────────────────────────────────────────────────────── */
 
 const Card = ({ title, sub, children, className = "", testid, action }) => (
-  <div className={`flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm ${className}`} data-testid={testid}>
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-3.5">
+  <div
+    className={`group/card relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(37,99,235,0.18)] transition-shadow duration-300 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_36px_-14px_rgba(37,99,235,0.32)] ${className}`}
+    data-testid={testid}
+  >
+    <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-500" />
+    <div className="flex items-start justify-between gap-4 border-b border-blue-100/70 bg-gradient-to-r from-sky-50/90 via-blue-50/40 to-white px-5 py-3.5">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-800">{title}</p>
         {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
@@ -202,7 +206,10 @@ const Dot = ({ color, children }) => (
 
 const Track = ({ value, max, color, h = "h-2" }) => (
   <span className={`${h} w-full overflow-hidden rounded-full bg-slate-100`}>
-    <span className="block h-full rounded-full" style={{ width: `${value ? Math.max(1.5, (value / max) * 100) : 0}%`, background: color }} />
+    <span
+      className="block h-full rounded-full shadow-[0_1px_4px_-1px_rgba(37,99,235,0.45)]"
+      style={{ width: `${value ? Math.max(1.5, (value / max) * 100) : 0}%`, background: `linear-gradient(90deg, ${color}99, ${color})` }}
+    />
   </span>
 );
 
@@ -728,7 +735,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
     // Held at reduced opacity while refetching rather than swapped for a skeleton: the
     // layout stays put and the previous answer stays readable.
     <div className={`space-y-4 transition-opacity ${loading ? "opacity-60" : ""}`} data-testid="leads-analytics-dashboard">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="leads-analytics-kpis">
+      <div className="kpi-hero grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="leads-analytics-kpis">
         <LedgerCard label="Leads" value={nf(total)} sub="in this range" testid="leads-analytics-kpi-total" />
         <LedgerCard label="Reached a booking" value={nf(booked)} sub="have an appointment date" testid="leads-analytics-kpi-booked" />
         <LedgerCard label="Booking rate" value={`${bookingRate}%`} sub="booked ÷ leads" testid="leads-analytics-kpi-rate" />
