@@ -1273,9 +1273,8 @@ const LeadSourceRecords = ({ branchId }) => {
             title={source === key ? `${key} · press again to show all leads` : key}
             data-testid={`lead-source-card-${key}`}
           >
-            <p className="truncate px-4 text-[11px] font-medium text-slate-500">{key}</p>
+            <p className="truncate text-[11px] font-medium text-slate-500">{key}</p>
             <p className="text-xl font-bold text-slate-800">{count}</p>
-            <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           </button>
         ))}
       </div>
