@@ -15,7 +15,7 @@ from schemas.v3 import (
     V3CollectPackagePaymentInput, V3CollectTreatmentFeeInput, V3CollectDietFeeInput,
     V3CollectDietChartFeeInput,
     V3CollectRehabFeeInput,
-    V3PhysioDiagnosisInput, V3TreatmentSummaryInput,
+    V3PhysioDiagnosisInput, V3TreatmentSummaryInput, V3TreatmentProtocolInput,
 )
 from utils import generate_transaction_id
 
@@ -1432,6 +1432,39 @@ async def save_treatment_summary(lead_id: str, payload: V3TreatmentSummaryInput,
         "lead_id": lead_id,
         "action": "treatment_summary_saved",
         "details": f"Treatment summary {'saved & locked' if payload.locked else 'saved'} by {user.full_name}",
+        "created_by": user.full_name,
+        "created_by_role": user.role,
+        "created_at": _now(),
+    })
+    updated = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0})
+    return V3LeadOut(**updated)
+
+
+@router.post("/leads/{lead_id}/treatment-protocol", response_model=V3LeadOut)
+async def save_treatment_protocol(lead_id: str, payload: V3TreatmentProtocolInput, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin"))):
+    """The Consultant's Treatment Protocol, typed in the Treatment Prescription popup.
+
+    Optional: nothing waits on it. Saved on the lead, and copied onto page 3 (Treatment
+    Protocol) of every Consultation Form tied to this lead, so the paper shows what the
+    Consultant wrote. A form made for the lead later picks it up when it is created
+    (create_consultation_form)."""
+    await ensure_head_chief_lead(user, lead_id)
+    text = (payload.protocol or "").replace("\r\n", "\n").strip()
+    if len(text) > 5000:
+        raise HTTPException(status_code=400, detail="Treatment Protocol is too long")
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "id": 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    await v3_col("leads").update_one({"id": lead_id}, {"$set": {
+        "treatment_protocol": text,
+        "updated_at": _now(),
+    }})
+    await v3_col("consultation_forms").update_many({"lead_id": lead_id}, {"$set": {"treatment_protocol": text}})
+    await v3_col("lead_activity").insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "action": "treatment_protocol_saved",
+        "details": f"Treatment Protocol saved by {user.full_name}",
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": _now(),

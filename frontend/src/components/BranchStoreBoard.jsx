@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Eye, Pencil, Clock, CalendarCheck, RefreshCw, Plus } from "lucide-react";
+import { Eye, Pencil, Clock, CalendarCheck, RefreshCw, Plus, ScrollText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
@@ -7,6 +7,7 @@ import { listStoreItems, getBranches } from "@/lib/api";
 import { useFeatureHidden } from "@/lib/featureVisibility";
 import { StoreInventoryPanel } from "@/components/branch/StoreInventoryPanel";
 import { TreatmentTypesBoard } from "@/components/TreatmentTypesBoard";
+import { TreatmentProtocolsBoard } from "@/components/TreatmentProtocolsBoard";
 import {
   TABS,
   SUPER_ADMIN_CATALOGUE_TABS,
@@ -430,7 +431,12 @@ const INVENTORY_TABS = new Set(["tablet", "supplementary", "equipment"]);
 // pay a vendor from, beside the expenses paid to them -- so it is not offered here as well.
 const BRANCH_HIDDEN_TABS = new Set(["vendor"]);
 
-const PANELS_BUILT = new Set(["consultations", "sessions", "diet", "treatment", "home_visit", ...Object.keys(SESSION_LIKE_TABS), ...INVENTORY_TABS]);
+const PANELS_BUILT = new Set(["consultations", "sessions", "diet", "treatment", "treatment_protocol", "home_visit", ...Object.keys(SESSION_LIKE_TABS), ...INVENTORY_TABS]);
+
+// Branch Admin only, so not on the shared TABS list: Treatment Protocol sits right after
+// Treatments, in every mode. Developer Access > Hide Tab > Branch Admin hides it.
+const TREATMENT_PROTOCOL_TAB = { key: "treatment_protocol", label: "Treatment Protocol", icon: ScrollText };
+const BRANCH_TABS = TABS.flatMap((t) => (t.key === "treatment" ? [t, TREATMENT_PROTOCOL_TAB] : [t]));
 
 /**
  * A branch's own FITSIO STORE — scoped to its own vertical rather than offering every
@@ -466,19 +472,24 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
   // Treatments can be hidden as a whole feature (Danger Zone > Hide Features) — the same
   // switch that takes it off Super Admin's Services and Products takes it off every branch.
   const treatmentsHidden = useFeatureHidden("treatments");
+  const protocolHidden = useFeatureHidden("ba_treatment_protocol");
 
   const modeFilter = mode || "all";
-  const branchStoreTabs = TABS.filter(
-    (t) => MODE_TAB_KEYS[modeFilter].has(t.key) && !SUPER_ADMIN_CATALOGUE_TABS.has(t.key) && !BRANCH_HIDDEN_TABS.has(t.key)
-      && !(treatmentsHidden && t.key === "treatment"),
-  );
+  const branchStoreTabs = BRANCH_TABS.filter((t) => (t.key === TREATMENT_PROTOCOL_TAB.key
+    ? !protocolHidden
+    : MODE_TAB_KEYS[modeFilter].has(t.key) && !SUPER_ADMIN_CATALOGUE_TABS.has(t.key) && !BRANCH_HIDDEN_TABS.has(t.key)
+      && !(treatmentsHidden && t.key === "treatment")));
 
   // Falls back to Consultations rather than leaving `tab` pointed at a key this branch's
   // own mode doesn't carry, once its vertical is known — or at the Treatments tab once
   // that feature is hidden.
   useEffect(() => {
+    if (tab === TREATMENT_PROTOCOL_TAB.key) {
+      if (protocolHidden) setTab("consultations");
+      return;
+    }
     if ((mode && !MODE_TAB_KEYS[mode].has(tab)) || (treatmentsHidden && tab === "treatment")) setTab("consultations");
-  }, [mode, treatmentsHidden, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, treatmentsHidden, protocolHidden, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     // flex+gap rather than space-y: the first child is the phone's dropdown, hidden from md
@@ -550,6 +561,7 @@ export const FitsiomaxStorePanel = ({ branchId }) => {
           "setup coming soon" for a list that has been populated all along. Create, rename
           and delete are all the branch's now — the endpoints take branch_admin. */}
       {tab === "treatment" && !treatmentsHidden && <TreatmentTypesBoard />}
+      {tab === TREATMENT_PROTOCOL_TAB.key && !protocolHidden && <TreatmentProtocolsBoard />}
       {!PANELS_BUILT.has(tab) && branchStoreTabs.map((t) => tab === t.key && (
         <PlaceholderPanel key={t.key} label={t.label} testid={`branch-store-panel-${t.key}`} />
       ))}

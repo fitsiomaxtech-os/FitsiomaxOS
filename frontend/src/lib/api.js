@@ -133,6 +133,11 @@ export const getTreatmentTypes = async () => (await api.get("/treatment-types"))
 export const createTreatmentType = async (payload) => (await api.post("/treatment-types", payload)).data;
 export const updateTreatmentType = async (id, payload) => (await api.patch(`/treatment-types/${id}`, payload)).data;
 export const deleteTreatmentType = async (id) => (await api.delete(`/treatment-types/${id}`)).data;
+// Branch Admin > Services and Products > Treatment Protocol: a name and optional information.
+export const getTreatmentProtocols = async () => (await api.get("/treatment-protocols")).data;
+export const createTreatmentProtocol = async (payload) => (await api.post("/treatment-protocols", payload)).data;
+export const updateTreatmentProtocol = async (id, payload) => (await api.patch(`/treatment-protocols/${id}`, payload)).data;
+export const deleteTreatmentProtocol = async (id) => (await api.delete(`/treatment-protocols/${id}`)).data;
 
 // Type of Physios — the physiotherapy services offered, Super Admin > Services and
 // Products. A name each, like treatments; prices live on the store packages.
@@ -1158,6 +1163,8 @@ export const savePhysioDiagnosis = async (leadId, report, locked = false) => (aw
 export const unlockPhysioDiagnosis = async (leadId) => (await api.put(`/leads/${leadId}/physio-diagnosis/unlock`)).data;
 export const saveTreatmentSummary = async (leadId, summary, locked = false) => (await api.post(`/leads/${leadId}/treatment-summary`, { summary, locked })).data;
 export const unlockTreatmentSummary = async (leadId) => (await api.put(`/leads/${leadId}/treatment-summary/unlock`)).data;
+// The Consultant's Treatment Protocol; the server copies it onto page 3 of the lead's Consultation Form.
+export const saveTreatmentProtocol = async (leadId, protocol) => (await api.post(`/leads/${leadId}/treatment-protocol`, { protocol })).data;
 
 
 // Recruitment — Human Resource Master View. Candidates live in their own collection and

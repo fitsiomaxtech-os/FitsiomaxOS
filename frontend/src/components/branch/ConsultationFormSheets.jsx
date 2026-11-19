@@ -66,6 +66,8 @@ export const formFromLead = (lead) => {
     nature_of_job: text(lead.occupation),
     place: [lead.city, lead.state].map(text).filter(Boolean).join(", ") || text(lead.location) || text(lead.address),
     symptoms_root_cause: [text(lead.condition), pain && `Pain for ${pain}`].filter(Boolean).join(" — "),
+    // Page 3: what the Consultant typed in the Treatment Prescription popup.
+    treatment_protocol: text(lead.treatment_protocol),
     date: todayIso(),
   };
 };

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User, ScrollText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveBranchStage, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, setSessionPackageTotal, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
-  saveTreatmentSummary, unlockTreatmentSummary, stagesList, getDoctors,
+  saveTreatmentSummary, unlockTreatmentSummary, saveTreatmentProtocol, getTreatmentProtocols, stagesList, getDoctors,
   assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
   rehabSessionsForLead,
   listNutritionCoaches, bookDietAppointment, collectDietFee, collectDietChartFee,
@@ -3006,7 +3006,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // debounce before it closed the box; with the button gone, closing the popup inside the
   // 800ms window would otherwise drop the last keystrokes silently. Holds the lead id too,
   // because the flush runs after selectedLead has already been cleared.
-  const pendingWriteRef = useRef({ leadId: null, diag: null, treat: null });
+  const pendingWriteRef = useRef({ leadId: null, diag: null, treat: null, protocol: null });
 
   // Head Physio's treatment plan summary
   const [treatmentDraft, setTreatmentDraft] = useState("");
@@ -3021,6 +3021,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // Treatment Summary box goes from this popup — unless a summary was already written,
   // which stays readable — and Move to Admin stops asking for one.
   const treatmentsHidden = useFeatureHidden("treatments");
+  // The Consultant's Treatment Protocol (Treatment Prescription popup): typed by hand,
+  // auto-saved, optional. The server copies it onto page 3 of the lead's Consultation Form.
+  // The Branch Admin's Services and Products > Treatment Protocol list gives ready ones to
+  // drop in, unless Developer Access > Hide Tab has hidden that tab.
+  const [protocolDraft, setProtocolDraft] = useState("");
+  const [savingProtocol, setSavingProtocol] = useState(false);
+  const protocolDebounceRef = useRef(null);
+  const [treatmentProtocols, setTreatmentProtocols] = useState([]);
+  const protocolListHidden = useFeatureHidden("ba_treatment_protocol");
+  useEffect(() => {
+    if (!isConsultant) return undefined;
+    let cancelled = false;
+    getTreatmentProtocols()
+      .then((d) => { if (!cancelled) setTreatmentProtocols(Array.isArray(d) ? d : []); })
+      .catch(() => { if (!cancelled) setTreatmentProtocols([]); });
+    return () => { cancelled = true; };
+  }, [isConsultant]);
   // Developer Zone > Features: Off skips the confirm before Collect on the fee popup.
   const feeConfirmOff = useFeatureHidden("consultation_fee_confirm");
 
@@ -4240,6 +4257,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setPhysioDiagEditing(!selectedLead?.physio_diagnosis_report);
     setTreatmentDraft(selectedLead?.treatment_summary || "");
     setTreatmentEditing(!selectedLead?.treatment_summary);
+    setProtocolDraft(selectedLead?.treatment_protocol || "");
     setShowPhysioModal(false);
     setPhysioPick("");
     setFollowUpDraft(null);
@@ -4685,6 +4703,37 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     treatmentDebounceRef.current = setTimeout(() => autoSaveTreatment(text), 800);
   };
 
+  // ---- Consultant's Treatment Protocol: optional, typed, saved as you type ----
+  const autoSaveProtocol = async (text) => {
+    // Empty writes through too: clearing the box is a deliberate act.
+    setSavingProtocol(true);
+    try {
+      const updated = await saveTreatmentProtocol(selectedLead.id, text.trim());
+      applyUpdatedLead(updated);
+      if (pendingWriteRef.current.protocol === text) pendingWriteRef.current.protocol = null;
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to save treatment protocol");
+    }
+    setSavingProtocol(false);
+  };
+
+  const handleProtocolChange = (text) => {
+    setProtocolDraft(text);
+    pendingWriteRef.current.leadId = selectedLead?.id || null;
+    pendingWriteRef.current.protocol = text;
+    if (protocolDebounceRef.current) clearTimeout(protocolDebounceRef.current);
+    protocolDebounceRef.current = setTimeout(() => autoSaveProtocol(text), 800);
+  };
+
+  // A protocol from the list goes in under what is already typed; the box stays editable.
+  const addProtocolFromList = (id) => {
+    const row = treatmentProtocols.find((p) => p.id === id);
+    if (!row) return;
+    const line = row.info ? `${row.name}: ${row.info}` : row.name;
+    const current = protocolDraft.replace(/\s+$/, "");
+    handleProtocolChange(current ? `${current}\n${line}` : line);
+  };
+
   // Writes out anything still in flight when the popup closes or moves to another lead.
   // This is what "Done" used to do, minus the button: it cancels the pending debounce and
   // saves that text immediately, against the lead it was actually typed for.
@@ -4694,13 +4743,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return () => {
       if (physioDiagDebounceRef.current) { clearTimeout(physioDiagDebounceRef.current); physioDiagDebounceRef.current = null; }
       if (treatmentDebounceRef.current) { clearTimeout(treatmentDebounceRef.current); treatmentDebounceRef.current = null; }
+      if (protocolDebounceRef.current) { clearTimeout(protocolDebounceRef.current); protocolDebounceRef.current = null; }
       const p = pendingWriteRef.current;
       if (p.leadId !== openLeadId) return;
       if (p.diag && p.diag.trim()) savePhysioDiagnosis(openLeadId, p.diag.trim(), false).catch(() => {});
       // `!== null` rather than truthy: p.treat is only set by an edit, so an empty string
       // here means the boxes were deliberately cleared and that has to reach the server.
       if (p.treat !== null) saveTreatmentSummary(openLeadId, p.treat.trim(), false).catch(() => {});
-      pendingWriteRef.current = { leadId: null, diag: null, treat: null };
+      if (p.protocol !== null) saveTreatmentProtocol(openLeadId, p.protocol.trim()).catch(() => {});
+      pendingWriteRef.current = { leadId: null, diag: null, treat: null, protocol: null };
     };
   }, [openLeadId]);
 
@@ -8744,6 +8795,43 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             testPrefix="cons-treatment-summary"
                           />
                         )}
+                      </div>
+                    )}
+
+                    {/* The Consultant's Treatment Protocol: typed by hand, optional, saved as
+                        it is typed. Copied onto page 3 of the patient's Consultation Form. */}
+                    {isConsultant && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="cons-treatment-protocol">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            <ScrollText className="h-3.5 w-3.5" /> Treatment Protocol
+                            <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span>
+                          </p>
+                          {(savingProtocol || protocolDraft.trim()) && (
+                            <span className="flex items-center gap-1 text-[11px] text-slate-400" data-testid="cons-treatment-protocol-autosave-status">
+                              {savingProtocol ? "Saving..." : (<><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-saved</>)}
+                            </span>
+                          )}
+                        </div>
+                        {!protocolListHidden && treatmentProtocols.length > 0 && (
+                          <ThemedSelect
+                            value=""
+                            onChange={addProtocolFromList}
+                            options={treatmentProtocols.map((p) => ({ value: p.id, label: p.name }))}
+                            placeholder="Add from Treatment Protocol list"
+                            className="mb-2 h-8 text-[11px]"
+                            testid="cons-treatment-protocol-pick"
+                          />
+                        )}
+                        <textarea
+                          value={protocolDraft}
+                          onChange={(e) => handleProtocolChange(e.target.value)}
+                          rows={3}
+                          maxLength={5000}
+                          placeholder="Type the treatment protocol..."
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs"
+                          data-testid="cons-treatment-protocol-input"
+                        />
                       </div>
                     )}
 

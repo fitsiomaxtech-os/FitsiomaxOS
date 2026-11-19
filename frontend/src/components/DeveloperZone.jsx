@@ -100,6 +100,15 @@ const HIDE_TAB_GROUPS = [
       { key: "bd_sales_view", label: "Sales View" },
     ],
   },
+  {
+    // Services and Products > Treatment Protocol. Hidden also takes the pick-from-list off
+    // the Consultant's Treatment Protocol box; the typed box itself stays.
+    key: "branch_admin",
+    label: "Branch Admin",
+    tabs: [
+      { key: "ba_treatment_protocol", label: "Treatment Protocol (Services and Products)" },
+    ],
+  },
 ];
 
 // The five pages inside the zone, all behind the same developer password.

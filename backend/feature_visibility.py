@@ -40,9 +40,13 @@ SETTING_ID = "hidden_features"
 # bd_marketing_view / bd_sales_view: the Business Development Executive's Marketing View and
 # Sales View tabs (BusinessLeadsDashboard's strip and CRMPage's phone footer). Listed on the
 # Developer Zone's Hide Tab page rather than Features. Screen-only, and shipped shown.
+#
+# ba_treatment_protocol: the Branch Admin's Services and Products > Treatment Protocol tab,
+# and the pick-from-list above the Consultant's Treatment Protocol box with it. Hide Tab
+# page, screen-only, shipped shown. The Consultant's typed box stays either way.
 FEATURE_KEYS = (
     "treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm",
-    "bd_marketing_view", "bd_sales_view",
+    "bd_marketing_view", "bd_sales_view", "ba_treatment_protocol",
 )
 
 # What a missing row means. "treatments" ships hidden: this install asked for the tab and

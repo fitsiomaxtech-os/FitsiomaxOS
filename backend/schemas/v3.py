@@ -84,6 +84,27 @@ class V3TreatmentTypeOut(BaseModel):
     created_at: str
 
 
+# Treatment Protocol -- the Branch Admin's Services and Products > Treatment Protocol list:
+# a name and a little information about it, the information optional.
+class V3TreatmentProtocolCreate(BaseModel):
+    name: str
+    info: Optional[str] = ""
+
+
+class V3TreatmentProtocolUpdate(BaseModel):
+    name: str
+    info: Optional[str] = ""
+
+
+class V3TreatmentProtocolOut(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    info: Optional[str] = ""
+    created_at: str
+
+
 # Type of Physios — the kinds of physiotherapy service the clinic offers, kept the same
 # shape as a treatment type for the same reason: a name is the whole record, because the
 # price and the session count belong to a package in FITSIO STORE.
@@ -555,6 +576,9 @@ class V3LeadOut(BaseModel):
     physio_diagnosis_locked: Optional[bool] = False
     treatment_summary: Optional[str] = None  # Head Physio's treatment plan
     treatment_summary_locked: Optional[bool] = False
+    # The Consultant's Treatment Protocol, typed in the Treatment Prescription popup.
+    # Optional. Copied onto page 3 of the lead's Consultation Form (save_treatment_protocol).
+    treatment_protocol: Optional[str] = None
     consultation_payment_mode: Optional[str] = None  # "cash" | "upi" | "card" | ...
     assigned_physio_id: Optional[str] = None
     assigned_physio_name: Optional[str] = None
@@ -667,6 +691,10 @@ class V3PhysioDiagnosisInput(BaseModel):
 class V3TreatmentSummaryInput(BaseModel):
     summary: str
     locked: bool = False
+
+
+class V3TreatmentProtocolInput(BaseModel):
+    protocol: str = ""
 
 
 class V3SellStoreItemInput(BaseModel):

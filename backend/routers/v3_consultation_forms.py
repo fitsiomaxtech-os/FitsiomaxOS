@@ -153,7 +153,12 @@ async def create_consultation_form(
     _guard(user, branch_id)
     await _branch_exists(branch_id)
     lead_id = (payload.lead_id or "").strip()
-    return await _insert(branch_id, user, _clean(payload.fields), {"lead_id": lead_id} if lead_id else None)
+    fields = _clean(payload.fields)
+    # Page 3's Treatment Protocol: the Consultant's, from the lead, when the form brings none.
+    if lead_id and not fields.get("treatment_protocol"):
+        lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "treatment_protocol": 1}) or {}
+        fields["treatment_protocol"] = str(lead.get("treatment_protocol") or "").strip()
+    return await _insert(branch_id, user, fields, {"lead_id": lead_id} if lead_id else None)
 
 
 @router.post("/branches/{branch_id}/consultation-forms/request")

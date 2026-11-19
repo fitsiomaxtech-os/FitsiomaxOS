@@ -22,6 +22,8 @@ import { getFeatureVisibility } from "@/lib/api";
 //                           Consultation Fee popup. Shown as ON / OFF; hidden is OFF.
 //   bd_marketing_view / bd_sales_view — the Business Development Executive's Marketing
 //                           View and Sales View tabs, on the Developer Zone's Hide Tab page.
+//   ba_treatment_protocol — the Branch Admin's Services and Products > Treatment Protocol
+//                           tab (Hide Tab page), and the Consultant's pick-from-list with it.
 let hiddenFeatures = [];
 let loaded = false;
 // Whether the list has actually come back, as opposed to `loaded`, which is set as soon

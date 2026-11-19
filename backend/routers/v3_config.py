@@ -35,6 +35,7 @@ from schemas.v3 import (
     V3TeamMemberCreate, V3TeamMemberOut,
     V3DoctorCreate, V3DoctorSlotsInput, V3DoctorOut,
     V3TreatmentTypeCreate, V3TreatmentTypeUpdate, V3TreatmentTypeOut,
+    V3TreatmentProtocolCreate, V3TreatmentProtocolUpdate, V3TreatmentProtocolOut,
     V3PhysioTypeCreate, V3PhysioTypeOut, V3PhysioTypeUpdate, V3DoctorServiceInput,
     V3DoctorMeetLinkInput,
 )
@@ -175,6 +176,73 @@ async def v3_delete_treatment_type(treatment_type_id: str, _: V3UserOut = Depend
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Treatment not found")
     return {"message": "Treatment deleted"}
+
+
+# ---- Treatment Protocols ---------------------------------------------------------------
+# Branch Admin > Services and Products > Treatment Protocol: a name and a little information
+# about it (optional). One list for the whole OS, like the Treatments list above. The
+# Consultant can drop one into their Treatment Protocol box; what is saved on a patient is
+# the typed text, so a rename or delete here never touches a patient.
+PROTOCOL_INFO_MAX = 2000
+
+
+def _protocol_fields(name: Optional[str], info: Optional[str]) -> dict:
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Treatment Protocol name is required")
+    if len(name) > 200:
+        raise HTTPException(status_code=400, detail="Treatment Protocol name is too long")
+    info = (info or "").replace("\r\n", "\n").strip()
+    if len(info) > PROTOCOL_INFO_MAX:
+        raise HTTPException(status_code=400, detail="Information is too long")
+    return {"name": name, "info": info}
+
+
+@router.get("/treatment-protocols", response_model=List[V3TreatmentProtocolOut])
+async def v3_get_treatment_protocols(_: V3UserOut = Depends(v3_current_user)):
+    rows = await v3_col("treatment_protocols").find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    return [V3TreatmentProtocolOut(**row) for row in rows]
+
+
+@router.post("/treatment-protocols", response_model=V3TreatmentProtocolOut)
+async def v3_add_treatment_protocol(payload: V3TreatmentProtocolCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
+    fields = _protocol_fields(payload.name, payload.info)
+    clash = await v3_col("treatment_protocols").find_one(
+        {"name": {"$regex": f"^{re.escape(fields['name'])}$", "$options": "i"}}, {"_id": 0, "name": 1}
+    )
+    if clash:
+        raise HTTPException(status_code=409, detail=f"'{clash['name']}' already exists")
+    doc = {"id": str(uuid.uuid4()), **fields, "created_at": now_iso()}
+    await v3_col("treatment_protocols").insert_one(doc.copy())
+    return V3TreatmentProtocolOut(**doc)
+
+
+@router.patch("/treatment-protocols/{protocol_id}", response_model=V3TreatmentProtocolOut)
+async def v3_update_treatment_protocol(
+    protocol_id: str,
+    payload: V3TreatmentProtocolUpdate,
+    _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    fields = _protocol_fields(payload.name, payload.info)
+    existing = await v3_col("treatment_protocols").find_one({"id": protocol_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Treatment Protocol not found")
+    clash = await v3_col("treatment_protocols").find_one(
+        {"name": {"$regex": f"^{re.escape(fields['name'])}$", "$options": "i"}, "id": {"$ne": protocol_id}},
+        {"_id": 0, "name": 1},
+    )
+    if clash:
+        raise HTTPException(status_code=409, detail=f"'{clash['name']}' already exists")
+    await v3_col("treatment_protocols").update_one({"id": protocol_id}, {"$set": fields})
+    return V3TreatmentProtocolOut(**{**existing, **fields})
+
+
+@router.delete("/treatment-protocols/{protocol_id}")
+async def v3_delete_treatment_protocol(protocol_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin"))):
+    res = await v3_col("treatment_protocols").delete_one({"id": protocol_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Treatment Protocol not found")
+    return {"message": "Treatment Protocol deleted"}
 
 
 # Type of Physios — which kinds of physiotherapy the clinic offers.
@@ -1875,6 +1943,7 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
         "physio_diagnosis_locked": False,
         "treatment_summary": None,
         "treatment_summary_locked": False,
+        "treatment_protocol": None,
         "assigned_physio_id": None,
         "assigned_physio_name": None,
         "physio_assigned_at": None,
