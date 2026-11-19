@@ -8,6 +8,7 @@ from deps import v3_require_roles
 from schemas.v3 import V3UserOut, V3AssignSessionsInput
 from stage_utils import refuse_if_branch_lost
 from routers.v3_physio_absence import refuse_if_physio_absent
+from course_order import keep_days_in_date_order
 
 router = APIRouter(prefix="/api/v3")
 
@@ -156,24 +157,17 @@ _COURSES = (
 )
 
 
-def _order_bounds(siblings: list, number: int, num_field: str) -> tuple:
-    """The window a dateless day's new date has to land in, as (after, before).
+def _course_end(siblings: list) -> str:
+    """The last hour this course already holds; a dateless day's new date goes after it.
 
-    Days are worked in number order — the physio is refused a day whose predecessors are
-    not signed off — so the date has to sit where the number does: after every earlier day
-    of the same course and before every later one. Either end is "" when nothing bounds it.
+    Days are worked in number order, and course_order keeps the dateless days at the end
+    of the numbering, so a re-booked day is always the course's next-to-last or last day
+    and belongs after every day already booked. Measured against every other day of the
+    course, not only the lower-numbered ones: bounding it by the next booked day as well
+    left a window that was often empty, and the popup then said the physio had no free
+    time when their calendar was wide open. "" when nothing else in the course is dated.
     """
-    earlier = [
-        (r.get("slot_time") or "").strip()
-        for r in siblings
-        if (r.get(num_field) or 0) < number and (r.get("slot_time") or "").strip()
-    ]
-    later = [
-        (r.get("slot_time") or "").strip()
-        for r in siblings
-        if (r.get(num_field) or 0) > number and (r.get("slot_time") or "").strip()
-    ]
-    return (max(earlier, default=""), min(later, default=""))
+    return max(((r.get("slot_time") or "").strip() for r in siblings), default="")
 
 
 class ScheduleSessionInput(BaseModel):
@@ -186,6 +180,14 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
     query: dict = {"needs_assignment": True, "status": {"$ne": "completed"}}
     if user.branch_id:
         query["branch_id"] = user.branch_id
+
+    # Courses jammed before course_order existed: a dateless day numbered ahead of a day
+    # that still holds a date. Put back in order first, so what is listed below is the day
+    # that really needs a date, the last one. A no-op on a course already in order.
+    for collection, _track, num_field, _total in _COURSES:
+        waiting = await v3_col(collection).find(query, {"_id": 0, "lead_id": 1}).to_list(500)
+        for lead_id in {w.get("lead_id") for w in waiting if w.get("lead_id")}:
+            await keep_days_in_date_order(collection, num_field, lead_id)
 
     rows: list = []
     for collection, track, num_field, total_field in _COURSES:
@@ -205,7 +207,7 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
     # absence that stranded a rehab day says nothing about a stranded treatment day.
     #
     # The same pass reads back every day of the patient's course, which is what says where
-    # the new date is allowed to go — see _order_bounds.
+    # the new date is allowed to go — see _course_end.
     latest_absence: dict = {}
     bounds: dict = {}
     for collection, track, num_field, _total in _COURSES:
@@ -226,14 +228,16 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
             if s.get("track") != track:
                 continue
             others = [r for r in by_lead.get(s.get("lead_id"), []) if r.get("id") != s.get("id")]
-            bounds[s["id"]] = _order_bounds(others, s.get("session_number") or 0, num_field)
+            bounds[s["id"]] = _course_end(others)
 
         for row in siblings:
             for ab in row.get("absences") or []:
                 key = (row.get("lead_id"), track)
                 current = latest_absence.get(key)
                 if not current or (ab.get("marked_at") or "") > (current.get("marked_at") or ""):
-                    latest_absence[key] = {**ab, "session_number": row.get(num_field)}
+                    # The day number as it was when the absence was marked. course_order can
+                    # renumber the row later; older absences did not record it.
+                    latest_absence[key] = {**ab, "session_number": ab.get("session_number") or row.get(num_field)}
 
     # A session carries the patient's name but not their patient number, and the number is
     # how the branch actually identifies someone on the phone.
@@ -248,13 +252,10 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
         lead = lead_map.get(s.get("lead_id"), {})
         s["patient_number"] = lead.get("patient_number", "")
         s["phone"] = lead.get("phone", "")
-        after, before = bounds.get(s["id"], ("", ""))
-        # Named for what the branch reads them as: the day the patient's booked days run
-        # out, and — if an earlier absence stranded two days — the day that follows this
-        # one. The picker offers only the gap between them, which is exactly what
+        # Named for what the branch reads it as: the hour the patient's booked days run out.
+        # The picker offers only what comes after it, which is exactly what
         # schedule_session below will accept.
-        s["course_end"] = after
-        s["next_day_at"] = before
+        s["course_end"] = bounds.get(s["id"], "")
 
     return {"sessions": rows}
 
@@ -296,7 +297,7 @@ async def schedule_session(
     # Not onto a day this physio has said they will not be in — see v3_physio_absence.
     await refuse_if_physio_absent(session.get("physio_id"), [slot])
 
-    # Where the number says the date has to sit. A slot earlier in the course is real, and
+    # After every day the course already holds. A slot earlier in the course is real, and
     # the physio is free on it, and the day still cannot be delivered when it comes round:
     # the board refuses a day whose predecessors are not signed off, so the patient is
     # turned away a second time over the same absence. Checked against the days themselves
@@ -307,21 +308,13 @@ async def schedule_session(
         {"lead_id": session.get("lead_id"), "id": {"$ne": session_id}},
         {"_id": 0, num_field: 1, "slot_time": 1},
     ).to_list(2000)
-    after, before = _order_bounds(siblings, number, num_field)
+    after = _course_end(siblings)
     if after and slot <= after:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Day {number} is worked after the days already booked — pick a time after"
                 f" {after.replace('T', ' at ')}, when this patient's slots run out"
-            ),
-        )
-    if before and slot >= before:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Day {number} is worked before the next day already booked — pick a time"
-                f" before {before.replace('T', ' at ')}"
             ),
         )
 
@@ -344,6 +337,11 @@ async def schedule_session(
         {"id": session_id},
         {"$set": {"slot_time": slot, "needs_assignment": False, "updated_at": now_iso()}},
     )
+    # With two days waiting, the one booked can be the later number; it then swaps with the
+    # earlier one so the course still runs in date order. Logged and returned under the
+    # number it ends up with.
+    renumbered = await keep_days_in_date_order(collection, num_field, session.get("lead_id"))
+    number = renumbered.get(session_id, number)
 
     day_word = "Rehab day" if track == "rehab" else "Day"
     await v3_col("lead_activity").insert_one({
@@ -531,6 +529,10 @@ async def reschedule_calendar_booking(
             "updated_at": now,
         }},
     )
+    # A day moved past the next one, or a dateless day given an hour ahead of booked ones,
+    # would leave the numbers out of date order and jam the in-order rule on the board.
+    if spec["day_field"] and course in ("session", "rehab"):
+        await keep_days_in_date_order(spec["collection"], spec["day_field"], booking.get("lead_id"))
 
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
@@ -593,6 +595,10 @@ async def decline_calendar_booking(
         fields["status"] = "cancelled"
 
     await v3_col(spec["collection"]).update_one({"id": booking_id}, {"$set": fields})
+    # The day just lost its hour. Left at its number, every later day would be refused on
+    # the board until it is re-booked; it becomes the last day of the course instead.
+    if frees_the_day:
+        await keep_days_in_date_order(spec["collection"], spec["day_field"], booking.get("lead_id"))
 
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),

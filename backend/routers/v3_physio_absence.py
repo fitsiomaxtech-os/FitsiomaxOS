@@ -32,6 +32,7 @@ from deps import v3_require_roles, is_physio_role, works_org_wide, collapse_dupl
 from physio_scope import resolve_physio_doctor
 from schemas.v3 import V3UserOut
 from utils import now_iso, clinic_today, ACTIVE_DOCTOR, slot_capacity_of, physio_slot_load
+from course_order import keep_days_in_date_order
 
 router = APIRouter(prefix="/api/v3")
 
@@ -507,6 +508,9 @@ async def release_day(
         },
         "$unset": {"covered_for_physio_id": "", "covered_for_physio_name": ""},
     })
+    # The released day becomes the last of the course, so the days after it can still be
+    # signed off in order while it waits for Missed Classes to book it.
+    await keep_days_in_date_order(spec["collection"], spec["num_field"], row.get("lead_id"))
 
     number = row.get(spec["num_field"])
     await _log(row.get("lead_id"), user, "physio_absence_released", (

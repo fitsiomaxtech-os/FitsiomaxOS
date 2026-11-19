@@ -6,6 +6,7 @@ import uuid
 
 from database import v3_col
 from utils import now_iso, normalize_slot_time
+from course_order import keep_days_in_date_order
 from security import hash_password
 from deps import v3_require_roles
 from schemas.v3 import (
@@ -777,10 +778,20 @@ async def physio_mark_absent(
         {"id": session_id},
         {"$push": {"absences": {
             "date": missed_on,
+            # Kept on the record: course_order may give this row another number later.
+            "session_number": number,
             "marked_by": user.full_name,
             "marked_at": now_iso(),
             "remarks": (payload.remarks or "").strip(),
         }}},
+    )
+
+    # The shift above steps only the days that hold a date, so a day already waiting from an
+    # earlier absence can end up numbered ahead of booked days. Put the numbers back in date
+    # order, so the dateless days are the last ones and the rest can still be signed off.
+    renumbered = await keep_days_in_date_order(collection, num_field, session["lead_id"])
+    stranded = (
+        renumbered.get(dated[-1]["id"], dated[-1].get(num_field)) if dated else None
     )
 
     await v3_col("lead_activity").insert_one({
@@ -791,7 +802,7 @@ async def physio_mark_absent(
             f"Day {number} marked absent on {missed_on or 'an unknown date'} by {user.full_name}."
             f" That day and {max(moved - 1, 0)} later day(s) moved down one slot."
             + (
-                f" Day {dated[-1].get(num_field)} now needs a date from the Branch Admin."
+                f" Day {stranded} now needs a date from the Branch Admin."
                 if dated else ""
             )
             + (f" Remarks: {payload.remarks.strip()}" if (payload.remarks or "").strip() else "")
@@ -803,7 +814,7 @@ async def physio_mark_absent(
 
     updated = await v3_col(collection).find_one({"id": session_id}, {"_id": 0})
     landed = ((updated or {}).get("slot_time") or "").split("T")[0]
-    unscheduled_day = dated[-1].get(num_field) if dated else None
+    unscheduled_day = stranded
     return {
         "session": updated,
         "moved": moved,

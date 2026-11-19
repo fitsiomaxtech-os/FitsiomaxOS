@@ -114,17 +114,16 @@ function SlotPicker({ session, onClose, onBooked }) {
   // slot nobody can deliver: the physio opens the day, the board refuses it, and the
   // patient is turned away a second time over the same absence.
   //
-  // `next_day_at` is the other end, and is usually empty — a second absence before the
-  // first was re-booked can strand two days, and then the earlier one has a day in front
-  // of it as well as behind. Both come from the server, which applies the same two bounds
-  // before it accepts the booking.
+  // One end only. The server keeps a dateless day numbered after every booked one
+  // (course_order), so nothing booked ever sits after it. Bounding it by "the next booked
+  // day" as well once left a window too small to hold a single slot, and this popup said
+  // the physio had no free time with their whole month open.
   const courseEnd = session.course_end || "";
-  const nextDayAt = session.next_day_at || "";
 
-  // Every slot this physio has published that falls in that window, grouped by the day it
-  // falls on. Full slots stay in, unlike the chip list this replaced: the day panel has
-  // the room to draw them for what they are, and a time shown as taken tells the branch
-  // more than a time that silently isn't there.
+  // Every slot this physio has published after that point, grouped by the day it falls
+  // on. Full slots stay in, unlike the chip list this replaced: the day panel has the room
+  // to draw them for what they are, and a time shown as taken tells the branch more than
+  // a time that silently isn't there.
   const slotsByDate = useMemo(() => {
     const map = {};
     for (const slot of calendar?.slots || []) {
@@ -132,12 +131,11 @@ function SlotPicker({ session, onClose, onBooked }) {
       if (!d || !t || d < today) continue;
       // Slots are normalized `YYYY-MM-DDTHH:MM`, so they compare as strings in time order.
       if (courseEnd && slot <= courseEnd) continue;
-      if (nextDayAt && slot >= nextDayAt) continue;
       (map[d] = map[d] || []).push(t);
     }
     Object.values(map).forEach((times) => times.sort());
     return map;
-  }, [calendar, today, courseEnd, nextDayAt]);
+  }, [calendar, today, courseEnd]);
 
   const seatsTaken = useCallback((slot) => calendar?.occupancy?.[slot] || 0, [calendar]);
 
@@ -190,9 +188,12 @@ function SlotPicker({ session, onClose, onBooked }) {
   const book = async (slot) => {
     setSaving(true);
     try {
-      await scheduleSession(session.id, slot);
+      const res = await scheduleSession(session.id, slot);
       const [d, t] = slot.split("T");
-      toast.success(`Day ${session.session_number} booked for ${shortDate(d)} at ${to12h(t)}`);
+      // The number the day ends up with. With two days waiting, booking the later one
+      // swaps it with the earlier so the course stays in date order.
+      const booked = res?.session?.session_number ?? res?.session?.day_number ?? session.session_number;
+      toast.success(`Day ${booked} booked for ${shortDate(d)} at ${to12h(t)}`);
       onBooked();
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Couldn't book that slot");
