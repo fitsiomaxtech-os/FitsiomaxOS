@@ -257,7 +257,7 @@ const CONSULTATION_ADDONS = [
 const CONSULTATION_ADDON_GROUPS = [
   { label: "Treatments", keys: ["treatment", "diet"] },
   { label: "Long Term", keys: ["rehab", "fitness"] },
-  { label: "Others", keys: ["zumba"] },
+  { label: "Short Term", keys: ["zumba"] },
 ];
 
 /**
@@ -9519,7 +9519,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         The five services in one row, each group's label over its own tiles;
                         what has been chosen listed below, and the pickers over the form in a
                         popup, one service at a time. On a phone the row is four across, so
-                        Others wraps to a second line. */}
+                        Short Term wraps to a second line. */}
                     <div className="mb-3 space-y-4">
                       <div>
                         {/* The outer gap matches each group's inner one, so all five tiles come
