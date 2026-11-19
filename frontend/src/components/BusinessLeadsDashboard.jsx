@@ -12,7 +12,6 @@ import {
   CalendarOff,
   ChevronRight,
   Headphones,
-  LayoutDashboard,
   Megaphone,
   PhoneCall,
   RefreshCw,
@@ -137,9 +136,11 @@ const BoardFallback = () => (
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   // Pre Sales View: the Pre Sales desk's own board across every branch, its stage cards
-  // and its toolbar. Between Dashboard and Branch Control, as asked.
+  // and its toolbar. Right after Dashboard.
+  //
+  // Branch Control is off this strip, as asked: Dashboard | Pre Sales View | Consultation
+  // View | Finance | Permission | HR Admin | Management | Services and Products | Settings.
   { key: "presales_view", label: "Pre Sales View", icon: PhoneCall },
-  { key: "branch_control", label: "Branch Control", icon: LayoutDashboard },
   { key: "marketing_view", label: "Marketing View", icon: Megaphone },
   // Consultation View: every branch's Consultation tab, its stage cards and its toolbar.
   { key: "consultation_view", label: "Consultation View", icon: Stethoscope },
@@ -228,7 +229,9 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
   const isTabHidden = useBdTabHidden();
   const visibleTabs = useMemo(() => TABS.filter((t) => !isTabHidden(t.key)), [isTabHidden]);
   useEffect(() => {
-    if (isTabHidden(activeTab)) setActiveTab("dashboard");
+    // Branch Control is no longer a tab; a desk that last had it open lands on Dashboard
+    // rather than on a screen with nothing lit above it.
+    if (isTabHidden(activeTab) || activeTab === "branch_control") setActiveTab("dashboard");
   }, [activeTab, isTabHidden, setActiveTab]);
   const [loading, setLoading] = useState(false);
 

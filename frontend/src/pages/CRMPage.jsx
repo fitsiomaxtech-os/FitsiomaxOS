@@ -1039,7 +1039,6 @@ export const CRMPage = ({ auth, onLogout }) => {
         .filter((s) => !isBdTabHidden(s.key)),
       more: [
         bdStop("presales_view", "Pre Sales View", PhoneCall),
-        bdStop("branch_control", "Branch Control", LayoutDashboard),
         bdStop("consultation_view", "Consultation View", Stethoscope),
         bdStop("finance", "Finance", BadgeIndianRupee),
         bdStop("permission", "Permission", CalendarOff),
