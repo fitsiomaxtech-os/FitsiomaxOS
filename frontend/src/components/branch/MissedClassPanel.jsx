@@ -496,12 +496,7 @@ export default function MissedClassPanel() {
         <StatTile label="Patients waiting" value={patients} arrow="desk" color="#dc2626" testid="missed-class-tile-patients" />
       </div>
 
-      {/* The sentence is desk only; on a phone Refresh sits alone at the right. */}
-      <div className="flex items-center justify-between gap-2">
-        <p className="hidden text-xs text-slate-500 sm:block">
-          A day here is a day the patient has paid for and not been given. Book it onto the physio's calendar,
-          after the days they already hold.
-        </p>
+      <div className="flex items-center justify-end gap-2">
         <Button onClick={load} disabled={loading} className="ml-auto h-9 w-9 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600" title="Refresh" aria-label="Refresh" data-testid="missed-class-refresh">
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
@@ -540,18 +535,15 @@ export default function MissedClassPanel() {
                   {/* Which course the day fell out of, not only its number. Rehab and
                       treatment are separate runs of days for the same patient, and both
                       land in this queue — "Day 3" alone would have the branch placing a
-                      rehab day back into the treatment course. */}
+                      rehab day back into the treatment course, so rehab says so on the tag. */}
                   <td className="px-3 py-3">
                     <span
                       className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
                         s.track === "rehab" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"
                       }`}
                     >
-                      Day {s.session_number}
+                      {s.track === "rehab" ? "Rehab " : ""}Day {s.session_number}
                     </span>
-                    <p className="mt-0.5 text-[10px] text-slate-400">
-                      of {s.total_sessions} · {s.track === "rehab" ? "Rehab" : "Treatment"}
-                    </p>
                   </td>
                   <td className="truncate px-3 py-3 text-xs text-slate-600">{s.physio_name || "—"}</td>
                   <td className="px-3 py-3">
@@ -560,9 +552,11 @@ export default function MissedClassPanel() {
                     {s.last_absence ? (
                       <>
                         <p className="text-xs text-slate-600">{shortDate(s.last_absence.date)}</p>
-                        <p className="truncate text-[10px] text-slate-400" title={s.last_absence.remarks || ""}>
-                          {s.last_absence.remarks || `Day ${s.last_absence.session_number} absent`}
-                        </p>
+                        {s.last_absence.remarks && (
+                          <p className="truncate text-[10px] text-slate-400" title={s.last_absence.remarks}>
+                            {s.last_absence.remarks}
+                          </p>
+                        )}
                       </>
                     ) : (
                       <span className="text-xs text-slate-300">—</span>
