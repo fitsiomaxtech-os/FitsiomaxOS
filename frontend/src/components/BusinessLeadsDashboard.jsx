@@ -402,7 +402,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           );
         })}
         <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 pb-1.5 pl-2">
-          <Button size="sm" onClick={() => setShowCreateLead(true)} className={`bg-sky-600 hover:bg-sky-700 ${ADD_LEAD_WITHHELD_TABS.includes(activeTab) ? "hidden" : activeTab === "dashboard" ? "hidden sm:inline-flex" : ""}`} data-testid="bd-quick-add-lead-btn">
+          <Button size="sm" onClick={() => setShowCreateLead(true)} className={`bg-sky-600 hover:bg-sky-700 ${ADD_LEAD_WITHHELD_TABS.includes(activeTab) ? "hidden" : activeTab === "dashboard" ? "hidden" : ""}`} data-testid="bd-quick-add-lead-btn">
             <UserPlus className="mr-1 h-4 w-4" /> Add Lead
           </Button>
           {/* The same Refresh as Branch Admin > Branch Leads: grey, icon-only, square,
@@ -451,7 +451,6 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           onRefresh={refreshAll}
           onPulled={reloadAll}
           onBranchSwap={() => setSwapPicking(true)}
-          onAddLead={() => setShowCreateLead(true)}
           onOpenLead={openLeadDetail}
         />
       )}
@@ -1028,7 +1027,6 @@ function DashboardTab({
   onRefresh,
   onPulled,
   onBranchSwap,
-  onAddLead,
   onOpenLead,
 }) {
   // Which tab of the eight is on screen. OnBoarding, because this desk's own pipeline is
@@ -1383,15 +1381,6 @@ function DashboardTab({
             iconOnly
           />
 
-          <Button
-            onClick={onAddLead}
-            title="Add Lead"
-            aria-label="Add Lead"
-            className="h-10 w-10 shrink-0 bg-sky-600 p-0 text-white hover:bg-sky-700 sm:hidden"
-            data-testid="bd-toolbar-add-lead-btn"
-          >
-            <UserPlus className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
