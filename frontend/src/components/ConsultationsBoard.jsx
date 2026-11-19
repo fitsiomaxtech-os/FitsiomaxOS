@@ -8213,8 +8213,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               it still gives way to a smaller window, and only its body scrolls.
 
               At Consultation Booked (bookedDetail) it is 550 wide with automatic height;
-              other tabs grow it up to the same 660 cap. */}
-          <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5 ${bookedDetail
+              other tabs grow it up to the same 660 cap.
+
+              The Consultant's Treatment Prescription popup is a fixed 1025 × 640 from sm up,
+              on every tab; it gives way to a smaller window, and only its body scrolls. */}
+          <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-900/5 ${isConsultant
+            ? "sm:h-[min(640px,calc(100dvh-1rem))] sm:max-h-none sm:w-[min(1025px,calc(100vw-1rem))] sm:max-w-none"
+            : bookedDetail
             ? "max-w-[550px] sm:max-h-[min(660px,calc(100dvh-1rem))]"
             : compactDetail
             ? "max-w-[570px] sm:h-[min(610px,calc(100dvh-1rem))] sm:max-h-none"
