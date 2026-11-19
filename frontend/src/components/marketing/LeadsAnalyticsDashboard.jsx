@@ -290,37 +290,6 @@ const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid
   );
 };
 
-/** The side panel, as Finance's "Expense by type": horizontal bars, the figure at the
- *  bar's end, a light grid and an axis along the foot. */
-const SideBars = ({ title, sub, rows, money, color, emptyText, testid }) => {
-  const fmt = money ? inrAxis : nf;
-  return (
-    <FlowCard title={title} sub={sub} testid={testid}>
-      {rows.length === 0 ? <Empty>{emptyText}</Empty> : (
-        <ResponsiveContainer width="100%" height={Math.max(180, rows.length * 52 + 40)}>
-          <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 64, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke={INK.grid} strokeWidth={1} horizontal={false} />
-            <XAxis type="number" tickFormatter={fmt} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} />
-            <YAxis type="category" dataKey="name" width={118} tick={{ fill: INK.secondary, fontSize: 12 }} tickLine={false} axisLine={{ stroke: INK.axis }} />
-            <Tooltip
-              cursor={{ fill: "rgba(37,99,235,0.06)" }}
-              content={({ active, payload }) => (active && payload?.length ? (
-                <div className="rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.22)] backdrop-blur-sm">
-                  <p className="mb-1 text-xs font-medium text-slate-500">{payload[0].payload.name}</p>
-                  <p className="text-[13px] font-semibold tabular-nums text-slate-900">{money ? inr(payload[0].value) : nf(payload[0].value)}</p>
-                </div>
-              ) : null)}
-            />
-            <Bar dataKey="value" fill={color} radius={[0, 4, 4, 0]} maxBarSize={20} isAnimationActive={false}>
-              <LabelList dataKey="value" position="right" offset={6} style={{ fontSize: 11, fill: INK.secondary }} formatter={fmt} />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </FlowCard>
-  );
-};
-
 const REVENUE_TYPE_LABEL = { consultation: "Consultation", session: "Session", diet: "Diet", rehab: "Rehab", spot_joining: "Spot joining", zumba: "Zumba" };
 
 /* ── chrome ─────────────────────────────────────────────────────────────────────── */
@@ -868,13 +837,11 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
     .map(([name, vals]) => ({ name, value: vals.reduce((a, v) => a + v, 0) }))
     .filter((row) => row.value > 0)
     .sort((x, y) => y.value - x.value);
-  const trendLeadBranches = sumSeries(branchTrend.leads);
-  const trendLeadTotal = trendLeadBranches.reduce((a, row) => a + row.value, 0);
+  const trendLeadTotal = sumSeries(branchTrend.leads).reduce((a, row) => a + row.value, 0);
   const revenueByType = (branchTrend.revenue_by_type || [])
     .filter((row) => row.value > 0)
     .map((row) => ({ name: REVENUE_TYPE_LABEL[row.name] || row.name, value: row.value }));
   const revenueTotal = revenueByType.reduce((a, row) => a + row.value, 0);
-  const bySourceRows = (data?.by_source || []).filter((row) => row.value > 0);
   // The branch card lists real branches only. Leads with no branch are not a branch's
   // demand, and as the longest bar they squashed every row beneath them; their count is
   // said in the subtitle instead.
@@ -916,62 +883,28 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <LedgerCard label="Online" value={nf(onlineTotal)} sub="online services" muted={!onlineTotal} testid="leads-analytics-kpi-online" />
       </div>
 
-      {/* 1 — leads over time, with where they landed beside it */}
-      <div className="grid gap-4 xl:grid-cols-3">
+      {/* 1 — leads and revenue over time, side by side at half width each */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <BranchTrendCard
           key={`leads-${branchKey}`}
-          className="xl:col-span-2"
           title="Leads over time"
-          sub={`Leads per ${branchTrend.grain === "month" ? "month" : "day"}${oneBranch ? "" : ", by branch"} · click a branch to hide it`}
+          sub={`${nf(trendLeadTotal)} leads per ${branchTrend.grain === "month" ? "month" : "day"}${oneBranch ? "" : ", by branch · click a branch to hide it"}`}
           periods={branchTrend.periods}
           series={branchTrend.leads}
           single={oneBranch}
           emptyText="No leads arrived in this range."
           testid="leads-analytics-trend"
         />
-        {oneBranch ? (
-          <SideBars
-            title="Leads by source"
-            sub={`${nf(total)} leads across ${bySourceRows.length} source${bySourceRows.length === 1 ? "" : "s"}`}
-            rows={bySourceRows}
-            color={SERIES}
-            emptyText="No leads in this range."
-            testid="leads-analytics-trend-side"
-          />
-        ) : (
-          <SideBars
-            title="Leads by branch"
-            sub={`${nf(trendLeadTotal)} leads across ${trendLeadBranches.length} branches`}
-            rows={trendLeadBranches}
-            color={SERIES}
-            emptyText="No leads in this range."
-            testid="leads-analytics-trend-side"
-          />
-        )}
-      </div>
-
-      {/* 2 — revenue over time, with what it paid for beside it */}
-      <div className="grid gap-4 xl:grid-cols-3">
         <BranchTrendCard
           key={`revenue-${branchKey}`}
-          className="xl:col-span-2"
           title="Revenue"
-          sub={`Fees collected per ${branchTrend.grain === "month" ? "month" : "day"}, on the day they were paid${oneBranch ? "" : ", by branch"}`}
+          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments, on the day they were paid`}
           periods={branchTrend.periods}
           series={branchTrend.revenue}
           money
           single={oneBranch}
           emptyText="No fees collected in this range."
           testid="leads-analytics-revenue-trend"
-        />
-        <SideBars
-          title="Revenue by type"
-          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments`}
-          rows={revenueByType}
-          money
-          color={CATEGORICAL[2]}
-          emptyText="No fees collected in this range."
-          testid="leads-analytics-revenue-side"
         />
       </div>
 
