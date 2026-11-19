@@ -55,6 +55,36 @@ export const StatTile = ({
   // loses the inner clicks. So the chrome moves to a wrapper and only the figure stays
   // pressable.
   const wrapped = !!footer || !!corner;
+
+  // The app's figure tile, as Branch Leads' stage strip draws it: white and borderless
+  // until picked, label over figure, centred, the picked one in light blue with a chevron.
+  // `data-strip-tile` is what index.css keys the soft tray behind a row of them on, so no
+  // page has to wrap its own grid. A card with a footer or a corner control keeps the
+  // layout below, which those controls were placed against.
+  if (!wrapped) {
+    const TileTag = onClick ? "button" : "div";
+    return (
+      <TileTag
+        {...(onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
+        data-strip-tile=""
+        className={`relative flex h-full w-full min-w-0 flex-col items-center justify-center rounded-lg border-2 px-3 py-2.5 text-center transition-all duration-150 ${
+          active
+            ? "border-sky-400 bg-sky-50 shadow-[0_2px_8px_-2px_rgba(14,165,233,0.35)]"
+            : `border-transparent bg-white ${onClick ? "cursor-pointer hover:border-slate-200 hover:shadow-sm" : ""}`
+        }`}
+        data-testid={testid}
+      >
+        {active && <ChevronRight aria-hidden className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-sky-500" />}
+        <span className={`block w-full truncate px-2 ${compact ? "text-[11px]" : "text-xs"} font-semibold ${active ? "text-sky-700" : "text-slate-700"}`} title={typeof label === "string" ? label : undefined}>
+          {label}
+        </span>
+        <span className={`mt-1 block font-bold leading-tight tabular-nums ${compact ? "text-base sm:text-xl" : "text-xl"}`} style={{ color: active ? undefined : color }}>
+          <span className={active ? "text-sky-800" : ""}>{value}</span>
+        </span>
+        {sub && <span className={`mt-0.5 block w-full truncate text-[10px] leading-tight text-slate-400 ${arrow === "phone" ? "hidden sm:block" : ""}`}>{sub}</span>}
+      </TileTag>
+    );
+  }
   const phoneArrow = arrow === "phone";
   const deskArrow = arrow === "desk";
   const fullArrow = !!arrow && !phoneArrow;

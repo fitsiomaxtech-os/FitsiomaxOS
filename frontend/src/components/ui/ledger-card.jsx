@@ -29,6 +29,31 @@ import { ChevronRight } from "lucide-react";
  * draws the control, so it is the caller that knows to turn it white on a picked card.
  */
 export const LedgerCard = ({ label, value, sub, color = "#0284c7", active = false, muted = false, onClick, title, testid, corner }) => {
+  // The app's figure tile, as Branch Leads' stage strip draws it -- see ui/stat-tile. A
+  // card with a corner control keeps the layout below, which that control is placed on.
+  if (!corner) {
+    const TileTag = onClick ? "button" : "div";
+    return (
+      <TileTag
+        type={onClick ? "button" : undefined}
+        onClick={onClick}
+        aria-pressed={onClick ? active : undefined}
+        title={title}
+        data-strip-tile=""
+        className={`relative flex h-full w-full min-w-0 flex-col items-center justify-center rounded-lg border-2 px-3 py-2.5 text-center transition-all duration-150 ${
+          active
+            ? "border-sky-400 bg-sky-50 shadow-[0_2px_8px_-2px_rgba(14,165,233,0.35)]"
+            : `border-transparent bg-white ${onClick ? "cursor-pointer hover:border-slate-200 hover:shadow-sm" : ""}`
+        }`}
+        data-testid={testid}
+      >
+        {active && <ChevronRight aria-hidden="true" className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-sky-500" />}
+        <span className={`block w-full truncate px-2 text-xs font-semibold ${active ? "text-sky-700" : "text-slate-700"}`}>{label}</span>
+        <span className={`mt-1 block text-xl font-bold leading-tight tabular-nums ${active ? "text-sky-800" : muted ? "text-slate-400" : "text-slate-800"}`}>{value}</span>
+        {sub ? <span className="mt-0.5 block w-full truncate text-[11px] leading-tight text-slate-400">{sub}</span> : null}
+      </TileTag>
+    );
+  }
   const Tag = onClick ? "button" : "div";
   const chrome = `h-full w-full min-w-0 rounded-[5px] border text-left transition duration-200 ${
     active
