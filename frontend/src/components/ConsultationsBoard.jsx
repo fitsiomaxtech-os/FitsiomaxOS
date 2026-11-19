@@ -8451,7 +8451,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               // Consultation Visit and Fee Collected draw their Overview flat: no borders, 2px
               // corners, and no icons on its buttons -- see .fee-flat in index.css.
               // Programme pills share that flat layout and Fee Collected's white fee rows.
-              <div className={`flex flex-col gap-3 ${flatFeeStyle ? "fee-flat" : ""} ${flatFeeStyle || FEE_FLAT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" || programmeFeeStyle ? "fee-collected" : ""}`}>
+              // The Consultant's column fills the body's height at least, so Move to Admin
+              // (mt-auto, sticky) sits in the bottom-right corner even when the form is short.
+              <div className={`flex flex-col gap-3 ${isConsultant ? "min-h-full" : ""} ${flatFeeStyle ? "fee-flat" : ""} ${flatFeeStyle || FEE_FLAT_PILLS.includes(stageFilter) ? "fee-soft" : ""} ${selectedLead.consultation_stage === "Fee Collected" || programmeFeeStyle ? "fee-collected" : ""}`}>
               {/* No Appointment Record row. */}
               {/* The consultation as it was written up — what pre-sales heard, what the
                   Consultant diagnosed, what they wrote down as the treatment, and the plan
@@ -9542,10 +9544,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   // boxes above it (LockableTextBox): 8px corners, 12px in, an 11px grey
                   // heading -- so the three sections line up on one left edge and read as
                   // one set rather than this one shouting over the other two.
+                  // No "Treatment Service" heading: the tiles open the box.
+                  <>
                   <div className="rounded-lg border border-slate-200 bg-white p-3" data-testid="cons-decision-form">
-                    <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                      <ClipboardCheck className="h-3.5 w-3.5" /> Treatment Service
-                    </p>
                     {/* The thing standing between this form and Save, so it is a block that
                         stops the eye rather than a coloured line of text among other lines.
                         Rose over amber for the same reason: amber is the colour half this
@@ -9571,8 +9572,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         The five services in one row, each group's label over its own tiles;
                         what has been chosen listed below, and the pickers over the form in a
                         popup, one service at a time. On a phone the row is four across, so
-                        Short Term wraps to a second line. */}
-                    <div className="mb-3 space-y-4">
+                        Short Term wraps to a second line.
+
+                        From lg up each tile is one line -- icon | name -- and the five fill the
+                        width; below that the name sits under the icon, as there is no room. */}
+                    <div className="space-y-4">
                       <div>
                         {/* The outer gap matches each group's inner one, so all five tiles come
                             out the same width. */}
@@ -9599,18 +9603,19 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                         type="button"
                                         onClick={() => pickAddon(p.key)}
                                         aria-pressed={selected}
-                                        className="flex h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-[4px] border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px]"
+                                        className={`flex h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-[4px] border px-1 text-xs font-semibold text-slate-800 transition hover:brightness-95 sm:px-2 sm:text-[13px] lg:h-12 lg:flex-row lg:gap-2.5 ${selected ? "lg:pr-7" : ""}`}
                                         style={{ background: `${p.tone}${selected ? "1f" : "12"}`, borderColor: `${p.tone}38` }}
                                         data-testid={`cons-decision-plan-${p.key}`}
                                       >
-                                        <Icon aria-hidden className="h-7 w-7 shrink-0" style={{ color: p.tone }} />
+                                        <Icon aria-hidden className="h-7 w-7 shrink-0 lg:h-6 lg:w-6" style={{ color: p.tone }} />
+                                        <span aria-hidden className="hidden h-7 w-px shrink-0 lg:block" style={{ background: `${p.tone}4d` }} />
                                         <span className="max-w-full truncate">{p.label}</span>
                                       </button>
                                       {selected && (
                                         <button
                                           type="button"
                                           onClick={() => clearAddon(p.key)}
-                                          className="absolute right-1 top-1 p-1 text-slate-800 transition hover:text-black"
+                                          className="absolute right-1 top-1 p-1 text-slate-800 transition hover:text-black lg:top-1/2 lg:-translate-y-1/2"
                                           title={`Remove ${p.label}`}
                                           data-testid={`cons-decision-plan-remove-${p.key}`}
                                         >
@@ -9758,9 +9763,17 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         </div>
                       );
                     })()}
+                  </div>
+                  {/* Move to Admin floats in the bottom-right corner of the body and stays
+                      there while it scrolls: sticky against the Overview column, which spans
+                      the whole scroll, and pushed down by mt-auto when the form is short.
+                      The white backing keeps the (half-faded when disabled) button solid
+                      over whatever scrolls beneath it. */}
+                  <div className="pointer-events-none sticky bottom-[10px] z-10 mt-auto flex justify-end" data-testid="cons-decision-save-float">
+                    <span className="pointer-events-auto rounded-md bg-white shadow-lg">
                     <Button
                       size="sm"
-                      className="mt-4 h-9 bg-blue-700 px-5 text-xs font-semibold hover:bg-blue-800"
+                      className="h-9 bg-blue-700 px-5 text-xs font-semibold hover:bg-blue-800"
                       onClick={submitConsultationDecision}
                       disabled={savingDecision || !canSave}
                       data-testid="cons-decision-save"
@@ -9773,7 +9786,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           button names the desk the patient lands on. */}
                       {savingDecision ? "Saving..." : "Move to Admin"}
                     </Button>
+                    </span>
                   </div>
+                  </>
                 );
               })()}
 
