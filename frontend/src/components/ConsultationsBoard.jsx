@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User, ScrollText, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8794,7 +8794,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             onEdit={() => setPhysioDiagEditing(true)}
                             onUnlock={unlockPhysioDiag}
                             rows={3}
-                            placeholder="Write the full diagnosis report..."
+                            // The Consultant's box has no card or heading: its name is the
+                            // placeholder, as on the Treatment Protocol box under it.
+                            bare={isConsultant}
+                            placeholder={isConsultant ? "Diagnosis Report" : "Write the full diagnosis report..."}
                             /* No preset picker here. A diagnosis is written about one patient, so
                                a saved phrase to drop in is a phrase that fits somebody else — and
                                the dropdown and its Save sat above the box making the one thing
@@ -8844,18 +8847,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {/* The Consultant's Treatment Protocol: typed by hand, optional, saved as
                         it is typed. Copied onto page 3 of the patient's Consultation Form. */}
                     {isConsultant && (
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="cons-treatment-protocol">
-                        <div className="mb-1.5 flex items-center justify-between gap-2">
-                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                            <ScrollText className="h-3.5 w-3.5" /> Treatment Protocol
-                            <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span>
-                          </p>
-                          {(savingProtocol || protocolDraft.trim()) && (
-                            <span className="flex items-center gap-1 text-[11px] text-slate-400" data-testid="cons-treatment-protocol-autosave-status">
-                              {savingProtocol ? "Saving..." : (<><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-saved</>)}
-                            </span>
-                          )}
-                        </div>
+                      <div data-testid="cons-treatment-protocol">
                         {!protocolListHidden && treatmentProtocols.length > 0 && (
                           <ThemedSelect
                             value=""
@@ -8866,15 +8858,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             testid="cons-treatment-protocol-pick"
                           />
                         )}
-                        <textarea
-                          value={protocolDraft}
-                          onChange={(e) => handleProtocolChange(e.target.value)}
-                          rows={3}
-                          maxLength={5000}
-                          placeholder="Type the treatment protocol..."
-                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs"
-                          data-testid="cons-treatment-protocol-input"
-                        />
+                        <div className="relative">
+                          <textarea
+                            value={protocolDraft}
+                            onChange={(e) => handleProtocolChange(e.target.value)}
+                            rows={3}
+                            maxLength={5000}
+                            placeholder="Treatment Protocol (optional)"
+                            className="block w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400"
+                            data-testid="cons-treatment-protocol-input"
+                          />
+                          {(savingProtocol || protocolDraft.trim()) && (
+                            <span className="pointer-events-none absolute bottom-2 right-6 flex items-center gap-1 rounded bg-white/90 px-1 text-[11px] text-slate-400" data-testid="cons-treatment-protocol-autosave-status">
+                              {savingProtocol ? "Saving..." : (<><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-saved</>)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -16674,7 +16673,7 @@ function TreatmentChecklist({ options, value, onChange, testPrefix }) {
 function LockableTextBox({
   icon: Icon, label, value, onChange, editing, locked, savedText,
   saving, canEdit, onEdit, onUnlock, rows, placeholder, testPrefix, presetKind,
-  choices, lockNote, statusInHead,
+  choices, lockNote, statusInHead, bare = false,
 }) {
   const showEditor = canEdit && (editing || !savedText);
   const hasChoices = Array.isArray(choices) && choices.length > 0;
@@ -16689,6 +16688,53 @@ function LockableTextBox({
       )}
     </span>
   );
+
+  // `bare`: the text box alone, no card, no padding, no heading -- the placeholder names it
+  // (the Consultant's Diagnosis Report). The save status sits inside the box's corner so it
+  // adds no line under it. A saved report not being edited reads in the same box, with Edit.
+  if (bare) {
+    const boxCls = "block w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800";
+    return (
+      <div className="relative" data-testid={testPrefix}>
+        {showEditor ? (
+          <>
+            <textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              rows={rows}
+              placeholder={placeholder}
+              className={`${boxCls} placeholder:text-slate-400`}
+              data-testid={`${testPrefix}-input`}
+            />
+            {showStatus && (
+              <div className="pointer-events-none absolute bottom-2 right-6 rounded bg-white/90 px-1" data-testid={`${testPrefix}-autosave-status`}>{status}</div>
+            )}
+          </>
+        ) : savedText ? (
+          <div className={boxCls}>
+            <p className="whitespace-pre-wrap">{savedText}</p>
+            {canEdit ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 text-xs"
+                onClick={locked ? onUnlock : onEdit}
+                data-testid={`${testPrefix}-edit`}
+              >
+                <Pencil className="mr-1 h-3 w-3" /> Edit
+              </Button>
+            ) : lockNote ? (
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-500" data-testid={`${testPrefix}-lock-note`}>
+                <Lock className="h-3 w-3 shrink-0" /> {lockNote}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className={`${boxCls} text-slate-400`}>{placeholder}: not written yet.</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid={testPrefix}>
