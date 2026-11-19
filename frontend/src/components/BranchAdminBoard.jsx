@@ -2631,6 +2631,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 showCustom={false}
                 showTomorrow={onConsultationTab}
                 omit={BRANCH_OMITTED_RANGES}
+                yesterdayFirst
               />
             </div>
             {/* Pain Type, Pain Duration and City — the columns the list grew, now askable
@@ -2986,6 +2987,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               showCustom={false}
               showTomorrow={onConsultationTab}
               omit={BRANCH_OMITTED_RANGES}
+              yesterdayFirst
             />
           </div>
 
