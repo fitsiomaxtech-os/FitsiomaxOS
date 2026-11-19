@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User, ScrollText } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User, ScrollText, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2935,6 +2935,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // its patient triggers. See openRowFee, which parks it, and the effect that picks it up.
   const pendingRowFeeRef = useRef(null);
   const [detailTab, setDetailTab] = useState("overview");
+  // The Treatment Prescription popup's tab rail, folded to icons or open with labels.
+  // Kept per browser, like a remembered filter; private windows just start open.
+  const [rxRailCollapsed, setRxRailCollapsed] = useState(() => {
+    try { return window.localStorage.getItem("cons-rx-rail-collapsed") === "1"; } catch { return false; }
+  });
+  const toggleRxRail = () => setRxRailCollapsed((was) => {
+    try { window.localStorage.setItem("cons-rx-rail-collapsed", was ? "0" : "1"); } catch { /* not kept */ }
+    return !was;
+  });
   // On the Branch Admin's Consultation Visit stage the Documents tab is the Prescription
   // tab: the generated prescription's View PDF / Download / WhatsApp / Print / Share in
   // the footer, the uploaded pages, and Camera / Choose File to add more.
@@ -8308,6 +8317,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               </button>
             </div>
 
+            {/* The tab bar and the body. The Consultant's card lays them side by side from
+                tablet width up -- the tabs a rail down the left, collapsible to icons --
+                and stacked on a phone. For everyone else this box is display: contents
+                and the card lays out as it always has. */}
+            <div className={isConsultant ? "flex min-h-0 flex-1 flex-col sm:flex-row" : "contents"} data-testid="cons-detail-main">
             {/* Sub tabs. An underline rail rather than six filled pills: the pills read as
                 six buttons to press, which is not what the top of a card whose first job is
                 to be read should say, and they spent a band of colour and half again the
@@ -8321,7 +8335,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                 The Consultant's tabs are shaded pills with an icon each: the selected one
                 sits on a pale blue fill in blue, the rest in slate with no fill. */}
-            <div className={`flex shrink-0 flex-nowrap items-center overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden ${isConsultant ? "gap-x-2 py-1.5 [justify-content:safe_center]" : "gap-x-4"}`} data-testid="cons-detail-tabs">
+            {/* The Consultant's tabs: a centred pill row on a phone; from tablet width up a
+                rail down the left of the card, the open tab on a pale blue fill with a blue
+                bar at its left edge. Collapse folds the rail to its icons (the names come
+                back as tooltips); Expand opens it again. */}
+            <div className={isConsultant
+              ? `flex shrink-0 flex-nowrap items-center gap-x-2 overflow-x-auto border-b border-slate-200 px-4 py-1.5 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-col sm:items-stretch sm:gap-1 sm:overflow-y-auto sm:overflow-x-hidden sm:border-b-0 sm:border-r sm:bg-white sm:px-2 sm:py-3 sm:transition-[width] sm:duration-200 sm:[justify-content:flex-start] ${rxRailCollapsed ? "sm:w-[60px]" : "sm:w-[184px]"}`
+              : "flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden"} data-testid="cons-detail-tabs">
               {[
                 { key: "overview", label: "Overview", icon: House },
                 // Not for the Consultant, for the same reason the Timeline is not: chasing
@@ -8347,11 +8367,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 <button
                   key={t.key}
                   onClick={() => setDetailTab(t.key)}
-                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${detailTab === t.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"}`}
+                  title={rxRailCollapsed ? t.label : undefined}
+                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors sm:gap-3 sm:py-2.5 sm:text-sm sm:font-medium ${rxRailCollapsed ? "sm:justify-center sm:px-0" : "sm:px-3"} ${detailTab === t.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"}`}
                   data-testid={`cons-detail-tab-${t.key}`}
                 >
-                  <t.icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                  {t.label}
+                  {detailTab === t.key && <span aria-hidden="true" className="absolute inset-y-0 left-0 hidden w-[3px] rounded-l-md bg-blue-600 sm:block" />}
+                  <t.icon className="h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+                  <span className={rxRailCollapsed ? "sm:sr-only" : ""}>{t.label}</span>
                 </button>
               ) : (
                 <button
@@ -8363,12 +8385,28 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {t.label}
                 </button>
               ))}
+              {/* At the foot of the rail; not on a phone, where the tabs are a row. */}
+              {isConsultant && (
+                <button
+                  type="button"
+                  onClick={toggleRxRail}
+                  title={rxRailCollapsed ? "Expand" : "Collapse"}
+                  aria-label={rxRailCollapsed ? "Expand tabs" : "Collapse tabs"}
+                  aria-expanded={!rxRailCollapsed}
+                  className={`mt-auto hidden shrink-0 items-center gap-3 whitespace-nowrap rounded-md py-2 text-[13px] font-medium text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 sm:flex ${rxRailCollapsed ? "justify-center px-0" : "px-3"}`}
+                  data-testid="cons-detail-tabs-collapse"
+                >
+                  {rxRailCollapsed
+                    ? <PanelLeftOpen className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
+                    : <><PanelLeftClose className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />Collapse</>}
+                </button>
+              )}
             </div>
 
             {/* The only part of the card that scrolls. Its own padding, because the
                 head band above it is flush to the card edge and has to stay that way
                 for its border to run the full width. */}
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-[10px]" data-testid="cons-detail-body">
+            <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto p-[10px]" data-testid="cons-detail-body">
               {/* A column with an order to it rather than a fragment. For everyone but the
                   Consultant it is the summary of the consultation, then the panel that
                   does the work: what was found is read before it is acted on, and now that
@@ -11972,6 +12010,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   ))}
                 </div>
               )}
+            </div>
             </div>
 
             {/* Held out of the scroll, like the name and the tab row at the top of the card, so
