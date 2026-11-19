@@ -5,7 +5,7 @@ from typing import Optional
 from database import v3_col
 from utils import CLINIC_UTC_OFFSET, clinic_day_of, clinic_today, live_branch_query, without_past_moves
 from stage_utils import get_closing_stage_name
-from deps import v3_current_user, v3_require_roles
+from deps import PRACTICE_TOKENS, v3_current_user, v3_require_roles, vertical_in_arm
 from constants import V3_STAGES, V3_BRANCH_STAGES, BRANCH_APPOINTMENT_STAGE, BRANCH_APPOINTMENT_STAGE_FORMER, BRANCH_CANCELLED_STAGE, BRANCH_LOST_STAGE, SALES_STAGE_ROLE_APPOINTMENT
 from schemas.v3 import V3UserOut, V3LeadOut
 from routers.v3_finance import REVENUE_ACTIONS, CONSULTATION_FEE_ACTIONS, _parse_rs_amount, _revenue_category, _lead_session_summary
@@ -1023,8 +1023,37 @@ async def v3_dashboard_leads_analytics(
     """
     query: dict = without_past_moves(_utc_stamp_range_query("created_at", start_date, end_date))
     wanted_branches = [b for b in (branch_ids or "").split(",") if b.strip()]
+
+    branch_rows = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1, "vertical": 1}).to_list(500)
+    branch_names = {b["id"]: b.get("branch_name") or "—" for b in branch_rows}
+
+    # The online arms' leads are counted under the arm's own branch. The Online Fitness and
+    # Online Physiotherapy boards find their leads by `vertical`, not by `branch_id` (see
+    # v3_arm_board), so an online lead is often filed with no branch at all -- or under the
+    # branch whose sheet it came in on -- while the arm's desk is the one booking it. Read
+    # by branch_id alone, those leads and every booking on them landed in "Unassigned" or
+    # in somebody else's branch, and the arm's own row read zero appointments.
+    arm_branch: dict = {}
+    for practice in PRACTICE_TOKENS:
+        for b in branch_rows:
+            if vertical_in_arm(b.get("vertical"), practice):
+                arm_branch[practice] = b["id"]
+                break
+
+    def _effective_branch(lead: dict) -> str:
+        for practice, bid in arm_branch.items():
+            if vertical_in_arm(lead.get("vertical"), practice):
+                return bid
+        return lead.get("branch_id") or ""
+
     if wanted_branches:
-        query["branch_id"] = {"$in": wanted_branches}
+        # Ask for the branch's own leads, and for any online lead when an arm's branch is
+        # among those wanted; which arm each of those belongs to is decided in Python below.
+        wanted_arm = any(bid in wanted_branches for bid in arm_branch.values())
+        branch_clause = {"branch_id": {"$in": wanted_branches}}
+        if wanted_arm:
+            branch_clause = {"$or": [branch_clause, {"vertical": {"$regex": "online", "$options": "i"}}]}
+        query = {"$and": [query, branch_clause]} if query else branch_clause
     leads = await v3_col("leads").find(
         query,
         {"_id": 0, "id": 1, "created_at": 1, "stage": 1, "branch_id": 1, "source_tab": 1, "source_type": 1,
@@ -1035,8 +1064,11 @@ async def v3_dashboard_leads_analytics(
          "rehab_fee_paid": 1, "diet_fee_paid": 1, "diet_chart_fee_paid": 1},
     ).to_list(50000)
 
-    branch_rows = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500)
-    branch_names = {b["id"]: b.get("branch_name") or "—" for b in branch_rows}
+    for lead in leads:
+        lead["branch_id"] = _effective_branch(lead)
+    if wanted_branches:
+        wanted_set = set(wanted_branches)
+        leads = [lead for lead in leads if lead["branch_id"] in wanted_set]
 
     # Who actually came in. There is no single "arrived" flag on a lead, so a visit is read
     # off what only happens once the patient is in the room: an appointment marked

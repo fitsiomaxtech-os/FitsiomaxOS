@@ -215,8 +215,12 @@ const HeadRow = ({ children }) => (
   </div>
 );
 
-const BranchName = ({ name, strong }) => (
-  <span className={`truncate text-[13px] ${strong ? "font-semibold text-slate-900" : "font-medium"} ${name === "Unassigned" ? "italic text-slate-400" : strong ? "" : "text-slate-700"}`}>
+const BranchName = ({ name, strong, active }) => (
+  <span
+    className={`truncate text-[13px] transition-colors duration-200 ${strong ? "font-semibold" : "font-medium"} ${
+      active ? "text-blue-800" : name === "Unassigned" ? "italic text-slate-400" : strong ? "text-slate-900" : "text-slate-700"
+    }`}
+  >
     {name}
   </span>
 );
@@ -292,11 +296,19 @@ const HoverRows = ({ head, rows, scale, hint }) => {
             <li
               key={row.key}
               onMouseMove={move(row)}
-              className={`grid ${ROW_COLS} cursor-default items-center gap-x-4 rounded-lg px-2 -mx-2 py-3 transition-colors duration-150 ${
-                on ? "bg-slate-100/70" : "hover:bg-slate-50"
+              className={`relative grid ${ROW_COLS} cursor-default items-center gap-x-4 rounded-lg px-3 -mx-3 py-3 transition-all duration-200 ${
+                on
+                  // The hovered row lifts onto a soft blue wash with an accent edge, so the eye
+                  // keeps its place as the pointer travels down the list.
+                  ? "bg-gradient-to-r from-blue-50 via-indigo-50/60 to-white shadow-[inset_0_0_0_1px_rgba(59,130,246,0.14)]"
+                  : ""
               } ${row.strong ? "mb-1 border-b border-slate-200 rounded-b-none" : ""}`}
             >
-              <BranchName name={row.label} strong={row.strong} />
+              <span
+                aria-hidden="true"
+                className={`absolute inset-y-2 left-0 w-[3px] rounded-full bg-gradient-to-b from-blue-500 to-indigo-500 transition-opacity duration-200 ${on ? "opacity-100" : "opacity-0"}`}
+              />
+              <BranchName name={row.label} strong={row.strong} active={on} />
               <span className="relative flex flex-col gap-1.5 pr-1">
                 {guides}
                 {row.bars}
@@ -605,6 +617,13 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const trend = fillTrend(data?.trend || [], data?.grain);
   const byBranch = data?.by_branch || [];
   const branchFunnel = data?.branch_funnel || [];
+  // The branch card lists real branches only. Leads with no branch are not a branch's
+  // demand, and as the longest bar they squashed every row beneath them; their count is
+  // said in the subtitle instead.
+  const assignedBranches = branchFunnel.filter((r) => r.name !== "Unassigned");
+  const unassignedLeads = branchFunnel.find((r) => r.name === "Unassigned")?.leads || 0;
+  const assignedLeads = assignedBranches.reduce((a, r) => a + r.leads, 0);
+  const assignedBooked = assignedBranches.reduce((a, r) => a + r.booked, 0);
   // One branch picked in the filter: the left card shows that branch's pre-sales stages
   // rather than a one-row branch list.
   const oneBranch = (branchIds || []).length === 1;
@@ -708,11 +727,13 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
             {total === 0 ? <Empty>No leads for this branch in this range.</Empty> : <StageLeadsList total={total} stages={byStage} />}
           </Card>
         ) : (
-          <Card title="Leads & appointments by branch" sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked`} testid="leads-analytics-branches">
-            {branchFunnel.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
-              <ValueTable rows={branchFunnel.map((r) => ({ name: r.name, value: r.leads }))} firstHeading="Branch" />
+          <Card
+            title="Leads & appointments by branch"
+            sub={`${nf(assignedLeads)} leads · ${nf(assignedBooked)} with an appointment booked${unassignedLeads ? ` · ${nf(unassignedLeads)} not yet given a branch` : ""}`} testid="leads-analytics-branches">
+            {assignedBranches.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
+              <ValueTable rows={assignedBranches.map((r) => ({ name: r.name, value: r.leads }))} firstHeading="Branch" />
             ) : (
-              <BranchLeadsList rows={branchFunnel} />
+              <BranchLeadsList rows={assignedBranches} />
             )}
           </Card>
         )}
