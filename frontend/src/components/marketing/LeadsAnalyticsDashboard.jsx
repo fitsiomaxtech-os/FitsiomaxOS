@@ -82,7 +82,6 @@ const fillTrend = (rows, grain) => {
 /** ₹ in the Indian grouping the desk reads: ₹45k, ₹1.6L, ₹2.3Cr on an axis; the full
  *  ₹1,64,690 in the hover card. */
 const inr = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
-const countShort = (n) => (n >= 1000 ? `${Math.round((n / 1000) * 10) / 10}k` : String(n));
 
 const longPeriod = (p) => {
   const parts = String(p || "").split("-");
@@ -92,44 +91,6 @@ const longPeriod = (p) => {
   return `${m} ${parts[0]}`;
 };
 
-/** The hover card for the over-time charts: the period on top, every branch that had
- *  anything that day biggest first with its coloured dash, and the day's total beneath a
- *  hairline. The highlighted branch, if one is picked in the legend, is lifted out. */
-const TrendTooltip = ({ active, payload, label, money, focus }) => {
-  if (!active || !payload?.length) return null;
-  const rows = payload
-    .filter((p) => Number(p.value) > 0)
-    .sort((a, b) => Number(b.value) - Number(a.value));
-  const total = payload.reduce((a, p) => a + Number(p.value || 0), 0);
-  const fmt = money ? inr : nf;
-  return (
-    <div className="min-w-[13rem] rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.22)] backdrop-blur-sm">
-      <p className="mb-2 text-xs font-medium text-slate-500">{longPeriod(label)}</p>
-      {rows.length === 0 ? (
-        <p className="text-[13px] text-slate-400">Nothing on this {String(label).length > 7 ? "day" : "month"}</p>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {rows.map((p) => (
-            <div
-              key={p.dataKey}
-              className={`flex items-baseline gap-2 whitespace-nowrap rounded-md transition-opacity ${focus && focus !== p.dataKey ? "opacity-40" : ""}`}
-            >
-              <span className="inline-block h-[2px] w-3 shrink-0 translate-y-[-3px] rounded-full" style={{ background: p.color }} />
-              <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmt(p.value)}</span>
-              <span className="truncate text-[13px] text-slate-500">{p.name}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {payload.length > 1 && (
-        <div className="mt-2 flex items-baseline justify-between border-t border-slate-100 pt-2 text-xs">
-          <span className="text-slate-400">Total</span>
-          <span className="font-semibold tabular-nums text-slate-800">{fmt(total)}</span>
-        </div>
-      )}
-    </div>
-  );
-};
 
 
 /** ₹ the way Finance's Cash flow axis writes it: ₹15 L, ₹1.2 Cr, ₹45 k. */
@@ -153,152 +114,30 @@ const ChartIcon = () => (
   </svg>
 );
 
-/** The card frame Finance's Cash flow uses: title and subtitle on the left, a "View data"
- *  toggle on the right, no rule under the header. */
-const FlowCard = ({ title, sub, action, children, testid, className = "" }) => (
-  <div className={`flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`} data-testid={testid}>
-    <div className="mb-4 flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-slate-900">{title}</p>
-        {sub && <p className="mt-1 text-[13px] text-slate-500">{sub}</p>}
-      </div>
-      {action}
-    </div>
-    <div className="flex-1">{children}</div>
-  </div>
-);
-
 const ViewDataButton = ({ on, onClick, testid }) => (
   <button
     type="button"
     onClick={onClick}
     data-testid={testid}
-    className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
   >
     {on ? <ChartIcon /> : <TableIcon />}
     {on ? "View chart" : "View data"}
   </button>
 );
 
-/** Over time as columns, one per period -- stacked by branch when several are showing,
- *  a single colour when one branch is picked. The legend's squares double as toggles:
- *  click one to take that branch off the chart, hover it to fade the others. */
-const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single, className }) => {
-  const names = Object.keys(series || {});
-  const [hidden, setHidden] = useState(() => new Set());
-  const [focus, setFocus] = useState(null);
-  const [asData, setAsData] = useState(false);
-  const color = (i) => (single ? (money ? CATEGORICAL[2] : SERIES) : CATEGORICAL[i % CATEGORICAL.length]);
-  const shown = names.filter((n) => !hidden.has(n));
-  const rows = (periods || []).map((period, i) => {
-    const row = { period };
-    names.forEach((n) => { row[n] = series[n][i] || 0; });
-    row.__total = shown.reduce((a, n) => a + row[n], 0);
-    return row;
-  });
-  const fmt = money ? inr : nf;
-  const tick = money ? inrAxis : countShort;
-  const toggle = (n) => setHidden((h) => {
-    const next = new Set(h);
-    if (next.has(n)) next.delete(n); else next.add(n);
-    return next;
-  });
-  const lastShown = shown[shown.length - 1];
-
-  return (
-    <FlowCard
-      title={title}
-      sub={sub}
-      testid={testid}
-      className={className}
-      action={names.length > 0 && rows.length > 0 ? <ViewDataButton on={asData} onClick={() => setAsData((v) => !v)} testid={`${testid}-view-data`} /> : null}
-    >
-      {names.length === 0 || rows.length === 0 ? <Empty>{emptyText}</Empty> : asData ? (
-        <div className="max-h-[300px] overflow-auto rounded-lg border border-slate-100">
-          <table className="w-full text-[13px]">
-            <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              <tr>
-                <th className="px-3 py-2">{periods[0]?.length > 7 ? "Day" : "Month"}</th>
-                {shown.map((n) => <th key={n} className="px-3 py-2 text-right">{n}</th>)}
-                {shown.length > 1 && <th className="px-3 py-2 text-right">Total</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {rows.filter((row) => row.__total > 0).map((row) => (
-                <tr key={row.period} className="transition-colors hover:bg-blue-50/40">
-                  <td className="px-3 py-2 text-slate-600">{longPeriod(row.period)}</td>
-                  {shown.map((n) => <td key={n} className="px-3 py-2 text-right tabular-nums text-slate-800">{row[n] ? fmt(row[n]) : <span className="text-slate-300">—</span>}</td>)}
-                  {shown.length > 1 && <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{fmt(row.__total)}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <>
-          <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2" onMouseLeave={() => setFocus(null)}>
-            {names.map((n, i) => {
-              const off = hidden.has(n);
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  disabled={single}
-                  onClick={() => toggle(n)}
-                  onMouseEnter={() => setFocus(off ? null : n)}
-                  aria-pressed={!off}
-                  title={single ? n : off ? `Show ${n}` : `Hide ${n}`}
-                  className={`inline-flex items-center gap-2 text-[13px] transition-opacity ${single ? "cursor-default" : "cursor-pointer"} ${
-                    off ? "opacity-40" : focus && focus !== n ? "opacity-50" : ""
-                  }`}
-                >
-                  <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: color(i) }} />
-                  <span className={`text-slate-700 ${off ? "line-through" : ""}`}>{n}</span>
-                </button>
-              );
-            })}
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
-              <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
-              <XAxis dataKey="period" tickFormatter={shortPeriod} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: INK.axis }} minTickGap={20} />
-              <YAxis allowDecimals={false} tickFormatter={tick} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} width={money ? 56 : 40} />
-              <Tooltip
-                content={<TrendTooltip money={money} focus={focus} />}
-                cursor={{ fill: "rgba(37,99,235,0.06)", radius: 6 }}
-                wrapperStyle={{ outline: "none" }}
-              />
-              {names.map((n, i) => (hidden.has(n) ? null : (
-                <Bar
-                  key={n}
-                  dataKey={n}
-                  name={n}
-                  stackId="t"
-                  fill={color(i)}
-                  fillOpacity={focus && focus !== n ? 0.25 : 1}
-                  maxBarSize={18}
-                  // Rounded only where the column ends, so a stack reads as one column.
-                  radius={n === lastShown ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                  isAnimationActive={false}
-                />
-              )))}
-            </BarChart>
-          </ResponsiveContainer>
-        </>
-      )}
-    </FlowCard>
-  );
-};
-
 const REVENUE_TYPE_LABEL = { consultation: "Consultation", session: "Session", diet: "Diet", rehab: "Rehab", spot_joining: "Spot joining", zumba: "Zumba" };
 
 /* ── chrome ─────────────────────────────────────────────────────────────────────── */
 
-const Card = ({ title, sub, children, className = "", testid }) => (
+const Card = ({ title, sub, children, className = "", testid, action }) => (
   <div className={`flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm ${className}`} data-testid={testid}>
-    <div className="border-b border-slate-100 px-5 py-3.5">
-      <p className="text-sm font-semibold text-slate-800">{title}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
+    <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-3.5">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800">{title}</p>
+        {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
+      </div>
+      {action}
     </div>
     <div className="flex-1 px-5 py-4">{children}</div>
   </div>
@@ -455,10 +294,10 @@ const Track = ({ value, max, color, h = "h-2" }) => (
 
 /** One line of the hover card, styled as the Finance charts' tooltip: a short coloured
  *  dash, the figure in bold, what it counts, and a quiet ratio after it. */
-const HoverStat = ({ color, label, value, note }) => (
+const HoverStat = ({ color, label, value, note, money }) => (
   <div className="flex items-baseline gap-2 whitespace-nowrap">
     <span className="inline-block h-[2px] w-3 shrink-0 translate-y-[-3px] rounded-full" style={{ background: color }} />
-    <span className="text-[13px] font-semibold tabular-nums text-slate-900">{nf(value)}</span>
+    <span className="text-[13px] font-semibold tabular-nums text-slate-900">{money || nf(value)}</span>
     <span className="text-[13px] text-slate-500">{label}</span>
     {note && <span className="ml-auto pl-3 text-[11px] tabular-nums text-slate-400">{note}</span>}
   </div>
@@ -482,7 +321,7 @@ const compact = (n) => (n >= 1000 ? `${Math.round((n / 1000) * 10) / 10}k` : nf(
  *  pointer travels down the list; `scale`, when given, draws round-number ticks along the
  *  foot of the bar column with faint guides up through the rows. */
 const TIP_W = 248;
-const HoverRows = ({ head, rows, scale, hint }) => {
+const HoverRows = ({ head, rows, scale, hint, tickFormat = compact }) => {
   const [tip, setTip] = useState(null);
   const box = useRef(null);
   const move = (row) => (e) => {
@@ -545,7 +384,7 @@ const HoverRows = ({ head, rows, scale, hint }) => {
                   transform: i === 0 ? "none" : i === scale.ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
                 }}
               >
-                {compact(t)}
+                {tickFormat(t)}
               </span>
             ))}
           </span>
@@ -748,6 +587,130 @@ const StepFunnelList = ({ row }) => {
   );
 };
 
+/** Days rolled into Monday-to-Sunday weeks, for the one-branch view of a long range: a row
+ *  a day is thirty rows, a row a week is four or five. Months are left as they are. */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const periodBuckets = (periods, values) => {
+  if (!periods.length) return [];
+  if (periods[0].length === 7 || periods.length <= 14) {
+    return periods.map((p, i) => ({ key: p, label: longPeriod(p), value: values[i] || 0 }));
+  }
+  const weeks = [];
+  periods.forEach((p, i) => {
+    const d = new Date(`${p}T00:00:00Z`);
+    const monday = new Date(d);
+    monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    const key = monday.toISOString().slice(0, 10);
+    let w = weeks[weeks.length - 1];
+    if (!w || w.key !== key) {
+      w = { key, first: d, last: d, value: 0 };
+      weeks.push(w);
+    }
+    w.last = d;
+    w.value += values[i] || 0;
+  });
+  return weeks.map((w) => {
+    const a = `${w.first.getUTCDate()} ${MONTHS[w.first.getUTCMonth()]}`;
+    const b = `${w.last.getUTCDate()} ${MONTHS[w.last.getUTCMonth()]}`;
+    return { key: w.key, label: a === b ? a : `${a} – ${b}`, value: w.value };
+  });
+};
+
+/** Leads or revenue over the range, in the bar-list format of the branch cards: one row
+ *  and one bar per branch on a shared, ticked scale. With one branch picked, the rows are
+ *  that branch's weeks (or days, or months) instead. Hover a row for its figures, best day
+ *  included; View data opens the day-by-day table behind it. */
+const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single, className }) => {
+  const [asData, setAsData] = useState(false);
+  const names = Object.keys(series || {});
+  const fmt = money ? inr : nf;
+  const tickFormat = money ? inrAxis : compact;
+  const tint = money ? CATEGORICAL[2] : SERIES;
+  const unit = money ? "collected" : "leads";
+
+  const branchRows = names
+    .map((n) => {
+      const vals = series[n] || [];
+      const value = vals.reduce((a, v) => a + v, 0);
+      let best = -1;
+      vals.forEach((v, i) => { if (v > 0 && (best < 0 || v > vals[best])) best = i; });
+      return { key: n, label: n, value, best: best >= 0 ? { period: periods[best], value: vals[best] } : null };
+    })
+    .filter((row) => row.value > 0)
+    .sort((x, y) => y.value - x.value);
+  const rows = single ? periodBuckets(periods || [], series[names[0]] || []) : branchRows;
+  const total = rows.reduce((a, row) => a + row.value, 0);
+  const scale = niceScale(Math.max(1, ...rows.map((row) => row.value)));
+
+  const table = (
+    <div className="max-h-[300px] overflow-auto rounded-lg border border-slate-100">
+      <table className="w-full text-[13px]">
+        <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <tr>
+            <th className="px-3 py-2">{periods[0]?.length > 7 ? "Day" : "Month"}</th>
+            {names.map((n) => <th key={n} className="px-3 py-2 text-right">{n}</th>)}
+            {names.length > 1 && <th className="px-3 py-2 text-right">Total</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {(periods || []).map((period, i) => {
+            const cells = names.map((n) => series[n][i] || 0);
+            const sum = cells.reduce((a, v) => a + v, 0);
+            if (!sum) return null;
+            return (
+              <tr key={period} className="transition-colors hover:bg-blue-50/40">
+                <td className="px-3 py-2 text-slate-600">{longPeriod(period)}</td>
+                {cells.map((v, k) => <td key={names[k]} className="px-3 py-2 text-right tabular-nums text-slate-800">{v ? fmt(v) : <span className="text-slate-300">—</span>}</td>)}
+                {names.length > 1 && <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{fmt(sum)}</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <Card
+      title={title}
+      sub={sub}
+      testid={testid}
+      className={className}
+      action={rows.length > 0 ? <ViewDataButton on={asData} onClick={() => setAsData((v) => !v)} testid={`${testid}-view-data`} /> : null}
+    >
+      {rows.length === 0 ? <Empty>{emptyText}</Empty> : asData ? table : (
+        <HoverRows
+          scale={scale}
+          tickFormat={tickFormat}
+          head={
+            <>
+              <span>{single ? (periods[0]?.length === 7 ? "Month" : periods.length <= 14 ? "Day" : "Week") : "Branch"}</span>
+              <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
+                <Dot color={tint}>{money ? "Revenue" : "Leads"}</Dot>
+              </span>
+            </>
+          }
+          rows={rows.map((row) => ({
+            key: row.key,
+            label: row.label,
+            bars: <Track value={row.value} max={scale.top} color={tint} />,
+            stats: (
+              <>
+                <HoverStat color={tint} label={unit} value={money ? undefined : row.value} note={`${pctOf(row.value, total)} of total`} money={money ? fmt(row.value) : null} />
+                {row.best && (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Best {periods[0]?.length === 7 ? "month" : "day"}: {longPeriod(row.best.period)} · {fmt(row.best.value)}
+                  </p>
+                )}
+              </>
+            ),
+          }))}
+        />
+      )}
+    </Card>
+  );
+};
+
 /** Vertical columns in a fixed order (calendar), one hue. */
 const OrderedColumns = ({ rows }) => (
   <ResponsiveContainer width="100%" height={220}>
@@ -888,7 +851,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <BranchTrendCard
           key={`leads-${branchKey}`}
           title="Leads over time"
-          sub={`${nf(trendLeadTotal)} leads per ${branchTrend.grain === "month" ? "month" : "day"}${oneBranch ? "" : ", by branch · click a branch to hide it"}`}
+          sub={`${nf(trendLeadTotal)} leads in this range${oneBranch ? `, by ${branchTrend.grain === "month" ? "month" : branchTrend.periods.length <= 14 ? "day" : "week"}` : ", by branch"}`}
           periods={branchTrend.periods}
           series={branchTrend.leads}
           single={oneBranch}
@@ -898,7 +861,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <BranchTrendCard
           key={`revenue-${branchKey}`}
           title="Revenue"
-          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments, on the day they were paid`}
+          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments${oneBranch ? `, by ${branchTrend.grain === "month" ? "month" : branchTrend.periods.length <= 14 ? "day" : "week"}` : ", by branch"}`}
           periods={branchTrend.periods}
           series={branchTrend.revenue}
           money
