@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft, Check, ChevronRight, ClipboardList, Copy, Download, ExternalLink, Link2, Loader2, MessageCircle,
-  Pencil, Plus, Printer, Search, Send, Trash2, X,
+  Pencil, Plus, Printer, Search, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { ThemedSelect } from "@/components/ui/themed-select";
+import { DateFilterPopover } from "@/components/DateFilterPopover";
 import {
   consultationFormLink,
   createConsultationForm,
@@ -12,21 +15,23 @@ import {
   getBranches,
   getConsultationForm,
   listConsultationForms,
-  requestConsultationForm,
   shareConsultationForm,
   updateConsultationForm,
 } from "@/lib/api";
 import { waNumber } from "@/lib/phone";
 import { claimPrintWindow, downloadConsultationForm, printConsultationForm } from "@/lib/consultationFormPrint";
-import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, formBranchName, formBranchesFrom, formFromLead, showDate, todayIso } from "@/components/branch/ConsultationFormSheets";
+import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, formBranchName, formBranchesFrom, formFromLead, showDate } from "@/components/branch/ConsultationFormSheets";
+import { LeadConsultationFormPopup } from "@/components/branch/LeadConsultationFormPopup";
 import { branchNameOf } from "@/lib/branchOrder";
 
 /**
  * Settings > Consultation Form: the clinic's three-page paper Offline Consultation Form,
  * filled on screen. The list keeps the branch's saved forms; a tap opens one in the same
- * layout to edit. Request from Client sends the patient a link to fill their part
- * themselves (pages/ClientConsultationFormPage); Print and Download give the filled
- * paper back (lib/consultationFormPrint).
+ * layout to edit. New Form opens the Consultation Form's steps (LeadConsultationFormPopup
+ * with no lead), not the paper. The toolbar's calendar narrows the list by the form's Date,
+ * and New to Old / Old to New orders it. A row's Share Link sends the patient a link to fill
+ * their part themselves (pages/ClientConsultationFormPage); Print and Download give the
+ * filled paper back (lib/consultationFormPrint).
  *
  * A plain overlay by default (the Consultant's patient card opens it that way). `inline`
  * draws the same card in the page instead, as a tab view: the Branch Admin's Settings gear
@@ -35,6 +40,15 @@ import { branchNameOf } from "@/lib/branchOrder";
  */
 
 const fillFrom = (r) => Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, r?.[k] || ""]));
+// A row's day: the form's own Date (local midnight), else the day it was saved.
+const rowDay = (r) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date || "");
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+  const t = new Date(r.created_at || 0).getTime();
+  return Number.isNaN(t) ? 0 : t;
+};
+const savedAt = (r) => new Date(r.created_at || 0).getTime() || 0;
+const SORTS = [{ value: "newest", label: "New to Old" }, { value: "oldest", label: "Old to New" }];
 const showStamp = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -100,40 +114,6 @@ const SharePanel = ({ share, onClose }) => {
   );
 };
 
-/** Request from Client: who it is for, both optional -- the patient can type them. */
-const RequestPanel = ({ busy, onSend, onClose }) => {
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/40 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} data-testid="consultation-form-request">
-      <form
-        className="w-full max-w-md rounded-[4px] bg-white p-5 shadow-xl"
-        onSubmit={(e) => { e.preventDefault(); onSend({ name: name.trim(), contact_no: contact.trim() }); }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="flex items-center gap-2 text-base font-semibold text-slate-800"><Send className="h-4 w-4 text-sky-600" />Request from Client</p>
-            <p className="mt-1 text-xs text-slate-500">Creates a link the client opens to fill the form. Both fields are optional.</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-full p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-4 w-4" /></button>
-        </div>
-        <label className="mt-4 block text-xs font-medium text-slate-600">Client name
-          <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-9 w-full rounded-[4px] border border-slate-200 px-3 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" data-testid="consultation-form-request-name" />
-        </label>
-        <label className="mt-3 block text-xs font-medium text-slate-600">Contact no (for WhatsApp)
-          <input value={contact} onChange={(e) => setContact(e.target.value)} inputMode="tel" className="mt-1 h-9 w-full rounded-[4px] border border-slate-200 px-3 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" data-testid="consultation-form-request-contact" />
-        </label>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy} className="rounded-[4px]">Cancel</Button>
-          <Button type="submit" size="sm" disabled={busy} className="gap-1.5 rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-request-send">
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}Create Link
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
-};
-
 const iconBtn = "rounded p-1.5 text-slate-400 transition hover:bg-sky-50 hover:text-sky-700";
 
 /** The row's arrow: page 1's Patient Details, read only, with the row's tools under them. */
@@ -194,6 +174,10 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [dateFilter, setDateFilter] = useState(null); // DateFilterPopover's { from, to, label }
+  const [sortOrder, setSortOrder] = useState("newest"); // "newest" | "oldest"
+  // New Form: the Consultation Form's steps over the app, not the paper.
+  const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [meta, setMeta] = useState(null); // the open form's client_status and stamps
   // A form the client sent back opens as a read-only report; Edit (or the row's pencil) unlocks it.
@@ -202,11 +186,8 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const [saved, setSaved] = useState(initialForm);
   const [formLoading, setFormLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [homeBranch, setHomeBranch] = useState("");
   // The Branch boxes: the live offline branches (the paper's four until they come).
   const [branchNames, setBranchNames] = useState([]);
-  const [requesting, setRequesting] = useState(false);
-  const [requestBusy, setRequestBusy] = useState(false);
   const [share, setShare] = useState(null); // { token, name, contact }
   const [pdfBusy, setPdfBusy] = useState(null); // the id (or "open") a PDF is being drawn for
   // The row arrow's popup: the row, and its form once fetched.
@@ -222,7 +203,6 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
         if (!live) return;
         setBranchNames(formBranchesFrom(list));
         const branch = formBranchName(branchNameOf((list || []).find((b) => b.id === branchId)));
-        setHomeBranch(branch);
         if (initialLead) {
           setForm((current) => current.branch ? current : { ...current, branch });
           setSaved((current) => current === initialForm ? { ...current, branch } : current);
@@ -249,21 +229,21 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     return () => clearTimeout(t);
   }, [q, load]);
 
+  // The calendar's days, then the order picked. Ties (one Date) go by when each was saved.
+  const shown = useMemo(() => {
+    const from = dateFilter?.from?.getTime();
+    const to = dateFilter?.to?.getTime();
+    const list = rows.filter((r) => {
+      const t = rowDay(r);
+      return !(from && t < from) && !(to && t > to);
+    });
+    const dir = sortOrder === "oldest" ? 1 : -1;
+    return list.sort((a, b) => dir * (rowDay(a) - rowDay(b) || savedAt(a) - savedAt(b)));
+  }, [rows, dateFilter, sortOrder]);
+
   const dirty = view === "form" && JSON.stringify(form) !== JSON.stringify(saved);
   const set = (key, v) => setForm((cur) => ({ ...cur, [key]: v }));
   const top = () => scrollRef.current?.scrollTo({ top: 0 });
-
-  const openNew = () => {
-    const start = { ...EMPTY_FORM, date: todayIso(), branch: homeBranch };
-    setEditingId(null);
-    setLeadForm(false);
-    setMeta(null);
-    setReport(false);
-    setForm(start);
-    setSaved(start);
-    setView("form");
-    top();
-  };
 
   const openEdit = async (id, { edit = false, lead = false } = {}) => {
     setEditingId(id);
@@ -368,20 +348,6 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     setDetails(null);
   };
 
-  const sendRequest = async ({ name, contact_no }) => {
-    setRequestBusy(true);
-    try {
-      const r = await requestConsultationForm(branchId, { name, contact_no, branch: homeBranch, date: todayIso() });
-      setRequesting(false);
-      setShare({ token: r.share_token, name, contact: contact_no });
-      load(q.trim());
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Couldn't create the link");
-    } finally {
-      setRequestBusy(false);
-    }
-  };
-
   // A form the client already sent back is opened to them again only on purpose.
   const shareRow = async (row) => {
     if (row.client_status === "submitted" && !window.confirm(`${row.name || "The client"} has already filled this form.\n\nSend the link again so they can change their answers?`)) return;
@@ -462,19 +428,25 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                     data-testid="consultation-form-search"
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => setRequesting(true)} className="h-9 gap-1.5 rounded-[4px] border-sky-200 text-sky-700 hover:bg-sky-50" data-testid="consultation-form-request-open">
-                  <Send className="h-4 w-4" />Request from Client
-                </Button>
-                <Button type="button" size="sm" onClick={openNew} className="h-9 gap-1.5 rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-new">
+                <DateFilterPopover value={dateFilter} onChange={setDateFilter} testid="consultation-form-date-filter" centered iconOnly phoneIconOnly snug />
+                <ThemedSelect
+                  value={sortOrder}
+                  onChange={(v) => setSortOrder(v || "newest")}
+                  options={SORTS}
+                  title="Sort by date"
+                  className="h-9 w-[8.5rem] shrink-0 rounded-[4px] text-sm"
+                  testid="consultation-form-sort"
+                />
+                <Button type="button" size="sm" onClick={() => setCreating(true)} className="h-9 gap-1.5 rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid="consultation-form-new">
                   <Plus className="h-4 w-4" />New Form
                 </Button>
               </div>
 
               {listLoading ? (
                 <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
-              ) : rows.length === 0 ? (
+              ) : shown.length === 0 ? (
                 <div className="rounded-[4px] border border-dashed border-slate-200 py-14 text-center text-sm text-slate-400" data-testid="consultation-form-empty">
-                  {q ? "No form matches that search." : "No consultation forms yet. Tap New Form to fill one, or Request from Client to send a link."}
+                  {q ? "No form matches that search." : dateFilter ? "No form on those dates." : "No consultation forms yet. Tap New Form to fill one."}
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-[4px] border border-slate-200">
@@ -489,7 +461,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((r) => (
+                      {shown.map((r) => (
                         <tr key={r.id} onClick={() => openEdit(r.id)} className="cursor-pointer border-t border-slate-100 hover:bg-sky-50/50" data-testid={`consultation-form-row-${r.id}`}>
                           <td className="px-3 py-2.5">
                             <p className={r.name ? "font-medium text-slate-800" : "italic text-slate-400"}>{r.name || "Awaiting client"}</p>
@@ -584,8 +556,12 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
             onClose={closeDetails}
           />
         )}
-        {requesting && <RequestPanel busy={requestBusy} onSend={sendRequest} onClose={() => setRequesting(false)} />}
         {share && <SharePanel share={share} onClose={() => setShare(null)} />}
+        {/* Over the whole app, out of the card's clipping: the steps carry their own overlay. */}
+        {creating && createPortal(
+          <LeadConsultationFormPopup branchId={branchId} onClose={() => setCreating(false)} onSaved={() => load(q.trim())} />,
+          document.body,
+        )}
       </div>
   );
 
