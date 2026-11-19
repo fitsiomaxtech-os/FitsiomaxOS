@@ -46,7 +46,7 @@ SETTING_ID = "hidden_features"
 # page, screen-only, shipped shown. The Consultant's typed box stays either way.
 #
 # consultant_instructions: the Instructions box under the Treatment Protocol on the
-# Consultant's Treatment Prescription popup. Features page, Show / Hide, screen-only,
+# Consultant's Treatment Prescription popup. Hide Tab page (Consultant), Show / Hide, screen-only,
 # shipped shown. What was already written stays on the lead and its Consultation Form.
 FEATURE_KEYS = (
     "treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm",
