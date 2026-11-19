@@ -1028,7 +1028,11 @@ async def v3_dashboard_leads_analytics(
     leads = await v3_col("leads").find(
         query,
         {"_id": 0, "created_at": 1, "stage": 1, "branch_id": 1, "source_tab": 1, "source_type": 1,
-         "vertical": 1, "appointment_date": 1, "assigned_user_name": 1},
+         "vertical": 1, "appointment_date": 1, "assigned_user_name": 1,
+         # What the branch funnel reads: the consultation fee (the visit happened) and the
+         # fees _is_converted checks (they paid for a service).
+         "package_paid": 1, "treatment_fee_paid": 1, "session_package_id": 1,
+         "rehab_fee_paid": 1, "diet_fee_paid": 1, "diet_chart_fee_paid": 1},
     ).to_list(50000)
 
     branch_rows = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500)
@@ -1091,6 +1095,10 @@ async def v3_dashboard_leads_analytics(
     # Leads with an appointment fixed, per branch -- the same "reached a booking" test the
     # headline count uses, so the branch split adds up to it.
     booked_by_branch: dict = {}
+    # Per branch id: leads -> appointment fixed -> came for the consultation -> paid fees.
+    # The last two are the Dashboard > Leads tab's own tests (METRIC_DEFS "consultations"
+    # and _is_converted), so a branch's figures here match its figures there.
+    funnel_by_branch: dict = {}
     for lead in leads:
         stage = lead.get("stage")
         if stage in stage_counts:
@@ -1105,6 +1113,14 @@ async def v3_dashboard_leads_analytics(
         by_branch[bid] = by_branch.get(bid, 0) + 1
         if str(lead.get("appointment_date") or "").strip():
             booked_by_branch[bid] = booked_by_branch.get(bid, 0) + 1
+        f = funnel_by_branch.setdefault(bid, {"leads": 0, "booked": 0, "consulted": 0, "paid": 0})
+        f["leads"] += 1
+        if str(lead.get("appointment_date") or "").strip():
+            f["booked"] += 1
+        if lead.get("package_paid") is not None:
+            f["consulted"] += 1
+        if _is_converted(lead):
+            f["paid"] += 1
         by_vertical[_vertical_label(lead.get("vertical"))] = by_vertical.get(_vertical_label(lead.get("vertical")), 0) + 1
         weekday = _weekday_of(lead.get("created_at"))
         if weekday:
@@ -1122,9 +1138,22 @@ async def v3_dashboard_leads_analytics(
             rows.append({"name": "Other", "value": tail})
         return rows
 
+    # Re-keyed by branch name and summed where names meet, for the reason
+    # _named_branch_counts gives; biggest first by leads.
+    funnel_named: dict = {}
+    for bid, f in funnel_by_branch.items():
+        name = branch_names.get(bid, "Unassigned") if bid else "Unassigned"
+        row = funnel_named.setdefault(name, {"name": name, "leads": 0, "booked": 0, "consulted": 0, "paid": 0})
+        for k in ("leads", "booked", "consulted", "paid"):
+            row[k] += f[k]
+    branch_funnel = sorted(funnel_named.values(), key=lambda r: (-r["leads"], r["name"]))
+
     return {
         "applied_filters": {"start_date": start_date, "end_date": end_date, "branch_ids": wanted_branches},
         "total": len(leads),
+        "consulted": sum(f["consulted"] for f in funnel_by_branch.values()),
+        "paid": sum(f["paid"] for f in funnel_by_branch.values()),
+        "branch_funnel": branch_funnel,
         "booked": sum(booked_by_source.values()),
         "grain": grain,
         "trend": trend,

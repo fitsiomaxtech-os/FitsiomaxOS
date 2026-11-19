@@ -195,46 +195,161 @@ const RankedBars = ({ rows, ramp, valueKey = "value", suffix = "", color = SERIE
   </ResponsiveContainer>
 );
 
-/** A ranked list drawn in plain markup rather than a chart, for the two branch cards.
- *  Name, bar, count and share each sit in a fixed column, so every row lines up on the
- *  same edges whatever the name length -- which an SVG axis could not promise: it broke
- *  long names in two and floated each label a few pixels off its bar. */
-const BarList = ({ rows, total, color = SERIES, unit = "Leads" }) => {
-  const max = Math.max(1, ...rows.map((r) => Number(r.value) || 0));
-  const sum = total || rows.reduce((a, r) => a + (Number(r.value) || 0), 0) || 1;
+/* The two branch cards are plain markup rather than a chart: name, bar and figures
+ * each sit in a fixed column, so every row lines up on the same edges whatever the name
+ * length -- which an SVG axis could not promise. */
+
+const pctOf = (part, whole) => {
+  if (!whole) return "—";
+  const p = (part / whole) * 100;
+  return p > 0 && p < 1 ? "<1%" : `${Math.round(p)}%`;
+};
+
+const BOOKED = CATEGORICAL[2];
+const CAME = "#0e7490";
+const PAID = "#4a3aa7";
+
+const HeadRow = ({ cols, children }) => (
+  <div className={`grid ${cols} items-end gap-x-4 border-b border-slate-100 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400`}>
+    {children}
+  </div>
+);
+
+const TotalRow = ({ cols, children }) => (
+  <div className={`grid ${cols} items-center gap-x-4 border-t border-slate-200 pt-3 text-[13px] font-semibold text-slate-900`}>
+    {children}
+  </div>
+);
+
+const BranchName = ({ name }) => (
+  <span className={`truncate text-[13px] font-medium ${name === "Unassigned" ? "italic text-slate-400" : "text-slate-700"}`}>
+    {name}
+  </span>
+);
+
+const Dot = ({ color, children }) => (
+  <span className="flex items-center gap-1.5">
+    <i className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
+    {children}
+  </span>
+);
+
+/** Leads and appointments booked per branch on one row: "T Nagar · 554 leads · 6 booked". */
+const LEADS_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_3.75rem_3.75rem_3.25rem]";
+const BranchLeadsList = ({ rows }) => {
+  const max = Math.max(1, ...rows.map((r) => r.leads));
+  const sum = rows.reduce((a, r) => ({ leads: a.leads + r.leads, booked: a.booked + r.booked }), { leads: 0, booked: 0 });
   return (
     <div className="flex flex-col">
-      <div className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_3.75rem_3rem] items-center gap-x-4 border-b border-slate-100 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+      <HeadRow cols={LEADS_COLS}>
         <span>Branch</span>
-        <span />
-        <span className="text-right">{unit}</span>
-        <span className="text-right">Share</span>
-      </div>
+        <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
+          <Dot color={SERIES}>Leads</Dot>
+          <Dot color={BOOKED}>Booked</Dot>
+        </span>
+        <span className="text-right">Leads</span>
+        <span className="text-right">Booked</span>
+        <span className="text-right">Rate</span>
+      </HeadRow>
       <ul className="divide-y divide-slate-50">
-        {rows.map((r) => {
-          const v = Number(r.value) || 0;
-          const pct = (v / sum) * 100;
-          const share = pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
-          const muted = r.name === "Unassigned";
-          return (
-            <li
-              key={r.name}
-              title={`${r.name}: ${nf(v)} (${share})`}
-              className="group grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_3.75rem_3rem] items-center gap-x-4 py-3"
-            >
-              <span className={`truncate text-[13px] font-medium ${muted ? "italic text-slate-400" : "text-slate-700"}`}>{r.name}</span>
-              <span className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <span
-                  className="block h-full rounded-full transition-[width] duration-500 group-hover:brightness-110"
-                  style={{ width: `${Math.max(v > 0 ? 1.5 : 0, (v / max) * 100)}%`, background: muted ? "#94a3b8" : color }}
-                />
+        {rows.map((r) => (
+          <li
+            key={r.name}
+            title={`${r.name}: ${nf(r.leads)} leads, ${nf(r.booked)} booked (${pctOf(r.booked, r.leads)})`}
+            className={`grid ${LEADS_COLS} items-center gap-x-4 py-3`}
+          >
+            <BranchName name={r.name} />
+            {/* The leads bar against the biggest branch, with the booked share drawn inside
+                it, so a branch's bookings read as a part of its own leads. */}
+            <span className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <span
+                className="relative block h-full overflow-hidden rounded-full"
+                style={{ width: `${Math.max(r.leads ? 1.5 : 0, (r.leads / max) * 100)}%`, background: r.name === "Unassigned" ? "#94a3b8" : SERIES }}
+              >
+                {r.booked > 0 && (
+                  <span
+                    className="absolute inset-y-0 left-0 rounded-full"
+                    style={{ width: `${Math.max(4, (r.booked / r.leads) * 100)}%`, background: BOOKED }}
+                  />
+                )}
               </span>
-              <span className="text-right text-[13px] font-semibold tabular-nums text-slate-900">{nf(v)}</span>
-              <span className="text-right text-xs tabular-nums text-slate-500">{share}</span>
-            </li>
-          );
-        })}
+            </span>
+            <span className="text-right text-[13px] font-semibold tabular-nums text-slate-900">{nf(r.leads)}</span>
+            <span className={`text-right text-[13px] font-semibold tabular-nums ${r.booked ? "text-emerald-700" : "text-slate-300"}`}>{nf(r.booked)}</span>
+            <span className="text-right text-xs tabular-nums text-slate-500">{pctOf(r.booked, r.leads)}</span>
+          </li>
+        ))}
       </ul>
+      <TotalRow cols={LEADS_COLS}>
+        <span>All branches</span>
+        <span />
+        <span className="text-right tabular-nums">{nf(sum.leads)}</span>
+        <span className="text-right tabular-nums text-emerald-700">{nf(sum.booked)}</span>
+        <span className="text-right text-xs tabular-nums text-slate-500">{pctOf(sum.booked, sum.leads)}</span>
+      </TotalRow>
+    </div>
+  );
+};
+
+/** Per branch: appointments booked -> came for the consultation -> paid fees, each step
+ *  with its ratio to the step before. */
+const FUNNEL_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_3.5rem_4.5rem_4.5rem]";
+const Step = ({ value, of, color }) => (
+  <span className="flex flex-col items-end leading-tight">
+    <span className="text-[13px] font-semibold tabular-nums" style={{ color: value ? color : "#cbd5e1" }}>{nf(value)}</span>
+    <span className="text-[11px] tabular-nums text-slate-400">{pctOf(value, of)}</span>
+  </span>
+);
+const BranchFunnelList = ({ rows }) => {
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.booked, r.consulted, r.paid)));
+  const sum = rows.reduce(
+    (a, r) => ({ booked: a.booked + r.booked, consulted: a.consulted + r.consulted, paid: a.paid + r.paid }),
+    { booked: 0, consulted: 0, paid: 0 },
+  );
+  const w = (v) => `${v ? Math.max(1.5, (v / max) * 100) : 0}%`;
+  return (
+    <div className="flex flex-col">
+      <HeadRow cols={FUNNEL_COLS}>
+        <span>Branch</span>
+        <span className="flex flex-wrap items-center gap-x-3 font-medium normal-case tracking-normal">
+          <Dot color={BOOKED}>Booked</Dot>
+          <Dot color={CAME}>Came</Dot>
+          <Dot color={PAID}>Paid</Dot>
+        </span>
+        <span className="text-right">Booked</span>
+        <span className="text-right leading-tight">Came<br /><span className="font-normal normal-case tracking-normal">of booked</span></span>
+        <span className="text-right leading-tight">Paid<br /><span className="font-normal normal-case tracking-normal">of came</span></span>
+      </HeadRow>
+      <ul className="divide-y divide-slate-50">
+        {rows.map((r) => (
+          <li
+            key={r.name}
+            title={`${r.name}: ${nf(r.booked)} booked · ${nf(r.consulted)} came (${pctOf(r.consulted, r.booked)}) · ${nf(r.paid)} paid (${pctOf(r.paid, r.consulted)})`}
+            className={`grid ${FUNNEL_COLS} items-center gap-x-4 py-2.5`}
+          >
+            <BranchName name={r.name} />
+            {/* Three thin bars on one scale, one per step, so the drop from each step to
+                the next is the gap you see. */}
+            <span className="flex flex-col gap-1">
+              {[[r.booked, BOOKED], [r.consulted, CAME], [r.paid, PAID]].map(([v, c], i) => (
+                <span key={i} className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <span className="block h-full rounded-full" style={{ width: w(v), background: c }} />
+                </span>
+              ))}
+            </span>
+            <span className="text-right text-[13px] font-semibold tabular-nums" style={{ color: r.booked ? BOOKED : "#cbd5e1" }}>{nf(r.booked)}</span>
+            <Step value={r.consulted} of={r.booked} color={CAME} />
+            <Step value={r.paid} of={r.consulted} color={PAID} />
+          </li>
+        ))}
+      </ul>
+      <TotalRow cols={FUNNEL_COLS}>
+        <span>All branches</span>
+        <span />
+        <span className="text-right tabular-nums" style={{ color: BOOKED }}>{nf(sum.booked)}</span>
+        <Step value={sum.consulted} of={sum.booked} color={CAME} />
+        <Step value={sum.paid} of={sum.consulted} color={PAID} />
+      </TotalRow>
     </div>
   );
 };
@@ -322,7 +437,12 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const booked = Number(data?.booked || 0);
   const trend = fillTrend(data?.trend || [], data?.grain);
   const byBranch = data?.by_branch || [];
-  const apptByBranch = data?.appointments_by_branch || [];
+  const branchFunnel = data?.branch_funnel || [];
+  // Only branches with something past the lead stage, most bookings first.
+  const funnelRows = branchFunnel
+    .filter((r) => r.booked || r.consulted || r.paid)
+    .slice()
+    .sort((a, b) => b.booked - a.booked || b.consulted - a.consulted);
   const byVertical = data?.by_vertical || [];
   const byWeekday = data?.by_weekday || [];
   const byOwner = data?.by_owner || [];
@@ -405,21 +525,21 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* 2 — which branches the demand lands on */}
-        <Card title="Leads by branch" sub={`${nf(total)} leads across all branches, unassigned included`} testid="leads-analytics-branches">
-          {byBranch.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
-            <ValueTable rows={byBranch} firstHeading="Branch" />
+        {/* 2 — which branches the demand lands on, and how much of it books */}
+        <Card title="Leads & appointments by branch" sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked`} testid="leads-analytics-branches">
+          {branchFunnel.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
+            <ValueTable rows={branchFunnel.map((r) => ({ name: r.name, value: r.leads }))} firstHeading="Branch" />
           ) : (
-            <BarList rows={byBranch} total={total} unit="Leads" />
+            <BranchLeadsList rows={branchFunnel} />
           )}
         </Card>
 
-        {/* 3 — where those leads have an appointment fixed */}
-        <Card title="Appointments by branch" sub={`${nf(booked)} leads with an appointment fixed`} testid="leads-analytics-appointments-branch">
-          {apptByBranch.length === 0 ? <Empty>No appointments fixed in this range.</Empty> : asTable ? (
-            <ValueTable rows={apptByBranch} firstHeading="Branch" />
+        {/* 3 — of those booked, who came and who paid */}
+        <Card title="Appointment ratio by branch" sub="Booked → came for consultation → paid fees" testid="leads-analytics-appointments-branch">
+          {funnelRows.length === 0 ? <Empty>No appointments booked in this range.</Empty> : asTable ? (
+            <ValueTable rows={funnelRows.map((r) => ({ name: r.name, value: r.booked }))} firstHeading="Branch" />
           ) : (
-            <BarList rows={apptByBranch} total={booked} color={CATEGORICAL[2]} unit="Booked" />
+            <BranchFunnelList rows={funnelRows} />
           )}
         </Card>
 
