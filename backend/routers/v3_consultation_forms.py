@@ -22,6 +22,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+import consultation_form_page3
 from database import v3_col
 from deps import is_branch_admin_role, v3_require_roles
 from physio_scope import user_branch_ids
@@ -43,7 +44,8 @@ FIELDS = (
     # Page 2 -- Previous Consultations; Diagnosis & Treatment Plan
     "previous_medical_consultations", "previous_diagnosis", "previous_physiotherapy",
     "fitsiomax_diagnosis", "treatment_goals",
-    # Page 3
+    # Page 3. Most of it is the Consultant's Treatment Prescription, copied from the lead
+    # (consultation_form_page3.py).
     "treatment_protocol", "sessions_weeks_required", "sessions_weeks_online_offline",
     "short_term_goal", "long_term_goal", "dos_and_donts", "special_instructions",
     "therapist_name",
@@ -125,7 +127,10 @@ async def get_consultation_form(
     user: V3UserOut = Depends(v3_require_roles(*ROLES)),
 ):
     _guard(user, branch_id)
-    return await _get(branch_id, form_id)
+    # A form made before page 3 was linked, or before the Consultant wrote it, shows the
+    # Treatment Prescription in its blanks; saving it keeps them.
+    row = await _get(branch_id, form_id)
+    return await consultation_form_page3.fill_blanks(row, row.get("lead_id"))
 
 
 async def _insert(branch_id: str, user: V3UserOut, fields: dict, extra: Optional[dict] = None) -> dict:
@@ -153,15 +158,8 @@ async def create_consultation_form(
     _guard(user, branch_id)
     await _branch_exists(branch_id)
     lead_id = (payload.lead_id or "").strip()
-    fields = _clean(payload.fields)
-    # Page 3's Treatment Protocol and Special Instructions: the Consultant's, from the lead,
-    # where the form brings none.
-    notes = ("treatment_protocol", "special_instructions")
-    if lead_id and any(not fields.get(k) for k in notes):
-        lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, **{k: 1 for k in notes}}) or {}
-        for k in notes:
-            if not fields.get(k):
-                fields[k] = str(lead.get(k) or "").strip()
+    # Page 3: the Consultant's Treatment Prescription, from the lead, where the form brings none.
+    fields = await consultation_form_page3.fill_blanks(_clean(payload.fields), lead_id)
     return await _insert(branch_id, user, fields, {"lead_id": lead_id} if lead_id else None)
 
 

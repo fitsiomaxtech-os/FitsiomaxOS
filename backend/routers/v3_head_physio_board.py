@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from datetime import date
 import uuid
 
+import consultation_form_page3
 import session_mode_swap
 import store_branch_overrides
 from database import v3_col
@@ -800,6 +801,8 @@ async def hp_consultation_decision(
         detail += f" · Zumba: {zumba_item['name']} ({z_sessions} classes)"
 
     await v3_col("leads").update_one({"id": lead_id}, {"$set": updates})
+    # Page 3 of the lead's Consultation Form: the package, its mode, Long Term, Short Term.
+    await consultation_form_page3.sync_forms(lead_id, consultation_form_page3.PLAN)
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
@@ -968,6 +971,8 @@ async def hp_complete_rehab_consultation(
         {"lead_id": lead_id, "appt_kind": "rehab_consultation", "status": "new_appointment"},
         {"$set": {"status": "completed", "updated_at": now}},
     )
+    # Page 3's Long Term Goal now names the Rehab package.
+    await consultation_form_page3.sync_forms(lead_id, consultation_form_page3.LONG_TERM)
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
@@ -1311,6 +1316,8 @@ async def hp_mark_online(
         "updated_at": now,
     }
     await v3_col("leads").update_one({"id": lead_id}, {"$set": fields})
+    # Page 3's Sessions / Weeks (Online / Offline) on the lead's Consultation Form.
+    await consultation_form_page3.sync_forms(lead_id, consultation_form_page3.MODE)
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
@@ -1509,6 +1516,8 @@ async def hp_assign_physio_with_sessions(
         **handover,
     })
     if swap:
+        # Page 3's Sessions / Weeks (Online / Offline) on the lead's Consultation Form.
+        await consultation_form_page3.sync_forms(lead_id, consultation_form_page3.MODE)
         await v3_col("lead_activity").insert_one({
             "id": str(uuid.uuid4()),
             "lead_id": lead_id,

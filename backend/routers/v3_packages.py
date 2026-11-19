@@ -6,6 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+import consultation_form_page3
 import store_branch_overrides
 from database import v3_col
 from deps import v3_require_roles
@@ -1377,6 +1378,8 @@ async def save_physio_diagnosis(lead_id: str, payload: V3PhysioDiagnosisInput, u
         "physio_diagnosis_locked": payload.locked,
         "updated_at": _now(),
     }})
+    # Page 3's Fitsiomax Diagnosis on the lead's Consultation Form.
+    await consultation_form_page3.sync_forms(lead_id, consultation_form_page3.DIAGNOSIS)
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
