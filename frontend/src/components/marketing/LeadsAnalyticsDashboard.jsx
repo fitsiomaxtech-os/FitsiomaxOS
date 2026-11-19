@@ -330,7 +330,7 @@ const HoverRows = ({ head, rows, scale, hint }) => {
           className="pointer-events-none absolute z-30 rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_8px_24px_-6px_rgba(15,23,42,0.18)] backdrop-blur-sm"
           style={{ left: tip.left, top: tip.top, width: TIP_W, transform: tip.flipUp ? "translateY(-100%)" : undefined }}
         >
-          <p className="mb-1.5 truncate text-xs font-medium text-slate-500">{tip.row.label}</p>
+          <p className="mb-1.5 truncate text-xs font-medium text-slate-500">{tip.row.title || tip.row.label}</p>
           <div className="flex flex-col gap-1">{tip.row.stats}</div>
           {hint && <p className="mt-2 text-[11px] text-slate-400">{hint}</p>}
         </div>
@@ -424,8 +424,9 @@ const FUNNEL_STEPS = [
   { key: "session_paid", label: "Session paid", short: "session paid", color: SESSION_PAID, of: "consulted" },
 ];
 const STEP_OF_LABEL = { booked: "booked", came: "came", consulted: "consultation paid" };
+const BRANCH_STEPS = FUNNEL_STEPS.slice(0, 2);
 const BranchFunnelList = ({ rows }) => {
-  const scale = niceScale(Math.max(1, ...rows.map((r) => Math.max(...FUNNEL_STEPS.map((st) => r[st.key] || 0)))));
+  const scale = niceScale(Math.max(1, ...rows.map((r) => Math.max(...BRANCH_STEPS.map((st) => r[st.key] || 0)))));
   return (
     <HoverRows
       scale={scale}
@@ -433,7 +434,7 @@ const BranchFunnelList = ({ rows }) => {
         <>
           <span>Branch</span>
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium normal-case tracking-normal">
-            {FUNNEL_STEPS.map((st) => <Dot key={st.key} color={st.color}>{st.label}</Dot>)}
+            {BRANCH_STEPS.map((st) => <Dot key={st.key} color={st.color}>{st.label}</Dot>)}
           </span>
         </>
       }
@@ -441,13 +442,13 @@ const BranchFunnelList = ({ rows }) => {
         key: r.name,
         label: r.name,
         bars: (
-          <span className="flex flex-col gap-1">
-            {FUNNEL_STEPS.map((st) => <Track key={st.key} value={r[st.key] || 0} max={scale.top} color={st.color} h="h-1.5" />)}
-          </span>
+          <>
+            {BRANCH_STEPS.map((st) => <Track key={st.key} value={r[st.key] || 0} max={scale.top} color={st.color} />)}
+          </>
         ),
         stats: (
           <>
-            {FUNNEL_STEPS.map((st) => (
+            {BRANCH_STEPS.map((st) => (
               <HoverStat
                 key={st.key}
                 color={st.color}
@@ -459,6 +460,63 @@ const BranchFunnelList = ({ rows }) => {
           </>
         ),
       }))}
+    />
+  );
+};
+
+/** One branch picked: its appointment funnel as four rows -- Booked, Came for
+ *  consultation, Consultation paid, Session paid -- each bar on one scale, so the drop
+ *  from one step to the next is the gap you see. A step's chip gives it as a share of the
+ *  step before it. */
+const StepFunnelList = ({ row }) => {
+  const scale = niceScale(Math.max(1, ...FUNNEL_STEPS.map((st) => row[st.key] || 0)));
+  return (
+    <HoverRows
+      head={
+        <>
+          <span>Step</span>
+          <span className="font-medium normal-case tracking-normal">Leads at each step · share of the step before</span>
+        </>
+      }
+      rows={FUNNEL_STEPS.map((st, i) => {
+        const v = row[st.key] || 0;
+        const prev = st.of ? row[st.of] || 0 : null;
+        return {
+          key: st.key,
+          title: st.label,
+          label: (
+            <span className="flex items-center gap-2.5">
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                style={{ background: st.color }}
+              >
+                {i + 1}
+              </span>
+              <span className="truncate">{st.label}</span>
+            </span>
+          ),
+          bars: (
+            <span className="flex items-center gap-3">
+              <Track value={v} max={scale.top} color={st.color} h="h-2.5" />
+              <span className="w-10 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-900">{nf(v)}</span>
+              <span
+                className="w-12 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[11px] font-medium tabular-nums"
+                style={prev === null ? { color: "transparent" } : { background: `${st.color}14`, color: st.color }}
+              >
+                {prev === null ? "—" : pctOf(v, prev)}
+              </span>
+            </span>
+          ),
+          stats: (
+            <HoverStat
+              color={st.color}
+              label={st.short || "booked"}
+              value={v}
+              note={st.of ? `${pctOf(v, prev)} of ${STEP_OF_LABEL[st.of]}` : undefined}
+            />
+          ),
+        };
+      })}
     />
   );
 };
@@ -660,17 +718,29 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         )}
 
         {/* 3 — of those booked, who came for the consultation */}
-        <Card
-          title="Appointment ratio by branch"
-          sub={`${nf(funnelBooked)} booked · ${nf(funnelCame)} came · ${nf(funnelConsult)} consultation paid · ${nf(funnelSession)} session paid`}
-          testid="leads-analytics-appointments-branch"
-        >
-          {funnelRows.length === 0 ? <Empty>No appointments booked in this range.</Empty> : asTable ? (
-            <ValueTable rows={funnelRows.map((r) => ({ name: r.name, value: r.booked }))} firstHeading="Branch" />
-          ) : (
-            <BranchFunnelList rows={funnelRows} />
-          )}
-        </Card>
+        {oneBranch ? (
+          <Card
+            title={`${oneBranchName} · appointment ratio`}
+            sub={`${nf(funnelBooked)} booked · ${nf(funnelCame)} came · ${nf(funnelConsult)} consultation paid · ${nf(funnelSession)} session paid`}
+            testid="leads-analytics-appointments-branch"
+          >
+            {funnelRows.length === 0 ? <Empty>No appointments booked in this range.</Empty> : (
+              <StepFunnelList row={funnelRows[0]} />
+            )}
+          </Card>
+        ) : (
+          <Card
+            title="Appointment ratio by branch"
+            sub={`${nf(funnelBooked)} booked · ${nf(funnelCame)} came for consultation (${pctOf(funnelCame, funnelBooked)})`}
+            testid="leads-analytics-appointments-branch"
+          >
+            {funnelRows.length === 0 ? <Empty>No appointments booked in this range.</Empty> : asTable ? (
+              <ValueTable rows={funnelRows.map((r) => ({ name: r.name, value: r.booked }))} firstHeading="Branch" />
+            ) : (
+              <BranchFunnelList rows={funnelRows} />
+            )}
+          </Card>
+        )}
 
         {/* 4 — which service the demand is for */}
         <Card title="Service mix" sub="Which vertical the leads asked for" testid="leads-analytics-verticals">
