@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -195,9 +195,9 @@ const RankedBars = ({ rows, ramp, valueKey = "value", suffix = "", color = SERIE
   </ResponsiveContainer>
 );
 
-/* The two branch cards are plain markup rather than a chart: name, bar and figures
- * each sit in a fixed column, so every row lines up on the same edges whatever the name
- * length -- which an SVG axis could not promise. */
+/* The two branch cards are plain markup rather than a chart: name and bars sit in fixed
+ * columns, so every row lines up on the same edges whatever the name length -- which an
+ * SVG axis could not promise. The figures behind a row open beside the cursor on hover. */
 
 const pctOf = (part, whole) => {
   if (!whole) return "—";
@@ -207,21 +207,16 @@ const pctOf = (part, whole) => {
 
 const BOOKED = CATEGORICAL[2];
 const CAME = "#0e7490";
+const ROW_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)]";
 
-const HeadRow = ({ cols, children }) => (
-  <div className={`grid ${cols} items-end gap-x-4 border-b border-slate-100 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400`}>
+const HeadRow = ({ children }) => (
+  <div className={`grid ${ROW_COLS} items-end gap-x-4 border-b border-slate-100 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400`}>
     {children}
   </div>
 );
 
-const TotalRow = ({ cols, children }) => (
-  <div className={`grid ${cols} items-center gap-x-4 border-t border-slate-200 pt-3 text-[13px] font-semibold text-slate-900`}>
-    {children}
-  </div>
-);
-
-const BranchName = ({ name }) => (
-  <span className={`truncate text-[13px] font-medium ${name === "Unassigned" ? "italic text-slate-400" : "text-slate-700"}`}>
+const BranchName = ({ name, strong }) => (
+  <span className={`truncate text-[13px] ${strong ? "font-semibold text-slate-900" : "font-medium"} ${name === "Unassigned" ? "italic text-slate-400" : strong ? "" : "text-slate-700"}`}>
     {name}
   </span>
 );
@@ -233,70 +228,12 @@ const Dot = ({ color, children }) => (
   </span>
 );
 
-/** Leads and appointments booked per branch on one row: "T Nagar · 554 leads · 6 booked". */
-const LEADS_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_3.75rem_3.75rem_3.25rem]";
-const BranchLeadsList = ({ rows }) => {
-  const max = Math.max(1, ...rows.map((r) => r.leads));
-  const maxBooked = Math.max(1, ...rows.map((r) => r.booked));
-  const sum = rows.reduce((a, r) => ({ leads: a.leads + r.leads, booked: a.booked + r.booked }), { leads: 0, booked: 0 });
-  return (
-    <div className="flex flex-col">
-      <HeadRow cols={LEADS_COLS}>
-        <span>Branch</span>
-        <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
-          <Dot color={SERIES}>Leads</Dot>
-          <Dot color={BOOKED}>Booked</Dot>
-        </span>
-        <span className="text-right">Leads</span>
-        <span className="text-right">Booked</span>
-        <span className="text-right">Rate</span>
-      </HeadRow>
-      <ul className="divide-y divide-slate-50">
-        {rows.map((r) => (
-          <li
-            key={r.name}
-            title={`${r.name}: ${nf(r.leads)} leads, ${nf(r.booked)} booked (${pctOf(r.booked, r.leads)})`}
-            className={`grid ${LEADS_COLS} items-center gap-x-4 py-2.5`}
-          >
-            <BranchName name={r.name} />
-            {/* Two lines per branch: leads on top, booked underneath. Each line is scaled to
-                its own biggest branch -- on the leads scale a booking count of 6 would not
-                draw at all -- and the Rate column carries the booked-to-leads ratio. */}
-            <span className="flex flex-col gap-1.5">
-              <span className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                <span
-                  className="block h-full rounded-full"
-                  style={{ width: `${r.leads ? Math.max(1.5, (r.leads / max) * 100) : 0}%`, background: r.name === "Unassigned" ? "#94a3b8" : SERIES }}
-                />
-              </span>
-              <span className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                <span
-                  className="block h-full rounded-full"
-                  style={{ width: `${r.booked ? Math.max(1.5, (r.booked / maxBooked) * 100) : 0}%`, background: BOOKED }}
-                />
-              </span>
-            </span>
-            <span className="text-right text-[13px] font-semibold tabular-nums text-slate-900">{nf(r.leads)}</span>
-            <span className={`text-right text-[13px] font-semibold tabular-nums ${r.booked ? "text-emerald-700" : "text-slate-300"}`}>{nf(r.booked)}</span>
-            <span className="text-right text-xs tabular-nums text-slate-500">{pctOf(r.booked, r.leads)}</span>
-          </li>
-        ))}
-      </ul>
-      <TotalRow cols={LEADS_COLS}>
-        <span>All branches</span>
-        <span />
-        <span className="text-right tabular-nums">{nf(sum.leads)}</span>
-        <span className="text-right tabular-nums text-emerald-700">{nf(sum.booked)}</span>
-        <span className="text-right text-xs tabular-nums text-slate-500">{pctOf(sum.booked, sum.leads)}</span>
-      </TotalRow>
-    </div>
-  );
-};
+const Track = ({ value, max, color, h = "h-2" }) => (
+  <span className={`${h} w-full overflow-hidden rounded-full bg-slate-100`}>
+    <span className="block h-full rounded-full" style={{ width: `${value ? Math.max(1.5, (value / max) * 100) : 0}%`, background: color }} />
+  </span>
+);
 
-/** Per branch: appointments booked, and how many of them came for the consultation.
- *  Only the bars are on the card; the figures behind a row open on hover, so the card
- *  reads as a comparison at a glance and the numbers are there when they are wanted. */
-const FUNNEL_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)]";
 const HoverStat = ({ color, label, value, note }) => (
   <div className="flex items-center justify-between gap-6">
     <span className="flex items-center gap-1.5 text-slate-500">
@@ -309,52 +246,153 @@ const HoverStat = ({ color, label, value, note }) => (
     </span>
   </div>
 );
-const BranchFunnelList = ({ rows }) => {
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.booked, r.consulted)));
-  const w = (v) => `${v ? Math.max(1.5, (v / max) * 100) : 0}%`;
+
+/** A row list whose hover card follows the pointer. `rows` are { key, label, bars, stats,
+ *  strong }; the card is placed beside the cursor and flipped to the other side of it when
+ *  it would run off the right or bottom of the list. */
+const TIP_W = 232;
+const HoverRows = ({ head, rows }) => {
+  const [tip, setTip] = useState(null);
+  const box = useRef(null);
+  const move = (row) => (e) => {
+    const rect = box.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const left = x + 16 + TIP_W > rect.width ? x - 16 - TIP_W : x + 16;
+    const flipUp = y > rect.height - 90;
+    setTip({ row, left: Math.max(0, left), top: flipUp ? y - 12 : y + 16, flipUp });
+  };
   return (
-    <div className="flex flex-col">
-      <HeadRow cols={FUNNEL_COLS}>
-        <span>Branch</span>
-        <span className="flex items-center gap-x-3 font-medium normal-case tracking-normal">
-          <Dot color={BOOKED}>Booked</Dot>
-          <Dot color={CAME}>Came for consultation</Dot>
-        </span>
-      </HeadRow>
+    <div ref={box} className="relative flex flex-col" onMouseLeave={() => setTip(null)}>
+      <HeadRow>{head}</HeadRow>
       <ul className="divide-y divide-slate-50">
-        {rows.map((r, i) => (
+        {rows.map((row) => (
           <li
-            key={r.name}
-            tabIndex={0}
-            className={`group relative grid ${FUNNEL_COLS} cursor-default items-center gap-x-4 rounded-md py-3 outline-none hover:bg-slate-50/70 focus-visible:bg-slate-50/70`}
+            key={row.key}
+            onMouseMove={move(row)}
+            className={`grid ${ROW_COLS} cursor-default items-center gap-x-4 rounded-md py-3 transition-colors ${
+              tip?.row.key === row.key ? "bg-slate-50" : ""
+            } ${row.strong ? "border-b border-slate-200" : ""}`}
           >
-            <BranchName name={r.name} />
-            {/* Two bars on one scale, so the drop from booked to came is the gap you see. */}
-            <span className="flex flex-col gap-1.5 pr-1">
-              {[[r.booked, BOOKED], [r.consulted, CAME]].map(([v, c], k) => (
-                <span key={k} className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                  <span className="block h-full rounded-full" style={{ width: w(v), background: c }} />
-                </span>
-              ))}
-            </span>
-            {/* The row's figures, on hover or keyboard focus. Opens upward on the last
-                rows so it never runs off the bottom of the card. */}
-            <div
-              role="tooltip"
-              className={`pointer-events-none absolute right-2 z-20 w-56 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 ${
-                i >= rows.length - 2 && rows.length > 2 ? "bottom-full mb-1" : "top-full mt-1"
-              }`}
-            >
-              <p className="mb-2 truncate text-[13px] font-semibold text-slate-800">{r.name}</p>
-              <div className="flex flex-col gap-1.5">
-                <HoverStat color={BOOKED} label="Booked" value={r.booked} />
-                <HoverStat color={CAME} label="Came" value={r.consulted} note={`${pctOf(r.consulted, r.booked)} of booked`} />
-              </div>
-            </div>
+            <BranchName name={row.label} strong={row.strong} />
+            <span className="flex flex-col gap-1.5 pr-1">{row.bars}</span>
           </li>
         ))}
       </ul>
+      {tip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-30 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-xs shadow-lg"
+          style={{ left: tip.left, top: tip.top, width: TIP_W, transform: tip.flipUp ? "translateY(-100%)" : undefined }}
+        >
+          <p className="mb-2 truncate text-[13px] font-semibold text-slate-800">{tip.row.label}</p>
+          <div className="flex flex-col gap-1.5">{tip.row.stats}</div>
+        </div>
+      )}
     </div>
+  );
+};
+
+/** Leads and appointments booked per branch, two lines each. Each line is scaled to its
+ *  own biggest branch -- on the leads scale a booking count of 6 would not draw at all --
+ *  and the hover card gives the ratio between them. */
+const BranchLeadsList = ({ rows }) => {
+  const max = Math.max(1, ...rows.map((r) => r.leads));
+  const maxBooked = Math.max(1, ...rows.map((r) => r.booked));
+  return (
+    <HoverRows
+      head={
+        <>
+          <span>Branch</span>
+          <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
+            <Dot color={SERIES}>Leads</Dot>
+            <Dot color={BOOKED}>Booked</Dot>
+          </span>
+        </>
+      }
+      rows={rows.map((r) => ({
+        key: r.name,
+        label: r.name,
+        bars: (
+          <>
+            <Track value={r.leads} max={max} color={r.name === "Unassigned" ? "#94a3b8" : SERIES} />
+            <Track value={r.booked} max={maxBooked} color={BOOKED} />
+          </>
+        ),
+        stats: (
+          <>
+            <HoverStat color={SERIES} label="Leads" value={r.leads} />
+            <HoverStat color={BOOKED} label="Booked" value={r.booked} note={`${pctOf(r.booked, r.leads)} of leads`} />
+          </>
+        ),
+      }))}
+    />
+  );
+};
+
+/** One branch picked: its pre-sales pipeline -- Total leads, then each stage (New Leads,
+ *  RNR, Follow Up, ...) in pipeline order, on the total's scale. */
+const StageLeadsList = ({ total, stages }) => (
+  <HoverRows
+    head={
+      <>
+        <span>Pre-sales stage</span>
+        <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
+          <Dot color={SERIES}>Leads</Dot>
+        </span>
+      </>
+    }
+    rows={[
+      {
+        key: "__total",
+        label: "Total leads",
+        strong: true,
+        bars: <Track value={total} max={total || 1} color="#1e4f8f" h="h-2.5" />,
+        stats: <HoverStat color="#1e4f8f" label="Leads" value={total} />,
+      },
+      ...stages.map((st) => ({
+        key: st.name,
+        label: st.name,
+        bars: <Track value={st.value} max={total || 1} color={SERIES} />,
+        stats: <HoverStat color={SERIES} label="Leads" value={st.value} note={`${pctOf(st.value, total)} of total`} />,
+      })),
+    ]}
+  />
+);
+
+/** Per branch: appointments booked, and how many of them came for the consultation. */
+const BranchFunnelList = ({ rows }) => {
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.booked, r.consulted)));
+  return (
+    <HoverRows
+      head={
+        <>
+          <span>Branch</span>
+          <span className="flex items-center gap-x-3 font-medium normal-case tracking-normal">
+            <Dot color={BOOKED}>Booked</Dot>
+            <Dot color={CAME}>Came for consultation</Dot>
+          </span>
+        </>
+      }
+      rows={rows.map((r) => ({
+        key: r.name,
+        label: r.name,
+        // Both on one scale, so the drop from booked to came is the gap you see.
+        bars: (
+          <>
+            <Track value={r.booked} max={max} color={BOOKED} />
+            <Track value={r.consulted} max={max} color={CAME} />
+          </>
+        ),
+        stats: (
+          <>
+            <HoverStat color={BOOKED} label="Booked" value={r.booked} />
+            <HoverStat color={CAME} label="Came" value={r.consulted} note={`${pctOf(r.consulted, r.booked)} of booked`} />
+          </>
+        ),
+      }))}
+    />
   );
 };
 
@@ -442,6 +480,11 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const trend = fillTrend(data?.trend || [], data?.grain);
   const byBranch = data?.by_branch || [];
   const branchFunnel = data?.branch_funnel || [];
+  // One branch picked in the filter: the left card shows that branch's pre-sales stages
+  // rather than a one-row branch list.
+  const oneBranch = (branchIds || []).length === 1;
+  const oneBranchName = oneBranch ? (branchFunnel[0]?.name || "This branch") : null;
+  const byStage = (data?.by_stage || []).filter((st) => st.value > 0 || st.name !== "Not in the pipeline");
   // Only branches with something past the lead stage, most bookings first.
   const funnelRows = branchFunnel
     .filter((r) => r.booked || r.consulted)
@@ -531,14 +574,21 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* 2 — which branches the demand lands on, and how much of it books */}
-        <Card title="Leads & appointments by branch" sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked`} testid="leads-analytics-branches">
-          {branchFunnel.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
-            <ValueTable rows={branchFunnel.map((r) => ({ name: r.name, value: r.leads }))} firstHeading="Branch" />
-          ) : (
-            <BranchLeadsList rows={branchFunnel} />
-          )}
-        </Card>
+        {/* 2 — which branches the demand lands on, and how much of it books; with one
+            branch picked, that branch's pre-sales stages instead */}
+        {oneBranch ? (
+          <Card title={`${oneBranchName} · pre-sales`} sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked · hover a stage for its figures`} testid="leads-analytics-branches">
+            {total === 0 ? <Empty>No leads for this branch in this range.</Empty> : <StageLeadsList total={total} stages={byStage} />}
+          </Card>
+        ) : (
+          <Card title="Leads & appointments by branch" sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked · hover a branch for its figures`} testid="leads-analytics-branches">
+            {branchFunnel.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
+              <ValueTable rows={branchFunnel.map((r) => ({ name: r.name, value: r.leads }))} firstHeading="Branch" />
+            ) : (
+              <BranchLeadsList rows={branchFunnel} />
+            )}
+          </Card>
+        )}
 
         {/* 3 — of those booked, who came for the consultation */}
         <Card
