@@ -580,13 +580,13 @@ function LeadDetailModal({ lead, branches, onClose, onStageMove, onRefresh }) {
     <ModalOverlay onClose={onClose}>
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl" data-testid="presales-lead-detail-modal">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-200 p-5">
+        <div className="flex items-start justify-between rounded-t-xl border-b border-sky-700 bg-[#0284C7] p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-100 text-lg font-bold text-violet-700">
               {lead.name?.charAt(0)?.toUpperCase() || "?"}
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-slate-800" data-testid="lead-detail-name">{lead.name}</h3>
+              <h3 className="text-lg font-semibold text-white" data-testid="lead-detail-name">{lead.name}</h3>
               <div className="flex flex-wrap gap-1.5">
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700" data-testid="lead-detail-source">{lead.source_tab || lead.source_type}</span>
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STAGE_COLORS[lead.stage]?.light || "bg-slate-100 text-slate-600 border-slate-200"}`} data-testid="lead-detail-stage">{lead.stage}</span>
@@ -594,11 +594,11 @@ function LeadDetailModal({ lead, branches, onClose, onStageMove, onRefresh }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setEditing(!editing)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-sky-600 hover:bg-sky-50" data-testid="lead-detail-edit-btn">
+            <button type="button" onClick={() => setEditing(!editing)} className="rounded-md border border-white bg-white px-2.5 py-1 text-xs text-sky-600 hover:bg-sky-50" data-testid="lead-detail-edit-btn">
               {editing ? "Cancel" : "Edit"}
             </button>
-            <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-slate-100" data-testid="lead-detail-close-btn">
-              <X className="h-5 w-5 text-slate-400" />
+            <button type="button" onClick={onClose} className="rounded-md p-1 text-white/80 hover:bg-white/15 hover:text-white" data-testid="lead-detail-close-btn">
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>

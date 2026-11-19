@@ -1690,18 +1690,18 @@ const FitnessDetailDialog = ({ member, onClose, onEdit, onCollect, onStatus, onA
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl" data-testid="fitness-detail-dialog">
-        <div className="flex items-start justify-between border-b p-5">
+      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" data-testid="fitness-detail-dialog">
+        <div className="flex items-start justify-between border-b border-sky-700 bg-[#0284C7] p-5">
           <div className="min-w-0">
-            <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-800">
+            <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-white">
               {member.name}
               <span className={`inline-flex rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${meta.classes}`}>{meta.label}</span>
             </h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-white/85">
               {displayPhone(member.phone) || "No phone"}{member.age ? ` · ${member.age}` : ""}{member.gender ? ` · ${member.gender}` : ""}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="fitness-detail-close"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/15 hover:text-white" data-testid="fitness-detail-close"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-5">

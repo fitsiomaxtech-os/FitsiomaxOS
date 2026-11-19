@@ -3368,14 +3368,14 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
             centre line. On a phone the name alone, with the buttons: beside the ID and stage
             chips it was cut to two letters. No avatar -- the initial only repeats the name
             beside it. */}
-        <div className="relative shrink-0 border-b border-slate-200 bg-white px-3 py-1.5 sm:px-4 sm:py-2">
+        <div className="relative shrink-0 border-b border-sky-700 bg-[#0284C7] px-3 py-1.5 sm:px-4 sm:py-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-              <p className="min-w-0 truncate text-sm font-semibold leading-tight text-slate-900" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
+              <p className="min-w-0 truncate text-sm font-semibold leading-tight text-white" title={currentLead.name || undefined} data-testid="presales-detail-name">{currentLead.name}</p>
               {currentLead.patient_number && (
-                <span className="hidden shrink-0 rounded-[4px] bg-slate-100 px-1.5 py-px font-mono text-[10px] font-semibold text-slate-600 sm:inline" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
+                <span className="hidden shrink-0 rounded-[4px] bg-white/15 px-1.5 py-px font-mono text-[10px] font-semibold text-white sm:inline" data-testid="presales-detail-patient-number">{currentLead.patient_number}</span>
               )}
-              <span className="hidden shrink-0 whitespace-nowrap rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold text-slate-700 sm:inline" data-testid="presales-detail-stage">
+              <span className="hidden shrink-0 whitespace-nowrap rounded-[4px] border border-white/40 bg-white/15 px-1.5 py-px text-[10px] font-semibold text-white sm:inline" data-testid="presales-detail-stage">
                 {currentLead.stage || "No Stage"}
               </span>
             </div>
@@ -3406,7 +3406,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
                   <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
                 </button>
               )}
-              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-testid="presales-detail-close">
+              <button type="button" onClick={onClose} title="Close" aria-label="Close" className="rounded-full p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white" data-testid="presales-detail-close">
                 <X className="h-5 w-5 sm:h-4 sm:w-4" />
               </button>
             </div>

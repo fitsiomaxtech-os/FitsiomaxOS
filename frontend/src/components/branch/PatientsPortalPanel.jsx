@@ -884,9 +884,9 @@ function PatientPortalDetailModal({ lead, onClose, onSaved, onDeleted }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl" data-testid="branch-patient-detail-modal">
-        <div className="flex items-center justify-between border-b p-5">
-          <h3 className="text-base font-semibold text-slate-800">{lead.name}</h3>
-          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-slate-100"><X className="h-5 w-5 text-slate-400" /></button>
+        <div className="flex items-center justify-between border-b border-sky-700 bg-[#0284C7] p-5">
+          <h3 className="text-base font-semibold text-white">{lead.name}</h3>
+          <button type="button" onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">

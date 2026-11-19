@@ -1534,12 +1534,12 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, d
       data-testid="hr-emp-view-modal"
     >
       <div className="flex max-h-[90vh] w-full max-w-[720px] flex-col overflow-hidden rounded-[4px] bg-white shadow-xl">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-3" data-testid="hr-emp-view-header">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-5 py-3" data-testid="hr-emp-view-header">
           <div className="flex min-w-0 items-center gap-2">
-            <h3 className="truncate text-base font-semibold text-slate-900" data-testid="hr-emp-view-name">{e.full_name}</h3>
+            <h3 className="truncate text-base font-semibold text-white" data-testid="hr-emp-view-name">{e.full_name}</h3>
             <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${e.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{e.status || "active"}</span>
           </div>
-          <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600" data-testid="hr-emp-view-close"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="shrink-0 rounded p-1 text-white/80 hover:bg-white/15 hover:text-white" data-testid="hr-emp-view-close"><X className="h-4 w-4" /></button>
         </div>
 
         {/* Same shape as the Add/Edit dialog's below — sections down the left, the open

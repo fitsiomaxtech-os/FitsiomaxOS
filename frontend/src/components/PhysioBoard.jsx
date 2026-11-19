@@ -2264,16 +2264,16 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
             carried by white-on-colour, which there is no colour left to do.
             One row: the patient number rides beside the name rather than under it, and
             the name gives way first on a narrow screen so the number stays readable. */}
-        <div className="flex shrink-0 items-center justify-between gap-3 bg-white px-4 py-3 sm:px-6" data-testid="physio-detail-header">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-4 py-3 sm:px-6" data-testid="physio-detail-header">
           <div className="flex min-w-0 items-baseline gap-2">
-            <h3 className="truncate text-lg font-bold text-slate-900">{lead.name}</h3>
-            {lead.patient_number ? <span className="shrink-0 whitespace-nowrap text-xs text-slate-500">· {lead.patient_number}</span> : null}
+            <h3 className="truncate text-lg font-bold text-white">{lead.name}</h3>
+            {lead.patient_number ? <span className="shrink-0 whitespace-nowrap text-xs text-white/80">· {lead.patient_number}</span> : null}
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <span className="whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-bold text-sky-700">
               {completedSessions.length}/{sessions.length} days
             </span>
-            <button type="button" onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={onClose} className="rounded-full p-1.5 text-white/80 hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
           </div>
         </div>
 

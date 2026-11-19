@@ -1222,9 +1222,9 @@ const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, 
       {/* overflow-hidden, or the tinted header and footer paint their own square
           corners over the rounded ones this container draws. */}
       <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-3 border-b bg-slate-50/60 p-5">
+        <div className="flex items-start justify-between gap-3 border-b border-sky-700 bg-[#0284C7] p-5">
           <div className="min-w-0">
-            <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-800">
+            <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-white">
               {row.name || "—"}
               <span className={`inline-flex rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`} data-testid="zumba-view-status-chip">
                 {chip.label}
@@ -1232,11 +1232,11 @@ const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, 
             </h3>
             {/* The three that identify somebody at a glance, on one line — the same three
                 the gym's dialog leads with, and the reason neither needs a photo. */}
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-white/85">
               {displayPhone(row.phone) || "No phone"}{row.age ? ` · ${row.age}` : ""}{row.gender ? ` · ${row.gender}` : ""}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close" data-testid="zumba-view-close">
+          <button onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/15 hover:text-white" aria-label="Close" data-testid="zumba-view-close">
             <X className="h-4 w-4" />
           </button>
         </div>
