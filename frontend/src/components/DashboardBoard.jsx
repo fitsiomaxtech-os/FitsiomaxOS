@@ -965,25 +965,7 @@ const AnalyticsTab = ({ data, dateFilter, scope }) => {
         branchIds={scopedBranchIds}
       />
 
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Branch-wise growth</p>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {GROWTH_METRICS.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => setTrendMetric(m.key)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
-                trendMetric === m.key ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
-              }`}
-              data-testid={`dashboard-growth-metric-${m.key}`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <BranchGrowthTrend metric={activeMetric} highlightBranch={branchId || null} />
-      </div>
+      <BranchGrowthTrend metric={activeMetric} onMetric={setTrendMetric} highlightBranch={branchId || null} />
     </div>
   );
 };
@@ -1084,146 +1066,270 @@ const axisFor = (peakValue) => {
 
 const monthLabel = (k) => new Date(`${k}-01T00:00:00`).toLocaleDateString("en-US", { month: "short" });
 
-// Greyscale, darkest first — the reference design's own scheme. Branch identity rests on
-// the legend and the hover readout rather than on hue, which is what makes a monochrome
-// ramp safe here: four greys are not reliably tellable apart on their own.
-const BRANCH_INKS = ["#18181b", "#52525b", "#a1a1aa", "#d4d4d8", "#71717a", "#3f3f46"];
+// One hue per branch, in the same order and the same palette the Analytics cards above
+// use, so a branch reads as the same colour from one card to the next.
+const BRANCH_INKS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+
+/** ₹ in the Indian grouping on an axis: ₹45 k, ₹1.6 L, ₹2.3 Cr. */
+const growthTick = (v, currency) => {
+  const n = Number(v || 0);
+  const trim = (x) => String(Math.round(x * 10) / 10).replace(/\.0$/, "");
+  if (!currency) return n >= 1000 ? `${trim(n / 1000)}k` : String(Math.round(n));
+  if (n >= 1e7) return `₹${trim(n / 1e7)} Cr`;
+  if (n >= 1e5) return `₹${trim(n / 1e5)} L`;
+  if (n >= 1e3) return `₹${trim(n / 1e3)} k`;
+  return `₹${Math.round(n)}`;
+};
 
 /**
- * Six months split by branch — which branch is moving, and how they sit against each
- * other. Draws whichever metric is selected on the cards above.
+ * Six months split by branch -- which branch is moving, and how they sit against each
+ * other, for whichever of the four measures is switched on in the card's header.
+ *
+ * The legend chips carry each branch's six-month total and double as controls: hover one
+ * to lift its line out of the others, click it to take the branch off the chart. A
+ * branch picked in the filter above is lifted the same way rather than filtered to,
+ * because where it sits against the others is the point of the chart.
  */
-const BranchGrowthTrend = ({ metric, highlightBranch }) => {
+const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
   const { data, loading } = useTrendData();
   const [hoverIdx, setHoverIdx] = useState(null);
+  const [focus, setFocus] = useState(null);
+  const [hidden, setHidden] = useState(() => new Set());
   const [wrapRef, W] = useMeasuredWidth();
 
-  if (loading) return <Card><CardContent className="p-5"><p className="py-10 text-center text-sm text-slate-400">Loading growth…</p></CardContent></Card>;
-  if (!data || !data.months?.length) return null;
+  const header = (
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800">Branch-wise growth</p>
+        <p className="mt-0.5 text-xs text-slate-500">{metric.label} per branch, month by month · last 6 months</p>
+      </div>
+      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="tablist" aria-label="Measure">
+        {GROWTH_METRICS.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            role="tab"
+            aria-selected={metric.key === m.key}
+            onClick={() => onMetric(m.key)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+              metric.key === m.key
+                ? "bg-white text-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.12)] ring-1 ring-slate-200"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+            data-testid={`dashboard-growth-metric-${m.key}`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
-  // A selected branch is highlighted rather than filtered to: dropping the other lines
-  // would lose the very thing this chart is for, which is where that branch sits against
-  // them.
-  const series = (data.branches || []).map((b, i) => ({
-    ...b,
-    color: BRANCH_INKS[i % BRANCH_INKS.length],
-    points: branchSeries(b, metric.key),
-    faded: !!highlightBranch && b.branch_id !== highlightBranch,
-  }));
-  if (!series.length) return null;
+  const frame = (body) => (
+    <Card className="overflow-hidden rounded-xl border-slate-200 shadow-sm" data-testid="dashboard-branch-growth">
+      {header}
+      <CardContent className="p-5">{body}</CardContent>
+    </Card>
+  );
 
-  const { axisMax } = axisFor(Math.max(0, ...series.flatMap((s) => s.points)));
+  if (loading) return frame(<p className="py-10 text-center text-sm text-slate-400">Loading growth…</p>);
+  if (!data || !data.months?.length || !(data.branches || []).length) return frame(<p className="py-10 text-center text-sm text-slate-400">No branch history to draw yet.</p>);
+
+  const all = (data.branches || []).map((b, i) => {
+    const points = branchSeries(b, metric.key).map((v) => Number(v) || 0);
+    return { ...b, color: BRANCH_INKS[i % BRANCH_INKS.length], points, total: points.reduce((a, v) => a + v, 0) };
+  });
+  const lifted = focus || highlightBranch || null;
+  const series = all.filter((s2) => !hidden.has(s2.branch_id));
+  const { axisMax } = axisFor(Math.max(0, ...series.flatMap((s2) => s2.points)));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(axisMax * f * 100) / 100);
 
   const H = 300;
-  const PAD_L = 18;
-  const PAD_R = 18;
-  // Headroom at the top and a little under the baseline, because a curve bows past its
-  // own points — without it the highest peak clips against the frame.
-  const PAD_T = 24;
-  const PAD_B = 34;
+  const PAD_L = metric.currency ? 56 : 40;
+  const PAD_R = 20;
+  const PAD_T = 16;
+  const PAD_B = 30;
   const plotW = Math.max(1, W - PAD_L - PAD_R);
   const plotH = H - PAD_T - PAD_B;
-  const x = (i) => PAD_L + (data.months.length === 1 ? plotW / 2 : (i / (data.months.length - 1)) * plotW);
+  const n = data.months.length;
+  const x = (i) => PAD_L + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v) => PAD_T + plotH - (v / axisMax) * plotH;
+  const readout = (v) => (metric.currency ? fmtValue("revenue", v) : Number(v || 0).toLocaleString("en-IN"));
+  const toggle = (id) => setHidden((h) => {
+    const next = new Set(h);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const fadedOf = (s2) => !!lifted && s2.branch_id !== lifted;
+  // Faded lines first, so the lifted one draws on top of them.
+  const drawOrder = [...series].sort((a2, b2) => Number(fadedOf(b2)) - Number(fadedOf(a2)));
 
-  const readout = (v) => (metric.currency ? fmtValue("revenue", v) : v.toLocaleString("en-IN"));
+  const tipRows = hoverIdx === null ? [] : [...series].sort((a2, b2) => b2.points[hoverIdx] - a2.points[hoverIdx]);
+  const tipTotal = tipRows.reduce((a2, s2) => a2 + (s2.points[hoverIdx] || 0), 0);
+  const tipLeft = hoverIdx === null ? 0 : x(hoverIdx);
+  const tipOnLeft = hoverIdx !== null && tipLeft > W * 0.6;
 
-  return (
-    <Card data-testid="dashboard-branch-growth">
-      <CardContent className="p-4 sm:p-5">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm font-bold text-slate-800">OverAll Growth</p>
-          <p className="text-[11px] text-slate-400">{metric.label} by branch · last 6 months</p>
-        </div>
+  return frame(
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-1.5" onMouseLeave={() => setFocus(null)}>
+        {all.map((s2) => {
+          const off = hidden.has(s2.branch_id);
+          const lit = lifted === s2.branch_id && !off;
+          return (
+            <button
+              key={s2.branch_id}
+              type="button"
+              onClick={() => toggle(s2.branch_id)}
+              onMouseEnter={() => setFocus(off ? null : s2.branch_id)}
+              aria-pressed={!off}
+              title={off ? `Show ${s2.branch_name}` : `Hide ${s2.branch_name}`}
+              className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-all duration-200 ${
+                off
+                  ? "border-dashed border-slate-200 bg-white text-slate-400"
+                  : lit
+                    ? "border-transparent bg-white text-slate-900 shadow-[0_4px_14px_-4px_rgba(15,23,42,0.25)] ring-1 ring-slate-200"
+                    : "border-slate-200 bg-slate-50/70 text-slate-600 hover:bg-white"
+              }`}
+              data-testid={`dashboard-growth-legend-${s2.branch_id}`}
+            >
+              <span className="inline-block h-2.5 w-2.5 rounded-full transition-transform duration-200 group-hover:scale-125" style={{ background: off ? "#cbd5e1" : s2.color }} />
+              <span className={`font-medium ${off ? "line-through" : ""}`}>{s2.branch_name}</span>
+              <span className="tabular-nums text-slate-400">{growthTick(s2.total, metric.currency)}</span>
+            </button>
+          );
+        })}
+      </div>
 
-        {/* Legend always. Four greys cannot be told apart by eye, so identity rests here
-            and in the readout — the swatch only ties a name to a line already labelled. */}
-        <div className="mb-2 flex flex-wrap justify-center gap-x-8 gap-y-2">
-          {series.map((s) => (
-            <span key={s.branch_id} className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wide ${s.faded ? "text-slate-400" : "text-slate-700"}`}>
-              <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ background: s.color, opacity: s.faded ? 0.35 : 1 }} />
-              {s.branch_name}
-            </span>
-          ))}
-        </div>
+      <div ref={wrapRef} className="relative" onMouseLeave={() => setHoverIdx(null)}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${metric.label} per branch over the last six months`}>
+          <defs>
+            {series.map((s2) => (
+              <linearGradient key={s2.branch_id} id={`growth-fill-${s2.branch_id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s2.color} stopOpacity="0.18" />
+                <stop offset="100%" stopColor={s2.color} stopOpacity="0" />
+              </linearGradient>
+            ))}
+          </defs>
 
-        {/* No bands and no gridlines — a single hairline baseline, as the design has it.
-            Nothing is left on the chart to read a value off, which is what the permanent
-            markers and the readout below are for. */}
-        <div ref={wrapRef}>
-          <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${metric.label} per branch over the last six months`}>
-            <line x1={PAD_L} x2={W - PAD_R} y1={y(0)} y2={y(0)} stroke="#e4e4e7" strokeWidth="1" />
-
-            {data.months.map((k, i) => (
-              <text key={k} x={x(i)} y={H - 12} textAnchor="middle" className="fill-slate-400" style={{ fontSize: 11 }}>
-                {monthLabel(k)}
+          {/* Gridlines and the value axis, so a reading can be taken off the chart itself. */}
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={PAD_L} x2={W - PAD_R} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#cbd5e1" : "#eef2f6"} strokeWidth="1" />
+              <text x={PAD_L - 10} y={y(t) + 4} textAnchor="end" className="fill-slate-400" style={{ fontSize: 11 }}>
+                {growthTick(t, metric.currency)}
               </text>
-            ))}
+            </g>
+          ))}
 
-            {hoverIdx !== null && (
-              <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={PAD_T} y2={y(0)} stroke="#e4e4e7" strokeWidth="1" />
-            )}
+          {data.months.map((k, i) => (
+            <text
+              key={k}
+              x={x(i)}
+              y={H - 8}
+              textAnchor="middle"
+              className={hoverIdx === i ? "fill-slate-700" : "fill-slate-400"}
+              style={{ fontSize: 11, fontWeight: hoverIdx === i ? 600 : 400 }}
+            >
+              {monthLabel(k)}{k.endsWith("-01") || i === 0 ? ` ${k.slice(2, 4)}` : ""}
+            </text>
+          ))}
 
-            {/* Faded lines first, so the highlighted one is drawn over them rather than
-                under whichever branch happens to come later in the payload. */}
-            {[...series].sort((a, b) => Number(b.faded) - Number(a.faded)).map((s) => (
-              <path
-                key={s.branch_id}
-                fill="none"
-                stroke={s.color}
-                strokeWidth={s.faded ? 1.5 : 2.25}
-                strokeOpacity={s.faded ? 0.25 : 1}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                d={smoothPath(s.points.map((v, i) => [x(i), y(v || 0)]))}
-              />
-            ))}
-
-            {/* Every reading marked, always. The curve between them is interpolation; these
-                are the only places on the chart where the ink is a measurement. */}
-            {[...series].sort((a, b) => Number(b.faded) - Number(a.faded)).map((s) => (
-              s.points.map((v, i) => (
-                <circle
-                  key={`${s.branch_id}-${i}`}
-                  cx={x(i)}
-                  cy={y(v || 0)}
-                  r={hoverIdx === i && !s.faded ? 5 : 3.5}
-                  fill={s.color}
-                  fillOpacity={s.faded ? 0.25 : 1}
-                />
-              ))
-            ))}
-
-            {data.months.map((k, i) => (
-              <rect
-                key={k}
-                x={x(i) - plotW / Math.max(1, data.months.length - 1) / 2}
-                y={PAD_T}
-                width={plotW / Math.max(1, data.months.length - 1)}
-                height={plotH}
-                fill="transparent"
-                onMouseEnter={() => setHoverIdx(i)}
-                onMouseLeave={() => setHoverIdx(null)}
-              />
-            ))}
-          </svg>
-        </div>
-
-        <div className="mt-2 min-h-[20px] text-[11px] text-slate-500">
+          {/* The hovered month: a soft band behind the lines, and a guide through it. */}
           {hoverIdx !== null && (
-            <span className="flex flex-wrap gap-x-3 gap-y-1">
-              <span className="font-semibold text-slate-700">{monthLabel(data.months[hoverIdx])} {data.months[hoverIdx].slice(0, 4)}</span>
-              {series.map((s) => (
-                <span key={s.branch_id}>
-                  <span className="inline-block h-2 w-2 rounded-sm align-middle" style={{ background: s.color }} />{" "}
-                  {s.branch_name} <b className="text-slate-700">{readout(s.points[hoverIdx] || 0)}</b>
-                </span>
-              ))}
-            </span>
+            <g>
+              <rect
+                x={x(hoverIdx) - Math.min(36, plotW / Math.max(1, n - 1) / 2)}
+                y={PAD_T}
+                width={Math.min(72, plotW / Math.max(1, n - 1))}
+                height={plotH}
+                rx="8"
+                fill="rgba(37,99,235,0.05)"
+              />
+              <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={PAD_T} y2={y(0)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" />
+            </g>
           )}
-        </div>
-      </CardContent>
-    </Card>
+
+          {/* A soft wash under the lifted branch only -- under every line it would be mud. */}
+          {lifted && series.filter((s2) => s2.branch_id === lifted).map((s2) => {
+            const pts = s2.points.map((v, i) => [x(i), y(v)]);
+            return (
+              <path
+                key={`area-${s2.branch_id}`}
+                d={`${smoothPath(pts)} L ${x(n - 1)},${y(0)} L ${x(0)},${y(0)} Z`}
+                fill={`url(#growth-fill-${s2.branch_id})`}
+              />
+            );
+          })}
+
+          {drawOrder.map((s2) => (
+            <path
+              key={s2.branch_id}
+              fill="none"
+              stroke={s2.color}
+              strokeWidth={fadedOf(s2) ? 1.5 : lifted ? 3 : 2.25}
+              strokeOpacity={fadedOf(s2) ? 0.2 : 1}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              d={smoothPath(s2.points.map((v, i) => [x(i), y(v)]))}
+              style={{ transition: "stroke-opacity 200ms, stroke-width 200ms" }}
+            />
+          ))}
+
+          {drawOrder.map((s2) => s2.points.map((v, i) => (
+            <circle
+              key={`${s2.branch_id}-${i}`}
+              cx={x(i)}
+              cy={y(v)}
+              r={hoverIdx === i && !fadedOf(s2) ? 5 : 3}
+              fill={hoverIdx === i ? "#ffffff" : s2.color}
+              stroke={s2.color}
+              strokeWidth={hoverIdx === i ? 2.5 : 0}
+              fillOpacity={fadedOf(s2) ? 0.2 : 1}
+              strokeOpacity={fadedOf(s2) ? 0.2 : 1}
+            />
+          )))}
+
+          {data.months.map((k, i) => (
+            <rect
+              key={`hit-${k}`}
+              x={n === 1 ? PAD_L : x(i) - plotW / Math.max(1, n - 1) / 2}
+              y={PAD_T}
+              width={n === 1 ? plotW : plotW / Math.max(1, n - 1)}
+              height={plotH}
+              fill="transparent"
+              onMouseEnter={() => setHoverIdx(i)}
+            />
+          ))}
+        </svg>
+
+        {hoverIdx !== null && (
+          <div
+            role="tooltip"
+            className="pointer-events-none absolute top-3 z-20 min-w-[14rem] rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.22)] backdrop-blur-sm"
+            style={tipOnLeft ? { right: W - tipLeft + 14 } : { left: tipLeft + 14 }}
+          >
+            <p className="mb-2 text-xs font-medium text-slate-500">
+              {new Date(`${data.months[hoverIdx]}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+            </p>
+            <div className="flex flex-col gap-1">
+              {tipRows.map((s2) => (
+                <div key={s2.branch_id} className={`flex items-baseline gap-2 whitespace-nowrap ${fadedOf(s2) ? "opacity-40" : ""}`}>
+                  <span className="inline-block h-[2px] w-3 shrink-0 translate-y-[-3px] rounded-full" style={{ background: s2.color }} />
+                  <span className="text-[13px] font-semibold tabular-nums text-slate-900">{readout(s2.points[hoverIdx])}</span>
+                  <span className="truncate text-[13px] text-slate-500">{s2.branch_name}</span>
+                </div>
+              ))}
+            </div>
+            {tipRows.length > 1 && (
+              <div className="mt-2 flex items-baseline justify-between border-t border-slate-100 pt-2 text-xs">
+                <span className="text-slate-400">Total</span>
+                <span className="font-semibold tabular-nums text-slate-800">{readout(tipTotal)}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>,
   );
 };
 
