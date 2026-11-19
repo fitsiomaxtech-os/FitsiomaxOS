@@ -1007,11 +1007,14 @@ const branchSeries = (b, metricKey) => b.series?.[metricKey] || (metricKey === "
  * instead of being scaled along with the geometry.
  */
 const useMeasuredWidth = (fallback = 720) => {
-  const ref = useRef(null);
+  // A callback ref held in state, not a ref object read once on mount: the chart's first
+  // render is its Loading frame, which has no element to measure, and an effect that ran
+  // only then never saw the real one -- so the plot stayed at the 720px fallback, centred
+  // with a wide empty margin down each side of the card.
+  const [el, ref] = useState(null);
   const [width, setWidth] = useState(fallback);
 
   useEffect(() => {
-    const el = ref.current;
     if (!el) return undefined;
     const apply = () => setWidth(Math.max(320, Math.round(el.clientWidth)));
     apply();
@@ -1022,7 +1025,7 @@ const useMeasuredWidth = (fallback = 720) => {
     const ro = new ResizeObserver(apply);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [el]);
 
   return [ref, width];
 };
@@ -1035,7 +1038,7 @@ const useMeasuredWidth = (fallback = 720) => {
  * that touches zero can dip visually below it. The readings themselves stay exact, which
  * is why every point is also marked and printed in the readout.
  */
-const smoothPath = (pts) => {
+const smoothPath = (pts, floorY) => {
   if (!pts.length) return "";
   if (pts.length < 3) return pts.map((p, i) => `${i ? "L" : "M"} ${p[0]},${p[1]}`).join(" ");
   const t = 0.2; // Low tension: enough to read as a curve, not enough to loop or overshoot far.
@@ -1045,8 +1048,11 @@ const smoothPath = (pts) => {
     const p1 = pts[i];
     const p2 = pts[i + 1];
     const p3 = pts[i + 2] || p2;
-    d += ` C ${p1[0] + (p2[0] - p0[0]) * t},${p1[1] + (p2[1] - p0[1]) * t}`
-      + ` ${p2[0] - (p3[0] - p1[0]) * t},${p2[1] - (p3[1] - p1[1]) * t}`
+    // Control points held at the baseline when one is given, so a series that sits at zero
+    // either side of a rise does not bow below zero on its way up.
+    const cy = (v) => (floorY === undefined ? v : Math.min(v, floorY));
+    d += ` C ${p1[0] + (p2[0] - p0[0]) * t},${cy(p1[1] + (p2[1] - p0[1]) * t)}`
+      + ` ${p2[0] - (p3[0] - p1[0]) * t},${cy(p2[1] - (p3[1] - p1[1]) * t)}`
       + ` ${p2[0]},${p2[1]}`;
   }
   return d;
@@ -1146,7 +1152,7 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
 
   const H = 300;
   const PAD_L = metric.currency ? 56 : 40;
-  const PAD_R = 20;
+  const PAD_R = 28;
   const PAD_T = 16;
   const PAD_B = 30;
   const plotW = Math.max(1, W - PAD_L - PAD_R);
@@ -1255,7 +1261,7 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
             return (
               <path
                 key={`area-${s2.branch_id}`}
-                d={`${smoothPath(pts)} L ${x(n - 1)},${y(0)} L ${x(0)},${y(0)} Z`}
+                d={`${smoothPath(pts, y(0))} L ${x(n - 1)},${y(0)} L ${x(0)},${y(0)} Z`}
                 fill={`url(#growth-fill-${s2.branch_id})`}
               />
             );
@@ -1270,7 +1276,7 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
               strokeOpacity={fadedOf(s2) ? 0.2 : 1}
               strokeLinejoin="round"
               strokeLinecap="round"
-              d={smoothPath(s2.points.map((v, i) => [x(i), y(v)]))}
+              d={smoothPath(s2.points.map((v, i) => [x(i), y(v)]), y(0))}
               style={{ transition: "stroke-opacity 200ms, stroke-width 200ms" }}
             />
           ))}
