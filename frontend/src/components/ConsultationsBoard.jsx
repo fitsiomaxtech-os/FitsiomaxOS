@@ -22,7 +22,7 @@ import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
 import {
   getConsultationsBoard, moveBranchStage, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, setSessionPackageTotal, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
-  saveTreatmentSummary, unlockTreatmentSummary, saveTreatmentProtocol, getTreatmentProtocols, stagesList, getDoctors,
+  saveTreatmentSummary, unlockTreatmentSummary, saveTreatmentProtocol, saveSpecialInstructions, getTreatmentProtocols, stagesList, getDoctors,
   assignPhysioWithSessions, assignRehab, getDoctorCalendar, getLeadPhysioProgress, getSessionModeSwapQuote, markLeadOnline,
   rehabSessionsForLead,
   listNutritionCoaches, bookDietAppointment, collectDietFee, collectDietChartFee,
@@ -3015,7 +3015,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // debounce before it closed the box; with the button gone, closing the popup inside the
   // 800ms window would otherwise drop the last keystrokes silently. Holds the lead id too,
   // because the flush runs after selectedLead has already been cleared.
-  const pendingWriteRef = useRef({ leadId: null, diag: null, treat: null, protocol: null });
+  const pendingWriteRef = useRef({ leadId: null, diag: null, treat: null, protocol: null, instructions: null });
 
   // Head Physio's treatment plan summary
   const [treatmentDraft, setTreatmentDraft] = useState("");
@@ -3039,6 +3039,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const protocolDebounceRef = useRef(null);
   const [treatmentProtocols, setTreatmentProtocols] = useState([]);
   const protocolListHidden = useFeatureHidden("ba_treatment_protocol");
+  // The Consultant's Special Instructions, under the Treatment Protocol: the same kind of
+  // box, onto page 3 (Special Instructions to the Therapist) of the Consultation Form.
+  const [instructionsDraft, setInstructionsDraft] = useState("");
+  const [savingInstructions, setSavingInstructions] = useState(false);
+  const instructionsDebounceRef = useRef(null);
   useEffect(() => {
     if (!isConsultant) return undefined;
     let cancelled = false;
@@ -4267,6 +4272,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setTreatmentDraft(selectedLead?.treatment_summary || "");
     setTreatmentEditing(!selectedLead?.treatment_summary);
     setProtocolDraft(selectedLead?.treatment_protocol || "");
+    setInstructionsDraft(selectedLead?.special_instructions || "");
     setShowPhysioModal(false);
     setPhysioPick("");
     setFollowUpDraft(null);
@@ -4734,6 +4740,26 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     protocolDebounceRef.current = setTimeout(() => autoSaveProtocol(text), 800);
   };
 
+  const autoSaveInstructions = async (text) => {
+    setSavingInstructions(true);
+    try {
+      const updated = await saveSpecialInstructions(selectedLead.id, text.trim());
+      applyUpdatedLead(updated);
+      if (pendingWriteRef.current.instructions === text) pendingWriteRef.current.instructions = null;
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to save special instructions");
+    }
+    setSavingInstructions(false);
+  };
+
+  const handleInstructionsChange = (text) => {
+    setInstructionsDraft(text);
+    pendingWriteRef.current.leadId = selectedLead?.id || null;
+    pendingWriteRef.current.instructions = text;
+    if (instructionsDebounceRef.current) clearTimeout(instructionsDebounceRef.current);
+    instructionsDebounceRef.current = setTimeout(() => autoSaveInstructions(text), 800);
+  };
+
   // A protocol from the list goes in under what is already typed; the box stays editable.
   const addProtocolFromList = (id) => {
     const row = treatmentProtocols.find((p) => p.id === id);
@@ -4753,6 +4779,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       if (physioDiagDebounceRef.current) { clearTimeout(physioDiagDebounceRef.current); physioDiagDebounceRef.current = null; }
       if (treatmentDebounceRef.current) { clearTimeout(treatmentDebounceRef.current); treatmentDebounceRef.current = null; }
       if (protocolDebounceRef.current) { clearTimeout(protocolDebounceRef.current); protocolDebounceRef.current = null; }
+      if (instructionsDebounceRef.current) { clearTimeout(instructionsDebounceRef.current); instructionsDebounceRef.current = null; }
       const p = pendingWriteRef.current;
       if (p.leadId !== openLeadId) return;
       if (p.diag && p.diag.trim()) savePhysioDiagnosis(openLeadId, p.diag.trim(), false).catch(() => {});
@@ -4760,7 +4787,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       // here means the boxes were deliberately cleared and that has to reach the server.
       if (p.treat !== null) saveTreatmentSummary(openLeadId, p.treat.trim(), false).catch(() => {});
       if (p.protocol !== null) saveTreatmentProtocol(openLeadId, p.protocol.trim()).catch(() => {});
-      pendingWriteRef.current = { leadId: null, diag: null, treat: null, protocol: null };
+      if (p.instructions !== null) saveSpecialInstructions(openLeadId, p.instructions.trim()).catch(() => {});
+      pendingWriteRef.current = { leadId: null, diag: null, treat: null, protocol: null, instructions: null };
     };
   }, [openLeadId]);
 
@@ -8864,7 +8892,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             onChange={(e) => handleProtocolChange(e.target.value)}
                             rows={3}
                             maxLength={5000}
-                            placeholder="Treatment Protocol (optional)"
+                            placeholder="Treatment Protocol"
                             className="block w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400"
                             data-testid="cons-treatment-protocol-input"
                           />
@@ -8874,6 +8902,28 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                             </span>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* The Consultant's Special Instructions: the same plain box, optional, saved
+                        as it is typed. Copied onto page 3 of the patient's Consultation Form
+                        (Special Instructions to the Therapist). */}
+                    {isConsultant && (
+                      <div className="relative" data-testid="cons-special-instructions">
+                        <textarea
+                          value={instructionsDraft}
+                          onChange={(e) => handleInstructionsChange(e.target.value)}
+                          rows={3}
+                          maxLength={5000}
+                          placeholder="Instructions"
+                          className="block w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400"
+                          data-testid="cons-special-instructions-input"
+                        />
+                        {(savingInstructions || instructionsDraft.trim()) && (
+                          <span className="pointer-events-none absolute bottom-2 right-6 flex items-center gap-1 rounded bg-white/90 px-1 text-[11px] text-slate-400" data-testid="cons-special-instructions-autosave-status">
+                            {savingInstructions ? "Saving..." : (<><CheckCircle2 className="h-3 w-3 text-emerald-500" /> Auto-saved</>)}
+                          </span>
+                        )}
                       </div>
                     )}
 

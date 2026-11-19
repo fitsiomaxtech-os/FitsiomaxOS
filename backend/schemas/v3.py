@@ -579,6 +579,9 @@ class V3LeadOut(BaseModel):
     # The Consultant's Treatment Protocol, typed in the Treatment Prescription popup.
     # Optional. Copied onto page 3 of the lead's Consultation Form (save_treatment_protocol).
     treatment_protocol: Optional[str] = None
+    # The Consultant's Special Instructions, under the Treatment Protocol. Optional. Copied
+    # onto page 3 (Special Instructions to the Therapist) of the lead's Consultation Form.
+    special_instructions: Optional[str] = None
     consultation_payment_mode: Optional[str] = None  # "cash" | "upi" | "card" | ...
     assigned_physio_id: Optional[str] = None
     assigned_physio_name: Optional[str] = None
@@ -695,6 +698,10 @@ class V3TreatmentSummaryInput(BaseModel):
 
 class V3TreatmentProtocolInput(BaseModel):
     protocol: str = ""
+
+
+class V3SpecialInstructionsInput(BaseModel):
+    instructions: str = ""
 
 
 class V3SellStoreItemInput(BaseModel):

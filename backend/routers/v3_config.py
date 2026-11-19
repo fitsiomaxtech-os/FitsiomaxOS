@@ -1944,6 +1944,7 @@ async def v3_reset_all_leads(confirm: bool = False, _: V3UserOut = Depends(requi
         "treatment_summary": None,
         "treatment_summary_locked": False,
         "treatment_protocol": None,
+        "special_instructions": None,
         "assigned_physio_id": None,
         "assigned_physio_name": None,
         "physio_assigned_at": None,

@@ -68,6 +68,7 @@ export const formFromLead = (lead) => {
     symptoms_root_cause: [text(lead.condition), pain && `Pain for ${pain}`].filter(Boolean).join(" — "),
     // Page 3: what the Consultant typed in the Treatment Prescription popup.
     treatment_protocol: text(lead.treatment_protocol),
+    special_instructions: text(lead.special_instructions),
     date: todayIso(),
   };
 };

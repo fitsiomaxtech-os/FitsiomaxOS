@@ -1165,6 +1165,8 @@ export const saveTreatmentSummary = async (leadId, summary, locked = false) => (
 export const unlockTreatmentSummary = async (leadId) => (await api.put(`/leads/${leadId}/treatment-summary/unlock`)).data;
 // The Consultant's Treatment Protocol; the server copies it onto page 3 of the lead's Consultation Form.
 export const saveTreatmentProtocol = async (leadId, protocol) => (await api.post(`/leads/${leadId}/treatment-protocol`, { protocol })).data;
+// The Consultant's Special Instructions; copied onto page 3 the same way.
+export const saveSpecialInstructions = async (leadId, instructions) => (await api.post(`/leads/${leadId}/special-instructions`, { instructions })).data;
 
 
 // Recruitment — Human Resource Master View. Candidates live in their own collection and

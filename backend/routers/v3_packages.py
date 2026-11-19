@@ -15,7 +15,7 @@ from schemas.v3 import (
     V3CollectPackagePaymentInput, V3CollectTreatmentFeeInput, V3CollectDietFeeInput,
     V3CollectDietChartFeeInput,
     V3CollectRehabFeeInput,
-    V3PhysioDiagnosisInput, V3TreatmentSummaryInput, V3TreatmentProtocolInput,
+    V3PhysioDiagnosisInput, V3TreatmentSummaryInput, V3TreatmentProtocolInput, V3SpecialInstructionsInput,
 )
 from utils import generate_transaction_id
 
@@ -1448,23 +1448,37 @@ async def save_treatment_protocol(lead_id: str, payload: V3TreatmentProtocolInpu
     Protocol) of every Consultation Form tied to this lead, so the paper shows what the
     Consultant wrote. A form made for the lead later picks it up when it is created
     (create_consultation_form)."""
+    return await _save_consult_form_note(lead_id, user, "treatment_protocol", payload.protocol, "Treatment Protocol")
+
+
+@router.post("/leads/{lead_id}/special-instructions", response_model=V3LeadOut)
+async def save_special_instructions(lead_id: str, payload: V3SpecialInstructionsInput, user: V3UserOut = Depends(v3_require_roles("head_physio", "super_admin", "business_dev", "branch_admin"))):
+    """The Consultant's Special Instructions, typed under the Treatment Protocol. Optional.
+    Copied onto page 3 (Special Instructions to the Therapist) of the lead's Consultation
+    Form, the same way as the Treatment Protocol."""
+    return await _save_consult_form_note(lead_id, user, "special_instructions", payload.instructions, "Special Instructions")
+
+
+async def _save_consult_form_note(lead_id: str, user: V3UserOut, field: str, raw: Optional[str], label: str) -> V3LeadOut:
+    """One of the Consultant's page 3 notes: on the lead, and on every Consultation Form tied
+    to it. `field` is the same key on both."""
     await ensure_head_chief_lead(user, lead_id)
-    text = (payload.protocol or "").replace("\r\n", "\n").strip()
+    text = (raw or "").replace("\r\n", "\n").strip()
     if len(text) > 5000:
-        raise HTTPException(status_code=400, detail="Treatment Protocol is too long")
+        raise HTTPException(status_code=400, detail=f"{label} is too long")
     lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "id": 1})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     await v3_col("leads").update_one({"id": lead_id}, {"$set": {
-        "treatment_protocol": text,
+        field: text,
         "updated_at": _now(),
     }})
-    await v3_col("consultation_forms").update_many({"lead_id": lead_id}, {"$set": {"treatment_protocol": text}})
+    await v3_col("consultation_forms").update_many({"lead_id": lead_id}, {"$set": {field: text}})
     await v3_col("lead_activity").insert_one({
         "id": str(uuid.uuid4()),
         "lead_id": lead_id,
-        "action": "treatment_protocol_saved",
-        "details": f"Treatment Protocol saved by {user.full_name}",
+        "action": f"{field}_saved",
+        "details": f"{label} saved by {user.full_name}",
         "created_by": user.full_name,
         "created_by_role": user.role,
         "created_at": _now(),

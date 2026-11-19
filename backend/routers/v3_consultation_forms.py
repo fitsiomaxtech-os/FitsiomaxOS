@@ -154,10 +154,14 @@ async def create_consultation_form(
     await _branch_exists(branch_id)
     lead_id = (payload.lead_id or "").strip()
     fields = _clean(payload.fields)
-    # Page 3's Treatment Protocol: the Consultant's, from the lead, when the form brings none.
-    if lead_id and not fields.get("treatment_protocol"):
-        lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "treatment_protocol": 1}) or {}
-        fields["treatment_protocol"] = str(lead.get("treatment_protocol") or "").strip()
+    # Page 3's Treatment Protocol and Special Instructions: the Consultant's, from the lead,
+    # where the form brings none.
+    notes = ("treatment_protocol", "special_instructions")
+    if lead_id and any(not fields.get(k) for k in notes):
+        lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, **{k: 1 for k in notes}}) or {}
+        for k in notes:
+            if not fields.get(k):
+                fields[k] = str(lead.get(k) or "").strip()
     return await _insert(branch_id, user, fields, {"lead_id": lead_id} if lead_id else None)
 
 
