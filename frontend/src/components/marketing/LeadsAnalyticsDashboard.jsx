@@ -234,24 +234,36 @@ const Track = ({ value, max, color, h = "h-2" }) => (
   </span>
 );
 
+/** One line of the hover card, styled as the Finance charts' tooltip: a short coloured
+ *  dash, the figure in bold, what it counts, and a quiet ratio after it. */
 const HoverStat = ({ color, label, value, note }) => (
-  <div className="flex items-center justify-between gap-6">
-    <span className="flex items-center gap-1.5 text-slate-500">
-      <i className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
-      {label}
-    </span>
-    <span className="tabular-nums">
-      <span className="font-semibold text-slate-900">{nf(value)}</span>
-      {note && <span className="ml-1.5 text-slate-400">{note}</span>}
-    </span>
+  <div className="flex items-baseline gap-2 whitespace-nowrap">
+    <span className="inline-block h-[2px] w-3 shrink-0 translate-y-[-3px] rounded-full" style={{ background: color }} />
+    <span className="text-[13px] font-semibold tabular-nums text-slate-900">{nf(value)}</span>
+    <span className="text-[13px] text-slate-500">{label}</span>
+    {note && <span className="ml-auto pl-3 text-[11px] tabular-nums text-slate-400">{note}</span>}
   </div>
 );
 
+/** Round tick steps (1, 2, 2.5, 5 x 10^n) so the axis reads 0 · 400 · 800 · 1,200 rather
+ *  than 0 · 397 · 794. Bars are drawn against the top tick so they sit on the same scale. */
+const niceScale = (max, count = 4) => {
+  const raw = Math.max(1, max) / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((x) => x >= raw) || 10 * mag;
+  const top = Math.max(step, Math.ceil(Math.max(1, max) / step) * step);
+  const ticks = [];
+  for (let t = 0; t <= top + 1e-9; t += step) ticks.push(Math.round(t * 100) / 100);
+  return { top, ticks };
+};
+const compact = (n) => (n >= 1000 ? `${Math.round((n / 1000) * 10) / 10}k` : nf(n));
+
 /** A row list whose hover card follows the pointer. `rows` are { key, label, bars, stats,
- *  strong }; the card is placed beside the cursor and flipped to the other side of it when
- *  it would run off the right or bottom of the list. */
-const TIP_W = 232;
-const HoverRows = ({ head, rows }) => {
+ *  strong }. The hovered row lifts onto a soft band so the eye keeps its place as the
+ *  pointer travels down the list; `scale`, when given, draws round-number ticks along the
+ *  foot of the bar column with faint guides up through the rows. */
+const TIP_W = 248;
+const HoverRows = ({ head, rows, scale, hint }) => {
   const [tip, setTip] = useState(null);
   const box = useRef(null);
   const move = (row) => (e) => {
@@ -259,35 +271,68 @@ const HoverRows = ({ head, rows }) => {
     if (!rect) return;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const left = x + 16 + TIP_W > rect.width ? x - 16 - TIP_W : x + 16;
-    const flipUp = y > rect.height - 90;
-    setTip({ row, left: Math.max(0, left), top: flipUp ? y - 12 : y + 16, flipUp });
+    const left = x + 18 + TIP_W > rect.width ? x - 18 - TIP_W : x + 18;
+    const flipUp = y > rect.height - 110;
+    setTip({ row, left: Math.max(0, left), top: flipUp ? y - 14 : y + 18, flipUp });
   };
+  const guides = scale && (
+    <span className="pointer-events-none absolute inset-0" aria-hidden="true">
+      {scale.ticks.slice(1, -1).map((t) => (
+        <span key={t} className="absolute inset-y-0 w-px bg-slate-100" style={{ left: `${(t / scale.top) * 100}%` }} />
+      ))}
+    </span>
+  );
   return (
     <div ref={box} className="relative flex flex-col" onMouseLeave={() => setTip(null)}>
       <HeadRow>{head}</HeadRow>
-      <ul className="divide-y divide-slate-50">
-        {rows.map((row) => (
-          <li
-            key={row.key}
-            onMouseMove={move(row)}
-            className={`grid ${ROW_COLS} cursor-default items-center gap-x-4 rounded-md py-3 transition-colors ${
-              tip?.row.key === row.key ? "bg-slate-50" : ""
-            } ${row.strong ? "border-b border-slate-200" : ""}`}
-          >
-            <BranchName name={row.label} strong={row.strong} />
-            <span className="flex flex-col gap-1.5 pr-1">{row.bars}</span>
-          </li>
-        ))}
+      <ul className="py-1">
+        {rows.map((row) => {
+          const on = tip?.row.key === row.key;
+          return (
+            <li
+              key={row.key}
+              onMouseMove={move(row)}
+              className={`grid ${ROW_COLS} cursor-default items-center gap-x-4 rounded-lg px-2 -mx-2 py-3 transition-colors duration-150 ${
+                on ? "bg-slate-100/70" : "hover:bg-slate-50"
+              } ${row.strong ? "mb-1 border-b border-slate-200 rounded-b-none" : ""}`}
+            >
+              <BranchName name={row.label} strong={row.strong} />
+              <span className="relative flex flex-col gap-1.5 pr-1">
+                {guides}
+                {row.bars}
+              </span>
+            </li>
+          );
+        })}
       </ul>
+      {scale && (
+        <div className={`grid ${ROW_COLS} gap-x-4 border-t border-slate-100 pt-2`}>
+          <span />
+          <span className="relative mr-1 h-4 text-[11px] tabular-nums text-slate-400">
+            {scale.ticks.map((t, i) => (
+              <span
+                key={t}
+                className="absolute top-0"
+                style={{
+                  left: `${(t / scale.top) * 100}%`,
+                  transform: i === 0 ? "none" : i === scale.ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
+                }}
+              >
+                {compact(t)}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
       {tip && (
         <div
           role="tooltip"
-          className="pointer-events-none absolute z-30 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-xs shadow-lg"
+          className="pointer-events-none absolute z-30 rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_8px_24px_-6px_rgba(15,23,42,0.18)] backdrop-blur-sm"
           style={{ left: tip.left, top: tip.top, width: TIP_W, transform: tip.flipUp ? "translateY(-100%)" : undefined }}
         >
-          <p className="mb-2 truncate text-[13px] font-semibold text-slate-800">{tip.row.label}</p>
-          <div className="flex flex-col gap-1.5">{tip.row.stats}</div>
+          <p className="mb-1.5 truncate text-xs font-medium text-slate-500">{tip.row.label}</p>
+          <div className="flex flex-col gap-1">{tip.row.stats}</div>
+          {hint && <p className="mt-2 text-[11px] text-slate-400">{hint}</p>}
         </div>
       )}
     </div>
@@ -322,8 +367,8 @@ const BranchLeadsList = ({ rows }) => {
         ),
         stats: (
           <>
-            <HoverStat color={SERIES} label="Leads" value={r.leads} />
-            <HoverStat color={BOOKED} label="Booked" value={r.booked} note={`${pctOf(r.booked, r.leads)} of leads`} />
+            <HoverStat color={SERIES} label="leads" value={r.leads} />
+            <HoverStat color={BOOKED} label="booked" value={r.booked} note={`${pctOf(r.booked, r.leads)} of leads`} />
           </>
         ),
       }))}
@@ -331,64 +376,86 @@ const BranchLeadsList = ({ rows }) => {
   );
 };
 
-/** One branch picked: its pre-sales pipeline -- Total leads, then each stage (New Leads,
- *  RNR, Follow Up, ...) in pipeline order, on the total's scale. */
-const StageLeadsList = ({ total, stages }) => (
-  <HoverRows
-    head={
-      <>
-        <span>Pre-sales stage</span>
-        <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
-          <Dot color={SERIES}>Leads</Dot>
-        </span>
-      </>
-    }
-    rows={[
-      {
-        key: "__total",
-        label: "Total leads",
-        strong: true,
-        bars: <Track value={total} max={total || 1} color="#1e4f8f" h="h-2.5" />,
-        stats: <HoverStat color="#1e4f8f" label="Leads" value={total} />,
-      },
-      ...stages.map((st) => ({
-        key: st.name,
-        label: st.name,
-        bars: <Track value={st.value} max={total || 1} color={SERIES} />,
-        stats: <HoverStat color={SERIES} label="Leads" value={st.value} note={`${pctOf(st.value, total)} of total`} />,
-      })),
-    ]}
-  />
-);
-
-/** Per branch: appointments booked, and how many of them came for the consultation. */
-const BranchFunnelList = ({ rows }) => {
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.booked, r.consulted)));
+/** One branch picked: Total leads, then the four pre-sales stages the desk works from --
+ *  RNR, Follow Up, Appointment, Lost -- each on the total's scale. */
+const STAGE_PICK = ["RNR", "Follow Up", "Appointment", "Lost"];
+const StageLeadsList = ({ total, stages }) => {
+  const count = Object.fromEntries(stages.map((st) => [st.name, st.value]));
+  const scale = niceScale(total);
   return (
     <HoverRows
+      scale={scale}
+      head={
+        <>
+          <span>Pre-sales stage</span>
+          <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
+            <Dot color={SERIES}>Leads</Dot>
+          </span>
+        </>
+      }
+      rows={[
+        {
+          key: "__total",
+          label: "Total leads",
+          strong: true,
+          bars: <Track value={total} max={scale.top} color="#1e4f8f" h="h-2.5" />,
+          stats: <HoverStat color="#1e4f8f" label="leads" value={total} />,
+        },
+        ...STAGE_PICK.map((name) => ({
+          key: name,
+          label: name,
+          bars: <Track value={count[name] || 0} max={scale.top} color={SERIES} />,
+          stats: <HoverStat color={SERIES} label="leads" value={count[name] || 0} note={`${pctOf(count[name] || 0, total)} of total`} />,
+        })),
+      ]}
+    />
+  );
+};
+
+/** Per branch: appointments booked -> came in -> consultation fee paid -> session fee
+ *  paid. Four thin bars on one scale, so each drop is the gap you see; the hover card
+ *  gives each step as a share of the step before it. */
+const CONSULT_PAID = "#4a3aa7";
+const SESSION_PAID = "#eda100";
+const FUNNEL_STEPS = [
+  { key: "booked", label: "Booked", color: BOOKED },
+  { key: "came", label: "Came for consultation", short: "came", color: CAME, of: "booked" },
+  { key: "consulted", label: "Consultation paid", short: "consultation paid", color: CONSULT_PAID, of: "came" },
+  { key: "session_paid", label: "Session paid", short: "session paid", color: SESSION_PAID, of: "consulted" },
+];
+const STEP_OF_LABEL = { booked: "booked", came: "came", consulted: "consultation paid" };
+const BranchFunnelList = ({ rows }) => {
+  const scale = niceScale(Math.max(1, ...rows.map((r) => Math.max(...FUNNEL_STEPS.map((st) => r[st.key] || 0)))));
+  return (
+    <HoverRows
+      scale={scale}
       head={
         <>
           <span>Branch</span>
-          <span className="flex items-center gap-x-3 font-medium normal-case tracking-normal">
-            <Dot color={BOOKED}>Booked</Dot>
-            <Dot color={CAME}>Came for consultation</Dot>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium normal-case tracking-normal">
+            {FUNNEL_STEPS.map((st) => <Dot key={st.key} color={st.color}>{st.label}</Dot>)}
           </span>
         </>
       }
       rows={rows.map((r) => ({
         key: r.name,
         label: r.name,
-        // Both on one scale, so the drop from booked to came is the gap you see.
         bars: (
-          <>
-            <Track value={r.booked} max={max} color={BOOKED} />
-            <Track value={r.consulted} max={max} color={CAME} />
-          </>
+          <span className="flex flex-col gap-1">
+            {FUNNEL_STEPS.map((st) => <Track key={st.key} value={r[st.key] || 0} max={scale.top} color={st.color} h="h-1.5" />)}
+          </span>
         ),
         stats: (
           <>
-            <HoverStat color={BOOKED} label="Booked" value={r.booked} />
-            <HoverStat color={CAME} label="Came" value={r.consulted} note={`${pctOf(r.consulted, r.booked)} of booked`} />
+            {FUNNEL_STEPS.map((st) => (
+              <HoverStat
+                key={st.key}
+                color={st.color}
+                label={st.short || "booked"}
+                value={r[st.key] || 0}
+                note={st.of ? `${pctOf(r[st.key] || 0, r[st.of] || 0)} of ${STEP_OF_LABEL[st.of]}` : undefined}
+              />
+            ))}
           </>
         ),
       }))}
@@ -487,11 +554,13 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const byStage = (data?.by_stage || []).filter((st) => st.value > 0 || st.name !== "Not in the pipeline");
   // Only branches with something past the lead stage, most bookings first.
   const funnelRows = branchFunnel
-    .filter((r) => r.booked || r.consulted)
+    .filter((r) => r.booked || r.came || r.consulted || r.session_paid)
     .slice()
     .sort((a, b) => b.booked - a.booked || b.consulted - a.consulted);
   const funnelBooked = funnelRows.reduce((a, r) => a + r.booked, 0);
-  const funnelCame = funnelRows.reduce((a, r) => a + r.consulted, 0);
+  const funnelCame = funnelRows.reduce((a, r) => a + (r.came || 0), 0);
+  const funnelConsult = funnelRows.reduce((a, r) => a + (r.consulted || 0), 0);
+  const funnelSession = funnelRows.reduce((a, r) => a + (r.session_paid || 0), 0);
   const byVertical = data?.by_vertical || [];
   const byWeekday = data?.by_weekday || [];
   const byOwner = data?.by_owner || [];
@@ -577,11 +646,11 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         {/* 2 — which branches the demand lands on, and how much of it books; with one
             branch picked, that branch's pre-sales stages instead */}
         {oneBranch ? (
-          <Card title={`${oneBranchName} · pre-sales`} sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked · hover a stage for its figures`} testid="leads-analytics-branches">
+          <Card title={`${oneBranchName} · pre-sales`} sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked`} testid="leads-analytics-branches">
             {total === 0 ? <Empty>No leads for this branch in this range.</Empty> : <StageLeadsList total={total} stages={byStage} />}
           </Card>
         ) : (
-          <Card title="Leads & appointments by branch" sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked · hover a branch for its figures`} testid="leads-analytics-branches">
+          <Card title="Leads & appointments by branch" sub={`${nf(total)} leads · ${nf(booked)} with an appointment booked`} testid="leads-analytics-branches">
             {branchFunnel.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
               <ValueTable rows={branchFunnel.map((r) => ({ name: r.name, value: r.leads }))} firstHeading="Branch" />
             ) : (
@@ -593,7 +662,7 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         {/* 3 — of those booked, who came for the consultation */}
         <Card
           title="Appointment ratio by branch"
-          sub={`${nf(funnelBooked)} booked · ${nf(funnelCame)} came for consultation (${pctOf(funnelCame, funnelBooked)}) · hover a branch for its figures`}
+          sub={`${nf(funnelBooked)} booked · ${nf(funnelCame)} came · ${nf(funnelConsult)} consultation paid · ${nf(funnelSession)} session paid`}
           testid="leads-analytics-appointments-branch"
         >
           {funnelRows.length === 0 ? <Empty>No appointments booked in this range.</Empty> : asTable ? (

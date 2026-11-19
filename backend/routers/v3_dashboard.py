@@ -1027,7 +1027,7 @@ async def v3_dashboard_leads_analytics(
         query["branch_id"] = {"$in": wanted_branches}
     leads = await v3_col("leads").find(
         query,
-        {"_id": 0, "created_at": 1, "stage": 1, "branch_id": 1, "source_tab": 1, "source_type": 1,
+        {"_id": 0, "id": 1, "created_at": 1, "stage": 1, "branch_id": 1, "source_tab": 1, "source_type": 1,
          "vertical": 1, "appointment_date": 1, "assigned_user_name": 1,
          # What the branch funnel reads: the consultation fee (the visit happened) and the
          # fees _is_converted checks (they paid for a service).
@@ -1037,6 +1037,20 @@ async def v3_dashboard_leads_analytics(
 
     branch_rows = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500)
     branch_names = {b["id"]: b.get("branch_name") or "—" for b in branch_rows}
+
+    # Who actually came in. There is no single "arrived" flag on a lead, so a visit is read
+    # off what only happens once the patient is in the room: an appointment marked
+    # completed, a consultation form the branch filled for them (one sent out as a link for
+    # the patient to fill at home -- `client_status` set -- does not count; that can be done
+    # before they ever arrive), or the consultation fee collected (counted per lead below).
+    came_ids: set = set()
+    async for row in v3_col("appointments").find({"status": "completed"}, {"_id": 0, "lead_id": 1}):
+        if row.get("lead_id"):
+            came_ids.add(row["lead_id"])
+    async for row in v3_col("consultation_forms").find(
+        {"lead_id": {"$nin": [None, ""]}, "client_status": {"$exists": False}}, {"_id": 0, "lead_id": 1},
+    ):
+        came_ids.add(row["lead_id"])
 
     # Day buckets for anything up to a quarter, months beyond it. A year plotted by day is
     # 365 points on a card this size; a week plotted by month is one.
@@ -1095,9 +1109,10 @@ async def v3_dashboard_leads_analytics(
     # Leads with an appointment fixed, per branch -- the same "reached a booking" test the
     # headline count uses, so the branch split adds up to it.
     booked_by_branch: dict = {}
-    # Per branch id: leads -> appointment fixed -> came for the consultation -> paid fees.
-    # The last two are the Dashboard > Leads tab's own tests (METRIC_DEFS "consultations"
-    # and _is_converted), so a branch's figures here match its figures there.
+    # Per branch id: leads -> appointment fixed -> came in -> consultation fee paid ->
+    # session (treatment) fee paid. "consulted" is the Dashboard > Leads tab's own test
+    # (METRIC_DEFS "consultations"), so a branch's figure here matches its figure there;
+    # "paid" (_is_converted, any service bought) is kept for the callers that read it.
     funnel_by_branch: dict = {}
     for lead in leads:
         stage = lead.get("stage")
@@ -1113,12 +1128,19 @@ async def v3_dashboard_leads_analytics(
         by_branch[bid] = by_branch.get(bid, 0) + 1
         if str(lead.get("appointment_date") or "").strip():
             booked_by_branch[bid] = booked_by_branch.get(bid, 0) + 1
-        f = funnel_by_branch.setdefault(bid, {"leads": 0, "booked": 0, "consulted": 0, "paid": 0})
+        f = funnel_by_branch.setdefault(
+            bid, {"leads": 0, "booked": 0, "came": 0, "consulted": 0, "session_paid": 0, "paid": 0},
+        )
         f["leads"] += 1
         if str(lead.get("appointment_date") or "").strip():
             f["booked"] += 1
-        if lead.get("package_paid") is not None:
+        consult_paid = lead.get("package_paid") is not None
+        if consult_paid or lead.get("id") in came_ids:
+            f["came"] += 1
+        if consult_paid:
             f["consulted"] += 1
+        if lead.get("treatment_fee_paid") is not None:
+            f["session_paid"] += 1
         if _is_converted(lead):
             f["paid"] += 1
         by_vertical[_vertical_label(lead.get("vertical"))] = by_vertical.get(_vertical_label(lead.get("vertical")), 0) + 1
@@ -1143,8 +1165,10 @@ async def v3_dashboard_leads_analytics(
     funnel_named: dict = {}
     for bid, f in funnel_by_branch.items():
         name = branch_names.get(bid, "Unassigned") if bid else "Unassigned"
-        row = funnel_named.setdefault(name, {"name": name, "leads": 0, "booked": 0, "consulted": 0, "paid": 0})
-        for k in ("leads", "booked", "consulted", "paid"):
+        row = funnel_named.setdefault(
+            name, {"name": name, "leads": 0, "booked": 0, "came": 0, "consulted": 0, "session_paid": 0, "paid": 0},
+        )
+        for k in ("leads", "booked", "came", "consulted", "session_paid", "paid"):
             row[k] += f[k]
     branch_funnel = sorted(funnel_named.values(), key=lambda r: (-r["leads"], r["name"]))
 
