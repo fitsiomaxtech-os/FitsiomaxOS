@@ -1380,6 +1380,11 @@ async def v3_dashboard_leads_analytics(
 @router.get("/dashboard/leads-trend")
 async def v3_dashboard_leads_trend(
     months: int = Query(6, ge=2, le=24),
+    # The board's date range, when one is picked. The chart then draws that range and
+    # nothing else -- by day up to a month, by week up to about a quarter, by month past
+    # it -- instead of the fixed six months, which ignored the filter at the top of the tab.
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     # business_dev beside super_admin: the Business Development desk now mounts Super
     # Admin's own Dashboard > Analytics tab, and the branch-by-branch growth chart at the
     # bottom of it reads this. Group-wide and read-only, like the rest of that tab.
@@ -1414,18 +1419,84 @@ async def v3_dashboard_leads_trend(
         return {"months": [], "branches": []}
 
     now = datetime.now(timezone.utc)
+    today = date.fromisoformat(clinic_day_of(now.isoformat()) or now.date().isoformat())
+
+    def _day(raw) -> Optional[str]:
+        """The clinic day a stored value falls on. A stamp with a clock on it is UTC and
+        goes through clinic_day_of; a bare "YYYY-MM-DD" (appointment_date) already is one."""
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        if len(text) <= 10:
+            return text[:10]
+        return clinic_day_of(text) or text[:10]
+
+    grain = "month"
+    if start_date or end_date:
+        try:
+            d0 = date.fromisoformat(str(start_date)[:10]) if start_date else None
+            d1 = date.fromisoformat(str(end_date)[:10]) if end_date else today
+        except ValueError:
+            d0, d1 = None, today
+        d1 = min(d1, today)
+        if d0 is None:
+            d0 = d1.replace(day=1)
+        if d0 > d1:
+            d0 = d1
+        span = (d1 - d0).days
+        if span <= 31:
+            grain = "day"
+        elif span <= 120:
+            grain = "week"
+    else:
+        d1 = today
+        y, m = today.year, today.month
+        for _i in range(months - 1):
+            m -= 1
+            if m == 0:
+                m, y = 12, y - 1
+        d0 = date(y, m, 1)
+
     keys: list = []
-    y, m = now.year, now.month
-    for _i in range(months):
-        keys.append(f"{y}-{str(m).zfill(2)}")
-        m -= 1
-        if m == 0:
-            m = 12
-            y -= 1
-    keys.reverse()
+    if grain == "day":
+        d = d0
+        while d <= d1:
+            keys.append(d.isoformat())
+            d += timedelta(days=1)
+    elif grain == "week":
+        # Weeks run Monday to Sunday and are keyed by their Monday.
+        d = d0 - timedelta(days=d0.weekday())
+        while d <= d1:
+            keys.append(d.isoformat())
+            d += timedelta(days=7)
+    else:
+        y, m = d0.year, d0.month
+        while (y, m) <= (d1.year, d1.month):
+            keys.append(f"{y}-{str(m).zfill(2)}")
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+
+    def _key(raw) -> Optional[str]:
+        day = _day(raw)
+        if not day:
+            return None
+        try:
+            dd = date.fromisoformat(day)
+        except ValueError:
+            return None
+        if dd < d0 or dd > d1:
+            return None
+        if grain == "day":
+            return day
+        if grain == "week":
+            return (dd - timedelta(days=dd.weekday())).isoformat()
+        return day[:7]
 
     branch_ids = [b["id"] for b in branches]
-    floor = f"{keys[0]}-01"
+    # A day early, because the stored stamps are UTC and the clinic's day opens before
+    # UTC's does; _key drops anything that lands outside the range.
+    floor = (d0 - timedelta(days=1)).isoformat()
 
     # One bucket per metric. Each is {branch_id: {month_key: number}}, and `key in bucket`
     # rather than a date comparison guards every add: the $gte bounds below are string
@@ -1436,7 +1507,7 @@ async def v3_dashboard_leads_trend(
 
     def add(bucket, branch_id, raw_date, amount=1.0):
         row = bucket.get(branch_id)
-        key = str(raw_date or "")[:7]
+        key = _key(raw_date)
         if row is not None and key in row:
             row[key] += amount
 
@@ -1482,7 +1553,10 @@ async def v3_dashboard_leads_trend(
         return [round(bucket[bid][k], 2) if currency else int(bucket[bid][k]) for k in keys]
 
     return {
+        # `months` keeps its name for older callers; with a range picked its keys are days
+        # or week-opening Mondays, which `grain` says.
         "months": keys,
+        "grain": grain,
         "branches": [
             {
                 "branch_id": b["id"],

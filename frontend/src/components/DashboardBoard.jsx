@@ -965,7 +965,13 @@ const AnalyticsTab = ({ data, dateFilter, scope }) => {
         branchIds={scopedBranchIds}
       />
 
-      <BranchGrowthTrend metric={activeMetric} onMetric={setTrendMetric} highlightBranch={branchId || null} />
+      <BranchGrowthTrend
+        metric={activeMetric}
+        onMetric={setTrendMetric}
+        highlightBranch={branchId || null}
+        startDate={dateFilter?.from ? toIso(dateFilter.from) : undefined}
+        endDate={dateFilter?.to ? toIso(dateFilter.to) : undefined}
+      />
     </div>
   );
 };
@@ -977,18 +983,24 @@ const AnalyticsTab = ({ data, dateFilter, scope }) => {
  * refetching — the response already carries all four series, so a request per selection
  * would be four round trips for data already in hand.
  */
-const useTrendData = () => {
+const useTrendData = (startDate, endDate) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Refetched when the board's date range changes: the chart draws that range, by day,
+  // week or month, rather than a fixed six months that ignored the filter.
   useEffect(() => {
     let cancelled = false;
-    getDashboardLeadsTrend(6)
+    setLoading(true);
+    const range = {};
+    if (startDate) range.start_date = startDate;
+    if (endDate) range.end_date = endDate;
+    getDashboardLeadsTrend(6, range)
       .then((r) => { if (!cancelled) setData(r); })
       .catch(() => { if (!cancelled) setData(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [startDate, endDate]);
 
   return { data, loading };
 };
@@ -1096,8 +1108,22 @@ const growthTick = (v, currency) => {
  * branch picked in the filter above is lifted the same way rather than filtered to,
  * because where it sits against the others is the point of the chart.
  */
-const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
-  const { data, loading } = useTrendData();
+const BRANCH_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A point's label on the axis and in the hover card, for whichever grain came back. */
+const growthLabel = (key, grain, long = false) => {
+  const [y, m, d] = String(key || "").split("-").map(Number);
+  const mon = BRANCH_MONTHS[(m || 1) - 1];
+  if (grain === "day") return long ? `${d} ${mon} ${y}` : `${d} ${mon}`;
+  if (grain === "week") {
+    if (!long) return `${d} ${mon}`;
+    const end = new Date(Date.UTC(y, m - 1, d + 6));
+    return `Week of ${d} ${mon} – ${end.getUTCDate()} ${BRANCH_MONTHS[end.getUTCMonth()]} ${end.getUTCFullYear()}`;
+  }
+  return long ? new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }) : null;
+};
+
+const BranchGrowthTrend = ({ metric, onMetric, highlightBranch, startDate, endDate }) => {
+  const { data, loading } = useTrendData(startDate, endDate);
   const [hoverIdx, setHoverIdx] = useState(null);
   const [focus, setFocus] = useState(null);
   const [hidden, setHidden] = useState(() => new Set());
@@ -1107,7 +1133,11 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-800">Branch-wise growth</p>
-        <p className="mt-0.5 text-xs text-slate-500">{metric.label} per branch, month by month · last 6 months</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {metric.label} per branch, {data?.grain === "day" ? "day by day" : data?.grain === "week" ? "week by week" : "month by month"}
+          {" · "}
+          {startDate || endDate ? "in the range picked above" : "last 6 months"}
+        </p>
       </div>
       <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="tablist" aria-label="Measure">
         {GROWTH_METRICS.map((m) => (
@@ -1158,6 +1188,10 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
   const plotW = Math.max(1, W - PAD_L - PAD_R);
   const plotH = H - PAD_T - PAD_B;
   const n = data.months.length;
+  const grain = data.grain || "month";
+  // One label for every so many points, so a month of days does not print 31 dates on top
+  // of each other. The hovered point always shows its own.
+  const labelEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / 64))));
   const x = (i) => PAD_L + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v) => PAD_T + plotH - (v / axisMax) * plotH;
   const readout = (v) => (metric.currency ? fmtValue("revenue", v) : Number(v || 0).toLocaleString("en-IN"));
@@ -1207,7 +1241,7 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
       </div>
 
       <div ref={wrapRef} className="relative" onMouseLeave={() => setHoverIdx(null)}>
-        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${metric.label} per branch over the last six months`}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${metric.label} per branch over time`}>
           <defs>
             {series.map((s2) => (
               <linearGradient key={s2.branch_id} id={`growth-fill-${s2.branch_id}`} x1="0" y1="0" x2="0" y2="1">
@@ -1227,7 +1261,7 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
             </g>
           ))}
 
-          {data.months.map((k, i) => (
+          {data.months.map((k, i) => (labelEvery > 1 && i % labelEvery !== 0 && i !== n - 1 && hoverIdx !== i ? null : (
             <text
               key={k}
               x={x(i)}
@@ -1236,9 +1270,9 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
               className={hoverIdx === i ? "fill-slate-700" : "fill-slate-400"}
               style={{ fontSize: 11, fontWeight: hoverIdx === i ? 600 : 400 }}
             >
-              {monthLabel(k)}{k.endsWith("-01") || i === 0 ? ` ${k.slice(2, 4)}` : ""}
+              {grain === "month" ? `${monthLabel(k)}${k.endsWith("-01") || i === 0 ? ` ${k.slice(2, 4)}` : ""}` : growthLabel(k, grain)}
             </text>
-          ))}
+          )))}
 
           {/* The hovered month: a soft band behind the lines, and a guide through it. */}
           {hoverIdx !== null && (
@@ -1315,7 +1349,7 @@ const BranchGrowthTrend = ({ metric, onMetric, highlightBranch }) => {
             style={tipOnLeft ? { right: W - tipLeft + 14 } : { left: tipLeft + 14 }}
           >
             <p className="mb-2 text-xs font-medium text-slate-500">
-              {new Date(`${data.months[hoverIdx]}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+              {growthLabel(data.months[hoverIdx], grain, true)}
             </p>
             <div className="flex flex-col gap-1">
               {tipRows.map((s2) => (
