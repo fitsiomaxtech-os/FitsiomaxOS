@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { getLeadsAnalytics } from "@/lib/api";
@@ -82,14 +82,6 @@ const fillTrend = (rows, grain) => {
 /** ₹ in the Indian grouping the desk reads: ₹45k, ₹1.6L, ₹2.3Cr on an axis; the full
  *  ₹1,64,690 in the hover card. */
 const inr = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
-const inrShort = (n) => {
-  const v = Number(n || 0);
-  const trim = (x) => String(Math.round(x * 10) / 10).replace(/\.0$/, "");
-  if (v >= 1e7) return `₹${trim(v / 1e7)}Cr`;
-  if (v >= 1e5) return `₹${trim(v / 1e5)}L`;
-  if (v >= 1e3) return `₹${trim(v / 1e3)}k`;
-  return `₹${Math.round(v)}`;
-};
 const countShort = (n) => (n >= 1000 ? `${Math.round((n / 1000) * 10) / 10}k` : String(n));
 
 const longPeriod = (p) => {
@@ -140,132 +132,196 @@ const TrendTooltip = ({ active, payload, label, money, focus }) => {
 };
 
 
-/** One over-time card. With several branches: a line each, and legend chips that carry
- *  the branch's total -- hover a chip to lift its line out of the others, click it to take
- *  the branch off the chart. With one branch: that branch alone, as a filled area. */
-const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single }) => {
+/** ₹ the way Finance's Cash flow axis writes it: ₹15 L, ₹1.2 Cr, ₹45 k. */
+const inrAxis = (n) => {
+  const v = Number(n || 0);
+  const trim = (x) => String(Math.round(x * 100) / 100);
+  if (v >= 1e7) return `₹${trim(v / 1e7)} Cr`;
+  if (v >= 1e5) return `₹${trim(v / 1e5)} L`;
+  if (v >= 1e3) return `₹${trim(v / 1e3)} k`;
+  return `₹${Math.round(v)}`;
+};
+
+const TableIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M9 10v10" />
+  </svg>
+);
+const ChartIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+  </svg>
+);
+
+/** The card frame Finance's Cash flow uses: title and subtitle on the left, a "View data"
+ *  toggle on the right, no rule under the header. */
+const FlowCard = ({ title, sub, action, children, testid, className = "" }) => (
+  <div className={`flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`} data-testid={testid}>
+    <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-[15px] font-semibold text-slate-900">{title}</p>
+        {sub && <p className="mt-1 text-[13px] text-slate-500">{sub}</p>}
+      </div>
+      {action}
+    </div>
+    <div className="flex-1">{children}</div>
+  </div>
+);
+
+const ViewDataButton = ({ on, onClick, testid }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    data-testid={testid}
+    className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+  >
+    {on ? <ChartIcon /> : <TableIcon />}
+    {on ? "View chart" : "View data"}
+  </button>
+);
+
+/** Over time as columns, one per period -- stacked by branch when several are showing,
+ *  a single colour when one branch is picked. The legend's squares double as toggles:
+ *  click one to take that branch off the chart, hover it to fade the others. */
+const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single, className }) => {
   const names = Object.keys(series || {});
   const [hidden, setHidden] = useState(() => new Set());
   const [focus, setFocus] = useState(null);
-  const color = (i) => CATEGORICAL[i % CATEGORICAL.length];
+  const [asData, setAsData] = useState(false);
+  const color = (i) => (single ? (money ? CATEGORICAL[2] : SERIES) : CATEGORICAL[i % CATEGORICAL.length]);
   const shown = names.filter((n) => !hidden.has(n));
   const rows = (periods || []).map((period, i) => {
     const row = { period };
     names.forEach((n) => { row[n] = series[n][i] || 0; });
+    row.__total = shown.reduce((a, n) => a + row[n], 0);
     return row;
   });
-  const totals = Object.fromEntries(names.map((n) => [n, series[n].reduce((a, v) => a + v, 0)]));
-  const grand = shown.reduce((a, n) => a + totals[n], 0);
   const fmt = money ? inr : nf;
-  const tick = money ? inrShort : countShort;
+  const tick = money ? inrAxis : countShort;
   const toggle = (n) => setHidden((h) => {
     const next = new Set(h);
     if (next.has(n)) next.delete(n); else next.add(n);
     return next;
   });
-  const dense = rows.length > 31;
-  const axisProps = {
-    x: { dataKey: "period", tickFormatter: shortPeriod, tick: { fill: INK.muted, fontSize: 11 }, tickLine: false, axisLine: { stroke: INK.axis }, minTickGap: 24 },
-    y: { allowDecimals: false, tickFormatter: tick, tick: { fill: INK.muted, fontSize: 11 }, tickLine: false, axisLine: false, width: money ? 52 : 40 },
-  };
-  const cursor = { stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 4" };
+  const lastShown = shown[shown.length - 1];
 
   return (
-    <Card title={title} sub={sub} testid={testid}>
-      {names.length === 0 || rows.length === 0 ? <Empty>{emptyText}</Empty> : (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{single ? names[0] : "All branches"}</p>
-              <p className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(grand)}</p>
-            </div>
+    <FlowCard
+      title={title}
+      sub={sub}
+      testid={testid}
+      className={className}
+      action={names.length > 0 && rows.length > 0 ? <ViewDataButton on={asData} onClick={() => setAsData((v) => !v)} testid={`${testid}-view-data`} /> : null}
+    >
+      {names.length === 0 || rows.length === 0 ? <Empty>{emptyText}</Empty> : asData ? (
+        <div className="max-h-[300px] overflow-auto rounded-lg border border-slate-100">
+          <table className="w-full text-[13px]">
+            <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-3 py-2">{periods[0]?.length > 7 ? "Day" : "Month"}</th>
+                {shown.map((n) => <th key={n} className="px-3 py-2 text-right">{n}</th>)}
+                {shown.length > 1 && <th className="px-3 py-2 text-right">Total</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.filter((row) => row.__total > 0).map((row) => (
+                <tr key={row.period} className="transition-colors hover:bg-blue-50/40">
+                  <td className="px-3 py-2 text-slate-600">{longPeriod(row.period)}</td>
+                  {shown.map((n) => <td key={n} className="px-3 py-2 text-right tabular-nums text-slate-800">{row[n] ? fmt(row[n]) : <span className="text-slate-300">—</span>}</td>)}
+                  {shown.length > 1 && <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{fmt(row.__total)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2" onMouseLeave={() => setFocus(null)}>
+            {names.map((n, i) => {
+              const off = hidden.has(n);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={single}
+                  onClick={() => toggle(n)}
+                  onMouseEnter={() => setFocus(off ? null : n)}
+                  aria-pressed={!off}
+                  title={single ? n : off ? `Show ${n}` : `Hide ${n}`}
+                  className={`inline-flex items-center gap-2 text-[13px] transition-opacity ${single ? "cursor-default" : "cursor-pointer"} ${
+                    off ? "opacity-40" : focus && focus !== n ? "opacity-50" : ""
+                  }`}
+                >
+                  <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: color(i) }} />
+                  <span className={`text-slate-700 ${off ? "line-through" : ""}`}>{n}</span>
+                </button>
+              );
+            })}
           </div>
-
-          {!single && (
-            <div className="flex flex-wrap gap-1.5" onMouseLeave={() => setFocus(null)}>
-              {names.map((n, i) => {
-                const off = hidden.has(n);
-                const lit = focus === n;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => toggle(n)}
-                    onMouseEnter={() => setFocus(off ? null : n)}
-                    aria-pressed={!off}
-                    title={off ? `Show ${n}` : `Hide ${n}`}
-                    className={`group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all duration-200 ${
-                      off
-                        ? "border-dashed border-slate-200 bg-white text-slate-400"
-                        : lit
-                          ? "border-transparent bg-white text-slate-900 shadow-[0_4px_14px_-4px_rgba(15,23,42,0.25)] ring-1 ring-slate-200"
-                          : "border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-white"
-                    }`}
-                  >
-                    <span className="inline-block h-2 w-2 rounded-full transition-transform duration-200 group-hover:scale-125" style={{ background: off ? "#cbd5e1" : color(i) }} />
-                    <span className={off ? "line-through" : ""}>{n}</span>
-                    <span className="font-semibold tabular-nums text-slate-400">{tick(totals[n])}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <ResponsiveContainer width="100%" height={240}>
-            {single ? (
-              <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-                <defs>
-                  <linearGradient id={`fill-${testid}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={money ? CATEGORICAL[2] : SERIES} stopOpacity={0.28} />
-                    <stop offset="100%" stopColor={money ? CATEGORICAL[2] : SERIES} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
-                <XAxis {...axisProps.x} />
-                <YAxis {...axisProps.y} />
-                <Tooltip content={<TrendTooltip money={money} />} cursor={cursor} />
-                <Area
-                  type="monotone"
-                  dataKey={names[0]}
-                  name={names[0]}
-                  stroke={money ? CATEGORICAL[2] : SERIES}
-                  strokeWidth={2.25}
-                  fill={`url(#fill-${testid})`}
-                  // Today or Yesterday is one point, and a line of one point draws nothing.
-                  dot={rows.length <= 2 ? { r: 4, fill: money ? CATEGORICAL[2] : SERIES, strokeWidth: 0 } : false}
-                  activeDot={{ r: 5, fill: money ? CATEGORICAL[2] : SERIES, stroke: SURFACE, strokeWidth: 2.5 }}
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
+              <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
+              <XAxis dataKey="period" tickFormatter={shortPeriod} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: INK.axis }} minTickGap={20} />
+              <YAxis allowDecimals={false} tickFormatter={tick} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} width={money ? 56 : 40} />
+              <Tooltip
+                content={<TrendTooltip money={money} focus={focus} />}
+                cursor={{ fill: "rgba(37,99,235,0.06)", radius: 6 }}
+                wrapperStyle={{ outline: "none" }}
+              />
+              {names.map((n, i) => (hidden.has(n) ? null : (
+                <Bar
+                  key={n}
+                  dataKey={n}
+                  name={n}
+                  stackId="t"
+                  fill={color(i)}
+                  fillOpacity={focus && focus !== n ? 0.25 : 1}
+                  maxBarSize={18}
+                  // Rounded only where the column ends, so a stack reads as one column.
+                  radius={n === lastShown ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                   isAnimationActive={false}
                 />
-              </AreaChart>
-            ) : (
-              <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-                <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
-                <XAxis {...axisProps.x} />
-                <YAxis {...axisProps.y} />
-                <Tooltip content={<TrendTooltip money={money} focus={focus} />} cursor={cursor} />
-                {names.map((n, i) => (hidden.has(n) ? null : (
-                  <Line
-                    key={n}
-                    type="monotone"
-                    dataKey={n}
-                    name={n}
-                    stroke={color(i)}
-                    strokeWidth={focus === n ? 3 : 2}
-                    strokeOpacity={focus && focus !== n ? 0.18 : 1}
-                    strokeLinecap="round"
-                    dot={dense ? false : { r: 2.5, fill: color(i), strokeWidth: 0 }}
-                    activeDot={focus && focus !== n ? false : { r: 4.5, fill: color(i), stroke: SURFACE, strokeWidth: 2 }}
-                    isAnimationActive={false}
-                  />
-                )))}
-              </LineChart>
-            )}
+              )))}
+            </BarChart>
           </ResponsiveContainer>
-        </div>
+        </>
       )}
-    </Card>
+    </FlowCard>
   );
 };
+
+/** The side panel, as Finance's "Expense by type": horizontal bars, the figure at the
+ *  bar's end, a light grid and an axis along the foot. */
+const SideBars = ({ title, sub, rows, money, color, emptyText, testid }) => {
+  const fmt = money ? inrAxis : nf;
+  return (
+    <FlowCard title={title} sub={sub} testid={testid}>
+      {rows.length === 0 ? <Empty>{emptyText}</Empty> : (
+        <ResponsiveContainer width="100%" height={Math.max(180, rows.length * 52 + 40)}>
+          <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 64, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke={INK.grid} strokeWidth={1} horizontal={false} />
+            <XAxis type="number" tickFormatter={fmt} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} />
+            <YAxis type="category" dataKey="name" width={118} tick={{ fill: INK.secondary, fontSize: 12 }} tickLine={false} axisLine={{ stroke: INK.axis }} />
+            <Tooltip
+              cursor={{ fill: "rgba(37,99,235,0.06)" }}
+              content={({ active, payload }) => (active && payload?.length ? (
+                <div className="rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.22)] backdrop-blur-sm">
+                  <p className="mb-1 text-xs font-medium text-slate-500">{payload[0].payload.name}</p>
+                  <p className="text-[13px] font-semibold tabular-nums text-slate-900">{money ? inr(payload[0].value) : nf(payload[0].value)}</p>
+                </div>
+              ) : null)}
+            />
+            <Bar dataKey="value" fill={color} radius={[0, 4, 4, 0]} maxBarSize={20} isAnimationActive={false}>
+              <LabelList dataKey="value" position="right" offset={6} style={{ fontSize: 11, fill: INK.secondary }} formatter={fmt} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </FlowCard>
+  );
+};
+
+const REVENUE_TYPE_LABEL = { consultation: "Consultation", session: "Session", diet: "Diet", rehab: "Rehab", spot_joining: "Spot joining", zumba: "Zumba" };
 
 /* ── chrome ─────────────────────────────────────────────────────────────────────── */
 
@@ -808,6 +864,17 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const byBranch = data?.by_branch || [];
   const branchFunnel = data?.branch_funnel || [];
   const branchTrend = data?.branch_trend || { grain: "day", periods: [], leads: {}, revenue: {} };
+  const sumSeries = (obj) => Object.entries(obj || {})
+    .map(([name, vals]) => ({ name, value: vals.reduce((a, v) => a + v, 0) }))
+    .filter((row) => row.value > 0)
+    .sort((x, y) => y.value - x.value);
+  const trendLeadBranches = sumSeries(branchTrend.leads);
+  const trendLeadTotal = trendLeadBranches.reduce((a, row) => a + row.value, 0);
+  const revenueByType = (branchTrend.revenue_by_type || [])
+    .filter((row) => row.value > 0)
+    .map((row) => ({ name: REVENUE_TYPE_LABEL[row.name] || row.name, value: row.value }));
+  const revenueTotal = revenueByType.reduce((a, row) => a + row.value, 0);
+  const bySourceRows = (data?.by_source || []).filter((row) => row.value > 0);
   // The branch card lists real branches only. Leads with no branch are not a branch's
   // demand, and as the longest bar they squashed every row beneath them; their count is
   // said in the subtitle instead.
@@ -849,28 +916,62 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <LedgerCard label="Online" value={nf(onlineTotal)} sub="online services" muted={!onlineTotal} testid="leads-analytics-kpi-online" />
       </div>
 
-      {/* 1 — leads and revenue over time, a line per branch (or the one branch picked) */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* 1 — leads over time, with where they landed beside it */}
+      <div className="grid gap-4 xl:grid-cols-3">
         <BranchTrendCard
           key={`leads-${branchKey}`}
+          className="xl:col-span-2"
           title="Leads over time"
-          sub={`When they arrived, ${branchTrend.grain === "month" ? "by month" : "by day"}${oneBranch ? "" : " · per branch"}`}
+          sub={`Leads per ${branchTrend.grain === "month" ? "month" : "day"}${oneBranch ? "" : ", by branch"} · click a branch to hide it`}
           periods={branchTrend.periods}
           series={branchTrend.leads}
           single={oneBranch}
           emptyText="No leads arrived in this range."
           testid="leads-analytics-trend"
         />
+        {oneBranch ? (
+          <SideBars
+            title="Leads by source"
+            sub={`${nf(total)} leads across ${bySourceRows.length} source${bySourceRows.length === 1 ? "" : "s"}`}
+            rows={bySourceRows}
+            color={SERIES}
+            emptyText="No leads in this range."
+            testid="leads-analytics-trend-side"
+          />
+        ) : (
+          <SideBars
+            title="Leads by branch"
+            sub={`${nf(trendLeadTotal)} leads across ${trendLeadBranches.length} branches`}
+            rows={trendLeadBranches}
+            color={SERIES}
+            emptyText="No leads in this range."
+            testid="leads-analytics-trend-side"
+          />
+        )}
+      </div>
+
+      {/* 2 — revenue over time, with what it paid for beside it */}
+      <div className="grid gap-4 xl:grid-cols-3">
         <BranchTrendCard
           key={`revenue-${branchKey}`}
-          title="Revenue over time"
-          sub={`Fees collected, on the day they were paid, ${branchTrend.grain === "month" ? "by month" : "by day"}${oneBranch ? "" : " · per branch"}`}
+          className="xl:col-span-2"
+          title="Revenue"
+          sub={`Fees collected per ${branchTrend.grain === "month" ? "month" : "day"}, on the day they were paid${oneBranch ? "" : ", by branch"}`}
           periods={branchTrend.periods}
           series={branchTrend.revenue}
           money
           single={oneBranch}
           emptyText="No fees collected in this range."
           testid="leads-analytics-revenue-trend"
+        />
+        <SideBars
+          title="Revenue by type"
+          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments`}
+          rows={revenueByType}
+          money
+          color={CATEGORICAL[2]}
+          emptyText="No fees collected in this range."
+          testid="leads-analytics-revenue-side"
         />
       </div>
 

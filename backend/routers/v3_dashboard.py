@@ -1219,7 +1219,7 @@ async def v3_dashboard_leads_analytics(
     rev_by_day: dict = {}
     activity_query = {"action": {"$in": REVENUE_ACTIONS}, **_utc_stamp_range_query("created_at", start_date, end_date)}
     activities = await v3_col("lead_activity").find(
-        activity_query, {"_id": 0, "lead_id": 1, "details": 1, "created_at": 1},
+        activity_query, {"_id": 0, "lead_id": 1, "details": 1, "created_at": 1, "action": 1},
     ).to_list(100000)
     act_lead_ids = list({a["lead_id"] for a in activities if a.get("lead_id")})
     act_lead_branch = {}
@@ -1229,6 +1229,10 @@ async def v3_dashboard_leads_analytics(
         ).to_list(100000):
             act_lead_branch[row["id"]] = _effective_branch(row)
     wanted_set_rev = set(wanted_branches)
+    # The same money split by what it paid for (consultation, session, diet, rehab), and how
+    # many payments it took -- the revenue card's side panel, as Finance's "Expense by type".
+    rev_by_type: dict = {}
+    rev_payments = 0
     for a in activities:
         bid = act_lead_branch.get(a.get("lead_id")) or ""
         if not bid or (wanted_set_rev and bid not in wanted_set_rev):
@@ -1241,6 +1245,9 @@ async def v3_dashboard_leads_analytics(
             continue
         key = (day, branch_names.get(bid, "Unassigned"))
         rev_by_day[key] = rev_by_day.get(key, 0.0) + amount
+        kind = _revenue_category(a.get("action", ""))
+        rev_by_type[kind] = rev_by_type.get(kind, 0.0) + amount
+        rev_payments += 1
 
     all_days = sorted({d for d, _n in lead_by_day} | {d for d, _n in rev_by_day})
     trend_grain = "day"
@@ -1288,6 +1295,10 @@ async def v3_dashboard_leads_analytics(
         "periods": periods,
         "leads": _series(lead_by_day, False),
         "revenue": _series(rev_by_day, True),
+        "revenue_by_type": [
+            {"name": k, "value": round(v, 2)} for k, v in sorted(rev_by_type.items(), key=lambda kv: -kv[1])
+        ],
+        "revenue_payments": rev_payments,
     }
 
     # Re-keyed by branch name and summed where names meet, for the reason
