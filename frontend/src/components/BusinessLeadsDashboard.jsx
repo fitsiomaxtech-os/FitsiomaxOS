@@ -181,8 +181,6 @@ const isTabActive = (view, key) => (key === "settings" ? SETTINGS_SUB_VIEWS.incl
 // because its toolbar carries the same one, and the three mounted boards because each
 // carries its own and this one would not touch what they show.
 const REFRESH_WITHHELD_TABS = ["dashboard", "presales_view", "consultation_view", "finance", "permission", "hr", "packages"];
-// Where the strip's Add Lead is not drawn: the tab's own toolbar carries it.
-const ADD_LEAD_WITHHELD_TABS = ["presales_view", "consultation_view"];
 
 /**
  * The toolbar's date range as the two query params both BD endpoints already take.
@@ -402,9 +400,9 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           );
         })}
         <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 pb-1.5 pl-2">
-          <Button size="sm" onClick={() => setShowCreateLead(true)} className={`bg-sky-600 hover:bg-sky-700 ${ADD_LEAD_WITHHELD_TABS.includes(activeTab) ? "hidden" : activeTab === "dashboard" ? "hidden" : ""}`} data-testid="bd-quick-add-lead-btn">
-            <UserPlus className="mr-1 h-4 w-4" /> Add Lead
-          </Button>
+          {/* No Add Lead here: the row holds the main tabs only. The boards that take a lead
+              (Dashboard, Pre Sales View, Consultation View) each carry Add Lead on their
+              own toolbar. */}
           {/* The same Refresh as Branch Admin > Branch Leads: grey, icon-only, square,
               with the word on title/aria-label.
 

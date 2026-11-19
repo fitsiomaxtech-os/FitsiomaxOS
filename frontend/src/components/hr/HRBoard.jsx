@@ -496,42 +496,38 @@ const DashboardTab = () => {
       {/* Desk: the HR Admin Master View's summary cards -- label over count, left aligned,
           white and bordered -- in plain slate, without the per-stage colour. Selecting one
           filters the list under it, the way a stage does there. */}
-      <div className="hidden sm:grid sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-9" data-testid="hr-dashboard-cards">
-        {cards.map((c) => {
-          const active = c.key === current.key;
-          const Icon = c.icon;
-          const waiting = c.alert && (c.value ?? 0) > 0;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => { setSelected(c.key); setSearch(""); }}
-              className={`group relative flex w-full min-w-0 flex-col gap-3 rounded-xl border bg-white px-4 py-3.5 text-left transition-all duration-200 ${
-                active
-                  ? "border-sky-500 shadow-[0_0_0_3px_rgba(14,165,233,0.12)]"
-                  : "border-slate-200 hover:-translate-y-px hover:border-slate-300 hover:shadow-[0_6px_16px_-8px_rgba(15,23,42,0.18)]"
-              }`}
-              aria-pressed={active}
-              data-testid={`hr-kpi-${c.key}`}
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className={`truncate text-xs font-medium ${active ? "text-sky-700" : "text-slate-500"}`} title={c.label}>
+      {/* The stage strip Branch Leads wears: white tiles in a soft tinted tray, label over
+          count, centred; the open one in light blue with a chevron. Selecting one filters
+          the list under it. */}
+      <div className="hidden rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5 sm:block" data-testid="hr-dashboard-cards">
+        <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
+          {cards.map((c) => {
+            const active = c.key === current.key;
+            const waiting = c.alert && (c.value ?? 0) > 0;
+            return (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => { setSelected(c.key); setSearch(""); }}
+                className={`relative min-w-0 rounded-lg border-2 px-3 py-2.5 text-center transition-all duration-150 ${
+                  active
+                    ? "border-sky-400 bg-sky-50 shadow-[0_2px_8px_-2px_rgba(14,165,233,0.35)]"
+                    : "border-transparent bg-white hover:border-slate-200 hover:shadow-sm"
+                }`}
+                aria-pressed={active}
+                data-testid={`hr-kpi-${c.key}`}
+              >
+                {active && <ChevronRight className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-sky-500" />}
+                <span className={`block truncate px-2 text-xs font-semibold ${active ? "text-sky-700" : "text-slate-700"}`} title={c.label}>
                   {c.label}
                 </span>
-                {Icon && (
-                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                    active ? "bg-sky-500 text-white" : waiting ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/70"
-                  }`}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                )}
-              </span>
-              <span className={`text-[26px] font-semibold leading-none tabular-nums tracking-tight ${active ? "text-slate-900" : "text-slate-800"}`}>
-                {c.value ?? 0}
-              </span>
-            </button>
-          );
-        })}
+                <span className={`mt-1 block text-xl font-bold leading-tight tabular-nums ${active ? "text-sky-800" : waiting ? "text-amber-600" : "text-slate-700"}`}>
+                  {c.value ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* The search and the list: always on the desk, and on a phone only once a figure is
@@ -674,7 +670,7 @@ const DashboardList = ({ kind, rows }) => {
       <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block" data-testid="hr-dashboard-list">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] uppercase tracking-wider text-slate-500">
+            <thead className="bg-slate-700 text-left text-xs uppercase tracking-wide text-white">
               <tr>
                 {cols.map((c, j) => (
                   <th key={c.h} className={`whitespace-nowrap px-5 py-3 font-semibold ${j === cols.length - 1 ? "text-right" : ""}`}>{c.h}</th>
