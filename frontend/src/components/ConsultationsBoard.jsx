@@ -15147,12 +15147,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {pickerDate && (
                       <span className="shrink-0 border-l border-slate-200 pl-3 text-[13px] font-bold text-slate-800 sm:text-[15px]" data-testid="cons-slot-picker-date">{longDate(pickerDate)}</span>
                     )}
-                    <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2.5 text-[11px] font-semibold text-slate-400">
-                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-emerald-400 bg-white" /> Open</span>
-                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-600" /> Paid day</span>
-                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500" /> Unpaid day</span>
-                      <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" /> Booked</span>
-                    </div>
+                    <span className="ml-auto shrink-0 text-[13px] font-bold text-slate-800 sm:text-[15px]" data-testid="cons-slot-picker-title">Treatment Assign</span>
                     <button onClick={() => setShowSlotPicker(false)} className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" data-testid="cons-slot-picker-close">
                       <X className="h-4 w-4" />
                     </button>
