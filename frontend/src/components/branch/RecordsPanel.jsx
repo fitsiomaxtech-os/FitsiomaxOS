@@ -1286,23 +1286,38 @@ const LeadSourceRecords = ({ branchId }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5">
-        {cards.map(([key, count]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSource(key)}
-            className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
-              source === key ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-200 hover:border-slate-300"
-            }`}
-            title={key === "all" ? "All Sources" : key}
-            data-testid={`lead-source-card-${key}`}
-          >
-            <p className="truncate pr-6 text-[11px] font-medium text-slate-500">{key === "all" ? "All Sources" : key}</p>
-            <p className="text-xl font-bold text-slate-800">{count}</p>
-            <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-          </button>
-        ))}
+      {/* The sources as mini chips -- the Expense Request / Expense Approved toggle on
+          Branch Expenses: one segmented bar, each source's count in a chip beside its
+          name, the pressed one in sky. Wraps when a branch has many sources. */}
+      <div
+        className="flex flex-wrap items-center gap-0.5 self-start rounded-[2px] border border-slate-200 bg-slate-50 p-0.5"
+        data-testid="lead-source-cards"
+      >
+        {cards.map(([key, count]) => {
+          const active = source === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSource(key)}
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${
+                active ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"
+              }`}
+              title={key === "all" ? "All Sources" : key}
+              data-testid={`lead-source-card-${key}`}
+            >
+              {key === "all" ? "All Sources" : key}
+              <span
+                className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                  active ? "bg-white/25 text-white" : "bg-slate-200/70 text-slate-600"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* The Branch Transfer Records toolbar, field for field: one line on a phone with
