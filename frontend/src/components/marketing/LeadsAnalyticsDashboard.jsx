@@ -1,8 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { getLeadsAnalytics } from "@/lib/api";
 import { LedgerCard } from "@/components/ui/ledger-card";
 
@@ -24,8 +20,6 @@ import { LedgerCard } from "@/components/ui/ledger-card";
 
 /* Ink and chrome. Text never wears a series colour — the coloured mark beside it carries
    identity, and several of these hues are illegible as type on white. */
-const INK = { secondary: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7" };
-const SURFACE = "#ffffff";
 
 /* The validated 8-slot categorical order. Assigned in this fixed order, never cycled past
    eight and never generated — a ninth hue is indistinguishable from one of these under
@@ -40,14 +34,6 @@ const SERIES = CATEGORICAL[0];
 
 const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 
-/** "2026-08-17" -> "17 Aug"; "2026-08" -> "Aug 26". Axis ticks, so kept short. */
-const shortPeriod = (p) => {
-  const parts = String(p || "").split("-");
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const m = months[Number(parts[1]) - 1] || "";
-  if (parts.length === 3) return `${Number(parts[2])} ${m}`;
-  return `${m} ${String(parts[0]).slice(2)}`;
-};
 
 /** The server sends only days (or months) that had leads. A line drawn through those
  *  alone runs straight from Monday to Thursday as though Tuesday and Wednesday never
@@ -145,40 +131,7 @@ const Card = ({ title, sub, children, className = "", testid, action }) => (
 
 const Empty = ({ children }) => <p className="py-10 text-center text-sm text-slate-400">{children}</p>;
 
-const VizTooltip = ({ active, payload, label, labelFormat, unit = "lead" }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
-      <p className="font-semibold text-slate-800">{labelFormat ? labelFormat(label) : label}</p>
-      {payload.map((p) => (
-        <p key={p.name} className="mt-0.5 flex items-center gap-1.5 text-slate-600">
-          <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: p.color || p.payload?.fill }} />
-          {p.name}: <span className="font-medium text-slate-800">{nf(p.value)}</span>
-          {unit === "pct" ? "%" : ""}
-        </p>
-      ))}
-    </div>
-  );
-};
 
-/** A legend that also carries the values — the identity channel and the relief for the
- *  three light hues at once, so nothing rests on colour or a hover alone. */
-const ValueLegend = ({ rows, colorAt, total }) => (
-  <ul className="space-y-1.5" data-testid="viz-legend">
-    {rows.map((r, i) => (
-      <li key={r.name} className="flex items-center gap-2 text-xs">
-        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: colorAt(i) }} />
-        <span className="min-w-0 flex-1 truncate text-slate-600" title={r.name}>{r.name}</span>
-        <span className="shrink-0 font-semibold tabular-nums text-slate-800">{nf(r.value)}</span>
-        {total > 0 && (
-          <span className="w-9 shrink-0 text-right tabular-nums text-slate-400">
-            {Math.round((r.value / total) * 100)}%
-          </span>
-        )}
-      </li>
-    ))}
-  </ul>
-);
 
 const ValueTable = ({ rows, firstHeading, labelFormat, columns }) => (
   <div className="overflow-x-auto">
@@ -209,45 +162,6 @@ const ValueTable = ({ rows, firstHeading, labelFormat, columns }) => (
 
 /* ── forms ──────────────────────────────────────────────────────────────────────── */
 
-/** Horizontal bars, one hue — the axis names each bar, so a hue per bar would only
- *  restate the length. `ramp` overrides it for an ordered scale (the funnel). */
-const RankedBars = ({ rows, ramp, valueKey = "value", suffix = "", color = SERIES }) => (
-  // Height grows with the rows rather than being fixed, so the axis band is never what
-  // gets cut off and left in a nested scrollbar.
-  <ResponsiveContainer width="100%" height={Math.max(150, rows.length * 40 + 24)}>
-    <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 48, bottom: 4, left: 4 }}>
-      {/* No grid: the track behind each bar already gives the scale. */}
-      <XAxis type="number" hide />
-      <YAxis
-        type="category"
-        dataKey="name"
-        // Wide enough that "Anna Nagar Branch" sits on one line rather than breaking in two.
-        width={150}
-        tick={{ fill: INK.secondary, fontSize: 12 }}
-        tickLine={false}
-        axisLine={false}
-      />
-      <Tooltip content={<VizTooltip unit={suffix ? "pct" : "lead"} />} cursor={{ fill: "rgba(11,11,11,0.04)" }} />
-      {/* 4px round on the data end, square at the baseline; capped so a wide card leaves
-          air in the band rather than one fat block. */}
-      {/* A pale full-length track behind each bar, so every row reads against the same
-          scale and a short bar still shows where its row is. */}
-      <Bar dataKey={valueKey} radius={[0, 6, 6, 0]} maxBarSize={18} background={{ fill: "#f1f5f9", radius: 6 }} isAnimationActive={false}>
-        {rows.map((r, i) => <Cell key={r.name} fill={ramp ? ramp[i] : color} />)}
-        {/* Outside the bar end — a short bar has no room inside, and a clipped label is
-            worse than none. */}
-        <LabelList
-          dataKey={valueKey}
-          position="right"
-          offset={8}
-          className="fill-slate-600"
-          style={{ fontSize: 11, fontWeight: 600 }}
-          formatter={(v) => `${nf(v)}${suffix}`}
-        />
-      </Bar>
-    </BarChart>
-  </ResponsiveContainer>
-);
 
 /* The two branch cards are plain markup rather than a chart: name and bars sit in fixed
  * columns, so every row lines up on the same edges whatever the name length -- which an
@@ -716,49 +630,7 @@ const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid
   );
 };
 
-/** Vertical columns in a fixed order (calendar), one hue. */
-const OrderedColumns = ({ rows }) => (
-  <ResponsiveContainer width="100%" height={220}>
-    <BarChart data={rows} margin={{ top: 16, right: 8, bottom: 4, left: 0 }}>
-      <CartesianGrid stroke={INK.grid} strokeWidth={1} vertical={false} />
-      <XAxis dataKey="name" tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: INK.axis }} />
-      <YAxis allowDecimals={false} tick={{ fill: INK.muted, fontSize: 11 }} tickLine={false} axisLine={false} width={36} />
-      <Tooltip content={<VizTooltip />} cursor={{ fill: "rgba(11,11,11,0.04)" }} />
-      <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={24} fill={SERIES} isAnimationActive={false}>
-        <LabelList dataKey="value" position="top" offset={6} className="fill-slate-600" style={{ fontSize: 11, fontWeight: 600 }} formatter={nf} />
-      </Bar>
-    </BarChart>
-  </ResponsiveContainer>
-);
 
-/** Donut + value legend. Part-to-whole at a glance, capped at seven slices including
- *  Other — past that the ring stops being readable whatever the palette can hold.
- *  Slices take the palette in ring order: for a donut, adjacent separation is what the
- *  validated order guarantees, and the legend states the mapping either way. */
-const DonutWithLegend = ({ rows, total }) => (
-  <div className="grid items-center gap-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
-    <ResponsiveContainer width="100%" height={180}>
-      <PieChart>
-        <Pie
-          data={rows}
-          dataKey="value"
-          nameKey="name"
-          innerRadius={48}
-          outerRadius={78}
-          /* A 2px ring in the surface colour does the separating — never a stroke drawn
-             around each slice to outline it. */
-          stroke={SURFACE}
-          strokeWidth={2}
-          isAnimationActive={false}
-        >
-          {rows.map((r, i) => <Cell key={r.name} fill={CATEGORICAL[i % CATEGORICAL.length]} />)}
-        </Pie>
-        <Tooltip content={<VizTooltip />} />
-      </PieChart>
-    </ResponsiveContainer>
-    <ValueLegend rows={rows} colorAt={(i) => CATEGORICAL[i % CATEGORICAL.length]} total={total} />
-  </div>
-);
 
 /* ── the dashboard ──────────────────────────────────────────────────────────────── */
 
@@ -798,7 +670,6 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const total = Number(data?.total || 0);
   const booked = Number(data?.booked || 0);
   const trend = fillTrend(data?.trend || [], data?.grain);
-  const byBranch = data?.by_branch || [];
   const branchFunnel = data?.branch_funnel || [];
   const branchTrend = data?.branch_trend || { grain: "day", periods: [], leads: {}, revenue: {} };
   const sumSeries = (obj) => Object.entries(obj || {})
@@ -849,10 +720,6 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const funnelCame = funnelRows.reduce((a, r) => a + (r.came || 0), 0);
   const funnelConsult = funnelRows.reduce((a, r) => a + (r.consulted || 0), 0);
   const funnelSession = funnelRows.reduce((a, r) => a + (r.session_paid || 0), 0);
-  const byVertical = data?.by_vertical || [];
-  const byWeekday = data?.by_weekday || [];
-  const byOwner = data?.by_owner || [];
-  const conversion = data?.conversion_by_source || [];
   const offlineTotal = trend.reduce((n, t) => n + Number(t.offline || 0), 0);
   const onlineTotal = trend.reduce((n, t) => n + Number(t.online || 0), 0);
   const bookingRate = total > 0 ? Math.round((booked / total) * 1000) / 10 : 0;
@@ -941,48 +808,6 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
             )}
           </Card>
         )}
-
-        {/* 4 — which service the demand is for */}
-        <Card title="Service mix" sub="Which vertical the leads asked for" testid="leads-analytics-verticals">
-          {byVertical.length === 0 ? <Empty>No verticals recorded in this range.</Empty> : asTable ? (
-            <ValueTable rows={byVertical} firstHeading="Vertical" />
-          ) : (
-            <DonutWithLegend rows={byVertical} total={total} />
-          )}
-        </Card>
-
-        {/* 5 — which channels are worth the spend, not just the volume */}
-        <Card title="Booking rate by source" sub="Share of a source's leads that reached a booking · sources with 5+ leads" testid="leads-analytics-conversion">
-          {conversion.length === 0 ? <Empty>Not enough leads per source to compare rates yet.</Empty> : asTable ? (
-            <ValueTable
-              rows={conversion}
-              firstHeading="Source"
-              columns={[{ key: "leads", label: "Leads" }, { key: "booked", label: "Booked" }, { key: "rate", label: "Rate", pct: true }]}
-            />
-          ) : (
-            // The rate is the bar; leads and booked ride the tooltip and the table, so a
-            // strong rate off a handful of leads can always be checked.
-            <RankedBars rows={conversion} valueKey="rate" suffix="%" />
-          )}
-        </Card>
-
-        {/* 7 — when to staff the desk and run the spend */}
-        <Card title="Which days run hot" sub="Leads by day of week, across the range" testid="leads-analytics-weekday">
-          {byWeekday.length === 0 ? <Empty>No dated leads in this range.</Empty> : asTable ? (
-            <ValueTable rows={byWeekday} firstHeading="Day" />
-          ) : (
-            <OrderedColumns rows={byWeekday} />
-          )}
-        </Card>
-
-        {/* 8 — whether the book is spread evenly across the desk */}
-        <Card title="Leads per owner" sub="How the book is spread across the desk" className="lg:col-span-2" testid="leads-analytics-owners">
-          {byOwner.length === 0 ? <Empty>No owners recorded in this range.</Empty> : asTable ? (
-            <ValueTable rows={byOwner} firstHeading="Owner" />
-          ) : (
-            <RankedBars rows={byOwner} />
-          )}
-        </Card>
       </div>
     </div>
   );
