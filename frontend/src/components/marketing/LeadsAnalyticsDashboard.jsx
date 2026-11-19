@@ -365,7 +365,8 @@ const HoverRows = ({ head, rows, scale, hint, tickFormat = compact }) => {
               <BranchName name={row.label} strong={row.strong} active={on} />
               <span className="relative flex flex-col gap-1.5 pr-1">
                 {guides}
-                {row.bars}
+                {/* Above the guides, which would otherwise cut white lines across a bar. */}
+                <span className="relative z-[1] flex flex-col gap-1.5">{row.bars}</span>
               </span>
             </li>
           );
@@ -378,7 +379,7 @@ const HoverRows = ({ head, rows, scale, hint, tickFormat = compact }) => {
             {scale.ticks.map((t, i) => (
               <span
                 key={t}
-                className="absolute top-0"
+                className="absolute top-0 whitespace-nowrap"
                 style={{
                   left: `${(t / scale.top) * 100}%`,
                   transform: i === 0 ? "none" : i === scale.ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
@@ -620,7 +621,7 @@ const periodBuckets = (periods, values) => {
  *  and one bar per branch on a shared, ticked scale. With one branch picked, the rows are
  *  that branch's weeks (or days, or months) instead. Hover a row for its figures, best day
  *  included; View data opens the day-by-day table behind it. */
-const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single, className }) => {
+const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid, single, className, breakdown, breakdownLabel }) => {
   const [asData, setAsData] = useState(false);
   const names = Object.keys(series || {});
   const fmt = money ? inr : nf;
@@ -638,7 +639,11 @@ const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid
     })
     .filter((row) => row.value > 0)
     .sort((x, y) => y.value - x.value);
-  const rows = single ? periodBuckets(periods || [], series[names[0]] || []) : branchRows;
+  // One branch picked: what its total is made of (sources for leads, fee types for
+  // revenue), not a single bar. Without a breakdown, its weeks.
+  const rows = single
+    ? (breakdown ? breakdown.map((row) => ({ key: row.name, label: row.name, value: row.value })) : periodBuckets(periods || [], series[names[0]] || []))
+    : branchRows;
   const total = rows.reduce((a, row) => a + row.value, 0);
   const scale = niceScale(Math.max(1, ...rows.map((row) => row.value)));
 
@@ -678,13 +683,13 @@ const BranchTrendCard = ({ title, sub, periods, series, money, emptyText, testid
       className={className}
       action={rows.length > 0 ? <ViewDataButton on={asData} onClick={() => setAsData((v) => !v)} testid={`${testid}-view-data`} /> : null}
     >
-      {rows.length === 0 ? <Empty>{emptyText}</Empty> : asData ? table : (
+      {rows.length === 0 || total === 0 ? <Empty>{emptyText}</Empty> : asData ? table : (
         <HoverRows
           scale={scale}
           tickFormat={tickFormat}
           head={
             <>
-              <span>{single ? (periods[0]?.length === 7 ? "Month" : periods.length <= 14 ? "Day" : "Week") : "Branch"}</span>
+              <span>{single ? (breakdownLabel || (periods[0]?.length === 7 ? "Month" : periods.length <= 14 ? "Day" : "Week")) : "Branch"}</span>
               <span className="flex items-center gap-3 font-medium normal-case tracking-normal">
                 <Dot color={tint}>{money ? "Revenue" : "Leads"}</Dot>
               </span>
@@ -805,6 +810,24 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
     .filter((row) => row.value > 0)
     .map((row) => ({ name: REVENUE_TYPE_LABEL[row.name] || row.name, value: row.value }));
   const revenueTotal = revenueByType.reduce((a, row) => a + row.value, 0);
+  // One branch: where its leads came from, biggest first.
+  const leadSources = (data?.by_source || []).filter((row) => row.value > 0);
+  // One branch: its revenue in the desk's five lines, always all five so a line that took
+  // nothing reads as zero rather than going missing. Rehab, spot joining and anything
+  // else the fee trail names fall under Other.
+  const kindTotals = Object.fromEntries((branchTrend.revenue_by_type || []).map((row) => [row.name, row.value]));
+  const revenueKinds = [
+    { name: "Consultations", value: kindTotals.consultation || 0 },
+    { name: "Sessions", value: kindTotals.session || 0 },
+    { name: "Diet collections", value: kindTotals.diet || 0 },
+    { name: "Zumba", value: kindTotals.zumba || 0 },
+    {
+      name: "Other",
+      value: Object.entries(kindTotals)
+        .filter(([k]) => !["consultation", "session", "diet", "zumba"].includes(k))
+        .reduce((a, [, v]) => a + v, 0),
+    },
+  ];
   // The branch card lists real branches only. Leads with no branch are not a branch's
   // demand, and as the longest bar they squashed every row beneath them; their count is
   // said in the subtitle instead.
@@ -851,21 +874,25 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
         <BranchTrendCard
           key={`leads-${branchKey}`}
           title="Leads over time"
-          sub={`${nf(trendLeadTotal)} leads in this range${oneBranch ? `, by ${branchTrend.grain === "month" ? "month" : branchTrend.periods.length <= 14 ? "day" : "week"}` : ", by branch"}`}
+          sub={oneBranch ? `${nf(total)} leads in this range, by source` : `${nf(trendLeadTotal)} leads in this range, by branch`}
           periods={branchTrend.periods}
           series={branchTrend.leads}
           single={oneBranch}
+          breakdown={leadSources}
+          breakdownLabel="Source"
           emptyText="No leads arrived in this range."
           testid="leads-analytics-trend"
         />
         <BranchTrendCard
           key={`revenue-${branchKey}`}
           title="Revenue"
-          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments${oneBranch ? `, by ${branchTrend.grain === "month" ? "month" : branchTrend.periods.length <= 14 ? "day" : "week"}` : ", by branch"}`}
+          sub={`${inr(revenueTotal)} across ${nf(branchTrend.revenue_payments || 0)} payments, ${oneBranch ? "by type" : "by branch"}`}
           periods={branchTrend.periods}
           series={branchTrend.revenue}
           money
           single={oneBranch}
+          breakdown={revenueKinds}
+          breakdownLabel="Revenue type"
           emptyText="No fees collected in this range."
           testid="leads-analytics-revenue-trend"
         />

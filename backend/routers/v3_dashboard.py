@@ -1249,6 +1249,28 @@ async def v3_dashboard_leads_analytics(
         rev_by_type[kind] = rev_by_type.get(kind, 0.0) + amount
         rev_payments += 1
 
+    # Zumba is taken at the studio against a registration, not a lead, so it is read off
+    # zumba_registrations -- the same rows and the same fee_paid /dashboard/overview adds
+    # to its revenue -- and placed by the registration's own branch.
+    for reg in await v3_col("zumba_registrations").find(
+        _utc_stamp_range_query("created_at", start_date, end_date),
+        {"_id": 0, "branch_id": 1, "fee_paid": 1, "created_at": 1},
+    ).to_list(50000):
+        try:
+            amount = float(reg.get("fee_paid") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        bid = reg.get("branch_id") or ""
+        if amount <= 0 or not bid or (wanted_set_rev and bid not in wanted_set_rev):
+            continue
+        day = clinic_day_of(reg.get("created_at"))
+        if not day or day > today_day:
+            continue
+        key = (day, branch_names.get(bid, "Unassigned"))
+        rev_by_day[key] = rev_by_day.get(key, 0.0) + amount
+        rev_by_type["zumba"] = rev_by_type.get("zumba", 0.0) + amount
+        rev_payments += 1
+
     all_days = sorted({d for d, _n in lead_by_day} | {d for d, _n in rev_by_day})
     trend_grain = "day"
     periods: list = []
