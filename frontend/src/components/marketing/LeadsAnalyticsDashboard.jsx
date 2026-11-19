@@ -195,6 +195,50 @@ const RankedBars = ({ rows, ramp, valueKey = "value", suffix = "", color = SERIE
   </ResponsiveContainer>
 );
 
+/** A ranked list drawn in plain markup rather than a chart, for the two branch cards.
+ *  Name, bar, count and share each sit in a fixed column, so every row lines up on the
+ *  same edges whatever the name length -- which an SVG axis could not promise: it broke
+ *  long names in two and floated each label a few pixels off its bar. */
+const BarList = ({ rows, total, color = SERIES, unit = "Leads" }) => {
+  const max = Math.max(1, ...rows.map((r) => Number(r.value) || 0));
+  const sum = total || rows.reduce((a, r) => a + (Number(r.value) || 0), 0) || 1;
+  return (
+    <div className="flex flex-col">
+      <div className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_3.75rem_3rem] items-center gap-x-4 border-b border-slate-100 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <span>Branch</span>
+        <span />
+        <span className="text-right">{unit}</span>
+        <span className="text-right">Share</span>
+      </div>
+      <ul className="divide-y divide-slate-50">
+        {rows.map((r) => {
+          const v = Number(r.value) || 0;
+          const pct = (v / sum) * 100;
+          const share = pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
+          const muted = r.name === "Unassigned";
+          return (
+            <li
+              key={r.name}
+              title={`${r.name}: ${nf(v)} (${share})`}
+              className="group grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_3.75rem_3rem] items-center gap-x-4 py-3"
+            >
+              <span className={`truncate text-[13px] font-medium ${muted ? "italic text-slate-400" : "text-slate-700"}`}>{r.name}</span>
+              <span className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <span
+                  className="block h-full rounded-full transition-[width] duration-500 group-hover:brightness-110"
+                  style={{ width: `${Math.max(v > 0 ? 1.5 : 0, (v / max) * 100)}%`, background: muted ? "#94a3b8" : color }}
+                />
+              </span>
+              <span className="text-right text-[13px] font-semibold tabular-nums text-slate-900">{nf(v)}</span>
+              <span className="text-right text-xs tabular-nums text-slate-500">{share}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
 /** Vertical columns in a fixed order (calendar), one hue. */
 const OrderedColumns = ({ rows }) => (
   <ResponsiveContainer width="100%" height={220}>
@@ -362,20 +406,20 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* 2 — which branches the demand lands on */}
-        <Card title="Leads by branch" sub={`How many leads came into each branch · ${nf(total)} in all, unassigned included`} testid="leads-analytics-branches">
+        <Card title="Leads by branch" sub={`${nf(total)} leads across all branches, unassigned included`} testid="leads-analytics-branches">
           {byBranch.length === 0 ? <Empty>No leads to split by branch.</Empty> : asTable ? (
             <ValueTable rows={byBranch} firstHeading="Branch" />
           ) : (
-            <RankedBars rows={byBranch} />
+            <BarList rows={byBranch} total={total} unit="Leads" />
           )}
         </Card>
 
         {/* 3 — where those leads have an appointment fixed */}
-        <Card title="Appointments by branch" sub={`Leads with an appointment fixed, per branch · ${nf(booked)} in all`} testid="leads-analytics-appointments-branch">
+        <Card title="Appointments by branch" sub={`${nf(booked)} leads with an appointment fixed`} testid="leads-analytics-appointments-branch">
           {apptByBranch.length === 0 ? <Empty>No appointments fixed in this range.</Empty> : asTable ? (
             <ValueTable rows={apptByBranch} firstHeading="Branch" />
           ) : (
-            <RankedBars rows={apptByBranch} color={CATEGORICAL[2]} />
+            <BarList rows={apptByBranch} total={booked} color={CATEGORICAL[2]} unit="Booked" />
           )}
         </Card>
 
