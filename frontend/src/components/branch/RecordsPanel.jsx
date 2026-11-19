@@ -1412,7 +1412,7 @@ const LeadSourceRecords = ({ branchId }) => {
             ))}
           </div>
 
-          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
+          <div className="hidden overflow-hidden rounded-[4px] border border-slate-200 bg-white sm:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
