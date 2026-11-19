@@ -105,18 +105,21 @@ const dotted = {
   backgroundPosition: `0 ${LINE - 4}px`,
   lineHeight: `${LINE}px`,
 };
+// The report (read-only) view: same line spacing, no dots.
+const ruled = (readOnly) => (readOnly ? { lineHeight: `${LINE}px` } : dotted);
 
 const inputCls = "w-full min-w-0 bg-transparent px-1 text-[15px] text-slate-900 outline-none placeholder:text-slate-300 focus:bg-sky-50/60";
 
 /** One line: "Label: ......" with the dots filling the rest of the row. */
-const Line = ({ label, value, onChange, className = "", testid, ...rest }) => (
+const Line = ({ label, value, onChange, className = "", testid, readOnly = false, ...rest }) => (
   <label className={`flex min-w-0 items-end gap-1 ${className}`}>
     <span className="shrink-0 whitespace-nowrap text-[15px] text-slate-700" style={{ lineHeight: `${LINE}px` }}>{label}</span>
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className={`${inputCls} h-8 flex-1`}
-      style={dotted}
+      style={ruled(readOnly)}
+      readOnly={readOnly}
       data-testid={testid}
       {...rest}
     />
@@ -157,7 +160,7 @@ const Lines = ({ label, rows, value, onChange, inline = false, testid, readOnly 
           readOnly={readOnly}
           aria-label={label.replace(/[\s:]+$/, "")}
           className={`${inputCls} block resize-none overflow-hidden`}
-          style={{ ...dotted, minHeight: rows * LINE, textIndent: inline ? indent : 0, paddingTop: 0, paddingBottom: 0 }}
+          style={{ ...ruled(readOnly), minHeight: rows * LINE, textIndent: inline ? indent : 0, paddingTop: 0, paddingBottom: 0 }}
           data-testid={testid}
         />
       </div>
@@ -296,7 +299,7 @@ export const ConsultationFormSheets = ({ f, set, readOnly = false, branches }) =
             onChange={(e) => set("therapist_name", e.target.value)}
             readOnly={readOnly}
             className={`${inputCls} h-8 text-center`}
-            style={dotted}
+            style={ruled(readOnly)}
             aria-label="Therapist Name & Sign"
             data-testid="consultation-form-therapist_name"
           />
