@@ -207,7 +207,6 @@ const pctOf = (part, whole) => {
 
 const BOOKED = CATEGORICAL[2];
 const CAME = "#0e7490";
-const PAID = "#4a3aa7";
 
 const HeadRow = ({ cols, children }) => (
   <div className={`grid ${cols} items-end gap-x-4 border-b border-slate-100 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400`}>
@@ -294,65 +293,67 @@ const BranchLeadsList = ({ rows }) => {
   );
 };
 
-/** Per branch: appointments booked -> came for the consultation -> paid fees, each step
- *  with its ratio to the step before. */
-const FUNNEL_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)_3.5rem_4.5rem_4.5rem]";
-const Step = ({ value, of, color }) => (
-  <span className="flex flex-col items-end leading-tight">
-    <span className="text-[13px] font-semibold tabular-nums" style={{ color: value ? color : "#cbd5e1" }}>{nf(value)}</span>
-    <span className="text-[11px] tabular-nums text-slate-400">{pctOf(value, of)}</span>
-  </span>
+/** Per branch: appointments booked, and how many of them came for the consultation.
+ *  Only the bars are on the card; the figures behind a row open on hover, so the card
+ *  reads as a comparison at a glance and the numbers are there when they are wanted. */
+const FUNNEL_COLS = "grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)]";
+const HoverStat = ({ color, label, value, note }) => (
+  <div className="flex items-center justify-between gap-6">
+    <span className="flex items-center gap-1.5 text-slate-500">
+      <i className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+    <span className="tabular-nums">
+      <span className="font-semibold text-slate-900">{nf(value)}</span>
+      {note && <span className="ml-1.5 text-slate-400">{note}</span>}
+    </span>
+  </div>
 );
 const BranchFunnelList = ({ rows }) => {
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.booked, r.consulted, r.paid)));
-  const sum = rows.reduce(
-    (a, r) => ({ booked: a.booked + r.booked, consulted: a.consulted + r.consulted, paid: a.paid + r.paid }),
-    { booked: 0, consulted: 0, paid: 0 },
-  );
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.booked, r.consulted)));
   const w = (v) => `${v ? Math.max(1.5, (v / max) * 100) : 0}%`;
   return (
     <div className="flex flex-col">
       <HeadRow cols={FUNNEL_COLS}>
         <span>Branch</span>
-        <span className="flex flex-wrap items-center gap-x-3 font-medium normal-case tracking-normal">
+        <span className="flex items-center gap-x-3 font-medium normal-case tracking-normal">
           <Dot color={BOOKED}>Booked</Dot>
-          <Dot color={CAME}>Came</Dot>
-          <Dot color={PAID}>Paid</Dot>
+          <Dot color={CAME}>Came for consultation</Dot>
         </span>
-        <span className="text-right">Booked</span>
-        <span className="text-right leading-tight">Came<br /><span className="font-normal normal-case tracking-normal">of booked</span></span>
-        <span className="text-right leading-tight">Paid<br /><span className="font-normal normal-case tracking-normal">of came</span></span>
       </HeadRow>
       <ul className="divide-y divide-slate-50">
-        {rows.map((r) => (
+        {rows.map((r, i) => (
           <li
             key={r.name}
-            title={`${r.name}: ${nf(r.booked)} booked · ${nf(r.consulted)} came (${pctOf(r.consulted, r.booked)}) · ${nf(r.paid)} paid (${pctOf(r.paid, r.consulted)})`}
-            className={`grid ${FUNNEL_COLS} items-center gap-x-4 py-2.5`}
+            tabIndex={0}
+            className={`group relative grid ${FUNNEL_COLS} cursor-default items-center gap-x-4 rounded-md py-3 outline-none hover:bg-slate-50/70 focus-visible:bg-slate-50/70`}
           >
             <BranchName name={r.name} />
-            {/* Three thin bars on one scale, one per step, so the drop from each step to
-                the next is the gap you see. */}
-            <span className="flex flex-col gap-1">
-              {[[r.booked, BOOKED], [r.consulted, CAME], [r.paid, PAID]].map(([v, c], i) => (
-                <span key={i} className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            {/* Two bars on one scale, so the drop from booked to came is the gap you see. */}
+            <span className="flex flex-col gap-1.5 pr-1">
+              {[[r.booked, BOOKED], [r.consulted, CAME]].map(([v, c], k) => (
+                <span key={k} className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                   <span className="block h-full rounded-full" style={{ width: w(v), background: c }} />
                 </span>
               ))}
             </span>
-            <span className="text-right text-[13px] font-semibold tabular-nums" style={{ color: r.booked ? BOOKED : "#cbd5e1" }}>{nf(r.booked)}</span>
-            <Step value={r.consulted} of={r.booked} color={CAME} />
-            <Step value={r.paid} of={r.consulted} color={PAID} />
+            {/* The row's figures, on hover or keyboard focus. Opens upward on the last
+                rows so it never runs off the bottom of the card. */}
+            <div
+              role="tooltip"
+              className={`pointer-events-none absolute right-2 z-20 w-56 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 ${
+                i >= rows.length - 2 && rows.length > 2 ? "bottom-full mb-1" : "top-full mt-1"
+              }`}
+            >
+              <p className="mb-2 truncate text-[13px] font-semibold text-slate-800">{r.name}</p>
+              <div className="flex flex-col gap-1.5">
+                <HoverStat color={BOOKED} label="Booked" value={r.booked} />
+                <HoverStat color={CAME} label="Came" value={r.consulted} note={`${pctOf(r.consulted, r.booked)} of booked`} />
+              </div>
+            </div>
           </li>
         ))}
       </ul>
-      <TotalRow cols={FUNNEL_COLS}>
-        <span>All branches</span>
-        <span />
-        <span className="text-right tabular-nums" style={{ color: BOOKED }}>{nf(sum.booked)}</span>
-        <Step value={sum.consulted} of={sum.booked} color={CAME} />
-        <Step value={sum.paid} of={sum.consulted} color={PAID} />
-      </TotalRow>
     </div>
   );
 };
@@ -443,9 +444,11 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
   const branchFunnel = data?.branch_funnel || [];
   // Only branches with something past the lead stage, most bookings first.
   const funnelRows = branchFunnel
-    .filter((r) => r.booked || r.consulted || r.paid)
+    .filter((r) => r.booked || r.consulted)
     .slice()
     .sort((a, b) => b.booked - a.booked || b.consulted - a.consulted);
+  const funnelBooked = funnelRows.reduce((a, r) => a + r.booked, 0);
+  const funnelCame = funnelRows.reduce((a, r) => a + r.consulted, 0);
   const byVertical = data?.by_vertical || [];
   const byWeekday = data?.by_weekday || [];
   const byOwner = data?.by_owner || [];
@@ -537,8 +540,12 @@ export const LeadsAnalyticsDashboard = ({ startDate, endDate, branchIds }) => {
           )}
         </Card>
 
-        {/* 3 — of those booked, who came and who paid */}
-        <Card title="Appointment ratio by branch" sub="Booked → came for consultation → paid fees" testid="leads-analytics-appointments-branch">
+        {/* 3 — of those booked, who came for the consultation */}
+        <Card
+          title="Appointment ratio by branch"
+          sub={`${nf(funnelBooked)} booked · ${nf(funnelCame)} came for consultation (${pctOf(funnelCame, funnelBooked)}) · hover a branch for its figures`}
+          testid="leads-analytics-appointments-branch"
+        >
           {funnelRows.length === 0 ? <Empty>No appointments booked in this range.</Empty> : asTable ? (
             <ValueTable rows={funnelRows.map((r) => ({ name: r.name, value: r.booked }))} firstHeading="Branch" />
           ) : (
