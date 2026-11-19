@@ -470,9 +470,10 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                           <td className="hidden px-3 py-2.5 text-slate-600 sm:table-cell">{r.contact_no || "—"}</td>
                           <td className="hidden whitespace-nowrap px-3 py-2.5 text-slate-600 sm:table-cell">{showDate(r.date)}</td>
                           <td className="hidden px-3 py-2.5 text-slate-600 md:table-cell">{r.therapist_name || "—"}</td>
-                          {/* One arrow: the patient's details, with Share, Print, Download, Edit and Delete in their popup. */}
+                          {/* Delete, then the arrow: the patient's details, with Share, Print, Download, Edit and Delete in their popup. */}
                           <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex justify-end">
+                            <div className="flex items-center justify-end gap-1">
+                              <button type="button" onClick={() => remove(r)} className="rounded p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete form" title="Delete" data-testid={`consultation-form-delete-${r.id}`}><Trash2 className="h-4 w-4" /></button>
                               <button type="button" onClick={() => openDetails(r)} className={iconBtn} aria-label="Open patient details" title="Patient details" data-testid={`consultation-form-open-${r.id}`}><ChevronRight className="h-4 w-4" /></button>
                             </div>
                           </td>
