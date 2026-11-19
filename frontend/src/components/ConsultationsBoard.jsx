@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { paymentModeName, paymentModeOptions, useShownPaymentModes } from "@/lib/paymentModes";
 import { useFeatureHidden } from "@/lib/featureVisibility";
-import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List, House, ChartLine, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeftRight, FileText, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, XCircle, Search, Phone, Stethoscope, ClipboardList, Lock, Pencil, Dumbbell, Users, X, Bell, Plus, Trash2, Ban, ClipboardCheck, IndianRupee, Share2, Eye, Salad, HeartPulse, Music2, Video, Apple, Music, List } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2935,15 +2935,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // its patient triggers. See openRowFee, which parks it, and the effect that picks it up.
   const pendingRowFeeRef = useRef(null);
   const [detailTab, setDetailTab] = useState("overview");
-  // The Treatment Prescription popup's tab rail, folded to icons or open with labels.
-  // Kept per browser, like a remembered filter; private windows just start open.
-  const [rxRailCollapsed, setRxRailCollapsed] = useState(() => {
-    try { return window.localStorage.getItem("cons-rx-rail-collapsed") === "1"; } catch { return false; }
-  });
-  const toggleRxRail = () => setRxRailCollapsed((was) => {
-    try { window.localStorage.setItem("cons-rx-rail-collapsed", was ? "0" : "1"); } catch { /* not kept */ }
-    return !was;
-  });
   // On the Branch Admin's Consultation Visit stage the Documents tab is the Prescription
   // tab: the generated prescription's View PDF / Download / WhatsApp / Print / Share in
   // the footer, the uploaded pages, and Camera / Choose File to add more.
@@ -8368,28 +8359,28 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 Centred on the Consultant's Treatment Report popup. Safe centring, so a
                 row too wide for a phone falls back to the start and still scrolls.
 
-                The Consultant's tabs are shaded pills with an icon each: the selected one
-                sits on a pale blue fill in blue, the rest in slate with no fill. */}
+                The Consultant's tabs are shaded pills, names only: the selected one sits
+                on a pale blue fill in blue, the rest in slate with no fill. */}
             {/* The Consultant's tabs: a centred pill row on a phone; from tablet width up a
                 rail down the left of the card, the open tab on a pale blue fill with a blue
-                bar at its left edge. Collapse folds the rail to its icons (the names come
-                back as tooltips); Expand opens it again. */}
+                bar at its left edge. No icons, so no Collapse: a rail folded to nothing but
+                icons would have nothing left to show. */}
             <div className={isConsultant
-              ? `flex shrink-0 flex-nowrap items-center gap-x-2 overflow-x-auto border-b border-slate-200 px-4 py-1.5 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-col sm:items-stretch sm:gap-1 sm:overflow-y-auto sm:overflow-x-hidden sm:border-b-0 sm:border-r sm:bg-white sm:px-2 sm:py-3 sm:transition-[width] sm:duration-200 sm:[justify-content:flex-start] ${rxRailCollapsed ? "sm:w-[60px]" : "sm:w-[184px]"}`
+              ? "flex shrink-0 flex-nowrap items-center gap-x-2 overflow-x-auto border-b border-slate-200 px-4 py-1.5 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-[184px] sm:flex-col sm:items-stretch sm:gap-1 sm:overflow-y-auto sm:overflow-x-hidden sm:border-b-0 sm:border-r sm:bg-white sm:px-2 sm:py-3 sm:[justify-content:flex-start]"
               : "flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden"} data-testid="cons-detail-tabs">
               {[
-                { key: "overview", label: "Overview", icon: House },
+                { key: "overview", label: "Overview" },
                 // Not for the Consultant, for the same reason the Timeline is not: chasing
                 // a patient who did not pick up is the branch's errand, and scheduling the
                 // next call is theirs to schedule. A Consultant is here to write up the
                 // consultation in front of them.
                 ...(isConsultant ? [] : [{ key: "followup", label: "Follow up" }]),
-                { key: "documents", label: prescriptionTab ? "Prescription" : "Documents", icon: FileText },
+                { key: "documents", label: prescriptionTab ? "Prescription" : "Documents" },
                 // The four uploads a case sheet closes on, and the only screen that can
                 // verify them -- the Branch Admin's; the Consultant only reads it. The
                 // physio delivering the course gathers the clips, and checking their own
                 // work would make the requirement prove nothing.
-                { key: "progression", label: "Progression", icon: ChartLine },
+                { key: "progression", label: "Progression" },
                 // Not for the Consultant. The timeline is every stage move, call attempt
                 // and save on the lead — a branch's working record of how the patient got
                 // here, and the people who wrote it are the ones who read it back. A
@@ -8397,18 +8388,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 // rows of "Branch stage: 'Branch Assign' -> 'RNR'" is not the case they
                 // are being asked about.
                 ...(isConsultant ? [] : [{ key: "timeline", label: "Timeline" }]),
-                { key: "profile", label: "Profile", icon: User },
+                { key: "profile", label: "Profile" },
               ].map((t) => isConsultant ? (
                 <button
                   key={t.key}
                   onClick={() => setDetailTab(t.key)}
-                  title={rxRailCollapsed ? t.label : undefined}
-                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors sm:gap-3 sm:py-2.5 sm:text-sm sm:font-medium ${rxRailCollapsed ? "sm:justify-center sm:px-0" : "sm:px-3"} ${detailTab === t.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"}`}
+                  className={`relative flex shrink-0 items-center whitespace-nowrap rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition-colors sm:px-3 sm:py-2.5 sm:text-sm sm:font-medium ${detailTab === t.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"}`}
                   data-testid={`cons-detail-tab-${t.key}`}
                 >
                   {detailTab === t.key && <span aria-hidden="true" className="absolute inset-y-0 left-0 hidden w-[3px] rounded-l-md bg-blue-600 sm:block" />}
-                  <t.icon className="h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-                  <span className={rxRailCollapsed ? "sm:sr-only" : ""}>{t.label}</span>
+                  {t.label}
                 </button>
               ) : (
                 <button
@@ -8420,22 +8409,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {t.label}
                 </button>
               ))}
-              {/* At the foot of the rail; not on a phone, where the tabs are a row. */}
-              {isConsultant && (
-                <button
-                  type="button"
-                  onClick={toggleRxRail}
-                  title={rxRailCollapsed ? "Expand" : "Collapse"}
-                  aria-label={rxRailCollapsed ? "Expand tabs" : "Collapse tabs"}
-                  aria-expanded={!rxRailCollapsed}
-                  className={`mt-auto hidden shrink-0 items-center gap-3 whitespace-nowrap rounded-md py-2 text-[13px] font-medium text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 sm:flex ${rxRailCollapsed ? "justify-center px-0" : "px-3"}`}
-                  data-testid="cons-detail-tabs-collapse"
-                >
-                  {rxRailCollapsed
-                    ? <PanelLeftOpen className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
-                    : <><PanelLeftClose className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />Collapse</>}
-                </button>
-              )}
             </div>
 
             {/* The only part of the card that scrolls. Its own padding, because the
