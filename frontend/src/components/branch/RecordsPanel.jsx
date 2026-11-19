@@ -918,15 +918,6 @@ const LeadsConvertedRecords = ({ branchId }) => {
   const rows = useMemo(() => scoped.filter(CARD_BY_KEY[pick].match), [scoped, pick]);
 
   const sourceLabel = source === ALL_SOURCES ? "All Sources" : source;
-  const filtered = pick !== "leads" || source !== ALL_SOURCES || !!effectiveDateFilter || !!search.trim();
-  const clearFilters = () => {
-    setPick("leads");
-    setSource(ALL_SOURCES);
-    setQuickDate(null);
-    setDateFilter(null);
-    setSearch("");
-    setSearchOpen(false);
-  };
 
   const exportReport = async (kind) => {
     if (exporting) return;
@@ -1071,19 +1062,6 @@ const LeadsConvertedRecords = ({ branchId }) => {
         </div>
       </div>
 
-      {filtered ? (
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
-            data-testid="leads-converted-clear"
-          >
-            <X className="h-3 w-3" /> Clear
-          </button>
-        </div>
-      ) : null}
-
       {!rows.length ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-sm text-slate-400">
           {loading ? "Loading..." : leads.length ? "No leads match." : "No leads yet."}
@@ -1108,9 +1086,11 @@ const LeadsConvertedRecords = ({ branchId }) => {
             ))}
           </div>
 
-          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block">
+          {/* One line per lead: every cell stays on a single row, the patient number and
+              the time beside their main value rather than under it, the email on hover. */}
+          <div className="hidden overflow-hidden rounded-[4px] border border-slate-200 bg-white sm:block">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[960px] whitespace-nowrap text-sm">
                 <thead className="bg-slate-500 text-left text-[10px] uppercase tracking-wider text-white">
                   <tr>
                     <th className="px-4 py-2.5 font-semibold">Patient</th>
@@ -1125,21 +1105,18 @@ const LeadsConvertedRecords = ({ branchId }) => {
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((l) => (
                     <tr key={l.id} className="hover:bg-slate-50" data-testid={`leads-converted-row-${l.id}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800">{l.name}</p>
-                        <p className="font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</p>
+                      <td className="px-4 py-2.5">
+                        <span className="font-medium text-slate-800">{l.name}</span>
+                        <span className="ml-2 font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {displayPhone(l.phone)}
-                        {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
-                      </td>
-                      <td className="px-4 py-3"><SourcePill source={sourceOf(l)} /></td>
-                      <td className="px-4 py-3 text-slate-600">{FUNNEL[furthestStep(l)].label}</td>
-                      <td className="px-4 py-3"><ServicePills services={servicesOf(l)} /></td>
-                      <td className="px-4 py-3 text-slate-600">{currentStage(l)}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <span className="whitespace-nowrap">{dateStampFull(l.created_at)}</span>
-                        <span className="block text-[11px] text-slate-400">{callTimeStamp(l.created_at)}</span>
+                      <td className="px-4 py-2.5 text-slate-600" title={l.email || undefined}>{displayPhone(l.phone)}</td>
+                      <td className="px-4 py-2.5"><SourcePill source={sourceOf(l)} /></td>
+                      <td className="px-4 py-2.5 text-slate-600">{FUNNEL[furthestStep(l)].label}</td>
+                      <td className="px-4 py-2.5"><ServicePills services={servicesOf(l)} oneLine /></td>
+                      <td className="px-4 py-2.5 text-slate-600">{currentStage(l)}</td>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        {dateStampFull(l.created_at)}
+                        <span className="ml-2 text-[11px] text-slate-400">{callTimeStamp(l.created_at)}</span>
                       </td>
                     </tr>
                   ))}
@@ -1153,9 +1130,9 @@ const LeadsConvertedRecords = ({ branchId }) => {
   );
 };
 
-const ServicePills = ({ services }) => (
+const ServicePills = ({ services, oneLine = false }) => (
   services.length ? (
-    <span className="flex flex-wrap justify-end gap-1 sm:justify-start">
+    <span className={`flex gap-1 ${oneLine ? "flex-nowrap" : "flex-wrap justify-end sm:justify-start"}`}>
       {services.map((s) => (
         <span key={s} className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
           {s}
