@@ -499,21 +499,34 @@ const DashboardTab = () => {
       <div className="hidden sm:grid sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-9" data-testid="hr-dashboard-cards">
         {cards.map((c) => {
           const active = c.key === current.key;
+          const Icon = c.icon;
+          const waiting = c.alert && (c.value ?? 0) > 0;
           return (
             <button
               key={c.key}
               type="button"
               onClick={() => { setSelected(c.key); setSearch(""); }}
-              className={`w-full min-w-0 rounded-xl border-2 px-4 py-3.5 text-left transition hover:shadow-sm ${
-                active ? "border-slate-400 bg-slate-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
+              className={`group relative flex w-full min-w-0 flex-col gap-3 rounded-xl border bg-white px-4 py-3.5 text-left transition-all duration-200 ${
+                active
+                  ? "border-sky-500 shadow-[0_0_0_3px_rgba(14,165,233,0.12)]"
+                  : "border-slate-200 hover:-translate-y-px hover:border-slate-300 hover:shadow-[0_6px_16px_-8px_rgba(15,23,42,0.18)]"
               }`}
               aria-pressed={active}
               data-testid={`hr-kpi-${c.key}`}
             >
-              <span className="block truncate text-xs font-medium leading-[1.15] text-slate-500" title={c.label}>
-                {c.label}
+              <span className="flex items-center justify-between gap-2">
+                <span className={`truncate text-xs font-medium ${active ? "text-sky-700" : "text-slate-500"}`} title={c.label}>
+                  {c.label}
+                </span>
+                {Icon && (
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                    active ? "bg-sky-500 text-white" : waiting ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/70"
+                  }`}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                )}
               </span>
-              <span className="mt-1 block text-2xl font-semibold leading-tight text-slate-600">
+              <span className={`text-[26px] font-semibold leading-none tabular-nums tracking-tight ${active ? "text-slate-900" : "text-slate-800"}`}>
                 {c.value ?? 0}
               </span>
             </button>
@@ -524,13 +537,20 @@ const DashboardTab = () => {
       {/* The search and the list: always on the desk, and on a phone only once a figure is
           opened, as its screen. */}
       <div className={`flex-col gap-4 ${phoneList ? "flex" : "hidden sm:flex"}`} data-testid="hr-dashboard-list-screen">
-        <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold text-slate-900">{current.label}</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {current.ready === null ? "Loading…" : `${rows.length}${q ? ` of ${current.rows.length}` : ""} ${rows.length === 1 ? "record" : "records"}`}
+            </p>
+          </div>
+          <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-sky-400 focus-within:ring-4 focus-within:ring-sky-100 sm:max-w-md">
           <Search className="h-4 w-4 shrink-0 text-slate-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, code, phone or email..."
-            className="min-w-0 flex-1 border-0 p-0 text-sm outline-none placeholder:text-slate-400"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-800 outline-none placeholder:text-slate-400"
             data-testid="hr-dashboard-search"
           />
           {search && (
@@ -538,6 +558,7 @@ const DashboardTab = () => {
               <X className="h-4 w-4" />
             </button>
           )}
+          </div>
         </div>
 
         {current.ready === null ? <p className="text-sm text-slate-500">Loading...</p> : <DashboardList kind={current.kind} rows={rows} />}
@@ -552,22 +573,47 @@ const dashDate = (iso) => {
   return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 const slugLabel = (s) => String(s || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-const DashPill = ({ children }) => (
-  <span className="inline-flex shrink-0 whitespace-nowrap rounded-[5px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{children}</span>
-);
+// Coloured by what the status means, so a column of them can be scanned: green for the
+// working states, amber for waiting, red for the ones that need a look, grey otherwise.
+const PILL_TONES = {
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  present: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  late: "border-amber-200 bg-amber-50 text-amber-700",
+  pending: "border-amber-200 bg-amber-50 text-amber-700",
+  on_leave: "border-sky-200 bg-sky-50 text-sky-700",
+  absent: "border-rose-200 bg-rose-50 text-rose-700",
+  rejected: "border-rose-200 bg-rose-50 text-rose-700",
+  inactive: "border-slate-200 bg-slate-50 text-slate-500",
+};
+const DashPill = ({ children }) => {
+  const tone = PILL_TONES[String(children || "").trim().toLowerCase().replace(/\s+/g, "_")] || "border-slate-200 bg-slate-50 text-slate-600";
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${tone}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {children}
+    </span>
+  );
+};
 // Name over a quiet second line, as the Master View's Candidate and Position cells are.
-const TwoLine = ({ top, sub }) => (
-  <>
-    <p className="font-medium text-slate-800">{top || "—"}</p>
-    {sub ? <p className="truncate text-[11px] text-slate-400">{sub}</p> : null}
-  </>
-);
+// With no first line (a phone not on file), the second steps up rather than sitting under
+// a lone dash.
+const TwoLine = ({ top, sub, strong }) => {
+  const head = top && top !== "—" ? top : sub;
+  const tail = head === sub ? null : sub;
+  return (
+    <div className="min-w-0">
+      <p className={`truncate text-[13px] ${strong ? "font-semibold text-slate-900" : "font-medium text-slate-700"}`}>{head || <span className="text-slate-300">—</span>}</p>
+      {tail ? <p className="mt-0.5 truncate text-xs text-slate-400">{tail}</p> : null}
+    </div>
+  );
+};
 
 // One set of columns per kind of card. `text` is the same cell as a plain string, for the
 // phone layout's one-line summary.
 const DASH_COLUMNS = {
   employees: [
-    { h: "Employee", cell: (e) => <TwoLine top={e.full_name} sub={e.employee_code} /> },
+    { h: "Employee", cell: (e) => <TwoLine strong top={e.full_name} sub={e.employee_code} /> },
     { h: "Designation", cell: (e) => <TwoLine top={e.designation} sub={e.department} />, text: (e) => e.designation },
     { h: "Contact", cell: (e) => <TwoLine top={displayPhone(e.phone)} sub={e.email} />, text: (e) => displayPhone(e.phone) },
     { h: "Branch", cell: (e) => e.branch_name || "—", text: (e) => e.branch_name },
@@ -575,14 +621,14 @@ const DASH_COLUMNS = {
     { h: "Status", cell: (e) => <DashPill>{slugLabel(e.status) || "—"}</DashPill> },
   ],
   users: [
-    { h: "User", cell: (u) => <TwoLine top={u.full_name} sub={u.linked_employee?.employee_code} /> },
+    { h: "User", cell: (u) => <TwoLine strong top={u.full_name} sub={u.linked_employee?.employee_code} /> },
     { h: "Role", cell: (u) => <TwoLine top={roleLabel(u.role)} sub={u.linked_employee?.designation} />, text: (u) => roleLabel(u.role) },
     { h: "Contact", cell: (u) => <TwoLine top={u.email} sub={displayPhone(u.phone)} />, text: (u) => u.email },
     { h: "Department", cell: (u) => u.linked_employee?.department || "—", text: (u) => u.linked_employee?.department },
     { h: "Status", cell: (u) => <DashPill>{u.is_active === false ? "Inactive" : "Active"}</DashPill> },
   ],
   register: [
-    { h: "Employee", cell: (r) => <TwoLine top={r.full_name} sub={r.employee_code} /> },
+    { h: "Employee", cell: (r) => <TwoLine strong top={r.full_name} sub={r.employee_code} /> },
     { h: "Designation", cell: (r) => <TwoLine top={r.designation} sub={r.department} />, text: (r) => r.designation },
     { h: "Branch", cell: (r) => r.branch_name || "—", text: (r) => r.branch_name },
     { h: "Check In", cell: (r) => r.check_in || "—", text: (r) => r.check_in && `In ${r.check_in}` },
@@ -590,7 +636,7 @@ const DASH_COLUMNS = {
     { h: "Status", cell: (r) => <DashPill>{slugLabel(r.status)}</DashPill> },
   ],
   approvals: [
-    { h: "Employee", cell: (a) => <TwoLine top={a.employee_name} sub={a.employee_code} /> },
+    { h: "Employee", cell: (a) => <TwoLine strong top={a.employee_name} sub={a.employee_code} /> },
     { h: "Request", cell: (a) => <TwoLine top={slugLabel(a.kind)} sub={a.reason} />, text: (a) => slugLabel(a.kind) },
     {
       h: "When",
@@ -628,13 +674,26 @@ const DashboardList = ({ kind, rows }) => {
       <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white sm:block" data-testid="hr-dashboard-list">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
-              <tr>{cols.map((c) => <th key={c.h} className="px-4 py-2.5 font-semibold">{c.h}</th>)}</tr>
+            <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                {cols.map((c, j) => (
+                  <th key={c.h} className={`whitespace-nowrap px-5 py-3 font-semibold ${j === cols.length - 1 ? "text-right" : ""}`}>{c.h}</th>
+                ))}
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r, i) => (
-                <tr key={rowKey(r, i)} className="hover:bg-slate-50">
-                  {cols.map((c, j) => <td key={c.h} className={`px-4 py-3 ${j === 0 ? "" : "text-slate-600"}`}>{c.cell(r)}</td>)}
+                <tr key={rowKey(r, i)} className="transition-colors hover:bg-sky-50/40">
+                  {cols.map((c, j) => (
+                    <td
+                      key={c.h}
+                      className={`px-5 py-3.5 align-middle text-[13px] ${j === 0 ? "" : "text-slate-600"} ${
+                        j === cols.length - 1 ? "text-right" : ""
+                      } ${["Joined", "Raised", "Check In", "Check Out", "When"].includes(c.h) ? "whitespace-nowrap tabular-nums" : ""}`}
+                    >
+                      {c.cell(r)}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
