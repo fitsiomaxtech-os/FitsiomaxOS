@@ -86,15 +86,21 @@ const fail = (e) => toast.error(e?.response?.data?.detail || e?.message || "Some
 const Stat = ({ label, value, tone = "text-slate-800", onClick, active, testid }) => {
   const Tag = onClick ? "button" : "div";
   return (
+    // The stage-strip tile Branch Leads and HR Admin > Dashboard wear: white, borderless
+    // until picked, label over figure and centred; the open one in light blue with a
+    // chevron. It sits in a StatStrip tray -- see the grids that hold these.
     <Tag
       {...(onClick ? { type: "button", onClick } : {})}
-      className={`w-full rounded-xl border-2 bg-white px-3 py-2.5 text-left transition ${
-        active ? "border-sky-400 shadow-sm" : "border-slate-200"
-      } ${onClick ? "cursor-pointer hover:border-sky-300 hover:shadow-sm" : ""}`}
+      className={`relative w-full min-w-0 rounded-lg border-2 px-3 py-2.5 text-center transition-all duration-150 ${
+        active
+          ? "border-sky-400 bg-sky-50 shadow-[0_2px_8px_-2px_rgba(14,165,233,0.35)]"
+          : "border-transparent bg-white"
+      } ${onClick && !active ? "cursor-pointer hover:border-slate-200 hover:shadow-sm" : ""}`}
       data-testid={testid}
     >
-      <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-      <span className={`mt-0.5 block text-2xl font-extrabold ${tone}`}>{value}</span>
+      {active && <ChevronRight className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-sky-500" />}
+      <span className={`block truncate px-2 text-xs font-semibold ${active ? "text-sky-700" : "text-slate-700"}`}>{label}</span>
+      <span className={`mt-1 block text-xl font-bold leading-tight tabular-nums ${tone}`}>{value}</span>
     </Tag>
   );
 };
@@ -388,7 +394,7 @@ const DayDetailModal = ({ row, date, onClose, onSaved }) => {
         {/* Worked and away, not the span between the two presses. Check in and check out
             are both on the row already, so the gross figure was the one number here that
             could be read straight off the two beside it. */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5">
           <Stat label="Worked" value={hours(row.worked_minutes)} tone="text-emerald-600" testid="hr-att-detail-worked" />
           <Stat label="On break" value={duration(row.break_minutes)} tone="text-amber-600" testid="hr-att-detail-break" />
         </div>
@@ -641,7 +647,7 @@ export const AttendanceTab = () => {
         </CardContent>
       </Card>
 
-      <div className={`grid grid-cols-2 gap-3 ${single ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
+      <div className={`grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5 ${single ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
         <Stat label="Total Employees" value={tiles.total_employees ?? 0} tone="text-indigo-600" onClick={() => setCard("total")} active={activeCard === "total"} testid="hr-att-k-total" />
         <Stat label={single ? "Present / Working" : "Worked at all"} value={tiles.present_working ?? 0} tone="text-emerald-600" onClick={() => pickCard("present")} active={activeCard === "present"} testid="hr-att-k-present" />
         <Stat label="Work from Home" value={tiles.work_from_home ?? 0} tone="text-violet-600" onClick={() => pickCard("wfh")} active={activeCard === "wfh"} testid="hr-att-k-wfh" />
@@ -734,7 +740,7 @@ export const AttendanceTab = () => {
           <CardContent className="p-0">
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                <thead className="bg-slate-700 text-left text-[11px] uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-4 py-3">Employee</th>
                     <th className="px-4 py-3">Department</th>
@@ -1367,7 +1373,7 @@ const EmployeePayPage = ({ slip, onClose, onSaved }) => {
             <>
               <div>
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">This month</p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5 sm:grid-cols-3 lg:grid-cols-6">
                   <Stat label="Base" value={money(slip.base)} testid="hr-pay-emp-base" />
                   <Stat label="Payable days" value={`${slip.payable_days}/${slip.days_in_month}`} testid="hr-pay-emp-days" />
                   <Stat label="LOP days" value={slip.lop_days} tone={slip.lop_days > 0 ? "text-rose-600" : "text-slate-800"} testid="hr-pay-emp-lop" />
@@ -1417,7 +1423,7 @@ const EmployeePayPage = ({ slip, onClose, onSaved }) => {
 
                     <div className="hidden overflow-x-auto lg:block">
                       <table className="min-w-full text-sm" data-testid="hr-pay-income-history">
-                        <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                        <thead className="bg-slate-700 text-left text-xs uppercase tracking-wide text-white">
                           <tr>
                             <th className="px-3 py-2">Month</th>
                             <th className="px-3 py-2 text-right">Base</th>
@@ -1458,7 +1464,7 @@ const EmployeePayPage = ({ slip, onClose, onSaved }) => {
             </>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5 lg:grid-cols-4">
                 <Stat label="Current salary" value={money(totals.current)} tone="text-emerald-600" testid="hr-pay-t-current" />
                 {/* The raises, not the records: the figure somebody joined on is not a hike. */}
                 <Stat label="Total hikes" value={totals.hikes ?? 0} tone="text-indigo-600" testid="hr-pay-t-hikes" />
@@ -1528,7 +1534,7 @@ const EmployeePayPage = ({ slip, onClose, onSaved }) => {
 
                     <div className="hidden overflow-x-auto lg:block">
                       <table className="min-w-full text-sm" data-testid="hr-pay-records">
-                        <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                        <thead className="bg-slate-700 text-left text-xs uppercase tracking-wide text-white">
                           <tr>
                             <th className="px-3 py-2">#</th>
                             <th className="px-3 py-2">Effective from</th>
@@ -1776,7 +1782,7 @@ export const PayrollTab = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label="Employees" value={totals.employees ?? 0} testid="hr-pay-t-emp" />
         <Stat label="Earned" value={money(totals.gross)} testid="hr-pay-t-gross" />
         <Stat label="Bonuses" value={money(totals.bonus)} tone="text-emerald-600" testid="hr-pay-t-bonus" />
@@ -1824,7 +1830,7 @@ export const PayrollTab = () => {
             <CardContent className="p-0">
               <div className="overflow-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <thead className="bg-slate-700 text-left text-xs uppercase tracking-wide text-white">
                     <tr>
                       <th className="px-3 py-2">S.No</th>
                       <th className="px-3 py-2">Employee</th>
@@ -2143,7 +2149,7 @@ export const ApprovalsTab = () => {
 
   return (
     <div className="space-y-4" data-testid="hr-approvals-tab">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/70 bg-[#eef1f8] p-1.5 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label="Pending" value={counts.pending ?? 0} tone={counts.pending ? "text-amber-600" : "text-slate-400"} active={filter === "pending"} onClick={() => setFilter("pending")} testid="hr-appr-f-pending" />
         {/* The queue with a person on the other end of it. Everything else on this row is
             a state a request is in; this is the part of Pending that somebody outside
