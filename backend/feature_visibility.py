@@ -44,9 +44,13 @@ SETTING_ID = "hidden_features"
 # ba_treatment_protocol: the Branch Admin's Services and Products > Treatment Protocol tab,
 # and the pick-from-list above the Consultant's Treatment Protocol box with it. Hide Tab
 # page, screen-only, shipped shown. The Consultant's typed box stays either way.
+#
+# consultant_instructions: the Instructions box under the Treatment Protocol on the
+# Consultant's Treatment Prescription popup. Features page, Show / Hide, screen-only,
+# shipped shown. What was already written stays on the lead and its Consultation Form.
 FEATURE_KEYS = (
     "treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm",
-    "bd_marketing_view", "bd_sales_view", "ba_treatment_protocol",
+    "bd_marketing_view", "bd_sales_view", "ba_treatment_protocol", "consultant_instructions",
 )
 
 # What a missing row means. "treatments" ships hidden: this install asked for the tab and

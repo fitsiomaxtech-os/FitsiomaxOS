@@ -86,6 +86,17 @@ const HIDE_FEATURE_ROWS = [
     hiddenToast: "Consultation Fee confirmation is off",
     shownToast: "Consultation Fee confirmation is on",
   },
+  {
+    // The Instructions box on the Consultant's Treatment Prescription popup. Shown / Hidden.
+    key: "consultant_instructions",
+    label: "Treatment Prescription Instructions",
+    confirmHide:
+      "Hide Instructions?\n\nThe Instructions box disappears from the Consultant's Treatment Prescription popup. Instructions already written stay on the patient and on page 3 of the Consultation Form.",
+    confirmShow:
+      "Show Instructions?\n\nThe Instructions box comes back to the Consultant's Treatment Prescription popup, under the Treatment Protocol.",
+    hiddenToast: "Instructions box is hidden",
+    shownToast: "Instructions box is shown",
+  },
 ];
 
 // The Hide Tab page: whole tabs a developer can take off one desk's strip, by desk. Each key

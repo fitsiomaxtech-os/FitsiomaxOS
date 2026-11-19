@@ -3044,6 +3044,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   const [instructionsDraft, setInstructionsDraft] = useState("");
   const [savingInstructions, setSavingInstructions] = useState(false);
   const instructionsDebounceRef = useRef(null);
+  // Developer Access > Features: Hide takes the Instructions box off this popup.
+  const instructionsHidden = useFeatureHidden("consultant_instructions");
   useEffect(() => {
     if (!isConsultant) return undefined;
     let cancelled = false;
@@ -8908,7 +8910,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     {/* The Consultant's Special Instructions: the same plain box, optional, saved
                         as it is typed. Copied onto page 3 of the patient's Consultation Form
                         (Special Instructions to the Therapist). */}
-                    {isConsultant && (
+                    {isConsultant && !instructionsHidden && (
                       <div className="relative" data-testid="cons-special-instructions">
                         <textarea
                           value={instructionsDraft}
