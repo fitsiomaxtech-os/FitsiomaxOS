@@ -63,6 +63,9 @@ const countBySource = (leads) => {
     .sort(([a, x], [b, y]) => (a === NO_SOURCE) - (b === NO_SOURCE) || y - x || a.localeCompare(b));
 };
 
+// The Leads Source tab's cards: these main sources, in this order, whatever the counts.
+const MAIN_SOURCES = ["Manual", "WhatsApp", "SEO", "Instagram", "Phone Call", "Referral", "Walk-In", "Meta"];
+
 // Branch Transfer Records' two views, switched from the right end of the sub-tab strip.
 const TRANSFER_VIEWS = [
   { key: "transfers", label: "Transfers", icon: List },
@@ -1241,11 +1244,16 @@ const LeadSourceRecords = ({ branchId }) => {
       .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [leads, search, effectiveDateFilter]);
 
-  // All Sources still counts a hidden source's leads: they are still in the list below it.
-  const cards = useMemo(
-    () => [["all", dated.length], ...countBySource(dated).filter(([s]) => !hidden.includes(s))],
-    [dated, hidden],
-  );
+  // The fixed main sources, always in this order and shown even at 0. Any other source
+  // has no card of its own; its leads stay in All Sources and the list. All Sources still
+  // counts a hidden source's leads: they are still in the list below it.
+  const cards = useMemo(() => {
+    const counts = Object.fromEntries(countBySource(dated));
+    return [
+      ["all", dated.length],
+      ...MAIN_SOURCES.filter((s) => !hidden.includes(s)).map((s) => [s, counts[s] || 0]),
+    ];
+  }, [dated, hidden]);
 
   // Every source at this branch, undated, for the popup -- and a hidden one with no lead
   // here, so it can still be switched back on from this branch.
@@ -1292,13 +1300,13 @@ const LeadSourceRecords = ({ branchId }) => {
             key={key}
             type="button"
             onClick={() => setSource(key)}
-            className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-left transition-colors ${
+            className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-center transition-colors ${
               source === key ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-200 hover:border-slate-300"
             }`}
             title={key === "all" ? "All Sources" : key}
             data-testid={`lead-source-card-${key}`}
           >
-            <p className="truncate pr-6 text-[11px] font-medium text-slate-500">{key === "all" ? "All Sources" : key}</p>
+            <p className="truncate px-5 text-[11px] font-medium text-slate-500">{key === "all" ? "All Sources" : key}</p>
             <p className="text-xl font-bold text-slate-800">{count}</p>
             <ChevronRight aria-hidden className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           </button>
