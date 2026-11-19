@@ -2146,7 +2146,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               onClick={() => { setProfileOpen(false); setActiveView(tab.key); tabDots.click(tab.key); }}
               className={`relative flex flex-auto shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                 activeView === tab.key
-                  ? "bg-sky-600 text-white shadow-sm"
+                  // The blue gradient with its soft glow, as the Business Development
+                  // Dashboard's pressed buttons wear it.
+                  ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
                   : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
               }`}
               data-testid={`branch-view-tab-${tab.key}`}
@@ -2169,7 +2171,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               // Lit like a selected tab while its Consultation Form view is the one up.
               className={`ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded shadow-sm transition-colors duration-300 ${
                 activeView === CONSULT_FORMS_VIEW
-                  ? "bg-sky-600 text-white hover:bg-sky-700"
+                  ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
                   : "bg-white text-slate-500 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
               }`}
               title="Settings"

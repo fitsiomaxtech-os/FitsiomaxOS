@@ -160,7 +160,9 @@ export const QuickDateFilterBar = ({ value, onChange, testid = "quick-date", inl
               : `h-10 px-1 text-[11px] ${inline ? "sm:px-2 sm:text-xs 2xl:px-2.5 2xl:text-[13px]" : "sm:px-3 sm:text-sm"}`
           } ${
             activeKey === p.key
-              ? "bg-sky-600 text-white"
+              // The blue gradient with its soft glow, as the Business Development
+              // Dashboard's pressed buttons wear it -- on every board this row is on.
+              ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
               : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
           }`}
           data-testid={`${testid}-preset-${p.key}`}
