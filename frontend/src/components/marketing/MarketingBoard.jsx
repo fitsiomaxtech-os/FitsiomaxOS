@@ -615,24 +615,28 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
 
   const save = async () => {
     const validEntries = isSheets ? sheetEntries.filter((e) => e.spreadsheet_id) : [];
-    if (isSheets && validEntries.length === 0) {
+    // A branch's row starts with no sheet linked, and its mapping can be set before one
+    // is. Saving with no sheet is only refused when it would unlink one this source
+    // already had, or when a URL was typed that isn't a sheet URL.
+    const typedBadUrl = sheetEntries.some((e) => (e.sheet_url || "").trim() && !e.spreadsheet_id);
+    if (isSheets && validEntries.length === 0 && (source.spreadsheet_id || typedBadUrl)) {
       toast.error("Paste a valid Google Sheet URL (must contain /spreadsheets/d/<ID>/)");
       return;
     }
     const payload = {
       source_type: sourceType,
-      sheet_url: isSheets ? validEntries[0].sheet_url : sheetUrl,
+      sheet_url: isSheets ? (validEntries[0]?.sheet_url || "") : sheetUrl,
       branch_ids: branchIds,
       verticals: sourceVerticals,
       auto_sync_enabled: autoSyncEnabled,
       auto_sync_interval_minutes: Number(autoSyncInterval) || 60,
     };
-    if (isSheets) {
+    if (validEntries.length > 0) {
       payload.spreadsheet_id = validEntries[0].spreadsheet_id;
       payload.sheet_names = validEntries[0].sheet_names.length ? validEntries[0].sheet_names : ["Sheet1"];
       payload.column_mapping = validEntries[0].column_mapping || {};
     } else if (JSON.stringify(ownEntry.column_mapping || {}) !== JSON.stringify(source.column_mapping || {})) {
-      // Not a sheet: only sent when Edit Mapping actually changed it.
+      // No sheet behind it: only sent when Edit Mapping actually changed it.
       payload.column_mapping = ownEntry.column_mapping || {};
     }
     // Only touch headers/mapping if the user actually changed them — avoids
@@ -671,7 +675,7 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
       onClose={onClose}
       testid="mk-edit-source-dialog"
       maxWidth="max-w-[740px]"
-      boxClassName="h-[600px]"
+      boxClassName="relative h-[600px]"
       rounded="rounded-[4px]"
       bodyClassName="flex flex-col sm:flex-row"
       headerActions={(
@@ -686,12 +690,6 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
         >
           {source.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
         </button>
-      )}
-      footer={(
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} data-testid="mk-edit-source-cancel">Cancel</Button>
-          <Button onClick={save} className="bg-sky-600 hover:bg-sky-700" data-testid="mk-edit-source-save">✓ Save Changes</Button>
-        </div>
       )}
     >
       <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-52 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="mk-edit-source-sections">
@@ -708,7 +706,17 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
         ))}
       </div>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      {/* No footer: Save floats over the popup's bottom-right corner, and the scrolling side
+          keeps bottom room so its last row never sits under the button. */}
+      <Button
+        onClick={save}
+        className="absolute bottom-4 right-5 z-10 bg-sky-600 shadow-lg hover:bg-sky-700"
+        data-testid="mk-edit-source-save"
+      >
+        ✓ Save Changes
+      </Button>
+
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-16">
         {section === "mapping" && (
           <div className="space-y-3 px-5 py-3">
             <SheetMappingPanel
@@ -830,6 +838,10 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
   // The column waiting on a new question, and the label being typed for it.
   const [newQuestionFor, setNewQuestionFor] = useState(null);
   const [newQuestionLabel, setNewQuestionLabel] = useState("");
+  // Columns typed in by hand: a source with no sheet linked yet has no first row to read,
+  // so there would be nothing to map. Same rows as a read column once added.
+  const [addedCols, setAddedCols] = useState([]);
+  const [newCol, setNewCol] = useState("");
 
   const loadCatalogue = useCallback(
     () => mkLeadFieldCatalogue().then((d) => setGroups(d.groups || [])).catch((e) => console.warn("[catalogue]", e?.message || e)),
@@ -906,8 +918,19 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
   // A mapping can point at a column this tab does not have — a renamed question, or a
   // mapping made against another tab. Shown rather than dropped, because silently losing
   // it is how a mapping becomes wrong without anyone being told.
-  const orphaned = Object.entries(mapping || {}).filter(([, c]) => !headers.includes(c));
+  //
+  // With no sheet to read, what is already mapped is drawn as its own row instead, so it
+  // can still be changed here.
+  const columns = [...new Set([...headers, ...(!spreadsheetId ? Object.values(mapping) : []), ...addedCols])];
+  const orphaned = Object.entries(mapping || {}).filter(([, c]) => !columns.includes(c));
   const mappedCount = Object.keys(mapping || {}).length;
+
+  const addColumn = () => {
+    const c = newCol.trim();
+    if (!c) return;
+    if (!columns.includes(c)) setAddedCols((prev) => [...prev, c]);
+    setNewCol("");
+  };
 
   return (
     <>
@@ -927,14 +950,16 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
       {loading && <p className="text-xs text-slate-400">Reading this tab's columns…</p>}
       {headerError && <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">{headerError} Showing the columns from the last sync instead.</p>}
 
-      {!loading && headers.length === 0 && (
-        <p className="rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-500">No columns found in this tab's first row.</p>
+      {!loading && columns.length === 0 && (
+        <p className="rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-500">
+          {spreadsheetId ? "No columns found in this tab's first row." : "No sheet linked yet — add the sheet's column names below to map them."}
+        </p>
       )}
 
-      {headers.length > 0 && (
+      {columns.length > 0 && (
         <>
           <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span>{headers.length} column{headers.length === 1 ? "" : "s"} · {mappedCount} mapped</span>
+            <span>{columns.length} column{columns.length === 1 ? "" : "s"} · {mappedCount} mapped</span>
             <span>Anything left on Skip is still stored against the lead as extra detail.</span>
           </div>
           <div className="flex gap-3 px-1">
@@ -942,7 +967,7 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
             <p className="flex-[1.2] text-[10px] font-semibold uppercase tracking-wide text-slate-400">Becomes</p>
           </div>
           <div className="space-y-1.5">
-            {headers.map((h) => (
+            {columns.map((h) => (
               <div key={h} className="flex items-start gap-3">
                 <div className="flex min-w-0 flex-1 items-center self-stretch rounded-md bg-slate-50 px-2 py-1.5" title={h}>
                   <span className="truncate text-xs text-slate-700">{h}</span>
@@ -982,6 +1007,22 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
             ))}
           </div>
         </>
+      )}
+
+      {!loading && (
+        <div className="flex items-center gap-2" data-testid="mk-map-addcol">
+          <Input
+            value={newCol}
+            onChange={(e) => setNewCol(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addColumn(); } }}
+            placeholder="Sheet column name"
+            className="h-8 flex-1 rounded-[4px] text-xs"
+            data-testid="mk-map-addcol-name"
+          />
+          <Button type="button" size="sm" variant="outline" className="h-8 rounded-[4px] text-xs" onClick={addColumn} disabled={!newCol.trim()} data-testid="mk-map-addcol-btn">
+            <Plus className="mr-1 h-3.5 w-3.5" />Add Column
+          </Button>
+        </div>
       )}
 
       {orphaned.length > 0 && (
