@@ -68,7 +68,7 @@ import { OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/compone
 import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookFixedByPreSales, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
-import { PHONE_LEAD_LIST, PhoneLeadCard, sourceWords } from "@/components/ui/phone-lead-card";
+import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import {
@@ -3173,69 +3173,19 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   </p>
                 );
               }
+              // Avatar, name, stage and arrow, the phone number under the name -- nothing
+              // else (asked 2026-11-20). The rest is in the lead popup.
               return visible.map((lead) => {
                 const rowStage = rowStageName(lead);
-                const slot = apptSlotLabel(lead);
-                const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
-                const np = showNotProspectColumns ? notProspectLabel(lead) : null;
-                const pbRow = showPreBookColumns ? preBookOf(lead) : null;
-                // All Stages is the whole branch at a glance; a stage's own lines
-                // (appointment, follow-up, reminder) show under the name on that stage.
-                const allStages = !stageFilter;
-                const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || pbRow || lead.assigned_physio_name);
                 return (
                   <PhoneLeadCard
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={<><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
-                    // Pre Sales' line: the phone, then the source ("Meta · Facebook").
-                    subLine={[displayPhone(lead.phone), sourceWords(leadSourceLabel(lead))]}
+                    subLine={[displayPhone(lead.phone)]}
                     stage={rowStage || "—"}
                     onOpen={() => setSelectedLead(lead)}
                     testid="branch-card"
-                    details={hasDetails ? (
-                      <>
-                        {lead.email && <p className="truncate text-xs text-slate-500">{lead.email}</p>}
-                        {slot && (
-                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-appt-${lead.id}`}>
-                            <Calendar className="h-3 w-3 text-slate-400" />
-                            <span className="font-semibold text-slate-700">{[slot.date, slot.time].filter(Boolean).join(" · ")}</span>
-                            {!lead.assigned_physio_name && <span className="font-medium text-amber-600">Pre-Sales request</span>}
-                          </p>
-                        )}
-                        {/* The same Follow Up line the table draws, on the same stage and
-                            under the same rule. A phone is where a branch actually works a
-                            call list, so leaving this to the desk table would hide it from
-                            the reader most likely to be looking for it. */}
-                        {fu && (
-                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-followup-${lead.id}`}>
-                            <Clock className={`h-3 w-3 ${fu.overdue ? "text-rose-500" : "text-slate-400"}`} />
-                            <span className={`font-semibold ${fu.overdue ? "text-rose-600" : "text-slate-700"}`}>{[fu.date, fu.time].filter(Boolean).join(" · ")}</span>
-                            {fu.overdue && <span className="font-medium text-rose-500">Overdue</span>}
-                          </p>
-                        )}
-                        {np?.reminder && (
-                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-reminder-${lead.id}`}>
-                            <Bell className={`h-3 w-3 ${np.due ? "text-rose-500" : "text-slate-400"}`} />
-                            <span className="text-slate-500">Reminder call</span>
-                            <span className={`font-semibold ${np.due ? "text-rose-600" : "text-slate-700"}`}>{np.reminder}</span>
-                            <span className={`font-medium ${np.due ? "text-rose-500" : "text-slate-400"}`}>{np.due ? "Call due" : np.after}</span>
-                          </p>
-                        )}
-                        {pbRow && (
-                          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" data-testid={`branch-card-prebook-${lead.id}`}>
-                            <CalendarClock className="h-3 w-3 text-teal-500" />
-                            <span className="font-semibold text-slate-700">{preBookWhen(pbRow)}</span>
-                            <span className="text-slate-500">{pbRow.plan_label}</span>
-                            {preBookPaid(pbRow) > 0
-                              ? <span className="font-semibold text-teal-700">{rupees(preBookPaid(pbRow))} paid</span>
-                              : <span className="font-medium text-amber-600">Not paid</span>}
-                          </p>
-                        )}
-                        {lead.assigned_physio_name && <p className="truncate text-[10px] text-slate-400">Physio: {lead.assigned_physio_name}</p>}
-                      </>
-                    ) : null}
                   />
                 );
               });
@@ -5116,30 +5066,6 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                   )}
                   {lead.consultation_fee && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-100">Fee Rs.{lead.consultation_fee}</span>}
                   {lead.package_amount && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">Pkg Rs.{lead.package_amount}</span>}
-                  {/* Phone only (asked 2026-11-20): WhatsApp and Call as white tiles at the
-                      end of the second row, so the patient is reachable from every tab. */}
-                  {waNumber(lead.phone) && (
-                    <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:hidden" data-testid="branch-lead-phone-contact">
-                      <a
-                        href={`https://wa.me/${waNumber(lead.phone)}`}
-                        aria-label="WhatsApp"
-                        title="WhatsApp"
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#25D366] shadow-sm active:bg-green-50"
-                        data-testid="branch-lead-whatsapp"
-                      >
-                        <WhatsAppIcon className="h-5 w-5" />
-                      </a>
-                      <a
-                        href={`tel:${telNumber(lead.phone)}`}
-                        aria-label="Call"
-                        title="Call"
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#1E80F0] shadow-sm active:bg-blue-50"
-                        data-testid="branch-lead-call"
-                      >
-                        <Phone className="h-[18px] w-[18px]" />
-                      </a>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -5167,12 +5093,14 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                   <ArrowLeftRight className="h-5 w-5" />
                 </button>
               )}
-              {/* Icon only, the same square as Branch Transfer beside it. */}
+              {/* Icon only, the same square as Branch Transfer beside it. Not in the header
+                  on a phone, which holds only the name, Form, Transfer and Close (asked
+                  2026-11-20): there it sits in the Contact card, beside Call and WhatsApp. */}
               <button
                 onClick={() => setEditing(true)}
                 title="Edit"
                 aria-label="Edit"
-                className="inline-flex items-center rounded-[5px] bg-white p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+                className="hidden items-center rounded-[5px] bg-white p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 sm:inline-flex"
                 data-testid="branch-lead-edit"
               >
                 <Pencil className="h-5 w-5" />
@@ -5208,6 +5136,40 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                 <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600"><Phone className="h-4 w-4" /></span>
                   <p className="text-xs font-bold uppercase tracking-wider text-sky-700">Contact</p>
+                  {/* Phone only, as Pre Sales' popup has them (asked 2026-11-20): the list's
+                      cards carry no Call or WhatsApp, and the header no Edit on a phone. */}
+                  <div className="ml-auto flex items-center gap-2 sm:hidden" data-testid="branch-lead-contact-actions">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition active:bg-slate-200"
+                      title="Edit"
+                      aria-label="Edit"
+                      data-testid="branch-lead-contact-edit"
+                    >
+                      <Pencil className="h-[18px] w-[18px]" />
+                    </button>
+                    {waNumber(lead.phone) && (<>
+                      <a
+                        href={`https://wa.me/${waNumber(lead.phone)}`}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100"
+                        title="WhatsApp"
+                        aria-label={`WhatsApp ${lead.name || "patient"}`}
+                        data-testid="branch-lead-whatsapp"
+                      >
+                        <WhatsAppIcon className="h-5 w-5" />
+                      </a>
+                      <a
+                        href={`tel:${telNumber(lead.phone)}`}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition active:bg-sky-100"
+                        title="Call"
+                        aria-label={`Call ${lead.name || "patient"}`}
+                        data-testid="branch-lead-call"
+                      >
+                        <Phone className="h-5 w-5" />
+                      </a>
+                    </>)}
+                  </div>
                 </div>
                 <div className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Phone</span><span className="font-medium text-slate-800">{displayPhone(lead.phone) || "—"}</span></div>
