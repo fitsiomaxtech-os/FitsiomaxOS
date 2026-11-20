@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FileSpreadsheet, Users,
-  Plus, RefreshCw, ArrowRightLeft, X, Pencil, ChevronRight, Archive, ArchiveRestore,
+  Plus, RefreshCw, ArrowRightLeft, X, Pencil, ChevronRight, Archive, ArchiveRestore, Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   mkGetDistribution, mkPatchDistribution, mkRefreshDistribution,
   mkUnassignedCount, mkDistributeUnassigned,
   mkGetTeam, mkCreateTeamMember,
-  mkGetSources, mkLeadFieldCatalogue, gsSheetHeaders, leadFieldsCreate, mkCreateSource, mkUpdateSource,
+  mkGetSources, mkLeadFieldCatalogue, gsSheetHeaders, leadFieldsCreate, mkCreateSource, mkUpdateSource, mkDeleteSource,
   gsStatus, gsAuthUrl, gsDisconnect, gsPull, gsListTabs,
   getBranches,
 } from "@/lib/api";
@@ -157,6 +157,22 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
     setPullingId(null);
   };
 
+  // Archived rows only. Removes the row with its sheet link and mapping; leads it
+  // already imported stay where they are.
+  const [deletingId, setDeletingId] = useState(null);
+  const deleteSource = async (s) => {
+    if (!window.confirm(`Permanently delete "${s.name}"?\n\nIts Google Sheet link and column mapping are removed and cannot be restored. Leads it already imported are kept.`)) return;
+    setDeletingId(s.id);
+    try {
+      await mkDeleteSource(s.id);
+      toast.success("Source deleted");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Delete failed");
+    }
+    setDeletingId(null);
+  };
+
   return (
     <div className="space-y-4" data-testid="mk-sources-tab">
       {/* One toolbar: Google connection on the left, Active/Archived on the right.
@@ -255,8 +271,22 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     {/* Fixed-width slot, arrow pinned to its right edge — rows with no
                         Pull Lead (no sheet linked yet) keep their arrow in the same column. */}
-                    <div className="mx-auto flex w-[136px] items-center justify-end gap-2">
-                      {canPull && (
+                    <div className={`mx-auto flex items-center justify-end gap-2 ${s.is_archived ? "w-[176px]" : "w-[136px]"}`}>
+                      {/* Archived rows: Delete Permanently in place of Pull Lead. */}
+                      {s.is_archived && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => deleteSource(s)}
+                          disabled={deletingId === s.id}
+                          className="h-7 border-red-200 px-2.5 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                          data-testid={`mk-source-delete-${s.id}`}
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          {deletingId === s.id ? "Deleting..." : "Delete Permanently"}
+                        </Button>
+                      )}
+                      {!s.is_archived && canPull && (
                         <Button
                           size="sm"
                           onClick={() => pullNow(s)}

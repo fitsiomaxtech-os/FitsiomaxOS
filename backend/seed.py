@@ -1055,12 +1055,21 @@ async def ensure_branch_lead_sources() -> None:
     branches = await v3_col("branches").find({}, {"_id": 0, "id": 1, "branch_name": 1}).to_list(500)
     sources = await v3_col("marketing_sources").find({}, {"_id": 0}).to_list(500)
 
+    # Branches whose last row was deleted on purpose (v3_marketing.delete_source): no
+    # fresh empty card is made for them.
+    removed_branch_ids = {
+        d["branch_id"] for d in await v3_col("lead_source_removed_branches").find({}, {"_id": 0, "branch_id": 1}).to_list(500)
+    }
+
     claimed_source_ids = set()
     branch_to_source = {}
     # Further cards tied to exactly one branch: an extra sheet connected to it from
     # Lead Sources > Add Sheet. Kept (and kept named after the branch) rather than
     # archived as unclaimed; left archived if someone archived it.
     branch_extras = {}
+    # Orphans claimed by name in the second pass — the only matches un-archived below.
+    # A branch's own card that someone archived stays archived.
+    name_matched_ids = set()
 
     for branch in branches:
         matches = [s for s in sources if _lead_source_branch_ids(s) == [branch["id"]]]
@@ -1070,7 +1079,7 @@ async def ensure_branch_lead_sources() -> None:
             claimed_source_ids.update(s["id"] for s in matches)
 
     for branch in branches:
-        if branch["id"] in branch_to_source:
+        if branch["id"] in branch_to_source or branch["id"] in removed_branch_ids:
             continue
         branch_tokens = _lead_source_core_tokens(branch["branch_name"])
         if not branch_tokens:
@@ -1087,18 +1096,20 @@ async def ensure_branch_lead_sources() -> None:
         if candidate:
             branch_to_source[branch["id"]] = candidate
             claimed_source_ids.add(candidate["id"])
+            name_matched_ids.add(candidate["id"])
 
     for branch in branches:
         match = branch_to_source.get(branch["id"])
         if not match:
-            await v3_col("marketing_sources").insert_one(_default_lead_source_doc(branch["id"], branch["branch_name"]))
+            if branch["id"] not in removed_branch_ids:
+                await v3_col("marketing_sources").insert_one(_default_lead_source_doc(branch["id"], branch["branch_name"]))
             continue
         updates = {}
         if match.get("name") != branch["branch_name"]:
             updates["name"] = branch["branch_name"]
         if _lead_source_branch_ids(match) != [branch["id"]]:
             updates["branch_ids"] = [branch["id"]]
-        if match.get("is_archived"):
+        if match.get("is_archived") and match["id"] in name_matched_ids:
             updates["is_archived"] = False
         if updates:
             await v3_col("marketing_sources").update_one({"id": match["id"]}, {"$set": updates})

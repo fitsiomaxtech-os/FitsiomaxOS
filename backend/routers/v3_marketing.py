@@ -716,9 +716,23 @@ async def update_source(source_id: str, payload: MarketingSourceUpdate, _: V3Use
 
 @router.delete("/sources/{source_id}")
 async def delete_source(source_id: str, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
-    res = await v3_col("marketing_sources").delete_one({"id": source_id})
-    if res.deleted_count == 0:
+    source = await v3_col("marketing_sources").find_one({"id": source_id}, {"_id": 0})
+    if not source:
         raise HTTPException(status_code=404, detail="Source not found")
+    await v3_col("marketing_sources").delete_one({"id": source_id})
+    # Startup (seed.ensure_branch_lead_sources) gives every branch with no row a fresh
+    # empty one. When this was the branch's last row, the branch is recorded so a
+    # deliberate delete stays deleted; Add Sheet can still give it a row again.
+    branch_ids = normalize_source(dict(source))["branch_ids"]
+    if len(branch_ids) == 1:
+        bid = branch_ids[0]
+        remaining = await v3_col("marketing_sources").count_documents(
+            {"$or": [{"branch_ids": [bid]}, {"branch_ids": {"$exists": False}, "branch_id": bid}]}
+        )
+        if remaining == 0:
+            await v3_col("lead_source_removed_branches").update_one(
+                {"branch_id": bid}, {"$set": {"branch_id": bid, "removed_at": now_iso()}}, upsert=True,
+            )
     return {"message": "Source deleted"}
 
 
