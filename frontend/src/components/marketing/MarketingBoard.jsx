@@ -158,53 +158,43 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
 
   return (
     <div className="space-y-4" data-testid="mk-sources-tab">
-      <Card data-testid="gs-bar" className="border-slate-200 bg-white">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="flex items-center gap-3">
-            <svg viewBox="0 0 48 48" className="h-8 w-8">
-              <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
-              <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
-              <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
-              <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
-            </svg>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Google Sheets</p>
-              {gs.connected ? (
-                <p className="text-xs text-emerald-600">Connected · <span className="text-slate-500">Sheets read-only access only</span></p>
-              ) : (
-                <p className="text-xs text-slate-500">Connect Google to auto-pull leads (Sheets read-only — no Drive, no email).</p>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {gs.connected ? (
-              <Button variant="outline" size="sm" onClick={() => setShowManage(true)} data-testid="gs-view-btn">View</Button>
-            ) : (
-              <Button onClick={connectGoogle} className="bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 shadow-sm" data-testid="gs-connect-btn">
-                <svg viewBox="0 0 48 48" className="mr-2 h-4 w-4">
-                  <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
-                  <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
-                  <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
-                  <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
-                </svg>
-                Continue with Google
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* No Add Source here any more — a row exists for every branch in Branch Manager
+      {/* One toolbar: Google connection on the left, Active/Archived on the right.
+          No Add Source here any more — a row exists for every branch in Branch Manager
           the moment that branch does (see seed.ensure_branch_lead_sources), so there is
           nothing left to add by hand. Paste a sheet URL into an existing branch's row via
-          the ">" (Edit Source), or open a new branch in Operations > Branch > Branch Manager. */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <button onClick={() => setSourceView("active")} className={`rounded-md px-3 py-2 text-sm font-medium ${sourceView === "active" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-active">
-          Active ({sources.filter((s) => !s.is_archived).length})
-        </button>
-        <button onClick={() => setSourceView("archived")} className={`rounded-md px-3 py-2 text-sm font-medium ${sourceView === "archived" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-archived">
-          Archived ({sources.filter((s) => s.is_archived).length})
-        </button>
+          its Edit Source popup, or open a new branch in Operations > Branch > Branch Manager. */}
+      <div data-testid="gs-bar" className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <svg viewBox="0 0 48 48" className="h-6 w-6 shrink-0">
+            <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
+            <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
+            <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
+            <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
+          </svg>
+          <p className="text-sm font-semibold text-slate-800">Google Sheets</p>
+          {gs.connected ? (
+            <>
+              <span className="text-xs font-medium text-emerald-600">Connected</span>
+              <span className="text-slate-300">·</span>
+              <Button variant="outline" size="sm" className="h-7 rounded-[4px] px-3 text-xs" onClick={() => setShowManage(true)} data-testid="gs-view-btn">View</Button>
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-slate-500">Not connected</span>
+              <Button size="sm" onClick={connectGoogle} className="h-7 rounded-[4px] border border-slate-300 bg-white px-3 text-xs text-slate-800 shadow-sm hover:bg-slate-50" data-testid="gs-connect-btn">
+                Continue with Google
+              </Button>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setSourceView("active")} className={`rounded-md px-3 py-1.5 text-sm font-medium ${sourceView === "active" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-active">
+            Active ({sources.filter((s) => !s.is_archived).length})
+          </button>
+          <button onClick={() => setSourceView("archived")} className={`rounded-md px-3 py-1.5 text-sm font-medium ${sourceView === "archived" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-archived">
+            Archived ({sources.filter((s) => s.is_archived).length})
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-[4px] border border-slate-200 bg-white" data-testid="mk-sources-table">
@@ -225,7 +215,14 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
               const branchNames = (s.branch_ids || []).map((bid) => branches.find((b) => b.id === bid)?.branch_name || "Unknown branch");
               const canPull = s.source_type === "google_sheets" && s.spreadsheet_id && gs.connected;
               return (
-                <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`mk-source-row-${s.id}`}>
+                // The whole row opens Edit Source; header row keeps its own height.
+                <tr
+                  key={s.id}
+                  onClick={() => setShowEdit(s)}
+                  title="Edit connected sheet"
+                  className="h-[65px] cursor-pointer border-t border-slate-100 hover:bg-slate-50"
+                  data-testid={`mk-source-row-${s.id}`}
+                >
                   <td className="px-3 py-2 text-slate-500">{i + 1}</td>
                   <td className="px-3 py-2 font-medium text-slate-800">{s.name}</td>
                   <td className="px-3 py-2 text-slate-600">{sourceTypeLabel(s.source_type)}</td>
@@ -236,8 +233,10 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
                     {branchNames.length ? branchNames.join(", ") : "All Branches"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-600">{formatSynced(s.last_synced)}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-center gap-2">
+                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    {/* Fixed-width slot, arrow pinned to its right edge — rows with no
+                        Pull Lead (no sheet linked yet) keep their arrow in the same column. */}
+                    <div className="mx-auto flex w-[136px] items-center justify-end gap-2">
                       {canPull && (
                         <Button
                           size="sm"
