@@ -214,10 +214,10 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
             <Plus className="h-4 w-4" />Add Sheet
           </button>
           <button onClick={() => setSourceView("active")} className={`rounded-md px-3 py-1.5 text-sm font-medium ${sourceView === "active" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-active">
-            Active ({sources.filter((s) => !s.is_archived).length})
+            Active
           </button>
           <button onClick={() => setSourceView("archived")} className={`rounded-md px-3 py-1.5 text-sm font-medium ${sourceView === "archived" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-archived">
-            Archived ({sources.filter((s) => s.is_archived).length})
+            Archived
           </button>
         </div>
       </div>
