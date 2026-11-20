@@ -68,7 +68,7 @@ import { OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/compone
 import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookFixedByPreSales, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
-import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
+import { PHONE_LEAD_LIST, PhoneLeadCard, sourceWords } from "@/components/ui/phone-lead-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import {
@@ -3159,15 +3159,16 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           )}
 
           {/* Phone list — six columns can't be read at 430px whichever way they're sized,
-              so below md the same rows are stacked as cards instead of being pushed off
-              the side of a horizontally-scrolling table. */}
+              so below md each lead is a card: Pre Sales' phone card, exactly (asked
+              2026-11-20, see ui/phone-lead-card). No Call or WhatsApp on it -- those are
+              in the lead popup. */}
           {/* On a phone this sits right under the stage grid, narrowed by its open tile. */}
-          <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-list-mobile">
+          <div className={`${PHONE_LEAD_LIST} md:hidden`} data-testid="branch-list-mobile">
             {(() => {
               const visible = pageLeads;
               if (visible.length === 0) {
                 return (
-                  <p className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-mobile-empty">
+                  <p className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-mobile-empty">
                     No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                   </p>
                 );
@@ -3178,35 +3179,20 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
                 const pbRow = showPreBookColumns ? preBookOf(lead) : null;
-                // All Stages is the whole branch at a glance, every stage mixed together, so
-                // its card says only who, their number and where they stand: the name, the
-                // phone and the stage, boxed, then a grey bin and an arrow into the lead (see
-                // `glance` on ui/lead-row-card). The Patient Number, city, marks, the stage's
-                // own lines and Call/WhatsApp belong to a stage's pill, where the list is
-                // being worked rather than looked over.
+                // All Stages is the whole branch at a glance; a stage's own lines
+                // (appointment, follow-up, reminder) show under the name on that stage.
                 const allStages = !stageFilter;
                 const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || pbRow || lead.assigned_physio_name);
-                // Pre Sales' phone row (see ui/lead-row-card). Anything a stage adds
-                // (appointment, follow-up, reminder) goes under the name.
-                //
-                // No Call or WhatsApp on any row, New Leads included (asked 2026-11-20):
-                // the lead popup carries them on a phone. Tapping the row opens it.
                 return (
-                  <LeadRowCard
+                  <PhoneLeadCard
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
-                    nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
-                    badge={rowStage || "—"}
-                    badgeColor={rowStage ? stageColor(rowStage) : null}
-                    idLine={allStages ? [displayPhone(lead.phone) || "—"] : [lead.patient_number, displayPhone(lead.phone), cityAnswer(lead)]}
+                    nameAddon={<><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
+                    // Pre Sales' line: the phone, then the source ("Meta · Facebook").
+                    subLine={[displayPhone(lead.phone), sourceWords(leadSourceLabel(lead))]}
+                    stage={rowStage || "—"}
                     onOpen={() => setSelectedLead(lead)}
-                    // The desk row's bin, on the phone: same rule for who sees it, same
-                    // typed-DELETE dialog, same purge. New Leads only.
-                    onDelete={showingMirror && canDeleteLeads ? () => setRowDelete(lead) : null}
-                    glance={allStages}
-                    // Every row opens the lead, so every row ends in the arrow.
-                    arrow
                     testid="branch-card"
                     details={hasDetails ? (
                       <>
