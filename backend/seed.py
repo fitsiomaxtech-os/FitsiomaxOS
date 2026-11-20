@@ -1057,12 +1057,17 @@ async def ensure_branch_lead_sources() -> None:
 
     claimed_source_ids = set()
     branch_to_source = {}
+    # Further cards tied to exactly one branch: an extra sheet connected to it from
+    # Lead Sources > Add Sheet. Kept (and kept named after the branch) rather than
+    # archived as unclaimed; left archived if someone archived it.
+    branch_extras = {}
 
     for branch in branches:
-        match = next((s for s in sources if _lead_source_branch_ids(s) == [branch["id"]]), None)
-        if match:
-            branch_to_source[branch["id"]] = match
-            claimed_source_ids.add(match["id"])
+        matches = [s for s in sources if _lead_source_branch_ids(s) == [branch["id"]]]
+        if matches:
+            branch_to_source[branch["id"]] = matches[0]
+            branch_extras[branch["id"]] = matches[1:]
+            claimed_source_ids.update(s["id"] for s in matches)
 
     for branch in branches:
         if branch["id"] in branch_to_source:
@@ -1097,6 +1102,9 @@ async def ensure_branch_lead_sources() -> None:
             updates["is_archived"] = False
         if updates:
             await v3_col("marketing_sources").update_one({"id": match["id"]}, {"$set": updates})
+        for extra in branch_extras.get(branch["id"], []):
+            if extra.get("name") != branch["branch_name"]:
+                await v3_col("marketing_sources").update_one({"id": extra["id"]}, {"$set": {"name": branch["branch_name"]}})
 
     for s in sources:
         if s["id"] not in claimed_source_ids and not s.get("is_archived"):

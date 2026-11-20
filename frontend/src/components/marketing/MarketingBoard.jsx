@@ -90,6 +90,7 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
   const [sourceView, setSourceView] = useState("active");
   const [gs, setGs] = useState({ connected: false });
   const [showEdit, setShowEdit] = useState(null);
+  const [showAddSheet, setShowAddSheet] = useState(false);
   const [pullingId, setPullingId] = useState(null);
   // "View" shows the connection and its controls. It used to open locked behind a
   // code; that came off with the rest of the lock system.
@@ -188,6 +189,14 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddSheet(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            data-testid="mk-source-add-sheet"
+          >
+            <Plus className="h-4 w-4" />Add Sheet
+          </button>
           <button onClick={() => setSourceView("active")} className={`rounded-md px-3 py-1.5 text-sm font-medium ${sourceView === "active" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-active">
             Active ({sources.filter((s) => !s.is_archived).length})
           </button>
@@ -214,6 +223,9 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
             {visibleSources.map((s, i) => {
               const branchNames = (s.branch_ids || []).map((bid) => branches.find((b) => b.id === bid)?.branch_name || "Unknown branch");
               const canPull = s.source_type === "google_sheets" && s.spreadsheet_id && gs.connected;
+              // A Google Sheets row with no sheet linked pulls nothing, so it is not Active
+              // even though the source itself is switched on.
+              const status = !s.is_active ? "deactive" : s.source_type === "google_sheets" && !s.spreadsheet_id ? "no_sheet" : "active";
               return (
                 // The whole row opens Edit Source; header row keeps its own height.
                 <tr
@@ -227,7 +239,14 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
                   <td className="px-3 py-2 font-medium text-slate-800">{s.name}</td>
                   <td className="px-3 py-2 text-slate-600">{sourceTypeLabel(s.source_type)}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ${s.is_active ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"}`}>{s.is_active ? "Active" : "Deactive"}</span>
+                    <span
+                      className={`inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ${
+                        status === "active" ? "bg-green-100 text-green-700" : status === "no_sheet" ? "bg-orange-100 text-orange-700" : "bg-slate-200 text-slate-600"
+                      }`}
+                      data-testid={`mk-source-status-${s.id}`}
+                    >
+                      {status === "active" ? "Active" : status === "no_sheet" ? "No Sheet" : "Deactive"}
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-slate-600" data-testid={`mk-source-branch-${s.id}`}>
                     {branchNames.length ? branchNames.join(", ") : "All Branches"}
@@ -274,6 +293,10 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
           </tbody>
         </table>
       </div>
+
+      {showAddSheet && (
+        <AddSheetDialog branches={branches} sources={sources} onClose={() => setShowAddSheet(false)} onSaved={() => { setShowAddSheet(false); load(); }} />
+      )}
 
       {showEdit && (
         <EditSourceDialog source={showEdit} branches={branches} onClose={() => setShowEdit(null)} onSaved={() => { setShowEdit(null); load(); }} />
@@ -790,6 +813,83 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
             />
           </div>
         )}
+      </div>
+    </DialogShell>
+  );
+};
+
+/**
+ * Add Sheet: connect a Google Sheet to a branch. A branch whose own row has no sheet yet
+ * gets it on that row; a branch that already has one gets a further row of its own,
+ * tagged to that branch alone (seed.ensure_branch_lead_sources keeps those).
+ */
+const AddSheetDialog = ({ branches = [], sources = [], onClose, onSaved }) => {
+  const [branchId, setBranchId] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [tabs, setTabs] = useState(["Sheet1"]);
+  const [busy, setBusy] = useState(false);
+  const spreadsheetId = extractSheetId(sheetUrl);
+
+  const save = async () => {
+    const branch = branches.find((b) => b.id === branchId);
+    if (!branch) { toast.error("Pick a branch"); return; }
+    if (!spreadsheetId) { toast.error("Paste a valid Google Sheet URL (must contain /spreadsheets/d/<ID>/)"); return; }
+    const ownRows = sources.filter((s) => !s.is_archived && (s.branch_ids || []).length === 1 && s.branch_ids[0] === branchId);
+    if (ownRows.some((s) => s.spreadsheet_id === spreadsheetId)) {
+      toast.error(`This sheet is already connected to ${branch.branch_name}`);
+      return;
+    }
+    const sheet = {
+      source_type: "google_sheets",
+      sheet_url: sheetUrl.trim(),
+      spreadsheet_id: spreadsheetId,
+      sheet_names: tabs.length ? tabs : ["Sheet1"],
+    };
+    const emptyRow = ownRows.find((s) => !s.spreadsheet_id);
+    setBusy(true);
+    try {
+      if (emptyRow) await mkUpdateSource(emptyRow.id, sheet);
+      else await mkCreateSource({ ...sheet, name: branch.branch_name, branch_ids: [branchId], verticals: [] });
+      toast.success(`Sheet connected to ${branch.branch_name}`);
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not add the sheet");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DialogShell title="Add Sheet" onClose={onClose} testid="mk-add-sheet-dialog" maxWidth="max-w-[560px]" rounded="rounded-[4px]">
+      <div>
+        <FieldRow label="Branch">
+          <ThemedSelect
+            value={branchId}
+            onChange={setBranchId}
+            options={sortedForPicker(branches).map((b) => ({ value: b.id, label: b.branch_name }))}
+            placeholder="Select branch"
+            className="h-8 w-full rounded-[4px]"
+            testid="mk-add-sheet-branch"
+          />
+        </FieldRow>
+        <FieldRow label="Sheet URL">
+          <Input
+            className="h-8 rounded-[4px]"
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+            value={sheetUrl}
+            onChange={(e) => setSheetUrl(e.target.value)}
+            data-testid="mk-add-sheet-url"
+          />
+        </FieldRow>
+        {spreadsheetId && (
+          <FieldRow label="Tabs">
+            <SheetTabPicker spreadsheetId={spreadsheetId} values={tabs} onChange={setTabs} testid="mk-add-sheet-tabs" />
+          </FieldRow>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={busy} className="bg-sky-600 hover:bg-sky-700" data-testid="mk-add-sheet-save">
+          {busy ? "Adding..." : "✓ Add Sheet"}
+        </Button>
       </div>
     </DialogShell>
   );
