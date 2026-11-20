@@ -6,6 +6,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { toast } from "@/components/ui/sonner";
 import {
   mkGetDistribution, mkPatchDistribution, mkRefreshDistribution,
@@ -679,7 +680,7 @@ const TargetPicker = ({ branches, branchIds, onBranchIdsChange, testid }) => (
     {/* Tall enough to hold every branch open today (7) with no scroll — a name sitting
         one scroll below the fold is what read as "missing" here before. Still capped and
         scrollable for whenever the list outgrows that. */}
-    <div className="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-2" data-testid={`${testid}-branches`}>
+    <div className="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-[4px] border border-slate-200 p-2" data-testid={`${testid}-branches`}>
       {sortedForPicker(branches).map((b) => {
         const checked = branchIds.includes(b.id);
         return (
@@ -775,23 +776,24 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
   };
 
   return (
-    <DialogShell title="Edit Source" onClose={onClose} testid="mk-edit-source-dialog" maxWidth="max-w-2xl">
+    <DialogShell title="Edit Source" onClose={onClose} testid="mk-edit-source-dialog" maxWidth="max-w-2xl" rounded="rounded-[4px]">
       {/* Two columns on a wider dialog rather than one long stack — the tab and branch
           checklists side by side are what actually saved the height; everything else
           just rides along in the same grid. Single column again below sm. */}
       <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <div className="flex h-9 w-full items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700" data-testid="mk-edit-source-name">{name}</div>
-          <p className="mt-1 text-[11px] text-slate-400">Named after the branch — rename the branch in Branch Manager to change this.</p>
-        </div>
-        <select className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm" value={sourceType} onChange={(e) => setSourceType(e.target.value)} data-testid="mk-edit-source-type">
-          {["meta", "seo", "referral", "walk_in", "website", "csv_import", "google_sheets", "other"].map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <div className="flex h-9 w-full items-center rounded-[4px] border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700" data-testid="mk-edit-source-name">{name}</div>
+        <ThemedSelect
+          value={sourceType}
+          onChange={setSourceType}
+          options={["meta", "seo", "referral", "walk_in", "website", "csv_import", "google_sheets", "other"]}
+          className="h-9 w-full rounded-[4px]"
+          testid="mk-edit-source-type"
+        />
         {sourceType === "google_sheets" ? (
           <>
             <div className="flex items-center gap-2 sm:col-span-2" data-testid="mk-edit-source-innertabs">
-              <button type="button" onClick={() => setEditTab("details")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${editTab === "details" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-edit-source-tab-details">Details</button>
-              <button type="button" onClick={() => setEditTab("sources")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${editTab === "sources" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-edit-source-tab-sources">
+              <button type="button" onClick={() => setEditTab("details")} className={`rounded-[4px] px-3 py-1.5 text-xs font-medium ${editTab === "details" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-edit-source-tab-details">Details</button>
+              <button type="button" onClick={() => setEditTab("sources")} className={`rounded-[4px] px-3 py-1.5 text-xs font-medium ${editTab === "sources" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-edit-source-tab-sources">
                 Sources ({sheetEntries.filter((e) => e.spreadsheet_id).length})
               </button>
             </div>
@@ -812,8 +814,8 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
                   onBranchIdsChange={setBranchIds}
                   testid="mk-edit-source-target"
                 />
-                <Input placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
-                <p className="sm:col-span-2 text-xs text-amber-700 bg-amber-50 rounded p-2">
+                <Input className="rounded-[4px]" placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
+                <p className="sm:col-span-2 text-xs text-amber-700 bg-amber-50 rounded-[4px] p-2">
                   <strong>Important:</strong> every sheet must be either accessible to the Google account you connected, OR shared as “Anyone with the link can view”.
                 </p>
                 <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -823,7 +825,7 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
                 {autoSyncEnabled && (
                   <div className="flex items-center gap-2">
                     <label className="text-xs font-medium text-slate-600">Every</label>
-                    <Input type="number" min="5" className="w-24" value={autoSyncInterval} onChange={(e) => setAutoSyncInterval(e.target.value)} data-testid="mk-edit-source-interval" />
+                    <Input type="number" min="5" className="w-24 rounded-[4px]" value={autoSyncInterval} onChange={(e) => setAutoSyncInterval(e.target.value)} data-testid="mk-edit-source-interval" />
                     <span className="text-xs text-slate-500">minutes</span>
                   </div>
                 )}
@@ -832,22 +834,17 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
           </>
         ) : (
           <>
-            <Input className="sm:col-span-2" placeholder="Source URL (optional, for reference)" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} data-testid="mk-edit-source-url" />
+            <Input className="sm:col-span-2 rounded-[4px]" placeholder="Source URL (optional, for reference)" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} data-testid="mk-edit-source-url" />
             <TargetPicker
               branches={branches}
               branchIds={branchIds}
               onBranchIdsChange={setBranchIds}
               testid="mk-edit-source-target"
             />
-            <Input placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
+            <Input className="rounded-[4px]" placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
           </>
         )}
-        <p className="sm:col-span-2 text-xs text-slate-400">Changing headers re-detects the column mapping. Leave as-is to keep your current mapping.</p>
-        <p className="sm:col-span-2 text-xs text-slate-400">
-          Leave empty for All Branches (leads go to Pre-Sales as usual). Pick exactly ONE branch to auto-assign every lead pulled from it straight there. Picking several just tags this source for filtering — leads still land in the general Pre-Sales pool.
-          {" "}This card started tagged to its own branch — untick it and the next server restart retags it back and archives this card in favour of a fresh one, since Branch Manager is what keeps one card per branch in step.
-        </p>
-        <Button onClick={save} className="sm:col-span-2 w-full" data-testid="mk-edit-source-save">Save Changes</Button>
+        <Button onClick={save} className="sm:col-span-2 w-full rounded-[4px]" data-testid="mk-edit-source-save">Save Changes</Button>
       </div>
     </DialogShell>
   );
@@ -1206,9 +1203,9 @@ const TeamTab = ({ team, reloadTeam, branches }) => {
 // the content — a tall form (Add/Edit Source, with its branch and tab checklists) used to
 // push the close button off the top of the screen with no way to scroll back up to it,
 // since the old shell had no height cap at all.
-const DialogShell = ({ title, onClose, children, testid, maxWidth = "max-w-md" }) => (
+const DialogShell = ({ title, onClose, children, testid, maxWidth = "max-w-md", rounded = "rounded-lg" }) => (
   <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" data-testid={testid}>
-    <div className={`flex max-h-[85vh] w-full ${maxWidth} flex-col rounded-lg bg-white shadow-xl`}>
+    <div className={`flex max-h-[85vh] w-full ${maxWidth} flex-col ${rounded} bg-white shadow-xl`}>
       <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="mk-dialog-close"><X className="h-4 w-4" /></button>
