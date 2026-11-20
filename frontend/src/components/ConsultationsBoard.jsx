@@ -187,6 +187,11 @@ const weekOf = (d, firstDay) => Math.floor((new Date(`${d}T00:00:00`) - new Date
 // the same value PHYSIO CALENDAR cuts a physio's day into, so one published slot is
 // always exactly one treatment session.
 const FALLBACK_SESSION_MINUTES = 30;
+/** "09:30" → 570, minutes into the day. */
+const clockMinutes = (hhmm) => {
+  const [h, m] = String(hhmm || "").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
 
 /**
  * What the Head Physio is sending the patient away with. Consultation itself needs no
@@ -3499,13 +3504,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // MANAGEMENT → Physiotherapist Calendar, else FITSIO STORE's. This picker used to read
   // only the store, so a physio moved to 45 minutes still showed 30-minute ranges here.
   const sessionMinutes = Number(physioCalendarData?.slot_duration) || storeSessionMinutes;
-  // A published slot keeps the length it was opened at, so a day opened at 30 minutes still
-  // reads 8:00 to 8:30 after the physio moves to 45 — saying 8:00 to 8:45 would overlap the
-  // 8:30 slot next to it.
+  // The length each published slot was opened at. Only read for a booking standing at a
+  // time the picker no longer offers — see physioSlotsByDate, which cuts every day the
+  // picker shows at sessionMinutes.
   const savedSlotMinutes = useMemo(() => Object.fromEntries(
     (physioCalendarData?.slot_details || []).map((d) => [d.slot_time, Number(d.duration) || 0]),
   ), [physioCalendarData]);
-  const minutesAt = (date, time) => savedSlotMinutes[`${date}T${time}`] || sessionMinutes;
 
   // Diet Appointment (Branch Admin only) — books the Diet Consultation.
   //
@@ -6298,6 +6302,93 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // submitted; everything else on the slot is a standing booking.
   const assignCourse = isRehabAssign ? "rehab" : "session";
 
+  // Every time the picker offers, grouped by date, so the month grid can flag which days
+  // actually have availability and the day panel can list its times.
+  //
+  // Cut at the Treatment Session Duration rather than listed as published. A physio set to
+  // 1 h is offered 9:00 to 10:00, 10:00 to 11:00 … even on a day that was opened at 30
+  // minutes: a published time is offered only once the session before it has ended, so no
+  // two times on the list overlap. Only published times are ever offered — a gap in the day
+  // (a split shift, an hour taken off by hand) starts the next session at the first time
+  // published after it.
+  const physioSlotsByDate = useMemo(() => {
+    const published = {};
+    for (const slot of physioCalendarData?.slots || []) {
+      const [d, t] = slot.split("T");
+      if (!d || !t) continue;
+      (published[d] = published[d] || []).push(t);
+    }
+    const step = Math.max(5, Number(sessionMinutes) || FALLBACK_SESSION_MINUTES);
+    const map = {};
+    for (const [d, times] of Object.entries(published)) {
+      let free = -Infinity;
+      map[d] = [...new Set(times)].sort().filter((t) => {
+        const at = clockMinutes(t);
+        if (at < free) return false;
+        free = at + step;
+        return true;
+      });
+    }
+    return map;
+  }, [physioCalendarData, sessionMinutes]);
+
+  // How long the slot at this time runs: a time the picker offers is one whole session; a
+  // booking still standing at a time it no longer offers keeps the length it was opened at.
+  const minutesAt = (date, time) => ((physioSlotsByDate[date] || []).includes(time)
+    ? sessionMinutes
+    : savedSlotMinutes[`${date}T${time}`] || sessionMinutes);
+
+  // Whether `slot` falls inside the session the picker offers at `start` — a day booked at
+  // 9:30 when the physio ran 30 minutes is inside the 9:00 to 10:00 session now.
+  const sessionHolds = (start, slot) => {
+    if (!start || !slot) return false;
+    if (start === slot) return true;
+    const [d, t] = start.split("T");
+    const [sd, st] = slot.split("T");
+    if (d !== sd) return false;
+    const from = clockMinutes(t);
+    const at = clockMinutes(st);
+    return at >= from && at < from + minutesAt(d, t);
+  };
+
+  // The booked times of each date, so a session only looks through its own day's.
+  const bookedTimesByDate = useMemo(() => {
+    const map = {};
+    for (const key of Object.keys(physioCalendarData?.occupants || {})) {
+      const [d, t] = key.split("T");
+      if (d && t) (map[d] = map[d] || []).push(t);
+    }
+    return map;
+  }, [physioCalendarData]);
+
+  // Every booked time that overlaps the session at `slot`, with when it runs. Bookings
+  // made when the physio ran a shorter session sit inside the longer one now and take a
+  // seat in it.
+  const sessionKeys = useCallback((slot) => {
+    const [d, t] = (slot || "").split("T");
+    if (!d || !t) return [];
+    const from = clockMinutes(t);
+    const to = from + minutesAt(d, t);
+    return (bookedTimesByDate[d] || []).flatMap((bt) => {
+      const start = clockMinutes(bt);
+      const end = start + minutesAt(d, bt);
+      return start < to && end > from ? [{ key: `${d}T${bt}`, start, end }] : [];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookedTimesByDate, physioSlotsByDate, savedSlotMinutes, sessionMinutes]);
+
+  // The most seats in use at any moment of the session at `slot`, each booked time counted
+  // by `seatsAt`. Checked where the session starts and wherever a booking inside it starts.
+  const sessionLoad = useCallback((slot, seatsAt) => {
+    const keys = sessionKeys(slot);
+    if (keys.length === 0) return 0;
+    const from = clockMinutes((slot || "").split("T")[1]);
+    const moments = [from, ...keys.map((k) => k.start).filter((m) => m > from)];
+    return Math.max(0, ...moments.map((at) => keys
+      .filter((k) => k.start <= at && k.end > at)
+      .reduce((n, k) => n + seatsAt(k.key), 0)));
+  }, [sessionKeys]);
+
   // This lead's own bookings on the course being booked don't count against the slot.
   // Re-opening the picker for the physio they're already with would otherwise see their
   // own sessions as a clash and refuse to let them keep the times they already have.
@@ -6308,22 +6399,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // course was how this grid drew a free seat on a slot the backend then refused with
   // "Full for this physio (3 per slot)" — the branch was shown the slot, picked it, and
   // was told at submit that it had never been available.
-  const slotSeatsTaken = useCallback((slot) => {
-    const occ = physioCalendarData?.occupancy?.[slot] || 0;
-    const mine = (physioCalendarData?.occupants?.[slot] || [])
+  const slotSeatsTaken = useCallback((slot) => sessionLoad(slot, (key) => {
+    const occ = physioCalendarData?.occupancy?.[key] || 0;
+    const mine = (physioCalendarData?.occupants?.[key] || [])
       .filter((o) => o.lead_id === selectedLead?.id && o.course === assignCourse).length;
     return Math.max(0, occ - mine);
-  }, [physioCalendarData, selectedLead, assignCourse]);
+  }), [sessionLoad, physioCalendarData, selectedLead, assignCourse]);
 
   // A day this patient already holds with this physio on the other course. The seat count
   // cannot express it — the physio may well have a free seat — but the patient cannot be
   // on the treatment floor and in rehab in the same half hour. Both assign endpoints
   // refuse it by name; this takes the slot off the table before the branch gets that far.
   const slotOwnOtherCourse = useCallback((slot) => {
-    const clash = (physioCalendarData?.occupants?.[slot] || [])
+    const clash = sessionKeys(slot)
+      .flatMap((k) => physioCalendarData?.occupants?.[k.key] || [])
       .find((o) => o.lead_id === selectedLead?.id && o.course && o.course !== assignCourse);
     return clash ? (COURSE_DAY_NOUN[clash.course] || "booking") : "";
-  }, [physioCalendarData, selectedLead, assignCourse]);
+  }, [sessionKeys, physioCalendarData, selectedLead, assignCourse]);
 
   // One gate for every place that asks "can this slot be picked" — the month grid's
   // availability dots, the open-slot count, the tile, and the pick handler.
@@ -6332,11 +6424,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     [slotSeatsTaken, slotCapacity, slotOwnOtherCourse],
   );
 
-  const slotOccupantNames = useCallback((slot) => (physioCalendarData?.occupants?.[slot] || [])
+  const slotOccupantNames = useCallback((slot) => [...new Set(sessionKeys(slot)
+    .flatMap((k) => physioCalendarData?.occupants?.[k.key] || [])
     .filter((o) => o.lead_id !== selectedLead?.id)
     .map((o) => o.lead_name)
-    .filter(Boolean)
-    .join(", "), [physioCalendarData, selectedLead]);
+    .filter(Boolean))]
+    .join(", "), [sessionKeys, physioCalendarData, selectedLead]);
 
   // How full a slot is with nobody discounted. `slotSeatsTaken` above answers "can this
   // lead be put here", which means quietly not counting this lead's own days; the manage
@@ -6344,15 +6437,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // stop — and moving a booking onto an hour this lead already holds must be refused, not
   // waved through.
   const slotSeatsRaw = useCallback(
-    (slot) => physioCalendarData?.occupancy?.[slot] || 0,
-    [physioCalendarData],
+    (slot) => sessionLoad(slot, (key) => physioCalendarData?.occupancy?.[key] || 0),
+    [sessionLoad, physioCalendarData],
   );
 
   // Every booking standing in one hour, exactly as the calendar reported them — this
   // lead's included, and each carrying the id and course the manage popup acts on.
   const slotBookings = useCallback(
-    (slot) => physioCalendarData?.occupants?.[slot] || [],
-    [physioCalendarData],
+    (slot) => sessionKeys(slot).flatMap((k) => physioCalendarData?.occupants?.[k.key] || []),
+    [sessionKeys, physioCalendarData],
   );
 
   // The same bookings as the tags a tile wears, one per course rather than one per person.
@@ -6461,19 +6554,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   };
 
 
-
-  // Every published slot of the picked physio, grouped by date, so the picker's month grid
-  // can flag which days actually have availability and the day panel can list its times.
-  const physioSlotsByDate = useMemo(() => {
-    const map = {};
-    for (const slot of physioCalendarData?.slots || []) {
-      const [d, t] = slot.split("T");
-      if (!d || !t) continue;
-      (map[d] = map[d] || []).push(t);
-    }
-    Object.values(map).forEach((times) => times.sort());
-    return map;
-  }, [physioCalendarData]);
 
   const sortedPickedSlots = useMemo(() => [...pickedSessionSlots].sort(), [pickedSessionSlots]);
   // A Rehab course entered without a day count leaves nothing to count towards. Rather than
@@ -6632,6 +6712,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     // 9 back-to-back slots. Picking another time on a day that already holds a session
     // moves that day's session rather than stacking a second one onto it.
     const sameDay = prev.find((s) => s.startsWith(`${day}T`));
+    // A day already booked inside this session (9:30, from when the physio ran 30 minutes)
+    // shows on this tile as chosen, so clicking it unselects, as it says.
+    if (sameDay && sessionHolds(slot, sameDay)) { setPickedSessionSlots(prev.filter((s) => s !== sameDay)); return; }
     if (sameDay) { setPickedSessionSlots([...prev.filter((s) => s !== sameDay), slot]); return; }
 
     if (!openEndedRehab && prev.length >= daysToBook) {
@@ -15407,7 +15490,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                   // out of seats. Two different problems with two
                                   // different answers, so the tile says which.
                                   const ownClash = slotOwnOtherCourse(slot);
-                                  const picked = planByDate[pickerDate]?.slot === slot;
+                                  const picked = sessionHolds(slot, planByDate[pickerDate]?.slot);
                                   const pickedPaid = picked && isPaidSession(planByDate[pickerDate].day);
                                   // What is actually standing in this hour, grouped by the
                                   // course each booking came off. Three treatment days in a
