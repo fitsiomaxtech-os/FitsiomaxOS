@@ -2423,25 +2423,14 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           {uploadReminder && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5" data-testid="physio-upload-reminder">
-              <Bell className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <div className="min-w-0 flex-1 space-y-1 text-xs text-amber-800">
-                <p className="font-bold">
-                  Progression Upload — {uploadReminder.rehab ? "Rehab " : ""}Day {uploadReminder.n} of {uploadReminder.total}
-                </p>
-                {uploadReminder.start && (
-                  <p>Starting week: record the patient's starting progression video now.</p>
-                )}
-                {uploadReminder.end && (
-                  <p>
-                    {uploadReminder.left === 0
-                      ? "Last day of the course"
-                      : `Course ends in ${uploadReminder.left} day${uploadReminder.left === 1 ? "" : "s"}`}
-                    : upload the Before &amp; After or Testimonial video before it ends.
-                  </p>
-                )}
-                <p className="text-amber-700">Any one is mandatory for Mark Treatment Complete.</p>
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
+            // One row: the title, then the three videos, ticked once filed.
+            <div className="flex items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2" data-testid="physio-upload-reminder">
+              <Bell className="h-4 w-4 shrink-0 text-amber-600" />
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-800">
+                <span className="whitespace-nowrap font-bold">
+                  Progression Upload — {uploadReminder.rehab ? "Rehab " : ""}Day {uploadReminder.n} of {uploadReminder.total} :
+                </span>
+                <div className="flex flex-wrap gap-1.5">
                   {DAY_UPLOADS.map((u) => {
                     const filed = (progressionVideos.find((r) => r.kind === u.kind)?.uploaded || 0) > 0;
                     return (
