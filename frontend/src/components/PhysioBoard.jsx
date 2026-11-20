@@ -327,6 +327,10 @@ const weekDatesFor = (iso) => {
 // week, and a window that steps by five keeps every day of the week reachable.
 const windowDatesFor = (iso) => Array.from({ length: 5 }, (_, i) => shiftIso(iso, i - 2));
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+// The strip's "All" cell — stands in for a date in selectedDate.
+const ALL_DAYS = "all";
+// "Fri 20" — the date a row carries when the list spans more than one day.
+const shortDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
 
 /** True below md — the width the bottom bar is drawn at. Read rather than left to CSS
  *  because the strip's dates and its arrows' step both change with it. */
@@ -618,6 +622,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squ
         rows.push({
           key: `day-${s.id}`,
           lead: lead || { id: s.lead_id, name: s.lead_name },
+          date: s.slot_time.slice(0, 10),
           time: (s.slot_time.split("T")[1] || "").slice(0, 5),
           // A rehab day says so. It is the same physio in the same room, but it belongs to
           // the rehab course rather than the session package, and reading "Day 3 of 7" off
@@ -638,7 +643,13 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squ
     return rows.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   }, [sessions, leadById, inScope]);
 
-  const dayRows = useMemo(() => rowsFor(selectedDate), [rowsFor, selectedDate]);
+  // "All" in the strip lists every day the strip is showing (the Sun-Sat week, or the
+  // phone's five days), date first then time, and follows the arrows as they step.
+  const showAll = selectedDate === ALL_DAYS;
+  const dayRows = useMemo(
+    () => (showAll ? stripDates.flatMap((d) => rowsFor(d)) : rowsFor(selectedDate)),
+    [rowsFor, selectedDate, showAll, stripDates],
+  );
 
   // Which of the three summary tiles is narrowing the day's list — "all" (the
   // default, tapping "Total Days") shows everything; "completed"/"pending" isolate
@@ -860,7 +871,22 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squ
           <p className="mb-1 text-center text-[11px] font-semibold text-slate-600">
             {new Date(`${weekAnchor}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </p>
-          <div className={`grid gap-1 ${phone ? "grid-cols-5" : "grid-cols-7"}`}>
+          <div className={`grid gap-1 ${phone ? "grid-cols-6" : "grid-cols-8"}`}>
+          <button
+            type="button"
+            onClick={() => setSelectedDate(ALL_DAYS)}
+            className={`flex flex-col items-center gap-0.5 rounded-lg py-1 transition ${showAll ? "bg-sky-600" : "hover:bg-slate-50"}`}
+            data-testid="physio-day-all"
+          >
+            <span className="invisible text-[9px] font-semibold">A</span>
+            <span className={`flex h-6 items-center justify-center rounded-full px-2 text-xs font-semibold ${showAll ? "bg-white/20 text-white" : "text-slate-600"}`}>
+              All
+            </span>
+            {(() => {
+              const n = stripDates.reduce((sum, d) => sum + countFor(d), 0);
+              return n > 0 && <span className={`text-[9px] font-medium leading-none ${showAll ? "text-sky-100" : "text-slate-400"}`}>{n}</span>;
+            })()}
+          </button>
           {stripDates.map((date) => {
             const day = parseInt(date.split("-")[2], 10);
             const isSelected = date === selectedDate;
@@ -899,8 +925,10 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squ
           <ClipboardList className="h-10 w-10 text-slate-200 mx-auto mb-3" />
           <p className="text-sm text-slate-400">
             {search.trim()
-              ? `No patient matches "${search.trim()}" on this day`
-              : `Nothing booked for ${new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`}
+              ? `No patient matches "${search.trim()}" ${showAll ? "on these days" : "on this day"}`
+              : showAll
+                ? "Nothing booked on these days"
+                : `Nothing booked for ${new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`}
           </p>
         </div>
       ) : (
@@ -925,7 +953,8 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squ
                   }`}
                   data-testid={`treatment-row-${r.key}`}
                 >
-                  <div className={`flex h-11 w-16 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold ${r.done ? "bg-emerald-200 text-emerald-800" : "bg-sky-100 text-sky-700"}`}>
+                  <div className={`flex h-11 w-16 shrink-0 flex-col items-center justify-center rounded-lg text-[11px] font-bold leading-tight ${r.done ? "bg-emerald-200 text-emerald-800" : "bg-sky-100 text-sky-700"}`}>
+                    {showAll && <span className="text-[9px] font-semibold opacity-80">{shortDay(r.date)}</span>}
                     {r.time ? to12h(r.time) : "—"}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1009,6 +1038,7 @@ function TreatmentTab({ physioId, onCountChange, toolbarSlot, scope = "all", squ
                         data-testid={`treatment-row-${r.key}`}
                       >
                         <td className="px-4 py-3">
+                          {showAll && <p className="mb-1 whitespace-nowrap text-[10px] font-semibold text-slate-500">{shortDay(r.date)}</p>}
                           <span className={`inline-flex whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-bold ${r.done ? "bg-emerald-200 text-emerald-800" : "bg-sky-100 text-sky-700"}`}>
                             {r.time ? to12h(r.time) : "—"}
                           </span>
