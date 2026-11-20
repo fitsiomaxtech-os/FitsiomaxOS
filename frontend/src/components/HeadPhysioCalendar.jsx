@@ -115,7 +115,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   // Physiotherapist, not Physio: the tab above this panel says Physiotherapist Calendar,
   // and the shorthand only ever came from the slug.
   const roleLabel = isCoach ? "Nutritionist" : isRehab ? "Rehab Therapist" : isPhysio ? "Physiotherapist" : "CONSULTANT";
-  const roleLabelPlural = isCoach ? "Nutritionists" : isRehab ? "Rehab Therapists" : isPhysio ? "Physiotherapists" : "CONSULTANTS";
+  const roleLabelPlural = isCoach ? "Nutritionists" : isRehab ? "Rehab Therapists" : isPhysio ? "Physiotherapists" : "Consultants";
   // Title case for the phone dropdown's placeholder, where the shouted CONSULTANT of the
   // desk header would be the one capitalised word in a sentence.
   const roleNoun = isConsultant ? "Consultant" : roleLabel;
@@ -911,12 +911,15 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         </div>
 
-        <div className="hidden border-b border-slate-100 bg-slate-50/60 p-4 sm:block">
+        <div className="hidden border-b border-slate-100 bg-gradient-to-r from-sky-50/80 to-white px-4 py-3.5 sm:block">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-              <Stethoscope className="h-4 w-4 text-violet-500" /> {roleLabelPlural}
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
+                <Stethoscope className="h-4 w-4" />
+              </span>
+              {roleLabelPlural}
             </h3>
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{doctors.length}</span>
+            <span className="min-w-[1.75rem] rounded-full bg-sky-100 px-2 py-0.5 text-center text-[11px] font-semibold tabular-nums text-sky-700">{doctors.length}</span>
           </div>
         </div>
 
@@ -939,36 +942,38 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                 key={doc.id}
                 type="button"
                 onClick={() => selectDoctor(doc)}
-                className={`flex w-56 shrink-0 items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all sm:w-64 lg:w-full lg:shrink lg:gap-3 lg:p-3 ${
+                className={`relative flex w-56 shrink-0 items-center gap-3 rounded-xl border p-2.5 text-left transition-all duration-150 sm:w-64 lg:w-full lg:shrink lg:p-3 ${
                   isActive
-                    ? "border-violet-400 bg-violet-50 shadow-sm"
+                    ? "border-sky-300 bg-sky-50 shadow-[0_4px_14px_-6px_rgba(14,165,233,0.45)]"
                     : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50"
                 }`}
                 data-testid={`doctor-card-${doc.id}`}
               >
-                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${isActive ? "bg-violet-200 text-violet-800" : "bg-slate-100 text-slate-600"}`}>
+                {isActive && <span aria-hidden="true" className="absolute inset-y-2.5 left-0 w-[3px] rounded-full bg-gradient-to-b from-sky-500 to-blue-600" />}
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${isActive ? "bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
                   {doc.full_name?.charAt(0)?.toUpperCase() || "D"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-slate-800">
-                    <span className="truncate">{doc.full_name}</span>
-                    {/* The Super Admin sits on every branch's list; the tag is the same one
-                        their rows wear on the Consultations board. */}
-                    {doc.is_super_admin && (
-                      <span className="shrink-0 rounded-[4px] bg-slate-100 px-1 py-px text-[9px] font-bold uppercase text-slate-600">Super Admin</span>
-                    )}
+                  <p className={`truncate text-[13px] font-semibold leading-tight ${isActive ? "text-sky-900" : "text-slate-800"}`} title={doc.full_name}>
+                    {doc.full_name}
                   </p>
+                  {/* The Super Admin sits on every branch's list; the tag is the same one
+                      their rows wear on the Consultations board. On its own line under the
+                      name, so it no longer cuts the name short beside it. */}
+                  {doc.is_super_admin && (
+                    <span className="mt-1 inline-block rounded-[4px] bg-amber-50 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">Super Admin</span>
+                  )}
                   {/* Their shift, not their qualification, once they are on one: which
                       hours this person works is what decides the day about to be opened
                       for them, and it is the thing to check before clicking a date. */}
-                  <p className="truncate text-[10px] text-slate-400">
+                  <p className="mt-0.5 truncate text-[11px] text-slate-500">
                     {doc.shift_name
                       ? `${doc.shift_name} · ${hoursLabel(doc.shift_windows?.length ? { segments: doc.shift_windows } : { start_time: doc.shift_start, end_time: doc.shift_end })}`
                       : servicesOf(doc).join(", ") || doc.specialization || roleLabel}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end">
-                  <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-semibold ${slotCount > 0 ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"}`}>
+                  <span className={`min-w-[3.75rem] whitespace-nowrap rounded-full px-2 py-0.5 text-center text-[10px] font-semibold tabular-nums ${slotCount > 0 ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-50 text-slate-400 ring-1 ring-slate-200"}`}>
                     {isConsultant ? `${dayCount} day${dayCount === 1 ? "" : "s"}` : `${slotCount} slots`}
                   </span>
                 </div>
@@ -1220,23 +1225,23 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                   (duration, type, Mark Whole Day Available, Repeat) get clipped by the
                   row's lg:overflow-hidden with no way to reach them. */}
               <div className={`flex w-full flex-shrink-0 flex-col ${selectedDate ? "border-b" : "sm:border-b"} border-slate-100 p-3 sm:p-5 lg:w-[26rem] lg:border-b-0 lg:border-r lg:overflow-y-auto`}>
-                <div className="flex items-center justify-between mb-4">
-                  <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-slate-100" data-testid="cal-prev-month">
-                    <ChevronLeft className="h-4 w-4 text-slate-500" />
+                <div className="mb-4 flex items-center justify-between">
+                  <button type="button" onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700" aria-label="Previous month" data-testid="cal-prev-month">
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <h4 className="text-sm font-semibold text-slate-700" data-testid="cal-month-title">{monthNames[currentMonth]} {currentYear}</h4>
-                  <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-slate-100" data-testid="cal-next-month">
-                    <ChevronRight className="h-4 w-4 text-slate-500" />
+                  <h4 className="text-[15px] font-semibold tracking-tight text-slate-800" data-testid="cal-month-title">{monthNames[currentMonth]} {currentYear}</h4>
+                  <button type="button" onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700" aria-label="Next month" data-testid="cal-next-month">
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-7 gap-1 mb-1">
+                <div className="mb-1.5 grid grid-cols-7 gap-1.5">
                   {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-                    <div key={d} className="text-center text-[11px] font-semibold text-slate-400 py-1.5">{d}</div>
+                    <div key={d} className={`py-1 text-center text-[10px] font-semibold uppercase tracking-wider ${d === "Su" ? "text-rose-400" : "text-slate-400"}`}>{d}</div>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-1.5">
                   {Array.from({ length: firstDay }, (_, i) => (
                     <div key={`empty-${i}`} className="h-11" />
                   ))}
@@ -1260,20 +1265,23 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                         // show which days are open, and a 4px dot doesn't carry that far.
                         // Violet still wins for days picked in this editing session, since
                         // that is what Save Changes is about to act on.
-                        className={`h-11 rounded-lg text-sm font-medium relative transition-all ${
+                        className={`relative h-11 rounded-xl text-sm font-semibold tabular-nums transition-all duration-150 ${
                           leave && !isPicked
                             ? `bg-rose-50 text-rose-400 line-through decoration-rose-300 border border-rose-200${isToday ? " ring-2 ring-rose-200 ring-offset-1" : ""}`
                             : isPicked
-                            ? `bg-violet-600 text-white shadow-sm${isFocused ? " ring-2 ring-violet-300 ring-offset-1" : ""}`
+                            ? `bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_6px_14px_-6px_rgba(99,102,241,0.7)]${isFocused ? " ring-2 ring-violet-300 ring-offset-1" : ""}`
                             // Grey and dashed, not white: white is a day nothing has opened
                             // yet, this is a day somebody closed for this one person.
                             : off
                             ? `border border-dashed border-slate-300 bg-slate-100 text-slate-400 line-through decoration-slate-300 hover:bg-slate-200${isToday ? " ring-2 ring-slate-300 ring-offset-1" : ""}`
                             : slotCount > 0
-                            ? `bg-green-800 text-white shadow-sm hover:bg-green-900${isToday ? " ring-2 ring-green-300 ring-offset-1" : ""}`
+                            // Open for bookings: an emerald gradient, lighter than the old
+                            // solid dark green so a fully open month no longer reads as one
+                            // heavy block, still unmistakable from a closed day.
+                            ? `bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_4px_10px_-5px_rgba(5,150,105,0.65)] hover:brightness-105${isToday ? " ring-2 ring-sky-400 ring-offset-2" : ""}`
                             : isToday
-                            ? "bg-violet-50 text-violet-700 border border-violet-200"
-                            : "text-slate-600 hover:bg-slate-100"
+                            ? "border-2 border-sky-400 bg-sky-50 text-sky-700"
+                            : "border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"
                         }`}
                         title={
                           leave ? `Branch leave day${leave.note ? ` — ${leave.note}` : ""}${slotCount > 0 ? ` · ${slotCount} booked slot${slotCount === 1 ? "" : "s"} kept` : ""}`
@@ -1298,6 +1306,14 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                       </button>
                     );
                   })}
+                </div>
+                {/* What each fill means, under the grid it explains. */}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500" data-testid="cal-legend">
+                  <span className="flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-[4px] bg-gradient-to-br from-emerald-500 to-emerald-600" />{isConsultant ? "Available" : "Slots open"}</span>
+                  <span className="flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-[4px] bg-gradient-to-br from-violet-500 to-indigo-600" />Picked</span>
+                  <span className="flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-[4px] border border-rose-200 bg-rose-50" />Leave</span>
+                  <span className="flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-[4px] border border-dashed border-slate-300 bg-slate-100" />Off</span>
+                  <span className="flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-[4px] border-2 border-sky-400 bg-sky-50" />Today</span>
                 </div>
                 {/* The month in one go, leave days left out. Staging only — the bar that
                     replaces the button says what is about to open and nothing reaches the
@@ -1378,8 +1394,11 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
                 {!selectedDate ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
-                      <Clock className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                      <p className="text-xs text-slate-400">Pick a date to open the day for {purpose.toLowerCase()}</p>
+                      <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-50 text-sky-500 ring-1 ring-sky-100">
+                        <Clock className="h-6 w-6" />
+                      </span>
+                      <p className="text-sm font-semibold text-slate-700">No date picked yet</p>
+                      <p className="mt-1 text-xs text-slate-400">Pick a date to open the day for {purpose.toLowerCase()}</p>
                     </div>
                   </div>
                 ) : (
