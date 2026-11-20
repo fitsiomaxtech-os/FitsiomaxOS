@@ -353,6 +353,13 @@ code {
   color: #0284c7 !important; /* sky-600 */
   opacity: 1;
 }
+/* The next fee's Collect keeps the old soft look: the app-wide blue-button gradient
+   (background-image, below) would otherwise paint under its sky-blue words and hide them. */
+.fee-soft [data-testid^="cons-fee-act-"].bg-sky-600 {
+  background-image: none !important;
+  filter: none !important;
+  transform: none !important;
+}
 .fee-soft [data-testid^="cons-prebook-use-"] {
   color: #0f766e !important; /* teal-700 */
 }
