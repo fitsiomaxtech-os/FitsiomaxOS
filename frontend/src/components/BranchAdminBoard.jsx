@@ -68,7 +68,7 @@ import { OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/compone
 import { PreBookCollectDialog } from "@/components/branch/PreBookCollectDialog";
 import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookFixedByPreSales, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
-import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
+import { LEAD_CARD_LIST, LeadContactCard } from "@/components/ui/lead-contact-card";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import {
@@ -123,7 +123,8 @@ import { serviceTypeTitle } from "@/lib/serviceTypes";
 import { LeadEditModal } from "@/components/LeadEditModal";
 import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { isCourseComplete } from "@/lib/leadStage";
-import { displayPhone } from "@/lib/phone";
+import { displayPhone, telNumber } from "@/lib/phone";
+import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { leadPlatform, leadSource, leadSourceLabel } from "@/lib/leadSource";
 
 
@@ -3158,10 +3159,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           )}
 
           {/* Phone list — six columns can't be read at 430px whichever way they're sized,
-              so below md the same rows are stacked as cards instead of being pushed off
-              the side of a horizontally-scrolling table. */}
+              so below md the same rows are drawn as separate cards (ui/lead-contact-card),
+              the user's reference of 2026-11-20: name, stage pill, WhatsApp and Call. */}
           {/* On a phone this sits right under the stage grid, narrowed by its open tile. */}
-          <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-list-mobile">
+          <div className={`${LEAD_CARD_LIST} md:hidden`} data-testid="branch-list-mobile">
             {(() => {
               const visible = pageLeads;
               if (visible.length === 0) {
@@ -3177,47 +3178,26 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                 const fu = showFollowUpColumn ? followUpSlotLabel(lead) : null;
                 const np = showNotProspectColumns ? notProspectLabel(lead) : null;
                 const pbRow = showPreBookColumns ? preBookOf(lead) : null;
-                // All Stages is the whole branch at a glance, every stage mixed together, so
-                // its card says only who, their number and where they stand: the name, the
-                // phone and the stage, boxed, then a grey bin and an arrow into the lead (see
-                // `glance` on ui/lead-row-card). The Patient Number, city, marks, the stage's
-                // own lines and Call/WhatsApp belong to a stage's pill, where the list is
-                // being worked rather than looked over.
+                // All Stages keeps to who and where they stand; a stage's own lines
+                // (appointment, follow-up, reminder) go under the pill on that stage.
                 const allStages = !stageFilter;
                 const hasDetails = !allStages && (lead.email || slot || fu || np?.reminder || pbRow || lead.assigned_physio_name);
-                // The reference card's single row (see ui/lead-row-card). Reaching the patient
-                // is the commonest thing done from this list, so Call and WhatsApp sit on the
-                // card rather than three taps deep behind the lead popup. Anything a stage
-                // adds (appointment, follow-up, reminder) goes under the name.
-                //
-                // Only the Leads pill draws Call, WhatsApp and the bin, as the user asked:
-                // All Stages, RNR, Follow Up, Appointment and Not a Prospect show none of the
-                // three, and tapping the row is how those leads get worked.
-                const rowWa = showingMirror ? waNumber(lead.phone) : null;
+                // WhatsApp and Call on every stage, All Stages included (asked 2026-11-20).
+                const rowWa = waNumber(lead.phone);
                 return (
-                  <LeadRowCard
+                  <LeadContactCard
                     key={lead.id}
                     id={lead.id}
                     name={lead.name}
                     nameAddon={allStages ? null : <><TransferredTag lead={lead} className="ml-1" compact /><RescheduledTag lead={lead} className="ml-1.5" compact /><OnlineTag lead={lead} className="ml-1.5" compact /></>}
-                    // On the Leads pill the row's right holds only Call, WhatsApp and the
-                    // bin: every row there would read "Leads" anyway. The other pills and
-                    // All Stages keep the badge.
-                    badge={showingMirror ? null : (rowStage || "—")}
+                    badge={rowStage || "—"}
                     badgeColor={rowStage ? stageColor(rowStage) : null}
-                    // Where Call and WhatsApp sit on the card the number itself is left
-                    // off — the buttons are how it gets used. Everywhere else, and for a
-                    // phone too malformed to ring, the number stays.
-                    idLine={allStages ? [displayPhone(lead.phone) || "—"] : [lead.patient_number, rowWa ? null : displayPhone(lead.phone), cityAnswer(lead)]}
                     wa={rowWa}
+                    fallback={displayPhone(lead.phone) || null}
                     onOpen={() => setSelectedLead(lead)}
                     // The desk row's bin, on the phone: same rule for who sees it, same
-                    // typed-DELETE dialog, same purge. Leads pill only, like Call/WhatsApp.
+                    // typed-DELETE dialog, same purge. New Leads only, as before.
                     onDelete={showingMirror && canDeleteLeads ? () => setRowDelete(lead) : null}
-                    glance={allStages}
-                    // Every pill but Leads opens the lead rather than ringing it, so its
-                    // rows end in the arrow All Stages already draws.
-                    arrow={!showingMirror}
                     testid="branch-card"
                     details={hasDetails ? (
                       <>
@@ -5141,6 +5121,30 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                   )}
                   {lead.consultation_fee && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-100">Fee Rs.{lead.consultation_fee}</span>}
                   {lead.package_amount && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">Pkg Rs.{lead.package_amount}</span>}
+                  {/* Phone only (asked 2026-11-20): WhatsApp and Call as white tiles at the
+                      end of the second row, so the patient is reachable from every tab. */}
+                  {waNumber(lead.phone) && (
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:hidden" data-testid="branch-lead-phone-contact">
+                      <a
+                        href={`https://wa.me/${waNumber(lead.phone)}`}
+                        aria-label="WhatsApp"
+                        title="WhatsApp"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#25D366] shadow-sm active:bg-green-50"
+                        data-testid="branch-lead-whatsapp"
+                      >
+                        <WhatsAppIcon className="h-5 w-5" />
+                      </a>
+                      <a
+                        href={`tel:${telNumber(lead.phone)}`}
+                        aria-label="Call"
+                        title="Call"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#1E80F0] shadow-sm active:bg-blue-50"
+                        data-testid="branch-lead-call"
+                      >
+                        <Phone className="h-[18px] w-[18px]" />
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
