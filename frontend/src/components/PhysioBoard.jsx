@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import {
   AlertCircle,
   ArrowLeft,
+  Bell,
   Calendar,
   CalendarX,
   Check,
@@ -1974,6 +1975,22 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   const upcomingDays = useMemo(() => orderedSessions.filter((s) => s.status !== "completed"), [orderedSessions]);
   const completedDays = useMemo(() => orderedSessions.filter((s) => s.status === "completed"), [orderedSessions]);
 
+  // Progression Uploads Mandatory On: a reminder on every tab of this popup while the day
+  // being worked (the first open one) is in the first three days of the course or the last
+  // four — on a 14-day course, Days 1-3 and Days 11-14. A short course can be in both.
+  // Gone once the treatment is marked complete or the case sheet is closed.
+  const uploadReminder = useMemo(() => {
+    if (!progression?.mandatory || progression?.case_sheet_closed || isComplete) return null;
+    const day = upcomingDays[0];
+    const n = day?.session_number || 0;
+    const total = day?.total_sessions || 0;
+    if (!n || !total) return null;
+    const start = n <= 3;
+    const end = n >= total - 3;
+    if (!start && !end) return null;
+    return { n, total, start, end, left: total - n, rehab: day.track === "rehab" };
+  }, [progression, isComplete, upcomingDays]);
+
   // Each week of days goes to the Head Physio for a review appointment; that review
   // is only "completed" once they've written it up (status flips to reviewed).
   const totalWeeks = sessions.length ? Math.max(...sessions.map((s) => s.week_number || 1)) : 0;
@@ -2405,6 +2422,44 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
           )}
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
+          {uploadReminder && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5" data-testid="physio-upload-reminder">
+              <Bell className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div className="min-w-0 flex-1 space-y-1 text-xs text-amber-800">
+                <p className="font-bold">
+                  Progression Upload — {uploadReminder.rehab ? "Rehab " : ""}Day {uploadReminder.n} of {uploadReminder.total}
+                </p>
+                {uploadReminder.start && (
+                  <p>Starting week: record the patient's starting progression video now.</p>
+                )}
+                {uploadReminder.end && (
+                  <p>
+                    {uploadReminder.left === 0
+                      ? "Last day of the course"
+                      : `Course ends in ${uploadReminder.left} day${uploadReminder.left === 1 ? "" : "s"}`}
+                    : upload the Before &amp; After or Testimonial video before it ends.
+                  </p>
+                )}
+                <p className="text-amber-700">Any one is mandatory for Mark Treatment Complete.</p>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {DAY_UPLOADS.map((u) => {
+                    const filed = (progressionVideos.find((r) => r.kind === u.kind)?.uploaded || 0) > 0;
+                    return (
+                      <span
+                        key={u.kind}
+                        className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${
+                          filed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-white text-amber-700"
+                        }`}
+                      >
+                        {filed && <CheckCircle2 className="h-3 w-3" />}
+                        {u.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
           {tab === "overview" && (
           <div className="rounded-xl border-2 border-slate-200 bg-white p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
