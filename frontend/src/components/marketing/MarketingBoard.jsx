@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FileSpreadsheet, Users,
-  Plus, RefreshCw, Archive, ArchiveRestore, Link as LinkIcon, ArrowRightLeft, X, Pencil, Trash2,
+  Plus, RefreshCw, ArrowRightLeft, X, Pencil, ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,11 @@ import {
   mkGetDistribution, mkPatchDistribution, mkRefreshDistribution,
   mkUnassignedCount, mkDistributeUnassigned,
   mkGetTeam, mkCreateTeamMember,
-  mkGetSources, mkLeadFieldCatalogue, gsSheetHeaders, leadFieldsCreate, mkCreateSource, mkUpdateSource, mkDeleteSource, mkSyncSource,
+  mkGetSources, mkLeadFieldCatalogue, gsSheetHeaders, leadFieldsCreate, mkCreateSource, mkUpdateSource,
   gsStatus, gsAuthUrl, gsDisconnect, gsPull, gsListTabs,
   getBranches,
 } from "@/lib/api";
 import { MaskedContact } from "@/components/MaskedContact";
-import { SourcePill } from "@/components/marketing/SourcePill";
 
 // Extract spreadsheet ID from any Google Sheets URL: /spreadsheets/d/{ID}/...
 // Shared by SourcesTab, EditSourceDialog, and SheetEntriesEditor rather than each keeping
@@ -49,18 +48,17 @@ const prettyVertical = (v) => String(v || "")
 // Branches & Verticals' own mode tag, read off that prefix.
 const isOnlineVertical = (v) => String(v || "").startsWith("online_");
 
-// A source with no branch/vertical tag applies everywhere (its leads go to the general
-// Pre-Sales pool), so it counts as both Online and Offline rather than neither — a filter
-// that hid it from both would make an untagged source look archived. A tagged one is
-// classified off whichever mode(s) its own tags actually touch: its own verticals list,
-// plus the vertical of each branch it's pinned to.
-const sourceModes = (source, branches) => {
-  const verticals = [
-    ...(source.verticals || []),
-    ...(source.branch_ids || []).map((bid) => branches.find((b) => b.id === bid)?.vertical).filter(Boolean),
-  ];
-  if (verticals.length === 0) return { online: true, offline: true };
-  return { online: verticals.some(isOnlineVertical), offline: verticals.some((v) => !isOnlineVertical(v)) };
+// Type column: "google_sheets" -> "Google Sheet"; anything else goes through the same
+// snake_case prettifier the vertical tags use ("walk_in" -> "Walk In").
+const sourceTypeLabel = (t) => (t === "google_sheets" || t === "google_sheet" ? "Google Sheet" : prettyVertical(t) || "Other");
+
+// Sync Status column. last_synced is stored as a UTC ISO string; shown in the viewer's
+// own clock, date and time, e.g. "20 Nov 2026, 11:53 am".
+const formatSynced = (iso) => {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Never";
+  return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
 };
 
 const SUB_TABS = [
@@ -90,16 +88,8 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
   // Which of them are shown — archiving hides a source without losing its config or the
   // leads it already brought in, so there has to be somewhere to see it again.
   const [sourceView, setSourceView] = useState("active");
-  // Same Online/Offline split as Branches & Verticals and Branch Wise — a source is
-  // grouped by whichever branch(es)/vertical(s) it's actually tagged to.
-  const [sourceModeFilter, setSourceModeFilter] = useState("all"); // "all" | "offline" | "online"
   const [gs, setGs] = useState({ connected: false });
-  const [showSync, setShowSync] = useState(null);
-  const [showMap, setShowMap] = useState(null);
   const [showEdit, setShowEdit] = useState(null);
-  const [syncRows, setSyncRows] = useState(`[\n  {"name":"Aarav Sharma","phone":"9000000001","email":"aarav@example.com","city":"Chennai","condition":"Lower back pain","age":34}\n]`);
-  const [syncResult, setSyncResult] = useState(null);
-  const [pullResult, setPullResult] = useState(null);
   const [pullingId, setPullingId] = useState(null);
   // "View" shows the connection and its controls. It used to open locked behind a
   // code; that came off with the rest of the lock system.
@@ -110,10 +100,10 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
   const loadGs = useCallback(() => gsStatus().then(setGs).catch((e) => console.warn("[gs status]", e?.message || e)), []);
   useEffect(() => { load(); loadGs(); }, [load, loadGs]);
 
-  const visibleSources = useMemo(() => sources
-    .filter((s) => (sourceView === "archived" ? s.is_archived : !s.is_archived))
-    .filter((s) => sourceModeFilter === "all" || sourceModes(s, branches)[sourceModeFilter]),
-  [sources, sourceView, sourceModeFilter, branches]);
+  const visibleSources = useMemo(
+    () => sources.filter((s) => (sourceView === "archived" ? s.is_archived : !s.is_archived)),
+    [sources, sourceView],
+  );
 
   // OAuth result detection (?sheets_connect=success)
   useEffect(() => {
@@ -156,66 +146,14 @@ const SourcesTab = ({ branches: branchesProp = [] }) => {
   };
 
   const pullNow = async (s) => {
-    setPullResult(null);
     setPullingId(s.id);
     try {
       const res = await gsPull(s.id);
-      setPullResult({ source: s, res });
       if (res.imported > 0) toast.success(`Pulled ${res.imported} new leads from ${s.name}`);
       else toast(`No new leads. ${res.skipped_duplicate || 0} duplicates, ${res.skipped_no_phone || 0} missing phone.`);
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Pull failed"); }
     setPullingId(null);
-  };
-
-  const runSync = async () => {
-    try {
-      const rows = JSON.parse(syncRows);
-      if (!Array.isArray(rows)) { toast.error("JSON must be an array of objects"); return; }
-      const res = await mkSyncSource(showSync.id, rows);
-      setSyncResult(res);
-      if (res.imported > 0) {
-        toast.success(`Imported ${res.imported} · skipped ${res.skipped} (received ${res.rows_received}). Refresh Pre Sales to see them.`);
-      } else {
-        toast.error(`No leads imported. ${res.skipped_no_phone || 0} missing phone · ${res.skipped_duplicate || 0} duplicate. See details panel.`);
-      }
-      load();
-    } catch (e) {
-      if (e instanceof SyntaxError) { toast.error("Invalid JSON. Paste rows as a [ { ... }, ... ] array."); return; }
-      toast.error(e?.response?.data?.detail || "Sync failed");
-    }
-  };
-
-  const toggleActive = async (s) => {
-    await mkUpdateSource(s.id, { is_active: !s.is_active });
-    load();
-  };
-
-  // No gate on editing. Reaching this screen already means a Super Admin session,
-  // and that is the check now — the one-time code that used to sit here was removed
-  // at the branch's request.
-  //
-  // Archive, not delete — nothing here destroys a configured source or the leads it
-  // already brought in, so there's nothing a confirm dialog needs to guard against.
-  // It's reversible from the Archived tab.
-  const toggleArchive = async (s) => {
-    await mkUpdateSource(s.id, { is_archived: !s.is_archived });
-    load();
-  };
-
-  // Only offered on the Archived tab. Removes the card and its sheet link/mapping; leads
-  // it already imported stay where they are.
-  const deleteSource = async (s) => {
-    if (!window.confirm(`Permanently delete "${s.name}"?
-
-Its Google Sheet link and column mapping are removed and cannot be restored. Leads it already imported are kept.`)) return;
-    try {
-      await mkDeleteSource(s.id);
-      toast.success("Source deleted");
-      load();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Delete failed");
-    }
   };
 
   return (
@@ -256,175 +194,87 @@ Its Google Sheet link and column mapping are removed and cannot be restored. Lea
         </CardContent>
       </Card>
 
-      {/* No Add Source here any more — a card exists for every branch in Branch Manager
+      {/* No Add Source here any more — a row exists for every branch in Branch Manager
           the moment that branch does (see seed.ensure_branch_lead_sources), so there is
-          nothing left to add by hand. Paste a sheet URL into an existing branch's card via
-          Edit Source, or open a new branch in Operations > Branch > Branch Manager. */}
-      <p className="text-sm text-slate-600">Connect data feeds. Paste sheet headers to auto-detect column mappings.</p>
-
-      <div className="flex flex-wrap items-center gap-2">
+          nothing left to add by hand. Paste a sheet URL into an existing branch's row via
+          the ">" (Edit Source), or open a new branch in Operations > Branch > Branch Manager. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <button onClick={() => setSourceView("active")} className={`rounded-md px-3 py-2 text-sm font-medium ${sourceView === "active" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-active">
-          Active ({sources.filter((s) => !s.is_archived && (sourceModeFilter === "all" || sourceModes(s, branches)[sourceModeFilter])).length})
+          Active ({sources.filter((s) => !s.is_archived).length})
         </button>
         <button onClick={() => setSourceView("archived")} className={`rounded-md px-3 py-2 text-sm font-medium ${sourceView === "archived" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-source-tab-archived">
-          Archived ({sources.filter((s) => s.is_archived && (sourceModeFilter === "all" || sourceModes(s, branches)[sourceModeFilter])).length})
+          Archived ({sources.filter((s) => s.is_archived).length})
         </button>
       </div>
 
-      {/* Pills, not a dropdown — same pattern as Branches & Verticals' own mode filter.
-          An untagged ("All Branches") source counts as both, so it never disappears here. */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="mk-source-mode-filter">
-        {[["all", "All"], ["offline", "Offline"], ["online", "Online"]].map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSourceModeFilter(key)}
-            className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
-              sourceModeFilter === key ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
-            }`}
-            data-testid={`mk-source-mode-filter-${key}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="overflow-x-auto rounded-[4px] border border-slate-200 bg-white" data-testid="mk-sources-table">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="w-[6%] px-3 py-2">S.No</th>
+              <th className="px-3 py-2">Sheet Name</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Branch</th>
+              <th className="px-3 py-2">Sync Status</th>
+              <th className="px-3 py-2 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleSources.map((s, i) => {
+              const branchNames = (s.branch_ids || []).map((bid) => branches.find((b) => b.id === bid)?.branch_name || "Unknown branch");
+              const canPull = s.source_type === "google_sheets" && s.spreadsheet_id && gs.connected;
+              return (
+                <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`mk-source-row-${s.id}`}>
+                  <td className="px-3 py-2 text-slate-500">{i + 1}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{s.name}</td>
+                  <td className="px-3 py-2 text-slate-600">{sourceTypeLabel(s.source_type)}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ${s.is_active ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"}`}>{s.is_active ? "Active" : "Deactive"}</span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-600" data-testid={`mk-source-branch-${s.id}`}>
+                    {branchNames.length ? branchNames.join(", ") : "All Branches"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-600">{formatSynced(s.last_synced)}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center justify-center gap-2">
+                      {canPull && (
+                        <Button
+                          size="sm"
+                          onClick={() => pullNow(s)}
+                          disabled={pullingId === s.id}
+                          className="h-7 bg-emerald-600 px-2.5 text-xs hover:bg-emerald-700"
+                          data-testid={`gs-pull-${s.id}`}
+                        >
+                          <RefreshCw className={`mr-1 h-3 w-3 ${pullingId === s.id ? "animate-spin" : ""}`} />
+                          {pullingId === s.id ? "Pulling..." : "Pull Lead"}
+                        </Button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowEdit(s)}
+                        title="Edit connected sheet"
+                        aria-label={`Edit ${s.name}`}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                        data-testid={`mk-source-edit-${s.id}`}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {visibleSources.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-slate-400">
+                  {sourceView === "archived" ? "No archived sources." : "No branches yet — add one in Operations > Branch > Branch Manager."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-
-      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {visibleSources.map((s) => (
-          <Card key={s.id} data-testid={`mk-source-card-${s.id}`} className="min-w-0 border-slate-200">
-            <CardHeader className="flex flex-row items-start justify-between gap-2">
-              <div>
-                <CardTitle className="text-base">{s.name}</CardTitle>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <SourcePill source={s.source_type} />
-                  <span className={`inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ${s.is_active ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"}`}>{s.is_active ? "Active" : "Inactive"}</span>
-                  {(s.branch_ids || []).length === 0 && (s.verticals || []).length === 0 && (
-                    <span className="inline-flex h-5 items-center rounded-full bg-slate-100 px-2 text-[10px] font-semibold text-slate-500" data-testid={`mk-source-branch-${s.id}`}>All Branches</span>
-                  )}
-                  {(s.branch_ids || []).map((bid) => (
-                    <span key={bid} className="inline-flex h-5 items-center rounded-full bg-violet-100 px-2 text-[10px] font-semibold text-violet-700" data-testid={`mk-source-branch-${s.id}`}>
-                      {branches.find((b) => b.id === bid)?.branch_name || "Unknown branch"}
-                    </span>
-                  ))}
-                  {(s.verticals || []).map((v) => (
-                    <span key={v} className="inline-flex h-5 items-center rounded-full bg-indigo-100 px-2 text-[10px] font-semibold text-indigo-700" data-testid={`mk-source-vertical-${s.id}`}>
-                      {prettyVertical(v)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setShowEdit(s)} className="text-slate-400 hover:text-sky-600" data-testid={`mk-source-edit-${s.id}`} title="Edit source"><Pencil className="h-4 w-4" /></button>
-                <button onClick={() => toggleArchive(s)} className="text-slate-400 hover:text-amber-600" data-testid={`mk-source-archive-${s.id}`} title={s.is_archived ? "Unarchive source" : "Archive source"}>
-                  {s.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2 text-xs text-slate-600">
-              {s.sheet_url && <p className="flex items-center gap-1 text-slate-400"><LinkIcon className="h-3 w-3 shrink-0" />Google Sheet linked</p>}
-              {s.spreadsheet_id && <p className="text-[10px] text-slate-400">ID: <code>{s.spreadsheet_id.slice(0, 24)}…</code></p>}
-              <p>Rows: <span className="font-semibold">{s.row_count || 0}</span> · Last sync: {s.last_synced ? s.last_synced.slice(0, 16).replace("T", " ") : "Never"}</p>
-              <p>Mappings: <span className="font-semibold">{Object.keys(s.column_mapping || {}).length}</span> · Custom fields: {(s.custom_fields || []).length}</p>
-
-              <div className="flex flex-wrap gap-2 pt-2">
-                {s.source_type === "google_sheets" && s.spreadsheet_id && gs.connected && (
-                  <Button
-                    size="sm"
-                    onClick={() => pullNow(s)}
-                    disabled={pullingId === s.id}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                    data-testid={`gs-pull-${s.id}`}
-                  >
-                    <RefreshCw className={`mr-1 h-3 w-3 ${pullingId === s.id ? "animate-spin" : ""}`} />
-                    {pullingId === s.id ? "Pulling..." : "Pull from Sheet"}
-                  </Button>
-                )}
-                <Button size="sm" variant="outline" onClick={() => setShowSync(s)} data-testid={`mk-source-sync-${s.id}`}><RefreshCw className="mr-1 h-3 w-3" />Manual Sync (JSON)</Button>
-                <Button size="sm" variant="outline" onClick={() => setShowMap(s)} data-testid={`mk-source-map-${s.id}`}>Edit Mapping</Button>
-                <Button size="sm" variant="outline" onClick={() => toggleActive(s)} data-testid={`mk-source-toggle-${s.id}`}>{s.is_active ? "Deactivate" : "Activate"}</Button>
-                {s.is_archived && (
-                  <Button size="sm" variant="outline" onClick={() => deleteSource(s)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" data-testid={`mk-source-delete-${s.id}`}>
-                    <Trash2 className="mr-1 h-3 w-3" />Delete Permanently
-                  </Button>
-                )}
-              </div>
-              {pullResult && pullResult.source.id === s.id && (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-800" data-testid={`gs-pull-result-${s.id}`}>
-                  <p>Imported <span className="font-bold">{pullResult.res.imported}</span> of {pullResult.res.rows_received} rows · {pullResult.res.skipped_duplicate || 0} dup · {pullResult.res.skipped_no_phone || 0} no phone</p>
-                  {/* Only the rows that went somewhere other than this card's own branch,
-                      because the sheet asked the patient which location they wanted. A
-                      branch's own sheet has no such column and this stays hidden. */}
-                  {Object.keys(pullResult.res.routed_to_branches || {}).length > 0 && (
-                    <p className="mt-1" data-testid={`gs-pull-routed-${s.id}`}>
-                      Sent by <code className="rounded bg-emerald-100 px-1">{pullResult.res.branch_column_used}</code> to{" "}
-                      {Object.entries(pullResult.res.routed_to_branches).map(([name, n], i, all) => (
-                        <span key={name}>
-                          <span className="font-semibold">{name}</span> ({n}){i < all.length - 1 ? ", " : ""}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {visibleSources.length === 0 && (
-          <p className="col-span-full text-sm text-slate-400">
-            {sourceModeFilter !== "all"
-              ? "No sources match this filter."
-              : sourceView === "archived" ? "No archived sources." : "No branches yet — add one in Operations > Branch > Branch Manager."}
-          </p>
-        )}
-      </div>
-
-      {showSync && (
-        <DialogShell title={`Sync: ${showSync.name}`} onClose={() => { setShowSync(null); setSyncResult(null); }} testid="mk-sync-dialog">
-          <p className="text-xs text-slate-500">Paste JSON rows from your Google Sheet (each row = one object). Phones are deduped by last 10 digits. New leads land in <span className="font-semibold">Pre Sales</span> with auto round-robin if enabled.</p>
-          <textarea
-            value={syncRows}
-            onChange={(e) => setSyncRows(e.target.value)}
-            className="h-48 w-full rounded-md border border-slate-200 p-2 font-mono text-xs"
-            data-testid="mk-sync-rows-textarea"
-          />
-          <Button onClick={runSync} className="w-full" data-testid="mk-sync-submit"><RefreshCw className="mr-1 h-4 w-4" />Run Sync</Button>
-          {syncResult && (
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs space-y-1" data-testid="mk-sync-result">
-              <p><span className="font-semibold text-emerald-600">{syncResult.imported}</span> imported · <span className="font-semibold text-amber-600">{syncResult.skipped_no_phone || 0}</span> missing phone · <span className="font-semibold text-slate-600">{syncResult.skipped_duplicate || 0}</span> duplicates (of <span className="font-semibold">{syncResult.rows_received}</span> rows)</p>
-              <p className="text-slate-500">Phone column used: <code className="rounded bg-slate-200 px-1 text-[10px]">{syncResult.phone_column_used}</code></p>
-              {syncResult.mapping_used && Object.keys(syncResult.mapping_used).length > 0 && (
-                <p className="text-slate-500">Field mapping: {Object.entries(syncResult.mapping_used).map(([k, v]) => <code key={k} className="mr-1 rounded bg-slate-200 px-1 text-[10px]">{k}={v}</code>)}</p>
-              )}
-              {(syncResult.sample_errors || []).length > 0 && (
-                <ul className="ml-3 list-disc text-red-600">
-                  {syncResult.sample_errors.map((m, i) => <li key={i}>{m}</li>)}
-                </ul>
-              )}
-            </div>
-          )}
-        </DialogShell>
-      )}
-
-      {showMap && (
-        <SheetMappingDialog
-          title={`Mapping: ${showMap.name}`}
-          spreadsheetId={showMap.spreadsheet_id}
-          tabs={showMap.sheet_names || (showMap.sheet_name ? [showMap.sheet_name] : [])}
-          fallbackHeaders={showMap.headers_detected || []}
-          value={showMap.column_mapping || {}}
-          onClose={() => setShowMap(null)}
-          // Straight to the server here: this one is opened against a saved source from
-          // its own card, where there is no enclosing Save for it to wait on.
-          onSave={async (m) => {
-            try {
-              await mkUpdateSource(showMap.id, { column_mapping: m });
-              toast.success("Mapping saved");
-              setShowMap(null);
-              load();
-            } catch (e) { toast.error(e?.response?.data?.detail || "Save failed"); }
-          }}
-        />
-      )}
 
       {showEdit && (
         <EditSourceDialog source={showEdit} branches={branches} onClose={() => setShowEdit(null)} onSaved={() => { setShowEdit(null); load(); }} />
@@ -659,9 +509,8 @@ const SheetEntriesEditor = ({ entries, onChange, testid, fallbackHeaders = [] })
  * one selected branch this is a tag for organizing/filtering only (see the backend's
  * _internal_pull_source for the one-branch-still-auto-assigns rule).
  *
- * No separate Verticals picker: sourceModes() already reads each picked branch's own
- * vertical (Physiotherapy branches are offline, Online Physio/Fitness are online), so
- * picking T Nagar here already sorts this source under Offline without asking twice.
+ * No separate Verticals picker: each picked branch already carries its own vertical
+ * (Physiotherapy branches are offline, Online Physio/Fitness are online).
  */
 // Offline branches first (A-Z), online ones grouped last (A-Z among themselves) — same
 // order Branch Wise uses, so a name here sits where the Branch Manager already trained
