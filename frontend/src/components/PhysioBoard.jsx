@@ -1761,10 +1761,10 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
   // The three videos, as the Upload menu offers them. The Google Review is typed on the
   // Progression tab, so it is not a file to pick here.
   const progressionVideos = (progression?.requirements || []).filter((r) => r.input === "file");
-  // Mandatory: Mark Treatment Complete waits until each video has a file. The server
-  // refuses it too; this is so the button says so before it is pressed.
-  const videosMissing = progression?.mandatory
-    ? progressionVideos.filter((r) => !r.uploaded).map((r) => r.label)
+  // Mandatory: Mark Treatment Complete waits until any ONE of the three videos has a file.
+  // The server refuses it too; this is so the button says so before it is pressed.
+  const videosMissing = progression?.mandatory && progressionVideos.length && !progressionVideos.some((r) => r.uploaded)
+    ? progressionVideos.map((r) => r.label)
     : [];
   const uploadsOwed = videosMissing.length > 0;
 
@@ -2288,7 +2288,10 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl" data-testid="physio-consultation-detail-modal">
+      {/* Physio Records: a fixed 750 × 650 from sm up, giving way to a smaller window; only
+          the body scrolls, so nothing a tab adds is cut off. A phone keeps the full-width,
+          90vh sheet. */}
+      <div className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:h-[min(650px,calc(100dvh-2rem))] sm:max-h-none sm:w-[min(750px,calc(100vw-2rem))] sm:max-w-none" data-testid="physio-consultation-detail-modal">
         {/* Plain white header, as the Pre-Sales detail popup uses. The day count keeps
             its emphasis by going sky on a tinted chip — on the old slate bar it was
             carried by white-on-colour, which there is no colour left to do.
@@ -2300,6 +2303,12 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
             {lead.patient_number ? <span className="shrink-0 whitespace-nowrap text-xs text-white/80">· {lead.patient_number}</span> : null}
           </div>
           <div className="flex shrink-0 items-center gap-3">
+            {/* The popup names itself just before the day count, as the Consultant's
+                Treatment Prescription popup does before its X. Off on a phone, where the
+                patient's name needs the room. */}
+            <span className="hidden whitespace-nowrap text-sm font-medium text-white sm:inline" data-testid="physio-detail-popup-name">
+              Physio Records
+            </span>
             <span className="whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-bold text-sky-700">
               {completedSessions.length}/{sessions.length} days
             </span>
@@ -2357,7 +2366,7 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
             // as broken, and the reason is on the tab behind this one.
             title={reviewOwed
               ? "The CONSULTANT hasn't reviewed this patient yet — raise it from the Review tab first"
-              : uploadsOwed ? `Upload ${videosMissing.join(", ")} first` : undefined}
+              : uploadsOwed ? `Upload any one of ${videosMissing.join(", ")} first` : undefined}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition sm:px-3.5 sm:py-2 sm:text-xs ${
               isComplete
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700"

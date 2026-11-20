@@ -28,10 +28,10 @@ SETTING_ID = "hidden_features"
 # (Branch Leads and Pre Sales). The tab shows it as Allow / Block — hidden is Block.
 #
 # progression_mandatory: whether the case sheet's progression uploads hold anything up.
-# Mandatory (shown): the physio's Mark Treatment Complete waits until Weekly Progression,
-# Before & After and Testimonial each have a file, and Close Case Sheet waits until all
-# four are uploaded and verified. Optional (hidden): neither waits. The tab shows it as
-# Mandatory / Optional — hidden is Optional.
+# Mandatory (shown): the physio's Mark Treatment Complete waits until any one of Weekly
+# Progression, Before & After or Testimonial has a file, and Close Case Sheet waits until
+# all four are uploaded and verified. Optional (hidden): neither waits. The Features tab
+# shows it as "Progression Uploads Mandatory" On / Off — hidden is Off.
 #
 # consultation_fee_confirm: the "Collect the Consultation Fee of Rs.X by <mode>?" browser
 # confirm on the Collect Consultation Fee popup (Branch Leads). Screen-only: the tab shows

@@ -134,15 +134,17 @@ def is_shared_with_patient(doc: dict) -> bool:
 
 
 async def progression_videos_missing(lead_id: str) -> list:
-    """The progression videos (Weekly Progression, Before & After, Testimonial) with no file
-    filed yet, by label. What the physio's Mark Treatment Complete waits on while the uploads
-    are Mandatory. Filed is enough here; verifying is the Branch Admin's job and the case
-    sheet's gate, not the physio's."""
-    rows = await v3_col("lead_documents").find(
+    """What the physio's Mark Treatment Complete waits on while the uploads are Mandatory:
+    any ONE of the three videos (Weekly Progression, Before & After, Testimonial) is enough.
+    Empty once one is filed; otherwise all three labels, as the ones to pick from. Filed is
+    enough here; verifying is the Branch Admin's job and the case sheet's gate, not the
+    physio's."""
+    filed = await v3_col("lead_documents").find_one(
         {"lead_id": lead_id, "kind": {"$in": PROGRESSION_KEYS}}, {"_id": 0, "kind": 1}
-    ).to_list(500)
-    have = {r.get("kind") for r in rows}
-    return [label for key, label, _, kind_input in PROGRESSION_KINDS if kind_input == "file" and key not in have]
+    )
+    if filed:
+        return []
+    return [label for _, label, _, kind_input in PROGRESSION_KINDS if kind_input == "file"]
 
 
 async def has_prescription_on_file(lead_id: str) -> bool:

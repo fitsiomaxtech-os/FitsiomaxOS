@@ -59,18 +59,18 @@ const HIDE_FEATURE_ROWS = [
     shownToast: "Past day appointments are allowed",
   },
   {
-    // Hidden is Optional. Mandatory holds the physio's Mark Treatment Complete until the
-    // three videos are uploaded, and Close Case Sheet until all four are verified.
+    // Hidden is Off. On holds the physio's Mark Treatment Complete until any one of the
+    // three videos is uploaded, and Close Case Sheet until all four are verified.
     key: "progression_mandatory",
-    label: "Progression Uploads",
-    on: "Mandatory",
-    off: "Optional",
+    label: "Progression Uploads Mandatory",
+    on: "On",
+    off: "Off",
     confirmHide:
-      "Make Progression Uploads optional?\n\nMark Treatment Complete and Close Case Sheet no longer wait for them.",
+      "Turn Progression Uploads Mandatory off?\n\nMark Treatment Complete and Close Case Sheet no longer wait for them.",
     confirmShow:
-      "Make Progression Uploads mandatory?\n\nMark Treatment Complete waits for Weekly Progression, Before & After and Testimonial. Close Case Sheet waits until all four are verified.",
-    hiddenToast: "Progression Uploads are optional",
-    shownToast: "Progression Uploads are mandatory",
+      "Turn Progression Uploads Mandatory on?\n\nMark Treatment Complete waits for any one of Weekly Progression, Before & After or Testimonial. Close Case Sheet waits until all four are verified.",
+    hiddenToast: "Progression Uploads Mandatory is off",
+    shownToast: "Progression Uploads Mandatory is on",
   },
   {
     // Hidden is Off. Only the browser confirm before Collect on the Collect Consultation
