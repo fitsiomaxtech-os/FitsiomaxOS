@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FileSpreadsheet, Users,
-  Plus, RefreshCw, ArrowRightLeft, X, Pencil, ChevronRight,
+  Plus, RefreshCw, ArrowRightLeft, X, Pencil, ChevronRight, ChevronDown, Archive, ArchiveRestore,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -548,6 +548,23 @@ const TargetPicker = ({ branches, branchIds, onBranchIdsChange, testid }) => (
   </div>
 );
 
+// One collapsible section of the Edit Source popup: a header bar that opens/closes its body.
+const CollapseSection = ({ label, open, onToggle, children, testid }) => (
+  <div className="rounded-[4px] border border-slate-200" data-testid={testid}>
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}
+      aria-expanded={open}
+      data-testid={`${testid}-toggle`}
+    >
+      {label}
+      <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+    </button>
+    {open && <div className="space-y-3 border-t border-slate-200 p-3">{children}</div>}
+  </div>
+);
+
 const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
   const initialHeaders = (source.headers_detected || []).join(", ");
   // Not editable here, or anywhere in this dialog — a card is named after the branch it
@@ -560,6 +577,7 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
   // Google Sheets: this source's own sheet is the first row, seeded with today's exact
   // values — saving without touching Sources updates it byte-for-byte as before. Any row
   // added after it becomes a brand-new sibling source on save (see save() below).
+  // The first row's column_mapping is also what the Edit Mapping section edits.
   const [sheetEntries, setSheetEntries] = useState([{
     id: source.id,
     sheet_url: source.sheet_url || "",
@@ -567,7 +585,9 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
     sheet_names: source.sheet_names || (source.sheet_name ? [source.sheet_name] : ["Sheet1"]),
     column_mapping: source.column_mapping || {},
   }]);
-  const [editTab, setEditTab] = useState("details");
+  // Which collapsible section is open: "mapping" | "details" | "sources" | null.
+  const [openSection, setOpenSection] = useState("details");
+  const toggleSection = (key) => setOpenSection((cur) => (cur === key ? null : key));
   const [headers, setHeaders] = useState(initialHeaders);
   const [branchIds, setBranchIds] = useState(source.branch_ids || (source.branch_id ? [source.branch_id] : []));
   // No longer editable here — carried through unchanged so a save doesn't wipe whatever
@@ -575,25 +595,47 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
   const sourceVerticals = source.verticals || [];
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(!!source.auto_sync_enabled);
   const [autoSyncInterval, setAutoSyncInterval] = useState(String(source.auto_sync_interval_minutes || 60));
+  const [archiving, setArchiving] = useState(false);
+
+  const isSheets = sourceType === "google_sheets";
+  const ownEntry = sheetEntries[0];
+  const setOwnMapping = (fn) => setSheetEntries((es) => es.map((e, i) => (i === 0 ? { ...e, column_mapping: fn(e.column_mapping || {}) } : e)));
+
+  // Archive, not delete — the source's config and the leads it already brought in stay;
+  // it is restored from the same icon on the Archived list.
+  const toggleArchive = async () => {
+    setArchiving(true);
+    try {
+      await mkUpdateSource(source.id, { is_archived: !source.is_archived });
+      toast.success(source.is_archived ? "Source restored" : "Source archived");
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Archive failed");
+      setArchiving(false);
+    }
+  };
 
   const save = async () => {
-    const validEntries = sourceType === "google_sheets" ? sheetEntries.filter((e) => e.spreadsheet_id) : [];
-    if (sourceType === "google_sheets" && validEntries.length === 0) {
+    const validEntries = isSheets ? sheetEntries.filter((e) => e.spreadsheet_id) : [];
+    if (isSheets && validEntries.length === 0) {
       toast.error("Paste a valid Google Sheet URL (must contain /spreadsheets/d/<ID>/)");
       return;
     }
     const payload = {
       source_type: sourceType,
-      sheet_url: sourceType === "google_sheets" ? validEntries[0].sheet_url : sheetUrl,
+      sheet_url: isSheets ? validEntries[0].sheet_url : sheetUrl,
       branch_ids: branchIds,
       verticals: sourceVerticals,
       auto_sync_enabled: autoSyncEnabled,
       auto_sync_interval_minutes: Number(autoSyncInterval) || 60,
     };
-    if (sourceType === "google_sheets") {
+    if (isSheets) {
       payload.spreadsheet_id = validEntries[0].spreadsheet_id;
       payload.sheet_names = validEntries[0].sheet_names.length ? validEntries[0].sheet_names : ["Sheet1"];
       payload.column_mapping = validEntries[0].column_mapping || {};
+    } else if (JSON.stringify(ownEntry.column_mapping || {}) !== JSON.stringify(source.column_mapping || {})) {
+      // Not a sheet: only sent when Edit Mapping actually changed it.
+      payload.column_mapping = ownEntry.column_mapping || {};
     }
     // Only touch headers/mapping if the user actually changed them — avoids
     // silently wiping any manual "Edit Mapping" customization on every save.
@@ -624,10 +666,28 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
   };
 
   return (
-    <DialogShell title="Edit Source" onClose={onClose} testid="mk-edit-source-dialog" maxWidth="max-w-2xl" rounded="rounded-[4px]">
-      {/* Two columns on a wider dialog rather than one long stack — the tab and branch
-          checklists side by side are what actually saved the height; everything else
-          just rides along in the same grid. Single column again below sm. */}
+    <DialogShell
+      title="Edit Source"
+      onClose={onClose}
+      testid="mk-edit-source-dialog"
+      maxWidth="max-w-[655px]"
+      boxClassName="h-[550px]"
+      rounded="rounded-[4px]"
+      headerActions={(
+        <button
+          type="button"
+          onClick={toggleArchive}
+          disabled={archiving}
+          title={source.is_archived ? "Restore source" : "Archive source"}
+          aria-label={source.is_archived ? "Restore source" : "Archive source"}
+          className="text-slate-400 hover:text-amber-600 disabled:opacity-50"
+          data-testid="mk-edit-source-archive"
+        >
+          {source.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+        </button>
+      )}
+      footer={<Button onClick={save} className="w-full rounded-[4px]" data-testid="mk-edit-source-save">Save Changes</Button>}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex h-9 w-full items-center rounded-[4px] border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700" data-testid="mk-edit-source-name">{name}</div>
         <ThemedSelect
@@ -637,63 +697,66 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
           className="h-9 w-full rounded-[4px]"
           testid="mk-edit-source-type"
         />
-        {sourceType === "google_sheets" ? (
-          <>
-            <div className="flex items-center gap-2 sm:col-span-2" data-testid="mk-edit-source-innertabs">
-              <button type="button" onClick={() => setEditTab("details")} className={`rounded-[4px] px-3 py-1.5 text-xs font-medium ${editTab === "details" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-edit-source-tab-details">Details</button>
-              <button type="button" onClick={() => setEditTab("sources")} className={`rounded-[4px] px-3 py-1.5 text-xs font-medium ${editTab === "sources" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="mk-edit-source-tab-sources">
-                Sources ({sheetEntries.filter((e) => e.spreadsheet_id).length})
-              </button>
-            </div>
-            {editTab === "sources" ? (
-              <div className="sm:col-span-2">
-                <SheetEntriesEditor
-                  entries={sheetEntries}
-                  fallbackHeaders={source.headers_detected || []}
-                  onChange={(v) => setSheetEntries(v.length ? v : [emptySheetEntry()])}
-                  testid="mk-edit-source-sheets"
-                />
-              </div>
-            ) : (
-              <>
-                <TargetPicker
-                  branches={branches}
-                  branchIds={branchIds}
-                  onBranchIdsChange={setBranchIds}
-                  testid="mk-edit-source-target"
-                />
-                <Input className="rounded-[4px]" placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
-                <p className="sm:col-span-2 text-xs text-amber-700 bg-amber-50 rounded-[4px] p-2">
-                  <strong>Important:</strong> every sheet must be either accessible to the Google account you connected, OR shared as “Anyone with the link can view”.
-                </p>
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                  <input type="checkbox" checked={autoSyncEnabled} onChange={(e) => setAutoSyncEnabled(e.target.checked)} data-testid="mk-edit-source-autosync" />
-                  Auto-sync this sheet
-                </label>
-                {autoSyncEnabled && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-medium text-slate-600">Every</label>
-                    <Input type="number" min="5" className="w-24 rounded-[4px]" value={autoSyncInterval} onChange={(e) => setAutoSyncInterval(e.target.value)} data-testid="mk-edit-source-interval" />
-                    <span className="text-xs text-slate-500">minutes</span>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <Input className="sm:col-span-2 rounded-[4px]" placeholder="Source URL (optional, for reference)" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} data-testid="mk-edit-source-url" />
-            <TargetPicker
-              branches={branches}
-              branchIds={branchIds}
-              onBranchIdsChange={setBranchIds}
-              testid="mk-edit-source-target"
-            />
-            <Input className="rounded-[4px]" placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
-          </>
-        )}
-        <Button onClick={save} className="sm:col-span-2 w-full rounded-[4px]" data-testid="mk-edit-source-save">Save Changes</Button>
       </div>
+
+      <CollapseSection label="Edit Mapping" open={openSection === "mapping"} onToggle={() => toggleSection("mapping")} testid="mk-edit-source-sec-mapping">
+        <SheetMappingPanel
+          spreadsheetId={isSheets ? ownEntry.spreadsheet_id : ""}
+          tabs={ownEntry.sheet_names}
+          fallbackHeaders={source.headers_detected || []}
+          value={ownEntry.column_mapping || {}}
+          onChange={setOwnMapping}
+        />
+      </CollapseSection>
+
+      <CollapseSection label="Details" open={openSection === "details"} onToggle={() => toggleSection("details")} testid="mk-edit-source-sec-details">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {!isSheets && (
+            <Input className="sm:col-span-2 rounded-[4px]" placeholder="Source URL (optional, for reference)" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} data-testid="mk-edit-source-url" />
+          )}
+          <TargetPicker
+            branches={branches}
+            branchIds={branchIds}
+            onBranchIdsChange={setBranchIds}
+            testid="mk-edit-source-target"
+          />
+          <Input className="rounded-[4px]" placeholder="Headers (comma separated) — optional" value={headers} onChange={(e) => setHeaders(e.target.value)} data-testid="mk-edit-source-headers" />
+          {isSheets && (
+            <>
+              <p className="sm:col-span-2 text-xs text-amber-700 bg-amber-50 rounded-[4px] p-2">
+                <strong>Important:</strong> every sheet must be either accessible to the Google account you connected, OR shared as “Anyone with the link can view”.
+              </p>
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <input type="checkbox" checked={autoSyncEnabled} onChange={(e) => setAutoSyncEnabled(e.target.checked)} data-testid="mk-edit-source-autosync" />
+                Auto-sync this sheet
+              </label>
+              {autoSyncEnabled && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600">Every</label>
+                  <Input type="number" min="5" className="w-24 rounded-[4px]" value={autoSyncInterval} onChange={(e) => setAutoSyncInterval(e.target.value)} data-testid="mk-edit-source-interval" />
+                  <span className="text-xs text-slate-500">minutes</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </CollapseSection>
+
+      {isSheets && (
+        <CollapseSection
+          label={`Sources (${sheetEntries.filter((e) => e.spreadsheet_id).length})`}
+          open={openSection === "sources"}
+          onToggle={() => toggleSection("sources")}
+          testid="mk-edit-source-sec-sources"
+        >
+          <SheetEntriesEditor
+            entries={sheetEntries}
+            fallbackHeaders={source.headers_detected || []}
+            onChange={(v) => setSheetEntries(v.length ? v : [emptySheetEntry()])}
+            testid="mk-edit-source-sheets"
+          />
+        </CollapseSection>
+      )}
     </DialogShell>
   );
 };
@@ -715,10 +778,17 @@ const ADD_QUESTION = "__add_question__";
  *
  * Persistence is the caller's — a saved source PATCHes, a row in the Add/Edit popup keeps
  * it on the row until that popup saves.
+ *
+ * The panel is controlled: `value` is the mapping, `onChange` takes an updater
+ * (prev => next), same shape as a useState setter. SheetMappingDialog wraps it in its own
+ * popup with a Save button; Edit Source shows it inline in its Edit Mapping section.
  */
-const SheetMappingDialog = ({ title, spreadsheetId, tabs, fallbackHeaders = [], value, onClose, onSave }) => {
+const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, onChange }) => {
   const tabList = (tabs && tabs.length ? tabs : ["Sheet1"]);
-  const [tab, setTab] = useState(tabList[0]);
+  const [pickedTab, setTab] = useState(tabList[0]);
+  // The tab list can change under an inline panel (a sheet re-picked in Sources), so a
+  // tab that is no longer listed falls back to the first one.
+  const tab = tabList.includes(pickedTab) ? pickedTab : tabList[0];
   // Seeded from the last sync so a source with no spreadsheet behind it — a CSV or a Meta
   // source — still has columns to map. The live read below replaces these when there is a
   // sheet to read them from.
@@ -726,7 +796,8 @@ const SheetMappingDialog = ({ title, spreadsheetId, tabs, fallbackHeaders = [], 
   const [loading, setLoading] = useState(false);
   const [headerError, setHeaderError] = useState("");
   const [groups, setGroups] = useState([]);
-  const [mapping, setMapping] = useState(value || {});
+  const mapping = value || {};
+  const setMapping = onChange;
   // The column waiting on a new question, and the label being typed for it.
   const [newQuestionFor, setNewQuestionFor] = useState(null);
   const [newQuestionLabel, setNewQuestionLabel] = useState("");
@@ -810,7 +881,7 @@ const SheetMappingDialog = ({ title, spreadsheetId, tabs, fallbackHeaders = [], 
   const mappedCount = Object.keys(mapping || {}).length;
 
   return (
-    <DialogShell title={title} onClose={onClose} testid="mk-sheet-map-dialog" maxWidth="max-w-3xl">
+    <>
       {tabList.length > 1 && (
         <div className="flex flex-wrap items-center gap-1" data-testid="mk-map-tabpicker">
           <span className="mr-1 text-xs text-slate-500">Tab:</span>
@@ -901,6 +972,15 @@ const SheetMappingDialog = ({ title, spreadsheetId, tabs, fallbackHeaders = [], 
         </div>
       )}
 
+    </>
+  );
+};
+
+const SheetMappingDialog = ({ title, value, onClose, onSave, ...panel }) => {
+  const [mapping, setMapping] = useState(value || {});
+  return (
+    <DialogShell title={title} onClose={onClose} testid="mk-sheet-map-dialog" maxWidth="max-w-3xl">
+      <SheetMappingPanel {...panel} value={mapping} onChange={setMapping} />
       <Button onClick={() => onSave(mapping)} className="w-full" data-testid="mk-map-save">Save Mapping</Button>
     </DialogShell>
   );
@@ -1051,16 +1131,23 @@ const TeamTab = ({ team, reloadTeam, branches }) => {
 // the content — a tall form (Add/Edit Source, with its branch and tab checklists) used to
 // push the close button off the top of the screen with no way to scroll back up to it,
 // since the old shell had no height cap at all.
-const DialogShell = ({ title, onClose, children, testid, maxWidth = "max-w-md", rounded = "rounded-lg" }) => (
+// `boxClassName` fixes a size (Edit Source is 655 x 550); the body scrolls inside it, so
+// a section that grows never pushes the header or the footer out of the box.
+// `headerActions` sit just left of the X; `footer` is pinned below the scrolling body.
+const DialogShell = ({ title, onClose, children, testid, maxWidth = "max-w-md", rounded = "rounded-lg", boxClassName = "", headerActions = null, footer = null }) => (
   <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" data-testid={testid}>
-    <div className={`flex max-h-[85vh] w-full ${maxWidth} flex-col ${rounded} bg-white shadow-xl`}>
+    <div className={`flex max-h-[85vh] w-full ${maxWidth} flex-col ${rounded} bg-white shadow-xl ${boxClassName}`}>
       <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="mk-dialog-close"><X className="h-4 w-4" /></button>
+        <div className="flex items-center gap-3">
+          {headerActions}
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" data-testid="mk-dialog-close"><X className="h-4 w-4" /></button>
+        </div>
       </div>
-      <div className="space-y-3 overflow-y-auto p-5">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
         {children}
       </div>
+      {footer && <div className="shrink-0 border-t border-slate-200 px-5 py-3">{footer}</div>}
     </div>
   </div>
 );
