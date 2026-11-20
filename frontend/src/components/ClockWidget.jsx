@@ -181,7 +181,9 @@ const Figure = ({ label, value, tone = "text-slate-800", testid }) => (
 );
 
 // "2026-11-18" → "Wed, 18 Nov 2026", so the band reads as a day rather than a database key.
-const longDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "");
+function longDate(iso) {
+  return iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "";
+}
 
 const monthLabel = (m) => (m ? new Date(`${m}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "");
 const shiftMonth = (m, by) => {

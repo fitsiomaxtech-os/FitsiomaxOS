@@ -13,9 +13,6 @@ import { versionDetail, versionLabel } from "@/lib/version";
 // somebody meets at sign-in is the one they already used to set it up.
 import { CODE_LENGTH, CodeInput } from "@/components/ui/code-input";
 
-const BG_IMAGE =
-  "https://images.pexels.com/photos/62693/pexels-photo-62693.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
-
 const LOGO_URL =
   "https://customer-assets.emergentagent.com/job_3d74aa9e-a241-4207-b148-2bbe29802707/artifacts/nozl77ti_Logo%20Icon.webp";
 
@@ -135,31 +132,24 @@ export const LoginPage = ({ onLogin }) => {
     // hidden, so a page that tall puts its bottom edge — and the footer pinned to it —
     // under the bar until the reader scrolls. Older browsers keep min-h-screen.
     <div
-      className="relative min-h-screen overflow-hidden bg-white supports-[height:100dvh]:min-h-[100dvh]"
+      className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-50 via-white to-blue-100 supports-[height:100dvh]:min-h-[100dvh]"
       data-testid="screen1-login-page"
     >
-      <img
-        src={BG_IMAGE}
-        alt="Minimal background"
-        className="absolute inset-0 h-full w-full object-cover object-center"
-        data-testid="screen1-login-background-image"
-      />
-      <div className="absolute inset-0 bg-white/90 backdrop-blur-[2px]" data-testid="screen1-login-overlay" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(125,211,252,0.34),_transparent_42%),radial-gradient(ellipse_at_bottom_right,_rgba(191,219,254,0.58),_transparent_46%)]" data-testid="screen1-login-overlay" />
+      <div aria-hidden="true" className="absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-sky-200/30 blur-3xl" />
+      <div aria-hidden="true" className="absolute -right-24 bottom-1/4 h-80 w-80 rounded-full bg-blue-200/35 blur-3xl" />
 
-      {/* On phones the card is drawn at 90%. transform: scale rather than zoom — the card is
-          w-full, and zoom leaves a percentage width alone, so only its contents would shrink.
-          The card sits centred in a full-height flex box, so scaling about its centre keeps it there. */}
-      {/* pb-12 on phones keeps the card clear of the one-line footer under it. */}
+      {/* Keep the card centred while leaving room for the footer on smaller screens. */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 pb-12 pt-8 supports-[height:100dvh]:min-h-[100dvh] md:px-8 md:py-10">
         <Card
-          className="w-full max-w-md rounded-[4px] border border-slate-200 bg-white shadow-[0_8px_30px_rgb(2,6,23,0.06)] max-md:scale-90"
+          className="w-full max-w-md rounded-2xl border border-white/80 bg-white/90 shadow-[0_24px_80px_rgba(15,55,95,0.16)] backdrop-blur-xl"
           data-testid="screen1-login-card"
         >
-          <CardHeader className="space-y-1 pb-2 text-center">
+          <CardHeader className="space-y-2 pb-3 text-center">
             <img
               src={LOGO_URL}
               alt="Fitsiomax"
-              className="mx-auto h-16 w-16 rounded-lg object-contain"
+              className="mx-auto h-16 w-16 rounded-2xl bg-sky-50 p-1.5 object-contain ring-1 ring-sky-100"
               data-testid="screen1-login-logo"
             />
             <h1 className="font-heading text-3xl font-bold text-slate-900" data-testid="screen1-login-title">
@@ -196,7 +186,7 @@ export const LoginPage = ({ onLogin }) => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-[4px] bg-sky-500 text-white hover:bg-sky-600"
+                  className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 font-semibold text-white shadow-md shadow-sky-900/15 transition hover:from-sky-700 hover:to-blue-700"
                   data-testid="screen1-login-2fa-submit"
                 >
                   {loading ? "Verifying..." : "Verify & sign in"}
@@ -233,7 +223,7 @@ export const LoginPage = ({ onLogin }) => {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="user@fitsiomax.com"
-                    className="rounded-[4px] border-slate-200 bg-white"
+                    className="h-12 rounded-xl border-slate-200/90 bg-white/90 shadow-sm focus-visible:ring-sky-300"
                     data-testid="screen1-login-email-input"
                   />
                 </div>
@@ -258,7 +248,7 @@ export const LoginPage = ({ onLogin }) => {
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder="••••••••"
-                      className="rounded-[4px] border-slate-200 bg-white pr-10"
+                      className="h-12 rounded-xl border-slate-200/90 bg-white/90 pr-10 shadow-sm focus-visible:ring-sky-300"
                       data-testid="screen1-login-password-input"
                     />
                     <button
@@ -306,7 +296,7 @@ export const LoginPage = ({ onLogin }) => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-[4px] bg-[rgb(27_144_204)] text-white hover:bg-[rgb(22_126_180)]"
+                  className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 font-semibold text-white shadow-md shadow-sky-900/15 transition hover:from-sky-700 hover:to-blue-700"
                   data-testid="screen1-login-submit-button"
                 >
                   {loading ? "Signing in..." : "Continue"}
