@@ -884,7 +884,10 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
   return (
     <div className="flex flex-col gap-3 sm:gap-4 lg:h-[calc(100vh-220px)] lg:flex-row" data-testid="head-physio-calendar-root">
       {/* LEFT PANEL — Doctor List */}
-      <div className="flex w-full flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:h-full lg:w-72" data-testid="doctor-list-panel">
+      {/* The Analytics cards' frame -- a blue rule along the top, a light blue header and a
+          soft blue shadow that deepens on hover -- on both panels of this screen. */}
+      <div className="relative flex w-full flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(37,99,235,0.18)] transition-shadow duration-300 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_36px_-14px_rgba(37,99,235,0.32)] lg:h-full lg:w-72" data-testid="doctor-list-panel">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-500" />
         {/* Phone: the list folds into one dropdown, and the card itself is the dropdown —
             no header over it, since the placeholder already names who is being picked. A
             row of 224px cards scrolled sideways showed one and a half names at a time; the
@@ -911,7 +914,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         </div>
 
-        <div className="hidden border-b border-slate-100 bg-gradient-to-r from-sky-50/80 to-white px-4 py-3.5 sm:block">
+        <div className="hidden border-b border-blue-100/70 bg-gradient-to-r from-sky-50/90 via-blue-50/40 to-white px-4 py-3.5 sm:block">
           <div className="flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
@@ -1073,7 +1076,8 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
       {/* RIGHT PANEL — Calendar */}
       {/* Not drawn at all on a phone until somebody is picked: there it was a card holding
           only "Select a CONSULTANT to open…", which the dropdown above already says. */}
-      <div className={`${selectedDoctor ? "flex" : "hidden sm:flex"} flex-1 flex-col overflow-visible rounded-xl border border-slate-200 bg-white lg:overflow-hidden`} data-testid="calendar-panel">
+      <div className={`${selectedDoctor ? "flex" : "hidden sm:flex"} relative flex-1 flex-col overflow-visible rounded-xl border border-slate-200 bg-white lg:overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(37,99,235,0.18)] transition-shadow duration-300 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_36px_-14px_rgba(37,99,235,0.32)]`} data-testid="calendar-panel">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] rounded-t-xl bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-500" />
         {!selectedDoctor ? (
           <div className="flex-1 flex items-center justify-center" data-testid="calendar-empty-state">
             <div className="text-center">
@@ -1086,7 +1090,7 @@ export const HeadPhysioCalendar = ({ branchId, profileType = "head_physio", onli
             {/* Doctor Header. On a phone it keeps only the shift chip and the controls: the
                 name and initial are already on the dropdown right above it, and the count
                 line under them went as text nobody there was reading. */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2.5 sm:flex-nowrap sm:gap-0 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100/70 bg-gradient-to-r from-sky-50/90 via-blue-50/40 to-white px-3 py-2.5 sm:flex-nowrap sm:gap-0 sm:p-4">
               <div className={`flex min-w-0 items-center gap-3 ${isPhysio ? "max-sm:w-full" : ""}`}>
                 <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700 sm:flex">
                   {selectedDoctor.full_name?.charAt(0)?.toUpperCase()}
