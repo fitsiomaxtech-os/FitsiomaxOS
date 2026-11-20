@@ -21,6 +21,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { toast } from "@/components/ui/sonner";
 import { getBdSummaryRows } from "@/lib/api";
 import { displayPhone, telNumber } from "@/lib/phone";
+import { isMetaLead, leadSourceLabel } from "@/lib/leadSource";
 // The avatar the rest of the OS already gives a lead: same two letters, same hue per
 // first letter, so one person is the same colour on this list and on Sales View.
 import { avatarColor, initials } from "@/components/PreSalesCRM";
@@ -167,7 +168,8 @@ export const BdMarketingList = ({
   const narrowed = rows.length !== sent.length;
 
   const place = (r) => r.city || r.location || branchName(r.branch_id);
-  const channel = (r) => r.source_tab || r.source_type || "—";
+  // "Meta · Instagram" on a sheet lead, whose type line under it would only repeat it.
+  const channel = (r) => leadSourceLabel(r) || "—";
 
   return (
     <div className="space-y-4" data-testid="bd-marketing-list-tab">
@@ -273,7 +275,7 @@ export const BdMarketingList = ({
                         </td>
                         <td className="px-4 py-3">
                           <p className="truncate font-medium text-slate-700">{channel(r)}</p>
-                          <p className="truncate text-xs text-slate-500">{r.source_type || "—"}</p>
+                          {!isMetaLead(r) && <p className="truncate text-xs text-slate-500">{r.source_type || "—"}</p>}
                         </td>
                         <td className="px-4 py-3">
                           <p className="flex items-center gap-1.5 text-slate-600">

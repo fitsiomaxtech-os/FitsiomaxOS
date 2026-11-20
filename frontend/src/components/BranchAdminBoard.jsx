@@ -124,6 +124,7 @@ import { LeadEditModal } from "@/components/LeadEditModal";
 import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { isCourseComplete } from "@/lib/leadStage";
 import { displayPhone } from "@/lib/phone";
+import { leadPlatform, leadSource, leadSourceLabel } from "@/lib/leadSource";
 
 
 // Rows drawn per page of the Branch Leads list (see leadsPage).
@@ -505,7 +506,9 @@ const CITY_FILTER = {
 
 // The branch board's column in City's place, read as the column and the lead popup read
 // it. A string either way, since the narrowing lowercases whatever this returns.
-const sourceAnswer = (lead) => String(lead.source_tab || lead.source_type || "").trim();
+// A sheet lead reads "Meta" here -- its Platform has a dropdown of its own below, and the
+// column and the popup show the two together (leadSourceLabel).
+const sourceAnswer = (lead) => leadSource(lead);
 
 const SOURCE_FILTER = {
   key: "source",
@@ -515,6 +518,21 @@ const SOURCE_FILTER = {
   width: "w-28 2xl:w-32",
   answer: sourceAnswer,
 };
+
+// Instagram / Facebook, drawn only once Source is Meta: no other source has a platform, so
+// it would be a dropdown answering nothing. `dependsOn` is matched against the lowercased
+// value listFilters holds, and a Source changed away from Meta clears it.
+const PLATFORM_FILTER = {
+  key: "platform",
+  label: "Platform",
+  allLabel: "All Platforms",
+  width: "w-28 2xl:w-32",
+  answer: leadPlatform,
+  dependsOn: { key: SOURCE_FILTER.key, value: "meta" },
+};
+
+/** Whether a filter with a `dependsOn` is live under the dropdowns as they are set now. */
+const filterLive = (f, listFilters) => !f.dependsOn || (listFilters[f.dependsOn.key] || "") === f.dependsOn.value;
 
 const toolbarFiltersFor = (questions, trailing) => [
   ...questions.map((q) => ({
@@ -534,10 +552,13 @@ const toolbarFiltersFor = (questions, trailing) => [
 // The last one follows the third column: Source on a branch's board, City on an arm's.
 // Pain Type keeps its column but has no dropdown: the branch asked for "All Pain Types"
 // to go from the toolbar (2026-11-18).
-const BRANCH_TOOLBAR_FILTERS = toolbarFiltersFor(
-  BRANCH_INTAKE_QUESTIONS.filter((q) => q.key !== "pain_type"),
-  SOURCE_FILTER,
-);
+const BRANCH_TOOLBAR_FILTERS = [
+  ...toolbarFiltersFor(
+    BRANCH_INTAKE_QUESTIONS.filter((q) => q.key !== "pain_type"),
+    SOURCE_FILTER,
+  ),
+  PLATFORM_FILTER,
+];
 const PHYSIO_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(PHYSIO_ARM_INTAKE_QUESTIONS, CITY_FILTER);
 const FITNESS_ARM_TOOLBAR_FILTERS = toolbarFiltersFor(FITNESS_ARM_INTAKE_QUESTIONS, CITY_FILTER);
 
@@ -1691,7 +1712,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // table saying a number that is no longer in it.
     for (const f of toolbarFilters) {
       const wanted = listFilters[f.key];
-      if (!wanted) continue;
+      if (!wanted || !filterLive(f, listFilters)) continue;
       list = list.filter((l) => f.answer(l).toLowerCase() === wanted);
     }
     // The toolbar's order, applied last so it orders whatever the narrowings left rather
@@ -1825,7 +1846,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
         { header: "Phone", xlsx: 15, get: (l) => displayPhone(l.phone) || "" },
         onArmBoard
           ? { header: "City", xlsx: 16, get: (l) => cityAnswer(l) || "" }
-          : { header: "Source", xlsx: 18, get: (l) => sourceAnswer(l) || "" },
+          : { header: "Source", xlsx: 18, get: (l) => leadSourceLabel(l) || "" },
         ...intakeQuestions.map((q) => ({ header: q.label, xlsx: 18, get: (l) => formAnswer(l, q.question, q.fallback, q.formatFallback) || "" })),
         ...(onArmBoard ? [] : [{ header: "Assigned Physio", xlsx: 20, get: (l) => l.assigned_physio_name || "" }]),
         ...(onNotProspect ? [
@@ -2691,14 +2712,21 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               <div className="hidden shrink-0 items-center gap-1.5 xl:flex" data-testid="branch-list-filters">
                 {toolbarFilters.map((f) => {
                   const options = listFilterOptions[f.key] || [];
-                  if (options.length === 0) return null;
+                  if (options.length === 0 || !filterLive(f, listFilters)) return null;
                   return (
                     <FilterSelect
                       key={f.key}
                       filter={f}
                       options={options}
                       value={listFilters[f.key] || ""}
-                      onChange={(v) => setListFilters((p) => ({ ...p, [f.key]: v }))}
+                      onChange={(v) => setListFilters((p) => {
+                        const next = { ...p, [f.key]: v };
+                        // Platform lets go once Source is no longer Meta.
+                        for (const d of toolbarFilters) {
+                          if (d.dependsOn?.key === f.key && v !== d.dependsOn.value) next[d.key] = "";
+                        }
+                        return next;
+                      })}
                     />
                   );
                 })}
@@ -3492,8 +3520,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           </div>
                         </td>
                         <td className="truncate px-4 py-3 text-slate-600" title={displayPhone(lead.phone)}>{displayPhone(lead.phone) || "—"}</td>
-                        {/* Source on a branch's board, through sourceAnswer -- the same read
-                            as the lead popup, Pre Sales and the Source dropdown. An arm's board
+                        {/* Source on a branch's board, through leadSourceLabel -- the same read
+                            as the lead popup and Pre Sales ("Meta · Instagram" on a sheet lead;
+                            the Source dropdown reads its first half). An arm's board
                             keeps City, through cityAnswer, so a lead whose sheet mapped the
                             column and one whose sheet did not both show the same thing here. */}
                         {onArmBoard ? (() => {
@@ -3504,7 +3533,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </td>
                           );
                         })() : (() => {
-                          const source = sourceAnswer(lead);
+                          const source = leadSourceLabel(lead);
                           return (
                             <td className="truncate px-4 py-3 text-slate-600" title={source || undefined} data-testid={`branch-row-source-${lead.id}`}>
                               {source || <span className="text-slate-400">—</span>}
@@ -4987,7 +5016,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // these and a sheet import carries fifteen, and a fixed list would show the first as a
   // page of dashes — which is close to how the popup already read.
   const leadDetailRows = [
-    ["Source", lead.source_tab || lead.source_type],
+    ["Source", leadSourceLabel(lead)],
     // "offline_physiotherapy" -> "Offline Physiotherapy"; free text off a sheet as it was.
     ["Department", serviceTypeTitle(lead.department)],
     ["Alternative Phone", displayPhone(lead.alternative_phone)],

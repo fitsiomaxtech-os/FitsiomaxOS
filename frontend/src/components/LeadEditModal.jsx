@@ -12,6 +12,7 @@ import { MilkDateInput } from "@/components/ui/milk-calendar";
 // patient off the branch that has been seeing them.
 import { departmentHasBranch, departmentOptions, SOURCE_SUGGESTIONS } from "@/components/CreateLeadModal";
 import { displayPhone } from "@/lib/phone";
+import { isMetaLead, leadSourceLabel } from "@/lib/leadSource";
 import { useServiceTypes } from "@/lib/serviceTypes";
 
 const GENDERS = ["Male", "Female", "Other"];
@@ -172,16 +173,22 @@ export const LeadEditModal = ({ lead, onClose, onSaved, allowBranchChange = true
               <Field label="State"><Input value={form.state} onChange={(e) => set("state", e.target.value)} data-testid="lead-edit-state" /></Field>
               <Field label="Location"><Input value={form.location} onChange={(e) => set("location", e.target.value)} data-testid="lead-edit-location" /></Field>
               <Field label="Source">
-                {/* Same as the create form: the themed list, or typed by hand, so a channel
-                    nobody has named yet can still be written down as what it was. */}
-                <SelectOrType
-                  options={SOURCE_SUGGESTIONS}
-                  value={form.source_tab}
-                  onChange={(v) => set("source_tab", v)}
-                  placeholder="Select source"
-                  manualPlaceholder="Type the source"
-                  testid="lead-edit-source"
-                />
+                {/* A sheet lead's Source is its campaign's -- Meta, and the Platform the sheet
+                    gave -- so it is shown, not edited; source_tab is never sent for it. */}
+                {isMetaLead(lead) ? (
+                  <Input value={leadSourceLabel(lead)} readOnly disabled data-testid="lead-edit-source-meta" />
+                ) : (
+                  /* Same as the create form: the themed list, or typed by hand, so a channel
+                     nobody has named yet can still be written down as what it was. */
+                  <SelectOrType
+                    options={SOURCE_SUGGESTIONS}
+                    value={form.source_tab}
+                    onChange={(v) => set("source_tab", v)}
+                    placeholder="Select source"
+                    manualPlaceholder="Type the source"
+                    testid="lead-edit-source"
+                  />
+                )}
               </Field>
             </div>
           </Section>

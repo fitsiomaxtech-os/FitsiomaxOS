@@ -19,6 +19,7 @@ from constants import (
     SALES_ARM_OFFLINE, SALES_ARM_ONLINE,
 )
 import lead_control
+import lead_mapping
 from stage_utils import (
     align_desk_stages, clear_consultation_stages, get_closing_stage_name, get_first_stage_name,
     first_branch_stage_for, log_stage_moves, match_desk_stages, realign_branch_stage_leads, sales_arm_for,
@@ -2017,6 +2018,54 @@ async def backfill_lead_enquiry_dates() -> None:
         moved += 1
     if moved:
         print(f"[startup] re-dated {moved} lead(s) to when the patient enquired")
+
+
+async def backfill_meta_lead_source() -> None:
+    """Give leads already pulled from a Google Sheet their Source (Meta) and Platform.
+
+    The sheet pull writes both on every new lead now (see _pull_source_unlocked); this does
+    the same for the leads it imported before, reading the platform each one already holds
+    -- in the ad record where the column was mapped, else in extra_fields where the importer
+    kept it unmapped. A lead whose platform is blank or unreadable becomes Meta with none.
+
+    Only leads of a source with a sheet linked to it. A source with no sheet never pulled a
+    lead, and the two test sources (poonamalle, Trichy) are exactly that, so they are left
+    as they are. Matched by marketing_source_id, or by the source's name in source_tab for a
+    lead imported before the id was stamped on.
+
+    Safe to re-run: it picks only leads still marked "google_sheets", which is what it
+    changes, so the second startup finds nothing to do.
+    """
+    sources = await v3_col("marketing_sources").find(
+        {"spreadsheet_id": {"$nin": ["", None]}}, {"_id": 0, "id": 1, "name": 1},
+    ).to_list(None)
+    if not sources:
+        return
+    ids = [s["id"] for s in sources if s.get("id")]
+    names = [s["name"] for s in sources if s.get("name")]
+    tabs = names + [re.compile(rf"^{re.escape(n)} · ") for n in names]
+    cursor = v3_col("leads").find(
+        {
+            "source_type": "google_sheets",
+            "$or": [
+                {"marketing_source_id": {"$in": ids}},
+                {"marketing_source_id": {"$in": [None, ""]}, "source_tab": {"$in": tabs}},
+            ],
+        },
+        {"_id": 0, "id": 1, "lead_data": 1, "extra_fields": 1},
+    )
+    moved = 0
+    async for lead in cursor:
+        await v3_col("leads").update_one(
+            {"id": lead["id"], "source_type": "google_sheets"},
+            {"$set": {
+                "source_type": lead_mapping.META_SOURCE_TYPE,
+                "platform": lead_mapping.stored_platform(lead),
+            }},
+        )
+        moved += 1
+    if moved:
+        print(f"[startup] marked {moved} Google Sheet lead(s) as Source Meta with their Platform")
 
 
 async def backfill_zumba_package_sessions() -> None:

@@ -379,6 +379,9 @@ class V3LeadOut(BaseModel):
     vertical: str
     source_tab: Optional[str] = None
     source_type: str
+    # "Instagram" / "Facebook" on a Meta lead (source_type "meta"), else None. Read off the
+    # sheet's platform column by the Google Sheets pull.
+    platform: Optional[str] = None
     stage: str
     branch_stage: Optional[str] = None
     consultation_stage: Optional[str] = None

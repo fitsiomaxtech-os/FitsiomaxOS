@@ -585,8 +585,13 @@ async def _pull_source_unlocked(source_id: str, range_: str = "A1:Z10000") -> Di
                 "phone_normalized": phone_norm,
                 "email": std_payload.get("email", ""),
                 "vertical": std_payload.get("vertical") or default_vertical,
+                # Kept for the dashboards, which still count leads per sheet. The desks show
+                # Source and Platform below instead of the sheet's name.
                 "source_tab": f"{source['name']} · {tab_name}" if len(sheet_names) > 1 else source["name"],
-                "source_type": "google_sheets",
+                # Every synced sheet is a Meta campaign export: Source is Meta, and the
+                # sheet's own `platform` column (ig / fb) says Instagram or Facebook.
+                "source_type": lead_mapping.META_SOURCE_TYPE,
+                "platform": lead_mapping.row_platform(row, mapping),
                 # Pre-Sales stage stays normal ("New Leads") regardless — a source tagged with a
                 # branch only ADDS the branch assignment, landing the lead in that branch's New
                 # Appointment column too, without pulling it out of the usual Pre-Sales workflow.

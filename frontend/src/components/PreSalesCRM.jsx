@@ -42,6 +42,7 @@ import { displayPhone, telNumber } from "@/lib/phone";
 import { byOldestFirst } from "@/lib/timeline";
 import { PRE_BOOK_PLANS, planDate, preBookOf, preBookPaid, preBookPaidAt, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 import { apptWelcomeText } from "@/lib/appointmentMessage";
+import { META, PLATFORMS, leadSource, leadSourceLabel, matchesPlatform } from "@/lib/leadSource";
 
 export const initials = (name) => (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -106,7 +107,8 @@ const branchLabel = (b) => b?.branch_name || b?.name || "";
 const humanWords = (v) => String(v).replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
 
 /** A lead's source as words for the line under its name — "google_sheets" reads as
- *  "Google Sheets", the way HR Admin prints a candidate's source under their name. */
+ *  "Google Sheets", the way HR Admin prints a candidate's source under their name. Given
+ *  leadSourceLabel(lead), so a sheet lead reads "Meta · Instagram". */
 const sourceLabel = (src) => (src ? humanWords(src) : "—");
 
 /**
@@ -744,6 +746,48 @@ const BranchScopeSelects = ({ mode, onMode, branchId, onBranch, branches, testid
 );
 
 /**
+ * Source, and Platform beside it once Source is Meta -- the app a sheet lead's Meta form
+ * was filled in on. Any other Source has no platform, so the second dropdown is not drawn.
+ * "All" rides as "all" for the same reason as above and maps back to "".
+ */
+const LeadSourceSelects = ({ source, onSource, platform, onPlatform, sources, testid }) => (
+  <>
+    <Select value={source || "all"} onValueChange={(v) => onSource(v === "all" ? "" : v)}>
+      <SelectTrigger title="Source" aria-label="Source" className={toolbarSelectClass(!!source)} data-testid={`${testid}-source`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="max-h-72 border-slate-200">
+        <SelectItem value="all" className="text-xs text-slate-700" data-testid={`${testid}-source-all`}>All Sources</SelectItem>
+        {sources.map((s) => (
+          <SelectItem key={s} value={s} className="text-xs text-slate-700" data-testid={`${testid}-source-${s}`}>
+            {sourceLabel(s)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    {source === META && (
+      <Select value={platform || "all"} onValueChange={(v) => onPlatform(v === "all" ? "" : v)}>
+        <SelectTrigger title="Platform" aria-label="Platform" className={toolbarSelectClass(!!platform)} data-testid={`${testid}-platform`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="border-slate-200">
+          <SelectItem value="all" className="text-xs text-slate-700" data-testid={`${testid}-platform-all`}>All Platforms</SelectItem>
+          {PLATFORMS.map((p) => (
+            <SelectItem key={p} value={p} className="text-xs text-slate-700" data-testid={`${testid}-platform-${p.toLowerCase()}`}>
+              {p}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )}
+  </>
+);
+
+/** The Source dropdown's list: every source the leads carry, Meta first, then A-Z. */
+const leadSourceOptions = (leads) => [...new Set(leads.map(leadSource).filter(Boolean))]
+  .sort((a, b) => (a === META ? -1 : b === META ? 1 : a.localeCompare(b)));
+
+/**
  * A row of pills acting as one segmented control — the date presets on the Analytics pane
  * and the Leads range row, and the Handled By filter that sits beside the latter. One
  * component so that three controls reading as the same thing cannot drift into three that
@@ -1071,7 +1115,7 @@ const PhoneLeadCard = ({ lead, details = null, onOpen, testid }) => {
           <LeadMarks lead={lead} className="ml-1" />
         </p>
         <p className="mt-0.5 truncate text-[11px] text-slate-500">
-          {[displayPhone(lead.phone), (lead.source_tab || lead.source_type) && sourceLabel(lead.source_tab || lead.source_type)].filter(Boolean).join(" · ") || "—"}
+          {[displayPhone(lead.phone), leadSourceLabel(lead) && sourceLabel(leadSourceLabel(lead))].filter(Boolean).join(" · ") || "—"}
         </p>
         {details && <div className="mt-1 space-y-0.5">{details}</div>}
       </div>
@@ -1273,6 +1317,14 @@ export const PreSalesCRM = ({
   // Which desk's half of the book to read: "all" | "pre_sales" | "branch_admin". Opens on
   // All, the whole picture this view exists to give — the other two are a step in from it.
   const [handledByFilter, setHandledByFilter] = useState("all");
+  // The lead's Source ("" = all) and, under Meta only, its Platform ("" = all). Not
+  // sourceFilter above, which despite its name is the branch.
+  const [leadSourcePick, setLeadSourcePick] = useState("");
+  const [platformPick, setPlatformPick] = useState("");
+  const pickLeadSource = (v) => {
+    setLeadSourcePick(v);
+    if (v !== META) setPlatformPick("");
+  };
   const isSuperAdminMasterView = role === "super_admin" || role === "sales_head" || role === "marketing_head";
   // Marketing Head's KPI row is a fixed funnel rather than the live, admin-configurable
   // Pre-Sales stage list everyone else's cards come from (see MARKETING_HEAD_FUNNEL) —
@@ -1464,6 +1516,10 @@ export const PreSalesCRM = ({
     if (assignedUserId) {
       rows = rows.filter((l) => l.assigned_user_id === assignedUserId);
     }
+    if (leadSourcePick) {
+      rows = rows.filter((l) => leadSource(l) === leadSourcePick);
+      if (leadSourcePick === META && platformPick) rows = rows.filter((l) => matchesPlatform(l, platformPick));
+    }
     // Here with the date rather than in `filtered`, so the stage cards count the marked
     // leads too, the way Branch Admin's counts move with its marks.
     if (markFilter === "vip") rows = rows.filter((l) => l.is_vip);
@@ -1486,7 +1542,8 @@ export const PreSalesCRM = ({
       });
     }
     return rows;
-  }, [leads, sourceFilter, modeFilter, modeBranchIds, dateFilter, showHandledByFilter, handledByFilter, assignedUserId, markFilter]);
+  }, [leads, sourceFilter, modeFilter, modeBranchIds, dateFilter, showHandledByFilter, handledByFilter, assignedUserId, markFilter, leadSourcePick, platformPick]);
+  const sourceOptions = useMemo(() => leadSourceOptions(leads), [leads]);
 
   const stageCounts = useMemo(() => {
     const map = { All: dateSourceFiltered.length };
@@ -1616,7 +1673,7 @@ export const PreSalesCRM = ({
 
   // Rendering thousands of rows at once is fine on desktop but chokes mobile
   // devices, so re-page back to 50 whenever the filtered set changes.
-  useEffect(() => { setVisibleCount(50); }, [stageFilter, sourceFilter, modeFilter, search, dateFilter, handledByFilter, markFilter, sortOrder]);
+  useEffect(() => { setVisibleCount(50); }, [stageFilter, sourceFilter, modeFilter, search, dateFilter, handledByFilter, markFilter, sortOrder, leadSourcePick, platformPick]);
   const visibleLeads = filtered.slice(0, visibleCount);
 
   // The desk table's columns and each one's share of the row. table-fixed divides the row
@@ -1820,6 +1877,14 @@ export const PreSalesCRM = ({
             </SelectContent>
           </Select>
         )}
+        <LeadSourceSelects
+          source={leadSourcePick}
+          onSource={pickLeadSource}
+          platform={platformPick}
+          onPlatform={setPlatformPick}
+          sources={sourceOptions}
+          testid="presales-toolbar"
+        />
         {/* Icons only; the labels live on title/aria-label so a hover and a screen reader
             still say what each does. The order, the two marks and the calendar are white
             and bordered, uncoloured until one is switched on; the three actions after them
@@ -2009,8 +2074,8 @@ export const PreSalesCRM = ({
                           {preBookWhen({ date: l.appointment_date, time: l.appointment_time }, { short: true }) || "—"}
                         </td>
                       ) : (
-                        <td className="truncate px-4 py-3 text-slate-600" title={l.source_tab || l.source_type ? sourceLabel(l.source_tab || l.source_type) : undefined} data-testid={`presales-lead-source-${l.id}`}>
-                          {sourceLabel(l.source_tab || l.source_type) || "—"}
+                        <td className="truncate px-4 py-3 text-slate-600" title={leadSourceLabel(l) ? sourceLabel(leadSourceLabel(l)) : undefined} data-testid={`presales-lead-source-${l.id}`}>
+                          {sourceLabel(leadSourceLabel(l))}
                         </td>
                       )}
                       <td className="px-4 py-3">
@@ -2605,7 +2670,7 @@ export const PreSalesCRM = ({
                       nameAddon={allStages ? null : <LeadMarks lead={l} className="ml-1" />}
                       badge={onNewLeads ? null : (l.stage || "—")}
                       badgeColor={stg ? stageInk(stg) : null}
-                      idLine={allStages ? [displayPhone(l.phone) || "—"] : [l.patient_number, wa ? null : displayPhone(l.phone), sourceLabel(l.source_tab || l.source_type)]}
+                      idLine={allStages ? [displayPhone(l.phone) || "—"] : [l.patient_number, wa ? null : displayPhone(l.phone), sourceLabel(leadSourceLabel(l))]}
                       wa={wa}
                       onOpen={onConsultVisitTab ? null : () => setEditing(l)}
                       onDelete={onNewLeads && canPurgeLeads ? () => setPurgeLead(l) : null}
@@ -2896,7 +2961,7 @@ export const PreSalesCRM = ({
                           {new Date(l.next_follow_up_at).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
                         </span>
                       )}
-                      {(l.source_tab || l.source_type) && <span className="truncate">{l.source_tab || l.source_type}</span>}
+                      {leadSourceLabel(l) && <span className="truncate">{leadSourceLabel(l)}</span>}
                     </div>
                     <LeadContactIcons lead={l} />
                   </div>
@@ -3322,7 +3387,7 @@ export const LeadDetailDialog = ({ lead, stages, currentUser, pinnedBranchId = n
   // Who the patient is, read back off the record, on a tab of its own. Empty fields are
   // dropped rather than drawn as dashes — a walk-in carries three of these and a sheet
   // import fifteen. Added is last and always there, so the card is never empty.
-  const source = currentLead.source_tab || currentLead.source_type;
+  const source = leadSourceLabel(currentLead);
   const months = currentLead.months_of_pain;
   const leadDetailRows = [
     ["Source", source ? sourceLabel(source) : ""],

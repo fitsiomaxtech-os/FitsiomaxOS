@@ -72,6 +72,7 @@ import { DashboardTabPanel, ModeBranchScope, useDashboardData } from "@/componen
 // the file's own header for why the desk wants a table rather than tiles.
 import { BREAKDOWN_MODES, BdMarketingSources } from "@/components/BdMarketingSources";
 import { displayPhone } from "@/lib/phone";
+import { leadSourceLabel } from "@/lib/leadSource";
 import { useBdTabHidden } from "@/lib/featureVisibility";
 // Finance, HR Admin, Services and Products, and the two Settings screens -- the same five
 // boards Super Admin reaches, mounted here as this desk's own tabs.
@@ -679,7 +680,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
 const DRILL_COLUMNS = {
   lead: [
     { key: "name", label: "Lead", primary: true, value: (r) => r.name || "—", sub: (r) => displayPhone(r.phone) || r.email || "" },
-    { key: "source", label: "Source", value: (r) => r.source_tab || r.source_type || "—" },
+    { key: "source", label: "Source", value: (r) => leadSourceLabel(r) || "—" },
     { key: "stage", label: "Stage", value: (r) => r.stage || "—" },
     { key: "branch", label: "Branch", value: (r, ctx) => ctx.branchName(r.branch_id) },
     { key: "created", label: "Created", value: (r) => (r.created_at || "").slice(0, 10) || "—" },
@@ -718,7 +719,7 @@ const METRIC_COLUMNS = {
     { key: "name", label: "Lead", primary: true, value: (r) => r.name || "—" },
     { key: "phone", label: "Phone", value: (r) => displayPhone(r.phone) || "—" },
     { key: "branch", label: "Branch", value: (r, ctx) => ctx.branchName(r.branch_id) },
-    { key: "source", label: "Source", value: (r) => r.source_tab || r.source_type || "—" },
+    { key: "source", label: "Source", value: (r) => leadSourceLabel(r) || "—" },
     { key: "created", label: "Date & Time", value: (r) => dateTimeStamp(r.created_at) || "—" },
     { key: "action", label: "Action", action: true, value: () => "" },
   ],

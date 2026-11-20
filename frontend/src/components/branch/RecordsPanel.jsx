@@ -24,6 +24,7 @@ import {
 import { downloadCsv } from "@/lib/printable";
 import { dateStampFull, callTimeStamp } from "@/lib/time";
 import { displayPhone, telNumber } from "@/lib/phone";
+import { META, PLATFORMS, leadPlatform, leadSource, leadSourceLabel } from "@/lib/leadSource";
 
 /**
  * The branch's Records tab. Branch Transfer Records is the first record kept here; the
@@ -48,9 +49,14 @@ const periodLabel = (filter) => {
   return a === b ? a : `${a} – ${b}`;
 };
 const currentStage = (lead) => lead.consultation_stage || lead.branch_stage || lead.stage || "—";
-// Read as the Branch Leads Source column and its dropdown read it: source_tab, else source_type.
+// Read as the Branch Leads Source dropdown reads it: "Meta" for a sheet lead, else source_tab,
+// else source_type. sourceLabelOf adds the Platform -- "Meta · Instagram" -- for a row.
 const NO_SOURCE = "No Source";
-const sourceOf = (lead) => String(lead.source_tab || lead.source_type || "").trim() || NO_SOURCE;
+const sourceOf = (lead) => leadSource(lead) || NO_SOURCE;
+const sourceLabelOf = (lead) => leadSourceLabel(lead) || NO_SOURCE;
+// Platform under Meta: "all", or one of PLATFORMS.
+const ALL_PLATFORMS = "all";
+const byPlatform = (leads, platform) => (platform === ALL_PLATFORMS ? leads : leads.filter((l) => leadPlatform(l) === platform));
 // [source, count] pairs, biggest first; a lead with no source goes last whatever its count.
 const countBySource = (leads) => {
   const counts = {};
@@ -730,6 +736,50 @@ const ALL_SOURCES = "all";
 const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 /**
+ * Instagram / Facebook, beside the Source control once Source is Meta -- no other source
+ * has a platform. `leads` is the Meta leads the dates leave, counted beside each option; a
+ * Meta lead with no platform is counted under All Platforms only.
+ */
+const PlatformMenu = ({ value, onChange, leads, testid }) => {
+  const label = value === ALL_PLATFORMS ? "All Platforms" : value;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={`h-9 shrink-0 px-2.5 text-xs font-medium sm:h-10 sm:max-w-[13rem] sm:px-3 ${
+            value !== ALL_PLATFORMS ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800" : "text-slate-600"
+          }`}
+          title={`Platform: ${label}`}
+          aria-label={`Platform: ${label}`}
+          data-testid={testid}
+        >
+          <span className="truncate">{label}</span>
+          <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48" data-testid={`${testid}-menu`}>
+        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-400">Platform</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          <DropdownMenuRadioItem value={ALL_PLATFORMS} className="text-xs font-medium text-slate-600">
+            <span className="flex-1">All Platforms</span>
+            <span className="ml-3 text-[11px] text-slate-400">{leads.length}</span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuSeparator />
+          {PLATFORMS.map((p) => (
+            <DropdownMenuRadioItem key={p} value={p} className="text-xs text-slate-700" data-testid={`${testid}-${p.toLowerCase()}`}>
+              <span className="flex-1">{p}</span>
+              <span className="ml-3 text-[11px] text-slate-400">{byPlatform(leads, p).length}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+/**
  * The report object behind both files (see leadsReport.js), shared by Leads Converted and
  * Leads Source so a download from either tab reads the same. `scoped` is what the cards
  * count -- date, search and source applied; `list` is the leads printed one per row.
@@ -760,7 +810,7 @@ const buildLeadsReport = ({ branchName, scoped, list, filter, sourceLabel, showi
       // Plain digits, as the Call button dials it: some records carry "p:+91..." from the sheet.
       phone: telNumber(l.phone) || l.phone,
       email: l.email,
-      source: sourceOf(l),
+      source: sourceLabelOf(l),
       reached: FUNNEL[furthestStep(l)].label,
       stage: currentStage(l),
       services: servicesOf(l).join(", "),
@@ -862,6 +912,8 @@ const LeadsConvertedRecords = ({ branchId }) => {
   const searchRef = useRef(null);
   const [pick, setPick] = useState("leads");
   const [source, setSource] = useState(ALL_SOURCES);
+  const [platform, setPlatform] = useState(ALL_PLATFORMS);
+  const pickSource = (v) => { setSource(v); setPlatform(ALL_PLATFORMS); };
   const [exporting, setExporting] = useState(false);
   const [quickDate, setQuickDate] = useState(null);
   const [dateFilter, setDateFilter] = useState(null);
@@ -910,14 +962,17 @@ const LeadsConvertedRecords = ({ branchId }) => {
     return countBySource(leads).map(([name]) => [name, inRange[name] || 0]);
   }, [leads, dated]);
 
-  const scoped = useMemo(
+  const sourced = useMemo(
     () => (source === ALL_SOURCES ? dated : dated.filter((l) => sourceOf(l) === source)),
     [dated, source],
   );
+  // Platform narrows only under Meta; pickSource lets it go whenever Source changes.
+  const scoped = useMemo(() => (source === META ? byPlatform(sourced, platform) : sourced), [sourced, source, platform]);
   const counts = useMemo(() => countCards(scoped), [scoped]);
   const rows = useMemo(() => scoped.filter(CARD_BY_KEY[pick].match), [scoped, pick]);
 
-  const sourceLabel = source === ALL_SOURCES ? "All Sources" : source;
+  const sourceLabel = source === ALL_SOURCES ? "All Sources"
+    : source === META && platform !== ALL_PLATFORMS ? `${META} · ${platform}` : source;
 
   const exportReport = async (kind) => {
     if (exporting) return;
@@ -930,7 +985,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
       sourceLabel,
       showing: pick === "leads" ? "All Leads" : CARD_BY_KEY[pick].label,
     });
-    await saveLeadsReport(kind, report, leadsReportFilename({ prefix: "leads-report", branchName, source, filter: effectiveDateFilter }, kind));
+    await saveLeadsReport(kind, report, leadsReportFilename({ prefix: "leads-report", branchName, source: source === ALL_SOURCES ? source : sourceLabel, filter: effectiveDateFilter }, kind));
     setExporting(false);
   };
 
@@ -1024,7 +1079,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto" data-testid="leads-converted-source-menu">
             <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-400">Source</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={source} onValueChange={setSource}>
+            <DropdownMenuRadioGroup value={source} onValueChange={pickSource}>
               <DropdownMenuRadioItem value={ALL_SOURCES} className="text-xs font-medium text-slate-600">
                 <span className="flex-1">All Sources</span>
                 <span className="ml-3 text-[11px] text-slate-400">{dated.length}</span>
@@ -1039,6 +1094,9 @@ const LeadsConvertedRecords = ({ branchId }) => {
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {source === META && (
+          <PlatformMenu value={platform} onChange={setPlatform} leads={sourced} testid="leads-converted-platform-filter" />
+        )}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           <Button
             variant="outline"
@@ -1076,7 +1134,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
                     <p className="truncate text-sm font-bold text-slate-800">{l.name}</p>
                     <p className="truncate text-xs text-slate-500">{currentStage(l)}</p>
                   </div>
-                  <SourcePill source={sourceOf(l)} />
+                  <SourcePill source={sourceLabelOf(l)} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
                   <span>{displayPhone(l.phone)}</span>
@@ -1110,7 +1168,7 @@ const LeadsConvertedRecords = ({ branchId }) => {
                         <span className="ml-2 font-mono text-[11px] text-slate-400">{l.patient_number || "—"}</span>
                       </td>
                       <td className="px-4 py-2.5 text-slate-600" title={l.email || undefined}>{displayPhone(l.phone)}</td>
-                      <td className="px-4 py-2.5"><SourcePill source={sourceOf(l)} /></td>
+                      <td className="px-4 py-2.5"><SourcePill source={sourceLabelOf(l)} /></td>
                       <td className="px-4 py-2.5 text-slate-600">{FUNNEL[furthestStep(l)].label}</td>
                       <td className="px-4 py-2.5"><ServicePills services={servicesOf(l)} oneLine /></td>
                       <td className="px-4 py-2.5 text-slate-600">{currentStage(l)}</td>
@@ -1156,6 +1214,8 @@ const LeadSourceRecords = ({ branchId }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
   const [source, setSource] = useState("all");
+  const [platform, setPlatform] = useState(ALL_PLATFORMS);
+  const pickSource = (v) => { setSource(v); setPlatform(ALL_PLATFORMS); };
   const [exporting, setExporting] = useState(false);
   const branchName = useBranchName(branchId);
   const [quickDate, setQuickDate] = useState(null);
@@ -1192,7 +1252,7 @@ const LeadSourceRecords = ({ branchId }) => {
         if (from && ts < from) return false;
         if (to && ts > to) return false;
         if (!q) return true;
-        return [l.name, l.phone, l.patient_number, sourceOf(l)].some((v) => (v || "").toLowerCase().includes(q));
+        return [l.name, l.phone, l.patient_number, sourceLabelOf(l)].some((v) => (v || "").toLowerCase().includes(q));
       })
       .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [leads, search, effectiveDateFilter]);
@@ -1205,19 +1265,22 @@ const LeadSourceRecords = ({ branchId }) => {
     return MAIN_SOURCES.map((s) => [s, counts[s] || 0]);
   }, [dated]);
 
-  const rows = useMemo(
+  const sourced = useMemo(
     () => (source === "all" ? dated : dated.filter((l) => sourceOf(l) === source)),
     [dated, source],
   );
+  // Platform narrows only under the Meta card; pickSource lets it go whenever the card changes.
+  const rows = useMemo(() => (source === META ? byPlatform(sourced, platform) : sourced), [sourced, source, platform]);
 
-  const sourceLabel = source === "all" ? "All Sources" : source;
+  const sourceLabel = source === "all" ? "All Sources"
+    : source === META && platform !== ALL_PLATFORMS ? `${META} · ${platform}` : source;
   const exportReport = async (kind) => {
     if (exporting) return;
     setExporting(true);
     const report = buildLeadsReport({
       branchName, scoped: rows, list: rows, filter: effectiveDateFilter, sourceLabel, showing: "All Leads",
     });
-    await saveLeadsReport(kind, report, leadsReportFilename({ prefix: "leads-source-report", branchName, source, filter: effectiveDateFilter }, kind));
+    await saveLeadsReport(kind, report, leadsReportFilename({ prefix: "leads-source-report", branchName, source: source === "all" ? ALL_SOURCES : sourceLabel, filter: effectiveDateFilter }, kind));
     setExporting(false);
   };
 
@@ -1242,7 +1305,7 @@ const LeadSourceRecords = ({ branchId }) => {
           <button
             key={key}
             type="button"
-            onClick={() => setSource((s) => (s === key ? "all" : key))}
+            onClick={() => pickSource(source === key ? "all" : key)}
             aria-pressed={source === key}
             className={`relative rounded-[5px] border bg-white px-3 py-2.5 text-center transition-colors ${
               source === key ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-200 hover:border-slate-300"
@@ -1288,13 +1351,16 @@ const LeadSourceRecords = ({ branchId }) => {
         <span className="shrink-0 [&_button]:h-9 sm:[&_button]:h-10">
           <DateFilterPopover value={dateFilter} onChange={applyDateFilter} testid="lead-source-date-filter" centered iconOnly phoneIconOnly />
         </span>
+        {source === META && (
+          <PlatformMenu value={platform} onChange={setPlatform} leads={sourced} testid="lead-source-platform-filter" />
+        )}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {/* Every lead the date and search leave, as the Expense Request mini chip: sky
               while no source card is pressed (the default), and pressing it goes back there. */}
           <div className="flex items-center rounded-[2px] border border-slate-200 bg-slate-50 p-0.5">
             <button
               type="button"
-              onClick={() => setSource("all")}
+              onClick={() => pickSource("all")}
               aria-pressed={source === "all"}
               className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[2px] px-3 py-1 text-xs font-semibold transition ${
                 source === "all" ? "bg-sky-500 text-white shadow-sm" : "text-slate-500 hover:bg-white"
@@ -1348,7 +1414,7 @@ const LeadSourceRecords = ({ branchId }) => {
                     <p className="truncate text-sm font-bold text-slate-800">{l.name}</p>
                     <p className="truncate text-xs text-slate-500">{currentStage(l)}</p>
                   </div>
-                  <SourcePill source={sourceOf(l)} />
+                  <SourcePill source={sourceLabelOf(l)} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
                   <span>{displayPhone(l.phone)}</span>
@@ -1381,7 +1447,7 @@ const LeadSourceRecords = ({ branchId }) => {
                         {displayPhone(l.phone)}
                         {l.email ? <span className="block truncate text-[11px] text-slate-400">{l.email}</span> : null}
                       </td>
-                      <td className="px-4 py-3"><SourcePill source={sourceOf(l)} /></td>
+                      <td className="px-4 py-3"><SourcePill source={sourceLabelOf(l)} /></td>
                       <td className="px-4 py-3 text-slate-600">{currentStage(l)}</td>
                       <td className="px-4 py-3 text-slate-600">
                         <span className="whitespace-nowrap">{dateStampFull(l.created_at)}</span>
@@ -1552,7 +1618,7 @@ const TransferRecordDialog = ({ record, onClose }) => {
             <Field label="Phone">{displayPhone(lead.phone)}</Field>
             <Field label="Email">{lead.email}</Field>
             <Field label="Vertical">{lead.vertical}</Field>
-            <Field label="Source">{lead.source_type}</Field>
+            <Field label="Source">{leadSourceLabel(lead)}</Field>
             <Field label="Current Branch">{lead.current_branch_name}</Field>
             <Field label="Current Stage">{currentStage(lead)}</Field>
             <Field label="Physio">{lead.assigned_physio_name}</Field>

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { branchNameOf, sortBranchesForPicker } from "@/lib/branchOrder";
+import { isMetaLead, leadSourceLabel } from "@/lib/leadSource";
 
 /**
  * The clinic's three-page paper Offline Consultation Form, as fillable sheets, for Branch
@@ -62,7 +63,9 @@ export const formFromLead = (lead) => {
     contact_no: text(lead.phone),
     mail_id: text(lead.email),
     // "Manual" only says it was typed in at the desk -- no reference to write down.
-    source_of_reference: [text(lead.source_tab), titleWords(lead.source_type)].find((s) => s && !/^manual/i.test(s)) || "",
+    // A sheet lead's is its campaign: "Meta · Instagram", not the sheet's name.
+    source_of_reference: (isMetaLead(lead) ? leadSourceLabel(lead)
+      : [text(lead.source_tab), titleWords(lead.source_type)].find((s) => s && !/^manual/i.test(s))) || "",
     nature_of_job: text(lead.occupation),
     place: [lead.city, lead.state].map(text).filter(Boolean).join(", ") || text(lead.location) || text(lead.address),
     symptoms_root_cause: [text(lead.condition), pain && `Pain for ${pain}`].filter(Boolean).join(" — "),

@@ -13,6 +13,7 @@ which only Super Admin ever sees. Custom questions are appended by the caller fr
 it exists.
 """
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -92,6 +93,58 @@ BOOL_AD_FIELDS = {"is_organic"}
 
 _TRUE = {"true", "yes", "y", "1", "organic"}
 _FALSE = {"false", "no", "n", "0", "paid"}
+
+
+# Every Google Sheet the clinic syncs is a Meta lead-ads export, so a lead off one is a Meta
+# lead -- Source "meta" -- and the export's own `platform` column says which of Meta's two
+# apps the patient filled the form in. Stored as words on the lead's top-level `platform`,
+# beside source_type rather than inside lead_data, because the ad record is Super Admin's
+# only and every desk filters on this one.
+META_SOURCE_TYPE = "meta"
+PLATFORM_FIELD = LEAD_DATA_PREFIX + "platform"
+PLATFORM_HEADER = "platform"
+
+# Meta writes the short code; the long word is accepted too, for a sheet somebody tidied by
+# hand. Anything else -- blank, a typo, Meta's rarer "an" or "msg" -- is no platform rather
+# than a guess, and such a lead is still a Meta lead.
+_PLATFORM_LABELS = {
+    "ig": "Instagram", "instagram": "Instagram",
+    "fb": "Facebook", "facebook": "Facebook",
+}
+
+
+def platform_label(value: Any) -> Optional[str]:
+    """`ig` / `fb` (any case, any punctuation) as Instagram / Facebook, or None."""
+    return _PLATFORM_LABELS.get(re.sub(r"[^a-z]", "", str(value or "").lower()))
+
+
+def _platform_from_header(values: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The answer under whichever key spells "platform", however it was cased or spaced."""
+    for key, value in (values or {}).items():
+        if re.sub(r"[^a-z0-9]", "", str(key).lower()) == PLATFORM_HEADER:
+            found = platform_label(value)
+            if found:
+                return found
+    return None
+
+
+def row_platform(row: Dict[str, Any], mapping: Dict[str, str]) -> Optional[str]:
+    """One sheet row's platform: the column mapped to Lead Data -> Platform if there is one,
+    else the column headed "platform". Read straight off the row, so it needs nobody to map
+    the column first."""
+    column = mapping.get(PLATFORM_FIELD)
+    if column:
+        found = platform_label(row.get(column))
+        if found:
+            return found
+    return _platform_from_header(row)
+
+
+def stored_platform(lead: Dict[str, Any]) -> Optional[str]:
+    """The platform an already-imported lead carries: the ad record's, else the raw answer
+    the importer kept in extra_fields when nobody had mapped the column."""
+    ad = lead.get("lead_data") or {}
+    return platform_label(ad.get("platform")) or _platform_from_header(lead.get("extra_fields"))
 
 
 def catalogue(custom_fields: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
