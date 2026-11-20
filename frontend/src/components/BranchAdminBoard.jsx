@@ -5036,8 +5036,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:flex sm:justify-between sm:gap-3">
             <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-3">
               <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
-                <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-white" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
-                <div className="col-span-2 col-start-1 row-start-2 flex flex-wrap items-center gap-1.5">
+                <p className="col-start-1 row-start-1 min-w-0 text-base font-semibold leading-tight text-white max-sm:truncate" data-testid="branch-lead-name">{lead.name}<TransferredTag lead={lead} className="ml-1.5" /><OnlineTag lead={lead} className="ml-1.5" /><PreBookTag lead={lead} className="ml-1.5" /></p>
+                {/* Not on a phone, where the header is one row: the name, Form, Transfer and
+                    Close (asked 2026-11-20). */}
+                <div className="col-span-2 col-start-1 row-start-2 hidden flex-wrap items-center gap-1.5 sm:flex">
                   {lead.patient_number && (
                     <span className="rounded-[5px] bg-white/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
                   )}
