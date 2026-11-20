@@ -306,7 +306,7 @@ export const LoginPage = ({ onLogin }) => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-[4px] bg-sky-500 text-white hover:bg-sky-600"
+                  className="w-full rounded-[4px] bg-[rgb(27_144_204)] text-white hover:bg-[rgb(22_126_180)]"
                   data-testid="screen1-login-submit-button"
                 >
                   {loading ? "Signing in..." : "Continue"}
