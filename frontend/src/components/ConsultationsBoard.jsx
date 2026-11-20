@@ -161,6 +161,14 @@ const isoDate = (y, m, d) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
 const longDate = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 /** "2026-08-03" -> "Monday, 3 Aug" — how a treatment day reads on the plan. */
 const dayLabel = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "short" });
+/** "2026-11-21" -> "Sat, Nov 21", as Physio Records writes a completed day. */
+const shortDayLabel = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+/** The ISO date one day after `d`. */
+const dayAfterIso = (d) => {
+  const next = new Date(`${d}T00:00:00`);
+  next.setDate(next.getDate() + 1);
+  return isoDate(next.getFullYear(), next.getMonth(), next.getDate());
+};
 /** "2026-09-09" -> "Wed, 9 Sept" for the appointment chip, with the year added only when
  *  it is not the current one.
  *
@@ -6237,6 +6245,18 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     return () => { cancelled = true; };
   }, [showPhysioModal, physioPick]);
 
+  // The completed days, re-read as the assign popup opens: days marked done since the lead
+  // was opened must already be closed on the Slot Picker and counted out of what is left.
+  useEffect(() => {
+    if (!showPhysioModal || !selectedLead?.id || !selectedLead.physio_assigned_at) return;
+    let cancelled = false;
+    getLeadPhysioProgress(selectedLead.id)
+      .then((d) => { if (!cancelled) setPhysioProgress(d); })
+      .catch(() => { /* keep what was loaded with the lead */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPhysioModal]);
+
   // How long one treatment session runs. Read from FITSIO STORE exactly the way PHYSIO
   // CALENDAR reads it, so the length shown here is always the length of the slots that
   // calendar actually publishes — one published slot is one treatment session.
@@ -6264,7 +6284,28 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   //
   // Rehab replaces its course outright (the backend clears the old days first), so it has
   // nothing already-done to carry.
-  const sessionsAlreadyDone = isRehabAssign ? 0 : (selectedLead?.completed_sessions || 0);
+  // Read off the patient's own days (physio-progress, refetched when the picker opens)
+  // before the board's count, which was stamped when the board loaded and goes stale.
+  const sessionsAlreadyDone = isRehabAssign ? 0 : (physioProgress?.completed_sessions ?? selectedLead?.completed_sessions ?? 0);
+  // The dates those days were held on. Each is marked done on the Slot Picker, and every
+  // date up to the last one is closed: the rest of the course starts the day after it.
+  const completedDays = useMemo(
+    () => (isRehabAssign ? [] : (physioProgress?.completed_days || []).filter((c) => c?.date)),
+    [isRehabAssign, physioProgress],
+  );
+  const doneByDate = useMemo(() => {
+    const map = {};
+    completedDays.forEach((c) => { map[c.date] = c; });
+    return map;
+  }, [completedDays]);
+  const lastDoneDate = completedDays.length ? completedDays[completedDays.length - 1].date : "";
+  // The first date a day can be booked on: never in the past, never on or before the last
+  // completed day.
+  const pickFloor = (() => {
+    const today = localToday();
+    const afterDone = lastDoneDate ? dayAfterIso(lastDoneDate) : "";
+    return afterDone > today ? afterDone : today;
+  })();
   const totalSessionsNeeded = Math.max(0, packageSessions - sessionsAlreadyDone);
   // And the weeks with them. A resumed course has to keep counting from the weeks already
   // worked rather than restarting at one — the backend numbers the rows it writes off the
@@ -6658,6 +6699,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const mine = Object.entries(physioCalendarData.booked || {})
       .filter(([, b]) => b.lead_id === selectedLead.id)
       .map(([slot]) => slot)
+      // A past date, or one on or before the last completed day, cannot be booked again.
+      .filter((slot) => slot.split("T")[0] >= pickFloor)
       .sort()
       // Keep one a day, matching the rule the picker now enforces. Sessions booked before
       // that rule existed can sit several to a day; those extra days come back as unfixed
@@ -6671,7 +6714,30 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     if (mine.length === 0) return;
     // Paid days only: unpaid days booked before this rule come back unfixed.
     setPickedSessionSlots((prev) => (prev.length === 0 ? mine.slice(0, daysToBook) : prev));
-  }, [physioCalendarData, physioPick, selectedLead, isRehabAssign, daysToBook]);
+  }, [physioCalendarData, physioPick, selectedLead, isRehabAssign, daysToBook, pickFloor]);
+
+  // The completed days can arrive after the plan was laid: drop any pick that now falls on
+  // or before the last of them, or in the past.
+  useEffect(() => {
+    setPickedSessionSlots((prev) => {
+      const kept = prev.filter((s) => s.split("T")[0] >= pickFloor);
+      return kept.length === prev.length ? prev : kept;
+    });
+  }, [pickFloor]);
+
+  // Resuming a course: open on the first date the rest of it can start on, rather than on
+  // a month whose dates are all done or past.
+  useEffect(() => {
+    if (!showSlotPicker || !lastDoneDate || pickerDate || !physioCalendarData) return;
+    const first = Object.keys(physioSlotsByDate)
+      .filter((d) => d >= pickFloor && physioSlotsByDate[d].some((t) => !slotFull(`${d}T${t}`)))
+      .sort()[0] || pickFloor;
+    const [y, m] = first.split("-").map(Number);
+    setPickerYear(y);
+    setPickerMonth(m - 1);
+    setPickerDate(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSlotPicker, lastDoneDate, physioCalendarData, pickFloor]);
 
   // The plan itself: one treatment session per day, numbered Day 1, Day 2 … in date order
   // and stamped with the week it falls in — the same week rule the backend records, kept
@@ -6697,6 +6763,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   /** The next date after `after` that still has an open slot and no session on it yet. */
   const nextOpenDateAfter = (after, alreadyFixed) => Object.keys(physioSlotsByDate)
     .filter((d) => d > after
+      && d >= pickFloor
       && !alreadyFixed.has(d)
       && physioSlotsByDate[d].some((t) => !slotFull(`${d}T${t}`)))
     .sort()[0];
@@ -6707,6 +6774,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     const prev = pickedSessionSlots;
 
     if (prev.includes(slot)) { setPickedSessionSlots(prev.filter((s) => s !== slot)); return; }
+    if (day < pickFloor) {
+      toast.error(lastDoneDate && day <= lastDoneDate
+        ? `Day ${sessionsAlreadyDone} was completed on ${shortDayLabel(lastDoneDate)} — pick from ${shortDayLabel(pickFloor)}`
+        : "That date has passed — pick a date from today on");
+      return;
+    }
 
     // One treatment session a day — a 9-session package is 9 separate treatment days, not
     // 9 back-to-back slots. Picking another time on a day that already holds a session
@@ -6762,7 +6835,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     let moved = 0;
     for (const d of Object.keys(physioSlotsByDate).sort()) {
       if (added.length >= room) break;
-      if (d < startDate || fixedDays.has(d)) continue;
+      if (d < startDate || d < pickFloor || fixedDays.has(d)) continue;
       if (openEndedRehab && d > monthEnd) break;
       if (skipSundays && new Date(`${d}T00:00:00`).getDay() === 0) continue;
       const open = physioSlotsByDate[d].filter((t) => !slotFull(`${d}T${t}`));
@@ -15249,6 +15322,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {sessionPayment.paid > 0 && <span className="ml-2 font-medium text-emerald-500">Day 1–{sessionPayment.paid}</span>}
                         <span className="ml-2 font-medium text-emerald-500">{sessionPayment.paid} Day{sessionPayment.paid === 1 ? "" : "s"}</span>
                       </span>
+                      {/* Days already worked: their dates are closed on the calendar and the
+                          rest of the course starts after the last one. */}
+                      {completedDays.length > 0 && (
+                        <span
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 sm:px-3 sm:text-[12px]"
+                          title={completedDays.map((c) => `Day ${c.day || "?"} · ${shortDayLabel(c.date)}`).join("\n")}
+                          data-testid="cons-payment-completed"
+                        >
+                          <CheckCircle2 className="h-3 w-3" /> COMPLETED
+                          <span className="ml-1 font-medium text-slate-500">Day 1–{sessionsAlreadyDone}</span>
+                          <span className="ml-1 font-medium text-slate-500">
+                            {shortDayLabel(completedDays[0].date)}{completedDays.length > 1 ? ` · ${shortDayLabel(lastDoneDate)}` : ""}
+                          </span>
+                          <span className="ml-1 font-semibold text-violet-700">· Next from {shortDayLabel(pickFloor)}</span>
+                        </span>
+                      )}
                       {sessionPayment.unpaid > 0 ? (
                         <>
                           <span className="shrink-0 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 sm:px-3 sm:text-[12px]" data-testid="cons-payment-unpaid">
@@ -15345,17 +15434,22 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           {Array.from({ length: new Date(pickerYear, pickerMonth + 1, 0).getDate() }, (_, i) => {
                             const day = i + 1;
                             const d = isoDate(pickerYear, pickerMonth, day);
-                            const dayOpen = (physioSlotsByDate[d] || []).filter((t) => !slotFull(`${d}T${t}`)).length;
-                            const planned = planByDate[d];
-                            const isFocused = pickerDate === d;
+                            // Past, or on/before the last completed day: closed.
+                            const closed = d < pickFloor;
+                            const done = doneByDate[d];
+                            const dayOpen = closed ? 0 : (physioSlotsByDate[d] || []).filter((t) => !slotFull(`${d}T${t}`)).length;
+                            const planned = closed ? null : planByDate[d];
+                            const isFocused = !closed && pickerDate === d;
                             return (
                               <button
                                 key={day}
                                 type="button"
                                 onClick={() => setPickerDate(d)}
-                                disabled={dayOpen === 0 && !planned}
+                                disabled={closed || (dayOpen === 0 && !planned)}
                                 className={`relative h-9 rounded-md text-[13px] font-semibold transition-all ${
-                                  isFocused
+                                  done
+                                    ? "cursor-not-allowed border border-slate-300 bg-slate-100 text-slate-500"
+                                    : isFocused
                                     ? "bg-violet-600 text-white shadow-md ring-2 ring-violet-300 ring-offset-1"
                                     : planned
                                     ? isPaidSession(planned.day)
@@ -15365,13 +15459,21 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                                     ? "text-slate-600 hover:bg-slate-100"
                                     : "cursor-not-allowed text-slate-300"
                                 }`}
-                                title={planned
+                                title={done
+                                  ? `Day ${done.day || ""} · completed`
+                                  : closed
+                                  ? (lastDoneDate && d <= lastDoneDate ? `Before the last completed day (${shortDayLabel(lastDoneDate)})` : "Past date")
+                                  : planned
                                   ? `Day ${planned.day} · ${to12h(planned.time)} · ${isPaidSession(planned.day) ? "paid" : "unpaid"}`
                                   : dayOpen > 0 ? `${dayOpen} slot${dayOpen > 1 ? "s" : ""} open` : "No slots published"}
                                 data-testid={`cons-slot-day-${day}`}
                               >
                                 {day}
-                                {planned ? (
+                                {done ? (
+                                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-slate-500 px-1 text-[9px] font-bold text-white shadow-sm" data-testid={`cons-slot-day-done-${day}`}>
+                                    {done.day || <CheckCircle2 className="h-2.5 w-2.5" />}
+                                  </span>
+                                ) : planned ? (
                                   <span className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[9px] font-bold shadow-sm ${
                                     isPaidSession(planned.day) ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
                                   }`}>
@@ -15388,6 +15490,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         <div className="mt-3 hidden flex-wrap items-center gap-2.5 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-500 sm:flex">
                           <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> Paid day</span>
                           <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" /> Unpaid day</span>
+                          {completedDays.length > 0 && (
+                            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-500" /> Completed day</span>
+                          )}
                           <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> Slots open</span>
                         </div>
                       </div>
@@ -15406,6 +15511,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               <p className="text-sm text-slate-400">Pick a {isRehabAssign ? "rehab" : "treatment"} date to see this physio's open times</p>
                             </div>
                           </div>
+                        ) : pickerDate < pickFloor ? (
+                          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-8 text-center text-sm text-slate-500" data-testid="cons-slot-picker-closed-day">
+                            {doneByDate[pickerDate]
+                              ? `Day ${doneByDate[pickerDate].day || ""} was completed on this date.`
+                              : lastDoneDate && pickerDate <= lastDoneDate
+                              ? `This date is before the last completed day (${shortDayLabel(lastDoneDate)}).`
+                              : "This date has passed."}
+                            {" "}Pick from {shortDayLabel(pickFloor)}.
+                          </p>
                         ) : (
                           <>
                             {/* Bulk select: the same hour on every open day from this date

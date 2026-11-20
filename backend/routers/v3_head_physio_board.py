@@ -1367,6 +1367,19 @@ async def hp_assign_physio_with_sessions(
     sorted_slots = sorted(set(payload.slot_times))
     if len(sorted_slots) != len(payload.slot_times):
         raise HTTPException(status_code=400, detail="Duplicate session slot times were submitted")
+    # The rest of the course starts after the last completed day. A date on or before it
+    # would put Day 6 ahead of Day 5 that was already worked.
+    if done:
+        last_done_date = await last_completed_treatment_date(lead_id)
+        too_early = [s for s in sorted_slots if last_done_date and s.split("T")[0] <= last_done_date]
+        if too_early:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Day {done} was completed on {last_done_date} — book the remaining days after it "
+                    f"(got {', '.join(too_early)})"
+                ),
+            )
     # Only paid days are booked. While a Treatment Fee balance is owed the booking stops at
     # the last paid day; the rest wait to pay and are booked here once it is collected.
     # Up to that many rather than exactly: the picker counts paid days its own way (an
@@ -1566,6 +1579,20 @@ async def hp_assign_physio_with_sessions(
     }
 
 
+def _treatment_date(row: dict) -> str:
+    """The date a treatment day was held on: its slot's date, else the day it was completed."""
+    slot = (row.get("slot_time") or "").strip()
+    return slot.split("T")[0] if slot else (row.get("completed_at") or "")[:10]
+
+
+async def last_completed_treatment_date(lead_id: str) -> str:
+    """The latest date a completed treatment day of this lead was held on, or ""."""
+    rows = await v3_col("sessions").find(
+        {"lead_id": lead_id, "status": "completed"}, {"_id": 0, "slot_time": 1, "completed_at": 1},
+    ).to_list(1000)
+    return max((_treatment_date(r) for r in rows), default="")
+
+
 def _blank_spell(physio_id: str) -> dict:
     """A spell nobody completed a day in. Zeroes rather than absence: the physio held the
     patient, they just have nothing to show for it, and a card that dropped them would tell
@@ -1709,6 +1736,15 @@ async def hp_lead_physio_progress(
             spell["physio_name"] = spell["physio_name"] or names.get(spell["physio_id"]) or "Unknown physio"
 
     completed_sessions = sum(1 for r in rows if r.get("status") == "completed")
+    # The dates the completed days were held on, so the Slot Picker can mark them done and
+    # refuse every date up to the last one -- the rest of the course starts after it.
+    completed_days = sorted(
+        (
+            {"day": r.get("session_number"), "date": _treatment_date(r)}
+            for r in rows if r.get("status") == "completed" and _treatment_date(r)
+        ),
+        key=lambda d: d["date"],
+    )
     # The last week the patient actually worked, so a picker placing the rest of the course
     # can go on numbering from it rather than opening a second Week 1 beside the first.
     weeks_completed = max(
@@ -1726,6 +1762,8 @@ async def hp_lead_physio_progress(
         "package_sessions": package_sessions,
         "booked_sessions": len(rows),
         "completed_sessions": completed_sessions,
+        "completed_days": completed_days,
+        "last_completed_date": completed_days[-1]["date"] if completed_days else None,
         "weeks_completed": weeks_completed,
         "remaining_sessions": max(0, (package_sessions or len(rows)) - completed_sessions),
         "reassigned": len(previous) > 0,
