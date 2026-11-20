@@ -775,9 +775,6 @@ const EditSourceDialog = ({ source, branches = [], onClose, onSaved }) => {
                     )}
                   </div>
                 </FieldRow>
-                <FieldRow label="Sheet Access">
-                  <p className="pt-2 text-xs text-amber-700">Shared with the connected Google account, or “Anyone with the link can view”.</p>
-                </FieldRow>
               </>
             )}
           </div>
@@ -923,7 +920,6 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
   // can still be changed here.
   const columns = [...new Set([...headers, ...(!spreadsheetId ? Object.values(mapping) : []), ...addedCols])];
   const orphaned = Object.entries(mapping || {}).filter(([, c]) => !columns.includes(c));
-  const mappedCount = Object.keys(mapping || {}).length;
 
   const addColumn = () => {
     const c = newCol.trim();
@@ -958,10 +954,6 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
 
       {columns.length > 0 && (
         <>
-          <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span>{columns.length} column{columns.length === 1 ? "" : "s"} · {mappedCount} mapped</span>
-            <span>Anything left on Skip is still stored against the lead as extra detail.</span>
-          </div>
           <div className="flex gap-3 px-1">
             <p className="flex-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sheet column</p>
             <p className="flex-[1.2] text-[10px] font-semibold uppercase tracking-wide text-slate-400">Becomes</p>
@@ -969,12 +961,17 @@ const SheetMappingPanel = ({ spreadsheetId, tabs, fallbackHeaders = [], value, o
           <div className="space-y-1.5">
             {columns.map((h) => (
               <div key={h} className="flex items-start gap-3">
-                <div className="flex min-w-0 flex-1 items-center self-stretch rounded-md bg-slate-50 px-2 py-1.5" title={h}>
-                  <span className="truncate text-xs text-slate-700">{h}</span>
+                {/* Green once the column is mapped to a field, orange while it is on Skip. */}
+                <div
+                  className={`flex min-w-0 flex-1 items-center self-stretch rounded-md border px-2 py-1.5 ${fieldFor[h] ? "border-emerald-200 bg-emerald-50" : "border-orange-200 bg-orange-50"}`}
+                  title={h}
+                  data-testid={`mk-map-colname-${h}`}
+                >
+                  <span className={`truncate text-xs font-medium ${fieldFor[h] ? "text-emerald-700" : "text-orange-700"}`}>{h}</span>
                 </div>
                 <div className="flex-[1.2]">
                   <select
-                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                    className={`h-9 w-full rounded-md border px-2 text-sm ${fieldFor[h] ? "border-emerald-300" : "border-orange-300"}`}
                     value={fieldFor[h] || SKIP}
                     onChange={(e) => onPick(h, e.target.value)}
                     data-testid={`mk-map-col-${h}`}
