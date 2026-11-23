@@ -352,14 +352,15 @@ export const BranchTransferDialog = ({ branches: branchesProp, fromBranchId, onC
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4" data-testid="ops-branch-transfer-dialog">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#EFEAE0] px-5 py-3">
-          <h3 className="inline-flex items-center gap-2 text-base font-semibold">
-            <ArrowLeftRight className="h-4 w-4 text-indigo-600" />
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#EFEAE0] bg-[#FDFCF8] shadow-2xl">
+        {/* The same blue header as the Branch lead popup's. */}
+        <div className="flex items-center justify-between border-b border-sky-700 bg-[#0284C7] px-5 py-3">
+          <h3 className="inline-flex items-center gap-2 text-base font-semibold text-white">
+            <ArrowLeftRight className="h-4 w-4 text-white" />
             Branch Transfer
-            {fromBranch && <span className="text-sm font-normal text-slate-500">from {fromBranch.branch_name}</span>}
+            {fromBranch && <span className="text-sm font-normal text-white/80">from {fromBranch.branch_name}</span>}
           </h3>
-          <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-[#F3EFE6] hover:text-slate-600" data-testid="ops-branch-transfer-close">
+          <button onClick={onClose} className="rounded-full p-1.5 text-white/90 transition hover:bg-white/15 hover:text-white" data-testid="ops-branch-transfer-close">
             <X className="h-4 w-4" />
           </button>
         </div>

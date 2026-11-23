@@ -80,12 +80,13 @@ export const LeadBranchTransferDialog = ({ lead, fromBranchId, onClose, onTransf
       onClick={(e) => { if (e.target === e.currentTarget && !transferring) onClose(); }}
       data-testid="lead-branch-transfer-dialog"
     >
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h3 className="inline-flex items-center gap-2 text-base font-semibold text-slate-800">
-            <ArrowLeftRight className="h-4 w-4 text-indigo-600" /> Branch Transfer
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl ring-1 ring-slate-200">
+        {/* The same blue header as the Branch lead popup it opens from. */}
+        <div className="flex items-center justify-between border-b border-sky-700 bg-[#0284C7] px-5 py-3">
+          <h3 className="inline-flex items-center gap-2 text-base font-semibold text-white">
+            <ArrowLeftRight className="h-4 w-4 text-white" /> Branch Transfer
           </h3>
-          <button onClick={onClose} disabled={transferring} className="text-slate-400 hover:text-slate-600" data-testid="lead-branch-transfer-close">
+          <button onClick={onClose} disabled={transferring} className="rounded-[4px] p-1 text-white/90 transition hover:bg-white/15 hover:text-white" data-testid="lead-branch-transfer-close">
             <X className="h-4 w-4" />
           </button>
         </div>
