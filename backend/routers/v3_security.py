@@ -126,6 +126,8 @@ async def my_security(user: V3UserOut = Depends(v3_current_user), authorization:
     )
 
     return {
+        # Super Admin's Email ID panel has no Change Email ID button.
+        "role": row.get("role", ""),
         "email": row.get("email", ""),
         "email_masked": two_factor.mask_email(row.get("email", "")),
         "email_verified_at": row.get("email_verified_at"),

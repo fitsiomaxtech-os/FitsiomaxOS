@@ -185,14 +185,16 @@ const PasswordPanel = ({ onChanged }) => {
 
 /** The Email ID I sign in with, and whether anybody has read a code out of it. Always here,
  *  whatever Developer Access says about the message after sign-in. */
-const EmailPanel = ({ email, verified, provider, emailConfigured, onChanged }) => {
+const EmailPanel = ({ email, verified, provider, emailConfigured, canChange = true, onChanged }) => {
   const [open, setOpen] = useState(false);
+  // A verified Super Admin has no Change Email ID: the address stays as it is.
+  const showButton = !verified || canChange;
   return (
     <Panel
       title="Email ID"
       icon={Mail}
       testid="my-security-email"
-      right={!open && emailConfigured && (
+      right={!open && emailConfigured && showButton && (
         <Button onClick={() => setOpen(true)} className="bg-sky-600 hover:bg-sky-700" data-testid="my-security-email-open">
           {verified ? "Change Email ID" : "Update Email ID"}
         </Button>
@@ -207,7 +209,7 @@ const EmailPanel = ({ email, verified, provider, emailConfigured, onChanged }) =
           This server can't send the code yet. Ask your administrator to set up email sending.
         </p>
       )}
-      {open && emailConfigured && (
+      {open && emailConfigured && showButton && (
         <div className="mt-4 max-w-md">
           <EmailUpdateForm
             currentEmail={email}
@@ -470,6 +472,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
         email={data.email}
         verified={Boolean(data.email_verified_at)}
         provider={data.email_provider}
+        canChange={data.role !== "super_admin"}
         emailConfigured={data.two_factor?.email_configured !== false}
         onChanged={load}
       />
