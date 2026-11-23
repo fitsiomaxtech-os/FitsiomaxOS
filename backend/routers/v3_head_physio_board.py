@@ -1639,8 +1639,8 @@ async def hp_lead_physio_progress(
 
     rows = await v3_col("sessions").find(
         {"lead_id": lead_id},
-        {"_id": 0, "physio_id": 1, "physio_name": 1, "session_number": 1, "slot_time": 1,
-         "status": 1, "completed_at": 1, "week_number": 1},
+        {"_id": 0, "id": 1, "physio_id": 1, "physio_name": 1, "session_number": 1, "slot_time": 1,
+         "status": 1, "completed_at": 1, "week_number": 1, "absences": 1},
     ).sort("session_number", 1).to_list(1000)
 
     by_physio: dict = {}
@@ -1756,9 +1756,37 @@ async def hp_lead_physio_progress(
     # a patient reassigned before this booked the rest of their course instead of all of it
     # can hold more days than the package sold, and the card has to be able to say so.
     package_sessions = lead.get("session_package_sessions") or 0
+    # Every day of the course for the Treatment Progress calendar (the View button on the
+    # physio card): completed, booked or still waiting on a date, with the absences marked
+    # against it. Rows written before physio_name was kept take the name the spells found.
+    names = {s["physio_id"]: s["physio_name"] for s in [*previous, *([current] if current else [])]}
+    days = []
+    for r in rows:
+        completed = r.get("status") == "completed"
+        date, _, time = (r.get("slot_time") or "").strip().partition("T")
+        if completed:
+            date = _treatment_date(r)
+        days.append({
+            "id": r.get("id"),
+            "day": r.get("session_number"),
+            "date": date,
+            "time": time[:5],
+            "status": "completed" if completed else ("booked" if date else "waiting"),
+            "physio_name": r.get("physio_name") or names.get(r.get("physio_id") or "") or "",
+            "absences": [
+                {
+                    "date": ab.get("date") or "",
+                    "day": ab.get("session_number") or r.get("session_number"),
+                    "remarks": ab.get("remarks") or "",
+                    "marked_by": ab.get("marked_by") or "",
+                }
+                for ab in (r.get("absences") or [])
+            ],
+        })
     return {
         "lead_id": lead_id,
         "package_name": lead.get("session_package_name") or "",
+        "days": days,
         "package_sessions": package_sessions,
         "booked_sessions": len(rows),
         "completed_sessions": completed_sessions,

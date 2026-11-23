@@ -14,6 +14,7 @@ import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
 import { ConsultationFormDialog } from "@/components/branch/ConsultationFormDialog";
+import { CourseProgressCalendar, rehabCalendarDays } from "@/components/branch/CourseProgressCalendar";
 import { PrescriptionPdf } from "@/components/PrescriptionPdf";
 import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
@@ -2143,7 +2144,8 @@ const SPELL_TONE = {
  */
 // `modeTag` (Physio Assign only): the current spell's chip names the mode its days run in --
 // "Offline" or "Online" -- in place of "Current", and the card and chip take square corners.
-const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun = "sessions", modeTag = null }) => {
+// `onView` (current spell only): a View button after the chip that opens the course calendar.
+const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun = "sessions", modeTag = null, onView = null }) => {
   const current = !!spell.is_current;
   const skin = SPELL_TONE[tone] || SPELL_TONE.violet;
   const total = packageSessions || spell.sessions_assigned || 0;
@@ -2169,6 +2171,16 @@ const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun 
           <span className={`shrink-0 ${modeTag ? "rounded-[2px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${current ? skin.chip : "bg-slate-200 text-slate-600"}`} data-testid={current && modeTag ? "cons-physio-mode-badge" : undefined}>
             {current ? (modeTag || "Current") : "Previous"}
           </span>
+          {current && onView && (
+            <button
+              type="button"
+              onClick={onView}
+              className="inline-flex shrink-0 items-center gap-1 rounded-[2px] border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
+              data-testid={`${testid}-view`}
+            >
+              <Eye className="h-3 w-3" /> View
+            </button>
+          )}
         </div>
       </div>
       <p className="mt-1 text-[11px] text-slate-600">
@@ -3374,6 +3386,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // completed days are still theirs. null until asked for; `null` and "no physio yet" are
   // told apart by the lead's own stage, not by this.
   const [physioProgress, setPhysioProgress] = useState(null);
+  // Which course's progress calendar is open from a physio card's View button:
+  // "treatment", "rehab" or null.
+  const [progressCalendar, setProgressCalendar] = useState(null);
   // The same question asked of the rehab course, and asked of the days themselves. Rehab
   // keeps no count on the lead — _stamp_session_progress counts `sessions` and nothing
   // counts `rehab_sessions` — so a panel that wants to say how far through a course a
@@ -4300,6 +4315,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
     setEditingDecision(false);
     setAddonPicker(null);
     setPhysioProgress(null);
+    setProgressCalendar(null);
     setRehabDays(null);
     setRehabBookDraft(null);
     setRehabConsultItem("");
@@ -10237,6 +10253,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         tone="cyan"
                         dayNoun="days"
                         testid="cons-rehab-spell-current"
+                        onView={() => setProgressCalendar("rehab")}
                       />
                     )}
                   </div>
@@ -10662,6 +10679,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               packageSessions={totalCourseSessions}
                               testid="cons-physio-spell-current"
                               modeTag={courseMode === "online" ? "Online" : "Offline"}
+                              onView={() => setProgressCalendar("treatment")}
                             />
                           )}
                         </div>
@@ -16115,6 +16133,34 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Treatment / Rehab Progress calendar, from the View button on the physio card. */}
+            {progressCalendar === "treatment" && physioProgress && (
+              <CourseProgressCalendar
+                title="Treatment Progress"
+                leadName={selectedLead.name}
+                physioName={physioProgress.current?.physio_name}
+                days={physioProgress.days || []}
+                packageDays={physioProgress.package_sessions || physioProgress.booked_sessions}
+                tone="violet"
+                dayNoun="Day"
+                onClose={() => setProgressCalendar(null)}
+                testid="cons-treatment-progress"
+              />
+            )}
+            {progressCalendar === "rehab" && rehabProgress && (
+              <CourseProgressCalendar
+                title="Rehab Progress"
+                leadName={selectedLead.name}
+                physioName={rehabProgress.current?.physio_name}
+                days={rehabCalendarDays(rehabProgress.days)}
+                packageDays={rehabProgress.packageDays}
+                tone="cyan"
+                dayNoun="Rehab Day"
+                onClose={() => setProgressCalendar(null)}
+                testid="cons-rehab-progress-calendar"
+              />
             )}
 
             {/* Reschedule popup -- see ConsultationRescheduleDialog. */}
