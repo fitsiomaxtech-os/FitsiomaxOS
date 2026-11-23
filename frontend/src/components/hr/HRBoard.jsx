@@ -2054,15 +2054,19 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   // Credentials. The login already on the record is fetched on an edit; a new employee has
-  // none. credEmail stays null until typed in, and until then follows the account's own
-  // username, or the employee's Email for a login not made yet.
+  // none. Its Email ID and the Personal tab's Email are one address in one field
+  // (form.email): either box edits both, and the login's own address seeds it on an edit.
   const [login, setLogin] = useState(employee?.id ? null : { account: null });
   useEffect(() => {
     if (!employee?.id) return;
-    hrEmployeeAccount(employee.id).then(setLogin).catch(() => setLogin({ account: null, failed: true }));
+    hrEmployeeAccount(employee.id)
+      .then((d) => {
+        setLogin(d);
+        if (d?.account?.email) setForm((p) => ({ ...p, email: d.account.email }));
+      })
+      .catch(() => setLogin({ account: null, failed: true }));
   }, [employee?.id]);
   const account = login?.account || null;
-  const [credEmail, setCredEmail] = useState(null);
   const [credPwd, setCredPwd] = useState("");
   const [credConfirm, setCredConfirm] = useState("");
   // Read-only until somebody clicks into one of these. The browser fills a saved login
@@ -2071,7 +2075,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
   // autoComplete alone is not enough: Chrome ignores "off" on a username box.
   const [credArmed, setCredArmed] = useState(false);
   const armCred = { readOnly: !credArmed, onFocus: () => setCredArmed(true) };
-  const loginEmail = String(credEmail ?? (account?.email || form.email) ?? "").trim();
+  const loginEmail = String(form.email || "").trim();
   // The automatic check on it (components/EmailId.jsx). A login's own current email is never
   // checked, so one already in the OS can have its password changed whatever its email is.
   const emailCheck = useEmailCheck(
@@ -2190,16 +2194,16 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
     if (!form.designation) { toast.error("Pick a Designation"); setTab("structure"); return; }
     // Checked before the employee is written, so a typo in the password does not leave a
     // saved record behind a failed login. A blank password on a new employee is no login.
+    // The Email is the login's Email ID: with a login, a changed one moves the sign-in
+    // (the server does that with the employee save), so it is held to the check too.
+    if (login === null) { toast.error("Still loading this employee's login — one moment"); return; }
     const wantsPwd = Boolean(credPwd || credConfirm);
-    const emailChanged = Boolean(account && loginEmail && emailCheck.status !== "unchanged");
-    const saveLogin = wantsPwd || emailChanged;
-    // An Email ID typed here for a login not made yet, with no password beside it. The one
-    // carried over from the Personal tab is not that: nobody asked for a login with it.
-    const emailAlone = !account && !wantsPwd && Boolean(String(credEmail || "").trim());
-    if (saveLogin || emailAlone) {
+    const emailChanged = Boolean(account && emailCheck.status !== "unchanged");
+    const emailTab = tab === "personal" ? "personal" : "credentials";
+    if (account && !loginEmail) { toast.error("Enter the Email ID — this employee signs in with it"); setTab(emailTab); return; }
+    if (wantsPwd || emailChanged) {
       const block = emailBlock(emailCheck);
-      if (block) { toast.error(block); setTab("credentials"); return; }
-      if (emailAlone) { toast.error("Set a password for this login, or clear the Email ID"); setTab("credentials"); return; }
+      if (block) { toast.error(block); setTab(emailTab); return; }
       if (wantsPwd && credPwd.length < 6) { toast.error("Password must be at least 6 characters"); setTab("credentials"); return; }
       if (wantsPwd && credPwd !== credConfirm) { toast.error("Passwords do not match"); setTab("credentials"); return; }
     }
@@ -2246,13 +2250,17 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
         const role = await resolveRole(form.designation);
         if (role) payload.account_role = role;
       }
+      payload.email = loginEmail;
       let savedId = employee?.id;
-      if (employee) { await hrUpdateEmployee(employee.id, payload); toast.success("Employee updated"); }
-      else { savedId = (await hrCreateEmployee(payload))?.id; toast.success("Employee created"); }
+      if (employee) {
+        await hrUpdateEmployee(employee.id, payload);
+        toast.success(emailChanged ? "Employee updated — sign-in Email ID changed" : "Employee updated");
+      } else { savedId = (await hrCreateEmployee(payload))?.id; toast.success("Employee created"); }
       // The login goes second: it hangs off the employee's id, and its role is read off the
       // designation just saved. A refusal here leaves the employee saved and says so, so
-      // the login can be tried again from Edit -> Credentials.
-      if (saveLogin && savedId) {
+      // the login can be tried again from Edit -> Credentials. An Email ID change alone is
+      // already done: the employee save above moved it.
+      if (wantsPwd && savedId) {
         try {
           // Org-wide HR resolves (and if need be mints) the role the way Create User does;
           // a Branch Admin's is read off the designation on the server.
@@ -2282,8 +2290,9 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
         </div>
         {/* Sections down the left, the open one's fields down the right, one labelled row
             each — the same rows the View popup reads in. The fixed height is the tallest
-            tab's (Personal), so no tab scrolls and the dialog doesn't jump between them. */}
-        <div className="flex h-[430px] max-h-[70vh] flex-col sm:flex-row">
+            tab's (Personal, with the line the Email ID check prints under its box), so no
+            tab scrolls and the dialog doesn't jump between them. */}
+        <div className="flex h-[448px] max-h-[70vh] flex-col sm:flex-row">
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-52 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
             {EMP_TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
@@ -2352,7 +2361,16 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                 </div>
               </FormRow>
               <FormRow label="Full Name *"><Input className="h-8" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} data-testid="hr-emp-name" /></FormRow>
-              <FormRow label="Email"><Input className="h-8" value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="hr-emp-email" /></FormRow>
+              {/* The same Email ID as Credentials: one field behind both boxes. */}
+              <FormRow label="Email">
+                <EmailIdInput
+                  className="h-8"
+                  value={form.email || ""}
+                  onChange={(v) => set("email", v)}
+                  state={emailCheck}
+                  testid="hr-emp-email"
+                />
+              </FormRow>
               <FormRow label="Phone"><Input className="h-8" value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="hr-emp-phone" /></FormRow>
               {/* Typed, not picked. A birth date is decades back — reaching it in a
                   calendar is twenty-odd clicks through months, where typing it is eight
@@ -2500,12 +2518,13 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
               ) : (
                 <>
                   {/* The Email ID first, checked as it is typed: the password boxes open once
-                      it is Valid, so a login cannot be made on one that is not. */}
+                      it is Valid, so a login cannot be made on one that is not. It is the
+                      Personal tab's Email — the same field, so the two never differ. */}
                   <FormRow label="Email ID">
                     <EmailIdInput
                       className="h-8"
-                      value={credEmail ?? (account?.email || form.email || "")}
-                      onChange={setCredEmail}
+                      value={form.email || ""}
+                      onChange={(v) => set("email", v)}
                       state={emailCheck}
                       name="hr-new-employee-login"
                       {...armCred}
@@ -2521,8 +2540,8 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   )}
                   <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
                     {account
-                      ? "A new password signs them out everywhere. Leave both boxes blank to keep the current one."
-                      : "Enter a valid Email ID to set a password and give this employee a sign-in. Leave it blank to save them without one."}
+                      ? "This Email ID is also their Personal Email — changing either moves their sign-in. A new password signs them out everywhere; leave both boxes blank to keep the current one."
+                      : "This Email ID is also their Personal Email. Set a password to give this employee a sign-in, or leave the password blank to save them without one."}
                   </p>
                 </>
               )}

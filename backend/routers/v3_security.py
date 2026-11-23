@@ -129,6 +129,9 @@ async def my_security(user: V3UserOut = Depends(v3_current_user), authorization:
         "email": row.get("email", ""),
         "email_masked": two_factor.mask_email(row.get("email", "")),
         "email_verified_at": row.get("email_verified_at"),
+        # The mail service the code was read out of, for "Verified by [its logo]". Only
+        # looked up once verified: before that there is no mark to draw.
+        "email_provider": await email_check.provider_of(row.get("email")) if row.get("email_verified_at") else None,
         "password_changed_at": row.get("password_changed_at"),
         "two_factor": {
             "enabled": two_factor.is_enabled(row),
@@ -249,14 +252,12 @@ async def finish_email_verify(payload: EmailVerifyRequest, user: V3UserOut = Dep
         {"id": user.id},
         {"$set": {"email": target, "email_verified_at": verified_at, "email_code_due": False}},
     )
-    # The employee record's own Email follows only where it was the same address, so a
-    # personal email HR keeps there is left alone.
+    # The employee record's Email is the same Email ID as the login (Add / Edit Employee
+    # shows one box on Personal and Credentials), so it always follows.
     if row.get("employee_id"):
-        emp = await v3_col("employees").find_one({"id": row["employee_id"]}, {"_id": 0, "email": 1})
-        if emp and two_factor.same_email(emp.get("email"), current):
-            await v3_col("employees").update_one(
-                {"id": row["employee_id"]}, {"$set": {"email": target, "updated_at": now_iso()}}
-            )
+        await v3_col("employees").update_one(
+            {"id": row["employee_id"]}, {"$set": {"email": target, "updated_at": now_iso()}}
+        )
     return {
         "email": target,
         "email_verified_at": verified_at,

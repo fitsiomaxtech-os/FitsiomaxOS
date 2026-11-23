@@ -217,16 +217,21 @@ export const EmailIdInput = ({
   </div>
 );
 
-/** Verified / Not Verified, wherever a login's email is shown. */
-export const EmailVerifiedTag = ({ verified, testid }) => (
-  <span
-    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ${verified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-    title={verified ? "A code was read out of this Email ID" : "Nobody has read a code out of this Email ID yet"}
-    data-testid={testid}
-  >
-    {verified ? "Verified" : "Not Verified"}
-  </span>
-);
+/** Verified / Not Verified, wherever a login's email is shown. With `provider` (google,
+ *  outlook, yahoo, zoho), a verified one reads "Verified by [that service's logo]". */
+export const EmailVerifiedTag = ({ verified, provider, testid }) => {
+  const name = verified ? PROVIDER_NAMES[provider] : "";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${verified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+      title={verified ? `A code was read out of this ${name ? `${name} ` : ""}Email ID` : "Nobody has read a code out of this Email ID yet"}
+      data-testid={testid}
+    >
+      {verified ? (name ? "Verified by" : "Verified") : "Not Verified"}
+      {name && <MailProviderIcon provider={provider} className="h-3 w-3" />}
+    </span>
+  );
+};
 
 // ---------- verifying my own ----------
 

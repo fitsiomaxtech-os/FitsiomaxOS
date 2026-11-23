@@ -156,6 +156,14 @@ async def check(email: Any) -> Dict[str, Any]:
     return _answer(VALID, value, provider=_provider_of(hosts))
 
 
+async def provider_of(email: Any) -> Optional[str]:
+    """Whose mail an address is on (google / outlook / yahoo / zoho / other), or None when it
+    is not a valid address or DNS could not say. For the "Verified by" mark beside a login's
+    email, which names the mailbox the code was read out of."""
+    result = await check(email)
+    return result["provider"] if result["status"] == VALID else None
+
+
 async def _taken(email: str, exclude_user_id: Optional[str]) -> bool:
     # Case-blind: some older logins are stored in mixed case.
     query: Dict[str, Any] = {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}

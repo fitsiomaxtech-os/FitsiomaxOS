@@ -1102,6 +1102,28 @@ async def update_employee(
         if account_role not in await _all_role_names():
             raise HTTPException(status_code=400, detail="Invalid role")
 
+    # The Email is the login's Email ID: one address, shown in one box on Personal and on
+    # Credentials. A changed one moves the sign-in with it. Checked here, before anything is
+    # written, so a refused address leaves the employee as it was.
+    login_email_move: Optional[Dict[str, Any]] = None
+    if "email" in updates:
+        updates["email"] = str(updates["email"] or "").strip()
+        login = await v3_col("users").find_one(
+            {"employee_id": emp_id}, {"_id": 0, "id": 1, "email": 1, "role": 1}, sort=[("created_at", 1)],
+        )
+        if login and email_check.normalize(updates["email"]) != email_check.normalize(login.get("email")):
+            if not updates["email"]:
+                raise HTTPException(status_code=400, detail="This employee signs in with their Email ID, so it cannot be blank")
+            if login.get("role") == "super_admin" and user.role != "super_admin":
+                raise HTTPException(status_code=403, detail="Only a Super Admin can change a Super Admin account")
+            if branch_scope is not None and login.get("role") in BRANCH_ADMIN_BARRED_ROLES:
+                raise HTTPException(status_code=403, detail="Branch Admins cannot change this login")
+            updates["email"] = await email_check.require_allowed(updates["email"], login["id"])
+            login_email_move = {"id": login["id"], "email": updates["email"]}
+        elif login:
+            # Same address, another spelling: kept as the login stores it.
+            updates["email"] = login.get("email") or updates["email"]
+
     # Online is two arms, and Service says which. Before the branch block below rather than
     # instead of it: this decides the list, and that block is what reduces any list to the
     # primary branch_id every single-branch filter in the OS still reads.
@@ -1153,6 +1175,12 @@ async def update_employee(
     res = await v3_col("employees").update_one({"id": emp_id}, {"$set": updates})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
+    if login_email_move:
+        # A new address has had no code read out of it yet.
+        await v3_col("users").update_one(
+            {"id": login_email_move["id"]},
+            {"$set": {"email": login_email_move["email"], "email_verified_at": None}},
+        )
 
     # The designation is the role, and Credentials no longer edits either, so a change here
     # is the only way a login's role moves. Before the branch cascade below, which reads the
@@ -1461,10 +1489,13 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
     # The day their login is made is the day they joined. The Add Employee form stopped
     # asking for it, so it is stamped here instead — only when blank, so a date already on
     # the record (an older employee, or one set by Recruitment) is never moved.
-    if payload.employee_id and not emp.get("joining_date"):
-        await v3_col("employees").update_one(
-            {"id": payload.employee_id}, {"$set": {"joining_date": clinic_today(), "updated_at": now_iso()}},
-        )
+    #
+    # And the employee's Email becomes this login's Email ID: the two are one address.
+    if payload.employee_id:
+        emp_set: Dict[str, Any] = {"email": email, "updated_at": now_iso()}
+        if not emp.get("joining_date"):
+            emp_set["joining_date"] = clinic_today()
+        await v3_col("employees").update_one({"id": payload.employee_id}, {"$set": emp_set})
     if payload.role != "super_admin" and (is_diet_role(payload.role) or is_rehab_role(payload.role)):
         # A diet or rehab role belongs to a branch and holds a calendar there, exactly
         # like a Physio. Both are stamped with their own profile_type by
@@ -1576,6 +1607,12 @@ async def update_user_account(user_id: str, payload: UserAccountUpdate, caller: 
         await v3_col("doctors").update_many({"user_id": user_id}, {"$set": {"full_name": updates["full_name"]}})
         if user and user.get("employee_id"):
             await v3_col("employees").update_one({"id": user["employee_id"]}, {"$set": {"full_name": updates["full_name"], "updated_at": now_iso()}})
+    # The employee's Email is this login's Email ID — one address, so a changed one (or a
+    # newly linked employee) follows.
+    if user and user.get("employee_id") and ("email" in updates or updates.get("employee_id")):
+        await v3_col("employees").update_one(
+            {"id": user["employee_id"]}, {"$set": {"email": user.get("email") or "", "updated_at": now_iso()}},
+        )
 
     # The account's branch, written through to the employee record. The reverse of this has
     # existed since an employee could be moved — update_employee moves the login with them —
@@ -1815,6 +1852,11 @@ async def save_employee_account(
         await v3_col("users").update_one({"id": existing["id"]}, {"$set": updates})
         if password:
             await v3_col("sessions").delete_many({"user_id": existing["id"]})
+        # The employee's Email is the same Email ID — one address on both.
+        if "email" in updates:
+            await v3_col("employees").update_one(
+                {"id": emp_id}, {"$set": {"email": updates["email"], "updated_at": now_iso()}},
+            )
         return {"message": "Login updated", "created": False}
 
     if not email or not password:

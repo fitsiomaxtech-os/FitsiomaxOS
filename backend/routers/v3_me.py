@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
+import email_check
 from database import v3_col
 from deps import v3_current_user
 from schemas.v3 import V3UserOut
@@ -185,7 +186,7 @@ async def my_profile(user: V3UserOut = Depends(v3_current_user)):
     that reads as lost data.
     """
     account = await v3_col("users").find_one(
-        {"id": user.id}, {"_id": 0, "employee_id": 1, "mobile_number": 1, "branch_id": 1},
+        {"id": user.id}, {"_id": 0, "employee_id": 1, "mobile_number": 1, "branch_id": 1, "email_verified_at": 1},
     ) or {}
     emp: Dict[str, Any] = {}
     if account.get("employee_id"):
@@ -207,12 +208,18 @@ async def my_profile(user: V3UserOut = Depends(v3_current_user)):
     # typed their mobile into Credentials and never had it written onto their HR record
     # should still see it here rather than a dash.
     profile["full_name"] = profile["full_name"] or user.full_name
-    profile["email"] = profile["email"] or user.email
+    # The Email is the login's Email ID: the employee record holds the same one (HR's form
+    # shows one box for both), and it is the address Verified speaks of.
+    profile["email"] = user.email or profile["email"]
     profile["phone"] = profile["phone"] or (account.get("mobile_number") or "")
     profile["photo_url"] = profile["photo_url"] or (user.photo_url or "")
+    verified = bool(account.get("email_verified_at"))
 
     return {
         "linked": bool(emp),
+        # "Verified by [the mail service's logo]" beside the Email, as on the Security tab.
+        "email_verified": verified,
+        "email_provider": await email_check.provider_of(profile["email"]) if verified else None,
         # The login's own facts, which exist whether or not anybody is on the books.
         "account": {
             "id": user.id,

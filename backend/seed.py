@@ -2716,6 +2716,40 @@ async def retire_experts_without_a_login() -> None:
         )
 
 
+async def merge_employee_login_emails() -> None:
+    """Every employee with a login holds that login's Email ID as their Email.
+
+    The two used to be separate boxes (Personal > Email and Credentials > Email ID) that
+    could hold different addresses. They are one now, and the login's wins: it is the one
+    people sign in with and the one Verified speaks of. An address the employee record held
+    that differed is kept in `email_before_merge`, never thrown away. Safe to re-run: once
+    the two agree there is nothing to do.
+    """
+    logins = await v3_col("users").find(
+        {"employee_id": {"$nin": [None, ""]}, "email": {"$nin": [None, ""]}},
+        {"_id": 0, "employee_id": 1, "email": 1, "created_at": 1},
+    ).to_list(10000)
+    # The first login made for an employee is theirs, as everywhere else that reads one.
+    first = {}
+    for u in sorted(logins, key=lambda u: str(u.get("created_at") or "")):
+        if u.get("employee_id") and u.get("email"):
+            first.setdefault(u["employee_id"], u)
+    if not first:
+        return
+    emps = await v3_col("employees").find(
+        {"id": {"$in": list(first)}}, {"_id": 0, "id": 1, "email": 1},
+    ).to_list(10000)
+    for emp in emps:
+        login_email = first[emp["id"]]["email"]
+        current = str(emp.get("email") or "").strip()
+        if current.lower() == str(login_email).strip().lower():
+            continue
+        fields = {"email": login_email, "updated_at": now_iso()}
+        if current:
+            fields["email_before_merge"] = current
+        await v3_col("employees").update_one({"id": emp["id"]}, {"$set": fields})
+
+
 async def backfill_login_history_from_sessions() -> None:
     """login_history only started recording on /auth/login once that tracking was added,
     so anyone already logged in at that point shows zero entries in the Super Admin

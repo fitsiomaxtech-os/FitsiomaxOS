@@ -70,6 +70,7 @@ import { PermissionRequestBoard, TimeOffTab } from "@/components/MyTimeOff";
 // And the fourth, split out for the same reason — it is the other tab that writes, and
 // what it writes is the login itself.
 import { SecurityTab } from "@/components/MySecurity";
+import { EmailVerifiedTag } from "@/components/EmailId";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { PhotoEditor } from "@/components/ui/photo-editor";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
@@ -998,7 +999,15 @@ const ProfileView = ({ data, roleLabel, photo }) => {
   const [section, setSection] = useState("personal");
   const account = data.account || {};
   const rows = {
-    personal: [["Full Name", data.full_name], ["Email", data.email], ["Phone", displayPhone(data.phone)],
+    personal: [["Full Name", data.full_name],
+      // The login's Email ID, with the same Verified mark the Security tab shows.
+      ["Email", data.email && (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 break-all">{data.email}</span>
+          <EmailVerifiedTag verified={Boolean(data.email_verified)} provider={data.email_provider} testid="my-profile-email-tag" />
+        </span>
+      )],
+      ["Phone", displayPhone(data.phone)],
       ["Date of Birth", prettyDate(data.dob)], ["Gender", titleCase(data.gender)],
       ["Blood Group", data.blood_group], ["Marital Status", titleCase(data.marital_status)],
       ["Father's Name", data.father_name], ["Mother's Name", data.mother_name]],

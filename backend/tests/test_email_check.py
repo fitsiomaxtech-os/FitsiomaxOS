@@ -274,6 +274,86 @@ def test_employee_popup_password_change_on_an_old_test_login(db):
         run(v3_hr.save_employee_account("e1", v3_hr.EmployeeAccountSave(email="rabi2@nomail.test"), ADMIN))
 
 
+# ---------------------------------------------------------------- one Email for employee and login
+
+def test_employee_email_change_moves_the_login(db):
+    db("employees").rows.append({"id": "e1", "full_name": "Rabi", "email": "rabi@gmail.com"})
+    add_user(db, "u1", "rabi@gmail.com", employee_id="e1", email_verified_at="2026-11-01")
+    run(v3_hr.update_employee("e1", v3_hr.EmployeeUpdate(email=" New@Gmail.com "), ADMIN))
+    assert db("employees").rows[0]["email"] == "new@gmail.com"
+    u = db("users").rows[0]
+    assert u["email"] == "new@gmail.com" and u["email_verified_at"] is None
+
+
+def test_employee_email_same_address_leaves_the_login_verified(db):
+    db("employees").rows.append({"id": "e1", "full_name": "Rabi", "email": "rabi@gmail.com"})
+    add_user(db, "u1", "rabi@gmail.com", employee_id="e1", email_verified_at="2026-11-01")
+    run(v3_hr.update_employee("e1", v3_hr.EmployeeUpdate(email="RABI@gmail.com", phone="9"), ADMIN))
+    assert db("employees").rows[0]["email"] == "rabi@gmail.com"
+    assert db("users").rows[0]["email_verified_at"] == "2026-11-01"
+
+
+def test_employee_email_refused_or_blank_changes_nothing(db):
+    db("employees").rows.append({"id": "e1", "full_name": "Rabi", "email": "rabi@gmail.com"})
+    add_user(db, "u1", "rabi@gmail.com", employee_id="e1")
+    add_user(db, "u2", "taken@gmail.com")
+    for bad in ("a@nomail.test", "taken@gmail.com", ""):
+        with pytest.raises(HTTPException):
+            run(v3_hr.update_employee("e1", v3_hr.EmployeeUpdate(email=bad, phone="9"), ADMIN))
+    assert db("employees").rows[0]["email"] == "rabi@gmail.com" and "phone" not in db("employees").rows[0]
+    assert db("users").rows[0]["email"] == "rabi@gmail.com"
+
+
+def test_employee_without_a_login_keeps_any_email(db):
+    db("employees").rows.append({"id": "e1", "full_name": "Rabi", "email": ""})
+    run(v3_hr.update_employee("e1", v3_hr.EmployeeUpdate(email="someone@nomail.test"), ADMIN))
+    assert db("employees").rows[0]["email"] == "someone@nomail.test"
+
+
+def test_login_email_changes_reach_the_employee(db):
+    db("employees").rows.append({"id": "e1", "full_name": "Rabi", "designation": "Physio", "email": "old@gmail.com"})
+    add_user(db, "u1", "old@gmail.com", employee_id="e1")
+    run(v3_hr.save_employee_account("e1", v3_hr.EmployeeAccountSave(email="two@gmail.com"), ADMIN))
+    assert db("employees").rows[0]["email"] == "two@gmail.com"
+    run(v3_hr.update_user_account("u1", v3_hr.UserAccountUpdate(email="three@gmail.com"), ADMIN))
+    assert db("employees").rows[0]["email"] == "three@gmail.com"
+
+
+def test_a_new_login_for_an_employee_sets_their_email(db):
+    db("employees").rows.append({"id": "e1", "full_name": "Rabi", "email": "personal@yahoo.com", "joining_date": "2026-01-01"})
+    login = v3_hr.UserAccountCreate(full_name="Rabi", email="Rabi@Gmail.com", password="secret1", role="physio_x", employee_id="e1")
+    run(v3_hr.create_user_account(login, ADMIN))
+    assert db("employees").rows[0]["email"] == "rabi@gmail.com"
+
+
+def test_startup_merge_gives_every_employee_their_logins_email(db, monkeypatch):
+    import seed
+    monkeypatch.setattr(seed, "v3_col", db)
+    db("employees").rows += [
+        {"id": "e1", "email": "personal@yahoo.com"},
+        {"id": "e2", "email": ""},
+        {"id": "e3", "email": "Same@gmail.com"},
+        {"id": "e4", "email": "nologin@gmail.com"},
+    ]
+    add_user(db, "u1", "one@gmail.com", employee_id="e1")
+    add_user(db, "u2", "two@gmail.com", employee_id="e2")
+    add_user(db, "u3", "same@gmail.com", employee_id="e3")
+    add_user(db, "u9", "free@gmail.com")
+    run(seed.merge_employee_login_emails())
+    rows = {e["id"]: e for e in db("employees").rows}
+    assert rows["e1"]["email"] == "one@gmail.com" and rows["e1"]["email_before_merge"] == "personal@yahoo.com"
+    assert rows["e2"]["email"] == "two@gmail.com" and "email_before_merge" not in rows["e2"]
+    assert rows["e3"]["email"] == "Same@gmail.com" and "updated_at" not in rows["e3"]
+    assert rows["e4"]["email"] == "nologin@gmail.com"
+
+
+def test_verified_badge_names_the_mail_service(db):
+    assert run(email_check.provider_of("a@clinic.test")) == "google"
+    assert run(email_check.provider_of("a@gmail.com")) == "google"
+    assert run(email_check.provider_of("a@down.test")) is None
+    assert run(email_check.provider_of("")) is None
+
+
 def test_email_check_endpoint_knows_whose_login_it_is(db):
     add_user(db, "u1", "rabi@gmail.com", employee_id="e1")
     ask = lambda **k: run(v3_hr.check_login_email(v3_hr.EmailCheckRequest(email="rabi@gmail.com", **k), ADMIN))  # noqa: E731
@@ -420,12 +500,14 @@ def test_moving_to_a_new_email(db):
     assert sign_in("rabi@gmail.com").token
 
 
-def test_a_personal_email_on_the_employee_record_is_left_alone(db):
+def test_the_employee_email_always_follows_the_login(db):
+    # Personal > Email and Credentials > Email ID are one address now, so even an employee
+    # record that held a different one is moved with the login.
     db("employees").rows.append({"id": "e1", "email": "personal@yahoo.com"})
     row = add_user(db, "u1", "rabi@nomail.test", employee_id="e1")
     ch = start(row, "rabi@gmail.com", "secret1")
     finish(row, ch["challenge_id"], code_in(db))
-    assert db("employees").rows[0]["email"] == "personal@yahoo.com"
+    assert db("employees").rows[0]["email"] == "rabi@gmail.com"
 
 
 def test_somebody_elses_challenge_is_refused_unspent(db):

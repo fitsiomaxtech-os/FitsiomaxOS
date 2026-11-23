@@ -185,7 +185,7 @@ const PasswordPanel = ({ onChanged }) => {
 
 /** The Email ID I sign in with, and whether anybody has read a code out of it. Always here,
  *  whatever Developer Access says about the message after sign-in. */
-const EmailPanel = ({ email, verified, emailConfigured, onChanged }) => {
+const EmailPanel = ({ email, verified, provider, emailConfigured, onChanged }) => {
   const [open, setOpen] = useState(false);
   return (
     <Panel
@@ -200,7 +200,7 @@ const EmailPanel = ({ email, verified, emailConfigured, onChanged }) => {
     >
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 break-all text-sm text-slate-700" data-testid="my-security-email-current">{email}</p>
-        <EmailVerifiedTag verified={verified} testid="my-security-email-tag" />
+        <EmailVerifiedTag verified={verified} provider={provider} testid="my-security-email-tag" />
       </div>
       {!emailConfigured && (
         <p className="mt-2 text-xs text-amber-700" data-testid="my-security-email-unavailable">
@@ -469,6 +469,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
       <EmailPanel
         email={data.email}
         verified={Boolean(data.email_verified_at)}
+        provider={data.email_provider}
         emailConfigured={data.two_factor?.email_configured !== false}
         onChanged={load}
       />
