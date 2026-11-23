@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   Calendar,
@@ -150,6 +151,11 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * keep the look they have:
  *  - `toolbarLead` — controls set at the start of the tool bar, ahead of the search, so the
  *    host's pickers and the board's search and dates read as one row rather than two.
+ *  - `toolbarSlot` — the other way round: the node in a host's own tab row the tool bar is
+ *    drawn into (the Consultant + Physiotherapist's Consultation tab). null while that tab
+ *    is not the open one, undefined where the board keeps a row of its own.
+ *  - `onCountChange` — reports what is still to be worked on the whole board, for the count
+ *    on that host's tab.
  *  - `ledgerCards` — the summary cards drawn as the finance boards' ledger card (Branch
  *    Admin's Zumba strip): arrow in the corner, the picked one filled in its colour.
  *  - `rowArrow` — an Action column with an arrow at the end of the consultations table.
@@ -171,10 +177,11 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  */
 /**
  * `phoneStack` — mounted inside a board that owns the phone's bottom bar (Branch Admin's
- * Sumaiya Consultations). This board's own bar is left off, since two fixed bars on one spot
- * put this one over the host's and left no way out of the tab. Below sm the work tabs show
- * as the host's grey list cards instead, and a tap opens that list on its own screen with a
- * back bar above it, like the host's stage stacks.
+ * Sumaiya Consultations, the Consultant + Physiotherapist's Consultation tab). This board's
+ * own bar is left off, since two fixed bars on one spot put this one over the host's and
+ * left no way out of the tab. Below sm the work tabs show as the host's grey list cards
+ * instead, and a tap opens that list on its own screen with a back bar above it, like the
+ * host's stage stacks.
  *
  * `supervising` gets the same stack, for the same reason: Operations and Branch Control sit
  * under Super Admin's own bottom bar, and this board's bar (z-50) went over it, so a
@@ -182,7 +189,7 @@ const isDone = (...stages) => stages.some((s) => /complete/i.test(String(s || ""
  * HR Admin's phone wears (NotifyCard inline) under the shared PhoneBackBar, so every board
  * Operations opens on a phone reads the same way.
  */
-export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, ledgerCards = false, summaryCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false, squareTable = false }) => {
+export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false, mine = false, headChief = false, search = "", onSearchChange, roleLabel, onLogout, toolbarLead = null, toolbarSlot, onCountChange, ledgerCards = false, summaryCards = false, rowArrow = false, oneLineRows = false, phoneStack = false, branchColumn = false, squareTable = false }) => {
   const [workTab, setWorkTab] = useState("consultations");
   // Hosted under another board's bottom bar: Branch Admin's (phoneStack) or Super Admin's
   // (supervising). Either way this board draws no bar of its own on a phone.
@@ -223,6 +230,10 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
   // cards: what is still waiting on this Head Physio, not everything on their list.
   // Whatever the first head-consultation stage is currently called.
   const firstStage = consultStageNames[0] || null;
+  // New consultations and reviews still to write, the house-visit ones with them: the same
+  // figures the Consultations, Weekly Review and House Visit cards give.
+  const waitingCount = (consultStages[firstStage] || 0) + reviewCount + (hvConsultStages[firstStage] || 0) + hvReviewCount;
+  useEffect(() => { if (onCountChange) onCountChange(waitingCount); }, [waitingCount, onCountChange]);
 
   const q = search.trim().toLowerCase();
   const matches = (...fields) => !q || fields.some((f) => String(f || "").toLowerCase().includes(q));
@@ -561,6 +572,104 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
     return { n, sub };
   };
 
+  // The tool bar's contents: in this board's own row, or in a host's tab row (toolbarSlot).
+  // Sharing a row, with a host's tabs or with a lead, the search is narrow and the day
+  // strip dense.
+  const hosted = toolbarSlot !== undefined;
+  const sharedRow = !!toolbarLead || hosted;
+  const toolbar = (
+    <>
+      {/* One search for the whole board, so it works on Review, Rehab and All and not
+          only on Consultations. Hidden on a phone, where the header's magnifier does the
+          same job without costing a row of vertical space above the lists.
+          The rail carries the width; the field inside is what stays capped, so the rail
+          can go on balancing the right one after the field has stopped growing. */}
+      <div className={sharedRow ? "hidden shrink-0 sm:block" : "hidden min-w-0 sm:block sm:flex-1 sm:basis-0"}>
+        <div className={`relative ${sharedRow ? "w-40" : "max-w-xs"}`} data-testid="hp-header-search">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+            placeholder="Search patients..."
+            className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-3 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+            data-testid="hp-search-input"
+          />
+        </div>
+      </div>
+      {phoneSearchOpen && (
+        <div className="relative min-w-0 flex-1 sm:hidden">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+            placeholder="Search patients..."
+            className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-9 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+            data-testid="hp-phone-search-input"
+          />
+          <button
+            type="button"
+            onClick={() => { setPhoneSearchOpen(false); onSearchChange && onSearchChange(""); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100"
+            aria-label="Close search"
+            data-testid="hp-phone-search-close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {/* On a phone the lead's pickers fill the lines above, so the strip and its two
+          buttons start a line of their own rather than squeezing in beside a picker. */}
+      {toolbarLead && <div className="h-0 basis-full sm:hidden" aria-hidden />}
+      {/* The strip and the calendar icon drive the same single scope; a range typed into
+          the calendar simply leaves none of the day buttons lit. */}
+      <div className={`min-w-0 flex-1 justify-center sm:w-auto sm:flex-initial ${phoneSearchOpen ? "hidden sm:flex" : "flex"}`}>
+        <DayStripFilter value={dateRange} onChange={setDateRange} testid="hp-date-filter" dense={sharedRow} />
+      </div>
+      <div className={`flex shrink-0 items-center justify-end gap-1.5 sm:gap-2 ${sharedRow ? "ml-auto" : "sm:ml-0 sm:flex-1 sm:basis-0"}`}>
+        {/* Phone only; from sm up the box in the left rail is always on screen. Only
+            where the host owns a search to drive — a supervisor's board passes none. */}
+        {onSearchChange && !phoneSearchOpen && (
+          <button
+            type="button"
+            onClick={() => setPhoneSearchOpen(true)}
+            title="Search"
+            aria-label="Search"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border sm:hidden ${
+              search ? "border-teal-300 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+            data-testid="hp-phone-search-open"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        )}
+        {/* `large` only here: this board's calendar button is the only way to reach a
+            date the day strip doesn't cover, so the dialog it opens is sized to be read
+            and aimed at rather than squeezed. Other boards keep the compact dialog. */}
+        <DateFilterPopover
+          value={dateRange && !isDayKey(dateRange.key) ? dateRange : null}
+          onChange={setDateRange}
+          testid="hp-date-custom"
+          centered
+          iconOnly
+          phoneIconOnly
+          large
+        />
+        <button
+          type="button"
+          onClick={() => setRefreshTick((n) => n + 1)}
+          disabled={loading}
+          title="Refresh"
+          aria-label="Refresh"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-500 text-white transition hover:bg-slate-600 disabled:opacity-50"
+          data-testid="hp-refresh-btn"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+    </>
+  );
+
   return (
     // Bottom padding on phones clears the fixed bottom bar, so the last row of any list
     // is still reachable instead of sitting underneath it. Hosted (phoneStack or
@@ -628,97 +737,12 @@ export const HeadPhysioBoard = ({ branchId, branchIds, user, supervising = false
           and the two buttons on the second. From 2xl up it is the one row, sized to fit
           without the dates scrolling (narrower search, a dense strip); on a screen just
           past 2xl that does not quite fit, the strip gives a few pixels to its scroller. */}
-      <div className={`items-center gap-2 bg-white p-2 ${toolbarLead ? "flex-wrap 2xl:flex-nowrap" : "flex-nowrap sm:flex-wrap lg:flex-nowrap"} ${profileOpen ? "hidden sm:flex" : "flex"}`}>
-        {toolbarLead}
-        {/* One search for the whole board, so it works on Review, Rehab and All and not
-            only on Consultations. Hidden on a phone, where the header's magnifier does the
-            same job without costing a row of vertical space above the lists.
-            The rail carries the width; the field inside is what stays capped, so the rail
-            can go on balancing the right one after the field has stopped growing. */}
-        <div className={toolbarLead ? "hidden shrink-0 sm:block" : "hidden min-w-0 sm:block sm:flex-1 sm:basis-0"}>
-          <div className={`relative ${toolbarLead ? "w-40" : "max-w-xs"}`} data-testid="hp-header-search">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-              placeholder="Search patients..."
-              className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-3 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
-              data-testid="hp-search-input"
-            />
-          </div>
+      {hosted ? toolbarSlot && createPortal(toolbar, toolbarSlot) : (
+        <div className={`items-center gap-2 bg-white p-2 ${toolbarLead ? "flex-wrap 2xl:flex-nowrap" : "flex-nowrap sm:flex-wrap lg:flex-nowrap"} ${profileOpen ? "hidden sm:flex" : "flex"}`}>
+          {toolbarLead}
+          {toolbar}
         </div>
-        {phoneSearchOpen && (
-          <div className="relative min-w-0 flex-1 sm:hidden">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-              placeholder="Search patients..."
-              className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-9 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
-              data-testid="hp-phone-search-input"
-            />
-            <button
-              type="button"
-              onClick={() => { setPhoneSearchOpen(false); onSearchChange && onSearchChange(""); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100"
-              aria-label="Close search"
-              data-testid="hp-phone-search-close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-        {/* On a phone the lead's pickers fill the lines above, so the strip and its two
-            buttons start a line of their own rather than squeezing in beside a picker. */}
-        {toolbarLead && <div className="h-0 basis-full sm:hidden" aria-hidden />}
-        {/* The strip and the calendar icon drive the same single scope; a range typed into
-            the calendar simply leaves none of the day buttons lit. */}
-        <div className={`min-w-0 flex-1 justify-center sm:w-auto sm:flex-initial ${phoneSearchOpen ? "hidden sm:flex" : "flex"}`}>
-          <DayStripFilter value={dateRange} onChange={setDateRange} testid="hp-date-filter" dense={!!toolbarLead} />
-        </div>
-        <div className={`flex shrink-0 items-center justify-end gap-1.5 sm:gap-2 ${toolbarLead ? "ml-auto" : "sm:ml-0 sm:flex-1 sm:basis-0"}`}>
-          {/* Phone only; from sm up the box in the left rail is always on screen. Only
-              where the host owns a search to drive — a supervisor's board passes none. */}
-          {onSearchChange && !phoneSearchOpen && (
-            <button
-              type="button"
-              onClick={() => setPhoneSearchOpen(true)}
-              title="Search"
-              aria-label="Search"
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border sm:hidden ${
-                search ? "border-teal-300 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-              }`}
-              data-testid="hp-phone-search-open"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-          )}
-          {/* `large` only here: this board's calendar button is the only way to reach a
-              date the day strip doesn't cover, so the dialog it opens is sized to be read
-              and aimed at rather than squeezed. Other boards keep the compact dialog. */}
-          <DateFilterPopover
-            value={dateRange && !isDayKey(dateRange.key) ? dateRange : null}
-            onChange={setDateRange}
-            testid="hp-date-custom"
-            centered
-            iconOnly
-            phoneIconOnly
-            large
-          />
-          <button
-            type="button"
-            onClick={() => setRefreshTick((n) => n + 1)}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-500 text-white transition hover:bg-slate-600 disabled:opacity-50"
-            data-testid="hp-refresh-btn"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Hosted, below sm: the work tabs as the host's grey list cards, the count on a
           corner badge in the tab's colour -- or, supervising, the reference rows with the

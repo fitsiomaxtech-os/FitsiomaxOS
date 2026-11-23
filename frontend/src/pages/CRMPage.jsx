@@ -234,7 +234,8 @@ const BRANCH_ADMIN_ROLES = [
 ];
 const isBranchAdminRole = (role) => BRANCH_ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
 
-/** Consultant + Physiotherapist: one login on both boards, with a switch between them.
+/** Consultant + Physiotherapist: one login on both boards, in one row of tabs -- the
+ * Consultation board first, then the Physio's own.
  * Kept in step with COMBINED_EXPERT_ROLES in backend/deps.py. */
 const COMBINED_EXPERT_ROLES = ["consultant_physio"];
 const isCombinedExpertRole = (role) => COMBINED_EXPERT_ROLES.includes(String(role || "").trim().toLowerCase());
@@ -535,15 +536,17 @@ export const CRMPage = ({ auth, onLogout }) => {
   const [showSuperAdminMenu, setShowSuperAdminMenu] = useState(false);
 
   const role = auth.user.role;
-  // Which board a Consultant + Physiotherapist is on. Remembered per login, so they come
-  // back to the desk they left; Consultation when there is nothing remembered.
+  // Which side of the tabs a Consultant + Physiotherapist is on: Consultation, or any of
+  // the Physio ones. Remembered per login, so they come back to the side they left (Treatment
+  // on the Physio one); Consultation when there is nothing remembered.
   const deskKey = `fitsiomax.desk.${auth.user.id}`;
   const [combinedDesk, setCombinedDesk] = useState(() => {
     try { return localStorage.getItem(deskKey) === "physio" ? "physio" : "consultant"; } catch { return "consultant"; }
   });
-  const switchCombinedDesk = (desk) => {
+  const onCombinedTab = (tab) => {
+    if (tab === "profile") return;
+    const desk = tab === "consultation" ? "consultant" : "physio";
     setCombinedDesk(desk);
-    setShowProfile(false);
     try { localStorage.setItem(deskKey, desk); } catch { /* remembered for this visit only */ }
   };
   // A hand-created HR role can carry any slug, so fall back to the board's own name
@@ -936,37 +939,12 @@ export const CRMPage = ({ auth, onLogout }) => {
   // "Marketing Head", not "Pre Sales".
   const showMarketingHeadBoard = role === "marketing_head";
   const showBranchBoard = isBranchAdminRole(role);
-  // A Consultant + Physiotherapist passes both predicates, and is shown one board at a
-  // time — whichever desk the switch above the board is on.
+  // A Consultant + Physiotherapist passes both predicates, and gets the Physio board with
+  // the Consultation board as its first tab. onConsultationTab: that tab is the open one.
   const isCombined = isCombinedExpertRole(role);
-  const showHeadPhysioBoard = isHeadPhysioRole(role) && (!isCombined || combinedDesk === "consultant");
-  const showPhysioBoard = isPhysioRole(role) && (!isCombined || combinedDesk === "physio");
-  // The switch itself, handed to whichever board is open as the start of its own tool bar,
-  // so switch, search, dates and buttons are one row rather than a row of their own.
-  const deskSwitch = isCombined ? (
-    <div className="inline-flex h-10 shrink-0 items-center gap-0.5 rounded-[4px] border border-slate-200 bg-white p-0.5" role="tablist" aria-label="Desk" data-testid="combined-desk-switch">
-      {[
-        { key: "consultant", label: "Consultation", icon: Stethoscope },
-        { key: "physio", label: "Physiotherapy", icon: Activity },
-      ].map((d) => {
-        const active = combinedDesk === d.key;
-        return (
-          <button
-            key={d.key}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => switchCombinedDesk(d.key)}
-            className={`inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-[3px] px-3 text-sm font-medium transition ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-            data-testid={`combined-desk-${d.key}`}
-          >
-            <d.icon className="h-4 w-4" />
-            {d.label}
-          </button>
-        );
-      })}
-    </div>
-  ) : null;
+  const showHeadPhysioBoard = isHeadPhysioRole(role) && !isCombined;
+  const showPhysioBoard = isPhysioRole(role);
+  const onConsultationTab = isCombined && combinedDesk === "consultant";
   const showDietBoard = isDietRole(role);
   const showAccountantBoard = role === "accountant";
   const showZumbaBoard = isZumbaRole(role);
@@ -1134,7 +1112,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               <div className="flex shrink-0 items-center gap-1">
                 <ClockWidget />
                 <HeaderThemePicker userId={auth.user.id} />
-                <button type="button" onClick={() => setShowPhysioCalendar(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" data-testid="physio-mobile-header-calendar">
+                <button type="button" onClick={() => (onConsultationTab ? setShowHPCalendar(true) : setShowPhysioCalendar(true))} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" data-testid="physio-mobile-header-calendar">
                   <CalendarDays className="h-5 w-5" />
                 </button>
                 {/* Time Off up here rather than as a row of the Profile menu: asking for a
@@ -1142,7 +1120,7 @@ export const CRMPage = ({ auth, onLogout }) => {
                 <button type="button" onClick={() => setShowTimeOff(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-50" aria-label="Time Off" title="Time Off" data-testid="physio-mobile-header-timeoff">
                   <CalendarOff className="h-5 w-5" />
                 </button>
-                <NotificationBell iconClass="h-5 w-5" />
+                <NotificationBell iconClass="h-5 w-5" {...bellProps} />
                 {/* No profile or logout here: the bottom bar's Profile opens My Profile, and
                     Logout sits on its Security tab. */}
               </div>
@@ -1281,12 +1259,13 @@ export const CRMPage = ({ auth, onLogout }) => {
               )}
               {/* A Head Physio's own calendar sits beside their profile rather than in the
                   board's tab row — it's a reference, not one of the lists they work. */}
-              {/* A Consultant + Physiotherapist keeps it on the Physiotherapy side too, where
-                  it opens their Physio calendar — the one a Physio's phone header opens. */}
-              {(showHeadPhysioBoard || (isCombined && showPhysioBoard)) && (
+              {/* A Consultant + Physiotherapist keeps it on every tab: their Consultant
+                  calendar on Consultation, and on the Physio tabs their Physio calendar — the
+                  one a Physio's phone header opens. */}
+              {(showHeadPhysioBoard || isCombined) && (
                 <button
                   type="button"
-                  onClick={() => (showHeadPhysioBoard ? setShowHPCalendar(true) : setShowPhysioCalendar(true))}
+                  onClick={() => (showHeadPhysioBoard || onConsultationTab ? setShowHPCalendar(true) : setShowPhysioCalendar(true))}
                   className="inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-[2px] border border-slate-200 px-2 text-xs font-medium text-slate-600 shadow-[0_1px_3px_0_rgb(0_0_0/0.055),0_1px_2px_-1px_rgb(0_0_0/0.055)] transition-colors hover:bg-slate-50 sm:h-11 sm:px-3"
                   data-testid="hp-header-calendar-button"
                 >
@@ -1358,7 +1337,7 @@ export const CRMPage = ({ auth, onLogout }) => {
           <PhysioCalendarPage onClose={() => setShowPhysioCalendar(false)} />
         )}
 
-        {showHeadPhysioBoard && showHPCalendar && (
+        {(showHeadPhysioBoard || isCombined) && showHPCalendar && (
           <HeadPhysioCalendarModal branchId={auth?.user?.branch_id} onClose={() => setShowHPCalendar(false)} />
         )}
 
@@ -1637,14 +1616,29 @@ export const CRMPage = ({ auth, onLogout }) => {
           // not the branch's. Without it this fell to the branch-wide query and every
           // Consultant read every other Consultant's consultations. Operations and Branch
           // Control mount the same board with `supervising` instead and keep the branch view.
-          <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards rowArrow search={hpSearch} onSearchChange={setHpSearch} roleLabel={roleLabel} onLogout={logout} toolbarLead={deskSwitch} squareTable />
+          <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards rowArrow search={hpSearch} onSearchChange={setHpSearch} roleLabel={roleLabel} onLogout={logout} squareTable />
         )}
 
         {showPhysioBoard && (
           // user/roleLabel are for the board's own My Profile stop — the fourth glyph on
           // the phone's bottom bar, which renders the same page this one does from the
           // header button, inside the board so the bar stays under it.
-          <PhysioBoard user={auth.user} roleLabel={roleLabel} onLogout={logout} toolbarLead={deskSwitch} squareTable />
+          //
+          // consultation: the same board a Consultant gets above, less its own bottom bar
+          // and tool bar row, which are this board's here.
+          <PhysioBoard
+            user={auth.user}
+            roleLabel={roleLabel}
+            onLogout={logout}
+            squareTable
+            initialTab={onConsultationTab ? "consultation" : "treatment"}
+            onTabChange={isCombined ? onCombinedTab : undefined}
+            consultation={isCombined ? ({ toolbarSlot, onCountChange }) => (
+              <Suspense fallback={<BoardFallback />}>
+                <HeadPhysioBoard branchId={auth?.user?.branch_id} branchIds={auth?.user?.branch_ids} user={auth?.user} mine oneLineRows branchColumn summaryCards rowArrow search={hpSearch} onSearchChange={setHpSearch} toolbarSlot={toolbarSlot} onCountChange={onCountChange} phoneStack squareTable />
+              </Suspense>
+            ) : null}
+          />
         )}
 
         {showDietBoard && (

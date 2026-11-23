@@ -20,6 +20,7 @@ import {
   Search,
   Send,
   Star,
+  Stethoscope,
   Upload,
   UserCircle,
   Users,
@@ -87,6 +88,10 @@ const VIEW_TABS = [
   { key: "absence", label: "Absence", icon: CalendarX },
 ];
 
+// The Consultant + Physiotherapist's own first tab, ahead of the Physio's five: their
+// Consultation board, which the host hands in (see `consultation`). A Physio has no such tab.
+const CONSULTATION_TAB = { key: "consultation", label: "Consultation", icon: Stethoscope };
+
 /**
  * A fourth stop on the phone's bar only: My Profile, after Patients.
  *
@@ -101,15 +106,21 @@ const VIEW_TABS = [
  * and still read out by a screen reader.
  */
 const PROFILE_TAB = { key: "profile", label: "My Profile", icon: UserCircle };
-const BOTTOM_TABS = [...VIEW_TABS, PROFILE_TAB];
 
 // `onLogout` puts Logout on My Profile's Security tab, the phone header having none.
-// `toolbarLead`: a host control set at the start of the view bar, ahead of the tabs — the
-// Consultant + Physiotherapist's desk switch, so switch, tabs and toolbar read as one row.
+// `consultation`: the Consultant + Physiotherapist's Consultation board, as a function of
+// { toolbarSlot, onCountChange }. With it the bar starts on a Consultation tab; without it
+// (a Physio, or a supervisor driving one) the board is the five Physio tabs alone.
+// `initialTab` / `onTabChange`: the tab it opens on, and word of every change after that.
 // `squareTable`: the Treatment, House Visit, Send to Review and Patients tables with 4px
 // corners rather than rounded-xl — the Physio's own board, matching the Consultant's.
-export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead = null, squareTable = false } = {}) => {
-  const [activeTab, setActiveTab] = useState("treatment");
+export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, consultation = null, initialTab = "treatment", onTabChange, squareTable = false } = {}) => {
+  const [activeTab, setOpenTab] = useState(initialTab);
+  const setActiveTab = (key) => {
+    setOpenTab(key);
+    if (onTabChange) onTabChange(key);
+  };
+  const combined = !!consultation;
   // Driven by somebody else (Operations, Branch Control), the board sits under Super
   // Admin's own bottom bar, so on a phone it draws no bar of its own: the two landed on one
   // spot and this one covered the host's, leaving no way off the tab. Its views are the
@@ -125,7 +136,8 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
   };
   // Absence is marked by the physio for themselves. A desk driving somebody else's board
   // from Operations marks it from Branch Admin > Management > Physio Absence instead.
-  const viewTabs = physioId ? VIEW_TABS.filter((t) => t.key !== "absence") : VIEW_TABS;
+  const physioTabs = physioId ? VIEW_TABS.filter((t) => t.key !== "absence") : VIEW_TABS;
+  const viewTabs = combined ? [CONSULTATION_TAB, ...physioTabs] : physioTabs;
   // Counts shown on both switchers — every one of them is what's still
   // outstanding, so it counts down as the physio works through it rather than
   // holding at a fixed total: Treatment is today's pending sessions/appointments
@@ -137,7 +149,8 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
   const [homeVisitCount, setHomeVisitCount] = useState(0);
   const [reviewCount, setReviewCount] = useState(0);
   const [patientsCount, setPatientsCount] = useState(0);
-  const badgeFor = { treatment: treatmentCount, home_visit: homeVisitCount, review: reviewCount, patients: patientsCount };
+  const [consultationCount, setConsultationCount] = useState(0);
+  const badgeFor = { consultation: consultationCount, treatment: treatmentCount, home_visit: homeVisitCount, review: reviewCount, patients: patientsCount };
 
   // Where the open tab's search and date filter render. A callback ref rather than
   // useRef: the node has to arrive as state so the tabs re-render once it exists,
@@ -148,12 +161,13 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
   const slotFor = (key) => (activeTab === key ? toolbarSlot : null);
 
   const currentView = viewTabs.find((t) => t.key === activeTab) || viewTabs[0];
+  const onConsultation = combined && activeTab === "consultation";
 
   // Supervised: flex+gap rather than space-y, since the rows and the back bar ahead of the
   // view bar are hidden by class on a desk and space-y would still push the bar down for
   // them. No bottom padding either: the host pads for its own bar.
   return (
-    <div className={supervised ? "flex flex-col gap-3 [&>*]:min-w-0" : `${toolbarLead ? "space-y-4" : "space-y-3"} pb-20 md:pb-0`} data-testid="physio-board-root">
+    <div className={supervised ? "flex flex-col gap-3 [&>*]:min-w-0" : `${combined ? "space-y-4" : "space-y-3"} pb-20 md:pb-0`} data-testid="physio-board-root">
       {supervised && phoneOpen && (
         <PhoneBackBar
           current={{ ...currentView, value: badgeFor[currentView.key] || 0 }}
@@ -191,13 +205,10 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
           than being dropped on desktop: an outstanding count is the reason to look
           at a tab you aren't already on — on the selected pill it goes white-on-indigo,
           since a slate badge on a filled tab reads as disabled. */}
-      {/* With a lead (Consultant + Physiotherapist), the bar is drawn exactly as the
-          Consultation board's tool bar is — white strip, p-2, no rule, 16px to what follows
-          — so the desk switch and the buttons stand still when the person changes desk. */}
-      <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 ${toolbarLead ? "bg-white p-2" : "md:border-b md:border-slate-200 md:pb-2"} ${activeTab === "profile" ? "hidden md:flex" : "flex"} ${phoneRows ? "max-md:hidden" : ""}`} data-testid="physio-view-bar">
-      {/* `contents` without a lead, so the bar lays out exactly as it always has. */}
-      <div className={toolbarLead ? "flex min-w-0 flex-wrap items-center gap-2 md:gap-4" : "contents"}>
-      {toolbarLead}
+      {/* Consultant + Physiotherapist: a white strip, p-2, no rule, 16px to what follows.
+          The Consultation tab's search and dates are too long to share a laptop's row with
+          six tabs, so they take a line of their own under them until the row holds both. */}
+      <div className={`flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 ${combined ? "bg-white p-2" : "md:border-b md:border-slate-200 md:pb-2"} ${onConsultation ? "md:flex-wrap md:gap-y-2 min-[1880px]:flex-nowrap" : ""} ${activeTab === "profile" ? "hidden md:flex" : "flex"} ${phoneRows ? "max-md:hidden" : ""}`} data-testid="physio-view-bar">
       <div className="hidden flex-wrap items-center gap-2 overflow-x-auto md:flex" data-testid="physio-view-tabs">
         {viewTabs.map((tab) => {
           const Icon = tab.icon;
@@ -227,9 +238,16 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
           );
         })}
       </div>
+        <div ref={setToolbarSlot} className={onConsultation ? "flex min-w-0 items-center gap-2 md:basis-full min-[1880px]:flex-1" : `flex flex-wrap items-center gap-2 ${combined ? "" : "md:pb-1.5"}`} data-testid="physio-view-toolbar" />
       </div>
-        <div ref={setToolbarSlot} className={`flex flex-wrap items-center gap-2 ${toolbarLead ? "" : "md:pb-1.5"}`} data-testid="physio-view-toolbar" />
-      </div>
+
+      {/* Mounted whichever tab is open, like the four below, so its count stays live and
+          its search, dates and open list are as they were left. */}
+      {combined && (
+        <div style={{ display: onConsultation ? "block" : "none" }} data-testid="physio-consultation-view">
+          {consultation({ toolbarSlot: slotFor("consultation"), onCountChange: setConsultationCount })}
+        </div>
+      )}
 
       {/* Wrapped so the rows can hide all four at once on a phone: each one's own display
           is an inline style, which a class could not override. Still mounted under the
@@ -256,7 +274,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
           reads a month of attendance, which is not a request to make for a tab nobody
           opened. */}
       {activeTab === "profile" && (
-        <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setActiveTab("treatment")} onLogout={onLogout} phoneBar timeOffInHeader={!physioId} />
+        <MyProfilePage user={user} roleLabel={roleLabel} onBack={() => setActiveTab(viewTabs[0].key)} onLogout={onLogout} phoneBar timeOffInHeader={!physioId} />
       )}
 
       {/* Phones only. It used to render at every width, so a desk got a bar pinned
@@ -267,7 +285,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
       {!supervised && (
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-600 bg-slate-500 pb-[env(safe-area-inset-bottom)] md:hidden" data-testid="physio-bottom-nav">
         <div className="mx-auto flex max-w-lg items-stretch justify-around" style={{ zoom: 0.85 }}>
-          {(physioId ? BOTTOM_TABS.filter((t) => t.key !== "absence") : BOTTOM_TABS).map((tab) => {
+          {[...viewTabs, PROFILE_TAB].map((tab) => {
             const Icon = tab.icon;
             return (
               <BottomNavTab
@@ -278,6 +296,8 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
                 active={activeTab === tab.key}
                 badge={badgeFor[tab.key] || 0}
                 badgeTestId={`physio-bottom-tab-badge-${tab.key}`}
+                // Seven slots: each as wide as its own name, or "Send to Review" clips.
+                className={combined ? "flex-auto" : ""}
                 data-testid={`physio-bottom-tab-${tab.key}`}
               />
             );
