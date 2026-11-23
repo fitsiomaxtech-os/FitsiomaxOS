@@ -2159,9 +2159,17 @@ const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun 
         <p className={`min-w-0 truncate text-sm font-semibold ${current ? skin.name : "text-slate-600"}`} title={spell.physio_name}>
           {spell.physio_name || "Unknown physio"}
         </p>
-        <span className={`shrink-0 ${modeTag ? "rounded-[2px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${current ? skin.chip : "bg-slate-200 text-slate-600"}`} data-testid={current && modeTag ? "cons-physio-mode-badge" : undefined}>
-          {current ? (modeTag || "Current") : "Previous"}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Physio Assign only: names what the card is, beside the Offline / Online chip. */}
+          {current && modeTag && (
+            <span className="rounded-[2px] border border-violet-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-violet-700" data-testid="cons-physio-progress-label">
+              Treatment Progress
+            </span>
+          )}
+          <span className={`shrink-0 ${modeTag ? "rounded-[2px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${current ? skin.chip : "bg-slate-200 text-slate-600"}`} data-testid={current && modeTag ? "cons-physio-mode-badge" : undefined}>
+            {current ? (modeTag || "Current") : "Previous"}
+          </span>
+        </div>
       </div>
       <p className="mt-1 text-[11px] text-slate-600">
         <span className={`font-bold ${spell.sessions_completed ? "text-emerald-700" : "text-slate-400"}`}>{spell.sessions_completed}</span>
