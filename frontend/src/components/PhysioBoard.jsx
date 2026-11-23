@@ -4002,17 +4002,26 @@ function CompleteSessionModal({ session, onClose, onDone, sessions }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-white shadow-2xl" data-testid="complete-session-modal">
-        <div className="border-b p-5">
-          {/* A rehab day is named as one here too, so the heading matches the row that was
-              clicked and the only field underneath it. */}
-          <h3 className="text-base font-semibold text-slate-800">
-            {isDone
-              ? `${isRehab ? "Rehab Day" : "Session"} ${session.session_number} Summary`
-              : `Complete ${isRehab ? "Rehab Day" : "Session"} ${session.session_number}`}
-          </h3>
-          <p className="text-[10px] text-slate-400">{session.lead_name} · {dayDate(session.slot_time) || "—"}</p>
-        </div>
+      <div className={`flex max-h-[90vh] w-full flex-col bg-white shadow-2xl ${isDone ? "max-w-lg overflow-hidden rounded-[4px]" : "max-w-md rounded-xl"}`} data-testid="complete-session-modal">
+        {/* A rehab day is named as one here too, so the heading matches the row that was
+            clicked and the only field underneath it. */}
+        {isDone ? (
+          // The Send for Review popup's header: one row, one size. The patient line gives
+          // way first, so which session this is always reads. The X is the only way out
+          // drawn here -- a summary has no footer.
+          <div className="flex shrink-0 items-center gap-4 bg-slate-500 px-5 py-3 text-[12px] font-semibold uppercase leading-5 text-white [font-family:Inter,sans-serif]" data-testid="session-summary-header">
+            <p className="min-w-0 flex-1 truncate">{session.lead_name} · {dayDate(session.slot_time) || "—"}</p>
+            <p className="shrink-0 whitespace-nowrap">{isRehab ? "Rehab Day" : "Session"} {session.session_number} Summary</p>
+            <button type="button" onClick={onClose} title="Close" aria-label="Close" className="shrink-0 text-white hover:opacity-80" data-testid="session-summary-close">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="border-b p-5">
+            <h3 className="text-base font-semibold text-slate-800">Complete {isRehab ? "Rehab Day" : "Session"} {session.session_number}</h3>
+            <p className="text-[10px] text-slate-400">{session.lead_name} · {dayDate(session.slot_time) || "—"}</p>
+          </div>
+        )}
         {/* Scrolls, and the header and footer do not. The tick-list expands inside this
             popup, so on a phone the Mark Complete button used to walk off the bottom of
             the screen the moment the list was opened. */}
@@ -4033,13 +4042,13 @@ function CompleteSessionModal({ session, onClose, onDone, sessions }) {
               {remarks.trim() && (
                 <div>
                   <p className="mb-1 text-xs font-medium text-slate-600">Treatment Remarks</p>
-                  <p className="whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="session-summary-treatment">{remarks}</p>
+                  <p className="whitespace-pre-wrap rounded-[4px] bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="session-summary-treatment">{remarks}</p>
                 </div>
               )}
               {rehabRemarks.trim() && (
                 <div>
                   <p className="mb-1 text-xs font-medium text-slate-600">Rehab Remarks</p>
-                  <p className="whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="session-summary-rehab">{rehabRemarks}</p>
+                  <p className="whitespace-pre-wrap rounded-[4px] bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="session-summary-rehab">{rehabRemarks}</p>
                 </div>
               )}
               {!remarks.trim() && !rehabRemarks.trim() && (
@@ -4104,14 +4113,14 @@ function CompleteSessionModal({ session, onClose, onDone, sessions }) {
             </>
           )}
         </div>
-        <div className="flex shrink-0 justify-end gap-2 border-t p-4">
-          <Button variant="outline" size="sm" onClick={onClose}>{isDone ? "Close" : "Cancel"}</Button>
-          {!isDone && (
+        {!isDone && (
+          <div className="flex shrink-0 justify-end gap-2 border-t p-4">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <Button size="sm" onClick={handleSubmit} disabled={submitting || !hasReport} className="bg-sky-600 hover:bg-sky-700 text-white" data-testid="session-complete-submit">
               {submitting ? "Completing..." : "Mark Complete"}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
