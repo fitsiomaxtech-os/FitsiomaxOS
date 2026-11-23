@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, ArrowRightLeft, CalendarX, CheckCircle2, Clock, RefreshCw, Trash2, UserX, Users, X } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, CalendarX, CheckCircle2, Clock, RefreshCw, Trash2, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -248,7 +248,7 @@ function DayRow({ absence, day, candidates, onChanged }) {
 
   return (
     <li
-      className={`rounded-xl border bg-white transition-shadow ${
+      className={`overflow-hidden rounded-[4px] border bg-white transition-shadow ${
         day.state === "waiting" ? "border-amber-200 shadow-sm" : "border-slate-200"
       }`}
       data-testid={`absence-day-${day.id}`}
@@ -287,13 +287,13 @@ function DayRow({ absence, day, candidates, onChanged }) {
 
       {!settled && !releasing && (
         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
-          <Button size="sm" variant="outline" onClick={() => setReleasing(true)} className="h-8 bg-white text-xs" data-testid={`absence-day-release-${day.id}`}>
+          <Button size="sm" variant="outline" onClick={() => setReleasing(true)} className="h-8 rounded-[4px] bg-white text-xs" data-testid={`absence-day-release-${day.id}`}>
             <Clock className="mr-1.5 h-3.5 w-3.5" /> Patient will wait
           </Button>
           <Button
             size="sm"
             onClick={() => setHandingOver(true)}
-            className="h-8 bg-sky-600 text-xs text-white hover:bg-sky-700"
+            className="h-8 rounded-[4px] bg-sky-600 text-xs text-white hover:bg-sky-700"
             data-testid={`absence-day-handover-${day.id}`}
           >
             <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5" /> {day.state === "reassigned" ? "Change physio" : "Hand over"}
@@ -310,7 +310,7 @@ function DayRow({ absence, day, candidates, onChanged }) {
               value={releaseReason}
               onChange={(e) => setReleaseReason(e.target.value)}
               placeholder="e.g. wants to wait for their own physio"
-              className="h-9 bg-white shadow-sm"
+              className="h-9 rounded-[4px] bg-white shadow-sm"
               data-testid={`absence-day-release-reason-${day.id}`}
             />
             <p className="mt-1.5 text-xs text-slate-500">
@@ -318,8 +318,8 @@ function DayRow({ absence, day, candidates, onChanged }) {
             </p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => { setReleasing(false); setReleaseReason(""); }} disabled={saving} className="h-8 bg-white text-xs">Back</Button>
-            <Button size="sm" onClick={release} disabled={saving} className="h-8 bg-amber-600 text-xs text-white hover:bg-amber-700" data-testid={`absence-day-release-confirm-${day.id}`}>
+            <Button size="sm" variant="outline" onClick={() => { setReleasing(false); setReleaseReason(""); }} disabled={saving} className="h-8 rounded-[4px] bg-white text-xs">Back</Button>
+            <Button size="sm" onClick={release} disabled={saving} className="h-8 rounded-[4px] bg-amber-600 text-xs text-white hover:bg-amber-700" data-testid={`absence-day-release-confirm-${day.id}`}>
               Release day
             </Button>
           </div>
@@ -358,46 +358,44 @@ function AbsenceDetail({ absenceId, onClose, onChanged }) {
 
   const changed = () => { load(); onChanged(); };
   const days = data?.days || [];
-  // Counted off the rows rather than the payload's counts, so the footer and the list above
-  // it are the same pass over the same days.
-  const counts = useMemo(() => {
-    const out = { waiting: 0, reassigned: 0, released: 0, done: 0 };
-    days.forEach((d) => { out[d.state in out ? d.state : "waiting"] += 1; });
-    return out;
-  }, [days]);
+  const Line = ({ label, children }) => (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-0.5 break-words text-sm text-slate-700">{children || "—"}</p>
+    </div>
+  );
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-[2px] sm:p-4"
+      className="fixed inset-0 z-[60] !mt-0 flex items-center justify-center bg-black/50 p-3 sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5" data-testid="physio-absence-detail">
-        {/* Header */}
-        <div className="flex items-start gap-3 px-5 pb-4 pt-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-100">
-            <UserX className="h-5 w-5" />
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl" data-testid="physio-absence-detail">
+        {/* The Send for Review popup's header: one row, one size, the popup's name just
+            before the X and off on a phone. The physio's name gives way first, so the date
+            always reads. No footer: every row saves itself and the X closes it. */}
+        <div className="flex shrink-0 items-center gap-4 bg-slate-500 px-5 py-3 text-[12px] font-semibold uppercase leading-5 text-white [font-family:Inter,sans-serif]" data-testid="physio-absence-detail-header">
+          <div className="flex min-w-0 flex-1 gap-1">
+            <p className="truncate">{data?.physio_name || "Physio"}</p>
+            {data?.date ? <p className="shrink-0 whitespace-nowrap">· {longDate(data.date)}</p> : null}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Physio absence</p>
-            <h3 className="truncate text-lg font-semibold leading-tight text-slate-900">{data?.physio_name || "Physio"}</h3>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-              <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-inset ring-rose-100">
-                <CalendarX className="h-3 w-3" /> {longDate(data?.date) || "—"}
-              </span>
-              {data?.reason && <span className="truncate">{data.reason}</span>}
-              <span className="truncate">Marked by <span className="font-medium text-slate-700">{data?.marked_by || "—"}</span></span>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="-mr-1 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
-            <X className="h-5 w-5" />
+          <p className="hidden shrink-0 whitespace-nowrap sm:block">Physio Absence</p>
+          <button type="button" onClick={onClose} title="Close" aria-label="Close" className="shrink-0 text-white hover:opacity-80" data-testid="physio-absence-detail-close">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto border-t border-slate-200 px-5 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          {data && (
+            <div className="grid grid-cols-2 gap-3 rounded-[4px] border border-slate-200 bg-slate-50/60 p-3" data-testid="physio-absence-detail-info">
+              <Line label="Reason">{data.reason}</Line>
+              <Line label="Marked By">{data.marked_by}</Line>
+            </div>
+          )}
           {loading && !data ? (
             <p className="py-10 text-center text-sm text-slate-400">Loading…</p>
           ) : days.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center">
+            <div className="rounded-[4px] border border-dashed border-slate-200 py-10 text-center">
               <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-200" />
               <p className="text-sm text-slate-400">No patients were booked with this physio on this day.</p>
             </div>
@@ -414,13 +412,6 @@ function AbsenceDetail({ absenceId, onClose, onChanged }) {
               ))}
             </ul>
           )}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/60 px-5 py-3">
-          <p className="text-xs text-slate-400">
-            {days.length > 0 && counts.waiting === 0 ? "Every patient has a plan for this day." : "Changes save as you make them."}
-          </p>
-          <Button variant="outline" size="sm" onClick={onClose} className="bg-white">Close</Button>
         </div>
       </div>
     </div>
