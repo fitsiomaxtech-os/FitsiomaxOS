@@ -223,17 +223,20 @@ function SlotPicker({ session, days, onPick, onClose, onBooked }) {
     setCursor({ y, m: m - 1 });
   }, [openDates]);
 
-  // The course so far: the days the patient came to and the ones they missed, by date, so
-  // the calendar marks them. One date can hold both, and one day can be missed twice.
+  // The course by date, so the calendar marks it: the days the patient came to, the ones
+  // they missed and the ones still booked, which are why those dates cannot be picked. One
+  // date can hold more than one of them, and one day can be missed twice.
   const presentDays = useMemo(() => session.present_days || [], [session.present_days]);
   const absentDays = useMemo(() => session.absent_days || [], [session.absent_days]);
+  const bookedDays = useMemo(() => session.booked_days || [], [session.booked_days]);
   const attendance = useMemo(() => {
     const map = {};
-    const on = (d) => (map[d] = map[d] || { present: [], absent: [] });
+    const on = (d) => (map[d] = map[d] || { present: [], absent: [], booked: [] });
     presentDays.forEach((x) => { if (x.date) on(x.date).present.push(x); });
     absentDays.forEach((x) => { if (x.date) on(x.date).absent.push(x); });
+    bookedDays.forEach((x) => { if (x.date) on(x.date).booked.push(x); });
     return map;
-  }, [presentDays, absentDays]);
+  }, [presentDays, absentDays, bookedDays]);
 
   // The grid opens on the first month with a free slot, which is usually past the days
   // already worked. The Present and Absent counts page it back to the latest of theirs.
@@ -415,6 +418,14 @@ function SlotPicker({ session, days, onPick, onClose, onBooked }) {
                   const marks = attendance[d];
                   const wasPresent = !!marks?.present.length;
                   const wasAbsent = !!marks?.absent.length;
+                  const isBooked = !!marks?.booked.length;
+                  // The day number, as the assign Slot Picker badges a completed day. A date
+                  // holding two kinds shows one in each corner; the hover names them all.
+                  const badges = [
+                    wasPresent && { kind: "present", day: marks.present[0].day || "P", fill: "bg-emerald-500" },
+                    wasAbsent && { kind: "absent", day: marks.absent[0].day || "A", fill: "bg-rose-500" },
+                    isBooked && { kind: "booked", day: marks.booked[0].day || "B", fill: "bg-slate-500" },
+                  ].filter(Boolean).slice(0, 2);
                   return (
                     <button
                       key={day}
@@ -430,35 +441,31 @@ function SlotPicker({ session, days, onPick, onClose, onBooked }) {
                           ? "border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
                           : dayOpen > 0
                           ? "text-slate-600 hover:bg-slate-100"
-                          : "cursor-not-allowed text-slate-300"
+                          : `border border-slate-300 bg-slate-100 text-slate-500 ${isBooked ? "hover:bg-slate-200" : "cursor-not-allowed"}`
                       }`}
                       title={[
                         ...(marks?.present || []).map((x) => `${dayNoun} ${x.day || ""} · Present`),
                         ...(marks?.absent || []).map((x) => `${dayNoun} ${x.day || ""} · Absent${x.remarks ? ` · ${x.remarks}` : ""}`),
+                        ...(marks?.booked || []).map((x) => `${dayNoun} ${x.day || ""} · Booked · ${to12h(x.time)}`),
                         dayOpen > 0
                           ? `${dayOpen} slot${dayOpen > 1 ? "s" : ""} open`
-                          : marks ? "" : d < today ? "Already past" : "No slots free",
+                          : marks ? ""
+                          : d < today ? "Already past"
+                          : d <= courseEnd.split("T")[0] ? `Blocked · booked until ${shortDate(courseEnd.split("T")[0])}`
+                          : "No slots free",
                       ].filter(Boolean).join("\n")}
                       data-testid={`missed-class-date-${d}`}
                     >
                       {day}
-                      {/* The day number, as the assign Slot Picker badges a completed day. */}
-                      {wasPresent && (
+                      {badges.map((b, n) => (
                         <span
-                          className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white shadow-sm"
-                          data-testid={`missed-class-present-${d}`}
+                          key={b.kind}
+                          className={`absolute -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-sm ${b.fill} ${n === 0 ? "-right-0.5" : "-left-0.5"}`}
+                          data-testid={`missed-class-${b.kind}-${d}`}
                         >
-                          {marks.present[0].day || "P"}
+                          {b.day}
                         </span>
-                      )}
-                      {wasAbsent && (
-                        <span
-                          className={`absolute -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white shadow-sm ${wasPresent ? "-left-0.5" : "-right-0.5"}`}
-                          data-testid={`missed-class-absent-${d}`}
-                        >
-                          {marks.absent[0].day || "A"}
-                        </span>
-                      )}
+                      ))}
                       {dayOpen > 0 && !isFocused && (
                         <span className="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-400" />
                       )}
@@ -494,6 +501,8 @@ function SlotPicker({ session, days, onPick, onClose, onBooked }) {
               <div className="mt-3 hidden flex-wrap items-center gap-2.5 text-[11px] font-semibold text-slate-500 sm:flex">
                 <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> Present day</span>
                 <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" /> Absent day</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-500" /> Booked day</span>
+                <span className="flex items-center gap-1" data-testid="missed-class-legend-blocked"><span className="inline-block h-2.5 w-2.5 rounded-[3px] border border-slate-300 bg-slate-100" /> Blocked day</span>
                 <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> Slots open</span>
               </div>
             </div>
@@ -517,6 +526,13 @@ function SlotPicker({ session, days, onPick, onClose, onBooked }) {
                       ABSENT
                       <span className="ml-2 font-medium text-rose-500">{dayNoun} {x.day}</span>
                       {x.remarks && <span className="ml-2 font-medium text-rose-500">{x.remarks}</span>}
+                    </p>
+                  ))}
+                  {pickedMarks.booked.map((x, i) => (
+                    <p key={`b-${i}`} className="rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-[12px] font-bold text-slate-700">
+                      BOOKED
+                      <span className="ml-2 font-medium text-slate-500">{dayNoun} {x.day}</span>
+                      <span className="ml-2 font-medium text-slate-500">{to12h(x.time)}</span>
                     </p>
                   ))}
                 </div>

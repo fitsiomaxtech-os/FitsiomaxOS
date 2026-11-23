@@ -171,10 +171,10 @@ def _course_end(siblings: list) -> str:
 
 
 def _course_attendance(rows: list, num_field: str) -> tuple:
-    """The days of one course the patient came to, and the ones they missed, by date.
+    """The days of one course attended, missed, and still booked ahead, each by date.
 
     An absence is an entry on a day rather than a day of its own: the day moves on and is
-    worked later, so one day can be both, and one day can be missed more than once.
+    worked later, so one day can be attended and missed, and missed more than once.
     """
     present = [
         {
@@ -191,7 +191,16 @@ def _course_attendance(rows: list, num_field: str) -> tuple:
         }
         for r in rows for ab in r.get("absences") or []
     ]
-    return sorted(present, key=lambda d: d["date"]), sorted(absent, key=lambda d: d["date"])
+    booked = []
+    for r in rows:
+        day, _, time = (r.get("slot_time") or "").strip().partition("T")
+        if day and r.get("status") != "completed":
+            booked.append({"day": r.get(num_field), "date": day, "time": time})
+    return (
+        sorted(present, key=lambda d: d["date"]),
+        sorted(absent, key=lambda d: d["date"]),
+        sorted(booked, key=lambda d: (d["date"], d["time"])),
+    )
 
 
 class ScheduleSessionInput(BaseModel):
@@ -254,8 +263,8 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
                 continue
             course = by_lead.get(s.get("lead_id"), [])
             bounds[s["id"]] = _course_end([r for r in course if r.get("id") != s.get("id")])
-            # What the picker marks on its calendar: the days attended and the days missed.
-            s["present_days"], s["absent_days"] = _course_attendance(course, num_field)
+            # What the picker marks on its calendar: the days attended, missed and booked.
+            s["present_days"], s["absent_days"], s["booked_days"] = _course_attendance(course, num_field)
 
         for row in siblings:
             for ab in row.get("absences") or []:
