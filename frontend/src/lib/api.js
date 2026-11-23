@@ -295,6 +295,11 @@ export const publicAppointmentPdfUrl = (token) => `${BACKEND_URL}/api/v3/public/
 // Saving it blank puts the standard message back.
 export const getAppointmentMessage = async (branchId) => (await api.get(`/branches/${branchId}/appointment-message`)).data;
 export const saveAppointmentMessage = async (branchId, template) => (await api.put(`/branches/${branchId}/appointment-message`, { template })).data;
+// Admin Setting > Branch Location: the map link that message carries. Resolve asks the
+// server where a Maps short link points, so the popup can draw it.
+export const getBranchLocation = async (branchId) => (await api.get(`/branches/${branchId}/location`)).data;
+export const saveBranchLocation = async (branchId, mapLocation) => (await api.put(`/branches/${branchId}/location`, { map_location: mapLocation })).data;
+export const resolveBranchLocationLink = async (branchId, link) => (await api.get(`/branches/${branchId}/location/resolve`, { params: { link } })).data;
 // Settings > Consultation Form: the paper Offline Consultation Form, kept per branch.
 export const listConsultationForms = async (branchId, q = "", { leadId } = {}) => (await api.get(`/branches/${branchId}/consultation-forms`, { params: { ...(q ? { q } : {}), ...(leadId ? { lead_id: leadId } : {}) } })).data;
 export const getConsultationForm = async (branchId, id) => (await api.get(`/branches/${branchId}/consultation-forms/${id}`)).data;

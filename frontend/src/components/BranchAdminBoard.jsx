@@ -49,7 +49,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock,
+  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock, MapPin,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -107,6 +107,7 @@ import { PullFromSheetButton } from "@/components/PullFromSheetButton";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { AppointmentMessageEditor } from "@/components/branch/AppointmentMessageEditor";
+import { BranchLocationDialog } from "@/components/branch/BranchLocationDialog";
 import { ConsultationFormDialog } from "@/components/branch/ConsultationFormDialog";
 import { LeadConsultationFormPopup } from "@/components/branch/LeadConsultationFormPopup";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
@@ -1072,6 +1073,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   // The same gear → Appointment Msg Editor: the WhatsApp welcome Pre Sales sends.
   const [apptMsgOpen, setApptMsgOpen] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
   // The same gear → Consultation Form: a view of its own in the board's place, like a tab,
   // though it has no button on the strip. Kept mounted once opened (hidden while another
   // tab is up), so a half-filled form is still there on the way back.
@@ -2214,6 +2216,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
               <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setLocationOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-location">
+              <MapPin aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Branch Location</span>
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={openConsultForms} className="gap-2.5 py-2" data-testid="branch-settings-menu-consult-form">
               <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
               <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
@@ -2241,6 +2247,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       )}
 
       {apptMsgOpen && <AppointmentMessageEditor branchId={branchId} onClose={() => setApptMsgOpen(false)} />}
+      {locationOpen && <BranchLocationDialog branchId={branchId} onClose={() => setLocationOpen(false)} />}
 
       {profileOpen && (
         <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
@@ -2974,6 +2981,10 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <DropdownMenuItem onSelect={() => setApptMsgOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-appt-msg">
                     <MessageSquareText aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Appointment Msg Editor</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setLocationOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-location">
+                    <MapPin aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Branch Location</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={openConsultForms} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-consult-form">
                     <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />

@@ -8,6 +8,9 @@ import logging
 import os
 import re
 import uuid
+from urllib.parse import parse_qs, quote, urljoin, urlsplit
+
+import httpx
 
 from database import v3_col
 from branch_calendar import is_leave
@@ -319,8 +322,10 @@ def _appt_card_html(a: dict) -> str:
     # The map link is a plain anchor rather than an embed: an iframe would need a keyed
     # Maps API and would be blocked in the in-app browsers this page mostly opens in.
     map_html = ""
+    # Through branch_map_href: a branch saved with an address or "lat,lng" needs a Maps
+    # link made of it, and only an http(s) value is ever used as the href as-is.
     if a["map_location"]:
-        map_html = (f'<a class="map" href="{_esc(a["map_location"])}" target="_blank" '
+        map_html = (f'<a class="map" href="{_esc(branch_map_href(a["map_location"]))}" target="_blank" '
                     f'rel="noopener noreferrer">Open in Maps</a>')
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -2833,6 +2838,102 @@ async def v3_set_appointment_message(
             upsert=True,
         )
     return await v3_get_appointment_message(branch_id, user)
+
+
+# Admin Setting > Branch Location: the branch's map_location, the link under "{branch}
+# location:" in that welcome. Super Admin sets it on the branch form; this is the Branch
+# Admin's own way in. An address, a "lat,lng" or a Maps link, stored as typed -- the
+# readers (apptMapUrl, branch_map_href) turn the first two into a Maps link.
+BRANCH_LOCATION_MAX_LEN = 1000
+# The Maps app's Share button gives a short link, which a map frame can't draw. The popup
+# asks where it points. Only Google's own short and Maps hosts are followed, so the server
+# can't be made to fetch anything else.
+_MAPS_SHORT_HOSTS = {"maps.app.goo.gl", "goo.gl", "g.co"}
+_GOOGLE_MAPS_HOST = re.compile(r"^((www|maps)\.)?google\.(com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$")
+
+
+def branch_map_href(loc: str) -> str:
+    """map_location as a link: kept if it is one, otherwise searched on Google Maps."""
+    loc = (loc or "").strip()
+    if not loc:
+        return ""
+    if re.match(r"^https?://", loc, re.I):
+        return loc
+    return "https://www.google.com/maps?q=" + quote(loc)
+
+
+class BranchLocationInput(BaseModel):
+    map_location: str = ""
+
+
+@router.get("/branches/{branch_id}/location")
+async def v3_get_branch_location(
+    branch_id: str,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    _appt_msg_branch_guard(user, branch_id)
+    branch = await v3_col("branches").find_one(
+        {"id": branch_id}, {"_id": 0, "branch_name": 1, "address": 1, "map_location": 1}
+    )
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    return {
+        "branch_name": branch.get("branch_name") or "",
+        "address": branch.get("address") or "",
+        "map_location": branch.get("map_location") or "",
+    }
+
+
+@router.put("/branches/{branch_id}/location")
+async def v3_set_branch_location(
+    branch_id: str,
+    payload: BranchLocationInput,
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """Saves the branch's location. Blank clears it, and the message falls back to the
+    branch address."""
+    _appt_msg_branch_guard(user, branch_id)
+    if not await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Branch not found")
+    value = " ".join((payload.map_location or "").split())
+    if len(value) > BRANCH_LOCATION_MAX_LEN:
+        raise HTTPException(status_code=400, detail=f"Location must be under {BRANCH_LOCATION_MAX_LEN} characters")
+    await v3_col("branches").update_one({"id": branch_id}, {"$set": {"map_location": value}})
+    return await v3_get_branch_location(branch_id, user)
+
+
+@router.get("/branches/{branch_id}/location/resolve")
+async def v3_resolve_branch_location(
+    branch_id: str,
+    link: str = Query(..., max_length=BRANCH_LOCATION_MAX_LEN),
+    user: V3UserOut = Depends(v3_require_roles("branch_admin", "super_admin", "business_dev")),
+):
+    """Where a Google Maps short link points, so the popup can draw it on the map."""
+    _appt_msg_branch_guard(user, branch_id)
+    url = link.strip()
+    try:
+        async with httpx.AsyncClient(timeout=6.0, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            for _ in range(6):
+                parts = urlsplit(url)
+                host = (parts.hostname or "").lower()
+                if parts.scheme not in ("http", "https"):
+                    break
+                # Outside the EU this never appears; inside it, the real link rides in `continue`.
+                if host == "consent.google.com":
+                    url = (parse_qs(parts.query).get("continue") or [""])[0]
+                    continue
+                if _GOOGLE_MAPS_HOST.match(host):
+                    return {"url": url}
+                if host not in _MAPS_SHORT_HOSTS:
+                    raise HTTPException(status_code=400, detail="Only a Google Maps link can be shown on the map")
+                r = await client.get(url)
+                nxt = r.headers.get("location")
+                if not r.is_redirect or not nxt:
+                    break
+                url = urljoin(url, nxt)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Couldn't open that link")
+    raise HTTPException(status_code=400, detail="Couldn't find the place this link points to")
 
 
 
