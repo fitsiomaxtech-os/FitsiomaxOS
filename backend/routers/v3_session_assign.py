@@ -170,6 +170,30 @@ def _course_end(siblings: list) -> str:
     return max(((r.get("slot_time") or "").strip() for r in siblings), default="")
 
 
+def _course_attendance(rows: list, num_field: str) -> tuple:
+    """The days of one course the patient came to, and the ones they missed, by date.
+
+    An absence is an entry on a day rather than a day of its own: the day moves on and is
+    worked later, so one day can be both, and one day can be missed more than once.
+    """
+    present = [
+        {
+            "day": r.get(num_field),
+            "date": ((r.get("slot_time") or "").strip() or r.get("completed_at") or "")[:10],
+        }
+        for r in rows if r.get("status") == "completed"
+    ]
+    absent = [
+        {
+            "day": ab.get("session_number") or r.get(num_field),
+            "date": ab.get("date") or "",
+            "remarks": ab.get("remarks") or "",
+        }
+        for r in rows for ab in r.get("absences") or []
+    ]
+    return sorted(present, key=lambda d: d["date"]), sorted(absent, key=lambda d: d["date"])
+
+
 class ScheduleSessionInput(BaseModel):
     slot_time: str
 
@@ -217,8 +241,9 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
 
         siblings = await v3_col(collection).find(
             {"lead_id": {"$in": ids}},
-            {"_id": 0, "id": 1, "lead_id": 1, num_field: 1, "slot_time": 1, "absences": 1},
-        ).to_list(2000)
+            {"_id": 0, "id": 1, "lead_id": 1, num_field: 1, "slot_time": 1, "absences": 1,
+             "status": 1, "completed_at": 1},
+        ).to_list(None)
 
         by_lead: dict = {}
         for row in siblings:
@@ -227,8 +252,10 @@ async def unscheduled_sessions(user: V3UserOut = Depends(v3_require_roles("branc
         for s in rows:
             if s.get("track") != track:
                 continue
-            others = [r for r in by_lead.get(s.get("lead_id"), []) if r.get("id") != s.get("id")]
-            bounds[s["id"]] = _course_end(others)
+            course = by_lead.get(s.get("lead_id"), [])
+            bounds[s["id"]] = _course_end([r for r in course if r.get("id") != s.get("id")])
+            # What the picker marks on its calendar: the days attended and the days missed.
+            s["present_days"], s["absent_days"] = _course_attendance(course, num_field)
 
         for row in siblings:
             for ab in row.get("absences") or []:

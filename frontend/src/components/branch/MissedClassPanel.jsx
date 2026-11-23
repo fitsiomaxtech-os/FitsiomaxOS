@@ -192,6 +192,27 @@ function SlotPicker({ session, onClose, onBooked }) {
     setCursor({ y, m: m - 1 });
   }, [openDates]);
 
+  // The course so far: the days the patient came to and the ones they missed, by date, so
+  // the calendar marks them. One date can hold both, and one day can be missed twice.
+  const presentDays = useMemo(() => session.present_days || [], [session.present_days]);
+  const absentDays = useMemo(() => session.absent_days || [], [session.absent_days]);
+  const attendance = useMemo(() => {
+    const map = {};
+    const on = (d) => (map[d] = map[d] || { present: [], absent: [] });
+    presentDays.forEach((x) => { if (x.date) on(x.date).present.push(x); });
+    absentDays.forEach((x) => { if (x.date) on(x.date).absent.push(x); });
+    return map;
+  }, [presentDays, absentDays]);
+
+  // The grid opens on the first month with a free slot, which is usually past the days
+  // already worked. The Present and Absent counts page it back to the latest of theirs.
+  const showMonthOf = (days) => {
+    const last = days[days.length - 1]?.date;
+    if (!last) return;
+    const [y, m] = last.split("-").map(Number);
+    setCursor({ y, m: m - 1 });
+  };
+
   const step = (delta) => setCursor(({ y, m }) => {
     const d = new Date(y, m + delta, 1);
     return { y: d.getFullYear(), m: d.getMonth() };
@@ -215,6 +236,7 @@ function SlotPicker({ session, onClose, onBooked }) {
 
   const dayTimes = pickedDate ? slotsByDate[pickedDate] || [] : [];
   const dayNoun = session.track === "rehab" ? "Rehab Day" : "Day";
+  const pickedMarks = pickedDate ? attendance[pickedDate] : null;
 
   const pickDate = (d) => {
     setPickedDate(pickedDate === d ? null : d);
@@ -241,7 +263,7 @@ function SlotPicker({ session, onClose, onBooked }) {
               {headerDate(pickedDate)}
             </span>
           )}
-          <span className="ml-auto shrink-0 text-[13px] font-bold text-slate-800 sm:text-[15px]">Slot Picker</span>
+          <span className="ml-auto shrink-0 text-[13px] font-bold text-slate-800 sm:text-[15px]" data-testid="missed-class-picker-heading">Slot Picker to Give a Date</span>
           <button
             type="button"
             onClick={onClose}
@@ -294,18 +316,6 @@ function SlotPicker({ session, onClose, onBooked }) {
               Couldn't load {session.physio_name || "this physio"}'s calendar.
             </p>
           </div>
-        ) : openDates.length === 0 ? (
-          <div className="flex-1 p-4">
-            <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-10 text-center text-sm text-amber-800" data-testid="missed-class-no-slots">
-              {session.physio_name || "This physio"} has no free slots published
-              {courseEnd
-                ? ` after ${longDate(courseEnd.split("T")[0])}, when ${session.lead_name || "this patient"}'s booked days run out.`
-                : " from today on."}
-              <span className="mt-1 block text-xs font-normal text-amber-700">
-                Open some days in MANAGEMENT → PHYSIO CALENDAR, then come back.
-              </span>
-            </p>
-          </div>
         ) : (
           <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
             {/* Month grid — a dot marks a day this physio still has room on */}
@@ -349,25 +359,53 @@ function SlotPicker({ session, onClose, onBooked }) {
                   const d = isoDate(cursor.y, cursor.m, day);
                   const dayOpen = openOn(d);
                   const isFocused = pickedDate === d;
+                  const marks = attendance[d];
+                  const wasPresent = !!marks?.present.length;
+                  const wasAbsent = !!marks?.absent.length;
                   return (
                     <button
                       key={day}
                       type="button"
                       onClick={() => pickDate(d)}
-                      disabled={dayOpen === 0}
+                      disabled={dayOpen === 0 && !marks}
                       className={`relative h-9 rounded-md text-[13px] font-semibold transition-all ${
                         isFocused
                           ? "bg-violet-600 text-white shadow-md ring-2 ring-violet-300 ring-offset-1"
+                          : wasPresent
+                          ? "border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : wasAbsent
+                          ? "border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
                           : dayOpen > 0
                           ? "text-slate-600 hover:bg-slate-100"
                           : "cursor-not-allowed text-slate-300"
                       }`}
-                      title={dayOpen > 0
-                        ? `${dayOpen} slot${dayOpen > 1 ? "s" : ""} open`
-                        : d < today ? "Already past" : "No slots free"}
+                      title={[
+                        ...(marks?.present || []).map((x) => `${dayNoun} ${x.day || ""} · Present`),
+                        ...(marks?.absent || []).map((x) => `${dayNoun} ${x.day || ""} · Absent${x.remarks ? ` · ${x.remarks}` : ""}`),
+                        dayOpen > 0
+                          ? `${dayOpen} slot${dayOpen > 1 ? "s" : ""} open`
+                          : marks ? "" : d < today ? "Already past" : "No slots free",
+                      ].filter(Boolean).join("\n")}
                       data-testid={`missed-class-date-${d}`}
                     >
                       {day}
+                      {/* The day number, as the assign Slot Picker badges a completed day. */}
+                      {wasPresent && (
+                        <span
+                          className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white shadow-sm"
+                          data-testid={`missed-class-present-${d}`}
+                        >
+                          {marks.present[0].day || "P"}
+                        </span>
+                      )}
+                      {wasAbsent && (
+                        <span
+                          className={`absolute -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white shadow-sm ${wasPresent ? "-left-0.5" : "-right-0.5"}`}
+                          data-testid={`missed-class-absent-${d}`}
+                        >
+                          {marks.absent[0].day || "A"}
+                        </span>
+                      )}
                       {dayOpen > 0 && !isFocused && (
                         <span className="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-400" />
                       )}
@@ -376,7 +414,33 @@ function SlotPicker({ session, onClose, onBooked }) {
                 })}
               </div>
 
-              <div className="mt-3 hidden flex-wrap items-center gap-2.5 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-500 sm:flex">
+              {/* How much of the course the patient came to. Each opens its latest month. */}
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => showMonthOf(presentDays)}
+                  disabled={presentDays.length === 0}
+                  className="flex items-center justify-between rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 enabled:hover:bg-emerald-100 disabled:cursor-default sm:text-[12px]"
+                  data-testid="missed-class-present-count"
+                >
+                  PRESENT
+                  <span className="font-semibold text-emerald-600">{presentDays.length} Day{presentDays.length === 1 ? "" : "s"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showMonthOf(absentDays)}
+                  disabled={absentDays.length === 0}
+                  className="flex items-center justify-between rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-700 enabled:hover:bg-rose-100 disabled:cursor-default sm:text-[12px]"
+                  data-testid="missed-class-absent-count"
+                >
+                  ABSENT
+                  <span className="font-semibold text-rose-600">{absentDays.length} Day{absentDays.length === 1 ? "" : "s"}</span>
+                </button>
+              </div>
+
+              <div className="mt-3 hidden flex-wrap items-center gap-2.5 text-[11px] font-semibold text-slate-500 sm:flex">
+                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> Present day</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" /> Absent day</span>
                 <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> Slots open</span>
               </div>
             </div>
@@ -385,15 +449,43 @@ function SlotPicker({ session, onClose, onBooked }) {
                 the calendar and the times are side-by-side columns that scroll on their
                 own; stacked on a phone, a scroller inside the body's own scroller traps the
                 times in a short box the last of them cannot be reached in. */}
-            <div className={`${pickedDate ? "" : "hidden sm:block"} w-full flex-shrink-0 p-3 sm:p-4 lg:flex-1 lg:overflow-y-auto`}>
-              {!pickedDate ? (
+            <div className={`${pickedDate || openDates.length === 0 ? "" : "hidden sm:block"} w-full flex-shrink-0 p-3 sm:p-4 lg:flex-1 lg:overflow-y-auto`}>
+              {/* What happened on the picked date, above any time still open on it. */}
+              {pickedMarks && (
+                <div className="mb-3 space-y-1.5" data-testid="missed-class-day-details">
+                  {pickedMarks.present.map((x, i) => (
+                    <p key={`p-${i}`} className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-700">
+                      PRESENT
+                      <span className="ml-2 font-medium text-emerald-600">{dayNoun} {x.day}</span>
+                    </p>
+                  ))}
+                  {pickedMarks.absent.map((x, i) => (
+                    <p key={`a-${i}`} className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-700">
+                      ABSENT
+                      <span className="ml-2 font-medium text-rose-500">{dayNoun} {x.day}</span>
+                      {x.remarks && <span className="ml-2 font-medium text-rose-500">{x.remarks}</span>}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {!pickedDate && openDates.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-10 text-center text-sm text-amber-800" data-testid="missed-class-no-slots">
+                  {session.physio_name || "This physio"} has no free slots published
+                  {courseEnd
+                    ? ` after ${longDate(courseEnd.split("T")[0])}, when ${session.lead_name || "this patient"}'s booked days run out.`
+                    : " from today on."}
+                  <span className="mt-1 block text-xs font-normal text-amber-700">
+                    Open some days in MANAGEMENT → PHYSIO CALENDAR, then come back.
+                  </span>
+                </p>
+              ) : !pickedDate ? (
                 <div className="flex h-full items-center justify-center py-10">
                   <div className="text-center">
                     <Calendar className="mx-auto mb-2 h-10 w-10 text-slate-200" />
                     <p className="text-sm text-slate-400">Pick a date to see this physio's open times</p>
                   </div>
                 </div>
-              ) : dayTimes.length === 0 ? (
+              ) : dayTimes.length === 0 ? pickedMarks ? null : (
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-8 text-center text-sm text-slate-400">
                   Nothing published on this day — open it in MANAGEMENT → PHYSIO CALENDAR first.
                 </p>
