@@ -248,7 +248,7 @@ export const PhysioBoard = ({ physioId, user, roleLabel, onLogout, toolbarLead =
         <PatientsTab physioId={physioId} onCountChange={setPatientsCount} toolbarSlot={slotFor("patients")} squareTable={squareTable} />
       </div>
       </div>
-      {!physioId && activeTab === "absence" && <PhysioAbsencePanel mode="physio" />}
+      {!physioId && activeTab === "absence" && <PhysioAbsencePanel mode="physio" toolbarSlot={slotFor("absence")} />}
 
       {/* My Profile stands in the board's place rather than over it, so the bar below stays
           put and Treatment takes the physio straight back — the page is left the way every

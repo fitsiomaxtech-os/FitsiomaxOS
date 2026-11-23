@@ -427,7 +427,8 @@ function AbsenceDetail({ absenceId, onClose, onChanged }) {
   );
 }
 
-export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
+// `toolbarSlot`: where the physio's board wants Refresh drawn, the right end of its tab row.
+export function PhysioAbsencePanel({ mode = "branch", branchId = null, toolbarSlot = null }) {
   const isPhysio = mode === "physio";
   const tileArrow = isPhysio ? true : "desk";
   const [data, setData] = useState({ absences: [], physios: [] });
@@ -503,8 +504,25 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
     }
   };
 
+  // The physio's own Refresh: the grey square every other tab of that board carries, in the
+  // same place on the tab row.
+  const physioRefresh = (
+    <Button
+      onClick={load}
+      disabled={loading}
+      title="Refresh"
+      aria-label="Refresh"
+      className="ml-auto h-10 w-10 shrink-0 bg-slate-500 p-0 text-white hover:bg-slate-600"
+      data-testid="physio-absence-refresh"
+    >
+      <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+    </Button>
+  );
+
   return (
     <div className="space-y-4" data-testid={`physio-absence-panel-${mode}`}>
+      {isPhysio && (toolbarSlot ? createPortal(physioRefresh, toolbarSlot) : <div className="flex">{physioRefresh}</div>)}
+
       {/* `arrow` on each tile: no corner disc and no icon, just the ledger card's chevron
           on a 5px corner, matching the Fitness, Review and Patients strips. On Branch
           Admin's board the chevron is from sm up only, as on every card there; the
@@ -518,9 +536,7 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
 
       {/* Mark absent */}
       <div className="rounded-xl border border-slate-200 bg-white p-4" data-testid="physio-absence-form">
-        <p className="mb-3 text-sm font-semibold text-slate-700">
-          {isPhysio ? "Mark yourself absent" : "Mark a physio absent"}
-        </p>
+        {!isPhysio && <p className="mb-3 text-sm font-semibold text-slate-700">Mark a physio absent</p>}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           {!isPhysio && (
             <label className="flex min-w-0 flex-1 flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -576,16 +592,19 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null }) {
         </div>
       </div>
 
-      {/* The sentence is dropped from Branch Admin's phone, where Refresh sits alone at
-          the right. */}
-      <div className="flex items-center justify-between gap-2">
-        <p className={`text-xs text-slate-500 ${isPhysio ? "" : "hidden sm:block"}`}>
-          Every patient booked on an absent day needs another physio or a new date, agreed with the patient.
-        </p>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="ml-auto shrink-0" data-testid="physio-absence-refresh">
-          <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
-      </div>
+      {/* Branch Admin's only: the physio's board has no guide text here and its Refresh is on
+          the tab row. The sentence is dropped from Branch Admin's phone, where Refresh sits
+          alone at the right. */}
+      {!isPhysio && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="hidden text-xs text-slate-500 sm:block">
+            Every patient booked on an absent day needs another physio or a new date, agreed with the patient.
+          </p>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading} className="ml-auto shrink-0" data-testid="physio-absence-refresh">
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
+      )}
 
       {shown.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 px-3 py-14 text-center" data-testid="physio-absence-empty">
