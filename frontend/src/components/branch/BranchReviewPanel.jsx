@@ -746,7 +746,7 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2 sm:px-5 sm:py-2.5">
               <div className="flex min-w-0 items-center gap-2">
                 <CalendarIcon className="h-4 w-4 shrink-0 text-sky-600" />
-                <p className="shrink-0 truncate text-sm font-semibold text-slate-900">Send to CONSULTANT</p>
+                <p className="shrink-0 truncate text-sm font-semibold text-slate-900">Send to Consultant</p>
                 <span className="ml-1 inline-flex min-w-0 items-center rounded-[4px] border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700" data-testid="branch-review-send-chip">
                   <span className="truncate">{sendDraft.review.lead_name} · {sendDraft.review.treatment_days} treatment days</span>
                 </span>
@@ -990,13 +990,6 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
                       </div>
                     )}
                   </>
-                )}
-
-                {sendDraft.review.physio_notes && (
-                  <div className="mt-4 rounded-[4px] border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Physio's Notes</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{sendDraft.review.physio_notes}</p>
-                  </div>
                 )}
 
                 <div className="mt-4">
