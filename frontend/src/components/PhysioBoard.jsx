@@ -1588,29 +1588,31 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
           </div>
         );
         const Report = ({ label, text, tone }) => (
-          <div className={`rounded-lg border p-3 ${tone}`}>
+          <div className={`rounded-[4px] border p-3 ${tone}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">{label}</p>
             <p className="mt-1 whitespace-pre-wrap text-sm">{text?.trim() || "Not written yet."}</p>
           </div>
         );
         return (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3" onClick={(e) => { if (e.target === e.currentTarget) setViewing(null); }}>
-            <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" data-testid="physio-review-view-modal">
-              <div className="flex shrink-0 items-center justify-between gap-3 bg-slate-500 px-5 py-4 text-white">
-                <div className="min-w-0">
-                  <p className="truncate text-lg font-bold">{viewing.lead_name}</p>
-                  <p className="truncate text-xs text-white/80">
-                    {viewing.patient_number || "—"}
-                    {rev?.review_number || viewing.review_number ? ` · ${ordinal(rev?.review_number || viewing.review_number)} Review` : ""}
-                  </p>
+            <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl" data-testid="physio-review-view-modal">
+              {/* The Send for Review popup's header: one row, one size. The name gives way
+                  first, so the patient number and the review stay readable. */}
+              <div className="flex shrink-0 items-center gap-4 bg-slate-500 px-5 py-3 text-[12px] font-semibold uppercase leading-5 text-white [font-family:Inter,sans-serif]" data-testid="physio-review-view-header">
+                <div className="flex min-w-0 flex-1 gap-1">
+                  <p className="truncate">{viewing.lead_name}</p>
+                  {viewing.patient_number ? <p className="shrink-0 whitespace-nowrap">· {viewing.patient_number}</p> : null}
+                  {rev?.review_number || viewing.review_number
+                    ? <p className="shrink-0 whitespace-nowrap">· {ordinal(rev?.review_number || viewing.review_number)} Review</p>
+                    : null}
                 </div>
-                <button onClick={() => setViewing(null)} className="rounded-full p-1.5 text-white/80 hover:bg-white/20" aria-label="Close" data-testid="physio-review-view-close">
+                <button type="button" onClick={() => setViewing(null)} title="Close" aria-label="Close" className="shrink-0 text-white hover:opacity-80" data-testid="physio-review-view-close">
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="grid grid-cols-2 gap-3 rounded-[4px] border border-slate-200 bg-slate-50/60 p-3">
                   <Line label="Package">{rev?.session_package_name || viewing.session_package_name}</Line>
                   <Line label="Treatment Days Done">{viewing.treatment_days}</Line>
                   <Line label="Status">
@@ -1633,7 +1635,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
                     <Report label="Suggestions" text={rev.head_physio_suggestions} tone="border-emerald-200 bg-emerald-50 text-emerald-900" />
                   </>
                 ) : (
-                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-400">
+                  <p className="rounded-[4px] border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-400">
                     No review has been raised for this patient yet.
                   </p>
                 )}
