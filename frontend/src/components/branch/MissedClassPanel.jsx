@@ -55,18 +55,15 @@ const headerDate = (iso) => {
     : d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 };
 
-/** How many of a patient's absences the list spells out before the rest go on the hover. */
-const ABSENCES_SHOWN = 3;
-
 /** Rehab and treatment are separate courses with their own numbering, so a day says which. */
 const dayName = (s) => `${s.track === "rehab" ? "Rehab Day" : "Day"} ${s.session_number}`;
 
 /**
  * The waiting days gathered one entry per patient, in the order the server lists them.
  *
- * Every waiting day of a course carries that whole course's absences, so they are taken once
- * per course rather than once per day — added up day by day, three waiting days would count
- * each absence three times.
+ * Every waiting day of a course carries that whole course's absences, so they are counted
+ * once per course rather than once per day — added up day by day, three waiting days would
+ * count each absence three times.
  */
 const byPatient = (rows) => {
   const held = new Map();
@@ -84,8 +81,7 @@ const byPatient = (rows) => {
       name: days[0].lead_name || "Unknown",
       contact: days[0].patient_number || displayPhone(days[0].phone) || "—",
       physios: [...new Set(days.map((d) => d.physio_name).filter(Boolean))],
-      // Latest first: the last reason given is the one that says whether they will come.
-      absent: [...courses.values()].flat().sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+      absentCount: [...courses.values()].flat().length,
     };
   });
 };
@@ -675,18 +671,17 @@ export default function MissedClassPanel() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          {/* A floor width so a phone scrolls the table inside its box. Seven fixed columns
+          {/* A floor width so a phone scrolls the table inside its box. Six fixed columns
               squeezed any tighter leave "Give a date" spilling out of its cell. */}
-          <table className="w-full min-w-[60rem] table-fixed text-left text-sm">
+          <table className="w-full min-w-[52rem] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="w-[6%] px-3 py-2.5">S.No</th>
-                <th className="w-[20%] px-3 py-2.5">Patient</th>
-                <th className="w-[16%] px-3 py-2.5">Day</th>
-                <th className="w-[13%] px-3 py-2.5">Physio</th>
-                <th className="w-[17%] px-3 py-2.5">Missed on</th>
-                <th className="w-[13%] whitespace-nowrap px-3 py-2.5">Absent Counts</th>
-                <th className="w-[15%] px-3 py-2.5 text-right">Action</th>
+                <th className="w-[23%] px-3 py-2.5">Patient</th>
+                <th className="w-[21%] px-3 py-2.5">Day</th>
+                <th className="w-[16%] px-3 py-2.5">Physio</th>
+                <th className="w-[16%] whitespace-nowrap px-3 py-2.5">Absent Counts</th>
+                <th className="w-[18%] px-3 py-2.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -715,34 +710,12 @@ export default function MissedClassPanel() {
                     </div>
                   </td>
                   <td className="truncate px-3 py-3 text-xs text-slate-600" title={p.physios.join(", ")}>{p.physios.join(", ") || "—"}</td>
-                  {/* The dates missed, and what the physio wrote against each — the only
-                      context for whether the patient is likely to make a new day. */}
-                  <td
-                    className="px-3 py-3"
-                    title={p.absent.map((x) => `${shortDate(x.date) || "No date"}${x.remarks ? ` · ${x.remarks}` : ""}`).join("\n")}
-                  >
-                    {p.absent.length === 0 ? (
-                      <span className="text-xs text-slate-300">—</span>
-                    ) : (
-                      <>
-                        {p.absent.slice(0, ABSENCES_SHOWN).map((x, n) => (
-                          <p key={n} className="truncate text-xs leading-5 text-slate-600">
-                            {shortDate(x.date) || "No date"}
-                            {x.remarks && <span className="ml-1.5 text-[10px] text-slate-400">{x.remarks}</span>}
-                          </p>
-                        ))}
-                        {p.absent.length > ABSENCES_SHOWN && (
-                          <p className="text-[10px] font-semibold text-slate-400">+{p.absent.length - ABSENCES_SHOWN} more</p>
-                        )}
-                      </>
-                    )}
-                  </td>
                   <td className="px-3 py-3">
                     <span
                       className="whitespace-nowrap rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700"
                       data-testid={`missed-class-absent-total-${p.key}`}
                     >
-                      {p.absent.length} Day{p.absent.length === 1 ? "" : "s"}
+                      {p.absentCount} Day{p.absentCount === 1 ? "" : "s"}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-right">
