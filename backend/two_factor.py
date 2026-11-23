@@ -47,7 +47,9 @@ OTP_TTL_MINUTES = 5
 MAX_ATTEMPTS = 5
 RESEND_COOLDOWN_SECONDS = 60
 
-PURPOSES = ("login", "enable", "disable", "email_verify", "email_login")
+# email_verify_admin: an admin (Super Admin, BDE, Branch Admin) verifying somebody else's
+# Email ID from HR -- the code goes to that person, who reads it out to the admin.
+PURPOSES = ("login", "enable", "disable", "email_verify", "email_login", "email_verify_admin")
 
 _SUBJECTS = {
     "login": "FitsiomaxOS — your sign-in code",
@@ -55,6 +57,7 @@ _SUBJECTS = {
     "disable": "FitsiomaxOS — confirm turning off two-factor authentication",
     "email_verify": "FitsiomaxOS — verify your Email ID",
     "email_login": "FitsiomaxOS — verify your Email ID to sign in",
+    "email_verify_admin": "FitsiomaxOS — verify your Email ID",
 }
 
 _LINES = {
@@ -63,6 +66,7 @@ _LINES = {
     "disable": "You asked to turn OFF two-factor authentication for your FitsiomaxOS account. Enter this code to confirm.",
     "email_verify": "Enter this code in FitsiomaxOS to verify this Email ID for your login.",
     "email_login": "This is your first sign-in to FitsiomaxOS. Enter this code to verify your Email ID and finish signing in.",
+    "email_verify_admin": "Your admin is verifying this Email ID for your FitsiomaxOS login. Tell them this code to finish.",
 }
 
 _WARNINGS = {
@@ -71,6 +75,7 @@ _WARNINGS = {
     "disable": "If this wasn't you, ignore this email — two-factor authentication stays ON. Then change your password.",
     "email_verify": "If you did not ask for this, ignore this email. Nothing has changed.",
     "email_login": "If this wasn't you, tell your admin.",
+    "email_verify_admin": "This code only verifies your Email ID — it does not sign anybody in. If you did not expect it, ignore this email.",
 }
 
 

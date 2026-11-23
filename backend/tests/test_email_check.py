@@ -354,6 +354,59 @@ def test_verified_badge_names_the_mail_service(db):
     assert run(email_check.provider_of("")) is None
 
 
+# ---------------------------------------------------------------- an admin verifying a login
+
+BRANCH_ADMIN = V3UserOut(id="ba", full_name="BA", email="ba@gmail.com", role="branch_admin", branch_id="b1", created_at="2026-01-01")
+
+
+def test_admin_verifies_a_login_with_the_code_its_holder_reads_out(db):
+    add_user(db, "u1", "rabi@gmail.com")
+    ch = run(v3_hr.start_user_email_verify("u1", ADMIN))
+    assert db.sent[-1][0] == "rabi@gmail.com" and "Your admin is verifying" in db.sent[-1][2]
+    with pytest.raises(HTTPException) as e:
+        run(v3_hr.finish_user_email_verify("u1", v3_hr.UserEmailVerifyFinish(challenge_id=ch["challenge_id"], code="000000"), ADMIN))
+    assert e.value.status_code == 401
+    out = run(v3_hr.finish_user_email_verify("u1", v3_hr.UserEmailVerifyFinish(challenge_id=ch["challenge_id"], code=code_in(db)), ADMIN))
+    assert out["email_verified_at"] and db("users").rows[0]["email_verified_at"] == out["email_verified_at"]
+    with pytest.raises(HTTPException) as e:
+        run(v3_hr.start_user_email_verify("u1", ADMIN))
+    assert e.value.status_code == 400
+
+
+def test_admin_verify_code_is_tied_to_its_login(db):
+    add_user(db, "u1", "one@gmail.com")
+    add_user(db, "u2", "two@gmail.com")
+    ch = run(v3_hr.start_user_email_verify("u1", ADMIN))
+    with pytest.raises(HTTPException) as e:
+        run(v3_hr.finish_user_email_verify("u2", v3_hr.UserEmailVerifyFinish(challenge_id=ch["challenge_id"], code=code_in(db)), ADMIN))
+    assert e.value.status_code == 403
+    with pytest.raises(HTTPException):
+        run(v3_hr.resend_user_email_verify("u2", v3_hr.UserEmailVerifyResend(challenge_id=ch["challenge_id"]), ADMIN))
+    assert not db("users").rows[1].get("email_verified_at")
+
+
+def test_admin_verify_refuses_an_address_changed_while_the_code_was_out(db):
+    row = add_user(db, "u1", "old@gmail.com")
+    ch = run(v3_hr.start_user_email_verify("u1", ADMIN))
+    code = code_in(db)
+    row["email"] = "new@gmail.com"
+    with pytest.raises(HTTPException) as e:
+        run(v3_hr.finish_user_email_verify("u1", v3_hr.UserEmailVerifyFinish(challenge_id=ch["challenge_id"], code=code), ADMIN))
+    assert e.value.status_code == 409 and not row.get("email_verified_at")
+
+
+def test_branch_admin_verifies_only_their_own_branch(db):
+    db("employees").rows += [{"id": "e1", "branch_id": "b1"}, {"id": "e2", "branch_id": "b2"}]
+    add_user(db, "u1", "mine@gmail.com", employee_id="e1")
+    add_user(db, "u2", "theirs@gmail.com", employee_id="e2")
+    add_user(db, "u3", "hr@gmail.com", employee_id="e1", role="hr_admin")
+    assert run(v3_hr.start_user_email_verify("u1", BRANCH_ADMIN))["challenge_id"]
+    for uid in ("u2", "u3"):
+        with pytest.raises(HTTPException) as e:
+            run(v3_hr.start_user_email_verify(uid, BRANCH_ADMIN))
+        assert e.value.status_code == 403
+
+
 def test_email_check_endpoint_knows_whose_login_it_is(db):
     add_user(db, "u1", "rabi@gmail.com", employee_id="e1")
     ask = lambda **k: run(v3_hr.check_login_email(v3_hr.EmailCheckRequest(email="rabi@gmail.com", **k), ADMIN))  # noqa: E731

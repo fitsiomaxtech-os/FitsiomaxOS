@@ -20,6 +20,9 @@ import { toast } from "@/components/ui/sonner";
 import {
   checkMyEmail,
   finishMyEmailVerify,
+  hrFinishEmailVerify,
+  hrResendEmailVerify,
+  hrStartEmailVerify,
   MY_EMAIL_CHANGED_EVENT,
   resendMyEmailVerify,
   startMyEmailVerify,
@@ -233,9 +236,85 @@ export const EmailVerifiedTag = ({ verified, provider, testid }) => {
   );
 };
 
-// ---------- verifying my own ----------
-
 const Label = ({ children }) => <p className="mb-1 text-[11px] text-slate-400">{children}</p>;
+
+// ---------- verifying somebody else's ----------
+
+/**
+ * An admin (Super Admin, BDE, Branch Admin) verifying another login's Email ID: Send Code
+ * mails a code to that inbox, its holder reads it out, the admin types it in. `onVerified`
+ * runs once the server says Verified.
+ */
+export const AdminEmailVerify = ({ userId, email, onVerified, testid = "admin-email-verify" }) => {
+  const [pending, setPending] = useState(null); // { challenge_id, email_masked }
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    try {
+      setBusy(true);
+      const data = await hrStartEmailVerify(userId);
+      setPending(data);
+      setCode("");
+      toast.success(`Code sent to ${data.email_masked}`);
+    } catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+
+  const resend = async () => {
+    try {
+      setBusy(true);
+      const data = await hrResendEmailVerify(userId, pending.challenge_id);
+      setPending((p) => ({ ...p, ...data }));
+      setCode("");
+      toast.success(`New code sent to ${data.email_masked}`);
+    } catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+
+  const verify = async () => {
+    if (code.length !== CODE_LENGTH) { toast.error(`Enter the ${CODE_LENGTH}-digit code`); return; }
+    try {
+      setBusy(true);
+      const data = await hrFinishEmailVerify(userId, pending.challenge_id, code);
+      toast.success(data.message || "Email ID verified");
+      onVerified?.(data);
+    } catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+
+  if (!pending) {
+    return (
+      <div className="space-y-2" data-testid={testid}>
+        <p className="text-xs text-slate-500">
+          A code goes to <b className="break-all text-slate-700">{email}</b>. Ask them to read it out, then enter it here.
+        </p>
+        <Button type="button" onClick={send} disabled={busy} className="w-full rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid={`${testid}-send`}>
+          {busy ? "Sending code…" : "Send Code"}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3" data-testid={`${testid}-code-step`}>
+      <div>
+        <Label>Code sent to {pending.email_masked}. It expires in 5 minutes.</Label>
+        <CodeInput value={code} onChange={setCode} onEnter={verify} testid={`${testid}-code`} autoFocus />
+      </div>
+      <Button type="button" onClick={verify} disabled={busy} className="w-full rounded-[4px] bg-sky-600 hover:bg-sky-700" data-testid={`${testid}-verify`}>
+        {busy ? "Checking…" : "Verify"}
+      </Button>
+      <div className="flex justify-end">
+        <button type="button" onClick={resend} disabled={busy} className="text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-50" data-testid={`${testid}-resend`}>
+          Send another code
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ---------- verifying my own ----------
 
 /**
  * Verify the Email ID I sign in with, or move my login to another one: the address, then the

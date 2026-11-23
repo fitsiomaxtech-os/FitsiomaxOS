@@ -6,6 +6,7 @@ import re
 import uuid
 
 import email_check
+import two_factor
 from database import v3_col
 from utils import now_iso, clinic_today, live_branch_query
 from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, is_combined_expert_role, is_branch_admin_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES, COMBINED_EXPERT_ROLES
@@ -1888,6 +1889,89 @@ async def save_employee_account(
         user,
     )
     return {"message": "Login created", "created": True}
+
+
+# ---------- verifying somebody else's Email ID ----------
+#
+# Super Admin, BDE and Branch Admin verify a login's Email ID for its holder: a code goes to
+# that inbox, the holder reads it out, the admin types it in. Verified still means a code was
+# read out of the inbox -- only who typed it differs. Its own purpose, so it never cancels a
+# code the holder asked for themselves on their Security tab.
+
+ADMIN_EMAIL_VERIFY = "email_verify_admin"
+
+
+class UserEmailVerifyResend(BaseModel):
+    challenge_id: str
+
+
+class UserEmailVerifyFinish(BaseModel):
+    challenge_id: str
+    code: str
+
+
+async def _email_verify_target(user_id: str, caller: V3UserOut) -> dict:
+    """The login being verified, scoped the way editing it is."""
+    target = await v3_col("users").find_one({"id": user_id}, {"_id": 0})
+    if not target or target.get("is_active") is False:
+        raise HTTPException(status_code=404, detail="Login not found or inactive")
+    if target.get("role") == "super_admin" and caller.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Only a Super Admin can verify a Super Admin account")
+    branch_scope = _branch_admin_scope(caller)
+    if branch_scope is not None:
+        if target.get("role") in BRANCH_ADMIN_BARRED_ROLES:
+            raise HTTPException(status_code=403, detail="Branch Admins cannot verify this login")
+        if target.get("employee_id"):
+            await _scoped_employee(target["employee_id"], caller)
+        else:
+            _require_employee_branch_scope(_employee_branch_ids(target), branch_scope)
+    return target
+
+
+@router.post("/users/{user_id}/email-verify/start")
+async def start_user_email_verify(
+    user_id: str,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """Mail the code that verifies this login's Email ID."""
+    target = await _email_verify_target(user_id, caller)
+    if target.get("email_verified_at"):
+        raise HTTPException(status_code=400, detail="This Email ID is already verified")
+    wait = await two_factor.wait_before_resend(user_id, ADMIN_EMAIL_VERIFY)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"Please wait {wait}s before asking for another code")
+    return await two_factor.issue_challenge(target, ADMIN_EMAIL_VERIFY)
+
+
+@router.post("/users/{user_id}/email-verify/resend")
+async def resend_user_email_verify(
+    user_id: str,
+    payload: UserEmailVerifyResend,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    await _email_verify_target(user_id, caller)
+    row = await v3_col("two_factor_challenges").find_one(
+        {"id": payload.challenge_id, "purpose": ADMIN_EMAIL_VERIFY}, {"_id": 0, "user_id": 1},
+    )
+    if not row or row.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="This verification has expired — start again")
+    return await two_factor.resend_challenge(payload.challenge_id, ADMIN_EMAIL_VERIFY)
+
+
+@router.post("/users/{user_id}/email-verify/finish")
+async def finish_user_email_verify(
+    user_id: str,
+    payload: UserEmailVerifyFinish,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """The code checks out: the login's Email ID is Verified."""
+    await _email_verify_target(user_id, caller)
+    row = await two_factor.consume_challenge(payload.challenge_id, payload.code, ADMIN_EMAIL_VERIFY, user_id=user_id)
+    # consume_challenge marks it Verified only when the code went to the address the login
+    # still has. One changed while the code was out is not this one.
+    if not row.get("email_verified_at"):
+        raise HTTPException(status_code=409, detail="The Email ID changed while the code was out — send a new code")
+    return {"email": row.get("email", ""), "email_verified_at": row["email_verified_at"], "message": "Email ID verified"}
 
 
 # ---------- email delivery ----------

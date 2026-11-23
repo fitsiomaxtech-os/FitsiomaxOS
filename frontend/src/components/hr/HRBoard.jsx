@@ -14,7 +14,7 @@ import {
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
-import { EmailIdInput, EmailVerifiedTag, emailBlock, useEmailCheck } from "@/components/EmailId";
+import { AdminEmailVerify, EmailIdInput, EmailVerifiedTag, emailBlock, useEmailCheck } from "@/components/EmailId";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { useStageBack } from "@/components/ui/phone-back";
 import { PhoneBackBar } from "@/components/ui/phone-back-bar";
@@ -2083,6 +2083,11 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
     (email) => hrEmailCheck({ email, employee_id: employee?.id }),
     account?.email,
   );
+  // Verify Email ID from here: an active login, Not Verified, with its Email unchanged.
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const canVerifyEmail = Boolean(
+    account?.id && account.is_active !== false && account.email_verified === false && emailCheck.status === "unchanged",
+  );
 
   // The picked photo is held here and only uploaded when the form is submitted — the same
   // order the store's item images use. Abandoning the dialog then costs nothing at all,
@@ -2536,7 +2541,31 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>
                   <FormRow label="Login Status"><Input className="h-8" value={account ? (account.is_active === false ? "Deactivated" : "Active") : login.failed ? "Could not load" : "No login yet"} disabled data-testid="hr-emp-login-status" /></FormRow>
                   {account && "email_verified" in account && (
-                    <FormRow label="Email Status"><Input className="h-8" value={account.email_verified ? "Verified" : "Not Verified"} disabled data-testid="hr-emp-login-email-status" /></FormRow>
+                    <FormRow label="Email Status">
+                      <div className="flex items-center gap-2">
+                        <Input className="h-8" value={account.email_verified ? "Verified" : "Not Verified"} disabled data-testid="hr-emp-login-email-status" />
+                        {/* Verified by a code its holder reads out — only on the address the
+                            login has now, not one typed above and not saved yet. */}
+                        {canVerifyEmail && !verifyOpen && (
+                          <Button type="button" size="sm" variant="outline" onClick={() => setVerifyOpen(true)} className="h-8 shrink-0 text-xs" data-testid="hr-emp-login-verify-open">
+                            <MailCheck className="mr-1.5 h-3.5 w-3.5" /> Verify
+                          </Button>
+                        )}
+                      </div>
+                    </FormRow>
+                  )}
+                  {canVerifyEmail && verifyOpen && (
+                    <div className="my-2 rounded-md border border-slate-200 p-3">
+                      <AdminEmailVerify
+                        userId={account.id}
+                        email={account.email}
+                        onVerified={() => {
+                          setVerifyOpen(false);
+                          setLogin((l) => ({ ...l, account: { ...l.account, email_verified: true } }));
+                        }}
+                        testid="hr-emp-login-verify"
+                      />
+                    </div>
                   )}
                   <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
                     {account
@@ -4679,7 +4708,7 @@ const RolesTab = ({ meta, reloadMeta }) => {
 };
 
 const UserActionsModal = ({ user, onClose, onDone }) => {
-  const [mode, setMode] = useState(null); // null | "edit" | "password" | "delete"
+  const [mode, setMode] = useState(null); // null | "edit" | "password" | "verify" | "delete"
   const [pwd, setPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [busy, setBusy] = useState(false);
@@ -4836,6 +4865,21 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
               </div>
             </button>
 
+            {/* Only while Not Verified: a code to their inbox, which they read out. */}
+            {user.is_active && !user.email_verified_at && (
+              <button
+                onClick={() => setMode("verify")}
+                className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left hover:bg-amber-100"
+                data-testid="hr-actions-verify-email"
+              >
+                <MailCheck className="h-4 w-4 text-amber-600" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-700">Verify Email ID</p>
+                  <p className="text-[11px] text-amber-600">Send a code to their email and enter it here.</p>
+                </div>
+              </button>
+            )}
+
             {user.is_active ? (
               <button
                 onClick={doDeactivate}
@@ -4960,6 +5004,13 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
               <Button variant="outline" onClick={() => { setMode(null); setPwd(""); setConfirmPwd(""); }} className="flex-1" data-testid="hr-actions-password-back">Back</Button>
               <Button onClick={submitPwd} disabled={busy} className="flex-1 bg-violet-600 hover:bg-violet-700" data-testid="hr-actions-password-save">Update Password</Button>
             </div>
+          </div>
+        )}
+
+        {mode === "verify" && (
+          <div className="space-y-3" data-testid="hr-actions-verify-form">
+            <AdminEmailVerify userId={user.id} email={user.email} onVerified={onDone} testid="hr-actions-verify" />
+            <Button variant="outline" onClick={() => setMode(null)} className="w-full rounded-[4px]" data-testid="hr-actions-verify-back">Back</Button>
           </div>
         )}
 

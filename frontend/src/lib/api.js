@@ -1027,6 +1027,13 @@ export const hrSaveEmployeeAccount = async (id, payload) => (await api.put(`/hr/
 // { status: valid | invalid | unchecked, provider, reason }. The ids say whose login it is,
 // so its own current email is not "already used".
 export const hrEmailCheck = async (payload) => (await api.post("/hr/email-check", payload, QUIET)).data;
+// Super Admin / BDE / Branch Admin verifying somebody else's Email ID: a code to that inbox,
+// read out by its holder and typed in here.
+export const hrStartEmailVerify = async (userId) => (await api.post(`/hr/users/${userId}/email-verify/start`)).data;
+export const hrResendEmailVerify = async (userId, challengeId) =>
+  (await api.post(`/hr/users/${userId}/email-verify/resend`, { challenge_id: challengeId })).data;
+export const hrFinishEmailVerify = async (userId, challengeId, code) =>
+  (await api.post(`/hr/users/${userId}/email-verify/finish`, { challenge_id: challengeId, code })).data;
 export const hrUsers = async (params = {}) => {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
