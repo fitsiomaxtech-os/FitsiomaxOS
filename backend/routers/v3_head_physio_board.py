@@ -1608,6 +1608,8 @@ def _blank_spell(physio_id: str) -> dict:
         "first_session_at": None,
         "last_session_at": None,
         "last_completed_at": None,
+        "branch_id": "",
+        "branch_name": "",
     }
 
 
@@ -1640,7 +1642,7 @@ async def hp_lead_physio_progress(
     rows = await v3_col("sessions").find(
         {"lead_id": lead_id},
         {"_id": 0, "id": 1, "physio_id": 1, "physio_name": 1, "session_number": 1, "slot_time": 1,
-         "status": 1, "completed_at": 1, "week_number": 1, "absences": 1},
+         "status": 1, "completed_at": 1, "week_number": 1, "absences": 1, "branch_id": 1},
     ).sort("session_number", 1).to_list(1000)
 
     by_physio: dict = {}
@@ -1651,6 +1653,9 @@ async def hp_lead_physio_progress(
         spell = by_physio.get(physio_id) or _blank_spell(physio_id)
         by_physio[physio_id] = spell
         spell["physio_name"] = spell["physio_name"] or (row.get("physio_name") or "")
+        # The branch the days were booked at. Rows come in day order, so the last one wins:
+        # the branch this physio's part of the course ended at.
+        spell["branch_id"] = row.get("branch_id") or spell["branch_id"]
         spell["sessions_assigned"] += 1
         completed = row.get("status") == "completed"
         spell["sessions_completed" if completed else "sessions_upcoming"] += 1
@@ -1709,6 +1714,7 @@ async def hp_lead_physio_progress(
             "assigned_at": entry.get("assigned_at"),
             "ended_at": entry.get("ended_at"),
             "handed_over_by": entry.get("handed_over_by") or "",
+            "ended_by_branch_transfer": bool(entry.get("ended_by_branch_transfer")),
             "is_current": False,
         })
 
@@ -1734,6 +1740,39 @@ async def hp_lead_physio_progress(
         names = {d["id"]: d.get("full_name") or "" for d in found}
         for spell in [*previous, *([current] if current else [])]:
             spell["physio_name"] = spell["physio_name"] or names.get(spell["physio_id"]) or "Unknown physio"
+
+    # The branch each part of the course ran at, so one Treatment Progress card can say
+    # "Day 1-7 at the old branch, Day 8-14 here" after a Branch Transfer. Read off the days
+    # themselves; a spell with no days (or days booked before branch_id was written) is
+    # placed by the transfer record instead: the branch the patient was at when it ended.
+    transfers = sorted(lead.get("branch_transfer_history") or [], key=lambda t: t.get("at") or "")
+
+    def _branch_at(moment: str) -> str:
+        for t in transfers:
+            if moment and (t.get("at") or "") >= moment:
+                return t.get("from_branch_id") or ""
+        return lead.get("branch_id") or ""
+
+    for spell in previous:
+        if not spell["branch_id"]:
+            spell["branch_id"] = _branch_at(spell.get("ended_at") or spell.get("last_completed_at") or "")
+    if current:
+        current["branch_id"] = current["branch_id"] or lead.get("branch_id") or ""
+    spell_list = [*previous, *([current] if current else [])]
+    branch_ids = list({s["branch_id"] for s in spell_list if s["branch_id"]})
+    if branch_ids:
+        found = await v3_col("branches").find(
+            {"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "branch_name": 1},
+        ).to_list(50)
+        branch_names = {b["id"]: b.get("branch_name") or "" for b in found}
+        # A branch since deleted still has its name on the transfer record.
+        for t in transfers:
+            for key in ("from", "to"):
+                bid = t.get(f"{key}_branch_id")
+                if bid and not branch_names.get(bid):
+                    branch_names[bid] = t.get(f"{key}_branch_name") or ""
+        for spell in spell_list:
+            spell["branch_name"] = branch_names.get(spell["branch_id"]) or ""
 
     completed_sessions = sum(1 for r in rows if r.get("status") == "completed")
     # The dates the completed days were held on, so the Slot Picker can mark them done and

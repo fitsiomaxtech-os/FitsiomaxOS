@@ -2162,12 +2162,6 @@ const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun 
           {spell.physio_name || "Unknown physio"}
         </p>
         <div className="flex shrink-0 items-center gap-1.5">
-          {/* Physio Assign only: names what the card is, beside the Offline / Online chip. */}
-          {current && modeTag && (
-            <span className="rounded-[2px] border border-violet-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-violet-700" data-testid="cons-physio-progress-label">
-              Treatment Progress
-            </span>
-          )}
           <span className={`shrink-0 ${modeTag ? "rounded-[2px]" : "rounded-full"} px-2 py-0.5 text-[10px] font-semibold ${current ? skin.chip : "bg-slate-200 text-slate-600"}`} data-testid={current && modeTag ? "cons-physio-mode-badge" : undefined}>
             {current ? (modeTag || "Current") : "Previous"}
           </span>
@@ -2206,6 +2200,91 @@ const PhysioSpell = ({ spell, packageSessions, testid, tone = "violet", dayNoun 
           {!current && spell.handed_over_by ? ` · handed over by ${spell.handed_over_by}` : ""}
         </p>
       )}
+    </div>
+  );
+};
+
+/**
+ * Physio Assign: the whole treatment course on one Treatment Progress card. One bar for the
+ * course as sold, cut into each physio's part, and one line per part naming the physio and
+ * the branch it ran at -- so a patient who did Day 1-7 at one branch and was transferred
+ * reads as 7 there + 7 here of the same 14, not as two cards that each say "7 of 14".
+ */
+const TreatmentProgressCard = ({ progress, packageSessions, modeTag, onView, testid = "cons-physio-treatment-progress" }) => {
+  const spells = [...(progress?.previous || []), ...(progress?.current ? [progress.current] : [])];
+  const total = packageSessions || progress?.booked_sessions || 0;
+  const done = progress?.completed_sessions ?? spells.reduce((n, s) => n + (s.sessions_completed || 0), 0);
+  const share = (n) => (total > 0 ? Math.min(100, (n / total) * 100) : 0);
+  return (
+    <div className="rounded-[2px] border border-violet-200 bg-violet-50/70 p-2.5" data-testid={testid}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-sm font-semibold text-violet-800" data-testid="cons-physio-progress-label">Treatment Progress</p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {modeTag && (
+            <span className="rounded-[2px] bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="cons-physio-mode-badge">
+              {modeTag}
+            </span>
+          )}
+          {onView && (
+            <button
+              type="button"
+              onClick={onView}
+              className="inline-flex shrink-0 items-center gap-1 rounded-[2px] border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
+              data-testid="cons-physio-spell-current-view"
+            >
+              <Eye className="h-3 w-3" /> View
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="mt-1 text-[11px] text-slate-600">
+        <span className={`font-bold ${done ? "text-emerald-700" : "text-slate-400"}`}>{done}</span>
+        {` of ${total || "—"} sessions completed`}
+      </p>
+      {/* One bar, each physio's completed days as their own segment: grey for a part that
+          has ended, violet for the part running now. Square ends. */}
+      <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-none bg-slate-200">
+        {spells.map((s, i) => (
+          <div
+            key={`${s.physio_id}-${i}`}
+            className={`h-full ${s.is_current ? "bg-violet-500" : "bg-slate-400"} ${i < spells.length - 1 ? "border-r border-white" : ""}`}
+            style={{ width: `${share(s.sessions_completed || 0)}%` }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {spells.map((s, i) => {
+          const from = s.assigned_at ? dayLabel(String(s.assigned_at).slice(0, 10)) : null;
+          const to = s.ended_at ? dayLabel(String(s.ended_at).slice(0, 10)) : null;
+          const days = s.first_day && s.last_day
+            ? `Day ${s.first_day}${s.last_day !== s.first_day ? `–${s.last_day}` : ""}`
+            : null;
+          return (
+            <div key={`${s.physio_id}-${i}`} className="flex items-start gap-2" data-testid={s.is_current ? "cons-physio-spell-current" : `cons-physio-spell-previous-${i}`}>
+              <span className={`mt-1 h-2 w-2 shrink-0 rounded-none ${s.is_current ? "bg-violet-500" : "bg-slate-400"}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className={`min-w-0 truncate text-[12px] font-semibold ${s.is_current ? "text-violet-800" : "text-slate-600"}`} title={[s.physio_name, s.branch_name].filter(Boolean).join(" · ")}>
+                    {s.physio_name || "Unknown physio"}
+                    {s.branch_name && <span className="font-medium text-slate-500"> · {s.branch_name}</span>}
+                  </p>
+                  <p className="shrink-0 text-[11px] text-slate-600 tabular-nums">
+                    <span className={`font-bold ${s.sessions_completed ? "text-emerald-700" : "text-slate-400"}`}>{s.sessions_completed || 0}</span>
+                    {` session${s.sessions_completed === 1 ? "" : "s"}`}
+                    {days ? ` · ${days}` : ""}
+                  </p>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  {(from || to) ? `${from || "—"} → ${s.is_current ? "now" : (to || "—")}` : ""}
+                  {s.sessions_upcoming > 0 ? ` · ${s.sessions_upcoming} still booked` : ""}
+                  {!s.is_current && s.handed_over_by ? ` · ${s.ended_by_branch_transfer ? "transferred" : "handed over"} by ${s.handed_over_by}` : ""}
+                  {s.sessions_assigned === 0 ? " · replaced before any day was delivered" : ""}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -10663,25 +10742,16 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           before this one, then this one. A reassignment leaves the previous
                           physio's completed days behind it, and the branch needs to see where
                           they left off before it reads what the new physio has picked up. */}
+                      {/* One Treatment Progress card for the whole course: every physio's
+                          part (and the branch it ran at) on one bar of the package. */}
                       {hasPhysioJourney && (
-                        <div className="space-y-1.5" data-testid="cons-physio-assign-journey">
-                          {physioProgress.previous.map((spell, i) => (
-                            <PhysioSpell
-                              key={`${spell.physio_id}-${i}`}
-                              spell={spell}
-                              packageSessions={totalCourseSessions}
-                              testid={`cons-physio-spell-previous-${i}`}
-                            />
-                          ))}
-                          {physioProgress.current && (
-                            <PhysioSpell
-                              spell={physioProgress.current}
-                              packageSessions={totalCourseSessions}
-                              testid="cons-physio-spell-current"
-                              modeTag={courseMode === "online" ? "Online" : "Offline"}
-                              onView={() => setProgressCalendar("treatment")}
-                            />
-                          )}
+                        <div data-testid="cons-physio-assign-journey">
+                          <TreatmentProgressCard
+                            progress={physioProgress}
+                            packageSessions={totalCourseSessions}
+                            modeTag={courseMode === "online" ? "Online" : "Offline"}
+                            onView={() => setProgressCalendar("treatment")}
+                          />
                         </div>
                       )}
 
