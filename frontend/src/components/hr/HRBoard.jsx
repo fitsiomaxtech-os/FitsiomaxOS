@@ -4605,7 +4605,7 @@ const RolesTab = ({ meta, reloadMeta }) => {
         {sortedUsers.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">No users.</p>}
       </div>
 
-      <Card className={`hidden overflow-hidden ${view === "branch" ? "" : "md:block"}`}>
+      <Card className={`hidden overflow-hidden rounded-[4px] ${view === "branch" ? "" : "md:block"}`} data-testid="hr-users-table">
         <CardContent className="p-0">
           <div className="overflow-auto">
             <table className="min-w-full text-sm">
@@ -4617,17 +4617,16 @@ const RolesTab = ({ meta, reloadMeta }) => {
 
                   Branch keeps its column and loses only its heading: a branch name says what
                   it is, where an employee code and a status pill do not. */}
-              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">User</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Linked Employee</th><th className="px-3 py-2">Status</th><th className="px-3 py-2" /><th className="px-3 py-2">Action</th></tr></thead>
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">S.No</th><th className="px-3 py-2">User</th><th className="px-3 py-2">Email</th><th className="px-3 py-2 text-center">Verification Status</th><th className="px-3 py-2">Linked Employee</th><th className="px-3 py-2">Status</th><th className="px-3 py-2" /><th className="px-3 py-2">Action</th></tr></thead>
               <tbody>
                 {sortedUsers.map((u, i) => (
                   <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`hr-user-row-${u.id}`}>
                     <td className="px-3 py-2 text-slate-500">{i + 1}</td>
                     <td className="px-3 py-2 font-medium text-slate-800">{u.full_name}</td>
-                    <td className="px-3 py-2 text-slate-600">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span>{u.email}</span>
-                        <EmailVerifiedTag verified={Boolean(u.email_verified_at)} testid={`hr-user-email-${u.id}`} />
-                      </div>
+                    <td className="px-3 py-2 text-slate-600">{u.email}</td>
+                    {/* Its own column, so who still owes a code can be read straight down. */}
+                    <td className="px-3 py-2 text-center">
+                      <EmailVerifiedTag verified={Boolean(u.email_verified_at)} testid={`hr-user-email-${u.id}`} />
                     </td>
                     <td className="px-3 py-2 text-xs text-emerald-600">{u.linked_employee ? `${u.linked_employee.employee_code} - ${u.linked_employee.designation || u.linked_employee.full_name}` : "—"}</td>
                     <td className="px-3 py-2">
@@ -4659,7 +4658,7 @@ const RolesTab = ({ meta, reloadMeta }) => {
                     </td>
                   </tr>
                 ))}
-                {sortedUsers.length === 0 && <tr><td colSpan="7" className="px-3 py-6 text-center text-slate-400">No users.</td></tr>}
+                {sortedUsers.length === 0 && <tr><td colSpan="8" className="px-3 py-6 text-center text-slate-400">No users.</td></tr>}
               </tbody>
             </table>
           </div>
