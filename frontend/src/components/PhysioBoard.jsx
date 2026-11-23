@@ -2768,16 +2768,11 @@ function ConsultationDetailModal({ lead, physioId, onClose, onDone }) {
                     asks for something is in this half. Completed is the record underneath
                     it. The split was already in the ordering — nothing named it, so a
                     twelve-row list had to be read badge by badge to find where the record
-                    ended and the work began. Upcoming's heading sits on the header row. */}
-                <div data-testid="physio-days-upcoming">
-                  {upcomingDays.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/40 p-4 text-center text-xs text-emerald-700" data-testid="physio-days-upcoming-empty">
-                      Every booked day is done.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">{upcomingDays.map(dayRow)}</div>
-                  )}
-                </div>
+                    ended and the work began. Upcoming's heading sits on the header row; with
+                    no day left, that heading's (0) says so and nothing is drawn here. */}
+                {upcomingDays.length > 0 && (
+                  <div className="space-y-2" data-testid="physio-days-upcoming">{upcomingDays.map(dayRow)}</div>
+                )}
 
                 <div data-testid="physio-days-completed">
                   <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
