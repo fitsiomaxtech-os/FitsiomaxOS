@@ -5077,7 +5077,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                 onClick={() => setFillingForm(true)}
                 title="Consultation Form"
                 aria-label="Consultation Form"
-                className="inline-flex items-center gap-1.5 rounded-[5px] bg-white px-2.5 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                className="inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/15 hover:text-white"
                 data-testid="branch-lead-form"
               >
                 <ClipboardList className="h-5 w-5" />Form
@@ -5089,7 +5089,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                   onClick={() => setTransferring(true)}
                   title="Branch Transfer"
                   aria-label="Branch Transfer"
-                  className="inline-flex items-center rounded-[5px] bg-white p-2 text-indigo-600 transition hover:bg-indigo-50"
+                  className="inline-flex items-center rounded-[5px] p-2 text-white/90 transition hover:bg-white/15 hover:text-white"
                   data-testid="branch-lead-transfer"
                 >
                   <ArrowLeftRight className="h-5 w-5" />
@@ -5102,7 +5102,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                 onClick={() => setEditing(true)}
                 title="Edit"
                 aria-label="Edit"
-                className="hidden items-center rounded-[5px] bg-white p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 sm:inline-flex"
+                className="hidden items-center rounded-[5px] p-2 text-white/90 transition hover:bg-white/15 hover:text-white sm:inline-flex"
                 data-testid="branch-lead-edit"
               >
                 <Pencil className="h-5 w-5" />
