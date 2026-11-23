@@ -1158,7 +1158,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
             {/* Branch Admin (filterDropdowns): the six modes as one dropdown, and the eight
                 revenue cards under the pile as a second one beside it -- the bar reads tabs,
                 mode, revenue, range. The revenue one only over an income pile, the one
-                place those cards stood. */}
+                place those cards stood, its box and list bordered orange over To Verify and
+                Awaiting Approval, the two piles with a step still to come. */}
             {filterDropdowns ? (
               <div className="hidden shrink-0 flex-nowrap items-center gap-2 border-l border-slate-200 pl-3 sm:flex" data-testid="accountant-manage-payment-mode-filter">
                 <ThemedSelect
@@ -1175,7 +1176,8 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                     onChange={setRevenueView}
                     options={REVENUE_VIEWS.map((v) => ({ value: v.key, label: `${v.short} · ${fmt(sums.totals[v.key])}` }))}
                     title="Revenue"
-                    className="h-10 w-56 px-2.5 text-sm font-semibold min-[1900px]:w-60"
+                    className={`h-10 w-56 px-2.5 text-sm font-semibold min-[1900px]:w-60 ${incomeStage !== "approved" ? "border-orange-500 focus:ring-orange-200" : ""}`}
+                    contentClassName={incomeStage !== "approved" ? "border-orange-500" : ""}
                     testid="accountant-manage-revenue-view-select"
                   />
                 )}
