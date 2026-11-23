@@ -55,6 +55,41 @@ const headerDate = (iso) => {
     : d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 };
 
+/** How many of a patient's absences the list spells out before the rest go on the hover. */
+const ABSENCES_SHOWN = 3;
+
+/** Rehab and treatment are separate courses with their own numbering, so a day says which. */
+const dayName = (s) => `${s.track === "rehab" ? "Rehab Day" : "Day"} ${s.session_number}`;
+
+/**
+ * The waiting days gathered one entry per patient, in the order the server lists them.
+ *
+ * Every waiting day of a course carries that whole course's absences, so they are taken once
+ * per course rather than once per day — added up day by day, three waiting days would count
+ * each absence three times.
+ */
+const byPatient = (rows) => {
+  const held = new Map();
+  rows.forEach((r) => {
+    const key = r.lead_id || r.id;
+    if (!held.has(key)) held.set(key, []);
+    held.get(key).push(r);
+  });
+  return [...held.entries()].map(([key, found]) => {
+    const days = [...found].sort((a, b) => (a.track === "rehab" ? 1 : 0) - (b.track === "rehab" ? 1 : 0));
+    const courses = new Map(days.map((d) => [d.track, d.absent_days || []]));
+    return {
+      key,
+      days,
+      name: days[0].lead_name || "Unknown",
+      contact: days[0].patient_number || displayPhone(days[0].phone) || "—",
+      physios: [...new Set(days.map((d) => d.physio_name).filter(Boolean))],
+      // Latest first: the last reason given is the one that says whether they will come.
+      absent: [...courses.values()].flat().sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+    };
+  });
+};
+
 const shortDate = (iso) => {
   if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);
@@ -76,7 +111,7 @@ const shortDate = (iso) => {
  * dropped for the same reason a missed day is being rebooked at all: it has to be a day
  * the patient can still attend.
  */
-function SlotPicker({ session, onClose, onBooked }) {
+function SlotPicker({ session, days, onPick, onClose, onBooked }) {
   const [calendar, setCalendar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -227,7 +262,8 @@ function SlotPicker({ session, onClose, onBooked }) {
       // swaps it with the earlier so the course stays in date order.
       const booked = res?.session?.session_number ?? res?.session?.day_number ?? session.session_number;
       toast.success(`Day ${booked} booked for ${shortDate(d)} at ${to12h(t)}`);
-      onBooked();
+      // Waited for, so this day cannot be booked a second time while the list reloads.
+      await onBooked();
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Couldn't book that slot");
     }
@@ -279,11 +315,32 @@ function SlotPicker({ session, onClose, onBooked }) {
         <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 sm:px-4 sm:py-2">
           <div className="flex items-stretch gap-2 overflow-x-auto whitespace-nowrap sm:gap-2.5">
             <span
-              className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 sm:px-3 sm:text-[12px]"
+              className="inline-flex shrink-0 items-center rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 sm:px-3 sm:text-[12px]"
               data-testid="missed-class-picker-day"
             >
               MISSED
-              <span className="ml-2 font-medium text-amber-600">{dayNoun} {session.session_number}</span>
+              {/* Every day this patient is waiting on; the filled one is being booked. */}
+              {days.length > 1 ? (
+                <span className="ml-2 inline-flex items-center gap-1">
+                  {days.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => s.id !== session.id && onPick(s)}
+                      disabled={saving}
+                      aria-pressed={s.id === session.id}
+                      className={`rounded px-1.5 font-medium ${
+                        s.id === session.id ? "bg-amber-600 text-white" : "text-amber-600 hover:bg-amber-100"
+                      }`}
+                      data-testid={`missed-class-picker-day-${s.id}`}
+                    >
+                      {dayName(s)}
+                    </button>
+                  ))}
+                </span>
+              ) : (
+                <span className="ml-2 font-medium text-amber-600">{dayName(session)}</span>
+              )}
             </span>
             {session.last_absence && (
               <span className="hidden shrink-0 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 sm:inline sm:px-3 sm:text-[12px]">
@@ -563,20 +620,35 @@ export default function MissedClassPanel() {
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(null);
 
+  // Hands back what it read, or null when it could not.
   const load = useCallback(async () => {
     setLoading(true);
+    let sessions = null;
     try {
       const data = await unscheduledSessions();
-      setRows(data.sessions || []);
+      sessions = data.sessions || [];
+      setRows(sessions);
     } catch {
       toast.error("Couldn't load missed classes");
     }
     setLoading(false);
+    return sessions;
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const patients = useMemo(() => new Set(rows.map((r) => r.lead_id)).size, [rows]);
+  const patients = useMemo(() => byPatient(rows), [rows]);
+
+  // One row and one button stand for all of a patient's waiting days, so the popup goes on
+  // to their next one rather than closing after the first. Same course before the other.
+  // Read afresh each time: booking a day moves where the next one may go, and can renumber
+  // it. Left alone if the popup was closed while that was being read.
+  const bookedOne = async (done) => {
+    const fresh = await load();
+    const left = (fresh || []).filter((r) => r.lead_id === done.lead_id && r.id !== done.id);
+    const next = left.find((r) => r.track === done.track) || left[0] || null;
+    setPicking((now) => (now && now.id === done.id ? next : now));
+  };
 
   return (
     <div className="space-y-4" data-testid="branch-missed-class-panel">
@@ -585,7 +657,7 @@ export default function MissedClassPanel() {
           them, from sm up only ("desk"): Branch Admin's phone cards carry no arrow. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Days to re-book" value={rows.length} arrow="desk" color="#d97706" testid="missed-class-tile-days" />
-        <StatTile label="Patients waiting" value={patients} arrow="desk" color="#dc2626" testid="missed-class-tile-patients" />
+        <StatTile label="Patients waiting" value={patients.length} arrow="desk" color="#dc2626" testid="missed-class-tile-patients" />
       </div>
 
       <div className="flex items-center justify-end gap-2">
@@ -603,63 +675,82 @@ export default function MissedClassPanel() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          {/* A floor width so a phone scrolls the table inside its box. Six fixed columns
-              squeezed into 330px left "Give a date" spilling out of a 50px cell. */}
-          <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
+          {/* A floor width so a phone scrolls the table inside its box. Seven fixed columns
+              squeezed any tighter leave "Give a date" spilling out of its cell. */}
+          <table className="w-full min-w-[60rem] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="w-[8%] px-3 py-2.5">S.No</th>
-                <th className="w-[26%] px-3 py-2.5">Patient</th>
-                <th className="w-[13%] px-3 py-2.5">Day</th>
-                <th className="w-[18%] px-3 py-2.5">Physio</th>
-                <th className="w-[20%] px-3 py-2.5">Missed on</th>
+                <th className="w-[6%] px-3 py-2.5">S.No</th>
+                <th className="w-[20%] px-3 py-2.5">Patient</th>
+                <th className="w-[16%] px-3 py-2.5">Day</th>
+                <th className="w-[13%] px-3 py-2.5">Physio</th>
+                <th className="w-[17%] px-3 py-2.5">Missed on</th>
+                <th className="w-[13%] whitespace-nowrap px-3 py-2.5">Absent Counts</th>
                 <th className="w-[15%] px-3 py-2.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((s, i) => (
-                <tr key={s.id} className="align-middle hover:bg-slate-50/60" data-testid={`missed-class-row-${s.id}`}>
+              {patients.map((p, i) => (
+                <tr key={p.key} className="align-middle hover:bg-slate-50/60" data-testid={`missed-class-row-${p.key}`}>
                   <td className="px-3 py-3 text-xs text-slate-400">{i + 1}</td>
                   <td className="px-3 py-3">
-                    <p className="truncate text-sm font-semibold text-slate-800">{s.lead_name || "Unknown"}</p>
-                    <p className="truncate text-[11px] text-slate-400">{s.patient_number || displayPhone(s.phone) || "—"}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800">{p.name}</p>
+                    <p className="truncate text-[11px] text-slate-400">{p.contact}</p>
                   </td>
-                  {/* Which course the day fell out of, not only its number. Rehab and
-                      treatment are separate runs of days for the same patient, and both
-                      land in this queue — "Day 3" alone would have the branch placing a
-                      rehab day back into the treatment course, so rehab says so on the tag. */}
+                  {/* Every day this patient is waiting on a date for. Which course it fell
+                      out of, not only its number: "Day 3" alone would have the branch
+                      placing a rehab day back into the treatment course. */}
                   <td className="px-3 py-3">
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
-                        s.track === "rehab" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {s.track === "rehab" ? "Rehab " : ""}Day {s.session_number}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {p.days.map((s) => (
+                        <span
+                          key={s.id}
+                          className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                            s.track === "rehab" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {dayName(s)}
+                        </span>
+                      ))}
+                    </div>
                   </td>
-                  <td className="truncate px-3 py-3 text-xs text-slate-600">{s.physio_name || "—"}</td>
-                  <td className="px-3 py-3">
-                    {/* The absence that caused this — the reason the physio typed is the
-                        only context for whether the patient is likely to make a new day. */}
-                    {s.last_absence ? (
+                  <td className="truncate px-3 py-3 text-xs text-slate-600" title={p.physios.join(", ")}>{p.physios.join(", ") || "—"}</td>
+                  {/* The dates missed, and what the physio wrote against each — the only
+                      context for whether the patient is likely to make a new day. */}
+                  <td
+                    className="px-3 py-3"
+                    title={p.absent.map((x) => `${shortDate(x.date) || "No date"}${x.remarks ? ` · ${x.remarks}` : ""}`).join("\n")}
+                  >
+                    {p.absent.length === 0 ? (
+                      <span className="text-xs text-slate-300">—</span>
+                    ) : (
                       <>
-                        <p className="text-xs text-slate-600">{shortDate(s.last_absence.date)}</p>
-                        {s.last_absence.remarks && (
-                          <p className="truncate text-[10px] text-slate-400" title={s.last_absence.remarks}>
-                            {s.last_absence.remarks}
+                        {p.absent.slice(0, ABSENCES_SHOWN).map((x, n) => (
+                          <p key={n} className="truncate text-xs leading-5 text-slate-600">
+                            {shortDate(x.date) || "No date"}
+                            {x.remarks && <span className="ml-1.5 text-[10px] text-slate-400">{x.remarks}</span>}
                           </p>
+                        ))}
+                        {p.absent.length > ABSENCES_SHOWN && (
+                          <p className="text-[10px] font-semibold text-slate-400">+{p.absent.length - ABSENCES_SHOWN} more</p>
                         )}
                       </>
-                    ) : (
-                      <span className="text-xs text-slate-300">—</span>
                     )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span
+                      className="whitespace-nowrap rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700"
+                      data-testid={`missed-class-absent-total-${p.key}`}
+                    >
+                      {p.absent.length} Day{p.absent.length === 1 ? "" : "s"}
+                    </span>
                   </td>
                   <td className="px-3 py-3 text-right">
                     <Button
                       size="sm"
                       className="bg-amber-600 text-xs text-white hover:bg-amber-700"
-                      onClick={() => setPicking(s)}
-                      data-testid={`missed-class-assign-${s.id}`}
+                      onClick={() => setPicking(p.days[0])}
+                      data-testid={`missed-class-assign-${p.key}`}
                     >
                       <CalendarPlus className="mr-1 h-3 w-3" /> Give a date
                     </Button>
@@ -673,9 +764,12 @@ export default function MissedClassPanel() {
 
       {picking && (
         <SlotPicker
+          key={picking.id}
           session={picking}
+          days={patients.find((p) => p.days.some((d) => d.id === picking.id))?.days || [picking]}
+          onPick={setPicking}
           onClose={() => setPicking(null)}
-          onBooked={() => { setPicking(null); load(); }}
+          onBooked={() => bookedOne(picking)}
         />
       )}
     </div>
