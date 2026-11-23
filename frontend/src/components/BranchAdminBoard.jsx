@@ -2196,8 +2196,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
                   : "bg-white text-slate-500 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
               }`}
-              title="Settings"
-              aria-label="Settings"
+              title="Admin Setting"
+              aria-label="Admin Setting"
               data-testid={`branch-view-tab-settings-${activeView}`}
             >
               {/* Still: no turn on hover or while the menu is open. */}
@@ -2959,8 +2959,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <button
                     type="button"
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors duration-300 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700 sm:h-10 sm:w-10 md:hidden"
-                    title="Settings"
-                    aria-label="Settings"
+                    title="Admin Setting"
+                    aria-label="Admin Setting"
                     data-testid={`branch-toolbar-settings-${activeView}`}
                   >
                     <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
