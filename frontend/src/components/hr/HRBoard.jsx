@@ -1969,9 +1969,10 @@ const EMP_TABS = [
   // straight over the figure that timeline had put on the employee. Two doors onto one
   // number, and the one with no history behind it won.
   { key: "bank", label: "Bank & PAN" },
+  // Ahead of Credentials: the login takes its role from the designation picked here.
+  { key: "structure", label: "Department & Designation" },
   // The employee's sign-in, set on the record itself rather than only from Credentials.
   { key: "credentials", label: "Credentials" },
-  { key: "structure", label: "Department & Designation" },
 ];
 
 const blankEmployee = {
