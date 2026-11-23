@@ -149,7 +149,7 @@ export const LoginPage = ({ onLogin }) => {
             <img
               src={LOGO_URL}
               alt="Fitsiomax"
-              className="mx-auto h-16 w-16 rounded-2xl bg-sky-50 p-1.5 object-contain ring-1 ring-sky-100"
+              className="mx-auto h-16 w-16 object-contain p-1.5"
               data-testid="screen1-login-logo"
             />
             <h1 className="font-heading text-3xl font-bold text-slate-900" data-testid="screen1-login-title">
