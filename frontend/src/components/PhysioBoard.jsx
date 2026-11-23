@@ -1646,19 +1646,20 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
       {/* Raising the review — reason and notes travel with it to the Head Physio. */}
       {draft && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3" onClick={(e) => { if (e.target === e.currentTarget) setDraft(null); }}>
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" data-testid="physio-raise-review-modal">
-            <div className="flex items-center justify-between bg-slate-500 px-6 py-4 text-white">
-              <div>
-                <p className="text-lg font-bold">Send for Review</p>
-                <p className="text-xs text-white/80">
-                  {draft.patient.lead_name} · {ordinal(draft.patient.review_number)} Review · {!draft.patient.review_first_day
-                    ? `${draft.patient.treatment_days} treatment days`
-                    : draft.patient.review_first_day < draft.patient.treatment_days
-                      ? `days ${draft.patient.review_first_day}–${draft.patient.treatment_days}`
-                      : `day ${draft.patient.treatment_days}`}
-                </p>
-              </div>
-              <button onClick={() => setDraft(null)} className="rounded-lg border-2 border-orange-200 bg-orange-100 p-2 text-orange-600 hover:bg-orange-200" data-testid="physio-raise-review-close">
+          <div className="w-full max-w-lg overflow-hidden rounded-[4px] bg-white shadow-2xl" data-testid="physio-raise-review-modal">
+            {/* One row, one size: whose review it is, then the popup's name just before the X.
+                The patient line gives way first; a phone drops the popup's name for it, as
+                the Physio Records header does. */}
+            <div className="flex items-center gap-4 bg-slate-500 px-5 py-3 text-[12px] font-semibold uppercase leading-5 text-white [font-family:Inter,sans-serif]" data-testid="physio-raise-review-header">
+              <p className="min-w-0 flex-1 truncate" data-testid="physio-raise-review-patient">
+                {draft.patient.lead_name} · {ordinal(draft.patient.review_number)} Review · {!draft.patient.review_first_day
+                  ? `${draft.patient.treatment_days} treatment days`
+                  : draft.patient.review_first_day < draft.patient.treatment_days
+                    ? `days ${draft.patient.review_first_day}–${draft.patient.treatment_days}`
+                    : `day ${draft.patient.treatment_days}`}
+              </p>
+              <p className="hidden shrink-0 whitespace-nowrap sm:block" data-testid="physio-raise-review-title">Send for Review</p>
+              <button type="button" onClick={() => setDraft(null)} title="Close" aria-label="Close" className="shrink-0 text-white hover:opacity-80" data-testid="physio-raise-review-close">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1669,6 +1670,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
                   value={draft.reason}
                   onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
                   placeholder="e.g. Week 1 progress review"
+                  className="rounded-[4px]"
                   data-testid="physio-raise-review-reason"
                 />
               </div>
@@ -1678,7 +1680,7 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
                 </label>
                 <textarea
                   rows={4}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                  className="w-full rounded-[4px] border border-slate-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                   placeholder="How has the patient responded so far?"
                   value={draft.physio_notes}
                   onChange={(e) => setDraft({ ...draft, physio_notes: e.target.value })}
@@ -1686,9 +1688,8 @@ function ReviewTab({ physioId, onCountChange, toolbarSlot, squareTable = false }
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-3.5">
-              <Button variant="outline" onClick={() => setDraft(null)} data-testid="physio-raise-review-cancel">Cancel</Button>
-              <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={submitRaise} disabled={saving} data-testid="physio-raise-review-submit">
+            <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50 px-5 py-3.5">
+              <Button className="rounded-[4px] bg-emerald-600 text-white hover:bg-emerald-700" onClick={submitRaise} disabled={saving} data-testid="physio-raise-review-submit">
                 {saving ? "Sending..." : "Send to Branch Admin"}
               </Button>
             </div>
