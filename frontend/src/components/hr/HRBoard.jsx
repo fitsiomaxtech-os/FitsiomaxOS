@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, hrDeleteEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount,
+  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, hrDeleteEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount, hrEmailCheck,
   hrUsers, hrCreateUser, hrUpdateUser, hrResetPassword, hrEmailStatus, hrEmailTest, hrDeactivateUser, hrActivateUser, hrDeleteUserPermanent, hrMeta, hrAddCustomRole,
   hrDepartments, hrCreateDepartment, hrRenameDepartment, hrDeleteDepartment, hrAddDesignation, hrRenameDesignation, hrDeleteDesignation, hrReorderDesignations,
   getBranches, getVerticals,
@@ -14,6 +14,7 @@ import {
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
+import { EmailIdInput, EmailVerifiedTag, emailBlock, useEmailCheck } from "@/components/EmailId";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { useStageBack } from "@/components/ui/phone-back";
 import { PhoneBackBar } from "@/components/ui/phone-back-bar";
@@ -1680,7 +1681,8 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, d
                 <p className="py-2 text-xs text-slate-400" data-testid="hr-emp-view-login-loading">Loading login…</p>
               ) : acct ? (
                 <>
-                  <ViewRow label="Username (Email)" value={acct.email} />
+                  <ViewRow label="Email ID" value={acct.email} />
+                  {"email_verified" in acct && <ViewRow label="Email Status" value={acct.email_verified ? "Verified" : "Not Verified"} />}
                   <ViewRow label="Password" value="••••••••" />
                   <ViewRow label="Role" value={acct.role ? roleLabel(acct.role) : ""} />
                   <ViewRow label="Login Status" value={acct.is_active === false ? "Deactivated" : "Active"} />
@@ -1689,7 +1691,7 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, d
                 </>
               ) : (
                 <>
-                  <ViewRow label="Username (Email)" value="" />
+                  <ViewRow label="Email ID" value="" />
                   <ViewRow label="Password" value="" />
                   <ViewRow label="Login Status" value={login.failed ? "Could not load" : "No login yet"} />
                   {!accounts && !login.failed && (
@@ -2070,6 +2072,13 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
   const [credArmed, setCredArmed] = useState(false);
   const armCred = { readOnly: !credArmed, onFocus: () => setCredArmed(true) };
   const loginEmail = String(credEmail ?? (account?.email || form.email) ?? "").trim();
+  // The automatic check on it (components/EmailId.jsx). A login's own current email is never
+  // checked, so one already in the OS can have its password changed whatever its email is.
+  const emailCheck = useEmailCheck(
+    login === null ? "" : loginEmail,
+    (email) => hrEmailCheck({ email, employee_id: employee?.id }),
+    account?.email,
+  );
 
   // The picked photo is held here and only uploaded when the form is submitted — the same
   // order the store's item images use. Abandoning the dialog then costs nothing at all,
@@ -2182,10 +2191,15 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
     // Checked before the employee is written, so a typo in the password does not leave a
     // saved record behind a failed login. A blank password on a new employee is no login.
     const wantsPwd = Boolean(credPwd || credConfirm);
-    const emailChanged = Boolean(account && loginEmail && loginEmail !== account.email);
+    const emailChanged = Boolean(account && loginEmail && emailCheck.status !== "unchanged");
     const saveLogin = wantsPwd || emailChanged;
-    if (saveLogin) {
-      if (!loginEmail) { toast.error("Enter the login username (email)"); setTab("credentials"); return; }
+    // An Email ID typed here for a login not made yet, with no password beside it. The one
+    // carried over from the Personal tab is not that: nobody asked for a login with it.
+    const emailAlone = !account && !wantsPwd && Boolean(String(credEmail || "").trim());
+    if (saveLogin || emailAlone) {
+      const block = emailBlock(emailCheck);
+      if (block) { toast.error(block); setTab("credentials"); return; }
+      if (emailAlone) { toast.error("Set a password for this login, or clear the Email ID"); setTab("credentials"); return; }
       if (wantsPwd && credPwd.length < 6) { toast.error("Password must be at least 6 characters"); setTab("credentials"); return; }
       if (wantsPwd && credPwd !== credConfirm) { toast.error("Passwords do not match"); setTab("credentials"); return; }
     }
@@ -2485,15 +2499,30 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                 <p className="py-3 text-xs text-slate-400" data-testid="hr-emp-login-loading">Loading login…</p>
               ) : (
                 <>
-                  <FormRow label="Username (Email)"><Input className="h-8" value={credEmail ?? (account?.email || form.email || "")} onChange={(e) => setCredEmail(e.target.value)} placeholder="user@company.com" autoComplete="off" name="hr-new-employee-login" {...armCred} data-testid="hr-emp-login-email" /></FormRow>
-                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} autoComplete="new-password" {...armCred} testid="hr-emp-login-pwd" /></FormRow>
-                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" {...armCred} testid="hr-emp-login-confirm" /></FormRow>
+                  {/* The Email ID first, checked as it is typed: the password boxes open once
+                      it is Valid, so a login cannot be made on one that is not. */}
+                  <FormRow label="Email ID">
+                    <EmailIdInput
+                      className="h-8"
+                      value={credEmail ?? (account?.email || form.email || "")}
+                      onChange={setCredEmail}
+                      state={emailCheck}
+                      name="hr-new-employee-login"
+                      {...armCred}
+                      testid="hr-emp-login-email"
+                    />
+                  </FormRow>
+                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} autoComplete="new-password" disabled={!emailCheck.allowed} {...armCred} testid="hr-emp-login-pwd" /></FormRow>
+                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" disabled={!emailCheck.allowed} {...armCred} testid="hr-emp-login-confirm" /></FormRow>
                   <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>
                   <FormRow label="Login Status"><Input className="h-8" value={account ? (account.is_active === false ? "Deactivated" : "Active") : login.failed ? "Could not load" : "No login yet"} disabled data-testid="hr-emp-login-status" /></FormRow>
+                  {account && "email_verified" in account && (
+                    <FormRow label="Email Status"><Input className="h-8" value={account.email_verified ? "Verified" : "Not Verified"} disabled data-testid="hr-emp-login-email-status" /></FormRow>
+                  )}
                   <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
                     {account
                       ? "A new password signs them out everywhere. Leave both boxes blank to keep the current one."
-                      : "Set a password to give this employee a sign-in. Leave it blank to save them without one."}
+                      : "Enter a valid Email ID to set a password and give this employee a sign-in. Leave it blank to save them without one."}
                   </p>
                 </>
               )}
@@ -4542,6 +4571,7 @@ const RolesTab = ({ meta, reloadMeta }) => {
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className={`rounded px-2 py-0.5 text-xs ${u.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{u.is_active ? "Active" : "Inactive"}</span>
+              <EmailVerifiedTag verified={Boolean(u.email_verified_at)} testid={`hr-user-card-email-${u.id}`} />
               {u.two_factor_enabled && (
                 <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700" data-testid={`hr-user-card-2fa-${u.id}`}>
                   <ShieldCheck className="h-3 w-3" />2FA
@@ -4574,7 +4604,12 @@ const RolesTab = ({ meta, reloadMeta }) => {
                   <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`hr-user-row-${u.id}`}>
                     <td className="px-3 py-2 text-slate-500">{i + 1}</td>
                     <td className="px-3 py-2 font-medium text-slate-800">{u.full_name}</td>
-                    <td className="px-3 py-2 text-slate-600">{u.email}</td>
+                    <td className="px-3 py-2 text-slate-600">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{u.email}</span>
+                        <EmailVerifiedTag verified={Boolean(u.email_verified_at)} testid={`hr-user-email-${u.id}`} />
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-xs text-emerald-600">{u.linked_employee ? `${u.linked_employee.employee_code} - ${u.linked_employee.designation || u.linked_employee.full_name}` : "—"}</td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap items-center gap-1">
@@ -4643,6 +4678,11 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
     mobile_number: user.mobile_number || "",
     aadhar_number: user.aadhar_number || "",
   });
+  const emailCheck = useEmailCheck(
+    mode === "edit" ? editForm.email : "",
+    (email) => hrEmailCheck({ email, user_id: user.id }),
+    user.email,
+  );
 
   useEffect(() => {
     if (mode !== "edit") return;
@@ -4665,7 +4705,8 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
     : editForm.branch_ids;
 
   const submitEdit = async () => {
-    if (!editForm.email.trim()) { toast.error("Email is required"); return; }
+    const emailRefused = emailBlock(emailCheck);
+    if (emailRefused) { toast.error(emailRefused); return; }
     if (!linked && !editForm.full_name.trim()) { toast.error("Name is required"); return; }
     if (!linked && isMultiBranchRole && !BRANCHLESS_OK_ROLES.has(user.role) && editForm.branch_ids.length === 0) {
       toast.error("Select at least one branch"); return;
@@ -4829,7 +4870,7 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
             ) : (
               <Field label="Name"><Input placeholder="Full name" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} data-testid="hr-actions-edit-name" /></Field>
             )}
-            <Field label="Email"><Input placeholder="user@company.com" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} data-testid="hr-actions-edit-email" /></Field>
+            <Field label="Email ID"><EmailIdInput value={editForm.email} onChange={(v) => setEditForm((f) => ({ ...f, email: v }))} state={emailCheck} testid="hr-actions-edit-email" /></Field>
             {!linked && (
               <>
                 {isMultiBranchRole ? (
@@ -5021,6 +5062,9 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
   const [employees, setEmployees] = useState([]);
   const [form, setForm] = useState({ employee_id: "", full_name: "", email: "", role: "", branch_id: "", branch_ids: [], password: "", confirm: "" });
   const isMultiBranchRole = Boolean(multiBranchLabel(form.role));
+  // No employee on it: this always makes a new login, so an email the employee already signs
+  // in with is taken.
+  const emailCheck = useEmailCheck(form.email, (email) => hrEmailCheck({ email }));
   const { resolve, resolving: resolvingRole } = useDesignationRole(meta, reloadMeta);
   useEffect(() => { hrEmployees({ status: "active" }).then(setEmployees).catch((e) => console.warn("[load failed]", e?.message || e)); }, []);
 
@@ -5065,7 +5109,9 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
     // without one. Named rather than implied: "employee required" is the whole fix.
     if (!form.employee_id) { toast.error("Pick the employee this login is for"); return; }
     if (!form.role) { toast.error("That employee has no designation — set one on their record first"); return; }
-    if (!form.email || !form.password) { toast.error("Email and password required"); return; }
+    const emailRefused = emailBlock(emailCheck);
+    if (emailRefused) { toast.error(emailRefused); return; }
+    if (!form.password) { toast.error("Password required"); return; }
     if (form.password.length < 6) { toast.error("Min 6 characters"); return; }
     if (form.password !== form.confirm) { toast.error("Passwords do not match"); return; }
     // No branch is allowed: the login can be made before the employee is posted anywhere.
@@ -5113,9 +5159,9 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
             changed on the employee record (Employees, or Department & Designation), and a
             login carrying its own copy is how the two came to disagree. */}
         <Field label="Name"><Input placeholder="Filled from the employee" value={form.full_name} readOnly disabled className="bg-slate-50" data-testid="hr-create-user-name" /></Field>
-        <Field label="Username (Email) *"><Input placeholder="user@company.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="hr-create-user-email" /></Field>
-        <Field label="Password *"><PasswordInput placeholder="Min 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} testid="hr-create-user-pwd" /></Field>
-        <Field label="Confirm Password *"><PasswordInput placeholder="Confirm password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} testid="hr-create-user-confirm" /></Field>
+        <Field label="Email ID *"><EmailIdInput value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} state={emailCheck} testid="hr-create-user-email" /></Field>
+        <Field label="Password *"><PasswordInput placeholder="Min 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} disabled={!emailCheck.allowed} testid="hr-create-user-pwd" /></Field>
+        <Field label="Confirm Password *"><PasswordInput placeholder="Confirm password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} disabled={!emailCheck.allowed} testid="hr-create-user-confirm" /></Field>
         <div className="flex gap-2 pt-2"><Button variant="outline" onClick={onClose} className="flex-1" data-testid="hr-create-user-cancel">Cancel</Button><Button onClick={submit} className="flex-1 bg-sky-600 hover:bg-sky-700" data-testid="hr-create-user-submit">Create User</Button></div>
       </div>
     </div>
@@ -5144,7 +5190,7 @@ const FormRow = ({ label, children }) => (
 // A password box that can be read back. Whoever sets a password here has to pass it on
 // to the person it belongs to, so being unable to check what was typed is how an account
 // gets handed over with a credential nobody can log in with.
-const PasswordInput = ({ value, onChange, placeholder, testid, className = "", autoComplete, readOnly, onFocus }) => {
+const PasswordInput = ({ value, onChange, placeholder, testid, className = "", autoComplete, readOnly, onFocus, disabled = false }) => {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
@@ -5153,6 +5199,7 @@ const PasswordInput = ({ value, onChange, placeholder, testid, className = "", a
         autoComplete={autoComplete}
         readOnly={readOnly}
         onFocus={onFocus}
+        disabled={disabled}
         placeholder={placeholder}
         value={value}
         onChange={onChange}

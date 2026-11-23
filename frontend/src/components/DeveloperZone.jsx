@@ -86,6 +86,18 @@ const HIDE_FEATURE_ROWS = [
     hiddenToast: "Consultation Fee confirmation is off",
     shownToast: "Consultation Fee confirmation is on",
   },
+  {
+    // The message only. The check on a new Email ID, a new login's first-sign-in code and
+    // the Email ID panel on everybody's Security tab stay either way.
+    key: "update_email_notice",
+    label: "Update your Email ID Message",
+    confirmHide:
+      "Hide the Update your Email ID message?\n\nNobody sees it after sign-in, on any dashboard. Everybody still signs in as normal, and can still update their Email ID from Security.",
+    confirmShow:
+      "Show the Update your Email ID message?\n\nEvery login not verified yet sees it after sign-in, until they update. It can be closed, and nobody is stopped from working.\n\nSend a test email first (HR Admin > Credentials > the gear), so the code reaches them.",
+    hiddenToast: "Update your Email ID message is hidden",
+    shownToast: "Update your Email ID message is shown",
+  },
 ];
 
 // The Hide Tab page: whole tabs a developer can take off one desk's strip, by desk. Each key

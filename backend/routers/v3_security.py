@@ -1,6 +1,7 @@
 """SECURITY — the fourth tab of everybody's own page, and the only one that changes a login.
 
     Password        change my own, knowing the old one
+    Email ID        verify the one I sign in with, or move to another
     Two-factor      a code to my email at every sign-in, on or off
     Devices         where this account is signed in, and a way to end the rest
 
@@ -24,6 +25,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+import email_check
 import two_factor
 from database import v3_col
 from email_utils import smtp_configured
@@ -59,6 +61,26 @@ class TwoFactorVerifyRequest(BaseModel):
 class TwoFactorResendRequest(BaseModel):
     intent: str
     challenge_id: str
+
+
+class EmailCheckRequest(BaseModel):
+    email: str
+
+
+class EmailStartRequest(BaseModel):
+    email: str
+    # Asked only when the address changes. Verifying the one already on the login takes no
+    # password: it changes nothing about who can sign in.
+    current_password: str = ""
+
+
+class EmailChallengeRequest(BaseModel):
+    challenge_id: str
+
+
+class EmailVerifyRequest(BaseModel):
+    challenge_id: str
+    code: str
 
 
 def _token_of(authorization: str) -> str:
@@ -106,6 +128,7 @@ async def my_security(user: V3UserOut = Depends(v3_current_user), authorization:
     return {
         "email": row.get("email", ""),
         "email_masked": two_factor.mask_email(row.get("email", "")),
+        "email_verified_at": row.get("email_verified_at"),
         "password_changed_at": row.get("password_changed_at"),
         "two_factor": {
             "enabled": two_factor.is_enabled(row),
@@ -171,6 +194,73 @@ async def change_my_password(
     return {
         "message": "Password changed",
         "sessions_ended": ended.deleted_count,
+    }
+
+
+@router.post("/email/check")
+async def check_my_email(payload: EmailCheckRequest, user: V3UserOut = Depends(v3_current_user)):
+    """The automatic check behind the Email ID box. My own address is not "already used"."""
+    return await email_check.check_for_login(payload.email, user.id)
+
+
+@router.post("/email/start")
+async def start_email_verify(payload: EmailStartRequest, user: V3UserOut = Depends(v3_current_user)):
+    """Mail the code that verifies my Email ID, or moves my login to a new one.
+
+    Moving asks for the current password as well. The email is what Forgot Password writes
+    to, so changing it at an unlocked desk would hand over the account; the code alone does
+    not stop that, because it goes to the new inbox.
+    """
+    row = await _account(user.id)
+    changing = not two_factor.same_email(payload.email, row.get("email"))
+    if not changing and row.get("email_verified_at"):
+        raise HTTPException(status_code=400, detail="This Email ID is already verified")
+    if changing and not verify_password(payload.current_password, row.get("password", "")):
+        raise HTTPException(status_code=400, detail="Your current password is not right")
+
+    wait = await two_factor.wait_before_resend(user.id, "email_verify")
+    if wait:
+        raise HTTPException(status_code=429, detail=f"Please wait {wait}s before asking for another code")
+
+    # The address already on the login is not held to the check: it is in use, and a code
+    # read out of it says more than the check can.
+    target = await email_check.require_allowed(payload.email, user.id) if changing else row["email"]
+    challenge = await two_factor.issue_challenge(row, "email_verify", email=target)
+    return {**challenge, "changing": changing}
+
+
+@router.post("/email/resend")
+async def resend_email_verify(payload: EmailChallengeRequest, user: V3UserOut = Depends(v3_current_user)):
+    return await two_factor.resend_challenge(payload.challenge_id, "email_verify")
+
+
+@router.post("/email/verify")
+async def finish_email_verify(payload: EmailVerifyRequest, user: V3UserOut = Depends(v3_current_user)):
+    """The code checks out -- this inbox is mine, so it becomes the login's, verified."""
+    row = await two_factor.consume_challenge(payload.challenge_id, payload.code, "email_verify", user_id=user.id)
+    target, current = row["challenge_email"], row.get("email", "")
+    if two_factor.same_email(target, current):
+        return {"email": current, "email_verified_at": row["email_verified_at"], "message": "Email ID verified"}
+
+    # Asked again: somebody may have taken it in the five minutes the code was out.
+    target = await email_check.require_allowed(target, user.id)
+    verified_at = now_iso()
+    await v3_col("users").update_one(
+        {"id": user.id},
+        {"$set": {"email": target, "email_verified_at": verified_at, "email_code_due": False}},
+    )
+    # The employee record's own Email follows only where it was the same address, so a
+    # personal email HR keeps there is left alone.
+    if row.get("employee_id"):
+        emp = await v3_col("employees").find_one({"id": row["employee_id"]}, {"_id": 0, "email": 1})
+        if emp and two_factor.same_email(emp.get("email"), current):
+            await v3_col("employees").update_one(
+                {"id": row["employee_id"]}, {"$set": {"email": target, "updated_at": now_iso()}}
+            )
+    return {
+        "email": target,
+        "email_verified_at": verified_at,
+        "message": f"Email ID updated. Sign in with {target} from now on.",
     }
 
 

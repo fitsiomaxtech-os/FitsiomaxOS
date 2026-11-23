@@ -24,6 +24,8 @@ import { getFeatureVisibility } from "@/lib/api";
 //                           View and Sales View tabs, on the Developer Zone's Hide Tab page.
 //   ba_treatment_protocol — the Branch Admin's Services and Products > Treatment Protocol
 //                           tab (Hide Tab page), and the Consultant's pick-from-list with it.
+//   update_email_notice   — the "Update your Email ID" message after sign-in, on every login
+//                           not verified yet. Shown as Show / Hide; ships hidden.
 let hiddenFeatures = [];
 let loaded = false;
 // Whether the list has actually come back, as opposed to `loaded`, which is set as soon

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Header
+import logging
 import re
 import uuid
 
@@ -15,6 +16,8 @@ from schemas.v3 import (
     V3TwoFactorVerifyRequest,
     V3TwoFactorResendRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v3")
 
@@ -128,6 +131,16 @@ async def v3_login(payload: V3LoginRequest):
         challenge = await two_factor.issue_challenge(user, "login")
         return {"two_factor_required": True, **challenge}
 
+    # A new login proves its inbox once, at its first sign-in. Never asked of a login made
+    # before this, and a server that cannot send the code is not a lock-out: they get in,
+    # still Not Verified, and are asked again next time.
+    if two_factor.first_code_due(user):
+        try:
+            challenge = await two_factor.issue_challenge(user, "email_login")
+            return {"two_factor_required": True, "email_verify": True, **challenge}
+        except HTTPException as exc:
+            logger.warning("First sign-in email code not sent for user %s: %s", user["id"], exc.detail)
+
     return await _issue_session(user)
 
 
@@ -140,14 +153,16 @@ async def v3_login_verify_2fa(payload: V3TwoFactorVerifyRequest):
     five minutes. It carries the user id itself rather than taking one from the caller,
     which is what keeps a valid code for one account from signing in as another.
     """
-    user = await two_factor.consume_challenge(payload.challenge_id, payload.code, "login")
+    purpose = await two_factor.sign_in_purpose(payload.challenge_id)
+    user = await two_factor.consume_challenge(payload.challenge_id, payload.code, purpose)
     return await _issue_session(user)
 
 
 @router.post("/auth/login/resend-2fa")
 async def v3_login_resend_2fa(payload: V3TwoFactorResendRequest):
     """A fresh code on the same challenge, for the sign-in that never received the first."""
-    return await two_factor.resend_challenge(payload.challenge_id, "login")
+    purpose = await two_factor.sign_in_purpose(payload.challenge_id)
+    return await two_factor.resend_challenge(payload.challenge_id, purpose)
 
 
 @router.get("/auth/me", response_model=V3UserOut)

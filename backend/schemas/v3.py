@@ -23,6 +23,9 @@ class V3UserOut(BaseModel):
     # frontend takes its copy of the user from. Empty for an account with no employee
     # behind it, which every seeded and shared login is.
     photo_url: Optional[str] = ""
+    # When a code was read out of this login's inbox, or None. What "Update your Email ID"
+    # reads to decide whether to show itself (see two_factor.py).
+    email_verified_at: Optional[str] = None
     created_at: str
 
     # No role normalisation here on purpose. "consultant" used to be rewritten to

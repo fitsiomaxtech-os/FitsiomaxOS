@@ -43,7 +43,10 @@ export const LoginPage = ({ onLogin }) => {
   // no token from /auth/login — it gets a challenge, and this holds it until the emailed
   // code comes back. The password is dropped from state the moment the challenge exists;
   // it has done its job and the second call doesn't take it.
-  const [challenge, setChallenge] = useState(null); // { challenge_id, email_masked }
+  //
+  // A new login's first sign-in comes through here as well, with `email_verify` on it: the
+  // same code and the same two calls, told apart only by what the screen says it is for.
+  const [challenge, setChallenge] = useState(null); // { challenge_id, email_masked, email_verify? }
   const [code, setCode] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
@@ -169,9 +172,9 @@ export const LoginPage = ({ onLogin }) => {
                 <div className="flex items-start gap-3 rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-2.5">
                   <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-700">Check your email</p>
+                    <p className="text-sm font-semibold text-slate-700">{challenge.email_verify ? "Verify your Email ID" : "Check your email"}</p>
                     <p className="text-xs text-slate-500" data-testid="screen1-login-2fa-sent-to">
-                      We sent a {CODE_LENGTH}-digit code to {challenge.email_masked}. It expires in 5 minutes.
+                      {challenge.email_verify && "This is your first sign-in. "}We sent a {CODE_LENGTH}-digit code to {challenge.email_masked}. It expires in 5 minutes.
                     </p>
                   </div>
                 </div>

@@ -48,9 +48,15 @@ SETTING_ID = "hidden_features"
 # consultant_instructions: the Instructions box under the Treatment Protocol on the
 # Consultant's Treatment Prescription popup. Hide Tab page (Consultant), Show / Hide, screen-only,
 # shipped shown. What was already written stays on the lead and its Consultation Form.
+#
+# update_email_notice: the "Update your Email ID" message after sign-in, on every login not
+# verified yet. Features page, Show / Hide, screen-only. Hidden takes off the message and
+# nothing else: the check on a new Email ID, a new login's first-sign-in code and the Email
+# ID panel on everybody's Security tab all stay.
 FEATURE_KEYS = (
     "treatments", "past_day_appointments", "progression_mandatory", "consultation_fee_confirm",
     "bd_marketing_view", "bd_sales_view", "ba_treatment_protocol", "consultant_instructions",
+    "update_email_notice",
 )
 
 # What a missing row means. "treatments" ships hidden: this install asked for the tab and
@@ -59,7 +65,9 @@ FEATURE_KEYS = (
 # always behaved. "progression_mandatory" ships Optional, so turning it on is a decision
 # rather than a deploy locking Mark Treatment Complete on patients mid-course.
 # "consultation_fee_confirm" ships On, which is how Collect has always behaved.
-DEFAULT_HIDDEN = ("treatments", "past_day_appointments", "progression_mandatory")
+# "update_email_notice" ships hidden, so nobody is asked for a code before somebody has
+# checked this server can send one.
+DEFAULT_HIDDEN = ("treatments", "past_day_appointments", "progression_mandatory", "update_email_notice")
 
 # The keys a row decided on before rows carried `known` — every key that existed then. A
 # key added later is not in such a row's `hidden` because nobody has flipped it yet, not

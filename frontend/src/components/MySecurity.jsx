@@ -2,6 +2,7 @@
  * Security — the fourth tab of everybody's own page, and the only one that changes a login.
  *
  *     Password        change my own, knowing the old one
+ *     Email ID        verify the one I sign in with, or move to another
  *     Two-factor      a code to my email at every sign-in, on or off
  *     Devices         how many places this account is signed in, and a way to end the rest
  *
@@ -23,8 +24,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Check,
-  Eye,
-  EyeOff,
   KeyRound,
   Laptop,
   Loader2,
@@ -34,9 +33,10 @@ import {
   ShieldOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { CODE_LENGTH, CodeInput } from "@/components/ui/code-input";
+import { SecretInput } from "@/components/ui/secret-input";
+import { EmailUpdateForm, EmailVerifiedTag } from "@/components/EmailId";
 import {
   changeMyPassword,
   mySecurity,
@@ -82,35 +82,6 @@ const Panel = ({ title, icon: Icon, children, right, testid }) => (
 );
 
 const Label = ({ children }) => <p className="mb-1 text-[11px] text-slate-400">{children}</p>;
-
-/** A password box with the eye, because a password typed blind into a form that also asks
- *  for it twice is the form people give up on. */
-const SecretInput = ({ value, onChange, placeholder, testid, autoComplete }) => {
-  const [shown, setShown] = useState(false);
-  return (
-    <div className="relative">
-      <Input
-        type={shown ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className="border-slate-200 bg-white pr-10"
-        data-testid={testid}
-      />
-      <button
-        type="button"
-        onClick={() => setShown((s) => !s)}
-        tabIndex={-1}
-        aria-label={shown ? "Hide password" : "Show password"}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-        data-testid={`${testid}-toggle`}
-      >
-        {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </button>
-    </div>
-  );
-};
 
 // ---------- password ----------
 
@@ -205,6 +176,47 @@ const PasswordPanel = ({ onChanged }) => {
             </Button>
           </div>
         </form>
+      )}
+    </Panel>
+  );
+};
+
+// ---------- email id ----------
+
+/** The Email ID I sign in with, and whether anybody has read a code out of it. Always here,
+ *  whatever Developer Access says about the message after sign-in. */
+const EmailPanel = ({ email, verified, emailConfigured, onChanged }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <Panel
+      title="Email ID"
+      icon={Mail}
+      testid="my-security-email"
+      right={!open && emailConfigured && (
+        <Button onClick={() => setOpen(true)} className="bg-sky-600 hover:bg-sky-700" data-testid="my-security-email-open">
+          {verified ? "Change Email ID" : "Update Email ID"}
+        </Button>
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 break-all text-sm text-slate-700" data-testid="my-security-email-current">{email}</p>
+        <EmailVerifiedTag verified={verified} testid="my-security-email-tag" />
+      </div>
+      {!emailConfigured && (
+        <p className="mt-2 text-xs text-amber-700" data-testid="my-security-email-unavailable">
+          This server can't send the code yet. Ask your administrator to set up email sending.
+        </p>
+      )}
+      {open && emailConfigured && (
+        <div className="mt-4 max-w-md">
+          <EmailUpdateForm
+            currentEmail={email}
+            verified={verified}
+            onCancel={() => setOpen(false)}
+            onDone={() => { setOpen(false); onChanged(); }}
+            testid="my-security-email-update"
+          />
+        </div>
       )}
     </Panel>
   );
@@ -454,6 +466,12 @@ export const SecurityTab = ({ onLogout } = {}) => {
   return (
     <div className={SECURITY_FRAME} data-testid="my-security-tab">
       <PasswordPanel onChanged={load} />
+      <EmailPanel
+        email={data.email}
+        verified={Boolean(data.email_verified_at)}
+        emailConfigured={data.two_factor?.email_configured !== false}
+        onChanged={load}
+      />
       <TwoFactorPanel state={data.two_factor} emailMasked={data.email_masked} onChanged={load} />
       <SessionsPanel sessions={data.sessions} lastLoginAt={data.last_login_at} onChanged={load} />
       {logoutButton}

@@ -4,7 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import "@/App.css";
 import { LoginPage } from "@/pages/LoginPage";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
-import { apiMe, MY_PHOTO_CHANGED_EVENT } from "@/lib/api";
+import { apiMe, MY_EMAIL_CHANGED_EVENT, MY_PHOTO_CHANGED_EVENT } from "@/lib/api";
 import { AppThemeController } from "@/components/ThemeAppearance";
 import { OfflineScreen } from "@/components/OfflineScreen";
 import { LoadingBar } from "@/components/LoadingBar";
@@ -32,6 +32,7 @@ const PatientPortalPage = lazyWithRetry(() => import("@/pages/PatientPortalPage"
 const TestimonialsPage = lazyWithRetry(() => import("@/pages/TestimonialsPage").then((m) => ({ default: m.TestimonialsPage })));
 const LegalPage = lazyWithRetry(() => import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage })));
 const ClientConsultationFormPage = lazyWithRetry(() => import("@/pages/ClientConsultationFormPage").then((m) => ({ default: m.ClientConsultationFormPage })));
+const EmailUpdateNotice = lazyWithRetry(() => import("@/components/EmailUpdateNotice").then((m) => ({ default: m.EmailUpdateNotice })));
 
 /**
  * What a route shows while its chunk is on the wire.
@@ -89,6 +90,20 @@ function App() {
     return () => window.removeEventListener(MY_PHOTO_CHANGED_EVENT, onPhoto);
   }, []);
 
+  // The same for a verified or changed Email ID, from the Security tab or the message below.
+  useEffect(() => {
+    const onEmail = (e) => {
+      setAuth((prev) => {
+        if (!prev?.user) return prev;
+        const next = { ...prev, user: { ...prev.user, ...e.detail } };
+        saveSession(next);
+        return next;
+      });
+    };
+    window.addEventListener(MY_EMAIL_CHANGED_EVENT, onEmail);
+    return () => window.removeEventListener(MY_EMAIL_CHANGED_EVENT, onEmail);
+  }, []);
+
   const handleLogin = (loginResponse) => {
     saveSession(loginResponse);
     setAuth(loginResponse);
@@ -125,6 +140,10 @@ function App() {
             element={
               <RequireAuth isAuthenticated={isAuthenticated}>
                 <CRMPage auth={auth} onLogout={handleLogout} />
+                {/* Its own boundary, drawing nothing: the board must not wait on it. */}
+                <Suspense fallback={null}>
+                  <EmailUpdateNotice user={auth?.user} token={auth?.token} />
+                </Suspense>
               </RequireAuth>
             }
           />

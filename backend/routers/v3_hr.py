@@ -5,6 +5,7 @@ import os
 import re
 import uuid
 
+import email_check
 from database import v3_col
 from utils import now_iso, clinic_today, live_branch_query
 from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, is_combined_expert_role, is_branch_admin_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES, COMBINED_EXPERT_ROLES
@@ -1431,9 +1432,9 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
         raise HTTPException(status_code=400, detail="Invalid role")
     if len(payload.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    existing = await v3_col("users").find_one({"email": payload.email}, {"_id": 0, "id": 1})
-    if existing:
-        raise HTTPException(status_code=409, detail="Email already in use")
+    # The automatic check (email_check.py), and not already another login's. The screens run
+    # the same one as it is typed.
+    email = await email_check.require_allowed(payload.email)
     if payload.employee_id:
         emp = await v3_col("employees").find_one({"id": payload.employee_id}, {"_id": 0, "id": 1, "joining_date": 1})
         if not emp:
@@ -1441,7 +1442,11 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
     user = {
         "id": str(uuid.uuid4()),
         "full_name": payload.full_name,
-        "email": payload.email,
+        "email": email,
+        # Not Verified until a code is read out of the inbox, which its first sign-in asks
+        # for (two_factor.first_code_due).
+        "email_verified_at": None,
+        "email_code_due": True,
         "password": hash_password(payload.password),
         "role": payload.role,
         "branch_id": payload.branch_id,
@@ -1540,9 +1545,16 @@ async def update_user_account(user_id: str, payload: UserAccountUpdate, caller: 
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
     if "email" in updates:
-        existing = await v3_col("users").find_one({"email": updates["email"], "id": {"$ne": user_id}}, {"_id": 0, "id": 1})
-        if existing:
-            raise HTTPException(status_code=409, detail="Email already in use")
+        # The form sends the email back on every save. Only a changed one is checked, so a
+        # login already in the OS on an address the check would refuse can still be edited.
+        before = await v3_col("users").find_one({"id": user_id}, {"_id": 0, "email": 1})
+        if email_check.normalize(updates["email"]) == email_check.normalize((before or {}).get("email")):
+            updates.pop("email")
+            if not updates:
+                return await v3_col("users").find_one({"id": user_id}, {"_id": 0, "password": 0})
+        else:
+            updates["email"] = await email_check.require_allowed(updates["email"], user_id)
+            updates["email_verified_at"] = None
     if updates.get("employee_id"):
         emp = await v3_col("employees").find_one({"id": updates["employee_id"]}, {"_id": 0, "id": 1})
         if not emp:
@@ -1715,6 +1727,7 @@ def _account_out(u: dict, bmap: dict) -> dict:
         "email": u.get("email") or "",
         "role": u.get("role") or "",
         "is_active": u.get("is_active", True) is not False,
+        "email_verified": bool(u.get("email_verified_at")),
         "branches": [{"id": i, "name": bmap.get(i) or "Unknown branch"} for i in ids if i],
         "created_at": u.get("created_at"),
         "password_changed_at": u.get("password_changed_at"),
@@ -1739,6 +1752,30 @@ async def get_employee_account(
         )
         account["last_login_at"] = (last or {}).get("created_at")
     return {"account": account, "designation_role": await _role_for_designation(employee.get("designation"))}
+
+
+class EmailCheckRequest(BaseModel):
+    email: str
+    # Whose login the email is for, so its own current one is not "already used". Neither
+    # on a login not made yet.
+    employee_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+@router.post("/email-check")
+async def check_login_email(
+    payload: EmailCheckRequest,
+    _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """The automatic check behind every Email ID box on a login: Add / Edit Employee, Create
+    User and Credentials -> Edit. POST so the address is not written into an access log."""
+    own_id = payload.user_id
+    if not own_id and payload.employee_id:
+        row = await v3_col("users").find_one(
+            {"employee_id": payload.employee_id}, {"_id": 0, "id": 1}, sort=[("created_at", 1)]
+        )
+        own_id = (row or {}).get("id")
+    return await email_check.check_for_login(payload.email, own_id)
 
 
 @router.put("/employees/{emp_id}/account")
@@ -1767,11 +1804,9 @@ async def save_employee_account(
         if is_branch_admin and existing.get("role") in BRANCH_ADMIN_BARRED_ROLES:
             raise HTTPException(status_code=403, detail="Branch Admins cannot change this login")
         updates: Dict[str, Any] = {}
-        if email and email != existing.get("email"):
-            clash = await v3_col("users").find_one({"email": email, "id": {"$ne": existing["id"]}}, {"_id": 0, "id": 1})
-            if clash:
-                raise HTTPException(status_code=409, detail="Email already in use")
-            updates["email"] = email
+        if email and email_check.normalize(email) != email_check.normalize(existing.get("email")):
+            updates["email"] = await email_check.require_allowed(email, existing["id"])
+            updates["email_verified_at"] = None
         if password:
             updates["password"] = hash_password(password)
             updates["password_changed_at"] = now_iso()

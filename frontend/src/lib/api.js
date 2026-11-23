@@ -897,6 +897,18 @@ export const resendMy2fa = async (intent, challengeId) =>
   (await api.post("/me/security/2fa/resend", { intent, challenge_id: challengeId })).data;
 export const verifyMy2fa = async (intent, challengeId, code) =>
   (await api.post("/me/security/2fa/verify", { intent, challenge_id: challengeId, code })).data;
+// Email ID: the automatic check, then a code to the address being verified or moved to.
+// QUIET: the check runs as somebody types, and the loading bar is not for that.
+export const checkMyEmail = async (email) => (await api.post("/me/security/email/check", { email }, QUIET)).data;
+export const startMyEmailVerify = async (email, currentPassword = "") =>
+  (await api.post("/me/security/email/start", { email, current_password: currentPassword })).data;
+export const resendMyEmailVerify = async (challengeId) =>
+  (await api.post("/me/security/email/resend", { challenge_id: challengeId })).data;
+export const finishMyEmailVerify = async (challengeId, code) =>
+  (await api.post("/me/security/email/verify", { challenge_id: challengeId, code })).data;
+// Fired with { detail: { email, email_verified_at } } after the one above, so App can swap
+// the signed-in user's copy and the "Update your Email ID" message goes without a reload.
+export const MY_EMAIL_CHANGED_EVENT = "me:email-changed";
 export const revokeMyOtherSessions = async () => (await api.post("/me/security/sessions/revoke-others")).data;
 
 export const myRequests = async (year) => (await api.get("/me/requests", { params: year ? { year } : {} })).data;
@@ -1006,6 +1018,10 @@ export const hrDeleteEmployeeHistory = async (id) => (await api.delete(`/hr/empl
 // PUT creates one ({ email, password }) or changes its username / password.
 export const hrEmployeeAccount = async (id) => (await api.get(`/hr/employees/${id}/account`)).data;
 export const hrSaveEmployeeAccount = async (id, payload) => (await api.put(`/hr/employees/${id}/account`, payload)).data;
+// The automatic check on a login's Email ID: { email, employee_id?, user_id? } to
+// { status: valid | invalid | unchecked, provider, reason }. The ids say whose login it is,
+// so its own current email is not "already used".
+export const hrEmailCheck = async (payload) => (await api.post("/hr/email-check", payload, QUIET)).data;
 export const hrUsers = async (params = {}) => {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
