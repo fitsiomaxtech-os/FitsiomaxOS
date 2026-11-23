@@ -15,17 +15,16 @@ const BLANK = "__blank__";
  * A drop-in for a native <select>, in the app's own list rather than the OS's blue one.
  * `options` takes plain strings or { value, label }. An option whose value is "" stays in
  * the list, muted, so a field can still be cleared the way the native blank row allowed;
- * while nothing is picked the trigger shows `placeholder` in grey. `className` dresses the
- * box and `contentClassName` the list it opens.
+ * while nothing is picked the trigger shows `placeholder` in grey.
  */
-export const ThemedSelect = ({ value, onChange, options, placeholder = "Select", disabled, title, className = "", contentClassName = "", testid }) => {
+export const ThemedSelect = ({ value, onChange, options, placeholder = "Select", disabled, title, className = "", testid }) => {
   const opts = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
   return (
     <Select value={value || ""} onValueChange={(v) => onChange(v === BLANK ? "" : v)} disabled={disabled}>
       <SelectTrigger className={`${THEMED_TRIGGER} ${className}`} title={title} data-testid={testid}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent className={`${THEMED_CONTENT} ${contentClassName}`}>
+      <SelectContent className={THEMED_CONTENT}>
         {opts.map((o) => (
           <SelectItem
             key={o.value || BLANK}
