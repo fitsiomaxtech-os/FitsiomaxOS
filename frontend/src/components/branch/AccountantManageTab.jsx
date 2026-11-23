@@ -1158,8 +1158,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
             {/* Branch Admin (filterDropdowns): the six modes as one dropdown, and the eight
                 revenue cards under the pile as a second one beside it -- the bar reads tabs,
                 mode, revenue, range. The revenue one only over an income pile, the one
-                place those cards stood, its box (not the list it opens) bordered orange over
-                To Verify and Awaiting Approval, the two piles with a step still to come. The
+                place those cards stood, its box (not the list it opens) bordered orange. The
                 focus ring is the keyboard's only: after a pick by mouse it would stand
                 outside the border and read as a thicker one. */}
             {filterDropdowns ? (
@@ -1178,7 +1177,7 @@ export const AccountantManageTab = ({ branchId: fixedBranchId, stickyTabs = fals
                     onChange={setRevenueView}
                     options={REVENUE_VIEWS.map((v) => ({ value: v.key, label: `${v.short} · ${fmt(sums.totals[v.key])}` }))}
                     title="Revenue"
-                    className={`h-10 w-56 px-2.5 text-sm font-semibold min-[1900px]:w-60 ${incomeStage !== "approved" ? "border-[3px] border-[rgb(255_184_134)] focus:ring-0 focus-visible:ring-2 focus-visible:ring-orange-200" : ""}`}
+                    className="h-10 w-56 border-[3px] border-[rgb(255_184_134)] px-2.5 text-sm font-semibold focus:ring-0 focus-visible:ring-2 focus-visible:ring-orange-200 min-[1900px]:w-60"
                     testid="accountant-manage-revenue-view-select"
                   />
                 )}
