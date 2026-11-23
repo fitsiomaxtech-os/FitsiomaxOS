@@ -195,7 +195,7 @@ def _course_attendance(rows: list, num_field: str) -> tuple:
     for r in rows:
         day, _, time = (r.get("slot_time") or "").strip().partition("T")
         if day and r.get("status") != "completed":
-            booked.append({"day": r.get(num_field), "date": day, "time": time})
+            booked.append({"id": r.get("id"), "day": r.get(num_field), "date": day, "time": time})
     return (
         sorted(present, key=lambda d: d["date"]),
         sorted(absent, key=lambda d: d["date"]),
@@ -342,16 +342,26 @@ async def schedule_session(
     number = session.get(num_field) or 0
     siblings = await v3_col(collection).find(
         {"lead_id": session.get("lead_id"), "id": {"$ne": session_id}},
-        {"_id": 0, num_field: 1, "slot_time": 1},
+        {"_id": 0, num_field: 1, "slot_time": 1, "status": 1, "completed_at": 1, "absences": 1},
     ).to_list(2000)
-    after = _course_end(siblings)
-    if after and slot <= after:
+    on_date = slot.split("T")[0]
+    after = _course_end(siblings).split("T")[0]
+    if after and on_date <= after:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Day {number} is worked after the days already booked — pick a time after"
-                f" {after.replace('T', ' at ')}, when this patient's slots run out"
+                f"Day {number} needs a different date — this patient is booked until {after},"
+                " so pick a date after it"
             ),
+        )
+
+    # One day to a date. A later hour on a date the patient has already worked or missed is
+    # a second day on the same date, and a package is a count of separate treatment days.
+    present, absent, _booked = _course_attendance([*siblings, {**session, "slot_time": ""}], num_field)
+    if any(d["date"] == on_date for d in (*present, *absent)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Day {number} needs a different date — this patient already has a day on {on_date}",
         )
 
     # Both of the physio's courses count against the slot. A rehab day and a treatment day
