@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, ArrowRightLeft, CalendarX, CheckCircle2, Clock, RefreshCw, Trash2, Users, X } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, CalendarX, CheckCircle2, Clock, Eye, RefreshCw, Trash2, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
@@ -51,6 +51,14 @@ const STATE_BADGE = {
   released: { label: "Waiting for new date", pill: "bg-slate-100 text-slate-600 ring-slate-200", dot: "bg-slate-400" },
   done: { label: "Done", pill: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
 };
+
+// The table's number columns, in the summary cards' order and colours.
+const COUNT_COLUMNS = [
+  { key: "waiting", label: "Need a plan", tone: "text-amber-600" },
+  { key: "reassigned", label: "Handed over", tone: "text-sky-600" },
+  { key: "released", label: "Waiting", tone: "text-slate-600" },
+  { key: "done", label: "Done", tone: "text-emerald-600" },
+];
 
 const initialOf = (name) => (name || "?").trim().charAt(0).toUpperCase() || "?";
 
@@ -610,7 +618,79 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null, toolbarSl
           )}
         </div>
       ) : (
-        <div className="space-y-2" data-testid="physio-absence-list">
+        <>
+        {/* The physio's board: a table from md up and the cards below it on a phone, as its
+            other tabs draw theirs. Branch Admin keeps the cards at every width. */}
+        {isPhysio && (
+          <div className="hidden overflow-hidden rounded-[4px] border border-slate-200 bg-white md:block" data-testid="physio-absence-table">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[960px] whitespace-nowrap text-sm">
+                <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="w-12 px-4 py-2.5 font-semibold">S.No</th>
+                    <th className="px-4 py-2.5 font-semibold">Date</th>
+                    <th className="px-4 py-2.5 font-semibold">Reason</th>
+                    <th className="px-4 py-2.5 font-semibold">Marked By</th>
+                    <th className="px-4 py-2.5 text-center font-semibold">Patients</th>
+                    {COUNT_COLUMNS.map((c) => (
+                      <th key={c.key} className="px-4 py-2.5 text-center font-semibold">{c.label}</th>
+                    ))}
+                    <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shown.map((a, i) => {
+                    const waiting = a.counts?.waiting || 0;
+                    return (
+                      <tr key={a.id} className={waiting ? "bg-amber-50/40 hover:bg-amber-50" : "hover:bg-slate-50"} data-testid={`physio-absence-table-row-${a.id}`}>
+                        <td className="px-4 py-3 text-slate-400">{i + 1}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{longDate(a.date)}</td>
+                        <td className="max-w-[280px] truncate px-4 py-3 text-slate-600" title={a.reason || undefined}>{a.reason || <span className="text-slate-300">—</span>}</td>
+                        <td className="max-w-[200px] truncate px-4 py-3 text-slate-600">{a.marked_by || <span className="text-slate-300">—</span>}</td>
+                        <td className={`px-4 py-3 text-center font-semibold ${a.days_total ? "text-slate-800" : "text-slate-300"}`}>{a.days_total || 0}</td>
+                        {COUNT_COLUMNS.map((c) => {
+                          const n = a.counts?.[c.key] || 0;
+                          return <td key={c.key} className={`px-4 py-3 text-center font-semibold ${n ? c.tone : "text-slate-300"}`}>{n}</td>;
+                        })}
+                        <td className="px-4 py-2">
+                          <div className="flex items-center justify-end gap-2">
+                            {waiting > 0 ? (
+                              <Button size="sm" onClick={() => setOpenId(a.id)} className="h-8 rounded-[4px] bg-amber-600 text-xs text-white hover:bg-amber-700" data-testid={`physio-absence-table-open-${a.id}`}>
+                                Assign patients
+                              </Button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setOpenId(a.id)}
+                                title="View patients"
+                                aria-label="View patients"
+                                className="rounded-[4px] p-1.5 text-slate-400 transition hover:bg-sky-50 hover:text-sky-600"
+                                data-testid={`physio-absence-table-open-${a.id}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => cancel(a)}
+                              title="Cancel absence"
+                              aria-label="Cancel absence"
+                              className="rounded-[4px] p-1.5 text-rose-500 transition hover:bg-rose-50 hover:text-rose-600"
+                              data-testid={`physio-absence-table-cancel-${a.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <div className={`space-y-2 ${isPhysio ? "md:hidden" : ""}`} data-testid="physio-absence-list">
           {shown.map((a) => {
             const waiting = a.counts?.waiting || 0;
             return (
@@ -646,6 +726,7 @@ export function PhysioAbsencePanel({ mode = "branch", branchId = null, toolbarSl
             );
           })}
         </div>
+        </>
       )}
 
       {openId && <AbsenceDetail absenceId={openId} onClose={() => setOpenId(null)} onChanged={load} />}
