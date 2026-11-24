@@ -241,7 +241,58 @@ export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false, branc
   );
 };
 
-export const ConsultationFormSheets = ({ f, set, readOnly = false, branches }) => {
+/**
+ * Page 3's Therapist Name & Sign. `sign` is the named therapist's own (Admin Setting >
+ * Digital Sign); `signers` are the branch's therapists, offered as the name is typed, since
+ * it is the whole name that finds the sign.
+ */
+const TherapistSign = ({ value, onChange, readOnly, sign, signers }) => {
+  const [open, setOpen] = useState(false);
+  const typed = String(value || "").trim().toLowerCase();
+  const names = open && !readOnly
+    ? signers.filter((n) => n.toLowerCase() !== typed && n.toLowerCase().includes(typed)).slice(0, 6)
+    : [];
+  return (
+    <div className="mx-auto mt-10 w-full max-w-md text-center">
+      <p className="text-lg font-bold" style={{ color: FORM_BLUE }}>Therapist Name &amp; Sign:</p>
+      {sign && (
+        <img src={sign} alt="Therapist sign" className="mx-auto mt-2 max-h-16 max-w-[15rem] rounded-[4px] bg-[#fff]" data-testid="consultation-form-therapist-sign" />
+      )}
+      <div className="relative">
+        {names.length > 0 && (
+          <div className="absolute inset-x-0 bottom-full z-10 mb-1 overflow-hidden rounded-[4px] border border-slate-200 bg-white text-left shadow-lg" data-testid="consultation-form-therapist-names">
+            {names.map((n) => (
+              <button
+                key={n}
+                type="button"
+                // Before the box loses focus, which would shut the list under the tap.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(n); setOpen(false); }}
+                className="block w-full truncate px-3 py-2 text-sm text-slate-800 hover:bg-sky-50 hover:text-sky-700"
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+        <input
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          readOnly={readOnly}
+          autoComplete="off"
+          className={`${inputCls} h-8 text-center`}
+          style={ruled(readOnly)}
+          aria-label="Therapist Name & Sign"
+          data-testid="consultation-form-therapist_name"
+        />
+      </div>
+    </div>
+  );
+};
+
+export const ConsultationFormSheets = ({ f, set, readOnly = false, branches, sign = "", signers = [] }) => {
   const bind = bindFor(f, set, readOnly);
   return (
     <div className="flex flex-col gap-4">
@@ -296,18 +347,7 @@ export const ConsultationFormSheets = ({ f, set, readOnly = false, branches }) =
         <Lines inline label="Long Term Goal:" rows={2} {...bind("long_term_goal")} />
         <Lines inline label="Do's & Don'ts:" rows={4} {...bind("dos_and_donts")} />
         <Lines label="Special Instructions to the Therapist:" rows={5} {...bind("special_instructions")} />
-        <div className="mx-auto mt-10 w-full max-w-md text-center">
-          <p className="text-lg font-bold" style={{ color: FORM_BLUE }}>Therapist Name &amp; Sign:</p>
-          <input
-            value={f.therapist_name}
-            onChange={(e) => set("therapist_name", e.target.value)}
-            readOnly={readOnly}
-            className={`${inputCls} h-8 text-center`}
-            style={ruled(readOnly)}
-            aria-label="Therapist Name & Sign"
-            data-testid="consultation-form-therapist_name"
-          />
-        </div>
+        <TherapistSign value={f.therapist_name} onChange={(v) => set("therapist_name", v)} readOnly={readOnly} sign={sign} signers={signers} />
       </Page>
     </div>
   );

@@ -7,6 +7,7 @@
 // jsPDF and html2canvas are imported on first use, as lib/pdf.js does.
 import { toast } from "@/components/ui/sonner";
 import { escapeHtml } from "@/lib/printable";
+import { signSrc } from "@/lib/signImage";
 import { branchBoxes, sameBranch, showDate } from "@/components/branch/ConsultationFormSheets";
 
 const BLUE = "#3b7bbf";
@@ -58,6 +59,9 @@ const STYLES = `
   .ln{position:absolute;left:0;right:0;border-top:1.6px dotted #cbd5e1}
   .sign{text-align:center;margin:56px auto 0;width:440px}
   .sign .lbl{display:block;color:${BLUE};font-weight:700;font-size:19px}
+  /* With the therapist's sign on it, the block takes the room it had for a pen. */
+  .sign.signed{margin-top:22px}
+  .sign img{display:block;max-width:240px;max-height:58px;margin:4px auto 0}
   .sign .val{display:block;border-bottom:1.6px dotted #cbd5e1;min-height:30px;line-height:30px;margin-top:6px}
   /* The PDF only: html2canvas sets text lower in a tall line box than a browser does --
      about half the line's extra leading -- which ran the dotted rules through the words.
@@ -87,8 +91,10 @@ const sheet = (n, body) => `
     <div class="pno">${n}</div>
   </div>`;
 
-// `branches`: the live branch names (ConsultationFormSheets' formBranchesFrom).
+// `branches`: the live branch names (ConsultationFormSheets' formBranchesFrom). `f` may carry
+// the therapist's sign beside its fields, as `therapist_sign` (a data URL).
 export const consultationFormHtml = (f, branches) => {
+  const sign = signSrc(f.therapist_sign);
   const logo = `${window.location.origin}/logo-icon-192.png`;
   const page1 = `
     <div class="head">
@@ -128,7 +134,7 @@ export const consultationFormHtml = (f, branches) => {
     ${lines("Long Term Goal:", f.long_term_goal, 2)}
     ${lines("Do's & Don'ts:", f.dos_and_donts, 4)}
     ${lines("Special Instructions to the Therapist:", f.special_instructions, 5, false)}
-    <div class="sign"><span class="lbl">Therapist Name &amp; Sign:</span>${v(f.therapist_name)}</div>`;
+    <div class="sign${sign ? " signed" : ""}"><span class="lbl">Therapist Name &amp; Sign:</span>${sign ? `<img src="${sign}" alt="" />` : ""}${v(f.therapist_name)}</div>`;
   return `<!doctype html><html><head><meta charset="utf-8" /><title>Consultation Form${f.name ? ` - ${escapeHtml(f.name)}` : ""}</title>
     <style>${STYLES}</style></head><body>${sheet(1, page1)}${sheet(2, page2)}${sheet(3, page3)}</body></html>`;
 };

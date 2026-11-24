@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
 import { ConsultationFormSheets, EMPTY_FORM, formBranchName, formBranchesFrom, formFromLead } from "@/components/branch/ConsultationFormSheets";
+import { signSrc } from "@/lib/signImage";
 import { closeCaseSheet, leadConsultationReport, leadProgression, openLeadDocument, setGoogleReview, uploadLeadDocument, verifyGoogleReview, verifyLeadDocument } from "@/lib/api";
 
 /**
@@ -123,7 +124,7 @@ function ConsultationReport({ lead, branchName = "", branches = [] }) {
           <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5" data-testid="progression-report-form">
             {report ? (
               <div className="mx-auto w-full max-w-4xl">
-                <ConsultationFormSheets f={form} set={readOnlySet} readOnly branches={formBranchesFrom(branches)} />
+                <ConsultationFormSheets f={form} set={readOnlySet} readOnly branches={formBranchesFrom(branches)} sign={signSrc(report.therapist_sign?.image)} />
               </div>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-slate-400">

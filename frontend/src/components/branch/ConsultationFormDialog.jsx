@@ -15,10 +15,12 @@ import {
   getBranches,
   getConsultationForm,
   listConsultationForms,
+  listSignatures,
   shareConsultationForm,
   updateConsultationForm,
 } from "@/lib/api";
 import { waNumber } from "@/lib/phone";
+import { useTherapistSign } from "@/lib/useTherapistSign";
 import { claimPrintWindow, downloadConsultationForm, printConsultationForm } from "@/lib/consultationFormPrint";
 import { ConsultationFormSheets, EMPTY_FORM, PatientDetailsSheet, formBranchName, formBranchesFrom, formFromLead, showDate } from "@/components/branch/ConsultationFormSheets";
 import { LeadConsultationFormPopup } from "@/components/branch/LeadConsultationFormPopup";
@@ -40,6 +42,8 @@ import { branchNameOf } from "@/lib/branchOrder";
  */
 
 const fillFrom = (r) => Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, r?.[k] || ""]));
+// A saved form as it prints: its fields, and the sign it was saved with.
+const paperOf = (r) => ({ ...fillFrom(r), therapist_sign: r?.therapist_sign?.image || "" });
 // A row's day: the form's own Date (local midnight), else the day it was saved.
 const rowDay = (r) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date || "");
@@ -188,6 +192,9 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const [saving, setSaving] = useState(false);
   // The Branch boxes: the live offline branches (the paper's four until they come).
   const [branchNames, setBranchNames] = useState([]);
+  // Page 3's sign: the names offered as the therapist's is typed, and the open form's own.
+  const [signers, setSigners] = useState([]);
+  const [savedSign, setSavedSign] = useState(null); // { name, image } | null
   const [share, setShare] = useState(null); // { token, name, contact }
   const [pdfBusy, setPdfBusy] = useState(null); // the id (or "open") a PDF is being drawn for
   // The row arrow's popup: the row, and its form once fetched.
@@ -211,6 +218,16 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
       .catch(() => {});
     return () => { live = false; };
   }, [branchId, initialLead, initialForm]);
+
+  useEffect(() => {
+    let live = true;
+    listSignatures(branchId)
+      .then((r) => {
+        if (live) setSigners((r.people || []).filter((p) => ["Therapist", "Consultant"].includes(p.group) && p.name).map((p) => p.name));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [branchId]);
 
   const load = useCallback(async (term) => {
     setListLoading(true);
@@ -242,6 +259,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   }, [rows, dateFilter, sortOrder]);
 
   const dirty = view === "form" && JSON.stringify(form) !== JSON.stringify(saved);
+  const sign = useTherapistSign(branchId, view === "form" ? form.therapist_name : "", savedSign);
   const set = (key, v) => setForm((cur) => ({ ...cur, [key]: v }));
   const top = () => scrollRef.current?.scrollTo({ top: 0 });
 
@@ -249,6 +267,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     setEditingId(id);
     setLeadForm(lead);
     setReport(false);
+    setSavedSign(null);
     setView("form");
     setFormLoading(true);
     top();
@@ -257,6 +276,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
       const filled = fillFrom(r);
       setForm(filled);
       setSaved(filled);
+      setSavedSign(r.therapist_sign || null);
       setMeta({ client_status: r.client_status, client_submitted_at: r.client_submitted_at, share_token: r.share_token });
       setReport(!edit && r.client_status === "submitted");
     } catch (e) {
@@ -366,7 +386,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
     const w = claimPrintWindow();
     if (!w) return;
     try {
-      printConsultationForm(fillFrom(await getConsultationForm(branchId, id)), w, branchNames);
+      printConsultationForm(paperOf(await getConsultationForm(branchId, id)), w, branchNames);
     } catch (e) {
       w.close();
       toast.error(e?.response?.data?.detail || "Couldn't open the form");
@@ -376,7 +396,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
   const downloadRow = async (id) => {
     setPdfBusy(id);
     try {
-      await downloadConsultationForm(fillFrom(await getConsultationForm(branchId, id)), branchNames);
+      await downloadConsultationForm(paperOf(await getConsultationForm(branchId, id)), branchNames);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't open the form");
     } finally {
@@ -386,7 +406,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
 
   const downloadOpen = async () => {
     setPdfBusy("open");
-    try { await downloadConsultationForm(form, branchNames); } finally { setPdfBusy(null); }
+    try { await downloadConsultationForm({ ...form, therapist_sign: sign }, branchNames); } finally { setPdfBusy(null); }
   };
 
   const card = (
@@ -505,7 +525,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
               )}
               {/* In a tab, the paper keeps the popup's width rather than stretching across the desk. */}
               <div className={inline ? "mx-auto w-full max-w-4xl" : ""}>
-                <ConsultationFormSheets f={form} set={set} readOnly={report} branches={branchNames} />
+                <ConsultationFormSheets f={form} set={set} readOnly={report} branches={branchNames} sign={sign} signers={signers} />
               </div>
             </>
           )}
@@ -519,7 +539,7 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
                   <Link2 className="h-4 w-4" /><span className="hidden sm:inline">Share Link</span>
                 </Button>
               )}
-              <Button type="button" variant="outline" size="sm" onClick={() => printConsultationForm(form, null, branchNames)} disabled={formLoading} className="gap-1.5 rounded-[4px] px-2.5" title="Print" data-testid="consultation-form-footer-print">
+              <Button type="button" variant="outline" size="sm" onClick={() => printConsultationForm({ ...form, therapist_sign: sign }, null, branchNames)} disabled={formLoading} className="gap-1.5 rounded-[4px] px-2.5" title="Print" data-testid="consultation-form-footer-print">
                 <Printer className="h-4 w-4" /><span className="hidden sm:inline">Print</span>
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={downloadOpen} disabled={formLoading || pdfBusy === "open"} className="gap-1.5 rounded-[4px] px-2.5" title="Download PDF" data-testid="consultation-form-footer-download">

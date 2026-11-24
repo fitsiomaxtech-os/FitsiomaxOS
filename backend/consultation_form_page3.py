@@ -15,8 +15,8 @@ prints and hands over says what the Consultant prescribed:
 
 Copied, not looked up live: each is written onto the lead's forms when its source is saved
 (sync_forms), and a form takes any it is missing when it is made or opened (fill_blanks).
-Treatment Goals, Do's & Don'ts and Therapist Name & Sign stay the branch's to write -- the
-sign is done by hand on the printed sheet.
+Treatment Goals, Do's & Don'ts and Therapist Name stay the branch's to write. The sign is the
+named therapist's own (staff_sign.py), or by hand on the printed sheet where there is none.
 """
 import re
 from typing import Iterable, Optional

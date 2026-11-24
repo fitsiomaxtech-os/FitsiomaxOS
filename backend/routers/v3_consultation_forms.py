@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import consultation_form_page3
+import staff_sign
 from database import v3_col
 from deps import is_branch_admin_role, online_arm_practice, v3_require_roles, vertical_in_arm
 from physio_scope import user_branch_ids
@@ -96,6 +97,19 @@ async def _get(branch_id: str, form_id: str) -> dict:
     return row
 
 
+async def _sign_of(row: dict) -> Optional[dict]:
+    """The sign over the form's Therapist Name, with the name it belongs to. Only ever handed
+    to the desk: the client's link asks for CLIENT_FIELDS alone."""
+    image = staff_sign.data_url(await staff_sign.form_sign(row))
+    return {"name": row["therapist_name"], "image": image} if image else None
+
+
+async def _signed_as(branch_id: str, name: str) -> Optional[str]:
+    """The id of the sign a form is saved with, for the therapist named on it."""
+    sign = await staff_sign.therapist_sign(name, branch_id)
+    return sign["id"] if sign else None
+
+
 async def _branch_exists(branch_id: str) -> None:
     if not await v3_col("branches").find_one({"id": branch_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Branch not found")
@@ -130,7 +144,8 @@ async def get_consultation_form(
     # A form made before page 3 was linked, or before the Consultant wrote it, shows the
     # Treatment Prescription in its blanks; saving it keeps them.
     row = await _get(branch_id, form_id)
-    return await consultation_form_page3.fill_blanks(row, row.get("lead_id"))
+    filled = await consultation_form_page3.fill_blanks(row, row.get("lead_id"))
+    return {**filled, "therapist_sign": await _sign_of(row)}
 
 
 @router.get("/leads/{lead_id}/consultation-report")
@@ -163,6 +178,7 @@ async def lead_consultation_report(
         "saved": bool(row),
         "client_status": row.get("client_status"),
         "fields": {k: filled.get(k) or "" for k in FIELDS},
+        "therapist_sign": await _sign_of(row),
     }
 
 
@@ -193,7 +209,10 @@ async def create_consultation_form(
     lead_id = (payload.lead_id or "").strip()
     # Page 3: the Consultant's Treatment Prescription, from the lead, where the form brings none.
     fields = await consultation_form_page3.fill_blanks(_clean(payload.fields), lead_id)
-    return await _insert(branch_id, user, fields, {"lead_id": lead_id} if lead_id else None)
+    extra = {"therapist_sign_id": await _signed_as(branch_id, fields["therapist_name"])}
+    if lead_id:
+        extra["lead_id"] = lead_id
+    return await _insert(branch_id, user, fields, extra)
 
 
 @router.post("/branches/{branch_id}/consultation-forms/request")
@@ -238,10 +257,15 @@ async def update_consultation_form(
     user: V3UserOut = Depends(v3_require_roles(*ROLES)),
 ):
     _guard(user, branch_id)
-    await _get(branch_id, form_id)
+    row = await _get(branch_id, form_id)
+    fields = _clean(payload.fields)
+    # A form signed once keeps that sign for as long as it names the same therapist.
+    signed = row.get("therapist_sign_id")
+    if not signed or fields["therapist_name"] != (row.get("therapist_name") or ""):
+        signed = await _signed_as(branch_id, fields["therapist_name"])
     await v3_col(COL).update_one(
         {"id": form_id, "branch_id": branch_id},
-        {"$set": {**_clean(payload.fields), "updated_by": user.full_name, "updated_at": now_iso()}},
+        {"$set": {**fields, "therapist_sign_id": signed, "updated_by": user.full_name, "updated_at": now_iso()}},
     )
     return await _get(branch_id, form_id)
 

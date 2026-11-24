@@ -89,6 +89,8 @@ CORE_INDEXES = [
     # list and every booking priced at that branch (store_branch_overrides.overlay).
     ("store_item_branch_overrides", [("branch_id", 1), ("item_id", 1)], "branch_item"),
     ("users", [("email", 1)], "email"),
+    # A bill, a prescription and a Consultation Form each look one person's sign up.
+    ("staff_signatures", [("user_id", 1)], "user_id"),
     # _branch_stages / _consultation_stage_names: filter by type, read in order.
     ("pipeline_stages", [("type", 1), ("order", 1)], "type_order"),
     ("pipeline_stages", [("id", 1)], "id"),

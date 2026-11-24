@@ -1,5 +1,6 @@
 // The supplied letterhead is the artwork, not an approximation made from HTML.
-// Draw at its original PDF coordinates, preserving room for a handwritten signature.
+// Draw at its original PDF coordinates. The room over the consultant's name takes their own
+// sign where they have one (Admin Setting > Digital Sign), and is left for the pen otherwise.
 const W = 595.2;
 const H = 841.92;
 const BLUE = "#194579";
@@ -63,10 +64,20 @@ const loadArtwork = () => new Promise((resolve, reject) => {
   img.src = `${process.env.PUBLIC_URL || ""}/prescription/letterhead.png`;
 });
 
-export const buildPrescription = async (data) => {
+// A sign that will not load is left off: the paper is still the prescription.
+const loadSign = (sign) => new Promise((resolve) => {
+  if (!sign) { resolve(null); return; }
+  const img = new Image();
+  img.onload = () => resolve(img.naturalWidth && img.naturalHeight ? img : null);
+  img.onerror = () => resolve(null);
+  img.src = sign;
+});
+
+// `sign`: the consultant's sign as a data URL, or "".
+export const buildPrescription = async (data, sign = "") => {
   const missing = prescriptionMissing(data);
   if (missing) throw new Error(missing);
-  const [{ jsPDF }, artwork] = await Promise.all([import("jspdf"), loadArtwork()]);
+  const [{ jsPDF }, artwork, ink] = await Promise.all([import("jspdf"), loadArtwork(), loadSign(sign)]);
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(W * 2.5);
   canvas.height = Math.ceil(H * 2.5);
@@ -87,6 +98,13 @@ export const buildPrescription = async (data) => {
     fitted(data.address, 354.5, 70, 215, 4, 10);
     font(12, true); ctx.fillText(data.date, 454, 174);
     fitted(data.consultant, 394, 713, 167, 2, 12, true);
+    if (ink) {
+      // Over the name, centred on the letterhead's "(Signature & Seal)", below the last line
+      // the writing can reach (595).
+      const s = Math.min(1, 150 / ink.naturalWidth, 54 / ink.naturalHeight);
+      const [w, h] = [ink.naturalWidth * s, ink.naturalHeight * s];
+      ctx.drawImage(ink, 472 - w / 2, 699 - h, w, h);
+    }
     y = 207;
     font(11, true);
     const patient = `Patient: ${data.name}${data.number ? `   |   ID: ${data.number}` : ""}`;

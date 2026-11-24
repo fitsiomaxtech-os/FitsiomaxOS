@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
 import { toast } from "@/components/ui/sonner";
+import { getPrescriptionSign } from "@/lib/api";
 import { downloadPdf, sharePdf, whatsappPdf } from "@/lib/pdf";
 import { buildPrescription, prescriptionData, prescriptionMissing, printPrescription } from "@/lib/prescription";
+import { signSrc } from "@/lib/signImage";
 
 // `actionsSlot`: a DOM node (the popup's footer band) to draw the icon row in, instead of
 // under the status line.
@@ -18,21 +20,36 @@ export const PrescriptionPdf = ({ lead, branch, actionsSlot }) => {
   const [built, setBuilt] = useState(null);
   const [error, setError] = useState(null);
   const { preview, openPreview, closePreview } = useDocumentPreview();
+  // The consultant's sign, asked for before the paper is drawn so it is drawn once. No sign,
+  // or none that could be fetched, is a prescription to sign by hand.
+  const signKey = missing ? "" : `${lead.id}|${data.consultant}`;
+  const [sign, setSign] = useState({ key: "", image: "" });
+  useEffect(() => {
+    if (!signKey) return undefined;
+    let alive = true;
+    getPrescriptionSign(lead.id)
+      // Only ever over its own name: the record may have moved on since this was opened.
+      .then((r) => { if (alive) setSign({ key: signKey, image: r?.name === data.consultant ? signSrc(r.image) : "" }); })
+      .catch(() => { if (alive) setSign({ key: signKey, image: "" }); });
+    return () => { alive = false; };
+  }, [signKey, lead.id, data.consultant]);
+  const signReady = !!signKey && sign.key === signKey;
+  const signImage = signReady ? sign.image : "";
   const job = useMemo(() => {
     let pending;
-    return () => { if (!pending) pending = buildPrescription(data); return pending; };
+    return () => { if (!pending) pending = buildPrescription(data, signImage); return pending; };
     // Retry creates a fresh build after a temporary asset/load failure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, retry]);
+  }, [data, retry, signImage]);
   useEffect(() => {
     let alive = true;
     setError(null);
     closePreview();
-    if (!missing) job().then((result) => { if (alive) setBuilt({ job, result }); })
+    if (!missing && signReady) job().then((result) => { if (alive) setBuilt({ job, result }); })
       .catch((err) => { if (alive) setError(err.message || "Could not create the prescription PDF."); });
     return () => { alive = false; };
-  }, [job, missing, closePreview]);
-  const ready = !missing && built?.job === job;
+  }, [job, missing, signReady, closePreview]);
+  const ready = !missing && signReady && built?.job === job;
   const filename = `prescription-${(data.number || lead.id || "patient").replace(/[^a-zA-Z0-9_-]/g, "-")}.pdf`;
   const pdf = async () => (await job()).blob;
   const title = "FITSIOMAX Prescription";

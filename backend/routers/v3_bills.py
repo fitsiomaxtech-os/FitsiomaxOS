@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 import bills
 import old_clients
+import staff_sign
 from database import v3_col
 from deps import is_branch_admin_role, is_zumba_role, role_satisfies, v3_current_user
 from schemas.v3 import V3UserOut
@@ -215,6 +216,8 @@ async def get_bill(transaction_id: str, user: V3UserOut = Depends(require_bill_r
         "transaction_ids": [i for i, _ in found],
         "date": asked["at"],
         "collected_by": asked["by"],
+        # Their sign (Admin Setting > Digital Sign), for the Authorised Signature line.
+        "signature": await staff_sign.collector_sign(asked["by"], asked["branch_id"], asked["at"]),
         "patient": asked["patient"],
         "branch": {
             "name": branch.get("branch_name") or "", "address": branch.get("address") or "", "phone": branch.get("phone") or "",

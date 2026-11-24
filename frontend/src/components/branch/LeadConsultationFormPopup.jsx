@@ -95,7 +95,7 @@ export const LeadConsultationFormPopup = ({ lead = null, branchId, onClose, onSa
   };
 
   // The paper with the steps' answers on it, the clinic's part as saved (or as the lead has it).
-  const print = (answers) => printConsultationForm({ ...ready.form, ...answers }, null, ready.branches);
+  const print = (answers) => printConsultationForm({ ...ready.form, ...answers, therapist_sign: ready.saved?.therapist_sign?.image || "" }, null, ready.branches);
 
   return (
     <div

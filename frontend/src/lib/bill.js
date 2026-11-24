@@ -9,6 +9,7 @@
 import { escapeHtml } from "@/lib/printable";
 import { BILL_LOGO } from "@/lib/billLogo";
 import { displayPhone } from "@/lib/phone";
+import { signSrc } from "@/lib/signImage";
 
 const BLUE = "#2b6cb0";
 const PHONE = "+91 75388 36030";
@@ -76,7 +77,7 @@ const billModel = (r) => {
       already: b.already_paid, now: b.paid_now,
       balance: b.balance > 0 ? rs(b.balance) : "", due: b.balance > 0 ? billDay(b.due_date) : "",
       payment: paymentText(b.payments), words: b.paid_now,
-      by: ["Collected By", b.collected_by], installments: b.installments || [],
+      by: ["Collected By", b.collected_by], sign: signSrc(b.signature), installments: b.installments || [],
     };
   }
   const schedule = r.kind === "schedule";
@@ -166,7 +167,14 @@ const STYLES = `
   .note{margin-top:16px;padding:10px 12px;border:1px solid #f0c36d;border-radius:4px;background:#fff9ee;color:#8a4b0a;font-size:13px}
   .foot{margin-top:auto;padding-top:40px}
   .sign{align-items:flex-end}
-  .sign .box{width:240px;padding-top:7px;border-top:2px dotted #525252;text-align:center;font-size:14px;color:#525252}
+  .sign .box{position:relative;width:240px;padding-top:7px;border-top:2px dotted #525252;text-align:center;font-size:14px;color:#525252}
+  /* The collector's sign, standing on the dotted line in the room a hand sign is left. A
+     bill closed up for its plan keeps that room as it is. */
+  .foot.signed{padding-top:62px}
+  .tight .foot.signed{padding-top:34px}
+  .ink{position:absolute;left:0;right:0;bottom:100%;margin-bottom:5px;line-height:0;text-align:center}
+  .ink img{display:inline-block;max-width:220px;max-height:56px;vertical-align:bottom}
+  .tight .ink img{max-height:34px}
   .thanks{margin-top:18px;font-size:17px;font-weight:600;text-align:center}
   /* No page margin, so the browser has nowhere to print its own date, title, about:blank and
      page number; the sheet carries the margin itself, on every page it runs to. */
@@ -217,9 +225,9 @@ const planHtml = (plan) => {
   return `<div class="plan"><h4>Payment Plan</h4><div class="plans">${table(rows.slice(0, half))}${half < rows.length ? table(rows.slice(half)) : ""}</div></div>`;
 };
 
-const footHtml = (by) => `
-  <div class="foot">
-    <div class="row sign">${by && by[1] ? `<div>${by[0]}: <b>${escapeHtml(by[1])}</b></div>` : "<div></div>"}<div class="box">Authorised Signature</div></div>
+const footHtml = (by, sign = "") => `
+  <div class="foot${sign ? " signed" : ""}">
+    <div class="row sign">${by && by[1] ? `<div>${by[0]}: <b>${escapeHtml(by[1])}</b></div>` : "<div></div>"}<div class="box">${sign ? `<div class="ink"><img src="${sign}" alt=""></div>` : ""}Authorised Signature</div></div>
     <div class="thanks">Thank You</div>
   </div>`;
 
@@ -259,7 +267,7 @@ export const billHtml = (r) => {
   ${m.payment ? `<div class="mode"><b>Payment mode:</b> ${escapeHtml(m.payment)}</div>` : ""}
   ${planHtml(plan)}
   ${m.note ? `<div class="note">${escapeHtml(m.note)}</div>` : ""}
-  ${footHtml(m.by)}`, plan.length ? "tight" : "");
+  ${footHtml(m.by, m.sign)}`, plan.length ? "tight" : "");
 };
 
 /**
