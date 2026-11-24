@@ -10677,18 +10677,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                               : treatmentFeePaid ? "text-emerald-600" : "text-amber-600"
                           }
                         />
-                        {/* No Assigned Physio or Total Sessions rows: the physio card below
-                            names the physio, and Sessions Completed already reads "14 of 35".
-                            It carries what is left rather than making the reader subtract,
-                            because "4 left" is the thing the branch acts on. */}
-                        <PanelRow
-                          even
-                          label="Sessions Completed"
-                          value={`${courseCompleted} of ${totalCourseSessions || "—"}`}
-                          tone={courseCompleted > 0 ? "text-emerald-700" : ""}
-                          note={totalCourseSessions > 0 ? (courseDone ? "course complete" : `${courseRemaining} left`) : ""}
-                          noteTone={courseDone ? "text-emerald-600" : "text-slate-500"}
-                        />
+                        {/* No Assigned Physio, Total Sessions or Sessions Completed rows: the
+                            Treatment Progress card below names the physio and counts the
+                            sessions completed. */}
                         {selectedLead.diet_coach_name && (
                           <PanelRow
                             even
