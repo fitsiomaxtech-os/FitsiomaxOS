@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Eye, Loader2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, Loader2, Printer, X } from "lucide-react";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SpellTextarea } from "@/components/ui/spell-textarea";
@@ -9,9 +9,10 @@ import { loadSpelling } from "@/lib/spellcheck";
 /**
  * The client link (pages/ClientConsultationFormPage), asked as eight short steps instead of
  * the paper, one field per row. Name, Mobile Number and Branch must be filled. The last step
- * can show every answer as a plain list first (Preview, optional), then sends the lot; the
- * client sees only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin
- * opens it as a read-only report). The popup is 1020 wide and as tall as its step, so
+ * can show every answer first (Preview, optional: the ten short ones two a row, the longer
+ * writing one a row), then sends the lot; the client sees only a thank-you -- the filled
+ * paper is for the clinic's eyes (Branch Admin opens it as a read-only report). The popup
+ * is 1020 wide and as tall as its step, so
  * Previous / Next sit the same gap under the last field on every step; its top stays put
  * (where a 520-high popup would sit centred). The progress bar is above it. Each step is
  * headed "Consultation Form", centred; the date is picked in the OS's own calendar. Every
@@ -22,10 +23,14 @@ import { loadSpelling } from "@/lib/spellcheck";
  * `onClose` puts the same steps over the app instead of a page of their own: Branch Admin's
  * lead popup opens it from its Form button (LeadConsultationFormPopup), and the card gets
  * a close cross. The overlay around it scrolls, so it is the one put back at the top.
+ * `onPrint` adds Print at the right of the last step's (and Preview's) buttons; it is given
+ * the answers as they stand. The client link passes none: the paper is the clinic's.
  */
 
 const STAGES = 8;
 const BLUE = "#0066ff";
+// The progress bar's fill.
+const GREEN = "#22c55e";
 // The popup's heading and its buttons.
 const ACCENT = "rgb(26 162 231 / 76%)";
 // A move: the popup goes out (speeding up), then the next one comes in (slowing down).
@@ -181,7 +186,9 @@ const TRIM_KEYS = [
   "previous_diagnosis", "previous_physiotherapy",
 ];
 
-// Preview before Submit: every answer as a plain list of rows, not the paper's layout.
+// Preview before Submit: every answer as a plain list of rows, not the paper's layout. The
+// first PREVIEW_PAIRED (Name to Date) go two a row, the rest one a row.
+const PREVIEW_PAIRED = 10;
 const PREVIEW = [
   ["Name", (d) => d.name],
   ["Mobile Number", (d) => (d.number ? `+${d.code} ${d.number}` : "")],
@@ -206,7 +213,7 @@ const PREVIEW = [
 const outlineCls = "flex h-10 items-center gap-1.5 rounded-[8px] border bg-white px-5 text-[15px] font-medium transition hover:bg-slate-50 disabled:opacity-60";
 const outlineStyle = { borderColor: ACCENT, color: ACCENT };
 
-export const ClientFormStages = ({ form, branches: liveBranches, sending = false, error = "", onSubmit, onClose }) => {
+export const ClientFormStages = ({ form, branches: liveBranches, sending = false, error = "", onSubmit, onClose, onPrint }) => {
   // The live offline branches from the link's own fetch; the paper's four should none come.
   const branches = liveBranches?.length ? liveBranches : PAPER_BRANCHES;
   const [d, setD] = useState(() => startFrom(form, branches));
@@ -306,6 +313,16 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
     set("number")(digits.slice(0, d.code === "91" ? 10 : 12));
   };
 
+  // Every answer as it is saved, and as Print writes it on the paper.
+  const answers = () => ({
+    ...Object.fromEntries(TRIM_KEYS.map((k) => [k, d[k].trim()])),
+    name: d.name.trim(),
+    contact_no: joinPhone(d.code, d.number),
+    age: d.age,
+    place: d.place.trim().replace(/[ '-]+$/, ""),
+    date: d.date || todayIso(),
+  });
+
   const next = (e) => {
     e.preventDefault();
     if (sending || moving) return;
@@ -314,14 +331,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
     if (first) { document.getElementById(FIELD_IDS[first])?.focus(); return; }
     if (!last) { go(stage + 1); return; }
     if (!settled()) return;
-    onSubmit({
-      ...Object.fromEntries(TRIM_KEYS.map((k) => [k, d[k].trim()])),
-      name: d.name.trim(),
-      contact_no: joinPhone(d.code, d.number),
-      age: d.age,
-      place: d.place.trim().replace(/[ '-]+$/, ""),
-      date: d.date || todayIso(),
-    });
+    onSubmit(answers());
   };
 
   const backButton = (preview || stage > 0) && (
@@ -355,7 +365,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
           <span key={i} className="relative h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "#dfe4ee" }}>
             <span
               className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-[400ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none"
-              style={{ width: i <= stage ? "100%" : "0%", background: BLUE }}
+              style={{ width: i <= stage ? "100%" : "0%", background: GREEN }}
             />
           </span>
         ))}
@@ -385,8 +395,8 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
         <h1 className="px-6 pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]" style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Preview" : "Consultation Form"}</h1>
 
         {/* Rows only: one field under another. The body is as tall as its step, the
-            buttons a set gap under it; past the screen's height it scrolls (Preview's 18
-            rows) and the buttons stay in view. */}
+            buttons a set gap under it; past the screen's height it scrolls (Preview) and
+            the buttons stay in view. */}
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
           <div
             key={view}
@@ -395,12 +405,18 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
             data-testid="client-stage-panel"
           >
             {view === STAGES && (
-              <dl className="divide-y divide-slate-100 rounded-[8px] border border-slate-100" data-testid="client-preview-list">
-                {PREVIEW.map(([label, read]) => {
+              // Two columns from tablet width up; a phone keeps one.
+              <dl className="grid grid-cols-1 rounded-[8px] border border-slate-100 sm:grid-cols-2" data-testid="client-preview-list">
+                {PREVIEW.map(([label, read], i) => {
                   const value = String(read(d) || "").trim();
+                  const paired = i < PREVIEW_PAIRED;
+                  const edges = [
+                    i < PREVIEW.length - 1 ? "border-b" : "",
+                    paired ? (i % 2 === 0 ? "sm:border-r" : "") : "sm:col-span-2",
+                  ].join(" ");
                   return (
-                    <div key={label} className="flex gap-4 px-4 py-2">
-                      <dt className="w-[230px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
+                    <div key={label} className={`flex min-w-0 gap-4 border-slate-100 px-4 py-2 ${edges}`}>
+                      <dt className={`w-[130px] shrink-0 text-[14px] font-medium text-slate-500 ${paired ? "" : "sm:w-[230px]"}`}>{label}</dt>
                       <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
                     </div>
                   );
@@ -605,6 +621,11 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
                 <>Next<ArrowRight className="h-4 w-4" /></>
               )}
             </button>
+            {last && onPrint && (
+              <button type="button" onClick={() => { if (!moving && settled()) onPrint(answers()); }} disabled={sending} className={`${outlineCls} ml-auto`} style={outlineStyle} title="Print" data-testid="client-stage-print">
+                <Printer className="h-4 w-4" />Print
+              </button>
+            )}
           </div>
         </div>
       </form>

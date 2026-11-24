@@ -9,6 +9,7 @@ import {
   updateConsultationForm,
 } from "@/lib/api";
 import { branchNameOf } from "@/lib/branchOrder";
+import { printConsultationForm } from "@/lib/consultationFormPrint";
 import { EMPTY_FORM, formBranchName, formBranchesFrom, formFromLead, todayIso } from "@/components/branch/ConsultationFormSheets";
 import { ClientFormStages } from "@/components/branch/ClientFormStages";
 
@@ -20,7 +21,8 @@ import { ClientFormStages } from "@/components/branch/ClientFormStages";
  *
  * Submit saves it as the lead's Consultation Form (tied by lead_id, so the next Form opens
  * the same one). The three-page paper is only the report of it, in Settings >
- * Consultation Form; the clinic's own part (diagnosis, treatment) is kept as it was.
+ * Consultation Form; the clinic's own part (diagnosis, treatment) is kept as it was. Print
+ * (last step) prints that paper from the answers as they stand, saved or not.
  *
  * With no `lead` it is Settings > Consultation Form's New Form: the same steps, blank but
  * for today's date and the branch's own name, saved as a form of its own. `onSaved` lets
@@ -92,6 +94,9 @@ export const LeadConsultationFormPopup = ({ lead = null, branchId, onClose, onSa
     }
   };
 
+  // The paper with the steps' answers on it, the clinic's part as saved (or as the lead has it).
+  const print = (answers) => printConsultationForm({ ...ready.form, ...answers }, null, ready.branches);
+
   return (
     <div
       className="fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden bg-slate-900/50 backdrop-blur-sm"
@@ -99,7 +104,7 @@ export const LeadConsultationFormPopup = ({ lead = null, branchId, onClose, onSa
       data-testid="lead-consultation-form-popup"
     >
       {ready ? (
-        <ClientFormStages form={ready.form} branches={ready.branches} sending={sending} error={error} onSubmit={submit} onClose={onClose} />
+        <ClientFormStages form={ready.form} branches={ready.branches} sending={sending} error={error} onSubmit={submit} onClose={onClose} onPrint={print} />
       ) : (
         <div className="flex min-h-full items-center justify-center text-white/80"><Loader2 className="h-6 w-6 animate-spin" /></div>
       )}
