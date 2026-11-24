@@ -9,11 +9,11 @@ import { loadSpelling } from "@/lib/spellcheck";
 /**
  * The client link (pages/ClientConsultationFormPage), asked as eight short steps instead of
  * the paper, one field per row. Name, Mobile Number and Branch must be filled. The last step
- * can show every answer first (Preview, optional: the ten short ones two a row, the longer
- * writing one a row), then sends the lot; the client sees only a thank-you -- the filled
- * paper is for the clinic's eyes (Branch Admin opens it as a read-only report). The popup
- * is 1020 wide and as tall as its step, so
- * Previous / Next sit the same gap under the last field on every step; its top stays put
+ * can show every answer first (Preview, optional: the ten short ones as rows, the longer
+ * writing in boxes that grow with it, both two a line), then sends the lot; the client sees
+ * only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin opens it as a
+ * read-only report). The popup is 1020 wide and as tall as its step, so Previous / Next sit
+ * the same gap under the last field on every step; its top stays put
  * (where a 520-high popup would sit centred). The progress bar is above it. Each step is
  * headed "Consultation Form", centred; the date is picked in the OS's own calendar. Every
  * move slides the whole popup: Next sends it off the screen to the left, then the next
@@ -186,9 +186,9 @@ const TRIM_KEYS = [
   "previous_diagnosis", "previous_physiotherapy",
 ];
 
-// Preview before Submit: every answer as a plain list of rows, not the paper's layout. The
-// first PREVIEW_PAIRED (Name to Date) go two a row, the rest one a row.
-const PREVIEW_PAIRED = 10;
+// Preview before Submit: every answer, not in the paper's layout. The first PREVIEW_SHORT
+// (Name to Date) are label-and-value rows, the rest a box each; both go two a line.
+const PREVIEW_SHORT = 10;
 const PREVIEW = [
   ["Name", (d) => d.name],
   ["Mobile Number", (d) => (d.number ? `+${d.code} ${d.number}` : "")],
@@ -406,22 +406,34 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
           >
             {view === STAGES && (
               // Two columns from tablet width up; a phone keeps one.
-              <dl className="grid grid-cols-1 rounded-[8px] border border-slate-100 sm:grid-cols-2" data-testid="client-preview-list">
-                {PREVIEW.map(([label, read], i) => {
-                  const value = String(read(d) || "").trim();
-                  const paired = i < PREVIEW_PAIRED;
-                  const edges = [
-                    i < PREVIEW.length - 1 ? "border-b" : "",
-                    paired ? (i % 2 === 0 ? "sm:border-r" : "") : "sm:col-span-2",
-                  ].join(" ");
-                  return (
-                    <div key={label} className={`flex min-w-0 gap-4 border-slate-100 px-4 py-2 ${edges}`}>
-                      <dt className={`w-[130px] shrink-0 text-[14px] font-medium text-slate-500 ${paired ? "" : "sm:w-[230px]"}`}>{label}</dt>
-                      <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
+              <>
+                <dl className="grid grid-cols-1 rounded-[8px] border border-slate-100 sm:grid-cols-2" data-testid="client-preview-list">
+                  {PREVIEW.slice(0, PREVIEW_SHORT).map(([label, read], i) => {
+                    const value = String(read(d) || "").trim();
+                    // No line under the last row: one cell of it on a phone, two from there up.
+                    const under = i === PREVIEW_SHORT - 1 ? "" : i === PREVIEW_SHORT - 2 ? "border-b sm:border-b-0" : "border-b";
+                    return (
+                      <div key={label} className={`flex min-w-0 gap-4 border-slate-100 px-4 py-2 ${under} ${i % 2 === 0 ? "sm:border-r" : ""}`}>
+                        <dt className="w-[130px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
+                        <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+                {/* Each box is as tall as its writing, never less than two lines; the two on
+                    one line stretch to the taller. */}
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2" data-testid="client-preview-boxes">
+                  {PREVIEW.slice(PREVIEW_SHORT).map(([label, read]) => {
+                    const value = String(read(d) || "").trim();
+                    return (
+                      <div key={label} className="flex min-w-0 flex-col gap-1.5">
+                        <dt className="text-[14px] font-medium text-slate-500">{label}</dt>
+                        <dd className={`min-h-[64px] grow whitespace-pre-wrap break-words rounded-[8px] border border-[#c7cdea] bg-white px-4 py-2 text-[14px] leading-relaxed ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </>
             )}
 
             {view === 0 && (
