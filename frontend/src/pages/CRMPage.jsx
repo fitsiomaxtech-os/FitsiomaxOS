@@ -1052,6 +1052,10 @@ export const CRMPage = ({ auth, onLogout }) => {
   // fixed footer is still a sibling ahead of the board on a desktop, just display:none),
   // which together left 48px of empty page between the header and the tabs.
   const bdFlush = showBusinessDevBoard && !showProfile;
+  // My Profile from md up runs edge to edge: its sidebar is the left wall of the page, from
+  // under the header (under the tabs, for Super Admin) to the foot of the window. !p-0
+  // because the per-role md:pt-1 / md:pb-6 below would otherwise win over it.
+  const profileFlush = showProfile ? "md:flex md:min-h-[calc(100dvh-var(--role-header-height,89px))] md:flex-col md:space-y-0 md:!p-0" : "";
 
   const filteredAppointmentsForPhysioBoards = appointments;
 
@@ -1347,10 +1351,10 @@ export const CRMPage = ({ auth, onLogout }) => {
 
         </Suspense>
 
-        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : bdFlush ? "space-y-0 pt-1" : "space-y-4"} px-3 py-4 ${bdFlush ? "sm:pt-1" : "sm:space-y-6"} sm:px-6 sm:py-6 ${showBranchBoard ? "md:pt-1" : ""} ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""}`}>
+        <div className={`w-full ${bdPhoneFlush ? "space-y-0 pt-0" : bdFlush ? "space-y-0 pt-1" : "space-y-4"} px-3 py-4 ${bdFlush ? "sm:pt-1" : "sm:space-y-6"} sm:px-6 sm:py-6 ${showBranchBoard ? "md:pt-1" : ""} ${showSuperAdminBoard || showBusinessDevBoard || showAccountantBoard || showZumbaBoard ? "pb-20 md:pb-6" : ""} ${profileFlush}`}>
 
         {showSuperAdminBoard && (
-          <div className="hidden flex-wrap items-center gap-2 border-b border-slate-200 pb-2 md:flex" data-testid="super-admin-nav">
+          <div className={`hidden flex-wrap items-center gap-2 border-b border-slate-200 pb-2 md:flex ${showProfile ? "px-6 pt-6" : ""}`} data-testid="super-admin-nav">
             {SUPER_ADMIN_TABS.map((t) => (
               <button
                 key={t.key}

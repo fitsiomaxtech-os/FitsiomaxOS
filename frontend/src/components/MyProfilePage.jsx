@@ -42,6 +42,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  ShieldCheck,
   UserRound,
   Users,
   X,
@@ -79,19 +80,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { duration, hours, prettyTime } from "@/lib/clock";
 import { displayPhone } from "@/lib/phone";
 
-// The sidebar from md up, names only. A phone has its own list: see MENU_ITEMS.
+// The sidebar from md up. A phone has its own list: see MENU_ITEMS.
 const TABS = [
   // First: the month the branch is open, which is the frame the other tabs are read in.
-  { key: "calendar", label: "Monthly Calendar" },
+  { key: "calendar", label: "Monthly Calendar", icon: CalendarDays },
   // Leave and permission requests: what was the Attendance tab's Request popup, as a tab.
   // Not offered to Super Admin, who has no one above them to ask.
-  { key: "timeoff", label: "Permission Request" },
-  { key: "attendance", label: "Attendance" },
-  { key: "profile", label: "My Profile" },
+  { key: "timeoff", label: "Permission Request", icon: CalendarOff },
+  { key: "attendance", label: "Attendance", icon: Clock },
+  { key: "profile", label: "My Profile", icon: UserRound },
   // Last, because it is the tab opened on purpose rather than in passing. The ones before
   // it are read — what did I work, what did I ask for, what do they have on me — and this
   // one is only reached by somebody who came to change something.
-  { key: "security", label: "Security" },
+  { key: "security", label: "Security", icon: ShieldCheck },
 ];
 
 // ---------- reading the figures ----------
@@ -726,8 +727,7 @@ const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
   return (
     <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
       {compactLayout ? (
-        // On desktop the toolbar is drawn on the page's top row (toolbarTarget), across
-        // from Back.
+        // On desktop the toolbar is drawn on the page's top row (toolbarTarget).
         toolbarTarget ? createPortal(attendanceToolbar, toolbarTarget) : attendanceToolbar
       ) : phone ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white p-0.5 shadow-sm">
@@ -1319,54 +1319,55 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
   }
 
   return (
-    <div className="space-y-4" data-testid="my-profile-page">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className={`min-w-0 items-center gap-3 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}>
-          {/* Back as a bare chevron, no box round it. The name that sat beside
-              it is gone: the header above already says whose page this is. It hops left
+    <div className="flex flex-col bg-white md:flex-1 md:flex-row" data-testid="my-profile-page">
+      {/* The same sidebar as the Notifications popup, drawn as the page's left edge: flush
+          under the header and as tall as the page, so it is a wall rather than a card. Only
+          the column is full height — what is in it stays in view while a month scrolls past.
+          CRMPage drops its own padding round this page for that. */}
+      <aside className="shrink-0 border-b border-slate-200 bg-slate-50/60 md:w-56 md:border-b-0 md:border-r" data-testid="my-profile-sidebar">
+        <nav
+          aria-label="My Profile"
+          className="flex gap-1 overflow-x-auto p-2 text-xs md:sticky md:top-[var(--role-header-height,89px)] md:flex-col md:overflow-visible"
+          data-testid="my-profile-tabs"
+        >
+          {/* Back as a bare chevron, no box round it, over the tabs' icons. It hops left
               once a second -- the boards' nudge-left, on a 1s beat rather than 1.5s. */}
           <button
             type="button"
             onClick={onBack}
-            className="flex h-11 w-8 shrink-0 items-center justify-center text-slate-600 hover:text-slate-900"
+            className={`h-8 shrink-0 items-center rounded-md px-2.5 text-slate-600 hover:text-slate-900 focus-visible:outline-sky-600 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}
             aria-label="Back"
             title="Back"
             data-testid="my-profile-back"
           >
             <ChevronLeft className="h-5 w-5 motion-safe:animate-[nudge-left_1s_ease-in-out_infinite]" />
           </button>
-        </div>
-        {/* Top row: Back, then the open tab's tools pushed right. */}
-        <div ref={setToolsEl} className="flex flex-wrap items-center justify-end gap-2 empty:hidden sm:ml-auto" data-testid="my-profile-tab-tools" />
-      </div>
-
-      <div className="flex flex-col gap-4 md:flex-row md:items-start">
-        {/* The tabs, down the left: the list My Profile's own sections use (ProfileView).
-            It stays in view under the header while a month of attendance scrolls past. */}
-        <nav
-          aria-label="My Profile"
-          className="flex w-full shrink-0 flex-col gap-1 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm md:sticky md:top-[calc(var(--role-header-height,89px)+1rem)] md:w-52"
-          data-testid="my-profile-tabs"
-        >
-          {tabs.map(({ key, label }) => (
+          {tabs.map(({ key, label, icon: Icon }) => (
             <button
               type="button"
               key={key}
               onClick={() => setTab(key)}
               aria-current={tab === key ? "page" : undefined}
-              className={`whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${tab === key ? "bg-sky-100/70 font-semibold text-sky-700 shadow-[inset_3px_0_0_#0284C7]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"}`}
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${tab === key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
               data-testid={`my-profile-tabs-${key}`}
             >
-              {label}
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1">{label}</span>
             </button>
           ))}
         </nav>
+      </aside>
+
+      {/* gap rather than space-y: the tools row is display:none on a tab that has none, and
+          must not leave its space behind. */}
+      <div className="flex min-w-0 flex-col gap-4 py-4 md:flex-1 md:px-6" data-testid="my-profile-tab-body">
+        <div ref={setToolsEl} className="flex flex-wrap items-center justify-end gap-2 empty:hidden" data-testid="my-profile-tab-tools" />
 
         {/* Both tabs stay mounted once opened would mean two months of requests for a screen
             somebody opened to read one thing, so each is mounted only while it is the tab.
             Switching back re-reads, which is right for a page whose whole subject is what
             happened today. */}
-        <div className="w-full min-w-0 md:flex-1" data-testid="my-profile-tab-body">
+        <div className="min-w-0">
           {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
             : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
             : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>

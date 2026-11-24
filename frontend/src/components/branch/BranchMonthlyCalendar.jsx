@@ -22,7 +22,7 @@ const shortDate = (s) => new Date(`${s}T00:00:00`).toLocaleDateString("en-GB", {
 // Changed by the branch's Branch Admin, Super Admin and BDE only — the server says which
 // through `can_edit`, and everyone else sees it read-only.
 // `toolbarTarget`: a DOM node to draw the month switcher and the counts into instead of
-// above the grid -- My Profile puts them on its top row, across from Back.
+// above the grid -- My Profile puts them on its top row.
 export const BranchMonthlyCalendar = ({ branchId, toolbarTarget = null }) => {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [data, setData] = useState(null);
