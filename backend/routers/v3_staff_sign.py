@@ -1,6 +1,10 @@
-"""Branch Admin > Admin Setting > Digital Sign: the signs of a branch's people, uploaded and
-seen. What they are for, and whose prints where, is staff_sign.py's."""
-from typing import Dict
+"""The signs of the clinic's people, uploaded and seen.
+
+    My Profile > Sign Upload           everybody's own, whatever their desk
+    Admin Setting > Digital Sign       a branch's people, by the Branch Admin
+
+Whose sign prints on which paper is staff_sign.py's."""
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
@@ -8,7 +12,7 @@ import staff_sign
 from database import v3_col
 from deps import (
     is_branch_admin_role, is_head_physio_role, is_physio_role, is_pre_sales_role,
-    online_arm_practice, v3_require_roles, vertical_in_arm, works_org_wide,
+    online_arm_practice, v3_current_user, v3_require_roles, vertical_in_arm, works_org_wide,
 )
 from physio_scope import user_branch_ids
 from schemas.v3 import V3UserOut
@@ -72,6 +76,36 @@ def _stamp(row: dict) -> dict:
     return {"uploaded_at": row.get("uploaded_at") or "", "uploaded_by": row.get("uploaded_by") or ""}
 
 
+def _signed(name: str, row: Optional[dict]) -> dict:
+    return {"name": name, "image": staff_sign.data_url(row), **_stamp(row or {})}
+
+
+async def _read_sign(file: UploadFile) -> bytes:
+    """The picture the editor sends, or a refusal: a small PNG and nothing else."""
+    data = await file.read(staff_sign.MAX_BYTES + 1)
+    if len(data) > staff_sign.MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The sign picture is too large")
+    size = staff_sign.png_size(data)
+    if not size:
+        raise HTTPException(status_code=400, detail="The sign must be a PNG picture")
+    if not (0 < size[0] <= staff_sign.MAX_WIDTH and 0 < size[1] <= staff_sign.MAX_HEIGHT):
+        raise HTTPException(status_code=400, detail="The sign picture is too large")
+    return data
+
+
+# My Profile > Sign Upload. No id in either: they answer for whoever holds the token, as the
+# rest of My Profile does, so every desk has them.
+@router.get("/me/signature")
+async def my_signature(user: V3UserOut = Depends(v3_current_user)):
+    return _signed(user.full_name, await staff_sign.of_user(user.id))
+
+
+@router.post("/me/signature")
+async def upload_my_signature(file: UploadFile = File(...), user: V3UserOut = Depends(v3_current_user)):
+    me = {"id": user.id, "full_name": user.full_name}
+    return _signed(user.full_name, await staff_sign.save(me, await _read_sign(file), me))
+
+
 @router.get("/signatures")
 async def list_signatures(branch_id: str = Query(""), user: V3UserOut = Depends(v3_require_roles(*ROLES))):
     """Who signs at this branch, and who has a sign. The signs themselves are not in it."""
@@ -99,7 +133,7 @@ async def get_signature(user_id: str, branch_id: str = Query(""), user: V3UserOu
     row = await staff_sign.of_user(user_id)
     if not row:
         raise HTTPException(status_code=404, detail="No sign has been uploaded yet")
-    return {"name": person.get("full_name") or "", "image": staff_sign.data_url(row), **_stamp(row)}
+    return _signed(person.get("full_name") or "", row)
 
 
 @router.post("/signatures/{user_id}")
@@ -112,16 +146,8 @@ async def upload_signature(
     person = await _person(user_id, branch_id, user)
     if not _may_upload(user, person):
         raise HTTPException(status_code=403, detail="You cannot upload this person's sign")
-    data = await file.read(staff_sign.MAX_BYTES + 1)
-    if len(data) > staff_sign.MAX_BYTES:
-        raise HTTPException(status_code=413, detail="The sign picture is too large")
-    size = staff_sign.png_size(data)
-    if not size:
-        raise HTTPException(status_code=400, detail="The sign must be a PNG picture")
-    if not (0 < size[0] <= staff_sign.MAX_WIDTH and 0 < size[1] <= staff_sign.MAX_HEIGHT):
-        raise HTTPException(status_code=400, detail="The sign picture is too large")
-    row = await staff_sign.save(person, data, {"id": user.id, "full_name": user.full_name})
-    return {"name": person.get("full_name") or "", "image": staff_sign.data_url(row), **_stamp(row)}
+    row = await staff_sign.save(person, await _read_sign(file), {"id": user.id, "full_name": user.full_name})
+    return _signed(person.get("full_name") or "", row)
 
 
 @router.get("/branches/{branch_id}/therapist-sign")

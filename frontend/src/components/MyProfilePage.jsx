@@ -73,6 +73,7 @@ import { SecurityTab } from "@/components/MySecurity";
 import { EmailVerifiedTag } from "@/components/EmailId";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { PhotoEditor } from "@/components/ui/photo-editor";
+import { MySign } from "@/components/MySign";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent } from "@/components/ui/card";
 // The same formatters the header clock and HR's register read a day with, so an hour and
@@ -988,6 +989,7 @@ const PROFILE_SECTIONS = [
   ["documents", "ID & Documents"],
   ["address", "Address & Emergency"],
   ["bank", "Bank Details"],
+  ["sign", "Sign Upload"],
 ];
 
 // Match the employee view dialog while keeping the profile in its existing page.
@@ -1030,14 +1032,14 @@ const ProfileView = ({ data, roleLabel, photo }) => {
       </header>
       {!data.linked && <p className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-xs text-amber-800">This login is not linked to an employee record. Ask HR to link it from Credentials.</p>}
       <div className="flex min-h-[430px] flex-col sm:flex-row">
-        {/* Below sm the five sections sit in a 3 + 2 grid, every one on screen: as one
+        {/* Below sm the six sections sit in two rows of three, every one on screen: as one
             scrolling row, Address & Emergency and Bank Details sat past the right edge. A
             label too long for its cell on a narrow phone wraps rather than clipping. From
             sm up it is the list down the left, as before. */}
-        <nav aria-label="Profile sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs max-sm:grid max-sm:grid-cols-6 max-sm:overflow-visible sm:w-52 sm:flex-col sm:gap-1 sm:p-3 sm:text-sm sm:border-b-0 sm:border-r" data-testid="branch-profile-sections">
-          {PROFILE_SECTIONS.map(([key, label], i) => (
+        <nav aria-label="Profile sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs max-sm:grid max-sm:grid-cols-3 max-sm:overflow-visible sm:w-52 sm:flex-col sm:gap-1 sm:p-3 sm:text-sm sm:border-b-0 sm:border-r" data-testid="branch-profile-sections">
+          {PROFILE_SECTIONS.map(([key, label]) => (
             <button type="button" key={key} onClick={() => setSection(key)} aria-current={section === key ? "page" : undefined}
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 max-sm:min-w-0 max-sm:whitespace-normal max-sm:px-2 max-sm:text-center max-sm:leading-tight ${i < 3 ? "max-sm:col-span-2" : "max-sm:col-span-3"} ${section === key ? "bg-sky-100/70 font-semibold text-sky-700 sm:shadow-[inset_3px_0_0_#0284C7]" : "text-slate-600 hover:bg-white hover:text-slate-800"}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 max-sm:min-w-0 max-sm:whitespace-normal max-sm:px-2 max-sm:text-center max-sm:leading-tight ${section === key ? "bg-sky-100/70 font-semibold text-sky-700 sm:shadow-[inset_3px_0_0_#0284C7]" : "text-slate-600 hover:bg-white hover:text-slate-800"}`}
               data-testid={`branch-profile-section-${key}`}>{label}</button>
           ))}
         </nav>
@@ -1047,7 +1049,8 @@ const ProfileView = ({ data, roleLabel, photo }) => {
             <PhotoAvatar person={data} size={40} photo={photo} />
             <PhotoActions person={data} photo={photo} />
           </div>}
-          {rows[section].map(([label, value]) => (
+          {section === "sign" && <MySign />}
+          {(rows[section] || []).map(([label, value]) => (
             <div key={label} className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-4">
               <span className="shrink-0 text-xs font-medium text-slate-500 sm:w-40 sm:text-sm">{label}</span>
               <span className="min-h-9 min-w-0 flex-1 whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{value || "\u2014"}</span>
@@ -1055,7 +1058,7 @@ const ProfileView = ({ data, roleLabel, photo }) => {
           ))}
         </div>
       </div>
-      <footer className="border-t border-slate-200 bg-slate-50/60 px-5 py-3 text-xs text-slate-500">You can update your photo. For changes to your employee details, contact HR.</footer>
+      <footer className="border-t border-slate-200 bg-slate-50/60 px-5 py-3 text-xs text-slate-500">You can update your photo and your sign. For changes to your employee details, contact HR.</footer>
     </section>
   );
 };

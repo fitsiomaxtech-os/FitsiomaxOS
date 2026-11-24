@@ -309,6 +309,13 @@ export const uploadSignature = async (userId, branchId, blob) => {
   form.append("file", blob, "sign.png");
   return (await api.post(`/signatures/${userId}`, form, { params: { branch_id: branchId || "" } })).data;
 };
+// My Profile > Sign Upload: the signed-in person's own, whatever their desk.
+export const mySignature = async () => (await api.get("/me/signature")).data;
+export const uploadMySignature = async (blob) => {
+  const form = new FormData();
+  form.append("file", blob, "sign.png");
+  return (await api.post("/me/signature", form)).data;
+};
 // The sign that goes with a therapist's name on the Consultation Form, and the one over the
 // consultant's name on a prescription: { name, image }, image "" where there is none.
 export const getTherapistSign = async (branchId, name) => (await api.get(`/branches/${branchId}/therapist-sign`, { params: { name } })).data;

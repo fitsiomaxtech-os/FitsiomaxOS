@@ -241,6 +241,20 @@ def test_only_a_small_png_is_kept(db, data):
     assert db(staff_sign.COL).rows == []
 
 
+def test_everyone_has_their_own_at_my_profile(db):
+    # A desk the Digital Sign popup is closed to.
+    me = login("pre_sales", "tele", name="Tele")
+    assert run(v3_staff_sign.my_signature(me)) == {"name": "Tele", "image": "", "uploaded_at": "", "uploaded_by": ""}
+    done = run(v3_staff_sign.upload_my_signature(UploadFile(filename="s.png", file=io.BytesIO(png())), me))
+    assert run(v3_staff_sign.my_signature(me)) == done and done["uploaded_by"] == "Tele"
+    # Theirs alone, and the same one the branch's list and the papers read.
+    assert run(v3_staff_sign.my_signature(login("physio", "phy", name="Ravi")))["image"] == ""
+    assert run(staff_sign.collector_sign("Tele", "b1", "")) == done["image"]
+    with pytest.raises(HTTPException):
+        run(v3_staff_sign.upload_my_signature(UploadFile(filename="s.svg", file=io.BytesIO(b"<svg>" * 20)), me))
+    assert run(v3_staff_sign.my_signature(me)) == done
+
+
 def test_a_super_admins_sign_is_a_super_admins_to_add(db):
     db("users").rows.append({"id": "boss2", "full_name": "Chief", "role": "super_admin", "branch_id": "b1"})
     with pytest.raises(HTTPException) as e:
