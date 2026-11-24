@@ -27,7 +27,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  ArrowRight,
   BriefcaseBusiness,
+  CalendarClock,
   CalendarDays,
   CalendarOff,
   Camera,
@@ -43,6 +45,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Stethoscope,
   UserRound,
   Users,
   X,
@@ -381,6 +384,82 @@ const MonthSummary = ({ totals, month, today, todayStrip, workload, compactLayou
         </div>
       </DeskSection>}
     </>
+  );
+};
+
+// The status's colour as a card's left edge, for Recent Activity.
+const STATUS_ACCENT = {
+  present: "border-l-emerald-500",
+  late: "border-l-amber-500",
+  half_day: "border-l-orange-500",
+  absent: "border-l-rose-500",
+  leave: "border-l-violet-500",
+  week_off: "border-l-slate-300",
+  holiday: "border-l-sky-500",
+  working: "border-l-emerald-500",
+  on_break: "border-l-amber-500",
+  done: "border-l-emerald-500",
+  out: "border-l-slate-200",
+};
+
+/** The last six days of the month as cards, under the tiles. The whole month is the
+ *  History button's table; View Full Month opens it. */
+const RecentActivity = ({ rows, onViewAll }) => {
+  const days = rows.slice(0, 6);
+  if (!days.length) return null;
+  const bookings = rows.some((r) => r.appointments != null || r.consultations != null);
+  return (
+    <Card className="overflow-hidden border-slate-200 shadow-sm" data-testid="my-attendance-recent">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <CalendarClock className="h-4 w-4 text-sky-600" />
+          Recent Activity
+        </h3>
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-semibold text-sky-600 hover:bg-sky-50"
+          data-testid="my-attendance-recent-all"
+        >
+          View Full Month
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        {days.map((r) => {
+          const when = new Date(`${r.date}T00:00:00`);
+          const figures = bookings
+            ? [[CalendarDays, "Appointments", r.appointments ?? 0], [Stethoscope, "Consultations", r.consultations ?? 0]]
+            : [[LogIn, "Login", prettyTime(r.clock_in) || "—"], [LogOut, "Logout", prettyTime(r.clock_out) || "—"]];
+          return (
+            <div
+              key={r.date}
+              className={`flex items-center gap-4 rounded-md border border-l-[3px] border-slate-200 bg-white px-4 py-3 ${STATUS_ACCENT[r.status || r.state] || STATUS_ACCENT.out}`}
+              data-testid={`my-attendance-recent-${r.date}`}
+            >
+              <div className="w-10 shrink-0 text-center">
+                <p className="text-xl font-bold leading-none text-slate-800">{when.getDate()}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  {when.toLocaleDateString("en-GB", { month: "short" })}
+                </p>
+                <p className="text-[10px] text-slate-400">{when.toLocaleDateString("en-GB", { weekday: "short" })}</p>
+              </div>
+              <span className="h-10 w-px shrink-0 bg-slate-100" />
+              <div className="min-w-0 max-w-[11rem] flex-1 space-y-1.5">
+                {figures.map(([Icon, label, value]) => (
+                  <p key={label} className="flex items-center gap-2 text-xs text-slate-500">
+                    <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate">{label}</span>
+                    <span className="ml-auto text-sm font-semibold tabular-nums text-slate-800">{value}</span>
+                  </p>
+                ))}
+              </div>
+              <StatusChip row={r} className="ml-auto shrink-0" />
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 };
 
@@ -832,6 +911,7 @@ const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
                 todayStrip={isThisMonth && <TodayStrip hideHeading={compactLayout} row={todayRow} standard={data?.standard} today={data?.today} />}
                 workload={!compactLayout && isThisMonth && <TodayWorkload workload={data?.workload} />}
               />
+              <RecentActivity rows={rows} onViewAll={() => setShowHistory(true)} />
             </>
           )}
           {(view === "history" || (view === "all" && showHistory)) && <MonthTable rows={compactLayout ? data?.filteredDays || [] : rows} compactLayout={compactLayout} />}
