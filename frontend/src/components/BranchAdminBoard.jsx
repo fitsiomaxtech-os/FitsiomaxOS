@@ -2145,14 +2145,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     // scrolling inside it.
     <TabDotsProvider value={tabDots}>
     <PhoneBackProvider value={phoneBack}>
-    <div ref={boardRootRef} className={`flex flex-col gap-4 ${!embedded && activeView === "accountant_mgmt" ? "md:gap-0" : ""} [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
+    <div ref={boardRootRef} className={`flex flex-col gap-4 ${!embedded && (profileOpen || activeView === "accountant_mgmt") ? "md:gap-0" : ""} [&>*]:min-w-0 ${embedded ? "" : "pb-20 md:pb-0"}`} data-testid="branch-admin-board-root">
       {/* View Tabs — desk only; a phone gets the bottom nav at the end of this file.
           90%, this bar only. zoom rather than transform: scale — zoom shrinks the box
           itself, so eleven labels fit across a desk without the strip scrolling, and the
           bar stays flush with the board's edges instead of leaving the gap a scaled-down
           full-width row would. */}
       {/* Keep the sticky wrapper outside the zoomed strip so its header offset stays in viewport pixels. */}
-      <div ref={navRef} className={`hidden md:block ${embedded ? "" : "sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50 pt-2.5 md:-mb-0.5"}`}>
+      <div ref={navRef} className={`hidden md:block ${embedded ? "" : `sticky top-[var(--role-header-height,89px)] z-20 bg-slate-50 pt-2.5 ${profileOpen ? "" : "md:-mb-0.5"}`}`}>
       {/* 14px on both sides: the page leaves this bar 4px under the header (md:pt-1), so
           pt-2.5 adds 10px above; the board's gap-4 puts 16px under it, and -mb-0.5 takes
           2px of that back. Once it sticks, a 10px band stays between it and the header. */}
@@ -2268,10 +2268,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {locationOpen && <BranchLocationDialog branchId={branchId} onClose={() => setLocationOpen(false)} />}
 
       {/* The two wrappers move My Profile's sticky sidebar down past this board's own sticky
-          tab strip on a desk (a custom property can't be set from itself on one element). */}
+          tab strip on a desk (a custom property can't be set from itself on one element).
+          On a desk the page sits flush under the strip (the root's gap is off while it is
+          open), and its body starts 10px down rather than 16, the band the strip keeps
+          under the header. */}
       {profileOpen && (
         <div className="contents" style={{ "--branch-profile-top": "calc(var(--role-header-height, 89px) + var(--branch-nav-height, 0px))" }}>
-          <div className="contents" style={{ "--role-header-height": "var(--branch-profile-top)" }}>
+          <div className="contents md:[&_[data-testid=my-profile-tab-body]]:pt-2.5" style={{ "--role-header-height": "var(--branch-profile-top)" }}>
             <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
           </div>
         </div>
