@@ -414,7 +414,9 @@ const SessionsPanel = ({ sessions, lastLoginAt, onChanged }) => {
  * sits at the foot of this tab below md, and is always drawn, even if the settings fail
  * to load, so a phone is never left without a way to sign out.
  */
-export const SecurityTab = ({ onLogout } = {}) => {
+// `embedded` drops the frame: inside My Profile > Account the card round it is the frame.
+export const SecurityTab = ({ onLogout, embedded = false } = {}) => {
+  const frame = embedded ? "space-y-3" : SECURITY_FRAME;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -446,7 +448,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
 
   if (loading) {
     return (
-      <div className={SECURITY_FRAME}>
+      <div className={frame}>
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-slate-400" data-testid="my-security-loading">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading your security settings…
         </p>
@@ -456,7 +458,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
   }
   if (error) {
     return (
-      <div className={SECURITY_FRAME}>
+      <div className={frame}>
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" data-testid="my-security-error">
           {error}
         </p>
@@ -466,7 +468,7 @@ export const SecurityTab = ({ onLogout } = {}) => {
   }
 
   return (
-    <div className={SECURITY_FRAME} data-testid="my-security-tab">
+    <div className={frame} data-testid="my-security-tab">
       <PasswordPanel onChanged={load} />
       <EmailPanel
         email={data.email}

@@ -2,8 +2,8 @@
  * MY PROFILE — the page everybody has about themselves, whatever desk they sit at.
  *
  *     Attendance     the month I have worked, and today so far
- *     My Profile     what this company holds about me
- *     Security       the password and second factor on my own login
+ *     Account        what this company holds about me, and (its last section, Security)
+ *                    the password and second factor on my own login
  *
  * It replaced a dialog. The old My Profile was four lines in a box — name, role, joining
  * date — and every other fact about a person (their address, who to call in an emergency,
@@ -42,7 +42,6 @@ import {
   Loader2,
   LogIn,
   LogOut,
-  ShieldCheck,
   UserRound,
   Users,
   X,
@@ -89,11 +88,8 @@ const TABS = [
   // Not offered to Super Admin, who has no one above them to ask.
   { key: "timeoff", label: "Permission Request", icon: CalendarOff },
   { key: "attendance", label: "Attendance", icon: Clock },
-  { key: "profile", label: "My Profile", icon: UserRound },
-  // Last, because it is the tab opened on purpose rather than in passing. The ones before
-  // it are read — what did I work, what did I ask for, what do they have on me — and this
-  // one is only reached by somebody who came to change something.
-  { key: "security", label: "Security", icon: ShieldCheck },
+  // Security is no longer a tab of its own: it is the last section inside Account.
+  { key: "profile", label: "Account", icon: UserRound },
 ];
 
 // ---------- reading the figures ----------
@@ -993,8 +989,11 @@ const PROFILE_SECTIONS = [
 ];
 
 // Match the employee view dialog while keeping the profile in its existing page.
-const ProfileView = ({ data, roleLabel, photo }) => {
+// `withSecurity` adds Security as the last section (the desktop Account tab). The phone
+// leaves it out: its menu has Security as its own "Account" row.
+const ProfileView = ({ data, roleLabel, photo, withSecurity = false, onLogout }) => {
   const [section, setSection] = useState("personal");
+  const sections = withSecurity ? [...PROFILE_SECTIONS, ["security", "Security"]] : PROFILE_SECTIONS;
   const account = data.account || {};
   const rows = {
     personal: [["Full Name", data.full_name],
@@ -1037,19 +1036,20 @@ const ProfileView = ({ data, roleLabel, photo }) => {
             label too long for its cell on a narrow phone wraps rather than clipping. From
             sm up it is the list down the left, as before. */}
         <nav aria-label="Profile sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs max-sm:grid max-sm:grid-cols-3 max-sm:overflow-visible sm:w-52 sm:flex-col sm:gap-1 sm:p-3 sm:text-sm sm:border-b-0 sm:border-r" data-testid="branch-profile-sections">
-          {PROFILE_SECTIONS.map(([key, label]) => (
+          {sections.map(([key, label]) => (
             <button type="button" key={key} onClick={() => setSection(key)} aria-current={section === key ? "page" : undefined}
               className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 max-sm:min-w-0 max-sm:whitespace-normal max-sm:px-2 max-sm:text-center max-sm:leading-tight ${section === key ? "bg-sky-100/70 font-semibold text-sky-700 sm:shadow-[inset_3px_0_0_#0284C7]" : "text-slate-600 hover:bg-white hover:text-slate-800"}`}
               data-testid={`branch-profile-section-${key}`}>{label}</button>
           ))}
         </nav>
-        <div className="min-w-0 flex-1 px-5 py-4 sm:px-6" aria-label={PROFILE_SECTIONS.find(([key]) => key === section)[1]}>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{PROFILE_SECTIONS.find(([key]) => key === section)[1]}</h3>
+        <div className="min-w-0 flex-1 px-5 py-4 sm:px-6" aria-label={sections.find(([key]) => key === section)[1]}>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{sections.find(([key]) => key === section)[1]}</h3>
           {section === "personal" && <div className="mb-3 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
             <PhotoAvatar person={data} size={40} photo={photo} />
             <PhotoActions person={data} photo={photo} />
           </div>}
           {section === "sign" && <MySign />}
+          {section === "security" && <SecurityTab embedded onLogout={onLogout} />}
           {(rows[section] || []).map(([label, value]) => (
             <div key={label} className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-4">
               <span className="shrink-0 text-xs font-medium text-slate-500 sm:w-40 sm:text-sm">{label}</span>
@@ -1063,7 +1063,7 @@ const ProfileView = ({ data, roleLabel, photo }) => {
   );
 };
 
-const ProfileTab = ({ roleLabel }) => {
+const ProfileTab = ({ roleLabel, withSecurity = false, onLogout }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1089,7 +1089,7 @@ const ProfileTab = ({ roleLabel }) => {
     );
   }
 
-  return <ProfileView data={data} roleLabel={roleLabel} photo={photo} />;
+  return <ProfileView data={data} roleLabel={roleLabel} photo={photo} withSecurity={withSecurity} onLogout={onLogout} />;
 };
 
 // ---------- monthly calendar ----------
@@ -1333,18 +1333,22 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           className="flex gap-1 overflow-x-auto p-2 text-xs md:sticky md:top-[var(--role-header-height,89px)] md:flex-col md:overflow-visible"
           data-testid="my-profile-tabs"
         >
-          {/* Back as a bare chevron, no box round it, over the tabs' icons. It hops left
-              once a second -- the boards' nudge-left, on a 1s beat rather than 1.5s. */}
-          <button
-            type="button"
-            onClick={onBack}
-            className={`h-8 shrink-0 items-center rounded-md px-2.5 text-slate-600 hover:text-slate-900 focus-visible:outline-sky-600 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}
-            aria-label="Back"
-            title="Back"
-            data-testid="my-profile-back"
-          >
-            <ChevronLeft className="h-5 w-5 motion-safe:animate-[nudge-left_1s_ease-in-out_infinite]" />
-          </button>
+          {/* The sidebar's heading: Back as a bare chevron, no box round it, then the page's
+              name. The chevron hops left once a second -- the boards' nudge-left, on a 1s
+              beat rather than 1.5s. */}
+          <div className="flex h-8 shrink-0 items-center gap-1" data-testid="my-profile-heading">
+            <button
+              type="button"
+              onClick={onBack}
+              className={`h-8 shrink-0 items-center rounded-md px-2.5 text-slate-600 hover:text-slate-900 focus-visible:outline-sky-600 ${phoneBar && !keepBack ? "hidden sm:flex" : "flex"}`}
+              aria-label="Back"
+              title="Back"
+              data-testid="my-profile-back"
+            >
+              <ChevronLeft className="h-5 w-5 motion-safe:animate-[nudge-left_1s_ease-in-out_infinite]" />
+            </button>
+            <h2 className="truncate text-sm font-semibold text-slate-800">My Profile</h2>
+          </div>
           {tabs.map(({ key, label, icon: Icon }) => (
             <button
               type="button"
@@ -1374,8 +1378,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
             : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
             : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>
-              : tab === "security" ? <SecurityTab onLogout={onLogout} />
-                : <ProfileTab roleLabel={roleLabel} />}
+              : <ProfileTab roleLabel={roleLabel} withSecurity onLogout={onLogout} />}
         </div>
       </div>
     </div>
