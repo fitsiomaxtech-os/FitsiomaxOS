@@ -8,9 +8,12 @@ import { FinanceWorkspace } from "@/components/finance/FinanceWorkspace";
  * same component the Accountant's own board renders, from the same list, so a sign-off, an
  * expense or a closed book entered on either screen is on the other the next time it
  * loads, and the two rows cannot come to hold different pages.
+ *
+ * Business Development > Finance is this board too, with `branchDropdown`: its branch row
+ * is one dropdown rather than the pills.
  */
-export const FinanceWiseBoard = ({ branches }) => (
-  <FinanceWorkspace branches={branches || []} testId="finance-wise-board" />
+export const FinanceWiseBoard = ({ branches, branchDropdown = false }) => (
+  <FinanceWorkspace branches={branches || []} branchDropdown={branchDropdown} testId="finance-wise-board" />
 );
 
 export default FinanceWiseBoard;

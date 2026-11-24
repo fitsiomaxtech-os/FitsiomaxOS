@@ -7,6 +7,7 @@ import { BranchCashBoard } from "@/components/finance/BranchCashBoard";
 import { ExpenseBoard } from "@/components/finance/ExpenseBoard";
 import { ProfitBoard } from "@/components/finance/ProfitBoard";
 import { VendorPanel } from "@/components/branch/VendorPanel";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { getFinanceApprovals, getFinanceExpenses } from "@/lib/api";
 import { QUIET } from "@/lib/loadingBar";
 
@@ -142,8 +143,10 @@ const TABS = [
  * @param branches  Present only where it is — Super Admin's pill row. Given it, every page
  *              is scoped by that row and drops its own branch control; left off, as on the
  *              Accountant's own board, each page picks its own branch as it always did.
+ * @param branchDropdown  Business Development's copy: that row as one dropdown instead of
+ *              a pill per branch.
  */
-export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => {
+export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "finance-workspace" }) => {
   const scoped = !!branches;
   // Tabs gated to super_admin drop out entirely on the Accountant's own board rather than
   // sitting there to 404 on a click — the same reason each one's own endpoints refuse an
@@ -207,8 +210,22 @@ export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => 
     <div className="space-y-4" data-testid={`${testId}-root`}>
       {/* Whose book. A dropdown on a phone, the pill row from sm up — same split Branch
           Wise uses. Only where the caller handed down a branch list: the Accountant's own
-          board has no such row, and each page there keeps its own branch control. */}
-      {scoped && (
+          board has no such row, and each page there keeps its own branch control.
+
+          branchDropdown: the one dropdown at every width. The 3px border is its button's
+          alone, not the open list's; the focus ring is the keyboard's only, as a ring left
+          standing after a mouse pick would read as a thicker border. */}
+      {scoped && branchDropdown && (
+        <ThemedSelect
+          value={selectedId}
+          onChange={setSelectedId}
+          options={[{ value: ALL_KEY, label: "All Branches" }, ...sortedBranches.map((b) => ({ value: b.id, label: b.branch_name }))]}
+          title="Branch"
+          className="h-10 border-[3px] px-2.5 text-sm font-semibold focus:ring-0 focus-visible:ring-2 focus-visible:ring-sky-200 sm:w-64"
+          testid="finance-wise-branch-dropdown"
+        />
+      )}
+      {scoped && !branchDropdown && (
         <>
           <select
             value={selectedId}
