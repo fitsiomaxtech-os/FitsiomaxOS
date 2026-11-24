@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Eye, Loader2, Signature, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SignPaper, useSignUpload } from "@/components/ui/sign-editor";
+import { SignDelete, SignPaper, useSignUpload } from "@/components/ui/sign-editor";
 import { toast } from "@/components/ui/sonner";
-import { getSignature, listSignatures, uploadSignature } from "@/lib/api";
+import { deleteSignature, getSignature, listSignatures, uploadSignature } from "@/lib/api";
 import { signSrc } from "@/lib/signImage";
 
 const showDay = (iso) => {
@@ -36,7 +36,7 @@ const SignPanel = ({ title, image, note, onClose }) => (
 );
 
 /**
- * Admin Setting > Digital Sign: everyone who signs at this branch, with Upload and View. The
+ * Admin Setting > Digital Sign: everyone who signs at this branch, with View, Upload and Delete. The
  * sign then prints by itself -- on the bills a person collects, the prescriptions in their
  * name and the Consultation Forms that name them. Upload opens the sign editor: the photo is
  * cropped and cleaned by itself, changed by hand if need be, and confirmed before it is saved.
@@ -68,6 +68,14 @@ export const DigitalSignDialog = ({ branchId, onClose }) => {
     }));
     toast.success(`${person.name}'s sign saved`);
   });
+
+  const remove = async (person) => {
+    await deleteSignature(person.user_id, branchId);
+    setData((d) => ({
+      ...d,
+      people: d.people.map((p) => (p.user_id === person.user_id ? { ...p, has_sign: false, uploaded_at: "", uploaded_by: "" } : p)),
+    }));
+  };
 
   const open = async (person) => {
     viewing.current = person.user_id;
@@ -119,8 +127,9 @@ export const DigitalSignDialog = ({ branchId, onClose }) => {
                 </div>
                 <div className="divide-y divide-slate-100 rounded-[4px] border border-slate-200">
                   {g.people.map((p) => (
-                    <div key={p.user_id} className="flex items-center gap-2 px-3 py-2.5" data-testid={`digital-sign-row-${p.user_id}`}>
-                      <div className="min-w-0 flex-1">
+                    <div key={p.user_id} className="flex items-center gap-2 px-3 py-2.5 max-sm:flex-wrap" data-testid={`digital-sign-row-${p.user_id}`}>
+                      {/* A phone has no room for the name beside three buttons: it takes its own line. */}
+                      <div className="min-w-0 flex-1 max-sm:basis-full">
                         <p className="truncate text-sm font-medium text-slate-800">
                           {p.name || "—"}{p.you && <span className="ml-1.5 text-xs font-normal text-slate-400">(You)</span>}
                         </p>
@@ -142,6 +151,12 @@ export const DigitalSignDialog = ({ branchId, onClose }) => {
                       >
                         <Upload className="h-3.5 w-3.5" />Upload
                       </Button>
+                      <SignDelete
+                        whose={p.you ? "Your" : `${p.name || "This person"}'s`}
+                        onDelete={() => remove(p)}
+                        disabled={!p.has_sign || !p.can_upload}
+                        testid={`digital-sign-delete-${p.user_id}`}
+                      />
                     </div>
                   ))}
                 </div>

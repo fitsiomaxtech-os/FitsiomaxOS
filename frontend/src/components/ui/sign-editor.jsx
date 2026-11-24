@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Check, CheckCircle2, Crop, Loader2, RotateCcw, RotateCw, Signature, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Crop, Loader2, RotateCcw, RotateCw, Signature, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -68,6 +72,52 @@ export const SignPaper = ({ image, busy = false, children, testid = "sign-paper"
     {image && busy && <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-sky-600" />}
   </div>
 );
+
+/** Delete Sign, as a bin alone: asks once, then `onDelete`. `whose`: "Your" or "Asha's". */
+export const SignDelete = ({ whose, onDelete, disabled = false, testid = "sign-delete" }) => {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await onDelete();
+      toast.success("Sign deleted");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't delete the sign");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAsking(true)}
+        disabled={disabled || busy}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] border border-rose-200 text-rose-600 transition hover:bg-rose-50 disabled:border-slate-200 disabled:text-slate-300"
+        title="Delete Sign"
+        aria-label="Delete Sign"
+        data-testid={testid}
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+      </button>
+      <AlertDialog open={asking} onOpenChange={setAsking}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-[4px] p-5 sm:rounded-[4px]" data-testid={`${testid}-confirm`}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base text-slate-800">Delete this sign?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px] text-slate-500">
+              {whose} sign will come off every bill, form and prescription, old ones too. A new sign can be uploaded at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row justify-end gap-2 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-9 rounded-[4px]" data-testid={`${testid}-cancel`}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={remove} className="h-9 rounded-[4px] bg-rose-600 text-white hover:bg-rose-700" data-testid={`${testid}-yes`}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+};
 
 const SliderRow = ({ label, low, high, value, min, max, step, onChange, disabled, testid }) => (
   <div>

@@ -309,8 +309,10 @@ export const uploadSignature = async (userId, branchId, blob) => {
   form.append("file", blob, "sign.png");
   return (await api.post(`/signatures/${userId}`, form, { params: { branch_id: branchId || "" } })).data;
 };
+export const deleteSignature = async (userId, branchId) => (await api.delete(`/signatures/${userId}`, { params: { branch_id: branchId || "" } })).data;
 // My Profile > Sign Upload: the signed-in person's own, whatever their desk.
 export const mySignature = async () => (await api.get("/me/signature")).data;
+export const deleteMySignature = async () => (await api.delete("/me/signature")).data;
 export const uploadMySignature = async (blob) => {
   const form = new FormData();
   form.append("file", blob, "sign.png");

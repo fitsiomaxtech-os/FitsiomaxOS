@@ -14,7 +14,8 @@ popup.
 
 A person has one row for each sign they have had. A paper carries the one that was theirs on
 its day, so a new sign does not re-sign what the old one was on. Two uploads on one day are a
-correction: the second takes the first's place.
+correction: the second takes the first's place. Deleting takes all of theirs, so every paper is
+unsigned until they have another, which then signs the old ones too.
 
 Payments and forms record a name and no login, so a person is found by name. Where two logins
 share one and the branch does not tell them apart, the line is left blank: an unsigned paper
@@ -114,6 +115,14 @@ async def save(person: dict, png: bytes, by: dict) -> dict:
     row = {"id": str(uuid.uuid4()), "user_id": person["id"], "valid_from": now, **fields}
     await v3_col(COL).insert_one(row.copy())
     return row
+
+
+async def remove(person: dict, by: dict) -> bool:
+    """Delete a person's sign, every one they have had. False when there was none."""
+    res = await v3_col(COL).delete_many({"user_id": person["id"]})
+    if res.deleted_count:
+        logger.info(f"Sign of {person.get('id')} deleted by {by.get('id')}")
+    return bool(res.deleted_count)
 
 
 def is_posted(user: dict, branch_id: str) -> bool:

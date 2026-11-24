@@ -8,6 +8,7 @@ import os
 import re
 import struct
 import sys
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -76,6 +77,11 @@ class Col:
 
     async def insert_one(self, doc):
         self.rows.append(dict(doc))
+
+    async def delete_many(self, query):
+        kept = [r for r in self.rows if not _match(r, query)]
+        gone, self.rows = len(self.rows) - len(kept), kept
+        return SimpleNamespace(deleted_count=gone)
 
     async def update_one(self, query, change):
         for row in self.rows:
@@ -253,6 +259,53 @@ def test_everyone_has_their_own_at_my_profile(db):
     with pytest.raises(HTTPException):
         run(v3_staff_sign.upload_my_signature(UploadFile(filename="s.svg", file=io.BytesIO(b"<svg>" * 20)), me))
     assert run(v3_staff_sign.my_signature(me)) == done
+
+
+def test_deleting_your_own_takes_it_off_every_paper(db):
+    put(db, "admin", "OLD", "2026-11-01T06:00:00+00:00")
+    put(db, "admin", "NEW", "2026-11-10T06:00:00+00:00")
+    put(db, "phy", "RAVI")
+    me = login("branch_admin", "admin", name="Priya R")
+    assert run(v3_staff_sign.delete_my_signature(me)) == {"name": "Priya R", "image": "", "uploaded_at": "", "uploaded_by": ""}
+    assert run(v3_staff_sign.my_signature(me))["image"] == ""
+    assert run(staff_sign.collector_sign("Priya R", "b1", "2026-11-05T06:00:00+00:00")) == ""
+    # Nobody else's goes, and deleting again is not an error.
+    assert [r["user_id"] for r in db(staff_sign.COL).rows] == ["phy"]
+    assert run(v3_staff_sign.delete_my_signature(me))["image"] == ""
+    # A new one signs the old papers too.
+    again = run(v3_staff_sign.upload_my_signature(UploadFile(filename="s.png", file=io.BytesIO(png())), me))
+    assert run(staff_sign.collector_sign("Priya R", "b1", "2026-11-05T06:00:00+00:00")) == again["image"]
+
+
+def test_a_branch_deletes_only_what_it_may_upload(db):
+    put(db, "phy", "RAVI")
+    put(db, "far", "FAR")
+    put(db, "boss2", "CHIEF")
+    db("users").rows.append({"id": "boss2", "full_name": "Chief", "role": "super_admin", "branch_id": "b1"})
+    admin = login("branch_admin", "admin", name="Priya R")
+    for uid, code in (("far", 404), ("boss2", 403)):
+        with pytest.raises(HTTPException) as e:
+            run(v3_staff_sign.delete_signature(uid, "b1", admin))
+        assert e.value.status_code == code
+    with pytest.raises(HTTPException) as e:
+        run(v3_staff_sign.delete_signature("far", "b2", admin))
+    assert e.value.status_code == 403
+    assert len(db(staff_sign.COL).rows) == 3
+    assert run(v3_staff_sign.delete_signature("phy", "b1", admin))["image"] == ""
+    assert {r["user_id"] for r in db(staff_sign.COL).rows} == {"far", "boss2"}
+    out = run(v3_staff_sign.list_signatures("b1", admin))
+    assert not any(p["has_sign"] for p in out["people"] if p["user_id"] == "phy")
+
+
+def test_a_form_whose_sign_was_deleted_is_unsigned_until_there_is_another(db):
+    admin = login("branch_admin", "admin", name="Priya R")
+    put(db, "phy", "FIRST", "2026-11-01T06:00:00+00:00")
+    row = run(v3_consultation_forms.create_consultation_form("b1", form_input(therapist_name="Ravi"), admin))
+    run(v3_staff_sign.delete_signature("phy", "b1", admin))
+    read = lambda: run(v3_consultation_forms.get_consultation_form("b1", row["id"], admin))["therapist_sign"]  # noqa: E731
+    assert read() is None
+    put(db, "phy", "SECOND")
+    assert read()["image"] == url("SECOND")
 
 
 def test_a_super_admins_sign_is_a_super_admins_to_add(db):

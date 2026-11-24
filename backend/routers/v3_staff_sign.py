@@ -106,6 +106,12 @@ async def upload_my_signature(file: UploadFile = File(...), user: V3UserOut = De
     return _signed(user.full_name, await staff_sign.save(me, await _read_sign(file), me))
 
 
+@router.delete("/me/signature")
+async def delete_my_signature(user: V3UserOut = Depends(v3_current_user)):
+    await staff_sign.remove({"id": user.id}, {"id": user.id})
+    return _signed(user.full_name, None)
+
+
 @router.get("/signatures")
 async def list_signatures(branch_id: str = Query(""), user: V3UserOut = Depends(v3_require_roles(*ROLES))):
     """Who signs at this branch, and who has a sign. The signs themselves are not in it."""
@@ -148,6 +154,16 @@ async def upload_signature(
         raise HTTPException(status_code=403, detail="You cannot upload this person's sign")
     row = await staff_sign.save(person, await _read_sign(file), {"id": user.id, "full_name": user.full_name})
     return _signed(person.get("full_name") or "", row)
+
+
+@router.delete("/signatures/{user_id}")
+async def delete_signature(user_id: str, branch_id: str = Query(""), user: V3UserOut = Depends(v3_require_roles(*ROLES))):
+    """Whoever may add a person's sign may take it off."""
+    person = await _person(user_id, branch_id, user)
+    if not _may_upload(user, person):
+        raise HTTPException(status_code=403, detail="You cannot delete this person's sign")
+    await staff_sign.remove(person, {"id": user.id})
+    return _signed(person.get("full_name") or "", None)
 
 
 @router.get("/branches/{branch_id}/therapist-sign")
