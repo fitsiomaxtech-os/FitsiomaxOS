@@ -10,8 +10,7 @@ import { loadSpelling } from "@/lib/spellcheck";
  * The client link (pages/ClientConsultationFormPage), asked as eight short steps instead of
  * the paper, one field per row. Name, Mobile Number and Branch must be filled. The last step
  * can show every answer first (Preview, optional: the ten short ones as rows, the longer
- * writing in boxes that grow with it, both two a line; it alone covers the whole screen,
- * progress bar too), then sends the lot; the client sees
+ * writing in boxes that grow with it, both two a line), then sends the lot; the client sees
  * only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin opens it as a
  * read-only report). The popup is 1020 wide and as tall as its step, so Previous / Next sit
  * the same gap under the last field on every step; its top stays put
@@ -381,8 +380,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
         onSubmit={next}
         noValidate
         autoComplete="off"
-        // Preview alone is the whole screen, edge to edge, over the progress bar as well.
-        className={`flex flex-col bg-white ${preview ? "fixed inset-0 z-10" : "relative w-full max-w-[1020px] rounded-[18px] shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"}`}
+        className="relative flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
         {onClose && (
@@ -402,13 +400,13 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
         <h1 className={`${preview ? "px-12" : "px-6"} pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]`} style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Consultation Details Preview" : "Consultation Form"}</h1>
 
         {/* Rows only: one field under another. The body is as tall as its step, the
-            buttons a set gap under it; past the screen's height it scrolls and the buttons
-            stay in view. Preview fills the screen's height: its boxes share what is left. */}
-        <div ref={bodyRef} className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-4 pt-4 sm:px-10 ${preview ? "flex flex-col" : ""}`} data-testid="client-stage-body">
+            buttons a set gap under it; past the screen's height it scrolls (Preview) and
+            the buttons stay in view. */}
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-4 pt-4 sm:px-10" data-testid="client-stage-body">
           <div
             key={view}
             inert={moving !== null}
-            className={`flex min-w-0 flex-col gap-3.5 ${preview ? "shrink-0 grow" : ""}`}
+            className="flex min-w-0 flex-col gap-3.5"
             data-testid="client-stage-panel"
           >
             {view === STAGES && (
@@ -428,8 +426,8 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
                   })}
                 </dl>
                 {/* Each box is as tall as its writing, never less than two lines; the two on
-                    one line stretch to the taller, and every line to fill the screen. */}
-                <dl className="grid grow grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2" data-testid="client-preview-boxes">
+                    one line stretch to the taller. */}
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2" data-testid="client-preview-boxes">
                   {PREVIEW.slice(PREVIEW_SHORT).map(([label, read]) => {
                     const value = String(read(d) || "").trim();
                     return (
