@@ -607,6 +607,8 @@ export const uploadBankQrImage = async (file) => {
 export const getRevenueOverview = async (params = {}) => (await api.get("/finance/revenue-overview", { params })).data;
 
 export const getClientTransactionHistory = async (leadId) => (await api.get(`/finance/client/${leadId}`)).data;
+// One payment's bill, by its transaction id -- the same bill whichever screen opens it.
+export const getBill = async (transactionId) => (await api.get(`/finance/bills/${encodeURIComponent(transactionId)}`)).data;
 export const markInstallmentPaid = async (leadId, installmentNumber, payload) => (await api.post(`/finance/installment/${leadId}/${installmentNumber}/mark-paid`, payload)).data;
 // Add Due: an extra amount charged to a client, owed on one date or across a Payment
 // Schedule ({ reason, installments: [{ amount, due_date }] }). Collected later through

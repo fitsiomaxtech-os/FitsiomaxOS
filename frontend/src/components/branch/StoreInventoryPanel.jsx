@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { StatTile } from "@/components/ui/stat-tile";
+import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { quickReceipt } from "@/lib/receipt";
 import {
   listInventoryItems, inventorySummary, inventoryMovements,
   createInventoryItem, updateInventoryItem, deleteInventoryItem,
@@ -186,6 +188,7 @@ export const StoreInventoryPanel = ({ category = "tablet", branchId, reloadToken
   const [itemDraft, setItemDraft] = useState(null);    // create / edit catalogue entry
   const [addDraft, setAddDraft] = useState(null);      // stock in
   const [sellDraft, setSellDraft] = useState(null);    // counter sale
+  const [receipt, setReceipt] = useState(null);        // the bill for the sale just rung up
   // Less any mode hidden in Developer Access; a sale opened on one moves to the first shown.
   const paymentModes = useShownPaymentModes(PAYMENT_MODES);
   useKeepModeShown(sellDraft?.payment_mode, paymentModes, (mode) => setSellDraft((d) => (d ? { ...d, payment_mode: mode } : d)));
@@ -298,14 +301,26 @@ export const StoreInventoryPanel = ({ category = "tablet", branchId, reloadToken
     const qty = Number(sellDraft.qty);
     if (!qty || qty < 1) { toast.error("Quantity must be at least 1"); return; }
     if (qty > sellDraft.item.stock) { toast.error(`Only ${sellDraft.item.stock} in stock`); return; }
-    const ok = await run(() => sellInventoryItem(sellDraft.item.id, {
-      qty,
-      unit_price: sellDraft.unit_price === "" ? null : Number(sellDraft.unit_price),
-      customer_name: sellDraft.customer_name.trim(),
-      payment_mode: sellDraft.payment_mode,
-      note: sellDraft.note.trim(),
-    }, scope), "Sale recorded");
-    if (ok) setSellDraft(null);
+    const draft = sellDraft;
+    let sold = null;
+    const ok = await run(async () => {
+      sold = await sellInventoryItem(draft.item.id, {
+        qty,
+        unit_price: draft.unit_price === "" ? null : Number(draft.unit_price),
+        customer_name: draft.customer_name.trim(),
+        payment_mode: draft.payment_mode,
+        note: draft.note.trim(),
+      }, scope);
+      return sold;
+    }, "Sale recorded");
+    if (!ok) return;
+    setSellDraft(null);
+    if (sold?.transaction_id) {
+      setReceipt(quickReceipt({
+        transactionId: sold.transaction_id, patient: draft.customer_name.trim() || "Counter sale", amount: sold.amount,
+        paidFor: "Store Purchase", packageName: draft.item.name,
+      }));
+    }
   };
 
   const submitMove = async () => {
@@ -686,6 +701,8 @@ export const StoreInventoryPanel = ({ category = "tablet", branchId, reloadToken
           </Field>
         </Modal>
       )}
+
+      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} testid={tid("receipt")} />
 
       {moveDraft && (
         <Modal

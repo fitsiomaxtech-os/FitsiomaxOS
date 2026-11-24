@@ -6,11 +6,10 @@ import {
   addPreBookAdvanceOption, collectPreBook, deletePreBookAdvanceOption, listPreBookAdvanceOptions,
   listStoreItems, renamePreBookAdvanceOption,
 } from "@/lib/api";
-import { loadSession } from "@/lib/session";
 import { consultationItemPrice } from "@/lib/consultationPackages";
 import { COLLECT_MODES, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
-import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
+import { ALL_PAYMENT_MODE_LABELS, collectorName, paymentReference } from "@/lib/receipt";
 import { paymentModeName } from "@/lib/paymentModes";
 import { advanceForLabel, preBookConsultOwed, preBookOf, rupees, shortDay } from "@/lib/preBook";
 
@@ -250,8 +249,8 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   const [saving, setSaving] = useState(false);
   // Collect asks once more before the money is taken.
   const [confirming, setConfirming] = useState(false);
-  // The receipts still to show, one per transaction, after the money is in.
-  const [receipts, setReceipts] = useState([]);
+  // The bill for what was just paid, once the money is in.
+  const [receipt, setReceipt] = useState(null);
   const setD = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
   // Services and Products > Consultations > Pre Book, with this branch's prices -- the
@@ -291,7 +290,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
   // Escape closes this popup only, never the lead card under it.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== "Escape" || receipts.length) return;
+      if (e.key !== "Escape" || receipt) return;
       // An open Payment Mode menu takes the Escape itself and closes alone.
       if (e.target?.closest?.('[role="menu"]')) return;
       e.stopPropagation();
@@ -302,7 +301,7 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [saving, confirming, onClose, receipts.length]);
+  }, [saving, confirming, onClose, receipt]);
 
   // The rest of a part payment, written off rather than collected on the visit day.
   const shortToDiscount = () => setConsultDiscount(String(r2(consultOff + consultShort)));
@@ -355,7 +354,9 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
     const updated = res.lead || lead;
     onCollected && onCollected(updated);
 
-    // One receipt per transaction, in the order they were taken.
+    // One bill: the consultation and the advance are two transactions and one payment, and
+    // the server puts both on the one Bill No. (see ReceiptDialog). What is built here is
+    // what shows until that lands.
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const base = {
       kind: "paid",
@@ -363,11 +364,11 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
       patient: lead.name || "—",
       patientNo: lead.patient_number || "—",
       phone: lead.phone || "—",
-      branch: "",
+      branch: lead.branch_name || "",
       sessionsCovered: "",
       installments: [],
       discount: null,
-      collectedBy: loadSession()?.user?.full_name || "Branch Admin",
+      collectedBy: collectorName(),
       cashCounted: "",
     };
     // How one part was paid, as its receipt prints it.
@@ -402,23 +403,18 @@ export const PreBookCollectDialog = ({ lead, branchId, onClose, onCollected }) =
         balanceDue: "",
       });
     }
-    if (out.length) setReceipts(out);
-    else onClose();
+    if (!out.length) { onClose(); return; }
+    const [first, second] = out;
+    setReceipt(second ? {
+      ...first,
+      paidFor: `${first.paidFor} + ${second.paidFor.replace("Pre Book — ", "")}`,
+      amount: r2(first.amount + second.amount),
+      originalAmount: null,
+      discount: null,
+    } : first);
   };
 
-  if (receipts.length) {
-    return (
-      <ReceiptDialog
-        receipt={receipts[0]}
-        onClose={() => {
-          const rest = receipts.slice(1);
-          if (rest.length) setReceipts(rest);
-          else onClose();
-        }}
-        testid="pre-book-receipt"
-      />
-    );
-  }
+  if (receipt) return <ReceiptDialog receipt={receipt} onClose={onClose} testid="pre-book-receipt" />;
 
   const nothingLeft = paidConsult && paidAdvance;
 

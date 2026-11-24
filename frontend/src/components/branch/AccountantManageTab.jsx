@@ -2244,17 +2244,31 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
                     {/* Only where the collection has a transaction id. Rows taken before
                         ids existed are real money and still list, but a receipt with no
                         number on it proves nothing. */}
-                    {t.transaction_id && (
+                    {t.transaction_id && !(t.bills?.length > 1) && (
                       <button
                         type="button"
-                        onClick={() => onReceipt(t)}
+                        onClick={() => onReceipt(t.bills?.length ? { ...t, gross: t.bills[0].amount, date: t.bills[0].date } : t)}
                         className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                        title="Receipt — print, send or download it again"
+                        title="Bill — print, send or download it again"
                         data-testid={`payment-details-receipt-${t.id}`}
                       >
                         <Eye className="h-3.5 w-3.5" /> Receipt
                       </button>
                     )}
+                    {/* A Zumba or Fitness row is every payment on the membership added up,
+                        and each of them has its own bill. */}
+                    {t.bills?.length > 1 && t.bills.map((b) => (
+                      <button
+                        key={b.transaction_id}
+                        type="button"
+                        onClick={() => onReceipt({ ...t, transaction_id: b.transaction_id, gross: b.amount, date: b.date })}
+                        className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        title={`${b.bill_no || b.transaction_id} — print, send or download it again`}
+                        data-testid={`payment-details-receipt-${b.transaction_id}`}
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Receipt {fmt(b.amount)}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>

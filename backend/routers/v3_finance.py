@@ -21,6 +21,7 @@ from routers.v3_packages import _notes_label, _settle_cash_count, _denomination_
 import lead_purge
 import old_clients
 import past_data_live
+from bill_book import registration_bills, void_registration_bills
 
 
 def _now():
@@ -708,9 +709,11 @@ async def _delete_payment_off_its_book(activity_id: str, done: str = "deleted") 
     cleared = {"fee_paid": 0.0, "payment_mode": "", "payment_reference": "", "payment_lines": [], "approved": False, "income_requested": False}
     res = await v3_col("zumba_registrations").update_one({"id": activity_id}, {"$set": cleared, "$unset": unset})
     if res.matched_count:
+        await void_registration_bills(activity_id)
         return f"Zumba payment {done} -- the fee is owed again"
     res = await v3_col("fitness_registrations").update_one({"id": activity_id}, {"$set": {**cleared, "payments": []}, "$unset": unset})
     if res.matched_count:
+        await void_registration_bills(activity_id)
         return f"Fitness payment {done} -- the fee is owed again"
     # The old client's balance is worked out from the instalments left, so removing the row
     # is the whole of the undo.
@@ -2629,6 +2632,9 @@ async def revenue_overview(
     if vertical_mode in ("online", "offline"):
         zumba_rows = [z for z in zumba_rows if (z.get("branch_id") in online_branch_ids) == (vertical_mode == "online")]
 
+    # Each payment on a registration is billed on its own; the row is their running total,
+    # so it carries them all and the desk picks which to print.
+    reg_bills = await registration_bills([z.get("id") for z in zumba_rows])
     zumba_total = 0.0
     for reg in zumba_rows:
         amount = float(reg.get("fee_paid") or 0)
@@ -2658,7 +2664,8 @@ async def revenue_overview(
 
         transactions.append({
             "id": reg.get("id", ""),
-            "transaction_id": "",
+            "transaction_id": (reg_bills.get(reg.get("id")) or [{}])[-1].get("transaction_id", ""),
+            "bills": reg_bills.get(reg.get("id")) or [],
             "date": reg.get("created_at", ""),
             "branch_name": bname,
             "source": "zumba",
@@ -2704,6 +2711,7 @@ async def revenue_overview(
     if vertical_mode in ("online", "offline"):
         fitness_rows = [f for f in fitness_rows if (f.get("branch_id") in online_branch_ids) == (vertical_mode == "online")]
 
+    reg_bills.update(await registration_bills([f.get("id") for f in fitness_rows]))
     fitness_total = 0.0
     for reg in fitness_rows:
         amount = float(reg.get("fee_paid") or 0)
@@ -2728,7 +2736,8 @@ async def revenue_overview(
 
         transactions.append({
             "id": reg.get("id", ""),
-            "transaction_id": "",
+            "transaction_id": (reg_bills.get(reg.get("id")) or [{}])[-1].get("transaction_id", ""),
+            "bills": reg_bills.get(reg.get("id")) or [],
             "date": reg.get("created_at", ""),
             "branch_name": bname,
             "source": "fitness",

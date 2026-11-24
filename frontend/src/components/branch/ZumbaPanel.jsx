@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useStageBack } from "@/components/ui/phone-back";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
+import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { quickReceipt } from "@/lib/receipt";
 
 // How a registration arrived, as the branch would say it. A referral is recorded against
 // the master who made it rather than against a single "Masters" bucket, so these six are
@@ -267,7 +269,7 @@ const CollectDueModal = ({ row, onClose, onCollected }) => {
       const res = await collectZumba(row.id, paymentPayload(lines));
       // The server's own sentence, so what the branch reads back is what was recorded.
       toast.success(res?.message || "Payment collected");
-      onCollected();
+      onCollected(res, taking);
       onClose();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not collect");
@@ -369,7 +371,7 @@ const RenewMembershipModal = ({ row, packages, onClose, onRenewed }) => {
       });
       // The server's own sentence, so what the branch reads back is what was recorded.
       toast.success(res?.message || "Membership renewed");
-      onRenewed();
+      onRenewed(res, collected);
       onClose();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not renew");
@@ -1555,6 +1557,11 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
   const [removing, setRemoving] = useState(null);
   const [renewing, setRenewing] = useState(null); // the membership being sold another term
   const [collecting, setCollecting] = useState(null); // the balance being paid down
+  const [receipt, setReceipt] = useState(null); // the bill for a payment just taken
+  const billFor = (row, res, amount) => {
+    if (!res?.transaction_id) return;
+    setReceipt(quickReceipt({ transactionId: res.transaction_id, patient: row?.name, phone: row?.phone, amount, paidFor: "Zumba Membership", packageName: row?.package_name }));
+  };
   const [viewing, setViewing] = useState(null);   // the registration open in the detail popup
   // Payment Done opens rather than filters — see PaymentDoneModal. Its own flag rather
   // than a value of `card`, because the list underneath is left on whatever it was
@@ -2595,7 +2602,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
         <CollectDueModal
           row={collecting}
           onClose={() => setCollecting(null)}
-          onCollected={load}
+          onCollected={(res, amount) => { load(); billFor(collecting, res, amount); }}
         />
       )}
 
@@ -2604,9 +2611,11 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
           row={renewing}
           packages={packages}
           onClose={() => setRenewing(null)}
-          onRenewed={load}
+          onRenewed={(res, amount) => { load(); billFor(renewing, res, amount); }}
         />
       )}
+
+      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} testid="zumba-receipt" />
 
       {viewing && (
         <ViewRegistrationModal

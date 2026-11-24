@@ -334,7 +334,9 @@ async def collect_pre_book(
         receipts["consultation"] = txn
 
     if advance:
-        txn = await generate_transaction_id(lead.get("branch_id"))
+        # Taken with the consultation, it goes on the consultation's bill: one payment at the
+        # desk is one Bill No.
+        txn = await generate_transaction_id(lead.get("branch_id"), bill_with=receipts.get("consultation"))
         mode_details, mode_suffix = advance_paid
         label = ADVANCE_FOR[advance["for"]] + (f" — {advance['note']}" if advance["note"] else "")
         updates["pre_book.advance"] = {

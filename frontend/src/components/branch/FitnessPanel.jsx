@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useStageBack } from "@/components/ui/phone-back";
 import { listFitness, addFitness, updateFitness, setFitnessStatus, deleteFitness, collectFitnessPayment, renewFitness, acceptFitnessReferral, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
+import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { quickReceipt } from "@/lib/receipt";
 
 /**
  * Branch Admin > Fitness — the gym's membership roll.
@@ -185,6 +187,11 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
   const [editing, setEditing] = useState(null);   // a row, or {} for a new one
   const [collecting, setCollecting] = useState(null);
   const [renewing, setRenewing] = useState(null); // the membership being sold another term
+  const [receipt, setReceipt] = useState(null); // the bill for a payment just taken
+  const billFor = (member, res, amount) => {
+    if (!res?.transaction_id) return;
+    setReceipt(quickReceipt({ transactionId: res.transaction_id, patient: member?.name, phone: member?.phone, amount, paidFor: "Fitness Membership", packageName: member?.package_name }));
+  };
   const [viewing, setViewing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the roll
@@ -879,7 +886,7 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
           member={renewing}
           packages={packages}
           onClose={() => setRenewing(null)}
-          onRenewed={load}
+          onRenewed={(res, amount) => { load(); billFor(renewing, res, amount); }}
         />
       )}
 
@@ -887,9 +894,11 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
         <CollectPaymentDialog
           member={collecting}
           onClose={() => setCollecting(null)}
-          onCollected={() => { setCollecting(null); load(); }}
+          onCollected={(res) => { const m = collecting; setCollecting(null); load(); billFor(m, res, res?.payment?.amount); }}
         />
       )}
+
+      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} testid="fitness-receipt" />
 
       {editing && (
         <FitnessMemberDialog
@@ -1251,7 +1260,7 @@ const RenewMembershipDialog = ({ member, packages, onClose, onRenewed }) => {
       });
       // The server's own sentence, so what the branch reads back is what was recorded.
       toast.success(res?.message || "Membership renewed", { duration: 7000 });
-      onRenewed();
+      onRenewed(res, taking);
       onClose();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't renew");
@@ -1494,7 +1503,7 @@ export const CollectPaymentDialog = ({ member, onClose, onCollected }) => {
       // The server's own sentence, so what the branch reads back is what was recorded
       // rather than a second version of it assembled here.
       toast.success(res?.message || "Payment collected", { duration: 7000 });
-      onCollected();
+      onCollected(res);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't collect");
     }

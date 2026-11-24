@@ -1,9 +1,11 @@
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, CheckCircle2, Download, Printer, Share2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
+import { getBill } from "@/lib/api";
 import { LOGO_URL } from "@/lib/printable";
 import { downloadPdf, sharePdf, usePdf, whatsappPdf } from "@/lib/pdf";
-import { isSchedule, printReceipt, receiptHtml, receiptPopupRows } from "@/lib/receipt";
+import { billName, billTransaction, isSchedule, printReceipt, receiptHtml, receiptPopupRows, withBill } from "@/lib/receipt";
 
 /** round2, the same helper the collect form's own discount readout uses, so the
  *  percentage on the receipt cannot disagree with the one shown while the amount was
@@ -19,16 +21,39 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * record, because a patient who comes back for their receipt should be given the receipt
  * they were given the first time and not a second document that merely describes it.
  *
- * `receipt` is the shape makeReceipt builds in ConsultationsBoard and receiptFromTransaction
- * builds in lib/receipt.js. Renders nothing when it is null, so a caller can hold the
- * state and mount this unconditionally.
+ * `given` is the shape makeReceipt builds in ConsultationsBoard and receiptFromTransaction
+ * and quickReceipt build in lib/receipt.js. Renders nothing when it is null, so a caller can
+ * hold the state and mount this unconditionally.
+ *
+ * Opens at once on what the caller knows, then puts the server's bill over it (Bill No., the
+ * branch, what was already paid and what is left). Print, WhatsApp, Share and Download wait
+ * for that -- a moment -- so no bill is handed over without its number. If it cannot be
+ * fetched they come back on what the caller knew, and the popup says so with a Retry.
  */
-export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
+export function ReceiptDialog({ receipt: given, onClose, testid = "cons-receipt" }) {
+  const txn = billTransaction(given);
+  // Held with the id it answers, so a slow answer never lands on another receipt.
+  const [fetched, setFetched] = useState(null); // { txn, bill } | { txn, failed: true } | null
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    if (!txn) return undefined;
+    let live = true;
+    setFetched((f) => (f?.txn === txn && f.bill ? f : null));
+    getBill(txn)
+      .then((bill) => { if (live) setFetched({ txn, bill }); })
+      .catch(() => { if (live) setFetched({ txn, failed: true }); });
+    return () => { live = false; };
+  }, [txn, tries, given]);
+  const bill = txn && fetched?.txn === txn ? fetched.bill || null : null;
+  const failed = !!txn && fetched?.txn === txn && !!fetched.failed;
+  const waiting = !!txn && !bill && !failed;
+  const receipt = useMemo(() => (given && bill ? withBill(given, bill) : given), [given, bill]);
   // WhatsApp, Share and Download all send the printed bill as one PDF.
-  const pdf = usePdf(receipt ? receiptHtml(receipt) : null);
+  const html = useMemo(() => (receipt && !waiting ? receiptHtml(receipt) : null), [receipt, waiting]);
+  const pdf = usePdf(html);
   if (!receipt) return null;
-  const pdfName = `${isSchedule(receipt) ? "schedule" : "receipt"}-${receipt.receiptNo}.pdf`;
-  const pdfTitle = `FITSIOMAX ${isSchedule(receipt) ? "Payment Schedule" : "Receipt"} ${receipt.receiptNo}`;
+  const pdfName = `${isSchedule(receipt) ? "schedule" : "bill"}-${billName(receipt)}.pdf`;
+  const pdfTitle = `FITSIO_MAX ${isSchedule(receipt) ? "Payment Schedule" : "Bill"} ${billName(receipt)}`;
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3" data-testid={`${testid}-modal`}>
       {/* 88%, this dialog only. zoom rather than transform: scale — zoom shrinks the
@@ -51,7 +76,9 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
               : <CheckCircle2 className="h-7 w-7 shrink-0" />}
             <div className="min-w-0">
               <p className="text-base font-bold leading-tight">{isSchedule(receipt) ? "Payment Schedule Created" : "Payment Received"}</p>
-              <p className="truncate text-xs text-white/80">{isSchedule(receipt) ? "Reference" : "Txn"} {receipt.receiptNo}</p>
+              <p className="truncate text-xs text-white/80" data-testid={`${testid}-number`}>
+                {isSchedule(receipt) ? `Reference ${receipt.receiptNo}` : receipt.bill?.bill_no ? `Bill No. ${receipt.bill.bill_no}` : `Txn ${receipt.receiptNo}`}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="shrink-0 rounded-[4px] p-1.5 text-white/80 hover:bg-white/20" data-testid={`${testid}-close`}>
@@ -168,10 +195,17 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
             own brand green in the row, a second green next to it would have read as
             two competing defaults rather than one branded button. The green here now
             belongs to WhatsApp and means WhatsApp, nothing else. */}
+        {failed && (
+          <div className="flex items-center justify-between gap-3 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 sm:px-6" data-testid={`${testid}-no-bill`}>
+            <span>The Bill No. could not be loaded.</span>
+            <button type="button" onClick={() => setTries((n) => n + 1)} className="font-semibold underline" data-testid={`${testid}-retry`}>Retry</button>
+          </div>
+        )}
         <div className="flex items-center justify-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:gap-3 sm:px-6">
           <Button
             variant="outline"
             className="h-10 w-10 shrink-0 rounded-[4px] p-0"
+            disabled={waiting}
             onClick={() => printReceipt(receipt)}
             title={isSchedule(receipt) ? "Print Schedule" : "Print Bill"}
             aria-label={isSchedule(receipt) ? "Print Schedule" : "Print Bill"}
@@ -183,6 +217,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
               going to the number already printed on it. */}
           <Button
             className="h-10 w-10 shrink-0 rounded-[4px] bg-[#25D366] p-0 text-white hover:bg-[#1da851]"
+            disabled={waiting}
             onClick={() => whatsappPdf(pdf, pdfName, pdfTitle, receipt.phone)}
             title="Send on WhatsApp"
             aria-label="Send on WhatsApp"
@@ -193,6 +228,7 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
           <Button
             variant="outline"
             className="h-10 w-10 shrink-0 rounded-[4px] p-0"
+            disabled={waiting}
             onClick={() => sharePdf(pdf, pdfName, pdfTitle)}
             title="Share PDF"
             aria-label="Share PDF"
@@ -203,9 +239,10 @@ export function ReceiptDialog({ receipt, onClose, testid = "cons-receipt" }) {
           <Button
             variant="outline"
             className="h-10 w-10 shrink-0 rounded-[4px] p-0"
+            disabled={waiting}
             onClick={() => downloadPdf(pdf, pdfName)}
-            title={isSchedule(receipt) ? "Download Schedule" : "Download Receipt"}
-            aria-label={isSchedule(receipt) ? "Download Schedule" : "Download Receipt"}
+            title={isSchedule(receipt) ? "Download Schedule" : "Download Bill"}
+            aria-label={isSchedule(receipt) ? "Download Schedule" : "Download Bill"}
             data-testid={`${testid}-download`}
           >
             <Download className="h-4 w-4" />

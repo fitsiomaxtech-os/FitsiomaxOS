@@ -27,7 +27,9 @@ const RENDER_W = 794;
 // (800) and often the rest were painted in a fallback font at Lexend's positions: words
 // with double gaps between them, and every letter-spaced title broken apart ("F I T S I
 // OMAX", "APPOI NTMENT", "ANN-261013 -0029").
-const PRINT_FONT_URL = "https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap";
+const PRINT_FONT_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lexend:wght@400;500;600;700;800&display=swap";
+// Lexend on the appointment sheet, Inter on the bill.
+const PRINT_FONTS = ["Lexend", "Inter"];
 const PRINT_FONT_WEIGHTS = [400, 500, 600, 700, 800];
 let printFontReady = null;
 const loadPrintFont = () => {
@@ -42,7 +44,9 @@ const loadPrintFont = () => {
         link.addEventListener("error", resolve, { once: true });
         setTimeout(resolve, 4000);
       });
-      await Promise.all(PRINT_FONT_WEIGHTS.map((w) => document.fonts?.load(`${w} 16px Lexend`).catch(() => {})));
+      await Promise.all(PRINT_FONTS.flatMap((f) => PRINT_FONT_WEIGHTS.map((w) => document.fonts?.load(`${w} 16px ${f}`).catch(() => {}))));
+      // The rupee sign is in a subset of its own, fetched only for text that has one.
+      await Promise.all(PRINT_FONT_WEIGHTS.map((w) => document.fonts?.load(`${w} 16px Inter`, "₹").catch(() => {})));
     })();
   }
   return printFontReady;

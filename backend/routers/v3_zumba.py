@@ -25,6 +25,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from bill_book import bill_registration_payment
 from database import v3_col
 from deps import v3_current_user, v3_require_roles, is_branch_admin_role, is_zumba_role
 from schemas.v3 import V3UserOut
@@ -1643,12 +1644,23 @@ async def collect_zumba(
         "updated_by": user.full_name or user.email,
     }
     await v3_col("zumba_registrations").update_one({"id": registration_id}, {"$set": changes})
+    # A renewed membership's fee is every term added up; what it owes is the term's own
+    # balance, so that is what the bill is for.
+    renewed = bool(existing.get("renewals"))
+    transaction_id = await bill_registration_payment("zumba", existing, {
+        "amount": taken,
+        "lines": money["payment_lines"],
+        "fee_amount": outstanding if renewed else owed,
+        "already_paid": 0 if renewed else already,
+        "package_name": existing.get("package_name") or "",
+        "package_sessions": existing.get("package_sessions"),
+    }, user.full_name or user.email)
 
     shaped = _shape({**existing, **changes}, await _zumba_stages())
     left = round(owed - changes["fee_paid"], 2)
     summary = f"Collected {taken:g} from {existing.get('name', 'the customer')}"
     summary += f". {left:g} still due" if left > 0 else ". Paid up"
-    return {"message": summary, "registration": shaped}
+    return {"message": summary, "registration": shaped, "transaction_id": transaction_id}
 
 
 class ZumbaRenewInput(BaseModel):
@@ -1735,11 +1747,22 @@ async def renew_zumba(
     await v3_col("zumba_registrations").update_one(
         {"id": registration_id}, {"$set": changes, "$push": {"renewals": renewal}}
     )
+    transaction_id = await bill_registration_payment("zumba", existing, {
+        "amount": money["fee_paid"],
+        "lines": money["payment_lines"],
+        "fee_amount": charged,
+        "already_paid": 0,
+        "previous_balance": round(max(0.0, _amount(existing.get("fee_amount")) - _amount(existing.get("fee_paid"))), 2),
+        "package_name": changes["package_name"],
+        "package_sessions": sessions,
+        "renewal": True,
+    }, user.full_name or user.email) if money["fee_paid"] > 0 else ""
 
     shaped = _shape({**existing, **changes}, await _zumba_stages())
     return {
         "message": f"Renewed to {shaped['finish_on'] or 'the new term'}",
         "registration": shaped,
+        "transaction_id": transaction_id,
     }
 
 

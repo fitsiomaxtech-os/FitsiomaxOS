@@ -18,6 +18,7 @@ from typing import Optional, List
 from datetime import date, datetime, timedelta
 import uuid
 
+from bill_book import bill_registration_payment
 from database import v3_col
 from utils import now_iso
 from deps import v3_require_roles, is_branch_admin_role
@@ -844,6 +845,9 @@ async def renew_fitness(
         "due_date": _month_after(term_start, months).isoformat(),
         "fee_amount": round(_amount(row.get("fee_amount")) + charged, 2),
         "fee_paid": round(_amount(row.get("fee_paid")) + total, 2),
+        # The fee above is every term added up from here on. A later collection's bill reads
+        # this to know it is for what is owed, not for the whole of it.
+        "renewed_at": now_iso(),
         "status": STATUS_ACTIVE,
         "updated_at": now_iso(),
     }
@@ -859,12 +863,22 @@ async def renew_fitness(
     if cleaned:
         update["$push"] = {"payments": entry}
     await v3_col("fitness_registrations").update_one({"id": registration_id}, update)
+    transaction_id = await bill_registration_payment("fitness", row, {
+        "amount": total,
+        "lines": cleaned,
+        "fee_amount": charged,
+        "already_paid": 0,
+        "previous_balance": round(max(0.0, _amount(row.get("fee_amount")) - _amount(row.get("fee_paid"))), 2),
+        "package_name": changes["package_name"],
+        "package_sessions": payload.package_sessions,
+        "renewal": True,
+    }, user.full_name or user.email) if total > 0 else ""
 
     updated = await v3_col("fitness_registrations").find_one({"id": registration_id}, {"_id": 0})
     shaped = _shape(updated)
     summary = f"Renewed {row.get('name', 'the member')} to {changes['due_date']}"
     summary += f". {shaped['fee_due']:g} still due" if shaped["fee_due"] > 0 else ". Paid up"
-    return {"message": summary, "registration": shaped}
+    return {"message": summary, "registration": shaped, "transaction_id": transaction_id}
 
 
 @router.post("/branch/fitness/{registration_id}/collect")
@@ -963,6 +977,15 @@ async def collect_fitness_payment(
             "$push": {"payments": entry},
         },
     )
+    renewed = bool(row.get("renewed_at"))
+    transaction_id = await bill_registration_payment("fitness", row, {
+        "amount": total,
+        "lines": cleaned,
+        "fee_amount": outstanding if renewed else fee_amount,
+        "already_paid": 0 if renewed else already,
+        "package_name": row.get("package_name") or "",
+        "package_sessions": row.get("package_sessions"),
+    }, user.full_name or user.email)
 
     updated = await v3_col("fitness_registrations").find_one({"id": registration_id}, {"_id": 0})
     shaped = _shape(updated)
@@ -975,4 +998,4 @@ async def collect_fitness_payment(
     else:
         summary += ". Paid up"
 
-    return {"message": summary, "payment": entry, "registration": shaped}
+    return {"message": summary, "payment": entry, "registration": shaped, "transaction_id": transaction_id}

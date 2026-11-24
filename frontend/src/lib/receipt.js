@@ -1,18 +1,15 @@
 // ---- Payment receipt ----------------------------------------------------------------
-// The receipt is built as a standalone HTML document rather than printed from the page:
-// window.print() on a board would send the whole board — modals, sidebar and all — to the
-// printer, and the same document is what gets downloaded, so paper and file always match.
+// What a screen hands the receipt popup, and what the popup shows of it. The paper itself is
+// lib/bill.js: a standalone document, so Print never sends a whole board to the printer and
+// the file sent on WhatsApp is the same sheet.
 //
-// Lifted out of ConsultationsBoard, which is where every one of these was written and for
-// a while the only screen that could produce a receipt at all. Three screens can now: the
-// fee cards on a patient reissue the one they were handed, the Accountant Manage desk
-// reissues any collection on its ledger, and the collect popups still print the original.
-// One copy of the document is what stops those three handing a patient three different
-// pieces of paper for the same payment.
-import {
-  PRINTABLE_STYLES, docHeadHtml, escapeHtml, rupees, openPrintable,
-} from "@/lib/printable";
+// Every screen opens a receipt with a transaction id and whatever it knows; ReceiptDialog
+// fetches the bill behind that id and `withBill` puts it over the top. So the fee cards, the
+// collect popups and Accountant Manage all hand a patient the one bill.
+import { openPrintable } from "@/lib/printable";
+import { billDateTime, billDay, billHtml, paymentText } from "@/lib/bill";
 import { displayPhone } from "@/lib/phone";
+import { loadSession } from "@/lib/session";
 
 // "split" is here and not on the collect popups' own lists on purpose: it is never a mode
 // anyone picks, it is what the record says afterwards when a collection came in over more
@@ -36,145 +33,95 @@ export const paymentReference = (p) => p.transfer_reference
 // has come in yet, so it must never print "Amount Paid" or "PAYMENT RECEIVED".
 export const isSchedule = (r) => r.kind === "schedule";
 
-// The receipt's own document content. The branding, styles and the open/print/download/
-// share mechanics are shared with every other printable in lib/printable.js.
-export const receiptRows = (r) => [
-  [isSchedule(r) ? "Reference No." : "Transaction ID", r.receiptNo],
-  ["Date", r.dateLabel],
-  ["Patient", r.patient],
-  ["Patient No.", r.patientNo],
-  ["Phone", displayPhone(r.phone)],
-  r.branch ? ["Branch", r.branch] : null,
-  [isSchedule(r) ? "Scheduled For" : "Paid For", r.paidFor],
-  r.packageName ? ["Package", r.packageName] : null,
-  r.sessionsCovered ? ["Sessions Covered", r.sessionsCovered] : null,
-  ["Payment Mode", r.modeLabel],
-  r.reference ? ["Reference", r.reference] : null,
-  // Printed because the count is the half of a cash payment that can be checked against
-  // a till later; the figure on its own cannot be.
-  r.cashCounted ? ["Cash Counted", r.cashCounted] : null,
-  r.originalAmount != null && r.originalAmount !== r.amount ? ["Original Price", `Rs.${r.originalAmount}`] : null,
-  // The percentage alongside the rupees, so the receipt says how big the discount was and
-  // not just how much came off. Omitted when there's no original price to measure against.
-  r.discount
-    ? ["Discount", r.originalAmount > 0
-        ? `- Rs.${r.discount} (${Number(((r.discount / r.originalAmount) * 100).toFixed(2))}%)`
-        : `- Rs.${r.discount}`]
-    : null,
-  [isSchedule(r) ? "Total Payable" : "Amount Paid", `Rs.${r.amount}`],
-  r.balanceDue ? ["Balance Due", r.balanceDue] : null,
-  [isSchedule(r) ? "Prepared By" : "Collected By", r.collectedBy],
-].filter(Boolean);
+const rsText = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 /**
- * The shorter list the on-screen receipt shows. Deliberately not receiptRows.
+ * The short list the on-screen receipt shows.
  *
- * The printed bill and the shared text are records — they carry the branch, the package,
- * the mode, the original price and who collected it, because that is what a receipt has to
- * prove months later. The popup is an acknowledgement seen for a few seconds while the
- * patient is still standing there, and thirteen rows to confirm one payment is a wall to
- * read past rather than a confirmation.
- *
- * Everything dropped here is still on the bill, in the share text and in the download.
- * Money is not among it: the three figures sit in the block above this, larger.
+ * The bill is a record and carries everything; the popup is an acknowledgement seen for a
+ * few seconds while the patient is still standing there. Everything dropped here is on the
+ * bill. The money is in the block above this, larger.
  */
 export const receiptPopupRows = (r) => [
-  [isSchedule(r) ? "Reference No." : "Transaction ID", r.receiptNo],
+  [isSchedule(r) ? "Reference No." : "Transaction ID", (r.bill?.transaction_ids || []).join(", ") || r.receiptNo],
   ["Date and Time", r.dateLabel],
   ["Patient Name", r.patient],
   ["Phone Number", displayPhone(r.phone)],
   [isSchedule(r) ? "Scheduled For" : "Paid For", r.paidFor],
+  ["Balance Due", r.bill ? r.balanceDue : ""],
 ].filter(([, v]) => v);
 
-// The printed bill. Laid out as an invoice rather than a list of rows — who paid, how much,
-// for what, and how — but it carries every field receiptRows does, so paper and the shared
-// text still say the same things.
-export const receiptHtml = (r) => {
-  const sch = isSchedule(r);
-  const hasOriginal = r.originalAmount != null && r.originalAmount !== r.amount;
-  const pct = r.discount && r.originalAmount > 0
-    ? ` (${Number(((r.discount / r.originalAmount) * 100).toFixed(2))}%)`
-    : "";
-  const kv = (rows) => `<table class="kv">${rows.filter((row) => row && row[1]).map(
-    ([k, v]) => `<tr><td class="k">${escapeHtml(k)}</td><td class="v">${escapeHtml(v)}</td></tr>`,
-  ).join("")}</table>`;
-  const installments = r.installments || [];
+/** The transaction id a bill can be fetched by, or "" -- a schedule has none. */
+export const billTransaction = (r) => (r && !isSchedule(r) && /^TXN-/.test(r.receiptNo || "") ? r.receiptNo : "");
 
-  return `<!doctype html><html><head><meta charset="utf-8">
-<title>Receipt ${escapeHtml(r.receiptNo)}</title><style>${PRINTABLE_STYLES}</style></head>
-<body><div class="doc ${sch ? "tone-sch" : "tone-paid"}">
-  ${docHeadHtml({
-    title: sch ? "Payment Schedule" : "Payment Receipt",
-    meta: [[sch ? "Reference No." : "Transaction ID", r.receiptNo], ["Date", r.dateLabel]],
-    status: sch ? "PAYMENT SCHEDULE" : "PAYMENT RECEIVED",
-    branch: r.branch,
-  })}
-  <div class="body">
-    <div class="grid2">
-      <div class="panel">
-        <p class="label">${sch ? "Prepared For" : "Received From"}</p>
-        <div class="name">${escapeHtml(r.patient)}</div>
-        ${kv([["Patient No.", r.patientNo], ["Phone", displayPhone(r.phone)]])}
-      </div>
-      <div class="amount">
-        ${sch ? "" : `<div class="stamp">PAID</div>`}
-        <p class="label">${sch ? "Total Payable" : "Amount Paid"}</p>
-        <div class="value">${rupees(r.amount)}</div>
-        <div class="mode">${escapeHtml(r.modeLabel)}</div>
-      </div>
-    </div>
-
-    <table class="items">
-      <thead><tr><th>Description</th><th class="num">Amount</th></tr></thead>
-      <tbody><tr>
-        <td class="desc">${escapeHtml(r.paidFor || (sch ? "Payment schedule" : "Payment"))}
-          ${r.packageName ? `<small>Package: ${escapeHtml(r.packageName)}</small>` : ""}
-          ${r.sessionsCovered ? `<small>Sessions covered: ${escapeHtml(r.sessionsCovered)}</small>` : ""}
-        </td>
-        <td class="num">${rupees(hasOriginal ? r.originalAmount : r.amount)}</td>
-      </tr></tbody>
-    </table>
-
-    <div class="grid2 summary">
-      <div class="panel">
-        <p class="label">Payment Details</p>
-        ${kv([
-          ["Payment Mode", r.modeLabel],
-          ["Reference", r.reference],
-          ["Cash Counted", r.cashCounted],
-          [sch ? "Prepared By" : "Collected By", r.collectedBy],
-        ])}
-      </div>
-      <table class="totals">
-        ${hasOriginal ? `<tr><td>Original Price</td><td class="num">${rupees(r.originalAmount)}</td></tr>` : ""}
-        ${r.discount ? `<tr class="off"><td>Discount${pct}</td><td class="num">- ${rupees(r.discount)}</td></tr>` : ""}
-        <tr class="grand"><td>${sch ? "Total Payable" : "Amount Paid"}</td><td class="num">${rupees(r.amount)}</td></tr>
-        ${r.balanceDue ? `<tr class="due"><td>Balance Due</td><td class="num">${escapeHtml(r.balanceDue)}</td></tr>` : ""}
-      </table>
-    </div>
-
-    ${installments.length ? `<table class="items">
-      <thead><tr><th>#</th><th>Sessions</th><th>Due Date</th><th class="num">Amount</th><th class="num">Status</th></tr></thead>
-      <tbody>${installments.map((i, n) => `<tr>
-        <td>${n + 1}</td>
-        <td>${i.sessions ? escapeHtml(i.sessions) : "—"}</td>
-        <td>${escapeHtml(i.due_date || "—")}</td>
-        <td class="num">${rupees(i.amount)}</td>
-        <td class="num"><span class="badge ${i.paid ? "badge-paid" : "badge-due"}">${i.paid ? "PAID" : "DUE"}</span></td>
-      </tr>`).join("")}</tbody>
-    </table>` : ""}
-
-    ${sch ? `<div class="note note-warn">This is a payment schedule, not a receipt — no amount has been collected yet.<br>A receipt is issued for each installment when it is paid.</div>` : ""}
-  </div>
-  <div class="foot">
-    <div>${sch ? "Computer-generated payment schedule." : "This is a computer-generated receipt and needs no signature."}</div>
-    <div class="thanks">Thank you for choosing FITSIOMAX</div>
-  </div>
-</div></body></html>`;
+/** The receipt with the server's bill over it: the bill is what is printed, so the popup
+ *  says the same. */
+export const withBill = (r, bill) => {
+  const whole = !(bill.already_paid > 0) && !(bill.balance > 0);
+  const off = whole && bill.discount > 0;
+  return {
+    ...r,
+    bill,
+    dateLabel: billDateTime(bill.date) || r.dateLabel,
+    patient: bill.patient?.name || r.patient,
+    patientNo: bill.patient?.number || r.patientNo,
+    phone: bill.patient?.phone || r.phone,
+    branch: bill.branch?.name || r.branch,
+    paidFor: [...new Set((bill.items || []).map((i) => i.service))].join(" + ") || r.paidFor,
+    amount: bill.paid_now,
+    originalAmount: off ? bill.subtotal : null,
+    discount: off ? bill.discount : null,
+    modeLabel: (bill.payments || []).length > 1
+      ? bill.payments.map((p) => `${p.label} ${rsText(p.amount)}`).join(" + ")
+      : paymentText(bill.payments).split(" · ")[0] || r.modeLabel,
+    balanceDue: bill.balance > 0 ? `${rsText(bill.balance)}${bill.due_date ? ` · due ${billDay(bill.due_date)}` : ""}` : "",
+    installments: bill.installments || [],
+    collectedBy: bill.collected_by || r.collectedBy,
+  };
 };
 
+export const receiptHtml = billHtml;
 export const printReceipt = (r) => openPrintable(receiptHtml(r), { print: true });
-// WhatsApp, Share and Download send receiptHtml as a PDF — see ReceiptDialog and lib/pdf.js.
+
+/** "FM-ANN-0001", or the transaction id on a payment from before Bill Nos. */
+export const billName = (r) => r.bill?.bill_no || r.receiptNo;
+
+/** Whether this login may open a bill: backend/routers/v3_bills.py's BILL_ROLES, every
+ *  Branch Admin variant included. */
+const BILL_ROLES = new Set([
+  "branch_admin", "online_physio_admin", "online_fitness_admin", "branch_admin_physio", "branch_admin_fitness",
+  "branch_admin_physio_fitness", "super_admin", "accountant", "business_dev",
+]);
+export const canReadBills = () => BILL_ROLES.has(String(loadSession()?.user?.role || "").trim().toLowerCase());
+
+/** The signed-in person's own name, for Collected By on a payment just taken. */
+export const collectorName = () => loadSession()?.user?.full_name || "Branch Admin";
+
+/**
+ * A receipt for a payment known by little more than its transaction id -- a store sale, a
+ * class fee. The bill fills in the rest; this is what shows until it lands.
+ */
+export const quickReceipt = ({ transactionId, patient, phone, amount, paidFor, packageName, modeLabel }) => ({
+  kind: "paid",
+  receiptNo: transactionId,
+  dateLabel: billDateTime(new Date().toISOString()),
+  patient: patient || "—",
+  patientNo: "—",
+  phone: phone || "—",
+  branch: "",
+  paidFor: paidFor || "Payment",
+  packageName: packageName || "",
+  sessionsCovered: "",
+  balanceDue: "",
+  installments: [],
+  amount: Number(amount) || 0,
+  originalAmount: null,
+  discount: null,
+  modeLabel: modeLabel || "",
+  reference: "",
+  collectedBy: collectorName(),
+  cashCounted: "",
+});
 
 /** A phone rather than a desk: the two need opposite handoffs, below. */
 export const isHandheld = () => (typeof window !== "undefined"
@@ -189,10 +136,9 @@ export const isHandheld = () => (typeof window !== "undefined"
  * `created_at`, so a reissue from this desk is dated the day the money came in rather
  * than the day somebody asked for the paper again.
  *
- * What it cannot carry is the record behind the money — the package name, the cash
- * denominations, the bank reference, the installment schedule. Those live on the lead and
- * only the patient's own fee card can reach them, so a receipt reissued from here is the
- * shorter of the two on purpose rather than by omission.
+ * It cannot carry the record behind the money -- the package, the bank reference, the
+ * installments. The bill fetched by its transaction id does (see withBill); this is what
+ * shows until that lands, and all there is for a payment the server has no bill for.
  */
 export const receiptFromTransaction = (tx) => {
   const amount = Number(tx.gross) || 0;

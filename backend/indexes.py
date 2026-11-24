@@ -190,6 +190,17 @@ CORE_INDEXES = [
     ("old_clients", [("branch_id", 1), ("created_at", -1)], "branch_recent"),
     ("old_client_payments", [("old_client_id", 1)], "old_client_id"),
     ("old_client_payments", [("branch_id", 1), ("created_at", -1)], "branch_recent"),
+    # The bill book -- see bill_book.py and routers/v3_bills.py. A bill is opened by its
+    # transaction id, the transactions on one bill by their group, and a Zumba or Fitness
+    # row's bills by the registration.
+    ("payment_bills", [("transaction_id", 1)], "transaction_id"),
+    ("payment_bills", [("group", 1)], "group"),
+    ("payment_bills", [("registration_id", 1)], "registration_id"),
+    # ...and the payment behind it, in whichever book it is in. Sparse: only money lines
+    # carry one, and the activity trail is mostly everything else.
+    ("lead_activity", [("transaction_id", 1)], "transaction_id", {"sparse": True}),
+    ("inventory_movements", [("transaction_id", 1)], "transaction_id", {"sparse": True}),
+    ("old_client_payments", [("transaction_id", 1)], "transaction_id"),
 ]
 
 

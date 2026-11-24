@@ -2104,7 +2104,7 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
     back on the shelf, so a branch's stock count still agrees with its ledger of adds and
     transfers. The cash book (expenses, petty cash, handovers, adjustments including the
     opening cash, closing counts and closed books), payroll, and HR's advance and expense
-    claims are deleted outright. Receipt numbering restarts.
+    claims are deleted outright. Receipt and bill numbering restart.
 
     Leaves alone: leads, registrations, stock items, stock deliveries and transfers, and
     every activity entry that is not a payment. Irreversible — requires confirm=true.
@@ -2174,6 +2174,9 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
     # Receipt numbers are TXN-<branch>-<day>-<seq>, counted per branch per day. Patient
     # numbers share the collection under their own prefix and are not touched.
     await v3_col("counters").delete_many({"_id": {"$regex": "^transaction_id:"}})
+    # Bill numbers with them: the payments they were given to are gone.
+    await v3_col("counters").delete_many({"_id": {"$regex": "^bill_no:"}})
+    await v3_col("payment_bills").delete_many({})
 
     return {
         "message": "All payments reset to a fresh state",

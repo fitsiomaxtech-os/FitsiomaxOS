@@ -183,7 +183,7 @@ async def generate_patient_number(branch_id: Optional[str], at: Optional[str] = 
     return f"{code}-{day_key}-{seq:04d}"
 
 
-async def generate_transaction_id(branch_id: Optional[str]) -> str:
+async def generate_transaction_id(branch_id: Optional[str], *, bill_with: Optional[str] = None, bill_info: Optional[dict] = None) -> str:
     """Unique, human-readable id for one collection: TXN-BRANCHCODE-YYMMDD-SEQUENCE
     (e.g. TXN-ANN-260806-0000). Same shape and same atomic per-branch-per-day counter as
     generate_patient_number, so two tills collecting at once can't land on one number.
@@ -192,7 +192,10 @@ async def generate_transaction_id(branch_id: Optional[str]) -> str:
     and the receipt printed for the patient is traced by it. A branch with no code yet
     (or a payment with no branch, e.g. an online consultation) falls back to 'GEN' rather
     than returning nothing, because a payment without an id is the case this exists to
-    stop."""
+    stop.
+
+    The payment's Bill No. is given out with it (bill_book.open_bill, which takes
+    `bill_with` and `bill_info`): the one place every collection passes through."""
     from database import v3_col
     from pymongo import ReturnDocument
 
@@ -210,7 +213,11 @@ async def generate_transaction_id(branch_id: Optional[str]) -> str:
         return_document=ReturnDocument.AFTER,
     )
     seq = counter["seq"] - 1
-    return f"TXN-{code}-{day_key}-{seq:04d}"
+    transaction_id = f"TXN-{code}-{day_key}-{seq:04d}"
+
+    from bill_book import open_bill
+    await open_bill(transaction_id, branch_id, code, bill_with=bill_with, info=bill_info)
+    return transaction_id
 
 
 def normalize_slot_time(value: str) -> str:

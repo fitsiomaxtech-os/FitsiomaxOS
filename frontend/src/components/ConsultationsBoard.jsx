@@ -48,7 +48,7 @@ import { PRINTABLE_STYLES, docHeadHtml, escapeHtml, rowsHtml } from "@/lib/print
 import { loadSession } from "@/lib/session";
 import { dateStampFull, endTime12h, slotRange12h, to12h } from "@/lib/time";
 import { pickStoreMinutes } from "@/lib/sessionLength";
-import { ALL_PAYMENT_MODE_LABELS, paymentReference } from "@/lib/receipt";
+import { ALL_PAYMENT_MODE_LABELS, collectorName, paymentReference, quickReceipt } from "@/lib/receipt";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { PortalLoginCreatedDialog } from "@/components/branch/PortalLoginCreatedDialog";
 import { isCourseComplete } from "@/lib/leadStage";
@@ -3250,9 +3250,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       reference: splitLines
         ? splitLines.map((l) => (l.reference || "").trim()).filter(Boolean).join(", ")
         : paymentReference(payload),
-      // The desk, not the person. The collect popups have never known their own user's
-      // name; a reissue does, off the activity row, and overwrites this.
-      collectedBy: "Branch Admin",
+      // Whoever is signed in took it. A reissue may be printed by somebody else, and the
+      // bill it fetches says who it really was.
+      collectedBy: collectorName(),
       isCash: splitLines ? splitLines.every((l) => l.mode === "cash") : payload.payment_mode === "cash",
       // "2x500 + 1x200" — what was handed over, not just what it added up to. Blank
       // whenever nobody counted, which is allowed.
@@ -13262,7 +13262,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               <FitnessCollectDialog
                 member={fitnessCollecting}
                 onClose={() => setFitnessCollecting(null)}
-                onCollected={() => { setFitnessCollecting(null); loadFitnessMember(); }}
+                onCollected={(res) => {
+                  const m = fitnessCollecting;
+                  setFitnessCollecting(null);
+                  loadFitnessMember();
+                  if (res?.transaction_id) showReceipt(() => quickReceipt({ transactionId: res.transaction_id, patient: m?.name, phone: m?.phone, amount: res.payment?.amount, paidFor: "Fitness Membership", packageName: m?.package_name }));
+                }}
               />
             )}
 

@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Mail, Printer, FileText, Wallet, PhoneCall, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
+import { X, Mail, Printer, Download, Eye, Wallet, PhoneCall, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { displayPhone, telNumber } from "@/lib/phone";
 import { byOldestFirst } from "@/lib/timeline";
 import { getClientTransactionHistory, markInstallmentPaid, collectPastBalance } from "@/lib/api";
 import { BalanceDiscount, CollectField, TenderFields, emptyTender, tenderPayload } from "@/components/branch/CollectTender";
+import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { statementHtml } from "@/lib/bill";
+import { downloadPdf, pdfJob } from "@/lib/pdf";
+import { openPrintable } from "@/lib/printable";
+import { ALL_PAYMENT_MODE_LABELS, canReadBills, quickReceipt } from "@/lib/receipt";
 
 const fmt = (n) => `Rs.${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const fmtDate = (d) => (d ? (d.length > 10 ? d.slice(0, 16).replace("T", " ") : d) : "—");
@@ -160,7 +165,7 @@ const PaidLabel = ({ children = "Paid", tone = "text-teal-700" }) => (
  * Everything here comes off the transaction record — nothing is inferred. A field with no
  * value is dropped rather than shown blank, so what remains is all true.
  */
-const PaymentCards = ({ transactions, servicedBy }) => {
+const PaymentCards = ({ transactions, servicedBy, onBill }) => {
   const [openId, setOpenId] = useState(null);
   if (transactions.length === 0) {
     return <p className="py-4 text-center text-sm text-slate-500">No payments yet.</p>;
@@ -207,6 +212,17 @@ const PaymentCards = ({ transactions, servicedBy }) => {
               servicedBy && ["Service by", servicedBy],
               ["Paid on", when, "sm:hidden"],
             ]} />
+            {onBill && /^TXN-/.test(tx.transaction_id || "") && (
+              <button
+                type="button"
+                onClick={() => onBill(tx)}
+                className="mt-2.5 inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                title="Bill — print, send or download it again"
+                data-testid={`client-history-tx-bill-${tx.id}`}
+              >
+                <Eye className="h-3.5 w-3.5" /> Receipt
+              </button>
+            )}
           </FoldCard>
         );
       })}
@@ -293,26 +309,13 @@ const MoneyTile = ({ label, value, aside, tone = "text-slate-900", className = "
   </div>
 );
 
-const downloadInvoice = (client, data) => {
-  const lines = [
-    `Invoice — ${client.name}`,
-    displayPhone(client.phone) ? `Phone: ${displayPhone(client.phone)}` : "",
-    client.email ? `Email: ${client.email}` : "",
-    client.branch_name ? `Branch: ${client.branch_name}` : "",
-    "",
-    "Date,Type,Payment Mode,Amount,Receipt No",
-    ...(data.transactions || []).map((tx) => `${(tx.date || "").slice(0, 10)},${tx.source},${tx.payment_mode},${tx.amount},${tx.receipt_no || ""}`),
-    "",
-    `Outstanding Balance,,,${data.balance}`,
-  ].filter(Boolean).join("\n");
-  const blob = new Blob([lines], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `invoice-${client.name.replace(/\s+/g, "-").toLowerCase()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+/** What each line of the ledger is called on paper -- the words a bill uses. */
+const SOURCE_SERVICES = {
+  consultation: "Consultation", session: "Physiotherapy Session", diet: "Diet", rehab: "Rehab",
+  store: "Store Purchase", zumba: "Zumba Membership", fitness: "Fitness Membership",
 };
+const serviceName = (tx) => SOURCE_SERVICES[tx.source] || formatMode(tx.source) || "Payment";
+const modeName = (mode) => ALL_PAYMENT_MODE_LABELS[mode] || (mode && mode !== "unknown" ? formatMode(mode) : "—");
 
 const RECENT_PAYMENTS = 3;
 
@@ -343,6 +346,9 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
   const [tab, setTab] = useState("overview");
   const [recording, setRecording] = useState(false);
   const [collectDraft, setCollectDraft] = useState(null);
+  // The bill open over this popup, and whether this login may open one at all.
+  const [receipt, setReceipt] = useState(null);
+  const billable = canReadBills();
   // The Overview card opened for its detail -- a schedule row, a Balance to collect row or
   // the session package -- one at a time, as Recent payments opens them.
   const [openRow, setOpenRow] = useState(null);
@@ -370,7 +376,9 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Escape") return;
-      if (collectDraft) {
+      if (receipt) {
+        setReceipt(null);
+      } else if (collectDraft) {
         if (!recording) setCollectDraft(null);
       } else {
         onClose();
@@ -378,7 +386,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [collectDraft, recording, onClose]);
+  }, [collectDraft, recording, receipt, onClose]);
 
   const client = data?.client;
   const pd = data?.payment_details || {};
@@ -400,6 +408,21 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
   // averaging several across different prices would be a made-up number.
   const discounted = transactions.filter((t) => Number(t.discount_amount) > 0);
   const solePct = discounted.length === 1 ? discountPct(discounted[0]) : null;
+
+  const openBill = (tx) => setReceipt(quickReceipt({
+    transactionId: tx.transaction_id, patient: client?.name, phone: client?.phone, amount: tx.amount,
+    paidFor: serviceName(tx), modeLabel: modeName(tx.payment_mode),
+  }));
+
+  // Everything paid, on the bill's own paper. The same sheet printed or downloaded.
+  const statement = () => statementHtml({
+    client,
+    rows: [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date)).map((tx) => ({
+      date: tx.date, service: serviceName(tx), reference: tx.transaction_id || "", mode: modeName(tx.payment_mode), amount: tx.amount,
+    })),
+    billed, discount, paid: collected, balance: due, due: data?.next_due_date || "",
+  });
+  const fileName = String(client?.patient_number || client?.name || "client").replace(/\s+/g, "-").toLowerCase();
 
   const sendReminder = () => {
     if (!client?.phone) return;
@@ -469,18 +492,23 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
 
     setRecording(true);
     try {
+      let res;
       if (draft.kind === "past") {
-        await collectPastBalance(leadId, payload);
+        res = await collectPastBalance(leadId, payload);
       } else {
         // Which fee's balance this is. Omitted, the server would take it as the Treatment
         // Fee's — the only schedule that existed when that default was written.
         payload.fee = pd.next_installment_fee || "treatment";
         const off = Math.round(Math.max(0, parseFloat(draft.discount) || 0) * 100) / 100;
         if (off > 0) payload.discount_amount = off;
-        await markInstallmentPaid(leadId, pd.next_installment_number, payload);
+        res = await markInstallmentPaid(leadId, pd.next_installment_number, payload);
       }
       toast.success(`${fmt(amount)} collected from ${client.name}`);
       setCollectDraft(null);
+      // The bill, as every other Collect hands one over.
+      if (billable && res?.transaction_id) {
+        openBill({ transaction_id: res.transaction_id, amount, payment_mode: tender.payload.payment_mode, source: draft.kind === "past" ? "" : pd.next_installment_fee === "treatment" ? "session" : pd.next_installment_fee });
+      }
       load();
       onChanged && onChanged();
     } catch (e) {
@@ -765,7 +793,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                       >
                         Recent payments
                       </SectionTitle>
-                      <PaymentCards transactions={transactions.slice(0, RECENT_PAYMENTS)} servicedBy={client?.assigned_physio_name} />
+                      <PaymentCards transactions={transactions.slice(0, RECENT_PAYMENTS)} servicedBy={client?.assigned_physio_name} onBill={billable ? openBill : undefined} />
                     </div>
                   )}
 
@@ -774,7 +802,7 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
                   )}
                 </>
               ) : tab === "transactions" ? (
-                <PaymentCards transactions={transactions} servicedBy={client?.assigned_physio_name} />
+                <PaymentCards transactions={transactions} servicedBy={client?.assigned_physio_name} onBill={billable ? openBill : undefined} />
               ) : timeline.length === 0 ? (
                 <p className="py-4 text-center text-sm text-slate-500">No activity yet.</p>
               ) : (
@@ -798,11 +826,11 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
             not to whichever tab happens to be open. */}
         {data && (
           <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
-            <button type="button" onClick={() => window.print()} title="Print receipt" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-[#0284C7] px-3 text-sm font-semibold text-white hover:bg-sky-700 sm:flex-none" data-testid="client-history-print">
-              <Printer className="h-4 w-4 shrink-0" /> Print<span className="hidden sm:inline"> receipt</span>
+            <button type="button" onClick={() => openPrintable(statement(), { print: true })} title="Print statement" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-[#0284C7] px-3 text-sm font-semibold text-white hover:bg-sky-700 sm:flex-none" data-testid="client-history-print">
+              <Printer className="h-4 w-4 shrink-0" /> Print<span className="hidden sm:inline"> statement</span>
             </button>
-            <button type="button" onClick={() => downloadInvoice(client, data)} title="Download invoice" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
-              <FileText className="h-4 w-4 shrink-0" /> <span className="hidden sm:inline">Download </span>Invoice
+            <button type="button" onClick={() => downloadPdf(pdfJob(statement()), `statement-${fileName}.pdf`)} title="Download statement" className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:flex-none" data-testid="client-history-invoice">
+              <Download className="h-4 w-4 shrink-0" /> Download<span className="hidden sm:inline"> statement</span>
             </button>
             <button type="button" onClick={onClose} className="ml-auto hidden h-9 min-w-[6rem] rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:block" data-testid="client-history-footer-close">
               Close
@@ -810,6 +838,8 @@ export const ClientHistoryModal = ({ leadId, onClose, onChanged, onCollect, undo
           </div>
         )}
       </div>
+
+      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} testid="client-history-receipt" />
 
       {collectDraft && (
         <div
