@@ -30,7 +30,7 @@ import { loadSpelling } from "@/lib/spellcheck";
 const STAGES = 8;
 const BLUE = "#0066ff";
 // The progress bar's fill.
-const GREEN = "#22c55e";
+const GREEN = "#198754";
 // The popup's heading and its buttons.
 const ACCENT = "rgb(26 162 231 / 76%)";
 // A move: the popup goes out (speeding up), then the next one comes in (slowing down).
