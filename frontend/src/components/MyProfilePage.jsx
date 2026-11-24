@@ -84,6 +84,7 @@ import { Card, CardContent } from "@/components/ui/card";
 // a half is not "1h 30m" here and "90m" three screens away.
 import { duration, hours, prettyTime } from "@/lib/clock";
 import { displayPhone } from "@/lib/phone";
+import { versionDetail, versionLabel } from "@/lib/version";
 
 // The sidebar from md up. A phone has its own list: see MENU_ITEMS.
 const TABS = [
@@ -1410,10 +1411,48 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack, hideTimeOff = fal
 // `hideTimeOff` drops Permission Request (Super Admin). `timeOffInHeader` is for a host
 // whose phone header already carries Time Off as its own button (Physio, Consultant): the
 // phone menu then leaves the row out, so it is not in two places. The sidebar keeps it.
+// The page's height from md up: down to the foot of the screen, so the sidebar's footer
+// sits in the bottom corner however short the tab is. Where the page starts differs by
+// host (a tab strip above it or not), so its top is measured rather than written as a calc.
+const useFillToScreenBottom = () => {
+  const [el, setEl] = useState(null);
+  const [minHeight, setMinHeight] = useState(0);
+  useEffect(() => {
+    if (!el) return undefined;
+    const fit = () => setMinHeight(Math.max(0, window.innerHeight - (el.getBoundingClientRect().top + window.scrollY)));
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [el]);
+  return [setEl, minHeight];
+};
+
+// The sidebar's foot: the legal pages, two rows still to be wired, and the version.
+// The legal pages open in a new tab: their Back goes to the sign-in screen, not here.
+const SidebarFooter = () => (
+  <div className="mt-auto hidden px-5 pb-4 pt-6 md:sticky md:bottom-0 md:block" data-testid="my-profile-sidebar-footer">
+    <nav aria-label="About" className="flex flex-col items-start gap-1.5 text-[8px] leading-tight text-slate-400">
+      <a href="/terms" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600" data-testid="my-profile-footer-terms">
+        Terms &amp; Conditions
+      </a>
+      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600" data-testid="my-profile-footer-privacy">
+        Privacy Policy
+      </a>
+      {/* Left blank for now: no help desk or feedback form to send them to yet. */}
+      <button type="button" className="hover:text-slate-600" data-testid="my-profile-footer-help">Get Help</button>
+      <button type="button" className="hover:text-slate-600" data-testid="my-profile-footer-feedback">Send Feedback</button>
+    </nav>
+    <p className="mt-3 text-[7px] leading-none text-slate-300" title={versionDetail || undefined} data-testid="my-profile-footer-version">
+      {versionLabel}
+    </p>
+  </div>
+);
+
 export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false }) => {
   const [tab, setTab] = useState("attendance");
   // The tab's own tools (month, counts) are portalled into this slot, on the top row.
   const [toolsEl, setToolsEl] = useState(null);
+  const [pageRef, fillHeight] = useFillToScreenBottom();
   const phone = usePhone();
   const noTimeOff = hideTimeOff || user?.role === "super_admin";
   const tabs = noTimeOff ? TABS.filter((t) => t.key !== "timeoff") : TABS;
@@ -1422,12 +1461,17 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
   }
 
   return (
-    <div className="flex flex-col bg-white md:flex-1 md:flex-row" data-testid="my-profile-page">
+    <div
+      ref={pageRef}
+      className="flex flex-col bg-white md:min-h-[var(--my-profile-fill,0px)] md:flex-1 md:flex-row"
+      style={{ "--my-profile-fill": `${fillHeight}px` }}
+      data-testid="my-profile-page"
+    >
       {/* The same sidebar as the Notifications popup, drawn as the page's left edge: flush
           under the header and as tall as the page, so it is a wall rather than a card. Only
           the column is full height — what is in it stays in view while a month scrolls past.
           CRMPage drops its own padding round this page for that. */}
-      <aside className="shrink-0 border-b border-slate-200 bg-slate-50/60 md:w-56 md:border-b-0 md:border-r" data-testid="my-profile-sidebar">
+      <aside className="shrink-0 border-b border-slate-200 bg-slate-50/60 md:flex md:w-56 md:flex-col md:border-b-0 md:border-r" data-testid="my-profile-sidebar">
         <nav
           aria-label="My Profile"
           className="flex gap-1 overflow-x-auto p-2 text-xs md:sticky md:top-[var(--role-header-height,89px)] md:flex-col md:overflow-visible"
@@ -1463,6 +1507,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             </button>
           ))}
         </nav>
+        <SidebarFooter />
       </aside>
 
       {/* gap rather than space-y: the tools row is display:none on a tab that has none, and
