@@ -189,6 +189,9 @@ const TRIM_KEYS = [
 // Preview before Submit: every answer, not in the paper's layout. The first PREVIEW_SHORT
 // (Name to Date) are label-and-value rows, the rest a box each; both go two a line.
 const PREVIEW_SHORT = 10;
+// Black headers, light grey answers: exact colours, so no theme changes them.
+const PREVIEW_HEADER = { color: "#000000" };
+const PREVIEW_ANSWER = { color: "#9ca3af", fontFamily: "Lexend, sans-serif", fontWeight: 400 };
 const PREVIEW = [
   ["Name", (d) => d.name],
   ["Mobile Number", (d) => (d.number ? `+${d.code} ${d.number}` : "")],
@@ -414,8 +417,8 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
                     const under = i === PREVIEW_SHORT - 1 ? "" : i === PREVIEW_SHORT - 2 ? "border-b sm:border-b-0" : "border-b";
                     return (
                       <div key={label} className={`flex min-w-0 gap-4 border-slate-100 px-4 py-2 ${under} ${i % 2 === 0 ? "sm:border-r" : ""}`}>
-                        <dt className="w-[130px] shrink-0 text-[14px] font-medium text-slate-500">{label}</dt>
-                        <dd className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px] ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                        <dt className="w-[130px] shrink-0 text-[14px] font-medium" style={PREVIEW_HEADER}>{label}</dt>
+                        <dd className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[14px]" style={PREVIEW_ANSWER}>{value || "—"}</dd>
                       </div>
                     );
                   })}
@@ -427,8 +430,8 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
                     const value = String(read(d) || "").trim();
                     return (
                       <div key={label} className="flex min-w-0 flex-col gap-1.5">
-                        <dt className="text-[14px] font-medium text-slate-500">{label}</dt>
-                        <dd className={`min-h-[64px] grow whitespace-pre-wrap break-words rounded-[8px] border border-[#c7cdea] bg-white px-4 py-2 text-[14px] leading-relaxed ${value ? "text-slate-800" : "text-slate-400"}`}>{value || "—"}</dd>
+                        <dt className="text-[14px] font-medium" style={PREVIEW_HEADER}>{label}</dt>
+                        <dd className="min-h-[64px] grow whitespace-pre-wrap break-words rounded-[8px] border border-[#c7cdea] bg-white px-4 py-2 text-[14px] leading-relaxed" style={PREVIEW_ANSWER}>{value || "—"}</dd>
                       </div>
                     );
                   })}
