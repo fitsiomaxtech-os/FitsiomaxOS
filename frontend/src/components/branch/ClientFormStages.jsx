@@ -15,7 +15,8 @@ import { loadSpelling } from "@/lib/spellcheck";
  * read-only report). The popup is 1020 wide and as tall as its step, so Previous / Next sit
  * the same gap under the last field on every step; its top stays put
  * (where a 520-high popup would sit centred). The progress bar is above it. Each step is
- * headed "Consultation Form", centred; the date is picked in the OS's own calendar. Every
+ * headed "Consultation Form", centred (Preview is headed "Consultation Details Preview");
+ * the date is picked in the OS's own calendar. Every
  * move slides the whole popup: Next sends it off the screen to the left, then the next
  * step's popup comes in from the right (Previous the other way round); the progress bar
  * stays put and fills (or empties) as the new popup comes in.
@@ -395,7 +396,8 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
             <X className="h-5 w-5" />
           </button>
         )}
-        <h1 className="px-6 pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]" style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Preview" : "Consultation Form"}</h1>
+        {/* Preview's heading is long enough to reach the close cross on a phone: more room there. */}
+        <h1 className={`${preview ? "px-12" : "px-6"} pt-6 text-center text-[24px] font-semibold sm:px-10 sm:pt-7 sm:text-[26px]`} style={{ color: ACCENT }} data-testid="client-stage-heading">{preview ? "Consultation Details Preview" : "Consultation Form"}</h1>
 
         {/* Rows only: one field under another. The body is as tall as its step, the
             buttons a set gap under it; past the screen's height it scrolls (Preview) and
