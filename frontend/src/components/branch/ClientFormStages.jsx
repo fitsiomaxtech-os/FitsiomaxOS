@@ -189,9 +189,9 @@ const TRIM_KEYS = [
 // Preview before Submit: every answer, not in the paper's layout. The first PREVIEW_SHORT
 // (Name to Date) are label-and-value rows, the rest a box each; both go two a line.
 const PREVIEW_SHORT = 10;
-// Black headers, light grey answers: exact colours, so no theme changes them.
+// Black headers, grey answers: exact colours, so no theme changes them.
 const PREVIEW_HEADER = { color: "#000000" };
-const PREVIEW_ANSWER = { color: "#9ca3af", fontFamily: "Lexend, sans-serif", fontWeight: 400 };
+const PREVIEW_ANSWER = { color: "#6b7280", fontFamily: "Lexend, sans-serif", fontWeight: 400 };
 const PREVIEW = [
   ["Name", (d) => d.name],
   ["Mobile Number", (d) => (d.number ? `+${d.code} ${d.number}` : "")],
