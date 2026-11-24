@@ -62,8 +62,6 @@ export const paymentText = (payments) => (payments || []).map((p) => [
   `${p.label}${payments.length > 1 ? ` ${rs(p.amount)}` : ""}`, p.reference, p.notes && `Counted ${p.notes}`,
 ].filter(Boolean).join(" · ")).join("  +  ");
 
-const STATUS = { paid: ["PAID", "ok"], part_paid: ["PART PAID", "due"] };
-
 /** What the document prints, off the server's bill where there is one. */
 const billModel = (r) => {
   const b = r.bill;
@@ -72,7 +70,7 @@ const billModel = (r) => {
       title: "BILL / RECEIPT",
       number: b.bill_no ? ["Bill No", b.bill_no] : null,
       reference: ["Transaction ID", (b.transaction_ids || []).join(", ") || r.receiptNo],
-      date: billDateTime(b.date), status: b.status,
+      date: billDateTime(b.date),
       patient: { ...b.patient }, branch: { ...b.branch },
       items: b.items || [], subtotal: b.subtotal, discount: b.discount, total: b.total, totalLabel: "TOTAL",
       already: b.already_paid, now: b.paid_now,
@@ -88,7 +86,7 @@ const billModel = (r) => {
     title: schedule ? "PAYMENT SCHEDULE" : "BILL / RECEIPT",
     number: null,
     reference: [schedule ? "Reference No" : "Transaction ID", r.receiptNo],
-    date: r.dateLabel, status: "",
+    date: r.dateLabel,
     patient: { name: r.patient, number: r.patientNo === "—" ? "" : r.patientNo, phone: r.phone === "—" ? "" : r.phone },
     branch: { name: r.branch },
     items: [{
@@ -115,10 +113,7 @@ const STYLES = `
      1030px stops short of the 1047px a page holds. */
   .doc{display:flex;flex-direction:column;width:718px;max-width:100%;min-height:1030px;margin:0 auto;padding:18px 19px 8px;background:#fff}
   .head{display:flex;align-items:center;gap:30px}
-  .mark{flex:none;width:132px;text-align:center;color:#3f4b5b}
-  .mark img{display:block;width:85px;height:96px;margin:0 auto 6px;object-fit:contain}
-  .mark b{display:block;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.1;letter-spacing:.5px}
-  .mark span{display:block;margin-top:4px;font-size:9px}
+  .mark{flex:none;display:block;width:85px;height:96px;object-fit:contain}
   .brand{color:${BLUE};font-size:50px;font-weight:800;line-height:1;letter-spacing:-1px}
   .tag{margin-top:7px;font-size:16px;font-weight:600}
   .tel{margin-top:4px;font-size:18px;font-weight:600}
@@ -127,10 +122,7 @@ const STYLES = `
   .row{display:flex;justify-content:space-between;align-items:baseline;gap:20px}
   .row b,.val{font-weight:600}
   .top{margin-top:16px}
-  .ref{margin-top:6px;font-size:13px;color:#404040;align-items:center}
-  .pill{flex:none;padding:3px 12px;border-radius:4px;font-size:12px;font-weight:700;letter-spacing:.8px}
-  .ok{background:#e7f6ec;color:#15803d;border:1px solid #86cfa0}
-  .due{background:#fff6e5;color:#b45309;border:1px solid #f0c36d}
+  .ref{margin-top:6px;font-size:13px;color:#404040}
   .sec{margin-top:16px;color:${BLUE};font-weight:700}
   .line{display:flex;flex-wrap:wrap;gap:4px 34px;margin-top:8px}
   .line .grow{flex:1 1 220px;min-width:0}
@@ -188,7 +180,7 @@ const STYLES = `
 
 const head = (title) => `
   <div class="head">
-    <div class="mark"><img src="${BILL_LOGO}" alt=""><b>FITSIO_MAX</b><span>Physio Care &amp; Fitness Centre</span></div>
+    <img class="mark" src="${BILL_LOGO}" alt="">
     <div><div class="brand">FITSIO_MAX</div><div class="tag">Pain Management | Athletic Rehab | Fitness</div><div class="tel">${PHONE}</div></div>
   </div>
   <div class="rule"></div>
@@ -234,12 +226,11 @@ const footHtml = (by) => `
 /** The bill (or Payment Schedule) for a receipt, as one printable document. */
 export const billHtml = (r) => {
   const m = billModel(r);
-  const [statusText, statusTone] = STATUS[m.status] || [];
   const plan = m.installments || [];
   return page(`${m.title === "PAYMENT SCHEDULE" ? "Payment Schedule" : "Bill"} ${m.number ? m.number[1] : m.reference[1]}`, `
   ${head(m.title)}
   <div class="row top"><span>${m.number ? `${m.number[0]}: <b>${escapeHtml(m.number[1])}</b>` : `${m.reference[0]}: <b>${escapeHtml(m.reference[1])}</b>`}</span><span>Date: <b>${escapeHtml(m.date)}</b></span></div>
-  ${m.number || statusText ? `<div class="row ref"><span>${m.number ? `${m.reference[0]}: <b>${escapeHtml(m.reference[1])}</b>` : ""}</span>${statusText ? `<span class="pill ${statusTone}">${statusText}</span>` : ""}</div>` : ""}
+  ${m.number ? `<div class="row ref"><span>${m.reference[0]}: <b>${escapeHtml(m.reference[1])}</b></span></div>` : ""}
   ${patientHtml(m.patient, m.branch)}
 
   <div class="dash"></div>
