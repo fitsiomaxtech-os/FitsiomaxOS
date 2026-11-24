@@ -2169,7 +2169,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               type="button"
               onClick={() => { setProfileOpen(false); setActiveView(tab.key); tabDots.click(tab.key); }}
               className={`relative flex flex-auto shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
-                activeView === tab.key
+                !profileOpen && activeView === tab.key
                   // The blue gradient with its soft glow, as the Business Development
                   // Dashboard's pressed buttons wear it.
                   ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
@@ -2182,6 +2182,24 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </button>
           );
         })}
+        {/* My Profile, last tab before the gear: the board's own My Profile view (the one the
+            phone's Profile stop opens), so this strip stays up with the tab lit. Not when
+            Super Admin embeds the board -- the profile there would be hers, not this branch's. */}
+        {!embedded && currentUser && (
+          <button
+            type="button"
+            onClick={() => setProfileOpen(true)}
+            className={`relative flex flex-auto shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
+              profileOpen
+                ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
+            }`}
+            aria-current={profileOpen ? "page" : undefined}
+            data-testid="branch-view-tab-profile"
+          >
+            <ProfileNavGlyph user={currentUser} size={16} iconClassName="h-4 w-4" /> My Profile
+          </button>
+        )}
         {/* The bell moved to the page header, where Super Admin's already was and where a
             person looks for it. One control, one place, rather than the same thing in two
             with only one of them findable. */}
@@ -2194,7 +2212,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               type="button"
               // Lit like a selected tab while its Consultation Form view is the one up.
               className={`ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded shadow-sm transition-colors duration-300 ${
-                activeView === CONSULT_FORMS_VIEW
+                !profileOpen && activeView === CONSULT_FORMS_VIEW
                   ? "bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
                   : "bg-white text-slate-500 hover:bg-sky-50 hover:text-sky-700 data-[state=open]:bg-sky-50 data-[state=open]:text-sky-700"
               }`}
@@ -2249,8 +2267,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {apptMsgOpen && <AppointmentMessageEditor branchId={branchId} onClose={() => setApptMsgOpen(false)} />}
       {locationOpen && <BranchLocationDialog branchId={branchId} onClose={() => setLocationOpen(false)} />}
 
+      {/* The two wrappers move My Profile's sticky sidebar down past this board's own sticky
+          tab strip on a desk (a custom property can't be set from itself on one element). */}
       {profileOpen && (
-        <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
+        <div className="contents" style={{ "--branch-profile-top": "calc(var(--role-header-height, 89px) + var(--branch-nav-height, 0px))" }}>
+          <div className="contents" style={{ "--role-header-height": "var(--branch-profile-top)" }}>
+            <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
+          </div>
+        </div>
       )}
 
       {/* Hidden, not unmounted, while My Profile is open: `contents` keeps every view a
