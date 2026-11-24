@@ -13,13 +13,13 @@ import { loadSpelling } from "@/lib/spellcheck";
  * writing in boxes that grow with it, both two a line), then sends the lot; the client sees
  * only a thank-you -- the filled paper is for the clinic's eyes (Branch Admin opens it as a
  * read-only report). The popup is 1020 wide and as tall as its step, so Previous / Next sit
- * the same gap under the last field on every step; its top stays put
- * (where a 520-high popup would sit centred). The progress bar is above it. Each step is
+ * the same gap under the last field on every step. The steps sit in the middle of the
+ * screen, Preview at its top, centred. The progress bar is above the popup. Each step is
  * headed "Consultation Form", centred (Preview is headed "Consultation Details Preview");
  * the date is picked in the OS's own calendar. Every
  * move slides the whole popup: Next sends it off the screen to the left, then the next
  * step's popup comes in from the right (Previous the other way round); the progress bar
- * stays put and fills (or empties) as the new popup comes in.
+ * glides to its place over the new popup, and fills (or empties) as it comes in.
  *
  * `onClose` puts the same steps over the app instead of a page of their own: Branch Admin's
  * lead popup opens it from its Form button (LeadConsultationFormPopup), and the card gets
@@ -257,6 +257,10 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
   // for it to end, so a double tap on Next cannot skip a step.
   const [moving, setMoving] = useState(null);
   const bodyRef = useRef(null);
+  // The progress bar, and where it was as the popup left: a popup of another height (or
+  // Preview, at the top) has it elsewhere, so it glides there.
+  const barRef = useRef(null);
+  const barTop = useRef(null);
 
   // The new step, put in while the popup is off the screen.
   const show = (to) => {
@@ -297,16 +301,25 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
         ? { duration: OUT_MS, easing: OUT_EASE, fill: "forwards" }
         : { duration: IN_MS, easing: IN_EASE, fill: "backwards" },
     );
+    const bar = barRef.current;
+    const shift = !goingOut && bar && barTop.current !== null ? barTop.current - bar.getBoundingClientRect().top : 0;
+    const barAnim = shift
+      ? bar.animate([{ transform: `translateY(${shift}px)` }, { transform: "translateY(0)" }], { duration: IN_MS, easing: IN_EASE })
+      : null;
     let ended = false;
     const done = () => {
       if (ended) return;
       ended = true;
-      if (goingOut) { show(moving.to); setMoving({ ...moving, phase: "in" }); } else setMoving(null);
+      if (goingOut) {
+        barTop.current = bar ? bar.getBoundingClientRect().top : null;
+        show(moving.to);
+        setMoving({ ...moving, phase: "in" });
+      } else setMoving(null);
     };
     anim.onfinish = done;
     // Should the finish never come (a hidden tab), the move still ends.
     const timer = window.setTimeout(done, (goingOut ? OUT_MS : IN_MS) + 300);
-    return () => { ended = true; window.clearTimeout(timer); anim.cancel(); };
+    return () => { ended = true; window.clearTimeout(timer); anim.cancel(); barAnim?.cancel(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moving]);
 
@@ -352,19 +365,19 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
   );
 
   return (
-    // From tablet width up the top is held where a 520-high popup would sit centred, half
-    // the screen less 271px (half of the bar's 22 and the 520): a shorter or taller step
-    // moves only the popup's foot. The popup stops 40px above the screen's foot; beyond
-    // that its body scrolls. Clipped at its sides, so a popup off the screen mid-move adds
-    // no sideways scroll.
+    // The bar and the popup together: in the middle of the screen on the steps, at its top
+    // on Preview. From tablet width up they keep 40px from the screen's top and foot;
+    // beyond that the popup's body scrolls. A phone's link page is as tall as the screen
+    // without the browser's own bars, so its foot is padded by them: the middle is of what
+    // shows. Clipped at its sides, so a popup off the screen mid-move adds no sideways scroll.
     <div
-      className={`flex flex-col items-center justify-start overflow-x-clip ${onClose ? "min-h-full" : "min-h-screen bg-[#eef1f8]"} px-4 py-6 md:pb-10 md:pt-[var(--cs-top)] md:[--cs-top:max(2.5rem,calc(50vh_-_271px))]`}
+      className={`flex flex-col items-center overflow-x-clip ${preview ? "justify-start" : "justify-center"} ${onClose ? "min-h-full" : "min-h-screen bg-[#eef1f8] pb-[calc(1.5rem_+_100vh_-_100svh)]"} px-4 py-6 md:py-10`}
       data-testid="client-stages"
     >
-      {/* The progress sits above the popup, not in it, and stays put as the popup moves.
+      {/* The progress sits above the popup, not in it, and does not slide off with it.
           Each bar fills from its left as its step's popup comes in, and empties back when
           Previous brings the step before it in. */}
-      <div className="mb-4 flex w-full max-w-[1020px] gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={STAGES} aria-valuenow={stage + 1} aria-label="Progress" data-testid="client-stage-progress">
+      <div ref={barRef} className="mb-4 flex w-full max-w-[1020px] gap-1.5" role="progressbar" aria-valuemin={1} aria-valuemax={STAGES} aria-valuenow={stage + 1} aria-label="Progress" data-testid="client-stage-progress">
         {Array.from({ length: STAGES }, (_, i) => (
           <span key={i} className="relative h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "#dfe4ee" }}>
             <span
@@ -380,7 +393,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
         onSubmit={next}
         noValidate
         autoComplete="off"
-        className="relative flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_var(--cs-top)_-_22px_-_2.5rem)]"
+        className="relative flex w-full max-w-[1020px] flex-col rounded-[18px] bg-white shadow-xl md:max-h-[calc(100vh_-_22px_-_5rem)]"
         data-testid={preview ? "client-preview" : `client-stage-${stage + 1}`}
       >
         {onClose && (
