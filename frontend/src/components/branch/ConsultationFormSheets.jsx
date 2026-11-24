@@ -233,7 +233,8 @@ export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false, branc
       </div>
 
       <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-[1fr_2fr]">
-        <Line label="Date:" type="date" {...bind("date")} />
+        {/* A report with no date shows the line blank, not the date box's own dd-mm-yyyy. */}
+        <Line label="Date:" type={readOnly && !f.date ? "text" : "date"} {...bind("date")} />
         <Line label="Place:" {...bind("place")} />
       </div>
     </>

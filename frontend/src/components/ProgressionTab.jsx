@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock, Eye, EyeOff, Lock, Upload } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AlertCircle, CheckCircle2, Clock, Eye, Loader2, Lock, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { DocumentPreview, useDocumentPreview } from "@/components/ui/document-preview";
-import { EMPTY_FORM, formBranchName, formFromLead, showDate } from "@/components/branch/ConsultationFormSheets";
-import { displayPhone } from "@/lib/phone";
+import { ConsultationFormSheets, EMPTY_FORM, formBranchName, formBranchesFrom, formFromLead } from "@/components/branch/ConsultationFormSheets";
 import { closeCaseSheet, leadConsultationReport, leadProgression, openLeadDocument, setGoogleReview, uploadLeadDocument, verifyGoogleReview, verifyLeadDocument } from "@/lib/api";
 
 /**
@@ -43,53 +43,25 @@ const CHIP = "flex h-6 w-24 shrink-0 items-center justify-center gap-1 rounded-[
 const BTN = "flex h-8 w-32 shrink-0 items-center justify-center gap-1.5 rounded-[4px] px-0 text-xs font-medium";
 const NO_BTN = <span className="w-32 shrink-0" aria-hidden />;
 
-// The Consultation Report's form: the paper's fields, page for page, two a line. `date` and
-// `phone` say how a value is shown; every other field is its own writing.
-const REPORT = [
-  ["Patient Details", [
-    ["name", "Name"], ["contact_no", "Mobile Number", "phone"],
-    ["mail_id", "Email ID"], ["sex", "Gender"],
-    ["place", "Place"], ["branch", "Branch"],
-    ["age", "Age"], ["source_of_reference", "Source"],
-    ["nature_of_job", "Nature of Job"], ["date", "Date", "date"],
-  ]],
-  ["Medical History", [
-    ["past_medical_history", "Past Medical History"], ["any_medication", "Any Medication"],
-    ["symptoms_root_cause", "Symptoms / Root Cause"], ["primary_muscles", "Primary Muscles"],
-    ["secondary_muscles", "Secondary Muscles"],
-  ]],
-  ["Previous Consultations", [
-    ["previous_medical_consultations", "Previous Medical Consultations"], ["previous_diagnosis", "Previous Diagnosis"],
-    ["previous_physiotherapy", "Previous Physiotherapy"],
-  ]],
-  ["Diagnosis & Treatment Plan", [
-    ["fitsiomax_diagnosis", "Fitsiomax Diagnosis"], ["treatment_goals", "Treatment Goals"],
-    ["treatment_protocol", "Treatment Protocol"], ["special_instructions", "Special Instructions to the Therapist"],
-    ["sessions_weeks_required", "No of Sessions / Weeks Required"], ["sessions_weeks_online_offline", "No of Sessions / Weeks (Online / Offline)"],
-    ["short_term_goal", "Short Term Goal"], ["long_term_goal", "Long Term Goal"],
-    ["dos_and_donts", "Do's & Don'ts"], ["therapist_name", "Therapist Name"],
-  ]],
-];
-// The Consultation Form Preview's own header and answer, in exact colours.
-const REPORT_HEADER = { color: "#000000" };
-const REPORT_ANSWER = { color: "#6b7280", fontFamily: "Lexend, sans-serif", fontWeight: 400 };
 const REPORT_STATUS = {
   filled: { ...STATUS.completed, label: "Filled" },
   sent: { ...STATUS.uploaded, label: "Sent to client" },
   pending: STATUS.pending,
 };
+const readOnlySet = () => {};
 
 /**
- * The patient's Consultation Form as a read-only form, under the case sheet's four rows. It
- * is not one of the four: nothing here is uploaded, verified or waited on. The saved form's
- * answers come first and the lead fills what it left blank, as its Form button does; with
- * no form saved the row reads Pending and the form shows what the lead already holds. Its
- * own fetch, so a form that will not load never takes the four rows with it.
+ * The patient's Consultation Form: one row under the case sheet's four, and on Form View the
+ * whole three-page form over the whole screen, read only. Always shut until it is pressed.
+ * It is not one of the four: nothing here is uploaded, verified or waited on. The saved
+ * form's answers come first and the lead fills what it left blank, as its Form button does;
+ * with no form saved the row reads Pending and the form shows what the lead already holds.
+ * Its own fetch, so a form that will not load never takes the four rows with it.
  */
-function ConsultationReport({ lead, branchName = "" }) {
+function ConsultationReport({ lead, branchName = "", branches = [] }) {
   const [report, setReport] = useState(null);
   const [failed, setFailed] = useState(false);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const leadId = lead.id;
 
   useEffect(() => {
@@ -102,6 +74,13 @@ function ConsultationReport({ lead, branchName = "" }) {
     return () => { live = false; };
   }, [leadId]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const meta = REPORT_STATUS[!report?.saved ? "pending" : report.client_status === "requested" ? "sent" : "filled"];
   const Icon = meta.icon;
   // The lead's own details, less today's date: no form saved means no day it was filled.
@@ -109,56 +88,53 @@ function ConsultationReport({ lead, branchName = "" }) {
   const form = Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [
     k, String(report?.fields?.[k] ?? "").trim() || fromLead[k] || "",
   ]));
-  const shown = (key, as) => {
-    if (!form[key]) return "—";
-    if (as === "phone") return displayPhone(form[key]);
-    return as === "date" ? showDate(form[key]) : form[key];
-  };
 
   return (
-    <div className="space-y-2" data-testid="progression-consultation-report">
-      <div className={`${ROW} bg-white ${meta.ring}`}>
+    <>
+      <div className={`${ROW} bg-white ${meta.ring}`} data-testid="progression-consultation-report">
         <Icon className={`h-4 w-4 shrink-0 ${meta.tone}`} />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">Consultation Report</span>
         {report && <span className={`${CHIP} ${meta.chip}`} data-testid="progression-report-status">{meta.label}</span>}
         <button
           type="button"
-          onClick={() => setOpen((cur) => !cur)}
-          aria-expanded={open}
+          onClick={() => setOpen(true)}
           className={`${BTN} border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100`}
-          data-testid="progression-report-toggle"
+          data-testid="progression-report-open"
         >
-          {open ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          {open ? "Hide Form" : "Form View"}
+          <Eye className="h-3.5 w-3.5" /> Form View
         </button>
       </div>
 
-      {open && !report && (
-        <p className="py-6 text-center text-sm text-slate-400" data-testid="progression-report-wait">
-          {failed ? "Couldn't load the consultation report." : "Loading consultation report…"}
-        </p>
+      {/* Out of the patient popup and over it: the whole screen, under the popup's own band. */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-[90] flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="Consultation Report" data-testid="progression-report-view">
+          <div className="flex shrink-0 items-center gap-3 border-b border-sky-700 bg-[#0284C7] px-4 py-3 sm:px-5">
+            <p className="flex min-w-0 flex-1 items-center gap-2 text-base font-semibold text-white">
+              <span className="truncate">{form.name || "Lead"}</span>
+              {lead.patient_number && (
+                <span className="shrink-0 rounded bg-white/15 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white">{lead.patient_number}</span>
+              )}
+            </p>
+            <span className="hidden shrink-0 whitespace-nowrap text-sm font-medium text-white sm:block">Consultation Report</span>
+            <button type="button" onClick={() => setOpen(false)} className="shrink-0 rounded p-1 text-white hover:bg-[rgba(255,255,255,0.15)]" aria-label="Close" data-testid="progression-report-close">
+              <X className="h-5 w-5" strokeWidth={3} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5" data-testid="progression-report-form">
+            {report ? (
+              <div className="mx-auto w-full max-w-4xl">
+                <ConsultationFormSheets f={form} set={readOnlySet} readOnly branches={formBranchesFrom(branches)} />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                {failed ? "Couldn't load the consultation report." : <Loader2 className="h-6 w-6 animate-spin" />}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body,
       )}
-
-      {open && report && (
-        <div className="space-y-4 rounded-[4px] border border-slate-200 bg-white p-3" data-testid="progression-report-form">
-          {REPORT.map(([section, fields]) => (
-            <section key={section}>
-              <p className="mb-2 border-b border-slate-100 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-600">{section}</p>
-              {/* Two a line, one on a phone. Each box is as tall as its writing; the two on
-                  one line stretch to the taller. */}
-              <dl className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
-                {fields.map(([key, label, as]) => (
-                  <div key={key} className="flex min-w-0 flex-col gap-1" data-testid={`progression-report-${key}`}>
-                    <dt className="text-xs font-medium" style={REPORT_HEADER}>{label}</dt>
-                    <dd className="min-h-[32px] grow whitespace-pre-wrap break-words rounded-[4px] border border-slate-200 px-2.5 py-1.5 text-xs leading-[18px]" style={REPORT_ANSWER}>{shown(key, as)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -168,7 +144,7 @@ function ConsultationReport({ lead, branchName = "" }) {
 //
 // reportLead is the lead whose Consultation Report shows under the rows: the branch's
 // Consultation popup passes it, the Consultant's and the physio's leave it out.
-export function ProgressionTab({ leadId, canUpload = true, canVerify = false, canClose = canVerify, reportLead = null, reportBranch = "" }) {
+export function ProgressionTab({ leadId, canUpload = true, canVerify = false, canClose = canVerify, reportLead = null, reportBranch = "", reportBranches = [] }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyKind, setBusyKind] = useState(null);
@@ -454,7 +430,7 @@ export function ProgressionTab({ leadId, canUpload = true, canVerify = false, ca
           </div>
         );
       })}
-      {reportLead && <ConsultationReport lead={reportLead} branchName={reportBranch} />}
+      {reportLead && <ConsultationReport lead={reportLead} branchName={reportBranch} branches={reportBranches} />}
       <DocumentPreview preview={preview} onClose={closePreview} testid="progression-preview" />
     </div>
   );
