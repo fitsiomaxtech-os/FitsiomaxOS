@@ -10,7 +10,7 @@ import { FinanceWorkspace } from "@/components/finance/FinanceWorkspace";
  * loads, and the two rows cannot come to hold different pages.
  *
  * Business Development > Finance is this board too, with `branchDropdown`: its branch row
- * is one dropdown rather than the pills.
+ * is one dropdown in the tab bar rather than the pills.
  */
 export const FinanceWiseBoard = ({ branches, branchDropdown = false }) => (
   <FinanceWorkspace branches={branches || []} branchDropdown={branchDropdown} testId="finance-wise-board" />

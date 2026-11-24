@@ -143,8 +143,8 @@ const TABS = [
  * @param branches  Present only where it is — Super Admin's pill row. Given it, every page
  *              is scoped by that row and drops its own branch control; left off, as on the
  *              Accountant's own board, each page picks its own branch as it always did.
- * @param branchDropdown  Business Development's copy: that row as one dropdown instead of
- *              a pill per branch.
+ * @param branchDropdown  Business Development's copy: that row as one dropdown at the head
+ *              of the tab bar instead of a pill per branch above it.
  */
 export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "finance-workspace" }) => {
   const scoped = !!branches;
@@ -211,20 +211,7 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
       {/* Whose book. A dropdown on a phone, the pill row from sm up — same split Branch
           Wise uses. Only where the caller handed down a branch list: the Accountant's own
           board has no such row, and each page there keeps its own branch control.
-
-          branchDropdown: the one dropdown at every width. The 3px border is its button's
-          alone, not the open list's; the focus ring is the keyboard's only, as a ring left
-          standing after a mouse pick would read as a thicker border. */}
-      {scoped && branchDropdown && (
-        <ThemedSelect
-          value={selectedId}
-          onChange={setSelectedId}
-          options={[{ value: ALL_KEY, label: "All Branches" }, ...sortedBranches.map((b) => ({ value: b.id, label: b.branch_name }))]}
-          title="Branch"
-          className="h-10 border-[3px] px-2.5 text-sm font-semibold focus:ring-0 focus-visible:ring-2 focus-visible:ring-sky-200 sm:w-64"
-          testid="finance-wise-branch-dropdown"
-        />
-      )}
+          branchDropdown boards carry it in the tab bar below instead. */}
       {scoped && !branchDropdown && (
         <>
           <select
@@ -268,7 +255,25 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
       {/* Which page of it. No heading over this row: "Finance" above a row that already
           names its pages costs a band of screen to say where you are. */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-1" data-testid={`${testId}-tabs`}>
-        <div className="flex min-w-0 flex-1 flex-wrap gap-1 sm:gap-2">
+        {/* Whose book, at the head of the bar: there it holds still while the bar's other
+            end changes from page to page. The 3px orange border is its button's alone, not
+            the open list's; the focus ring is the keyboard's only, as a ring left standing
+            after a mouse pick would read as a thicker border.
+
+            176px so that it, the six tabs and Summary's dates share one line from 1366 up.
+            Narrower than that the dates take a line of their own (sm:flex-auto and sm:ml-auto
+            below), where tabs left to shrink would drop UPI alone onto a second. */}
+        {scoped && branchDropdown && (
+          <ThemedSelect
+            value={selectedId}
+            onChange={setSelectedId}
+            options={[{ value: ALL_KEY, label: "All Branches" }, ...sortedBranches.map((b) => ({ value: b.id, label: b.branch_name }))]}
+            title="Branch"
+            className="h-10 shrink-0 border-[3px] border-[rgb(255_184_134)] px-2.5 text-sm font-semibold focus:ring-0 focus-visible:ring-2 focus-visible:ring-orange-200 sm:w-44 min-[1440px]:w-56"
+            testid="finance-wise-branch-dropdown"
+          />
+        )}
+        <div className={`flex min-w-0 flex-1 flex-wrap gap-1 sm:gap-2 ${branchDropdown ? "sm:flex-auto" : ""}`}>
           {visibleTabs.map((t) => {
             const Icon = t.icon;
             const count = t.key === "approvals" ? pending.income + pending.expenses : 0;
@@ -287,7 +292,7 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
           })}
         </div>
 
-        <div ref={setToolbarTarget} className="flex shrink-0 flex-wrap items-center gap-2 empty:hidden" data-testid={`${testId}-toolbar`} />
+        <div ref={setToolbarTarget} className={`flex shrink-0 flex-wrap items-center gap-2 empty:hidden ${branchDropdown ? "sm:ml-auto" : ""}`} data-testid={`${testId}-toolbar`} />
 
         {/* The active page's own action, at the end of the row it belongs to. Full width
             below sm, where the tabs have already wrapped and a button squeezed against
