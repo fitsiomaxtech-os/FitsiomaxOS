@@ -7,7 +7,7 @@
 // fetches the bill behind that id and `withBill` puts it over the top. So the fee cards, the
 // collect popups and Accountant Manage all hand a patient the one bill.
 import { openPrintable } from "@/lib/printable";
-import { billDateTime, billDay, billHtml, paymentText } from "@/lib/bill";
+import { billDateTime, billDay, billHtml, billMessage, paymentText } from "@/lib/bill";
 import { displayPhone } from "@/lib/phone";
 import { loadSession } from "@/lib/session";
 
@@ -81,6 +81,7 @@ export const withBill = (r, bill) => {
 };
 
 export const receiptHtml = billHtml;
+export const receiptMessage = billMessage;
 export const printReceipt = (r) => openPrintable(receiptHtml(r), { print: true });
 
 /** "FM-ANN-0001", or the transaction id on a payment from before Bill Nos. */

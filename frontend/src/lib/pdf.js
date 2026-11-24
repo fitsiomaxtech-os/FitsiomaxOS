@@ -11,6 +11,7 @@
 import { useEffect, useMemo } from "react";
 import { toast } from "@/components/ui/sonner";
 import { waNumber } from "@/lib/phone";
+import { documentDrawn } from "@/lib/printable";
 import { isHandheld } from "@/lib/receipt";
 
 const A4_W = 210;
@@ -66,13 +67,8 @@ export const htmlToPdf = async (html) => {
     doc.write(html);
     doc.close();
     // Waits for the logo and the web font, same reason openPrintable does — drawn early,
-    // the sheet has a hole where the logo goes. The timer covers either never arriving.
-    await new Promise((resolve) => {
-      if (doc.readyState === "complete") resolve();
-      else frame.addEventListener("load", resolve, { once: true });
-      setTimeout(resolve, 4000);
-    });
-    try { await doc.fonts?.ready; } catch { /* fonts API missing — draw with what loaded */ }
+    // the sheet has a hole where the logo goes.
+    await documentDrawn(frame.contentWindow, 4000);
 
     const target = doc.querySelector(".doc") || doc.body;
     const canvas = await html2canvas(target, {
@@ -161,7 +157,9 @@ const shareFile = async (blob, filename, title, text) => {
   const file = new File([blob], filename, { type: "application/pdf" });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share(text ? { files: [file], title, text } : { files: [file], title });
+      // Only what was given: a share target types the title into the message as well, so a
+      // document whose message says it all is sent without one.
+      await navigator.share({ files: [file], ...(title ? { title } : {}), ...(text ? { text } : {}) });
       return "shared";
     } catch (err) {
       if (err?.name === "AbortError") return "cancelled";  // closed the share sheet
@@ -182,7 +180,7 @@ export const sharePdf = async (job, filename, title, text) => {
   const blob = await build(job);
   if (!blob) return;
   if (await shareFile(blob, filename, title, text) !== "saved") return;
-  if (text && await copyText(text)) toast.success("PDF saved, map link copied — attach the file and paste the link");
+  if (text && await copyText(text)) toast.success("PDF saved, message copied — attach the file and paste the message");
   else toast.success("PDF saved — attach it to your message");
 };
 
@@ -204,7 +202,7 @@ export const whatsappPdf = async (job, filename, title, phone, text) => {
     const blob = await build(job);
     if (!blob) return;
     if (await shareFile(blob, filename, title, text) === "saved") {
-      if (text && await copyText(text)) toast.success("PDF saved, map link copied — open WhatsApp, attach it and paste the link");
+      if (text && await copyText(text)) toast.success("PDF saved, message copied — open WhatsApp, attach it and paste the message");
       else toast.success("PDF saved — open WhatsApp and attach it");
     }
     return;

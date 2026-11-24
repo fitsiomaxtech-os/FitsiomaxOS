@@ -2177,6 +2177,7 @@ async def v3_reset_all_payments(confirm: bool = False, _: V3UserOut = Depends(re
     # Bill numbers with them: the payments they were given to are gone.
     await v3_col("counters").delete_many({"_id": {"$regex": "^bill_no:"}})
     await v3_col("payment_bills").delete_many({})
+    await v3_col("bill_links").delete_many({})
 
     return {
         "message": "All payments reset to a fresh state",

@@ -7,13 +7,11 @@
 // whichever screen opened it. A Payment Schedule has no transaction, and a bill that could
 // not be fetched still has to print, so both are built here off the receipt itself.
 import { escapeHtml } from "@/lib/printable";
+import { BILL_LOGO } from "@/lib/billLogo";
 import { displayPhone } from "@/lib/phone";
 
 const BLUE = "#2b6cb0";
 const PHONE = "+91 75388 36030";
-// Same origin, so the PDF's canvas can draw it. The 512px icon: the mark fills under half of
-// it, and the styles below crop to the mark at the size it prints.
-const logoUrl = () => `${window.location.origin}/portal-icon-512.png`;
 
 const two = (n) => (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const rs = (n) => `₹ ${two(n)}`;
@@ -118,8 +116,7 @@ const STYLES = `
   .doc{display:flex;flex-direction:column;width:718px;max-width:100%;min-height:1030px;margin:0 auto;padding:18px 19px 8px;background:#fff}
   .head{display:flex;align-items:center;gap:30px}
   .mark{flex:none;width:132px;text-align:center;color:#3f4b5b}
-  .mark div{position:relative;width:86px;height:96px;margin:0 auto 6px;overflow:hidden}
-  .mark img{position:absolute;left:-61px;top:-56px;width:207px;height:207px}
+  .mark img{display:block;width:85px;height:96px;margin:0 auto 6px;object-fit:contain}
   .mark b{display:block;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.1;letter-spacing:.5px}
   .mark span{display:block;margin-top:4px;font-size:9px}
   .brand{color:${BLUE};font-size:50px;font-weight:800;line-height:1;letter-spacing:-1px}
@@ -179,13 +176,19 @@ const STYLES = `
   .sign{align-items:flex-end}
   .sign .box{width:240px;padding-top:7px;border-top:2px dotted #525252;text-align:center;font-size:14px;color:#525252}
   .thanks{margin-top:18px;font-size:17px;font-weight:600;text-align:center}
-  @page{size:A4;margin:10mm}
-  @media print{body{padding:0;background:#fff}.doc{width:100%}}
+  /* No page margin, so the browser has nowhere to print its own date, title, about:blank and
+     page number; the sheet carries the margin itself, on every page it runs to. */
+  @page{size:A4;margin:0}
+  @media print{
+    body{padding:0;background:#fff}
+    .doc{width:100%;min-height:1108px;padding:52px 57px 40px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+    tr,.foot,.row{break-inside:avoid}
+  }
 `;
 
 const head = (title) => `
   <div class="head">
-    <div class="mark"><div><img src="${logoUrl()}" alt=""></div><b>FITSIO_MAX</b><span>Physio Care &amp; Fitness Centre</span></div>
+    <div class="mark"><img src="${BILL_LOGO}" alt=""><b>FITSIO_MAX</b><span>Physio Care &amp; Fitness Centre</span></div>
     <div><div class="brand">FITSIO_MAX</div><div class="tag">Pain Management | Athletic Rehab | Fitness</div><div class="tel">${PHONE}</div></div>
   </div>
   <div class="rule"></div>
@@ -194,8 +197,11 @@ const head = (title) => `
 const field = (label, value, cls = "") => (value === 0 || value ? `<div class="${cls}">${label}: <span class="val">${escapeHtml(value)}</span></div>` : "");
 const row = (label, value, cls = "") => `<div class="row ${cls}"><span>${label}</span><span>${value}</span></div>`;
 
+/** "Anna Nagar Branch " -> "Anna Nagar": the line already says Branch. */
+const branchLabel = (name) => String(name || "").trim().replace(/\s+branch$/i, "");
+
 const patientHtml = (p, branch) => {
-  const name = String(branch?.name || "").replace(/\s+branch$/i, "");
+  const name = branchLabel(branch?.name);
   const address = [branch?.address, branch?.phone && `Phone: ${displayPhone(branch.phone)}`].filter(Boolean).join(" · ");
   return `
   <div class="sec">Patient Details:</div>
@@ -263,6 +269,30 @@ export const billHtml = (r) => {
   ${planHtml(plan)}
   ${m.note ? `<div class="note">${escapeHtml(m.note)}</div>` : ""}
   ${footHtml(m.by)}`, plan.length ? "tight" : "");
+};
+
+/**
+ * The message a bill is sent with: who it is for, what was paid, what is left, and nothing
+ * else -- the rest is on the bill. `link` is the PDF's own link, for a chat that can carry
+ * text but not a file; without one the PDF is in the message itself.
+ */
+export const billMessage = (r, link = "") => {
+  const schedule = r.kind === "schedule";
+  const name = /^(—|counter sale)?$/i.test(String(r.patient || "").trim()) ? "" : ` ${String(r.patient).trim()}`;
+  const place = branchLabel(r.branch);
+  const amount = `₹${(Number(r.amount) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const balance = r.bill?.balance > 0
+    ? `Balance Due: ₹${Number(r.bill.balance).toLocaleString("en-IN", { maximumFractionDigits: 2 })}${r.bill.due_date ? ` on ${billDay(r.bill.due_date)}` : ""}`
+    : "";
+  return [
+    `Hi${name},`,
+    schedule
+      ? `Your payment schedule for ${amount} from FITSIO_MAX${place ? `, ${place}` : ""}.`
+      : `Thank you for your payment of ${amount} at FITSIO_MAX${place ? `, ${place}` : ""}.`,
+    r.bill?.bill_no ? `Bill No: ${r.bill.bill_no}` : "",
+    balance,
+    link ? `\nYour bill (PDF):\n${link}` : "",
+  ].filter(Boolean).join("\n");
 };
 
 /**

@@ -259,6 +259,8 @@ def _hit(doc, q):
                 return False
             if "$ne" in v and have == v["$ne"]:
                 return False
+            if "$lte" in v and not (have or "") <= v["$lte"]:
+                return False
             if "$regex" in v and not re.search(v["$regex"], str(have)):
                 return False
         elif have != v:
@@ -295,6 +297,17 @@ class _Col:
         for d in self.docs:
             if _hit(d, q):
                 d.update(change["$set"])
+
+    async def update_one(self, q, change, upsert=False):
+        hit = next((d for d in self.docs if _hit(d, q)), None)
+        if not hit and upsert:
+            hit = {}
+            self.docs.append(hit)
+        if hit is not None:
+            hit.update(change["$set"])
+
+    async def delete_many(self, q):
+        self.docs = [d for d in self.docs if not _hit(d, q)]
 
     async def find_one_and_update(self, q, change, upsert=False, return_document=None):
         hit = next((d for d in self.docs if _hit(d, q)), None)
@@ -425,3 +438,88 @@ def test_zumba_payments_are_billed_and_voided_on_undo(db):
     assert run(bill_book.registration_bills(["Z1"])) == {}
     with pytest.raises(HTTPException):
         run(api.get_bill(txn, ADMIN))
+
+
+# ---- the PDF link -----------------------------------------------------------------------
+
+class _Upload:
+    def __init__(self, data):
+        self.data = data
+
+    async def read(self, n=-1):
+        return self.data if n < 0 else self.data[:n]
+
+
+PDF = b"%PDF-1.4 sample"
+
+
+@pytest.fixture
+def pdfs(tmp_path, monkeypatch):
+    monkeypatch.setattr(api, "BILL_PDF_DIR", str(tmp_path / "bill_pdfs"))
+    return tmp_path / "bill_pdfs"
+
+
+def _send(txn, user=ADMIN, data=PDF):
+    return run(api.share_bill_pdf(txn, _Upload(data), user))["token"]
+
+
+def test_a_sent_bill_opens_from_its_link_and_nobody_may_keep_it(db, pdfs):
+    txn = run(utils.generate_transaction_id("ann"))
+    _collect(db, txn)
+    token = _send(txn)
+    assert len(token) >= 20
+    res = run(api.public_bill_pdf(token))
+    assert res.status_code == 200 and open(res.path, "rb").read() == PDF
+    assert 'filename="Bill-FM-ANN-0001.pdf"' in res.headers["content-disposition"] and res.headers["content-disposition"].startswith("inline")
+    assert "no-store" in res.headers["cache-control"] and "noindex" in res.headers["x-robots-tag"]
+
+
+def test_sending_again_keeps_the_link(db, pdfs):
+    txn = run(utils.generate_transaction_id("ann"))
+    _collect(db, txn)
+    assert _send(txn) == _send(txn, data=PDF + b"2")
+    assert len(db("bill_links").docs) == 1 and len(list(pdfs.iterdir())) == 1
+
+
+def test_an_expired_link_is_gone(db, pdfs):
+    txn = run(utils.generate_transaction_id("ann"))
+    _collect(db, txn)
+    token = _send(txn)
+    db("bill_links").docs[0]["expires_at"] = "2020-01-01T00:00:00+00:00"
+    assert run(api.public_bill_pdf(token)).status_code == 410
+    # Sent again, it is a new link, and the old one stays dead.
+    again = _send(txn)
+    assert again != token and run(api.public_bill_pdf(token)).status_code == 410
+
+
+def test_an_undone_payments_link_is_gone(db, pdfs):
+    txn = run(utils.generate_transaction_id("ann"))
+    _collect(db, txn)
+    token = _send(txn)
+    db("lead_activity").docs.clear()
+    assert run(api.public_bill_pdf(token)).status_code == 410
+
+
+@pytest.mark.parametrize("token", ["", "short", "../../etc/passwd", "a" * 22, "%2e%2e%2f" * 3, "x" * 200])
+def test_a_made_up_link_opens_nothing(db, pdfs, token):
+    assert run(api.public_bill_pdf(token)).status_code == 410
+
+
+def test_only_a_branch_that_may_read_the_bill_can_send_it(db, pdfs):
+    txn = run(utils.generate_transaction_id("ann"))
+    _collect(db, txn)
+    with pytest.raises(HTTPException) as e:
+        _send(txn, SimpleNamespace(role="branch_admin", branch_id="par", full_name="X"))
+    assert e.value.status_code == 404 and not db("bill_links").docs
+
+
+def test_only_a_pdf_and_not_a_huge_one(db, pdfs, monkeypatch):
+    txn = run(utils.generate_transaction_id("ann"))
+    _collect(db, txn)
+    with pytest.raises(HTTPException) as e:
+        _send(txn, data=b"<html>")
+    assert e.value.status_code == 400
+    monkeypatch.setattr(api, "BILL_PDF_MAX_BYTES", 8)
+    with pytest.raises(HTTPException) as e:
+        _send(txn)
+    assert e.value.status_code == 413 and not db("bill_links").docs

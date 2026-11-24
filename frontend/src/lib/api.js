@@ -609,6 +609,14 @@ export const getRevenueOverview = async (params = {}) => (await api.get("/financ
 export const getClientTransactionHistory = async (leadId) => (await api.get(`/finance/client/${leadId}`)).data;
 // One payment's bill, by its transaction id -- the same bill whichever screen opens it.
 export const getBill = async (transactionId) => (await api.get(`/finance/bills/${encodeURIComponent(transactionId)}`)).data;
+// The bill's PDF left behind a link of its own, for a WhatsApp chat opened from a desk: wa.me
+// carries text and no file. Returns { token, expires_at }.
+export const uploadBillPdf = async (transactionId, blob) => {
+  const form = new FormData();
+  form.append("file", blob, "bill.pdf");
+  return (await api.post(`/finance/bills/${encodeURIComponent(transactionId)}/pdf`, form)).data;
+};
+export const publicBillUrl = (token) => `${BACKEND_URL}/api/v3/public/bill/${token}`;
 export const markInstallmentPaid = async (leadId, installmentNumber, payload) => (await api.post(`/finance/installment/${leadId}/${installmentNumber}/mark-paid`, payload)).data;
 // Add Due: an extra amount charged to a client, owed on one date or across a Payment
 // Schedule ({ reason, installments: [{ amount, due_date }] }). Collected later through

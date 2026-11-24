@@ -196,6 +196,9 @@ CORE_INDEXES = [
     ("payment_bills", [("transaction_id", 1)], "transaction_id"),
     ("payment_bills", [("group", 1)], "group"),
     ("payment_bills", [("registration_id", 1)], "registration_id"),
+    # The PDF links a bill is sent on WhatsApp with.
+    ("bill_links", [("token", 1)], "token"),
+    ("bill_links", [("transaction_id", 1)], "transaction_id"),
     # ...and the payment behind it, in whichever book it is in. Sparse: only money lines
     # carry one, and the activity trail is mostly everything else.
     ("lead_activity", [("transaction_id", 1)], "transaction_id", {"sparse": True}),

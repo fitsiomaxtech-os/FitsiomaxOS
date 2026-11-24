@@ -168,14 +168,39 @@ export const docHeadHtml = ({ title, meta = [], status, branch }) => `<div class
     </div>
   </div>`;
 
+const pause = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/**
+ * Resolves once a document written into a window has everything it draws: its stylesheets
+ * (an @import included), its fonts and its images.
+ *
+ * Not readyState: a document that was written rather than fetched reads "complete" the
+ * moment it is closed, with the logo and the font still on their way. That is what printed
+ * bills with no logo. `cap` is the longest it waits -- a dead network must not stop a print.
+ */
+export const documentDrawn = async (win, cap = 5000) => {
+  const doc = win.document;
+  const until = Date.now() + cap;
+  const within = (promise) => Promise.race([promise, pause(Math.max(until - Date.now(), 0))]);
+  // Off the elements: document.styleSheets leaves out a sheet that is still loading, which
+  // is the one being waited for. Rule type 3 is an @import.
+  const sheetsIn = () => [...doc.querySelectorAll('style, link[rel="stylesheet"]')].every((el) => {
+    try { return !!el.sheet && [...el.sheet.cssRules].every((r) => r.type !== 3 || r.styleSheet); } catch { return true; }
+  });
+  while (Date.now() < until && (doc.readyState !== "complete" || !sheetsIn())) await pause(40);
+  // Laid out, so the fonts it uses are asked for; only then does fonts.ready wait on them.
+  void doc.body?.offsetHeight;
+  await pause(30);
+  await within(Promise.resolve(doc.fonts?.ready).catch(() => {}));
+  await within(Promise.all([...doc.images].map((img) => (img.decode ? img.decode().catch(() => {}) : null))));
+};
+
 /**
  * Opens the document in its own window.
  *
  * `print` also raises the print dialog — where the browser's own "Save as PDF" lives, so
- * this is the PDF path without shipping a PDF library. It waits for the logo before
- * printing: document.write returns immediately while the image is still loading, and
- * printing on a timer produces a sheet with a blank space where the logo should be, at
- * random. `load` fires even if the image fails, and the timeout covers it never resolving.
+ * this is the PDF path without shipping a PDF library. It waits for the logo and the font
+ * before printing (documentDrawn).
  */
 export const openPrintable = (html, { print = false } = {}) => {
   const w = window.open("", "_blank", "width=720,height=860");
@@ -184,15 +209,9 @@ export const openPrintable = (html, { print = false } = {}) => {
   w.document.close();
   w.focus();
   if (!print) return w;
-  let printed = false;
-  const go = () => {
-    if (printed) return;
-    printed = true;
+  documentDrawn(w).catch(() => {}).then(() => {
     try { w.print(); } catch { /* window was closed before printing */ }
-  };
-  if (w.document.readyState === "complete") go();
-  else w.addEventListener("load", go, { once: true });
-  setTimeout(go, 3000);
+  });
   return w;
 };
 

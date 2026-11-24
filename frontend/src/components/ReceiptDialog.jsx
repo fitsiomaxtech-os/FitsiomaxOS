@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, CheckCircle2, Download, Printer, Share2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
-import { getBill } from "@/lib/api";
+import { toast } from "@/components/ui/sonner";
+import { getBill, publicBillUrl, uploadBillPdf } from "@/lib/api";
 import { LOGO_URL } from "@/lib/printable";
-import { downloadPdf, sharePdf, usePdf, whatsappPdf } from "@/lib/pdf";
-import { billName, billTransaction, isSchedule, printReceipt, receiptHtml, receiptPopupRows, withBill } from "@/lib/receipt";
+import { downloadPdf, savePdf, sharePdf, usePdf, whatsappPdf } from "@/lib/pdf";
+import { waNumber } from "@/lib/phone";
+import { billName, billTransaction, isHandheld, isSchedule, printReceipt, receiptHtml, receiptMessage, receiptPopupRows, withBill } from "@/lib/receipt";
 
 /** round2, the same helper the collect form's own discount readout uses, so the
  *  percentage on the receipt cannot disagree with the one shown while the amount was
@@ -51,9 +53,45 @@ export function ReceiptDialog({ receipt: given, onClose, testid = "cons-receipt"
   // WhatsApp, Share and Download all send the printed bill as one PDF.
   const html = useMemo(() => (receipt && !waiting ? receiptHtml(receipt) : null), [receipt, waiting]);
   const pdf = usePdf(html);
+  const [sending, setSending] = useState(false);
   if (!receipt) return null;
-  const pdfName = `${isSchedule(receipt) ? "schedule" : "bill"}-${billName(receipt)}.pdf`;
-  const pdfTitle = `FITSIO_MAX ${isSchedule(receipt) ? "Payment Schedule" : "Bill"} ${billName(receipt)}`;
+  const pdfName = `${isSchedule(receipt) ? "Schedule" : "Bill"}-${billName(receipt)}.pdf`;
+  const message = receiptMessage(receipt);
+
+  // WhatsApp always carries the PDF and a short message. A phone hands the file itself over
+  // through its share sheet. A desk opens the patient's own chat, and wa.me takes text and
+  // no file -- so the PDF goes up behind a link of its own and rides in the message, as the
+  // appointment's does (AppointmentConfirmCard). With no link to be had, the file is saved
+  // beside the chat to be attached by hand.
+  const sendWhatsApp = async () => {
+    if (sending) return;
+    const num = waNumber(receipt.phone);
+    if (!num) { toast.error("This patient has no phone number on file"); return; }
+    if (isHandheld() || !txn || !bill) { whatsappPdf(pdf, pdfName, "", receipt.phone, message); return; }
+    // Claimed now, while the click still counts — after the awaits the popup blocker takes it.
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
+    setSending(true);
+    try {
+      const blob = await pdf();
+      let text;
+      try {
+        text = receiptMessage(receipt, publicBillUrl((await uploadBillPdf(txn, blob)).token));
+      } catch {
+        text = message;
+        savePdf(blob, pdfName);
+        toast.message("PDF downloaded — attach it in the WhatsApp chat");
+      }
+      const url = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+      if (tab && !tab.closed) tab.location.href = url;
+      else window.open(url, "_blank");
+    } catch {
+      tab?.close();
+      toast.error("Couldn't build the PDF");
+    } finally {
+      setSending(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3" data-testid={`${testid}-modal`}>
       {/* 88%, this dialog only. zoom rather than transform: scale — zoom shrinks the
@@ -217,8 +255,8 @@ export function ReceiptDialog({ receipt: given, onClose, testid = "cons-receipt"
               going to the number already printed on it. */}
           <Button
             className="h-10 w-10 shrink-0 rounded-[4px] bg-[#25D366] p-0 text-white hover:bg-[#1da851]"
-            disabled={waiting}
-            onClick={() => whatsappPdf(pdf, pdfName, pdfTitle, receipt.phone)}
+            disabled={waiting || sending}
+            onClick={sendWhatsApp}
             title="Send on WhatsApp"
             aria-label="Send on WhatsApp"
             data-testid={`${testid}-whatsapp`}
@@ -229,7 +267,7 @@ export function ReceiptDialog({ receipt: given, onClose, testid = "cons-receipt"
             variant="outline"
             className="h-10 w-10 shrink-0 rounded-[4px] p-0"
             disabled={waiting}
-            onClick={() => sharePdf(pdf, pdfName, pdfTitle)}
+            onClick={() => sharePdf(pdf, pdfName, "", message)}
             title="Share PDF"
             aria-label="Share PDF"
             data-testid={`${testid}-share`}

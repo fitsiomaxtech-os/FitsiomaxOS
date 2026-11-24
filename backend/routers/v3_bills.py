@@ -5,9 +5,16 @@ Book, Accountant Manage, the Store, Zumba and Fitness -- so the patient is hande
 paper whichever one it was. The sums are bills.py's; this finds the records behind the id.
 """
 
+import os
+import re
+import secrets
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 
 import bills
 import old_clients
@@ -172,9 +179,9 @@ def _may_read(user: V3UserOut, found: dict) -> bool:
     return mine and (is_branch_admin_role(user.role) or found["book"] == "zumba")
 
 
-@router.get("/finance/bills/{transaction_id}")
-async def get_bill(transaction_id: str, user: V3UserOut = Depends(require_bill_reader)):
-    """The bill a payment is given, and the same bill whenever it is opened again."""
+async def _open(transaction_id: str, user: V3UserOut):
+    """(the bill book's row, the payments on the bill, the one asked for), for a login that
+    may read it. 404 for one that may not, as for a payment that is not there."""
     bill = await v3_col("payment_bills").find_one({"transaction_id": transaction_id}, {"_id": 0}) or {}
     # The transactions on one bill, in the order they were taken. A payment from before the
     # bill book has no row and stands alone, without a Bill No.
@@ -192,7 +199,13 @@ async def get_bill(transaction_id: str, user: V3UserOut = Depends(require_bill_r
     asked = next((f for i, f in found if i == transaction_id), None)
     if not asked or not _may_read(user, asked):
         raise _not_found()
+    return bill, found, asked
 
+
+@router.get("/finance/bills/{transaction_id}")
+async def get_bill(transaction_id: str, user: V3UserOut = Depends(require_bill_reader)):
+    """The bill a payment is given, and the same bill whenever it is opened again."""
+    bill, found, asked = await _open(transaction_id, user)
     branch = await v3_col("branches").find_one(
         {"id": asked["branch_id"]}, {"_id": 0, "branch_name": 1, "address": 1, "phone": 1},
     ) if asked["branch_id"] else None
@@ -208,3 +221,108 @@ async def get_bill(transaction_id: str, user: V3UserOut = Depends(require_bill_r
         },
         **bills.combine([f["part"] for _, f in found]),
     }
+
+
+# ---- the PDF a bill is sent with --------------------------------------------------------
+#
+# A desk's WhatsApp opens the patient's chat with the message typed, and wa.me carries text
+# only, so the PDF goes as a link in it -- what the appointment confirmation does
+# (v3_branch_admin's APPT_PDF_DIR). The browser draws the PDF and leaves it here.
+#
+# A bill says what a person paid and for what treatment, so its link is held tighter: the
+# token is random and belongs to nothing else, it stops working after BILL_LINK_DAYS or when
+# the payment is undone, nothing may cache or index it, and the file is then deleted.
+BILL_PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bill_pdfs")
+BILL_PDF_MAX_BYTES = 5 * 1024 * 1024
+BILL_LINK_DAYS = 30
+_LINK_RE = re.compile(r"^[A-Za-z0-9_-]{20,64}$")
+
+
+def _stamp(at: datetime) -> str:
+    return at.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _pdf_path(token: str) -> Optional[str]:
+    return os.path.join(BILL_PDF_DIR, f"{token}.pdf") if _LINK_RE.match(token or "") else None
+
+
+async def _drop_old_links() -> None:
+    """Links past their day, and the files nobody has sent again since."""
+    await v3_col("bill_links").delete_many({"expires_at": {"$lte": _stamp(datetime.now(timezone.utc))}})
+    if not os.path.isdir(BILL_PDF_DIR):
+        return
+    oldest = time.time() - (BILL_LINK_DAYS + 1) * 86400
+    for name in os.listdir(BILL_PDF_DIR):
+        path = os.path.join(BILL_PDF_DIR, name)
+        try:
+            if os.path.getmtime(path) < oldest:
+                os.remove(path)
+        except OSError:
+            continue
+
+
+@router.post("/finance/bills/{transaction_id}/pdf")
+async def share_bill_pdf(transaction_id: str, file: UploadFile = File(...), user: V3UserOut = Depends(require_bill_reader)):
+    """Keep this bill's PDF behind a link, and say what it is. Sent again, the link is the
+    same one with its days started over."""
+    _, found, _ = await _open(transaction_id, user)
+    data = await file.read(BILL_PDF_MAX_BYTES + 1)
+    if len(data) > BILL_PDF_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The PDF is too large")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="That is not a PDF")
+
+    await _drop_old_links()
+    # The bill's first transaction, so both halves of a Pre Book share one link.
+    first = found[0][0]
+    link = await v3_col("bill_links").find_one({"transaction_id": first}, {"_id": 0, "token": 1})
+    token = link["token"] if link else secrets.token_urlsafe(16)
+    path = _pdf_path(token)
+    os.makedirs(BILL_PDF_DIR, exist_ok=True)
+    tmp = f"{path}.{uuid.uuid4().hex}.tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+    now = datetime.now(timezone.utc)
+    expires = _stamp(now + timedelta(days=BILL_LINK_DAYS))
+    await v3_col("bill_links").update_one(
+        {"token": token},
+        {"$set": {"token": token, "transaction_id": first, "expires_at": expires, "sent_at": _stamp(now), "sent_by": user.full_name}},
+        upsert=True,
+    )
+    return {"token": token, "expires_at": expires}
+
+
+def _link_gone() -> HTMLResponse:
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<meta name=robots content=noindex><title>FITSIO_MAX</title>"
+        "<p style='font:16px/1.5 Arial,sans-serif;margin:15vh auto;max-width:26rem;padding:0 1.5rem;text-align:center'>"
+        "This bill link is no longer available. Please ask your branch to send the bill again.</p>",
+        status_code=410, headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/public/bill/{token}")
+async def public_bill_pdf(token: str):
+    """The bill's PDF behind its link. Unauthenticated: the token is the key, and the file
+    holds only the bill the patient was sent."""
+    path = _pdf_path(token)
+    link = await v3_col("bill_links").find_one({"token": token}, {"_id": 0}) if path else None
+    if not link or link.get("expires_at", "") <= _stamp(datetime.now(timezone.utc)) or not os.path.isfile(path):
+        return _link_gone()
+    txn = link["transaction_id"]
+    bill = await v3_col("payment_bills").find_one({"transaction_id": txn}, {"_id": 0}) or {}
+    # An undone payment's bill is not one anybody should still be shown.
+    if not await _find(txn, bill):
+        return _link_gone()
+    return FileResponse(
+        path, media_type="application/pdf", filename=f"Bill-{bill.get('bill_no') or txn}.pdf",
+        # inline, so a tap in WhatsApp opens the bill rather than only saving it.
+        content_disposition_type="inline",
+        headers={
+            "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow, noarchive",
+            "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+        },
+    )

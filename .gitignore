@@ -123,3 +123,4 @@ frontend/node_modules/.cache/default-development/55.pack
 
 # Appointment confirmation PDFs sent to patients (routers/v3_branch_admin.py)
 backend/appointment_pdfs/
+backend/bill_pdfs/
