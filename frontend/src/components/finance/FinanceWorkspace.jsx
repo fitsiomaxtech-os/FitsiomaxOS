@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BadgeIndianRupee, Building2, CheckSquare, Coins, Layers, Plus, QrCode, Receipt, Truck, Wallet } from "lucide-react";
+import { BadgeIndianRupee, CheckSquare, Coins, Plus, QrCode, Receipt, Truck, Wallet } from "lucide-react";
 import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { ApprovalsBoard, PendingBadge } from "@/components/finance/ApprovalsBoard";
 import { BankAccountsBoard } from "@/components/finance/BankAccountsBoard";
@@ -138,15 +138,14 @@ const TABS = [
 /**
  * The finance book itself, with no role attached to it. Both desks that keep it render
  * this and open on the same page of it; the only thing either one says about itself is
- * whether the branch is picked above the tabs.
+ * whether the branch is picked in the tab bar.
  *
- * @param branches  Present only where it is — Super Admin's pill row. Given it, every page
- *              is scoped by that row and drops its own branch control; left off, as on the
- *              Accountant's own board, each page picks its own branch as it always did.
- * @param branchDropdown  Business Development's copy: that row as one dropdown after the
- *              last tab of the tab bar instead of a pill per branch above it.
+ * @param branches  Present only where it is — Super Admin's and Business Development's
+ *              dropdown after the last tab. Given it, every page is scoped by that dropdown
+ *              and drops its own branch control; left off, as on the Accountant's own board,
+ *              each page picks its own branch as it always did.
  */
-export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "finance-workspace" }) => {
+export const FinanceWorkspace = ({ branches, testId = "finance-workspace" }) => {
   const scoped = !!branches;
   // Tabs gated to super_admin drop out entirely on the Accountant's own board rather than
   // sitting there to 404 on a click — the same reason each one's own endpoints refuse an
@@ -208,54 +207,10 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
 
   return (
     <div className="space-y-4" data-testid={`${testId}-root`}>
-      {/* Whose book. A dropdown on a phone, the pill row from sm up — same split Branch
-          Wise uses. Only where the caller handed down a branch list: the Accountant's own
-          board has no such row, and each page there keeps its own branch control.
-          branchDropdown boards carry it in the tab bar below instead. */}
-      {scoped && !branchDropdown && (
-        <>
-          <select
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 sm:hidden"
-            data-testid="finance-wise-subtab-select"
-          >
-            <option value={ALL_KEY}>All Branches</option>
-            {sortedBranches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-          </select>
-
-          <div className="hidden flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:flex" data-testid="finance-wise-subtabs">
-            <button
-              type="button"
-              onClick={() => setSelectedId(ALL_KEY)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                selectedId === ALL_KEY ? "bg-sky-600 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-              }`}
-              data-testid="finance-wise-subtab-all"
-            >
-              <Layers className="h-3.5 w-3.5" /> All Branches
-            </button>
-            {sortedBranches.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setSelectedId(b.id)}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  selectedId === b.id ? "bg-sky-600 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                }`}
-                data-testid={`finance-wise-subtab-${b.id}`}
-              >
-                <Building2 className="h-3.5 w-3.5" /> {b.branch_name}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
       {/* Which page of it. No heading over this row: "Finance" above a row that already
           names its pages costs a band of screen to say where you are. */}
-      <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-1 ${branchDropdown ? "sm:justify-start" : ""}`} data-testid={`${testId}-tabs`}>
-        <div className={`flex min-w-0 flex-1 flex-wrap gap-1 sm:gap-2 ${branchDropdown ? "sm:flex-initial" : ""}`}>
+      <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-1 ${scoped ? "sm:justify-start" : ""}`} data-testid={`${testId}-tabs`}>
+        <div className={`flex min-w-0 flex-1 flex-wrap gap-1 sm:gap-2 ${scoped ? "sm:flex-initial" : ""}`}>
           {visibleTabs.map((t) => {
             const Icon = t.icon;
             const count = t.key === "approvals" ? pending.income + pending.expenses : 0;
@@ -281,8 +236,11 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
             would read as a thicker border.
 
             176px so that it, the six tabs and Summary's dates share one line from 1366 up.
-            Narrower than that the dates take a line of their own. */}
-        {scoped && branchDropdown && (
+            Narrower than that the dates take a line of their own.
+
+            Only where the caller handed down a branch list: the Accountant's own board has
+            no such dropdown, and each page there keeps its own branch control. */}
+        {scoped && (
           <ThemedSelect
             value={selectedId}
             onChange={setSelectedId}
@@ -293,7 +251,7 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
           />
         )}
 
-        <div ref={setToolbarTarget} className={`flex shrink-0 flex-wrap items-center gap-2 empty:hidden ${branchDropdown ? "sm:ml-auto" : ""}`} data-testid={`${testId}-toolbar`} />
+        <div ref={setToolbarTarget} className={`flex shrink-0 flex-wrap items-center gap-2 empty:hidden ${scoped ? "sm:ml-auto" : ""}`} data-testid={`${testId}-toolbar`} />
 
         {/* The active page's own action, at the end of the row it belongs to. Full width
             below sm, where the tabs have already wrapped and a button squeezed against
@@ -302,7 +260,7 @@ export const FinanceWorkspace = ({ branches, branchDropdown = false, testId = "f
           <button
             type="button"
             onClick={() => bankAddRef.current?.()}
-            className={`inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:w-auto ${branchDropdown ? "sm:ml-auto" : ""}`}
+            className={`inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:w-auto ${scoped ? "sm:ml-auto" : ""}`}
             data-testid="finance-bank-add"
           >
             <Plus className="h-4 w-4" /> Add Bank

@@ -1,19 +1,17 @@
 import { FinanceWorkspace } from "@/components/finance/FinanceWorkspace";
 
 /**
- * Super Admin > Finance — the whole finance book, browsed per branch.
+ * Super Admin > Finance and Business Development > Finance — the whole finance book,
+ * browsed per branch.
  *
- * The branch pill row picks whose book and the tab row picks which page of it, and both
- * apply together whichever branch (or All Branches) is selected. Every page here is the
- * same component the Accountant's own board renders, from the same list, so a sign-off, an
- * expense or a closed book entered on either screen is on the other the next time it
- * loads, and the two rows cannot come to hold different pages.
- *
- * Business Development > Finance is this board too, with `branchDropdown`: its branch row
- * is one dropdown in the tab bar rather than the pills.
+ * The tabs pick which page of it and the branch dropdown after the last of them picks whose
+ * book, and both apply together whichever branch (or All Branches) is selected. Every page
+ * here is the same component the Accountant's own board renders, from the same list, so a
+ * sign-off, an expense or a closed book entered on either screen is on the other the next
+ * time it loads, and the two tab rows cannot come to hold different pages.
  */
-export const FinanceWiseBoard = ({ branches, branchDropdown = false }) => (
-  <FinanceWorkspace branches={branches || []} branchDropdown={branchDropdown} testId="finance-wise-board" />
+export const FinanceWiseBoard = ({ branches }) => (
+  <FinanceWorkspace branches={branches || []} testId="finance-wise-board" />
 );
 
 export default FinanceWiseBoard;

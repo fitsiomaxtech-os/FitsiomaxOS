@@ -495,7 +495,7 @@ export const BusinessLeadsDashboard = ({ currentUser = null, tab, onTabChange })
           chunk arrives. */}
       <Suspense fallback={<BoardFallback />}>
         {activeTab === "finance" && (
-          <FinanceWiseBoard branches={branches} branchDropdown />
+          <FinanceWiseBoard branches={branches} />
         )}
 
         {activeTab === "permission" && (
