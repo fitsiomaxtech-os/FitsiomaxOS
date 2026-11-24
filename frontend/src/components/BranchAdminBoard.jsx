@@ -2271,10 +2271,12 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
           tab strip on a desk (a custom property can't be set from itself on one element).
           On a desk the page sits flush under the strip (the root's gap is off while it is
           open), and its body starts 10px down rather than 16, the band the strip keeps
-          under the header. */}
+          under the header. -mb-6 takes back the page's 24px bottom padding (CRMPage's
+          sm:py-6): My Profile already fills to the foot of the window, so that padding was
+          24px of scroll, a grey band under the sidebar and the top sliding under the strip. */}
       {profileOpen && (
         <div className="contents" style={{ "--branch-profile-top": "calc(var(--role-header-height, 89px) + var(--branch-nav-height, 0px))" }}>
-          <div className="contents md:[&_[data-testid=my-profile-tab-body]]:pt-2.5" style={{ "--role-header-height": "var(--branch-profile-top)" }}>
+          <div className="contents md:[&_[data-testid=my-profile-page]]:-mb-6 md:[&_[data-testid=my-profile-tab-body]]:pt-2.5" style={{ "--role-header-height": "var(--branch-profile-top)" }}>
             <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
           </div>
         </div>
