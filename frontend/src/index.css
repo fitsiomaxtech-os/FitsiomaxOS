@@ -281,7 +281,6 @@ code {
 .fee-soft [data-testid="cons-collect-online"],
 .fee-soft [data-testid="cons-open-physio-assign"],
 .fee-soft [data-testid="cons-reassign-physio"],
-.fee-soft [data-testid="cons-physio-assign-collect-balance"],
 .fee-soft [data-testid^="cons-diet-detail-"],
 .fee-soft [data-testid="cons-open-diet-assign"],
 .fee-soft [data-testid="cons-programme-details"],
@@ -295,8 +294,7 @@ code {
 .fee-soft [data-testid="cons-case-record-view"]:hover,
 .fee-soft [data-testid^="cons-fee-receipt"]:hover,
 .fee-soft [data-testid^="cons-fee-act-"]:hover,
-.fee-soft [data-testid^="cons-prebook-use-"]:hover,
-.fee-soft [data-testid="cons-physio-assign-collect-balance"]:hover {
+.fee-soft [data-testid^="cons-prebook-use-"]:hover {
   background-color: #f1f5f9 !important; /* slate-100 */
 }
 .fee-soft [data-testid="cons-fee-mark-online"],
@@ -335,13 +333,6 @@ code {
 .fee-soft [data-testid="cons-open-rehab-fee"]:hover {
   background-color: #ecfeff !important; /* cyan-50 */
   color: #0e7490 !important; /* cyan-700 */
-}
-/* Physio Assign's Collect Balance reads in the amber of the box it sits in, rose once overdue. */
-.fee-soft [data-testid="cons-physio-assign-collect-balance"] {
-  color: #b45309 !important; /* amber-700 */
-}
-.fee-soft [data-testid="cons-physio-assign-collect-balance"].bg-rose-600 {
-  color: #e11d48 !important; /* rose-600 */
 }
 /* View Details and the next fee's Collect keep their sky as the colour of their words; the
    other Collects read in slate, and Receipt keeps its emerald (set in the JSX). */

@@ -10700,36 +10700,52 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
                       {/* The balance still owed on the Treatment Fee, with the one button
                           that collects it — drawn only while a balance is actually open, the
-                          same gate the row above's note reads. */}
-                      {feeBalances.treatment && (
-                        <div
-                          className={`rounded-lg border px-3 py-2 ${feeBalances.treatment.overdue ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}
-                          data-testid="cons-physio-assign-balance"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className={`text-[11px] font-semibold ${feeBalances.treatment.overdue ? "text-rose-700" : "text-amber-700"}`}>
-                              {feeBalances.treatment.overdue ? "Overdue" : installmentLabelFor(feeBalances.treatment.nextIdx)}
-                            </span>
-                            <span className={`text-sm font-bold ${feeBalances.treatment.overdue ? "text-rose-700" : "text-amber-700"}`}>
-                              Rs.{Number(feeBalances.treatment.balance).toLocaleString("en-IN")}
-                            </span>
+                          same gate the row above's note reads.
+
+                          One row in the fee list's own shape, the Treatment Fee row on Fee
+                          Collected: the payment's number, its name with the due date under
+                          it, the amount, and Collect Balance on the right. The cons-fee-step-
+                          and cons-fee-act- test ids give it that list's .fee-flat / .fee-soft
+                          look (index.css). This body is also the Physio Assign tab on the
+                          Rehab, Diet Consultation and Diet Chart popups, so it reads the same
+                          on all four. */}
+                      {feeBalances.treatment && (() => {
+                        const bal = feeBalances.treatment;
+                        const amountTone = bal.overdue ? "text-rose-700" : "text-amber-700";
+                        const amount = `Rs.${Number(bal.balance).toLocaleString("en-IN")}`;
+                        return (
+                          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid="cons-physio-assign-balance">
+                            <div className="flex items-center gap-3 px-3 py-2.5" data-testid="cons-fee-step-physio-balance">
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                                {bal.nextIdx + 1}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-semibold text-slate-700">
+                                  {bal.overdue ? "Overdue" : installmentLabelFor(bal.nextIdx)}
+                                </p>
+                                {bal.next?.due_date && (
+                                  <p className={`truncate text-[11px] font-medium ${bal.overdue ? "text-rose-600" : "text-amber-600"}`}>
+                                    due {bal.next.due_date}
+                                  </p>
+                                )}
+                                {/* Under the name on a phone, as the fee rows do. */}
+                                <p className={`text-sm font-bold tabular-nums sm:hidden ${amountTone}`}>{amount}</p>
+                              </div>
+                              <p className={`hidden min-w-[4.5rem] shrink-0 text-right text-sm font-bold tabular-nums sm:block ${amountTone}`}>{amount}</p>
+                              <div className="flex min-w-[5.5rem] shrink-0 sm:min-w-[6.5rem]">
+                                <Button
+                                  size="sm"
+                                  className={`w-full rounded-[2px] bg-sky-600 text-white hover:bg-sky-700 ${ACT_BTN}`}
+                                  onClick={() => openTreatmentFeeFor(selectedLead)}
+                                  data-testid="cons-fee-act-physio-balance"
+                                >
+                                  Collect Balance
+                                </Button>
+                              </div>
+                            </div>
                           </div>
-                          {feeBalances.treatment.next?.due_date && (
-                            <p className={`mt-0.5 text-[10px] ${feeBalances.treatment.overdue ? "text-rose-600" : "text-amber-600"}`}>
-                              due {feeBalances.treatment.next.due_date}
-                            </p>
-                          )}
-                          <Button
-                            size="sm"
-                            className={`mt-2 w-full ${feeBalances.treatment.overdue ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700"} text-white shadow-sm ${ACT_BTN}`}
-                            onClick={() => openTreatmentFeeFor(selectedLead)}
-                            data-testid="cons-physio-assign-collect-balance"
-                          >
-                            <IndianRupee className="mr-1 h-3.5 w-3.5" />
-                            Collect Balance
-                          </Button>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* No green course bar here: the physio card's own bar shows the same. */}
                     </div>
