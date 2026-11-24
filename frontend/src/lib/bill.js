@@ -167,8 +167,8 @@ const STYLES = `
   .note{margin-top:16px;padding:10px 12px;border:1px solid #f0c36d;border-radius:4px;background:#fff9ee;color:#8a4b0a;font-size:13px}
   .foot{margin-top:auto;padding-top:40px}
   .sign{align-items:flex-end}
-  .sign .box{position:relative;width:240px;padding-top:7px;border-top:2px dotted #525252;text-align:center;font-size:14px;color:#525252}
-  /* The collector's sign, standing on the dotted line in the room a hand sign is left. A
+  .sign .box{position:relative;width:240px;padding-top:7px;text-align:center;font-size:14px;color:#525252}
+  /* The collector's sign, standing over the words in the room a hand sign is left. A
      bill closed up for its plan keeps that room as it is. */
   .foot.signed{padding-top:62px}
   .tight .foot.signed{padding-top:34px}
