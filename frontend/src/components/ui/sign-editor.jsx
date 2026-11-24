@@ -1,22 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Crop, Loader2, RotateCcw, RotateCw, Signature, SlidersHorizontal, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Crop, Loader2, RotateCcw, RotateCw, Signature, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "@/components/ui/sonner";
 import {
   FULL_CROP, PLAIN_LOOK, SIGN_FILE_TYPES,
-  closeSignPicture, dragCrop, drawCrop, drawTurned, findSign, makeSign, openSignPicture, signFileProblem,
+  autoSign, closeSignPicture, dragCrop, drawCrop, drawCropped, drawTurned, makeSign, openSignPicture, signFileProblem,
   tiltCrop, turnCrop, turnedSize,
 } from "@/lib/signImage";
 
 /**
- * Upload, then crop or edit, then Confirm: how a sign is added, for oneself (My Profile >
- * Sign Upload) and for a branch's people (Admin Setting > Digital Sign). Nothing is saved off
- * the file picker.
+ * How a sign is added, for oneself (My Profile > Sign Upload) and for a branch's people (Admin
+ * Setting > Digital Sign):
  *
- * The editor opens with the crop already round the sign it found. Crop & Rotate moves it, by
- * its corners or by drawing a new one over the photo; Edit changes the ink. The box under them
- * is the sign as it will print, and the very file Confirm saves.
+ *     Upload        a photo or scan is picked; nothing is saved off the picker
+ *     Auto          the sign is found, cropped and cleaned by itself (lib/signImage's autoSign)
+ *     Manual Edit   only if the auto one is not right: Crop & Rotate, by the crop's corners or
+ *                   by drawing a new one over the photo, and Edit, for the ink
+ *     Confirm       saves the sign exactly as "How it will print" shows it
  */
 
 const STAGE_H = 240;
@@ -41,6 +42,15 @@ const HANDLES = [
   { kind: "w", at: "-left-3.5 top-1/2 -translate-y-1/2 cursor-ew-resize", mark: "h-5 w-1.5" },
   { kind: "e", at: "-right-3.5 top-1/2 -translate-y-1/2 cursor-ew-resize", mark: "h-5 w-1.5" },
 ];
+
+/** The photo as it was picked, with what the crop leaves out dimmed. */
+const PhotoThumb = ({ pic, degrees, crop }) => {
+  const [canvas, setCanvas] = useState(null);
+  useEffect(() => {
+    if (pic && canvas) drawCropped(canvas, pic, degrees, crop, 600);
+  }, [pic, canvas, degrees, crop]);
+  return <canvas ref={setCanvas} className="h-full w-full object-contain" data-testid="sign-editor-photo" />;
+};
 
 /** A sign on its dotted line, white behind it on every theme, as the paper is. */
 export const SignPaper = ({ image, busy = false, children, testid = "sign-paper" }) => (
@@ -78,8 +88,9 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
   const [turn, setTurn] = useState(0); // quarter turns, in degrees
   const [tilt, setTilt] = useState(0); // straightening, in degrees
   const [crop, setCrop] = useState(FULL_CROP);
-  const [found, setFound] = useState(FULL_CROP); // the crop it opened on, for Reset
   const [look, setLook] = useState(PLAIN_LOOK);
+  const [auto, setAuto] = useState(null); // { crop, look }: what was done by itself
+  const [manual, setManual] = useState(false); // the tools, rather than the auto result
   const [tab, setTab] = useState("crop");
   const [made, setMade] = useState(null); // { blob, url } | { error }
   const [working, setWorking] = useState(true);
@@ -88,6 +99,7 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
   const [canvas, setCanvas] = useState(null);
   const stage = useRef(null);
   const drag = useRef(null);
+  const atOnce = useRef(true); // the first reading of a photo waits for nothing
 
   useEffect(() => {
     setPic(null);
@@ -97,8 +109,11 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
     setTurn(0);
     setTilt(0);
     setLook(PLAIN_LOOK);
+    setAuto(null);
+    setManual(false);
     setTab("crop");
     drag.current = null;
+    atOnce.current = true;
     if (!file) return undefined;
     let live = true;
     let opened = null;
@@ -106,9 +121,10 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
       .then((p) => {
         if (!live) { closeSignPicture(p); return; }
         opened = p;
-        const box = findSign(p);
-        setFound(box);
-        setCrop(box);
+        const done = autoSign(p);
+        setAuto(done);
+        setCrop(done.crop);
+        setLook(done.look);
         setPic(p);
       })
       .catch((e) => { if (live) setFailed(e?.message || "This picture could not be opened."); });
@@ -138,6 +154,8 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
     if (!pic) return undefined;
     let live = true;
     setWorking(true);
+    const pause = atOnce.current ? 0 : 250;
+    atOnce.current = false;
     const t = setTimeout(async () => {
       let next;
       try {
@@ -149,7 +167,7 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
       if (!live) { if (next.url) URL.revokeObjectURL(next.url); return; }
       setMade(next);
       setWorking(false);
-    }, 250);
+    }, pause);
     return () => { live = false; clearTimeout(t); };
   }, [pic, degrees, crop, look]);
 
@@ -173,7 +191,19 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
     setCrop((c) => tiltCrop(pic, c, degrees, turn + next));
     setTilt(next);
   };
-  const reset = () => { setTurn(0); setTilt(0); setCrop(found); setLook(PLAIN_LOOK); };
+  // A crop placed by hand keeps everything it is put round.
+  const cropByHand = (next) => {
+    setCrop(next);
+    setLook((l) => (l.tidy ? { ...l, tidy: false } : l));
+  };
+  const backToAuto = () => {
+    setTurn(0);
+    setTilt(0);
+    setCrop(auto.crop);
+    setLook(auto.look);
+    setTab("crop");
+    setManual(false);
+  };
 
   const grab = (kind) => ({
     onPointerDown: (e) => {
@@ -190,12 +220,12 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
       e.stopPropagation();
       const dx = (e.clientX - d.x) / d.w;
       const dy = (e.clientY - d.y) / d.h;
-      if (kind !== "new") { setCrop(dragCrop(d.crop, kind, dx, dy)); return; }
+      if (kind !== "new") { cropByHand(dragCrop(d.crop, kind, dx, dy)); return; }
       // A tap on the photo is not a crop.
       if (Math.abs(dx) < 0.015 && Math.abs(dy) < 0.015) return;
       const x = (d.x - d.left) / d.w;
       const y = (d.y - d.top) / d.h;
-      setCrop(drawCrop(x, y, x + dx, y + dy));
+      cropByHand(drawCrop(x, y, x + dx, y + dy));
     },
     onPointerUp: () => { drag.current = null; },
     onPointerCancel: () => { drag.current = null; },
@@ -208,9 +238,11 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
   const handles = HANDLES.filter(({ kind }) => kind.length === 2
     || ("ns".includes(kind) ? crop.w * size.width : crop.h * size.height) >= SIDE_ROOM);
   const locked = !pic || saving;
+  const reading = !failed && (!pic || working);
+  const unread = !!failed || (!reading && !!made?.error);
 
   return createPortal(
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="Crop or edit the sign" data-testid="sign-editor">
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="Check the sign" data-testid="sign-editor">
       <div className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-4 py-3">
           <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-white">
@@ -222,11 +254,31 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        {!manual ? (
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" data-testid="sign-editor-auto">
+          <p className={`flex items-center gap-1.5 text-sm font-semibold ${unread ? "text-amber-700" : reading ? "text-slate-500" : "text-emerald-700"}`} role="status" data-testid="sign-editor-status">
+            {unread ? <AlertCircle className="h-4 w-4 shrink-0" /> : reading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+            {failed || (unread ? "The sign could not be read by itself" : reading ? "Auto crop and edit…" : "Auto crop and edit done")}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <p className="mb-1.5 text-xs font-medium text-slate-600">Your photo</p>
+              <div className="flex h-32 items-center justify-center rounded-[4px] bg-[#0f172a] p-2">
+                {pic ? <PhotoThumb pic={pic} degrees={degrees} crop={crop} /> : failed ? null : <Loader2 className="h-5 w-5 animate-spin text-[#94a3b8]" />}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="mb-1.5 text-xs font-medium text-slate-600">How it will print</p>
+              <SignPaper image={made?.url} busy={reading} testid="sign-editor-preview">
+                <span className="text-[#b45309]">{failed ? "Choose another photo." : "Use Manual Edit, or choose another photo."}</span>
+              </SignPaper>
+            </div>
+          </div>
+        </div>
+        ) : (
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" data-testid="sign-editor-manual">
           <div ref={setFrame} className="flex min-h-[200px] items-center justify-center rounded-[4px] bg-[#0f172a] p-5" data-testid="sign-editor-frame">
-            {failed ? (
-              <p className="text-center text-xs text-[#cbd5e1]">{failed}</p>
-            ) : !pic ? (
+            {!pic ? (
               <Loader2 className="h-6 w-6 animate-spin text-[#94a3b8]" />
             ) : (
               <div ref={stage} className="relative cursor-crosshair touch-none select-none" style={size} {...grab("new")} data-testid="sign-editor-stage">
@@ -294,20 +346,25 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
 
           <div>
             <p className="mb-1.5 text-xs font-medium text-slate-600">How it will print</p>
-            <SignPaper image={made?.url} busy={!failed && working} testid="sign-editor-preview">
-              <span className="text-[#b91c1c]">{failed ? "Choose another photo." : made?.error}</span>
+            <SignPaper image={made?.url} busy={reading} testid="sign-editor-preview">
+              <span className="text-[#b91c1c]">{made?.error}</span>
             </SignPaper>
           </div>
         </div>
+        )}
 
-        <div className="flex shrink-0 items-center gap-4 border-t border-slate-100 px-4 py-3">
-          <button type="button" onClick={reset} disabled={locked} className="text-xs font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-40" data-testid="sign-editor-reset">Reset</button>
-          <button type="button" onClick={onAnother} disabled={saving} className="mr-auto text-xs font-semibold text-sky-700 hover:underline disabled:opacity-40" data-testid="sign-editor-another">Choose another</button>
+        <div className="flex shrink-0 items-center gap-2 whitespace-nowrap border-t border-slate-100 px-4 py-3 sm:gap-3">
+          <button type="button" onClick={onAnother} disabled={saving} className="mr-auto text-xs font-semibold text-sky-700 hover:underline disabled:opacity-40" aria-label="Choose another photo" data-testid="sign-editor-another"><span className="sm:hidden">Change</span><span className="hidden sm:inline">Choose another</span></button>
+          {manual ? (
+            <button type="button" onClick={backToAuto} disabled={locked} className={`${toolBtn} px-3`} data-testid="sign-editor-back-to-auto"><Sparkles className="h-3.5 w-3.5" />Auto</button>
+          ) : (
+            <button type="button" onClick={() => setManual(true)} disabled={locked} className={`${toolBtn} px-3 ${unread && pic ? "border-sky-500 bg-sky-50 text-sky-700 hover:bg-sky-50" : ""}`} data-testid="sign-editor-manual-edit"><SlidersHorizontal className="h-3.5 w-3.5" />Manual Edit</button>
+          )}
           <button
             type="button"
             onClick={() => { if (made?.blob) onSave(made.blob); }}
             disabled={locked || working || !made?.blob}
-            className="flex h-9 items-center gap-1.5 rounded-[4px] bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50"
+            className="flex h-9 items-center gap-1.5 rounded-[4px] bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50 sm:px-5"
             data-testid="sign-editor-confirm"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{saving ? "Saving…" : "Confirm"}
@@ -320,8 +377,9 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
 };
 
 /**
- * Upload -> crop or edit -> Confirm. `send(blob, target)` saves it; the editor stays open if
- * that fails. Draw `elements` once; `pick(target, title)` opens the file picker.
+ * Upload -> auto crop and edit -> (Manual Edit) -> Confirm. `send(blob, target)` saves it; the
+ * editor stays open if that fails. Draw `elements` once; `pick(target, title)` opens the file
+ * picker.
  */
 export const useSignUpload = (send) => {
   const inputRef = useRef(null);

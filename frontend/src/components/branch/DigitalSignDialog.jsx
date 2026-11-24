@@ -39,8 +39,8 @@ const SignPanel = ({ title, image, note, onClose }) => (
  * Admin Setting > Digital Sign: everyone who signs at this branch, with Upload and View. The
  * sign then prints by itself -- on the bills a person collects, the prescriptions in their
  * name and the Consultation Forms that name them. Upload opens the sign editor: the photo is
- * cropped or edited and confirmed before it is saved. Everybody can add their own at My
- * Profile > Sign Upload too.
+ * cropped and cleaned by itself, changed by hand if need be, and confirmed before it is saved.
+ * Everybody can add their own at My Profile > Sign Upload too.
  *
  * A plain overlay, like the other popups in the same menu.
  */
