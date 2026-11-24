@@ -37,6 +37,7 @@ import {
   ClipboardList,
   Clock,
   FileText,
+  History,
   KeyRound,
   Layers,
   Loader2,
@@ -74,6 +75,7 @@ import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { PhotoEditor } from "@/components/ui/photo-editor";
 import { MySign } from "@/components/MySign";
 import { StatTile } from "@/components/ui/stat-tile";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 // The same formatters the header clock and HR's register read a day with, so an hour and
 // a half is not "1h 30m" here and "90m" three screens away.
@@ -646,13 +648,16 @@ const MonthTable = ({ rows, compactLayout = false }) => {
   );
 };
 
-// `view`: "all" draws the whole month on one screen (desktop). On a phone the history is a
-// screen of its own behind a View History button, so it is "summary" or "history" there.
+// `view`: "all" is the desktop: the month's tiles, and the day-by-day table behind the
+// toolbar's History button. On a phone the history is a screen of its own behind a View
+// History button, so it is "summary" or "history" there.
 const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
   // Every dashboard uses the compact attendance layout introduced for Branch Admin.
   const compactLayout = true;
   const [month, setMonth] = useState(thisMonth);
   const [dateFilter, setDateFilter] = useState(null);
+  // Desktop only: the History button swaps the tiles for the day-by-day table.
+  const [showHistory, setShowHistory] = useState(false);
   const requestId = useRef(0);
   const isoDate = (date) => date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : "";
   const filterFrom = isoDate(dateFilter?.from);
@@ -717,7 +722,22 @@ const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
         <span className="text-sm font-semibold">{monthLabel(month)}</span>
         <button type="button" aria-label="Next month" disabled={month >= thisMonth()} onClick={() => changeMonth(shiftMonth(month, 1))} className="rounded-[4px] border p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
       </div>
-      <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) setMonth(isoDate(next.from).slice(0, 7)); }} iconOnly centered testid="attendance-date-filter" />
+      {/* A date range only filters the table, so picking one on the desktop opens History. */}
+      <DateFilterPopover value={dateFilter} onChange={(next) => { setDateFilter(next); if (next?.from) { setMonth(isoDate(next.from).slice(0, 7)); if (!phone) setShowHistory(true); } }} iconOnly centered testid="attendance-date-filter" />
+      {!phone && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowHistory((on) => !on)}
+          aria-pressed={showHistory}
+          aria-label="View History"
+          title="View History"
+          className={`h-10 w-10 px-0 ${showHistory ? "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100" : ""}`}
+          data-testid="my-attendance-view-history"
+        >
+          <History className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 
@@ -802,7 +822,7 @@ const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
             </>
           )}
           {view === "history" && !compactLayout && <PhoneHours totals={data?.totals} today={data?.today} />}
-          {view === "all" && (
+          {view === "all" && !showHistory && (
             <>
               <MonthSummary
                 compactLayout={compactLayout}
@@ -814,7 +834,7 @@ const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
               />
             </>
           )}
-          {view !== "summary" && <MonthTable rows={compactLayout ? data?.filteredDays || [] : rows} compactLayout={compactLayout} />}
+          {(view === "history" || (view === "all" && showHistory)) && <MonthTable rows={compactLayout ? data?.filteredDays || [] : rows} compactLayout={compactLayout} />}
           {/* Said once, at the foot, rather than as a banner over the figures: the hours
               above are real either way — they are what this person pressed — and only the
               marks (leave, absent, half day) are missing without the link. */}
