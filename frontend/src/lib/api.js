@@ -300,17 +300,8 @@ export const saveAppointmentMessage = async (branchId, template) => (await api.p
 export const getBranchLocation = async (branchId) => (await api.get(`/branches/${branchId}/location`)).data;
 export const saveBranchLocation = async (branchId, mapLocation) => (await api.put(`/branches/${branchId}/location`, { map_location: mapLocation })).data;
 export const resolveBranchLocationLink = async (branchId, link) => (await api.get(`/branches/${branchId}/location/resolve`, { params: { link } })).data;
-// Admin Setting > Digital Sign: who signs at a branch, their sign, and a new one (a small PNG
-// off lib/signImage.js). The list says who has a sign; the pictures come one at a time.
-export const listSignatures = async (branchId) => (await api.get("/signatures", { params: { branch_id: branchId || "" } })).data;
-export const getSignature = async (userId, branchId) => (await api.get(`/signatures/${userId}`, { params: { branch_id: branchId || "" } })).data;
-export const uploadSignature = async (userId, branchId, blob) => {
-  const form = new FormData();
-  form.append("file", blob, "sign.png");
-  return (await api.post(`/signatures/${userId}`, form, { params: { branch_id: branchId || "" } })).data;
-};
-export const deleteSignature = async (userId, branchId) => (await api.delete(`/signatures/${userId}`, { params: { branch_id: branchId || "" } })).data;
-// My Profile > Sign Upload: the signed-in person's own, whatever their desk.
+// My Profile > Sign Upload: the signed-in person's own sign, whatever their desk, as a small PNG
+// off lib/signImage.js.
 export const mySignature = async () => (await api.get("/me/signature")).data;
 export const deleteMySignature = async () => (await api.delete("/me/signature")).data;
 export const uploadMySignature = async (blob) => {
@@ -320,6 +311,7 @@ export const uploadMySignature = async (blob) => {
 };
 // The sign that goes with a therapist's name on the Consultation Form, and the one over the
 // consultant's name on a prescription: { name, image }, image "" where there is none.
+export const listTherapistNames = async (branchId) => (await api.get(`/branches/${branchId}/therapist-names`)).data;
 export const getTherapistSign = async (branchId, name) => (await api.get(`/branches/${branchId}/therapist-sign`, { params: { name } })).data;
 export const getPrescriptionSign = async (leadId) => (await api.get(`/leads/${leadId}/prescription-sign`, { timeout: 8000 })).data;
 // Settings > Consultation Form: the paper Offline Consultation Form, kept per branch.

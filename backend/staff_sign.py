@@ -1,16 +1,14 @@
 """Staff signs: the picture of a person's signature that prints on the clinic's papers.
 
-Uploaded by the person at My Profile > Sign Upload, or for a branch's people at Admin Setting >
-Digital Sign (routers/v3_staff_sign.py), and put on by itself where that person is the one who
-signs:
+Uploaded by the person themselves at My Profile > Sign Upload (routers/v3_staff_sign.py), and put
+on by itself where they are the one who signs:
 
     Bill / Receipt      whoever collected the payment
     Consultation Form   the therapist named on page 3
     Prescription        the consultant printed on it
 
 Kept here and nowhere else: not under uploads/, which is public, and not on the login, which
-half the app reads. A sign leaves only on a paper, to its own person, or to the Digital Sign
-popup.
+half the app reads. A sign leaves only on a paper or to its own person.
 
 A person has one row for each sign they have had. A paper carries the one that was theirs on
 its day, so a new sign does not re-sign what the old one was on. Two uploads on one day are a

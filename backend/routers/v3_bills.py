@@ -216,7 +216,7 @@ async def get_bill(transaction_id: str, user: V3UserOut = Depends(require_bill_r
         "transaction_ids": [i for i, _ in found],
         "date": asked["at"],
         "collected_by": asked["by"],
-        # Their sign (Admin Setting > Digital Sign), for the Authorised Signature line.
+        # Their sign (My Profile > Sign Upload), for the Authorised Signature line.
         "signature": await staff_sign.collector_sign(asked["by"], asked["branch_id"], asked["at"]),
         "patient": asked["patient"],
         "branch": {

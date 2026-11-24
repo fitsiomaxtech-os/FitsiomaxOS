@@ -15,7 +15,7 @@ import {
   getBranches,
   getConsultationForm,
   listConsultationForms,
-  listSignatures,
+  listTherapistNames,
   shareConsultationForm,
   updateConsultationForm,
 } from "@/lib/api";
@@ -221,10 +221,8 @@ export const ConsultationFormDialog = ({ branchId, onClose, initialLead = null, 
 
   useEffect(() => {
     let live = true;
-    listSignatures(branchId)
-      .then((r) => {
-        if (live) setSigners((r.people || []).filter((p) => ["Therapist", "Consultant"].includes(p.group) && p.name).map((p) => p.name));
-      })
+    listTherapistNames(branchId)
+      .then((r) => { if (live) setSigners(r.names || []); })
       .catch(() => {});
     return () => { live = false; };
   }, [branchId]);

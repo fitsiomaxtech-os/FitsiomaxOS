@@ -242,9 +242,9 @@ export const PatientDetailsSheet = ({ f, set = () => {}, readOnly = false, branc
 };
 
 /**
- * Page 3's Therapist Name & Sign. `sign` is the named therapist's own (Admin Setting >
- * Digital Sign); `signers` are the branch's therapists, offered as the name is typed, since
- * it is the whole name that finds the sign.
+ * Page 3's Therapist Name & Sign. `sign` is the named therapist's own (My Profile > Sign
+ * Upload); `signers` are the branch's therapists, offered as the name is typed, since it is
+ * the whole name that finds the sign.
  */
 const TherapistSign = ({ value, onChange, readOnly, sign, signers }) => {
   const [open, setOpen] = useState(false);

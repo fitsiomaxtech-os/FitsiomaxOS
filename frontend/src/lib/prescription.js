@@ -1,6 +1,6 @@
 // The supplied letterhead is the artwork, not an approximation made from HTML.
 // Draw at its original PDF coordinates. The room over the consultant's name takes their own
-// sign where they have one (Admin Setting > Digital Sign), and is left for the pen otherwise.
+// sign where they have one (My Profile > Sign Upload), and is left for the pen otherwise.
 const W = 595.2;
 const H = 841.92;
 const BLUE = "#194579";

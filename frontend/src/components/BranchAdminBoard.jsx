@@ -49,7 +49,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock, MapPin, Signature,
+  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock, MapPin,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -108,7 +108,6 @@ import { AccountantManageTab } from "@/components/branch/AccountantManageTab";
 import { BranchCalendarPanel } from "@/components/branch/BranchCalendarPanel";
 import { AppointmentMessageEditor } from "@/components/branch/AppointmentMessageEditor";
 import { BranchLocationDialog } from "@/components/branch/BranchLocationDialog";
-import { DigitalSignDialog } from "@/components/branch/DigitalSignDialog";
 import { ConsultationFormDialog } from "@/components/branch/ConsultationFormDialog";
 import { LeadConsultationFormPopup } from "@/components/branch/LeadConsultationFormPopup";
 import { TimeManagementPanel } from "@/components/branch/TimeManagementPanel";
@@ -1075,8 +1074,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   // The same gear → Appointment Msg Editor: the WhatsApp welcome Pre Sales sends.
   const [apptMsgOpen, setApptMsgOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
-  // The same gear → Digital Sign: the signs that print on bills, forms and prescriptions.
-  const [signOpen, setSignOpen] = useState(false);
   // The same gear → Consultation Form: a view of its own in the board's place, like a tab,
   // though it has no button on the strip. Kept mounted once opened (hidden while another
   // tab is up), so a half-filled form is still there on the way back.
@@ -2227,10 +2224,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
               <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSignOpen(true)} className="gap-2.5 py-2" data-testid="branch-settings-menu-digital-sign">
-              <Signature aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
-              <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Digital Sign</span>
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -2255,7 +2248,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
 
       {apptMsgOpen && <AppointmentMessageEditor branchId={branchId} onClose={() => setApptMsgOpen(false)} />}
       {locationOpen && <BranchLocationDialog branchId={branchId} onClose={() => setLocationOpen(false)} />}
-      {signOpen && <DigitalSignDialog branchId={branchId} onClose={() => setSignOpen(false)} />}
 
       {profileOpen && (
         <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
@@ -2997,10 +2989,6 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   <DropdownMenuItem onSelect={openConsultForms} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-consult-form">
                     <ClipboardList aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Consultation Form</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setSignOpen(true)} className="gap-2.5 py-2" data-testid="branch-toolbar-settings-menu-digital-sign">
-                    <Signature aria-hidden className="h-4 w-4 shrink-0 text-sky-600" />
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">Digital Sign</span>
                   </DropdownMenuItem>
                   {/* The phone's copy of the Consultation tab's Add New Lead -- the row's
                       own button waits for sm (see its note). */}

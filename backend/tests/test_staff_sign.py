@@ -1,4 +1,4 @@
-"""Whose sign goes on which paper, and who may add one.
+"""Whose sign goes on which paper, and that a sign is its own person's to add.
 
 Runs on an in-memory stand-in for Mongo, so it touches no database.
 """
@@ -198,44 +198,6 @@ def test_a_second_upload_the_same_day_is_a_correction(db):
     assert len(db(staff_sign.COL).rows) == 2
 
 
-def test_the_list_groups_the_branchs_people(db):
-    put(db, "phy", "HERE")
-    out = run(v3_staff_sign.list_signatures("b1", login("branch_admin", "admin", name="Priya R")))
-    assert [(p["user_id"], p["group"], p["has_sign"]) for p in out["people"]] == [
-        ("admin", "Branch Admin", False), ("cons", "Consultant", False), ("phy", "Therapist", True),
-    ]
-    assert out["branch_name"] == "Anna Nagar" and "image" not in out["people"][0]
-
-
-def test_org_wide_desks_also_see_the_desks_with_no_branch(db):
-    out = run(v3_staff_sign.list_signatures("b1", login("business_dev", "bd", None)))
-    rights = {p["user_id"]: p["can_upload"] for p in out["people"]}
-    assert rights["acc"] is True and rights["bd"] is True and rights["boss"] is False
-
-
-def test_only_your_own_branch_and_its_people(db):
-    admin = login("branch_admin", "admin", name="Priya R")
-    with pytest.raises(HTTPException) as e:
-        run(v3_staff_sign.list_signatures("b2", admin))
-    assert e.value.status_code == 403
-    for call in (v3_staff_sign.get_signature("far", "b1", admin), v3_staff_sign.get_signature("boss", "b1", admin)):
-        with pytest.raises(HTTPException) as e:
-            run(call)
-        assert e.value.status_code == 404
-
-
-def upload(user_id, data, user):
-    return run(v3_staff_sign.upload_signature(user_id, "b1", UploadFile(filename="s.png", file=io.BytesIO(data)), user))
-
-
-def test_upload_then_view(db):
-    admin = login("branch_admin", "admin", name="Priya R")
-    done = upload("phy", png(), admin)
-    seen = run(v3_staff_sign.get_signature("phy", "b1", admin))
-    assert seen["image"] == done["image"] and seen["image"].startswith("data:image/png;base64,")
-    assert seen["uploaded_by"] == "Priya R" and seen["uploaded_at"]
-
-
 @pytest.mark.parametrize("data", [
     pytest.param(b"", id="empty"), pytest.param(b"not a png" * 9, id="not-a-png"),
     pytest.param(b"<svg onload=alert(1)>" * 5, id="svg"), pytest.param(png(5000, 90), id="too-wide"),
@@ -243,17 +205,34 @@ def test_upload_then_view(db):
 ])
 def test_only_a_small_png_is_kept(db, data):
     with pytest.raises(HTTPException):
-        upload("phy", data, login("branch_admin", "admin", name="Priya R"))
+        run(v3_staff_sign.upload_my_signature(UploadFile(filename="s.png", file=io.BytesIO(data)), login("physio", "phy")))
     assert db(staff_sign.COL).rows == []
 
 
+def test_nobody_can_reach_anothers_sign():
+    # The only ways to a sign itself: one's own, and the papers'.
+    paths = {(m, r.path) for r in v3_staff_sign.router.routes for m in r.methods}
+    assert paths == {
+        ("GET", "/api/v3/me/signature"), ("POST", "/api/v3/me/signature"), ("DELETE", "/api/v3/me/signature"),
+        ("GET", "/api/v3/branches/{branch_id}/therapist-names"), ("GET", "/api/v3/branches/{branch_id}/therapist-sign"),
+        ("GET", "/api/v3/leads/{lead_id}/prescription-sign"),
+    }
+
+
+def test_the_form_offers_the_branchs_therapists_and_consultants(db):
+    admin = login("branch_admin", "admin", name="Priya R")
+    assert run(v3_staff_sign.therapist_names("b1", admin)) == {"names": ["Dr. Asha K.", "Ravi"]}
+    with pytest.raises(HTTPException) as e:
+        run(v3_staff_sign.therapist_names("b2", admin))
+    assert e.value.status_code == 403
+
+
 def test_everyone_has_their_own_at_my_profile(db):
-    # A desk the Digital Sign popup is closed to.
     me = login("pre_sales", "tele", name="Tele")
     assert run(v3_staff_sign.my_signature(me)) == {"name": "Tele", "image": "", "uploaded_at": "", "uploaded_by": ""}
     done = run(v3_staff_sign.upload_my_signature(UploadFile(filename="s.png", file=io.BytesIO(png())), me))
     assert run(v3_staff_sign.my_signature(me)) == done and done["uploaded_by"] == "Tele"
-    # Theirs alone, and the same one the branch's list and the papers read.
+    # Theirs alone, and the same one the papers read.
     assert run(v3_staff_sign.my_signature(login("physio", "phy", name="Ravi")))["image"] == ""
     assert run(staff_sign.collector_sign("Tele", "b1", "")) == done["image"]
     with pytest.raises(HTTPException):
@@ -277,43 +256,15 @@ def test_deleting_your_own_takes_it_off_every_paper(db):
     assert run(staff_sign.collector_sign("Priya R", "b1", "2026-11-05T06:00:00+00:00")) == again["image"]
 
 
-def test_a_branch_deletes_only_what_it_may_upload(db):
-    put(db, "phy", "RAVI")
-    put(db, "far", "FAR")
-    put(db, "boss2", "CHIEF")
-    db("users").rows.append({"id": "boss2", "full_name": "Chief", "role": "super_admin", "branch_id": "b1"})
-    admin = login("branch_admin", "admin", name="Priya R")
-    for uid, code in (("far", 404), ("boss2", 403)):
-        with pytest.raises(HTTPException) as e:
-            run(v3_staff_sign.delete_signature(uid, "b1", admin))
-        assert e.value.status_code == code
-    with pytest.raises(HTTPException) as e:
-        run(v3_staff_sign.delete_signature("far", "b2", admin))
-    assert e.value.status_code == 403
-    assert len(db(staff_sign.COL).rows) == 3
-    assert run(v3_staff_sign.delete_signature("phy", "b1", admin))["image"] == ""
-    assert {r["user_id"] for r in db(staff_sign.COL).rows} == {"far", "boss2"}
-    out = run(v3_staff_sign.list_signatures("b1", admin))
-    assert not any(p["has_sign"] for p in out["people"] if p["user_id"] == "phy")
-
-
 def test_a_form_whose_sign_was_deleted_is_unsigned_until_there_is_another(db):
     admin = login("branch_admin", "admin", name="Priya R")
     put(db, "phy", "FIRST", "2026-11-01T06:00:00+00:00")
     row = run(v3_consultation_forms.create_consultation_form("b1", form_input(therapist_name="Ravi"), admin))
-    run(v3_staff_sign.delete_signature("phy", "b1", admin))
+    run(v3_staff_sign.delete_my_signature(login("physio", "phy", name="Ravi")))
     read = lambda: run(v3_consultation_forms.get_consultation_form("b1", row["id"], admin))["therapist_sign"]  # noqa: E731
     assert read() is None
     put(db, "phy", "SECOND")
     assert read()["image"] == url("SECOND")
-
-
-def test_a_super_admins_sign_is_a_super_admins_to_add(db):
-    db("users").rows.append({"id": "boss2", "full_name": "Chief", "role": "super_admin", "branch_id": "b1"})
-    with pytest.raises(HTTPException) as e:
-        upload("boss2", png(), login("branch_admin", "admin", name="Priya R"))
-    assert e.value.status_code == 403
-    assert upload("boss2", png(), login("super_admin", "boss", None))["image"]
 
 
 def test_a_form_is_signed_by_the_branchs_own_therapist(db):

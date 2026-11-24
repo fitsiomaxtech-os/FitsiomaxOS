@@ -14,8 +14,7 @@ import {
 } from "@/lib/signImage";
 
 /**
- * How a sign is added, for oneself (My Profile > Sign Upload) and for a branch's people (Admin
- * Setting > Digital Sign):
+ * How a sign is added (My Profile > Sign Upload, components/MySign.jsx):
  *
  *     Upload        a photo or scan is picked; nothing is saved off the picker
  *     Auto          the sign is found, cropped and cleaned by itself (lib/signImage's autoSign)
@@ -73,8 +72,8 @@ export const SignPaper = ({ image, busy = false, children, testid = "sign-paper"
   </div>
 );
 
-/** Delete Sign, as a bin alone: asks once, then `onDelete`. `whose`: "Your" or "Asha's". */
-export const SignDelete = ({ whose, onDelete, disabled = false, testid = "sign-delete" }) => {
+/** Delete Sign, as a bin alone: asks once, then `onDelete`. */
+export const SignDelete = ({ onDelete, testid = "sign-delete" }) => {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const remove = async () => {
@@ -93,7 +92,7 @@ export const SignDelete = ({ whose, onDelete, disabled = false, testid = "sign-d
       <button
         type="button"
         onClick={() => setAsking(true)}
-        disabled={disabled || busy}
+        disabled={busy}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] border border-rose-200 text-rose-600 transition hover:bg-rose-50 disabled:border-slate-200 disabled:text-slate-300"
         title="Delete Sign"
         aria-label="Delete Sign"
@@ -106,7 +105,7 @@ export const SignDelete = ({ whose, onDelete, disabled = false, testid = "sign-d
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base text-slate-800">Delete this sign?</AlertDialogTitle>
             <AlertDialogDescription className="text-[13px] text-slate-500">
-              {whose} sign will come off every bill, form and prescription, old ones too. A new sign can be uploaded at any time.
+              Your sign will come off every bill, form and prescription, old ones too. A new sign can be uploaded at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row justify-end gap-2 sm:space-x-0">
@@ -427,33 +426,28 @@ export const SignEditor = ({ file, title = "Sign", saving = false, onCancel, onA
 };
 
 /**
- * Upload -> auto crop and edit -> (Manual Edit) -> Confirm. `send(blob, target)` saves it; the
- * editor stays open if that fails. Draw `elements` once; `pick(target, title)` opens the file
- * picker.
+ * Upload -> auto crop and edit -> (Manual Edit) -> Confirm. `send(blob)` saves it; the editor
+ * stays open if that fails. Draw `elements` once; `pick()` opens the file picker.
  */
-export const useSignUpload = (send) => {
+export const useSignUpload = (send, title = "Sign") => {
   const inputRef = useRef(null);
-  const next = useRef({ target: null, title: "" });
-  const [job, setJob] = useState(null); // { file, target, title }
+  const [file, setFile] = useState(null); // the picture in the editor
   const [saving, setSaving] = useState(false);
 
-  const pick = (target = null, title = "Sign") => {
-    next.current = { target, title };
-    inputRef.current?.click();
-  };
+  const pick = () => inputRef.current?.click();
   const onFile = (e) => {
-    const file = e.target.files?.[0];
+    const picked = e.target.files?.[0];
     e.target.value = ""; // the same file can be picked again
-    if (!file) return;
-    const problem = signFileProblem(file);
+    if (!picked) return;
+    const problem = signFileProblem(picked);
     if (problem) { toast.error(problem); return; }
-    setJob({ file, ...next.current });
+    setFile(picked);
   };
   const confirm = async (blob) => {
     setSaving(true);
     try {
-      await send(blob, job.target);
-      setJob(null);
+      await send(blob);
+      setFile(null);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Couldn't save the sign");
     } finally {
@@ -467,11 +461,11 @@ export const useSignUpload = (send) => {
       <>
         <input ref={inputRef} type="file" accept={SIGN_FILE_TYPES.join(",")} onChange={onFile} className="hidden" data-testid="sign-upload-file" />
         <SignEditor
-          file={job?.file || null}
-          title={job?.title}
+          file={file}
+          title={title}
           saving={saving}
-          onCancel={() => setJob(null)}
-          onAnother={() => pick(job?.target, job?.title)}
+          onCancel={() => setFile(null)}
+          onAnother={pick}
           onSave={confirm}
         />
       </>

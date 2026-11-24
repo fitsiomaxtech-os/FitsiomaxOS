@@ -33,7 +33,7 @@ export const MySign = () => {
   const sign = useSignUpload(async (blob) => {
     setMine(await uploadMySignature(blob));
     toast.success("Your sign is saved");
-  });
+  }, "My Sign");
 
   if (failed) {
     return (
@@ -54,8 +54,8 @@ export const MySign = () => {
           {image && mine.uploaded_by ? `Uploaded by ${mine.uploaded_by}${showDay(mine.uploaded_at) ? ` · ${showDay(mine.uploaded_at)}` : ""}` : "Upload a photo of your sign. It is cropped and cleaned by itself."}
         </p>
         <div className="flex shrink-0 items-center gap-2">
-          {image && <SignDelete whose="Your" onDelete={async () => setMine(await deleteMySignature())} testid="my-sign-delete" />}
-          <Button type="button" size="sm" onClick={() => sign.pick(null, "My Sign")} className="h-8 gap-1.5 rounded-[4px] bg-sky-600 px-3 text-xs hover:bg-sky-700" data-testid="my-sign-upload">
+          {image && <SignDelete onDelete={async () => setMine(await deleteMySignature())} testid="my-sign-delete" />}
+          <Button type="button" size="sm" onClick={sign.pick} className="h-8 gap-1.5 rounded-[4px] bg-sky-600 px-3 text-xs hover:bg-sky-700" data-testid="my-sign-upload">
             <Upload className="h-3.5 w-3.5" />Upload
           </Button>
         </div>
