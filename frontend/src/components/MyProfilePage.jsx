@@ -42,7 +42,6 @@ import {
   Loader2,
   LogIn,
   LogOut,
-  ShieldCheck,
   UserRound,
   Users,
   X,
@@ -73,7 +72,6 @@ import { SecurityTab } from "@/components/MySecurity";
 import { EmailVerifiedTag } from "@/components/EmailId";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { PhotoEditor } from "@/components/ui/photo-editor";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent } from "@/components/ui/card";
 // The same formatters the header clock and HR's register read a day with, so an hour and
@@ -81,21 +79,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { duration, hours, prettyTime } from "@/lib/clock";
 import { displayPhone } from "@/lib/phone";
 
-// A fourth tab means four across a phone, which is about 46px of text a tab — under what
-// "Attendance" and "My Profile" need, so both would arrive as an ellipsis. `short` is the
-// phone label; the full one returns from sm up. See SegmentedTabs.
+// The sidebar from md up, names only. A phone has its own list: see MENU_ITEMS.
 const TABS = [
   // First: the month the branch is open, which is the frame the other tabs are read in.
-  { key: "calendar", label: "Monthly Calendar", short: "Calendar", icon: CalendarDays },
+  { key: "calendar", label: "Monthly Calendar" },
   // Leave and permission requests: what was the Attendance tab's Request popup, as a tab.
   // Not offered to Super Admin, who has no one above them to ask.
-  { key: "timeoff", label: "Permission Request", short: "Request", icon: CalendarOff },
-  { key: "attendance", label: "Attendance", short: "Hours", icon: Clock },
-  { key: "profile", label: "My Profile", short: "Profile", icon: UserRound },
-  // Last, because it is the tab opened on purpose rather than in passing. The three before
+  { key: "timeoff", label: "Permission Request" },
+  { key: "attendance", label: "Attendance" },
+  { key: "profile", label: "My Profile" },
+  // Last, because it is the tab opened on purpose rather than in passing. The ones before
   // it are read — what did I work, what did I ask for, what do they have on me — and this
   // one is only reached by somebody who came to change something.
-  { key: "security", label: "Security", short: "Login", icon: ShieldCheck },
+  { key: "security", label: "Security" },
 ];
 
 // ---------- reading the figures ----------
@@ -730,8 +726,8 @@ const AttendanceTab = ({ view = "all", toolbarTarget = null }) => {
   return (
     <div className={phone ? "space-y-2" : "space-y-4"} data-testid="my-profile-attendance-tab">
       {compactLayout ? (
-        // On desktop the toolbar is drawn on the tab row itself (toolbarTarget), so the
-        // tabs and the month sit on one line.
+        // On desktop the toolbar is drawn on the page's top row (toolbarTarget), across
+        // from Back.
         toolbarTarget ? createPortal(attendanceToolbar, toolbarTarget) : attendanceToolbar
       ) : phone ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white p-0.5 shadow-sm">
@@ -1295,35 +1291,29 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack, hideTimeOff = fal
 
 // ---------- the page ----------
 
-// Hosts with a phone bar show the profile sections as icons.
-const PHONE_BAR_TABS = TABS.map((t) => ({ ...t, phone: "icon" }));
-
 /**
  * `phoneBar` is for a host that already frames this page on a phone — the Physio board,
- * which opens it from its own bottom bar. Below sm it drops the Back button and the name
- * (the bar underneath is the way out, and the header above already carries the name) and
- * puts all four tabs on one row. From sm up, and for every other host, the page is as it was.
+ * which opens it from its own bottom bar. Below sm it drops the Back button, the bar
+ * underneath being the way out.
  */
 /**
  * `onLogout` is for a host whose phone header no longer carries a logout — Super Admin,
  * whose bottom bar opens this page. It is handed to the Security tab, which draws the
  * button below md; from md up the header's own logout is on screen.
  */
-// `keepBack` keeps Back on a phone with the one-row bar, for a host with no bottom bar to
-// leave by (BDE, Accountant open this from the header).
-// `phoneMenu` swaps the tabs for PhoneProfileMenu below md, for every host.
+// `keepBack` keeps Back on a phone, for a host with no bottom bar to leave by (BDE,
+// Accountant open this from the header).
+// `phoneMenu` swaps the sidebar for PhoneProfileMenu below md, for every host.
 // `hideTimeOff` drops Permission Request (Super Admin). `timeOffInHeader` is for a host
 // whose phone header already carries Time Off as its own button (Physio, Consultant): the
-// phone menu then leaves the row out, so it is not in two places. The desktop tabs keep it.
+// phone menu then leaves the row out, so it is not in two places. The sidebar keeps it.
 export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false }) => {
   const [tab, setTab] = useState("attendance");
-  // The tab's own tools (month, counts) are portalled into this slot, on the same row as
-  // the tabs.
+  // The tab's own tools (month, counts) are portalled into this slot, on the top row.
   const [toolsEl, setToolsEl] = useState(null);
   const phone = usePhone();
   const noTimeOff = hideTimeOff || user?.role === "super_admin";
   const tabs = noTimeOff ? TABS.filter((t) => t.key !== "timeoff") : TABS;
-  const phoneTabs = noTimeOff ? PHONE_BAR_TABS.filter((t) => t.key !== "timeoff") : PHONE_BAR_TABS;
   if (phoneMenu && phone) {
     return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} hideTimeOff={noTimeOff || timeOffInHeader} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
@@ -1346,25 +1336,44 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             <ChevronLeft className="h-5 w-5 motion-safe:animate-[nudge-left_1s_ease-in-out_infinite]" />
           </button>
         </div>
-        {/* One row: Back, the tabs sized to their labels, then the open tab's tools
-            pushed right. On a window too narrow for both, the tools wrap below. */}
-        <div className="w-full sm:w-auto sm:shrink-0" data-testid="my-profile-tabs-wrap">
-          {phoneBar
-            ? <SegmentedTabs tabs={phoneTabs} value={tab} onChange={setTab} testid="my-profile-tabs" fit />
-            : <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} testid="my-profile-tabs" mobileCols={3} fit />}
-        </div>
+        {/* Top row: Back, then the open tab's tools pushed right. */}
         <div ref={setToolsEl} className="flex flex-wrap items-center justify-end gap-2 empty:hidden sm:ml-auto" data-testid="my-profile-tab-tools" />
       </div>
 
-      {/* Both tabs stay mounted once opened would mean two months of requests for a screen
-          somebody opened to read one thing, so each is mounted only while it is the tab.
-          Switching back re-reads, which is right for a page whose whole subject is what
-          happened today. */}
-      {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
-        : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
-        : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>
-          : tab === "security" ? <SecurityTab onLogout={onLogout} />
-            : <ProfileTab roleLabel={roleLabel} />}
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        {/* The tabs, down the left: the list My Profile's own sections use (ProfileView).
+            It stays in view under the header while a month of attendance scrolls past. */}
+        <nav
+          aria-label="My Profile"
+          className="flex w-full shrink-0 flex-col gap-1 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm md:sticky md:top-[calc(var(--role-header-height,89px)+1rem)] md:w-52"
+          data-testid="my-profile-tabs"
+        >
+          {tabs.map(({ key, label }) => (
+            <button
+              type="button"
+              key={key}
+              onClick={() => setTab(key)}
+              aria-current={tab === key ? "page" : undefined}
+              className={`whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${tab === key ? "bg-sky-100/70 font-semibold text-sky-700 shadow-[inset_3px_0_0_#0284C7]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"}`}
+              data-testid={`my-profile-tabs-${key}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Both tabs stay mounted once opened would mean two months of requests for a screen
+            somebody opened to read one thing, so each is mounted only while it is the tab.
+            Switching back re-reads, which is right for a page whose whole subject is what
+            happened today. */}
+        <div className="w-full min-w-0 md:flex-1" data-testid="my-profile-tab-body">
+          {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
+            : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
+            : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>
+              : tab === "security" ? <SecurityTab onLogout={onLogout} />
+                : <ProfileTab roleLabel={roleLabel} />}
+        </div>
+      </div>
     </div>
   );
 };
