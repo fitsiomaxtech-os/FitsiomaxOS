@@ -95,6 +95,7 @@ export function CourseProgressCalendar({
   packageDays,
   tone = "violet",
   dayNoun = "Day",
+  showAllDays = true,
   onClose,
   testid = "course-progress",
 }) {
@@ -163,7 +164,7 @@ export function CourseProgressCalendar({
     { key: "completed", label: "Completed", count: completed.length, cls: "border-emerald-300 bg-emerald-50 text-emerald-700 enabled:hover:bg-emerald-100", num: "text-emerald-600", go: () => focusDate(lastDoneDate), can: !!lastDoneDate },
     { key: "booked", label: "Booked", count: booked.length, cls: skin.tile, num: skin.num, go: () => focusDate(nextBookedDate), can: !!nextBookedDate },
     { key: "absent", label: "Absent", count: absences.length, cls: "border-rose-300 bg-rose-50 text-rose-700 enabled:hover:bg-rose-100", num: "text-rose-600", go: () => focusDate(lastAbsentDate), can: !!lastAbsentDate },
-    { key: "waiting", label: "Waiting for a date", count: waiting.length, cls: "border-amber-300 bg-amber-50 text-amber-700 enabled:hover:bg-amber-100", num: "text-amber-600", go: () => listRef.current?.querySelector("[data-waiting]")?.scrollIntoView({ behavior: "smooth", block: "center" }), can: waiting.length > 0 },
+    { key: "waiting", label: "Waiting for a date", count: waiting.length, cls: "border-amber-300 bg-amber-50 text-amber-700 enabled:hover:bg-amber-100", num: "text-amber-600", go: showAllDays ? () => listRef.current?.querySelector("[data-waiting]")?.scrollIntoView({ behavior: "smooth", block: "center" }) : null, can: showAllDays && waiting.length > 0 },
     { key: "total", label: "Total", count: total, cls: "border-slate-300 bg-white text-slate-700", num: "text-slate-600", go: null, can: false },
   ];
 
@@ -179,7 +180,8 @@ export function CourseProgressCalendar({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       data-testid={testid}
     >
-      <div className="flex h-[calc(100vh-1.5rem)] max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:h-[84vh] sm:max-h-[84vh]">
+      {/* Without All days the popup is only as tall as the calendar, not a fixed 84vh. */}
+      <div className={`flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:max-h-[84vh] ${showAllDays ? "h-[calc(100vh-1.5rem)] sm:h-[84vh]" : ""}`}>
         <div className="flex shrink-0 items-center gap-3 bg-slate-500 px-5 py-3 text-[12px] font-semibold uppercase leading-5 text-white [font-family:Inter,sans-serif]">
           <p className="min-w-0 flex-1 truncate" data-testid={`${testid}-title`}>
             {leadName || "Unknown"} <span className="font-normal opacity-80">with</span> {physioName || "the physio"}
@@ -208,7 +210,7 @@ export function CourseProgressCalendar({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="flex flex-col border-b border-slate-200 lg:flex-row">
+          <div className={`flex flex-col lg:flex-row ${showAllDays ? "border-b border-slate-200" : ""}`}>
             {/* Month grid: the day number badges each date the course touches. */}
             <div className="w-full flex-shrink-0 border-b border-slate-100 p-3 sm:p-4 lg:w-[19.5rem] lg:border-b-0 lg:border-r">
               <div className="mb-2 flex items-center justify-between">
@@ -338,7 +340,9 @@ export function CourseProgressCalendar({
             </div>
           </div>
 
-          {/* Every day of the course in order, including the ones with no date yet. */}
+          {/* Every day of the course in order, including the ones with no date yet. Treatment
+              Progress leaves it out (showAllDays false); Rehab Progress keeps it. */}
+          {showAllDays && (
           <div className="p-3 sm:p-4" ref={listRef}>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">All days</p>
             {list.length === 0 ? (
@@ -385,6 +389,7 @@ export function CourseProgressCalendar({
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>,

@@ -16224,6 +16224,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 packageDays={physioProgress.package_sessions || physioProgress.booked_sessions}
                 tone="violet"
                 dayNoun="Day"
+                showAllDays={false}
                 onClose={() => setProgressCalendar(null)}
                 testid="cons-treatment-progress"
               />
