@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 import consultation_form_page3
 from database import v3_col
-from deps import is_branch_admin_role, v3_require_roles
+from deps import is_branch_admin_role, online_arm_practice, v3_require_roles, vertical_in_arm
 from physio_scope import user_branch_ids
 from schemas.v3 import V3UserOut
 from utils import live_branch_query, now_iso
@@ -131,6 +131,39 @@ async def get_consultation_form(
     # Treatment Prescription in its blanks; saving it keeps them.
     row = await _get(branch_id, form_id)
     return await consultation_form_page3.fill_blanks(row, row.get("lead_id"))
+
+
+@router.get("/leads/{lead_id}/consultation-report")
+async def lead_consultation_report(
+    lead_id: str,
+    user: V3UserOut = Depends(v3_require_roles(*ROLES)),
+):
+    """One lead's Consultation Form, to read: the Consultation popup's Progression tab.
+
+    Found by the lead alone, so a patient who moved branches keeps the form the first one
+    filled. With none saved yet it still answers, with what the Consultant has prescribed
+    (`saved` is False), and the screen fills the patient's details from the lead.
+
+    The newest form wins, as the lead's own Form button opens it. The share token is left
+    out: reading the report is not sending it to the patient."""
+    lead = await v3_col("leads").find_one({"id": lead_id}, {"_id": 0, "branch_id": 1, "vertical": 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if is_branch_admin_role(user.role):
+        # Their own branch's patient, or -- for an admin who runs an online arm, whose leads
+        # carry no branch -- one of that arm's.
+        practice = online_arm_practice(user.role)
+        in_arm = bool(practice) and vertical_in_arm(lead.get("vertical"), practice)
+        if not in_arm and lead.get("branch_id") not in user_branch_ids(user):
+            raise HTTPException(status_code=403, detail="This patient is not at your branch")
+    rows = await v3_col(COL).find({"lead_id": lead_id}, {"_id": 0}).sort("created_at", -1).to_list(1)
+    row = rows[0] if rows else {}
+    filled = await consultation_form_page3.fill_blanks(row, lead_id)
+    return {
+        "saved": bool(row),
+        "client_status": row.get("client_status"),
+        "fields": {k: filled.get(k) or "" for k in FIELDS},
+    }
 
 
 async def _insert(branch_id: str, user: V3UserOut, fields: dict, extra: Optional[dict] = None) -> dict:

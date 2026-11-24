@@ -12202,6 +12202,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                      Case Sheet. */
                   canUpload={false}
                   canVerify={!isConsultant && viewerRole === "branch_admin"}
+                  /* The Consultation Report, in form view under the rows. */
+                  reportLead={!isConsultant && viewerRole === "branch_admin" ? selectedLead : null}
+                  reportBranch={branchNames[selectedLead.branch_id] || ""}
                 />
               )}
 

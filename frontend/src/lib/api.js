@@ -310,6 +310,8 @@ export const deleteConsultationForm = async (branchId, id) => (await api.delete(
 // The patient's link: a blank form sent to fill, or an existing one opened to them again.
 export const requestConsultationForm = async (branchId, fields) => (await api.post(`/branches/${branchId}/consultation-forms/request`, { fields })).data;
 export const shareConsultationForm = async (branchId, id) => (await api.post(`/branches/${branchId}/consultation-forms/${id}/share`)).data;
+// One lead's form to read (Consultation popup > Progression): { saved, client_status, fields }.
+export const leadConsultationReport = async (leadId) => (await api.get(`/leads/${leadId}/consultation-report`)).data;
 export const consultationFormLink = (token) => `${window.location.origin}/consult-form/${token}`;
 // `mine` narrows the board to the consultations booked to the caller — what My
 // Consultation needs and what Operations, reading a whole branch, must not send.
