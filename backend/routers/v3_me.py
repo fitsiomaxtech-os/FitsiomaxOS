@@ -830,28 +830,31 @@ HELP_MESSAGE_MAX = 2000
 
 
 class HelpRequestCreate(BaseModel):
-    topic: str
+    # Any number of topics; `topic` is the one-choice form a page loaded before that sends.
+    topics: Optional[List[str]] = None
+    topic: Optional[str] = None
     message: Optional[str] = ""
 
 
 @router.post("/help-requests")
 async def send_help_request(payload: HelpRequestCreate, user: V3UserOut = Depends(v3_current_user)):
-    """Get Help & Send Feedback: a topic and a few words, kept in `help_requests`.
+    """Get Help & Send Feedback: one or more topics and a few words, kept in `help_requests`.
 
     Who sent it is taken from the token, never the body, like everything else here. There is
     no screen that reads these yet; each row starts `new` for whoever builds one.
     """
-    topic = (payload.topic or "").strip()
-    if topic not in HELP_TOPICS:
+    picked = {(t or "").strip() for t in (payload.topics or [payload.topic or ""])}
+    if not picked or not picked <= set(HELP_TOPICS):
         raise HTTPException(status_code=400, detail="Pick what you need help with")
+    topics = [t for t in HELP_TOPICS if t in picked]  # the list's own order
     message = (payload.message or "").strip()
-    if topic == "Other" and not message:
+    if "Other" in topics and not message:
         raise HTTPException(status_code=400, detail="Tell us a little about it")
     if len(message) > HELP_MESSAGE_MAX:
         raise HTTPException(status_code=400, detail=f"Keep it under {HELP_MESSAGE_MAX} characters")
     row = {
         "id": str(uuid.uuid4()),
-        "topic": topic,
+        "topics": topics,
         "message": message,
         "status": "new",
         "user_id": user.id,
