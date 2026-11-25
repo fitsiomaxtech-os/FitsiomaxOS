@@ -2277,7 +2277,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
       {profileOpen && (
         <div className="contents" style={{ "--branch-profile-top": "calc(var(--role-header-height, 89px) + var(--branch-nav-height, 0px))" }}>
           <div className="contents md:[&_[data-testid=my-profile-page]]:-mb-6 md:[&_[data-testid=my-profile-tab-body]]:pt-2.5" style={{ "--role-header-height": "var(--branch-profile-top)" }}>
-            <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar />
+            <MyProfilePage user={currentUser} roleLabel={roleLabel} onBack={() => setProfileOpen(false)} onLogout={onLogout} phoneBar withHelp />
           </div>
         </div>
       )}

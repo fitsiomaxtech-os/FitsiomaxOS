@@ -1536,6 +1536,7 @@ export const CRMPage = ({ auth, onLogout }) => {
               keepBack={!profileInFooter}
               hideTimeOff={showSuperAdminBoard}
               timeOffInHeader={showPhysioBoard || showHeadPhysioBoard}
+              withHelp={showBranchBoard}
             />
           </Suspense>
         ) : (

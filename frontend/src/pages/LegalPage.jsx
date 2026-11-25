@@ -37,16 +37,60 @@ const parse = (text) => {
   return blocks;
 };
 
-const Inline = ({ text, from }) =>
+// `onPrivacy` is for a host that shows the policy itself (My Profile's Get Help popup):
+// the mention then switches to it there instead of leaving for /privacy.
+const Inline = ({ text, from, onPrivacy }) =>
   text.split(/(\{\{privacy\}\})/).map((part, i) =>
-    part === "{{privacy}}" ? (
+    part !== "{{privacy}}" ? (
+      part
+    ) : onPrivacy ? (
+      <button key={i} type="button" onClick={onPrivacy} className="font-medium text-sky-600 hover:text-sky-700">
+        Privacy Policy
+      </button>
+    ) : (
       <Link key={i} to="/privacy" state={{ from }} className="font-medium text-sky-600 hover:text-sky-700">
         Privacy Policy
       </Link>
-    ) : (
-      part
     )
   );
+
+export const legalTitle = (kind) => DOCS[kind].title;
+
+// The document's text, block by block: this page's article and the Get Help popup's panes.
+export const LegalText = ({ kind, from = "/", onPrivacy = null, className = "" }) => (
+  <div className={`space-y-3 text-sm leading-relaxed text-slate-700 ${className}`}>
+    {parse(DOCS[kind].text).map((b, i) => {
+      if (b.type === "heading") {
+        return (
+          <h2 key={i} className="!mt-8 text-sm font-bold uppercase tracking-wide text-slate-900">
+            {b.num}. {b.text}
+          </h2>
+        );
+      }
+      if (b.type === "clause") {
+        return (
+          <div key={i} className="flex gap-3">
+            <span className="w-9 shrink-0 tabular-nums text-slate-400">{b.num}</span>
+            <div className="min-w-0">
+              <p><Inline text={b.text} from={from} onPrivacy={onPrivacy} /></p>
+              {b.items.length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                  {b.items.map((item, j) => (
+                    <li key={j} className="flex gap-2">
+                      <span className="shrink-0 text-slate-400">{item.marker === "-" ? "•" : item.marker}</span>
+                      <span>{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        );
+      }
+      return <p key={i}><Inline text={b.text} from={from} onPrivacy={onPrivacy} /></p>;
+    })}
+  </div>
+);
 
 export const LegalPage = ({ kind }) => {
   const doc = DOCS[kind];
@@ -85,38 +129,7 @@ export const LegalPage = ({ kind }) => {
           <h1 className="font-heading text-2xl font-bold text-slate-900 md:text-3xl">{doc.title}</h1>
           <p className="mt-1 text-xs text-slate-400">Last updated: {LEGAL_LAST_UPDATED}</p>
 
-          <div className="mt-6 space-y-3 text-sm leading-relaxed text-slate-700">
-            {parse(doc.text).map((b, i) => {
-              if (b.type === "heading") {
-                return (
-                  <h2 key={i} className="!mt-8 text-sm font-bold uppercase tracking-wide text-slate-900">
-                    {b.num}. {b.text}
-                  </h2>
-                );
-              }
-              if (b.type === "clause") {
-                return (
-                  <div key={i} className="flex gap-3">
-                    <span className="w-9 shrink-0 tabular-nums text-slate-400">{b.num}</span>
-                    <div className="min-w-0">
-                      <p><Inline text={b.text} from={from} /></p>
-                      {b.items.length > 0 && (
-                        <ul className="mt-1.5 space-y-1">
-                          {b.items.map((item, j) => (
-                            <li key={j} className="flex gap-2">
-                              <span className="shrink-0 text-slate-400">{item.marker === "-" ? "•" : item.marker}</span>
-                              <span>{item.text}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              return <p key={i}><Inline text={b.text} from={from} /></p>;
-            })}
-          </div>
+          <LegalText kind={kind} from={from} className="mt-6" />
         </article>
 
         <p className="mt-6 text-center text-xs text-slate-400">

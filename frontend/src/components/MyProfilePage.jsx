@@ -42,6 +42,7 @@ import {
   History,
   KeyRound,
   Layers,
+  LifeBuoy,
   Loader2,
   LogIn,
   LogOut,
@@ -85,6 +86,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { duration, hours, prettyTime } from "@/lib/clock";
 import { displayPhone } from "@/lib/phone";
 import { versionDetail, versionLabel } from "@/lib/version";
+import { GetHelpDialog } from "@/components/GetHelpDialog";
 
 // The sidebar from md up. A phone has its own list: see MENU_ITEMS.
 const TABS = [
@@ -1436,8 +1438,11 @@ const SidebarFooter = () => (
   </div>
 );
 
-export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false }) => {
+// `withHelp` adds Get Help under Account (Branch Admin): a row that opens its popup over
+// whichever tab is open, rather than a tab of its own.
+export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false, withHelp = false }) => {
   const [tab, setTab] = useState("attendance");
+  const [helpOpen, setHelpOpen] = useState(false);
   // The tab's own tools (month, counts) are portalled into this slot, on the top row.
   const [toolsEl, setToolsEl] = useState(null);
   const [pageRef, fillHeight] = useFillToScreenBottom();
@@ -1494,7 +1499,20 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
               <span className="min-w-0 flex-1">{label}</span>
             </button>
           ))}
+          {withHelp && (
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              aria-haspopup="dialog"
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${helpOpen ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
+              data-testid="my-profile-tabs-help"
+            >
+              <LifeBuoy className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1">Get Help</span>
+            </button>
+          )}
         </nav>
+        {withHelp && <GetHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />}
         <SidebarFooter />
       </aside>
 
