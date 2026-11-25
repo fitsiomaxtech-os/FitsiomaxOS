@@ -1427,22 +1427,10 @@ const useFillToScreenBottom = () => {
   return [setEl, minHeight];
 };
 
-// The sidebar's foot: the legal pages, two rows still to be wired, and the version.
-// The legal pages open in a new tab: their Back goes to the sign-in screen, not here.
+// The sidebar's foot: the version alone, in the bottom corner.
 const SidebarFooter = () => (
   <div className="mt-auto hidden px-5 pb-4 pt-6 md:sticky md:bottom-0 md:block" data-testid="my-profile-sidebar-footer">
-    <nav aria-label="About" className="flex flex-col items-start gap-1.5 text-[8px] leading-tight text-slate-400">
-      <a href="/terms" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600" data-testid="my-profile-footer-terms">
-        Terms &amp; Conditions
-      </a>
-      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600" data-testid="my-profile-footer-privacy">
-        Privacy Policy
-      </a>
-      {/* Left blank for now: no help desk or feedback form to send them to yet. */}
-      <button type="button" className="hover:text-slate-600" data-testid="my-profile-footer-help">Get Help</button>
-      <button type="button" className="hover:text-slate-600" data-testid="my-profile-footer-feedback">Send Feedback</button>
-    </nav>
-    <p className="mt-3 text-[7px] leading-none text-slate-300" title={versionDetail || undefined} data-testid="my-profile-footer-version">
+    <p className="text-[7px] leading-none text-slate-300" title={versionDetail || undefined} data-testid="my-profile-footer-version">
       {versionLabel}
     </p>
   </div>
