@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, Loader2, Paperclip, X } from "lucide-react";
+import { Loader2, Paperclip, X } from "lucide-react";
 import { sendHelpRequest } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 
@@ -20,20 +20,16 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
-const PANEL_TESTID = "get-help-panel";
-
 /**
  * My Profile's Get Help: a 420 x 660 panel in the bottom-right corner. Any number of
- * topics, a few words, up to three images, Submit Request. An image comes in three ways:
- * Attach (a file), paste (Ctrl + V of a screenshot), or Capture, which draws the page
- * behind the panel with html2canvas (already in the app for the PDFs). Portalled to the
- * body so no transformed parent can clip it; Escape or the X closes it.
+ * topics, a few words, up to three images, Submit Request. An image comes in two ways:
+ * Attach (a file) or paste (Ctrl + V of a screenshot). Portalled to the body so no
+ * transformed parent can clip it; Escape or the X closes it.
  */
 export function GetHelpPanel({ onClose }) {
   const [topics, setTopics] = useState([]);
   const [message, setMessage] = useState("");
   const [images, setImages] = useState([]); // { id, file, url }
-  const [capturing, setCapturing] = useState(false);
   const [sending, setSending] = useState(false);
   const fileRef = useRef(null);
 
@@ -82,33 +78,6 @@ export function GetHelpPanel({ onClose }) {
     addImages(files);
   };
 
-  // What is on screen behind the panel, as a JPEG: the panel and any toast are left out.
-  const capture = async () => {
-    if (images.length >= MAX_IMAGES) { toast.error(`Up to ${MAX_IMAGES} images`); return; }
-    setCapturing(true);
-    try {
-      const { default: html2canvas } = await import("html2canvas");
-      const canvas = await html2canvas(document.body, {
-        x: window.scrollX,
-        y: window.scrollY,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        scale: Math.min(window.devicePixelRatio || 1, 1.5),
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        ignoreElements: (el) => el.getAttribute?.("data-testid") === PANEL_TESTID || el.hasAttribute?.("data-sonner-toaster"),
-      });
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
-      if (!blob) throw new Error("empty capture");
-      addImages([new File([blob], `screen-${Date.now()}.jpg`, { type: "image/jpeg" })]);
-    } catch {
-      toast.error("Could not capture the screen. Take a screenshot and paste it instead.");
-    } finally {
-      setCapturing(false);
-    }
-  };
-
   const ready = topics.length > 0 && (!topics.includes("Other") || message.trim());
   const full = images.length >= MAX_IMAGES;
 
@@ -135,7 +104,7 @@ export function GetHelpPanel({ onClose }) {
       aria-label="Get Help"
       onPaste={onPaste}
       className="fixed bottom-4 right-4 z-50 flex h-[660px] max-h-[calc(100vh-2rem)] w-[420px] max-w-[calc(100vw-2rem)] flex-col rounded-[4px] border border-slate-200 bg-white shadow-xl"
-      data-testid={PANEL_TESTID}
+      data-testid="get-help-panel"
     >
       <div className="flex shrink-0 items-start justify-between gap-2 px-5 pt-4">
         <h2 className="text-base font-semibold text-slate-900">Get Help</h2>
@@ -187,7 +156,7 @@ export function GetHelpPanel({ onClose }) {
             ))}
           </div>
         )}
-        <p className="mt-1.5 shrink-0 text-[11px] text-slate-400">Up to {MAX_IMAGES} images. Attach, capture this screen, or paste a screenshot (Ctrl + V).</p>
+        <p className="mt-1.5 shrink-0 text-[11px] text-slate-400">Up to {MAX_IMAGES} images. Attach, or paste a screenshot (Ctrl + V).</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-1 border-t border-slate-100 px-4 py-3">
@@ -203,23 +172,12 @@ export function GetHelpPanel({ onClose }) {
         >
           <Paperclip className="h-4 w-4" />
         </button>
-        <button
-          type="button"
-          onClick={capture}
-          disabled={full || capturing}
-          className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-          aria-label="Capture this screen"
-          title="Capture this screen"
-          data-testid="get-help-capture"
-        >
-          {capturing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-        </button>
         {images.length > 0 && <span className="ml-1 text-[11px] tabular-nums text-slate-400" data-testid="get-help-image-count">{images.length}/{MAX_IMAGES}</span>}
 
         <button
           type="button"
           onClick={submit}
-          disabled={!ready || sending || capturing}
+          disabled={!ready || sending}
           className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-600/30 transition hover:-translate-y-px hover:bg-sky-700 hover:shadow-xl disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           data-testid="get-help-submit"
         >

@@ -833,7 +833,7 @@ HELP_TOPICS = (
 )
 HELP_MESSAGE_MAX = 2000
 
-# Images on a request: attached, pasted or captured on the panel. Up to three, 5 MB each,
+# Images on a request: attached or pasted on the panel. Up to three, 5 MB each,
 # told apart by their first bytes rather than a filename a browser made up.
 HELP_IMAGES_MAX = 3
 HELP_IMAGE_MAX_BYTES = 5 * 1024 * 1024
