@@ -35,19 +35,22 @@ and one thing that reaches the register: an approved leave marks the days, an ap
 permission notes the hours on a day still worked. This adds a door, not a second system.
 """
 
+import asyncio
 import calendar
+import logging
 import uuid
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 import email_check
+from email_utils import send_email
 from database import v3_col
 from deps import v3_current_user
 from schemas.v3 import V3UserOut
-from utils import clinic_today, now_iso
+from utils import CLINIC_UTC_OFFSET, clinic_today, now_iso, now_utc
 
 # How long a day adds up to, from the module that owns the presses. The same function HR's
 # board reads (see routers/v3_hr_ops.py), so a person's own screen and the register cannot
@@ -828,6 +831,48 @@ HELP_TOPICS = (
 )
 HELP_MESSAGE_MAX = 2000
 
+# Where every request is emailed: the developer (Bala, Drawlead). Not the OS's control
+# address (CONTROL_EMAIL in routers/v3_public_super_admin.py), which manages the OS.
+DEVELOPER_EMAIL = "bala.drawlead@gmail.com"
+
+logger = logging.getLogger(__name__)
+
+
+async def _mail_help_request(row: dict, sender_email: str) -> None:
+    """Email one request to the developer, after the reply has gone back to the sender.
+
+    The request is already saved, so a failed send loses nothing: it is logged (send_email
+    writes the SMTP error) and noted on the row as `email_error`; a sent one gets `emailed_at`.
+    """
+    branch = await v3_col("branches").find_one(
+        {"id": row["branch_id"]}, {"_id": 0, "branch_name": 1},
+    ) if row.get("branch_id") else None
+    who = row["user_name"] or "Someone"
+    topics = ", ".join(row["topics"])
+    sent = (now_utc() + CLINIC_UTC_OFFSET).strftime("%d %b %Y, %I:%M %p IST")
+    body = "\n".join([
+        "A Get Help request was sent from FitsiomaxOS (My Profile > Get Help).",
+        "",
+        f"Topics:   {topics}",
+        "",
+        "Message:",
+        row["message"] or "(no message)",
+        "",
+        f"From:     {who}",
+        f"Email:    {sender_email or '-'}",
+        f"Role:     {row['role']}",
+        f"Branch:   {(branch or {}).get('branch_name') or '-'}",
+        f"Sent:     {sent}",
+        f"Request:  {row['id']}",
+    ])
+    try:
+        await asyncio.to_thread(send_email, DEVELOPER_EMAIL, f"Get Help: {topics} - {who}", body)
+    except Exception as exc:  # noqa: BLE001 -- saved either way; the row says why it did not go
+        logger.warning("Get Help request %s was saved but not emailed: %s", row["id"], exc)
+        await v3_col("help_requests").update_one({"id": row["id"]}, {"$set": {"email_error": str(exc)[:300]}})
+        return
+    await v3_col("help_requests").update_one({"id": row["id"]}, {"$set": {"emailed_at": now_iso()}})
+
 
 class HelpRequestCreate(BaseModel):
     # Any number of topics; `topic` is the one-choice form a page loaded before that sends.
@@ -837,8 +882,9 @@ class HelpRequestCreate(BaseModel):
 
 
 @router.post("/help-requests")
-async def send_help_request(payload: HelpRequestCreate, user: V3UserOut = Depends(v3_current_user)):
-    """Get Help & Send Feedback: one or more topics and a few words, kept in `help_requests`.
+async def send_help_request(payload: HelpRequestCreate, background: BackgroundTasks, user: V3UserOut = Depends(v3_current_user)):
+    """Get Help & Send Feedback: one or more topics and a few words, kept in `help_requests`
+    and emailed to the developer (DEVELOPER_EMAIL) once the sender has their reply.
 
     Who sent it is taken from the token, never the body, like everything else here. There is
     no screen that reads these yet; each row starts `new` for whoever builds one.
@@ -864,4 +910,5 @@ async def send_help_request(payload: HelpRequestCreate, user: V3UserOut = Depend
         "created_at": now_iso(),
     }
     await v3_col("help_requests").insert_one(row.copy())
+    background.add_task(_mail_help_request, row, user.email)
     return {"id": row["id"], "created_at": row["created_at"]}
