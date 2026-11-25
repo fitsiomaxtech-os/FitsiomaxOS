@@ -36,13 +36,13 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   ClipboardList,
   Clock,
   FileText,
   History,
   KeyRound,
   Layers,
-  LifeBuoy,
   Loader2,
   LogIn,
   LogOut,
@@ -1507,7 +1507,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
               className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${helpOpen ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
               data-testid="my-profile-tabs-help"
             >
-              <LifeBuoy className="h-4 w-4 shrink-0" />
+              <CircleHelp className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1">Get Help</span>
             </button>
           )}
