@@ -38,12 +38,14 @@ permission notes the hours on a day still worked. This adds a door, not a second
 import asyncio
 import calendar
 import logging
+import os
 import uuid
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
+from starlette.datastructures import UploadFile as FormFile
 
 import email_check
 from email_utils import send_email
@@ -831,6 +833,29 @@ HELP_TOPICS = (
 )
 HELP_MESSAGE_MAX = 2000
 
+# Images on a request: attached, pasted or captured on the panel. Up to three, 5 MB each,
+# told apart by their first bytes rather than a filename a browser made up.
+HELP_IMAGES_MAX = 3
+HELP_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+HELP_IMAGE_EXT = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+
+# DELIBERATELY NOT under `uploads/` (served to anyone with the URL, see server.py): a
+# screenshot of the OS can show a patient's name and number. Same reasoning, and the same
+# kind of folder, as backend/client_documents (routers/v3_lead_documents.py). Nothing
+# serves these; they go out on the developer's email and are kept here with the request.
+HELP_FILE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "help_request_files")
+
+
+def _image_type(data: bytes) -> Optional[str]:
+    if data.startswith(bytes.fromhex("89504e470d0a1a0a")):  # PNG
+        return "image/png"
+    if data.startswith(bytes.fromhex("ffd8ff")):  # JPEG
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 # Where every request is emailed: the developer (Bala, Drawlead). Not the OS's control
 # address (CONTROL_EMAIL in routers/v3_public_super_admin.py), which manages the OS.
 DEVELOPER_EMAIL = "bala.drawlead@gmail.com"
@@ -838,7 +863,7 @@ DEVELOPER_EMAIL = "bala.drawlead@gmail.com"
 logger = logging.getLogger(__name__)
 
 
-async def _mail_help_request(row: dict, sender_email: str) -> None:
+async def _mail_help_request(row: dict, sender_email: str, attachments: list) -> None:
     """Email one request to the developer, after the reply has gone back to the sender.
 
     The request is already saved, so a failed send loses nothing: it is logged (send_email
@@ -863,10 +888,11 @@ async def _mail_help_request(row: dict, sender_email: str) -> None:
         f"Role:     {row['role']}",
         f"Branch:   {(branch or {}).get('branch_name') or '-'}",
         f"Sent:     {sent}",
+        f"Images:   {len(attachments) or 'none'}",
         f"Request:  {row['id']}",
     ])
     try:
-        await asyncio.to_thread(send_email, DEVELOPER_EMAIL, f"Get Help: {topics} - {who}", body)
+        await asyncio.to_thread(send_email, DEVELOPER_EMAIL, f"Get Help: {topics} - {who}", body, attachments)
     except Exception as exc:  # noqa: BLE001 -- saved either way; the row says why it did not go
         logger.warning("Get Help request %s was saved but not emailed: %s", row["id"], exc)
         await v3_col("help_requests").update_one({"id": row["id"]}, {"$set": {"email_error": str(exc)[:300]}})
@@ -882,26 +908,72 @@ class HelpRequestCreate(BaseModel):
 
 
 @router.post("/help-requests")
-async def send_help_request(payload: HelpRequestCreate, background: BackgroundTasks, user: V3UserOut = Depends(v3_current_user)):
-    """Get Help & Send Feedback: one or more topics and a few words, kept in `help_requests`
-    and emailed to the developer (DEVELOPER_EMAIL) once the sender has their reply.
+async def send_help_request(request: Request, background: BackgroundTasks, user: V3UserOut = Depends(v3_current_user)):
+    """Get Help & Send Feedback: one or more topics, a few words and up to three images, kept
+    in `help_requests` and emailed to the developer (DEVELOPER_EMAIL) once the sender has
+    their reply.
+
+    The panel posts a form (`topics` repeated, `message`, `images` repeated). Plain JSON
+    ({topics, message}) is still taken, from a page loaded before images were added.
 
     Who sent it is taken from the token, never the body, like everything else here. There is
     no screen that reads these yet; each row starts `new` for whoever builds one.
     """
-    picked = {(t or "").strip() for t in (payload.topics or [payload.topic or ""])}
+    if request.headers.get("content-type", "").startswith("multipart/form-data"):
+        form = await request.form()
+        raw_topics = [t for t in form.getlist("topics") if isinstance(t, str)]
+        message = form.get("message") if isinstance(form.get("message"), str) else ""
+        uploads = [f for f in form.getlist("images") if isinstance(f, FormFile)]
+    else:
+        try:
+            body = HelpRequestCreate(**(await request.json()))
+        except Exception:  # noqa: BLE001 -- not JSON, or not this shape
+            raise HTTPException(status_code=400, detail="Pick what you need help with")
+        raw_topics = body.topics or [body.topic or ""]
+        message = body.message or ""
+        uploads = []
+
+    picked = {(t or "").strip() for t in raw_topics}
     if not picked or not picked <= set(HELP_TOPICS):
         raise HTTPException(status_code=400, detail="Pick what you need help with")
     topics = [t for t in HELP_TOPICS if t in picked]  # the list's own order
-    message = (payload.message or "").strip()
+    message = (message or "").strip()
     if "Other" in topics and not message:
         raise HTTPException(status_code=400, detail="Tell us a little about it")
     if len(message) > HELP_MESSAGE_MAX:
         raise HTTPException(status_code=400, detail=f"Keep it under {HELP_MESSAGE_MAX} characters")
+    if len(uploads) > HELP_IMAGES_MAX:
+        raise HTTPException(status_code=400, detail=f"Up to {HELP_IMAGES_MAX} images")
+
+    # Every image is read and checked before anything is written, so a bad third image
+    # leaves no first two behind on disk.
+    images = []
+    for f in uploads:
+        data = await f.read(HELP_IMAGE_MAX_BYTES + 1)
+        if len(data) > HELP_IMAGE_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Each image must be under 5 MB")
+        mime = _image_type(data)
+        if not mime:
+            raise HTTPException(status_code=400, detail="Only PNG, JPG or WebP images")
+        images.append((data, mime))
+
+    row_id = str(uuid.uuid4())
+    attachments, stored = [], []
+    if images:
+        folder = os.path.join(HELP_FILE_DIR, row_id)
+        os.makedirs(folder, exist_ok=True)
+        for n, (data, mime) in enumerate(images, start=1):
+            name = f"image-{n}{HELP_IMAGE_EXT[mime]}"
+            with open(os.path.join(folder, name), "wb") as out:
+                out.write(data)
+            attachments.append((name, data, mime))
+            stored.append({"file": f"{row_id}/{name}", "type": mime, "bytes": len(data)})
+
     row = {
-        "id": str(uuid.uuid4()),
+        "id": row_id,
         "topics": topics,
         "message": message,
+        "images": stored,
         "status": "new",
         "user_id": user.id,
         "user_name": user.full_name,
@@ -910,5 +982,5 @@ async def send_help_request(payload: HelpRequestCreate, background: BackgroundTa
         "created_at": now_iso(),
     }
     await v3_col("help_requests").insert_one(row.copy())
-    background.add_task(_mail_help_request, row, user.email)
+    background.add_task(_mail_help_request, row, user.email, attachments)
     return {"id": row["id"], "created_at": row["created_at"]}

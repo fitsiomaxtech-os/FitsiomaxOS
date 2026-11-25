@@ -22,6 +22,8 @@ failure whose cause is written plainly in the exception.
 import logging
 import os
 import smtplib
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
@@ -66,7 +68,8 @@ def smtp_status() -> dict:
     }
 
 
-def send_email(to_address: str, subject: str, body: str) -> None:
+def send_email(to_address: str, subject: str, body: str, attachments=None) -> None:
+    """Send plain text, with optional image attachments as (filename, bytes, "image/png")."""
     if not smtp_configured():
         logger.error(
             "Email not sent to %s (%r): SMTP_USER/SMTP_PASSWORD are not set in backend/.env",
@@ -74,7 +77,15 @@ def send_email(to_address: str, subject: str, body: str) -> None:
         )
         raise SmtpNotConfigured("SMTP_USER/SMTP_PASSWORD are not configured on the backend")
 
-    message = MIMEText(body)
+    if attachments:
+        message = MIMEMultipart()
+        message.attach(MIMEText(body))
+        for filename, data, mime in attachments:
+            part = MIMEImage(data, _subtype=mime.split("/", 1)[1])
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            message.attach(part)
+    else:
+        message = MIMEText(body)
     message["Subject"] = subject
     message["From"] = SMTP_USER
     message["To"] = to_address
