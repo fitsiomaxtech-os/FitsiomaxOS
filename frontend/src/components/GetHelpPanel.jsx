@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Paperclip, X } from "lucide-react";
 import { sendHelpRequest } from "@/lib/api";
@@ -20,6 +20,12 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
+// Opening: 300ms, fading in and rising out of the bottom-right corner. Closing: the same
+// in reverse, quicker. Off for anyone who has asked their system for reduced motion.
+const CLOSE_MS = 200;
+const OPEN_ANIM = "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out";
+const CLOSE_ANIM = "animate-out fade-out-0 zoom-out-95 slide-out-to-bottom-4 duration-200 ease-in fill-mode-forwards";
+
 /**
  * My Profile's Get Help: a 420 x 660 panel in the bottom-right corner. Any number of
  * topics, a few words, up to three images, Submit Request. An image comes in two ways:
@@ -33,11 +39,22 @@ export function GetHelpPanel({ onClose }) {
   const [sending, setSending] = useState(false);
   const fileRef = useRef(null);
 
+  // It eases in from the corner it sits in, and eases back out before it unmounts: the
+  // close plays CLOSE_MS of the out animation, then tells the host.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef(null);
+  const close = useCallback(() => {
+    if (closeTimer.current) return;
+    setClosing(true);
+    closeTimer.current = setTimeout(onClose, CLOSE_MS);
+  }, [onClose]);
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [close]);
 
   // The previews' object URLs are let go when the panel closes.
   const imagesRef = useRef(images);
@@ -91,7 +108,7 @@ export function GetHelpPanel({ onClose }) {
     try {
       await sendHelpRequest(form);
       toast.success("Request sent");
-      onClose();
+      close();
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Could not send. Try again.");
       setSending(false);
@@ -103,12 +120,12 @@ export function GetHelpPanel({ onClose }) {
       role="dialog"
       aria-label="Get Help"
       onPaste={onPaste}
-      className="fixed bottom-4 right-4 z-50 flex h-[660px] max-h-[calc(100vh-2rem)] w-[420px] max-w-[calc(100vw-2rem)] flex-col rounded-[4px] border border-slate-200 bg-white shadow-xl"
+      className={`fixed bottom-4 right-4 z-50 flex h-[660px] max-h-[calc(100vh-2rem)] w-[420px] max-w-[calc(100vw-2rem)] origin-bottom-right flex-col rounded-[4px] border border-slate-200 bg-white shadow-xl motion-reduce:animate-none ${closing ? CLOSE_ANIM : OPEN_ANIM}`}
       data-testid="get-help-panel"
     >
       <div className="flex shrink-0 items-start justify-between gap-2 px-5 pt-4">
         <h2 className="text-base font-semibold text-slate-900">Get Help</h2>
-        <button type="button" onClick={onClose} className="-mr-1 rounded p-0.5 text-slate-500 hover:text-slate-900" aria-label="Close" data-testid="get-help-close">
+        <button type="button" onClick={close} className="-mr-1 rounded p-0.5 text-slate-500 hover:text-slate-900" aria-label="Close" data-testid="get-help-close">
           <X className="h-5 w-5" />
         </button>
       </div>
