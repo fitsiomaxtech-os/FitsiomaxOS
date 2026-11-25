@@ -86,7 +86,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { duration, hours, prettyTime } from "@/lib/clock";
 import { displayPhone } from "@/lib/phone";
 import { versionDetail, versionLabel } from "@/lib/version";
-import { GetHelpDialog } from "@/components/GetHelpDialog";
 
 // The sidebar from md up. A phone has its own list: see MENU_ITEMS.
 const TABS = [
@@ -1438,17 +1437,18 @@ const SidebarFooter = () => (
   </div>
 );
 
-// `withHelp` adds Get Help under Account (Branch Admin): a row that opens its popup over
-// whichever tab is open, rather than a tab of its own.
+// `withHelp` adds a Get Help tab under Account (Branch Admin). Its page is still empty.
 export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false, withHelp = false }) => {
   const [tab, setTab] = useState("attendance");
-  const [helpOpen, setHelpOpen] = useState(false);
   // The tab's own tools (month, counts) are portalled into this slot, on the top row.
   const [toolsEl, setToolsEl] = useState(null);
   const [pageRef, fillHeight] = useFillToScreenBottom();
   const phone = usePhone();
   const noTimeOff = hideTimeOff || user?.role === "super_admin";
-  const tabs = noTimeOff ? TABS.filter((t) => t.key !== "timeoff") : TABS;
+  const tabs = [
+    ...(noTimeOff ? TABS.filter((t) => t.key !== "timeoff") : TABS),
+    ...(withHelp ? [{ key: "help", label: "Get Help", icon: CircleHelp }] : []),
+  ];
   if (phoneMenu && phone) {
     return <PhoneProfileMenu roleLabel={roleLabel} user={user} onLogout={onLogout} hideTimeOff={noTimeOff || timeOffInHeader} onBack={keepBack || !phoneBar ? onBack : null} />;
   }
@@ -1499,20 +1499,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
               <span className="min-w-0 flex-1">{label}</span>
             </button>
           ))}
-          {withHelp && (
-            <button
-              type="button"
-              onClick={() => setHelpOpen(true)}
-              aria-haspopup="dialog"
-              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${helpOpen ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
-              data-testid="my-profile-tabs-help"
-            >
-              <CircleHelp className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1">Get Help</span>
-            </button>
-          )}
         </nav>
-        {withHelp && <GetHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />}
         <SidebarFooter />
       </aside>
 
@@ -1529,6 +1516,7 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
             : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
             : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>
+            : tab === "help" && withHelp ? <div data-testid="my-profile-help-tab" />
               : <ProfileTab roleLabel={roleLabel} withSecurity onLogout={onLogout} />}
         </div>
       </div>
