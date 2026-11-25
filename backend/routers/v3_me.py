@@ -36,6 +36,7 @@ permission notes the hours on a day still worked. This adds a door, not a second
 """
 
 import calendar
+import uuid
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -810,3 +811,54 @@ async def withdraw_request(request_id: str, user: V3UserOut = Depends(v3_current
         raise HTTPException(status_code=400, detail="This has already been decided. Ask HR if it needs changing.")
     await v3_col("approvals").delete_one({"id": request_id, "employee_id": emp["id"]})
     return {"deleted": True, "id": request_id, "withdrawn_at": now_iso()}
+
+
+# ---------- Get Help ----------
+
+# The topics on My Profile's Get Help popup, in the order it lists them. The popup sends the
+# label itself, so a request read straight off the collection says what it is about.
+HELP_TOPICS = (
+    "Technical Issue",
+    "Report a Bug",
+    "Account & Access Support",
+    "How to Use",
+    "Feature Request",
+    "General Feedback",
+    "Other",
+)
+HELP_MESSAGE_MAX = 2000
+
+
+class HelpRequestCreate(BaseModel):
+    topic: str
+    message: Optional[str] = ""
+
+
+@router.post("/help-requests")
+async def send_help_request(payload: HelpRequestCreate, user: V3UserOut = Depends(v3_current_user)):
+    """Get Help & Send Feedback: a topic and a few words, kept in `help_requests`.
+
+    Who sent it is taken from the token, never the body, like everything else here. There is
+    no screen that reads these yet; each row starts `new` for whoever builds one.
+    """
+    topic = (payload.topic or "").strip()
+    if topic not in HELP_TOPICS:
+        raise HTTPException(status_code=400, detail="Pick what you need help with")
+    message = (payload.message or "").strip()
+    if topic == "Other" and not message:
+        raise HTTPException(status_code=400, detail="Tell us a little about it")
+    if len(message) > HELP_MESSAGE_MAX:
+        raise HTTPException(status_code=400, detail=f"Keep it under {HELP_MESSAGE_MAX} characters")
+    row = {
+        "id": str(uuid.uuid4()),
+        "topic": topic,
+        "message": message,
+        "status": "new",
+        "user_id": user.id,
+        "user_name": user.full_name,
+        "role": user.role,
+        "branch_id": user.branch_id,
+        "created_at": now_iso(),
+    }
+    await v3_col("help_requests").insert_one(row.copy())
+    return {"id": row["id"], "created_at": row["created_at"]}

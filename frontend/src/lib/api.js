@@ -912,6 +912,8 @@ export const removeMyPhoto = async () => (await api.delete("/me/photo")).data;
 // signed-in user's copy and the header avatar changes without a reload.
 export const MY_PHOTO_CHANGED_EVENT = "me:photo-changed";
 export const myAttendance = async (month) => (await api.get("/me/attendance", { params: month ? { month } : {} })).data;
+// My Profile > Get Help: { topic, message } -> { id, created_at }.
+export const sendHelpRequest = async (payload) => (await api.post("/me/help-requests", payload)).data;
 
 // The three that write. They post into the very list HR decides on -- see
 // backend/routers/v3_me.py -- so a leave raised here and one HR logged are the same

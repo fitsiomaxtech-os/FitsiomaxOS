@@ -86,6 +86,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { duration, hours, prettyTime } from "@/lib/clock";
 import { displayPhone } from "@/lib/phone";
 import { versionDetail, versionLabel } from "@/lib/version";
+import { GetHelpPanel } from "@/components/GetHelpPanel";
 
 // The sidebar from md up. A phone has its own list: see MENU_ITEMS.
 const TABS = [
@@ -1437,9 +1438,12 @@ const SidebarFooter = () => (
   </div>
 );
 
-// `withHelp` adds a Get Help tab under Account (Branch Admin). Its page is still empty.
+// `withHelp` adds Get Help under Account (Branch Admin): it opens GetHelpPanel in the
+// bottom-left corner rather than a page of its own.
 export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = false, keepBack = false, phoneMenu = true, hideTimeOff = false, timeOffInHeader = false, withHelp = false }) => {
   const [tab, setTab] = useState("attendance");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const closeHelp = useCallback(() => setHelpOpen(false), []);
   // The tab's own tools (month, counts) are portalled into this slot, on the top row.
   const [toolsEl, setToolsEl] = useState(null);
   const [pageRef, fillHeight] = useFillToScreenBottom();
@@ -1486,20 +1490,27 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
             </button>
             <h2 className="truncate text-sm font-semibold text-slate-800">My Profile</h2>
           </div>
-          {tabs.map(({ key, label, icon: Icon }) => (
-            <button
-              type="button"
-              key={key}
-              onClick={() => setTab(key)}
-              aria-current={tab === key ? "page" : undefined}
-              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${tab === key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
-              data-testid={`my-profile-tabs-${key}`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1">{label}</span>
-            </button>
-          ))}
+          {tabs.map(({ key, label, icon: Icon }) => {
+            // Get Help opens its panel over whichever tab is open; it is lit while that is up.
+            const help = key === "help";
+            const on = help ? helpOpen : tab === key;
+            return (
+              <button
+                type="button"
+                key={key}
+                onClick={() => (help ? setHelpOpen(true) : setTab(key))}
+                aria-current={!help && on ? "page" : undefined}
+                aria-haspopup={help ? "dialog" : undefined}
+                className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left focus-visible:outline-sky-600 ${on ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`}
+                data-testid={`my-profile-tabs-${key}`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1">{label}</span>
+              </button>
+            );
+          })}
         </nav>
+        {withHelp && helpOpen && <GetHelpPanel onClose={closeHelp} />}
         <SidebarFooter />
       </aside>
 
@@ -1516,7 +1527,6 @@ export const MyProfilePage = ({ user, roleLabel, onBack, onLogout, phoneBar = fa
           {tab === "calendar" ? <MonthlyCalendarTab user={user} toolbarTarget={toolsEl} />
             : tab === "attendance" ? <AttendanceTab toolbarTarget={toolsEl} />
             : tab === "timeoff" && !noTimeOff ? <div className="[&_*]:!rounded-[4px]" data-testid="my-profile-timeoff-tab"><PermissionRequestBoard /></div>
-            : tab === "help" && withHelp ? <div data-testid="my-profile-help-tab" />
               : <ProfileTab roleLabel={roleLabel} withSecurity onLogout={onLogout} />}
         </div>
       </div>
