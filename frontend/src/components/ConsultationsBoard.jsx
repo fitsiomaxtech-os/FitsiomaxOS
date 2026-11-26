@@ -1397,12 +1397,12 @@ const DUE_DATE_PLACEHOLDER = "Required: pick the date the balance is due";
  * sessions); `leading` is anything that has to be said before it (which sessions this
  * money bought). Both empty for the fees that are one price paid once.
  */
-const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, note = "", leading = null, testPrefix }) => {
+const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, note = "", leading = null, showDate = true, testPrefix }) => {
   if (!(balance > 0.009)) return null;
   const missing = !dueDate;
   return (
     <>
-      <div>
+      {showDate && <div>
         <label className={`mb-1 block text-[11px] font-medium ${missing ? "text-red-600" : "text-slate-500"}`}>
           Due Date for Balance ({note ? `${note}, ` : ""}Rs.{balance}) <span className="text-red-500">*</span>
         </label>
@@ -1417,7 +1417,7 @@ const BalanceDueBlock = ({ balance, dueDate, onDueDateChange, amount, discount, 
           className={`h-9 ${missing ? DUE_DATE_MISSING : ""}`}
           data-testid={`${testPrefix}-balance-due-date`}
         />
-      </div>
+      </div>}
       <div className="rounded-md border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-800" data-testid={`${testPrefix}-balance-note`}>
         {leading}
         Collecting <span className="font-semibold">Rs.{round2(amount)}</span>
@@ -12562,7 +12562,12 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               const short = round2(treatmentNetPayable - amountN);
               const agreedDiffers = chennaiAgreed && amountN > 0 && Math.abs(short) > 0.009;
               const editTotal = parseFloat(chennaiPkgEdit) || 0;
-              const ready = priced && chennaiPkgEdit === null && sessionsOk && amountN > 0 && !overDiscount && !overpaid;
+              const boxesOk = priced && chennaiPkgEdit === null && sessionsOk && amountN > 0 && !overDiscount && !overpaid;
+              // Fewer sessions than the package, or less money than they come to, leaves a
+              // balance -- dated here, before a mode is picked, as the server requires.
+              const needsDue = boxesOk && treatmentBalanceDue > 0.009;
+              const dueMissing = needsDue && !treatmentFeeDraft.balance_due_date;
+              const ready = boxesOk && !dueMissing;
               const rs = (n) => `Rs.${round2(n).toLocaleString("en-IN")}`;
               return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-chennai-collect-modal">
@@ -12714,6 +12719,23 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       </div>
                     )}
 
+                    {needsDue && (
+                      <div>
+                        <label className={`mb-1 block text-[11px] font-medium ${dueMissing ? "text-red-600" : "text-slate-500"}`}>
+                          Due Date for Balance <span className="text-red-500">*</span>
+                        </label>
+                        <MilkDateInput
+                          centered
+                          title="Due Date for Balance"
+                          value={treatmentFeeDraft.balance_due_date}
+                          onChange={(e) => setTreatmentFeeDraft({ ...treatmentFeeDraft, balance_due_date: e.target.value })}
+                          placeholder={DUE_DATE_PLACEHOLDER}
+                          className={`h-9 ${dueMissing ? DUE_DATE_MISSING : ""}`}
+                          data-testid="cons-chennai-collect-balance-due-date"
+                        />
+                      </div>
+                    )}
+
                     <div>
                       <label className="mb-1 block text-[11px] font-medium text-slate-500">Payment Mode</label>
                       <PaymentModeDropdown
@@ -12728,6 +12750,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           ? "Save the package amount first."
                           : ready
                           ? `Pick a payment mode to open its Collect popup.${treatmentDiscount > 0 || agreedDiffers ? " Cheque and Partial Payment are taken at the package rate, without any discount." : ""}`
+                          : dueMissing
+                          ? "Pick the Due Date for Balance first."
                           : "Enter the sessions and the amount first."}
                       </p>
                     </div>
@@ -13078,6 +13102,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         amount={treatmentAmountNow}
                         discount={treatmentDiscount}
                         note={treatmentIsPartialSessions && treatmentRemainingSessions > 0 ? `${treatmentRemainingSessions} sessions` : ""}
+                        // Clinic visits date the balance on the Collect Payment popup behind
+                        // this one. Cheque re-prices the amount to the sessions' rate, so its
+                        // balance can differ from that popup's and keeps the field here.
+                        showDate={!chennaiCollect || mode === "cheque"}
                         leading={treatmentIsPartialSessions ? (
                           <>Covers <span className="font-semibold">{treatmentSessionsNow} of {treatmentFeeTotalSessions}</span> sessions. </>
                         ) : null}
