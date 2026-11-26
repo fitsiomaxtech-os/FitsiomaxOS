@@ -1,11 +1,11 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar } from "lucide-react";
+import { Plus, Search, Settings as Cog, Phone, FileText, CheckCircle2, X, Pencil, PhoneOff, Clock, Bell, Trash2, Lock, Users, CalendarCheck, UserRound, ChevronDown, ChevronRight, RefreshCw, UserPlus, BarChart3, CalendarDays, IdCard, ArrowLeftRight, Star, AlertCircle, ArrowDown, ArrowUp, ArrowRight, ChevronLeft, Menu, LayoutGrid, UserX, CalendarClock, Ban, Stethoscope, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  getLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
+  getLeads, getPreSalesViewLeads, createManualLead, stagesList, updateLead, rnrAttempt, scheduleFollowUp, rescheduleFollowUp, scheduleAppointment, getBranches, leadActivity, setLeadFlags,
   getLeadDeleteEnabled, preSalesPreBook,
   getDashboardOverview, getLeadAppointmentCard, uploadAppointmentPdf, publicAppointmentPdfUrl,
 } from "@/lib/api";
@@ -784,8 +784,9 @@ const LeadSourceSelects = ({ source, onSource, platform, onPlatform, sources, te
 );
 
 /** The Source dropdown's list: every source the leads carry, Meta first, then A-Z. */
-const leadSourceOptions = (leads) => [...new Set(leads.map(leadSource).filter(Boolean))]
+const sortLeadSources = (list) => [...new Set(list.filter(Boolean))]
   .sort((a, b) => (a === META ? -1 : b === META ? 1 : a.localeCompare(b)));
+const leadSourceOptions = (leads) => sortLeadSources(leads.map(leadSource));
 
 /**
  * A row of pills acting as one segmented control — the date presets on the Analytics pane
@@ -1186,6 +1187,28 @@ const StageViewBranchSelect = ({ value, onChange, branches, testid }) => (
     testid={testid}
   />
 );
+// The Pre Sales View reads its leads a page at a time (getPreSalesViewLeads): this many
+// first, then VIEW_NEXT_PAGE more on each Explore.
+const VIEW_FIRST_PAGE = 75;
+const VIEW_NEXT_PAGE = 50;
+// [ Explore -> ] under the list: the next 50 leads. The arrow hops right on a beat (the
+// summary cards' nudge-right), held still under reduced motion; a spinner while it loads.
+const ExploreLeadsButton = ({ onClick, busy, disabled, testid }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={busy || disabled}
+    title={`Load ${VIEW_NEXT_PAGE} more leads`}
+    aria-label="Explore leads"
+    className="inline-flex h-9 items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-wait disabled:opacity-70"
+    data-testid={testid}
+  >
+    Explore
+    {busy
+      ? <RefreshCw className="h-4 w-4 animate-spin text-sky-600" />
+      : <ArrowRight className="h-4 w-4 animate-nudge-right text-sky-600 motion-reduce:animate-none" />}
+  </button>
+);
 
 /**
  * The Pre-Sales pipeline.
@@ -1343,6 +1366,72 @@ export const PreSalesCRM = ({
   // Sales master views keep it - they are the desks that actually move a lead along.
   const canMoveStage = role !== "marketing_head";
 
+  // The Pre Sales View (stageView) reads a page at a time rather than the whole book: the
+  // server filters, sorts and counts, and sends the first VIEW_FIRST_PAGE leads, then
+  // VIEW_NEXT_PAGE more on each Explore. `viewPage` holds what came with the last page --
+  // how many match (total), the stage cards' counts, and the Source dropdown's list.
+  // Every other board still reads the whole book through getLeads below.
+  const [viewPage, setViewPage] = useState({ total: 0, counts: null, sources: [] });
+  const [exploring, setExploring] = useState(false);
+  // The search as sent to the server, a beat behind the box so a typed name is one read,
+  // not one per letter. The loaded rows narrow at once on the box itself (`filtered`).
+  const [viewSearch, setViewSearch] = useState("");
+  useEffect(() => {
+    if (!stageView) return undefined;
+    const t = setTimeout(() => setViewSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search, stageView]);
+  const viewParams = useMemo(() => ({
+    stage: stageFilter === "All" ? undefined : stageFilter,
+    branch_id: sourceFilter || undefined,
+    date_from: dateFilter?.from ? dateFilter.from.toISOString() : undefined,
+    date_to: dateFilter?.to ? dateFilter.to.toISOString() : undefined,
+    q: viewSearch ? viewSearch.toLowerCase() : undefined,
+    sort: sortOrder,
+    mark: markFilter || undefined,
+    source: leadSourcePick || undefined,
+    platform: leadSourcePick === META && platformPick ? platformPick : undefined,
+  }), [stageFilter, sourceFilter, dateFilter, viewSearch, sortOrder, markFilter, leadSourcePick, platformPick]);
+  // Read through refs so load() keeps one identity: it is handed to a dozen dialogs.
+  const viewParamsRef = useRef(viewParams);
+  viewParamsRef.current = viewParams;
+  const loadedCountRef = useRef(0);
+  loadedCountRef.current = leads.length;
+  // Only the newest read lands; an answer to a filter since changed is dropped.
+  const viewSeq = useRef(0);
+  // One page. append: Explore's next page, onto the rows already shown. Otherwise the list
+  // is replaced -- from the top, as deep as `limit` reaches.
+  const fetchViewPage = useCallback(async ({ append = false, skip = 0, limit = VIEW_FIRST_PAGE } = {}) => {
+    const seq = ++viewSeq.current;
+    if (append) setExploring(true); else setLoading(true);
+    try {
+      const page = await getPreSalesViewLeads({ ...viewParamsRef.current, skip, limit });
+      if (seq !== viewSeq.current) return;
+      const rows = Array.isArray(page?.leads) ? page.leads : [];
+      setLeads((prev) => {
+        if (!append) return rows;
+        const have = new Set(prev.map((l) => l.id));
+        return [...prev, ...rows.filter((l) => !have.has(l.id))];
+      });
+      setViewPage({ total: Number(page?.total) || 0, counts: page?.counts || {}, sources: Array.isArray(page?.sources) ? page.sources : [] });
+      setEditing((prev) => prev ? (rows.find((l) => l.id === prev.id) || prev) : prev);
+    } catch (e) {
+      if (seq === viewSeq.current) toast.error("Failed to load");
+    } finally {
+      if (seq === viewSeq.current) { setLoading(false); setExploring(false); }
+    }
+  }, []);
+  const exploreLeads = () => fetchViewPage({ append: true, skip: leads.length, limit: VIEW_NEXT_PAGE });
+  // A filter changed: back to the first page under it. Skips the first run -- load() on
+  // mount already asks for that page.
+  const viewKey = stageView ? JSON.stringify(viewParams) : "";
+  const viewKeySeen = useRef(viewKey);
+  useEffect(() => {
+    if (!stageView || viewKeySeen.current === viewKey) return;
+    viewKeySeen.current = viewKey;
+    fetchViewPage();
+  }, [stageView, viewKey, fetchViewPage]);
+
   const load = useCallback(async () => {
     setLoading(true);
     // Read again on every refresh, so a switch flipped in Developer Access shows here on the
@@ -1353,6 +1442,12 @@ export const PreSalesCRM = ({
     stagesList("consultation")
       .then((rows) => { const s = rows.find((x) => x.name === CONSULTATION_VISIT_STAGE); if (s?.color) setConsultVisitHex(s.color); })
       .catch(() => {});
+    if (stageView) {
+      // A refresh (or a save in a dialog) keeps as many rows as Explore had opened.
+      stagesList("pre_sales").then(setStages).catch(() => {});
+      await fetchViewPage({ limit: Math.max(VIEW_FIRST_PAGE, loadedCountRef.current) });
+      return;
+    }
     try {
       // Scoped to the branch when this board is pinned to one. The API already scopes a
       // Branch Admin to their own branch, but a Super Admin drilled into a branch is not
@@ -1382,7 +1477,7 @@ export const PreSalesCRM = ({
       setEditing((prev) => prev ? (ldList.find((l) => l.id === prev.id) || prev) : prev);
     } catch (e) { toast.error("Failed to load"); }
     setLoading(false);
-  }, [branchControlled, branchId, isSuperAdminMasterView, stageView]);
+  }, [branchControlled, branchId, isSuperAdminMasterView, stageView, fetchViewPage]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { getBranches().then(setBranches).catch(() => {}); }, []);
@@ -1543,15 +1638,24 @@ export const PreSalesCRM = ({
     }
     return rows;
   }, [leads, sourceFilter, modeFilter, modeBranchIds, dateFilter, showHandledByFilter, handledByFilter, assignedUserId, markFilter, leadSourcePick, platformPick]);
-  const sourceOptions = useMemo(() => leadSourceOptions(leads), [leads]);
+  // The Pre Sales View holds a page of the book, not all of it, so its Source list and its
+  // stage counts are the server's, read off the whole book with every page.
+  const sourceOptions = useMemo(() => (
+    stageView ? sortLeadSources(viewPage.sources || []) : leadSourceOptions(leads)
+  ), [stageView, viewPage.sources, leads]);
 
   const stageCounts = useMemo(() => {
+    if (stageView) {
+      const map = { All: 0 };
+      stages.forEach((s) => { map[s.name] = 0; });
+      return { ...map, ...(viewPage.counts || {}) };
+    }
     const map = { All: dateSourceFiltered.length };
     stages.forEach((s) => { map[s.name] = 0; });
     dateSourceFiltered.forEach((l) => { if (map[l.stage] != null) map[l.stage] += 1; });
     map[CONSULTATION_VISIT_STAGE] = dateSourceFiltered.filter(isConsultationVisit).length;
     return map;
-  }, [dateSourceFiltered, stages]);
+  }, [stageView, viewPage.counts, dateSourceFiltered, stages]);
 
   // The summary cards' list: the live stages, then Consultation Visit after Lost. Only the
   // card rows read this -- a lead's chip and the stage pills still go by `stages`.
@@ -1674,7 +1778,10 @@ export const PreSalesCRM = ({
   // Rendering thousands of rows at once is fine on desktop but chokes mobile
   // devices, so re-page back to 50 whenever the filtered set changes.
   useEffect(() => { setVisibleCount(50); }, [stageFilter, sourceFilter, modeFilter, search, dateFilter, handledByFilter, markFilter, sortOrder, leadSourcePick, platformPick]);
-  const visibleLeads = filtered.slice(0, visibleCount);
+  // The Pre Sales View is already a page; it shows every row it has read, and Explore
+  // reads more while the server holds more than that.
+  const visibleLeads = stageView ? filtered : filtered.slice(0, visibleCount);
+  const canExplore = stageView && leads.length < viewPage.total;
 
   // The desk table's columns and each one's share of the row. table-fixed divides the row
   // by the stated widths, so they have to add up to the whole however many of the optional
@@ -2269,7 +2376,11 @@ export const PreSalesCRM = ({
             </table>
             )}
           </div>
-          {filtered.length > visibleCount && (
+          {canExplore ? (
+            <div className="flex items-center justify-center border-t border-slate-100 p-3">
+              <ExploreLeadsButton onClick={exploreLeads} busy={exploring} disabled={loading} testid="presales-explore" />
+            </div>
+          ) : !stageView && filtered.length > visibleCount && (
             <div className="flex items-center justify-center border-t border-slate-100 p-3">
               <Button variant="outline" onClick={() => setVisibleCount((c) => c + 50)} data-testid="presales-load-more">
                 Load More ({filtered.length - visibleCount} remaining)
@@ -2970,7 +3081,11 @@ export const PreSalesCRM = ({
             })}
           </div>
 
-          {filtered.length > visibleCount && (
+          {canExplore ? (
+            <div className="flex items-center justify-center pt-1">
+              <ExploreLeadsButton onClick={exploreLeads} busy={exploring} disabled={loading} testid="presales-mobile-explore" />
+            </div>
+          ) : !stageView && filtered.length > visibleCount && (
             <div className="flex items-center justify-center pt-1">
               <Button variant="outline" onClick={() => setVisibleCount((c) => c + 50)} data-testid="presales-mobile-load-more">
                 Load More ({filtered.length - visibleCount} remaining)

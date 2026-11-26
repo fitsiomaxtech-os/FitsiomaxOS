@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, Dict
 from pydantic import BaseModel
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+import re
 import uuid
 
 from database import v3_col
@@ -37,6 +38,23 @@ def _refuse_if_lost(lead: Optional[dict]) -> None:
         raise HTTPException(status_code=409, detail="This lead is Lost — its stage is locked")
 
 
+def _scope_to_branch(query: Dict[str, object], user: V3UserOut, branch_id: Optional[str]) -> None:
+    """The branch a leads read is held to: the caller's own, or the one they asked for.
+
+    A Pre-Sales user only gets branch-scoped once a branch is actually assigned to
+    them (Super Admin > Roles & Credentials) — one left unassigned still sees every
+    branch's leads, same as before.
+    Off the predicates for the clinical two, not the literals: the consultation desk
+    moved off `head_physio` onto `consultant`, and `online_physio` was never listed — so
+    both fell through this branch filter and were shown every branch's leads. pre_sales
+    stays an exact match; Sales Head is deliberately org-wide and must not be scoped.
+    """
+    if (is_branch_admin_role(user.role) or is_head_physio_role(user.role) or is_physio_role(user.role) or user.role == "pre_sales") and user.branch_id:
+        query["branch_id"] = user.branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+
+
 @router.get("/leads")
 async def v3_get_leads(
     stage: Optional[str] = None,
@@ -52,17 +70,7 @@ async def v3_get_leads(
     if source_tab:
         query["source_tab"] = source_tab
 
-    # A Pre-Sales user only gets branch-scoped once a branch is actually assigned to
-    # them (Super Admin > Roles & Credentials) — one left unassigned still sees every
-    # branch's leads, same as before.
-    # Off the predicates for the clinical two, not the literals: the consultation desk
-    # moved off `head_physio` onto `consultant`, and `online_physio` was never listed — so
-    # both fell through this branch filter and were shown every branch's leads. pre_sales
-    # stays an exact match; Sales Head is deliberately org-wide and must not be scoped.
-    if (is_branch_admin_role(user.role) or is_head_physio_role(user.role) or is_physio_role(user.role) or user.role == "pre_sales") and user.branch_id:
-        query["branch_id"] = user.branch_id
-    elif branch_id:
-        query["branch_id"] = branch_id
+    _scope_to_branch(query, user, branch_id)
 
     if start_date or end_date:
         created_query: Dict[str, str] = {}
@@ -87,6 +95,156 @@ async def v3_get_leads(
         V3LeadOut(**lead_as_read_by({**row, "lead_control": lead_control.control_for_lead(row, control_by_branch)}, user.role))
         for row in rows
     ]
+
+
+# --- The Business Development Executive's Pre Sales View, a page at a time ---------------
+#
+# GET /leads sends the whole book in one answer -- every lead, every field, validated row
+# by row -- and the Pre Sales View read it with All Branches picked, which is every branch's
+# book. The board only ever draws a screen of it. This reads just the fields the board
+# filters, sorts and counts on, does that here, and sends whole leads for one page alone:
+# the first 75, then 50 more each time the board's Explore asks. The stage cards' counts
+# come back with every page, so they still describe the whole filtered list.
+#
+# Each filter is the board's own (PreSalesCRM's dateSourceFiltered / filtered), reproduced
+# rule for rule, so a list read this way holds the same leads the full read narrowed to.
+
+_VIEW_FIELDS = {
+    "_id": 0, "id": 1, "stage": 1, "created_at": 1, "branch_id": 1, "name": 1, "phone": 1,
+    "email": 1, "source_type": 1, "source_tab": 1, "platform": 1, "is_vip": 1, "needs_attention": 1,
+}
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_FRACTION = re.compile(r"\.(\d+)")
+
+
+def _stamp_ms(value) -> Optional[int]:
+    """A stored timestamp as epoch milliseconds, read the way the browser's Date reads it.
+
+    None for anything unreadable (the board drops those once a date range is picked). A
+    stamp with no offset is the clinic's wall clock, as it is to a browser in the clinic;
+    a bare date is midnight UTC, as it is to Date.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = text.replace("Z", "+00:00").replace("z", "+00:00")
+    # Any number of fractional digits, cut or padded to the six fromisoformat takes.
+    text = _FRACTION.sub(lambda m: "." + (m.group(1) + "000000")[:6], text, count=1)
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = (dt - CLINIC_UTC_OFFSET).replace(tzinfo=timezone.utc) if "T" in text or " " in text else dt.replace(tzinfo=timezone.utc)
+    ms = (dt - _EPOCH) // timedelta(milliseconds=1)
+    return ms or None
+
+
+def _view_source(row: dict) -> str:
+    """lib/leadSource.js's leadSource: "Meta" for a Meta lead, else source_tab / source_type."""
+    if str(row.get("source_type") or "").strip().lower() == "meta":
+        return "Meta"
+    return str(row.get("source_tab") or row.get("source_type") or "").strip()
+
+
+def _view_platform(row: dict) -> str:
+    """lib/leadSource.js's leadPlatform."""
+    if str(row.get("source_type") or "").strip().lower() != "meta":
+        return ""
+    return str(row.get("platform") or "").strip()
+
+
+@router.get("/leads/pre-sales-view")
+async def v3_pre_sales_view_leads(
+    branch_id: Optional[str] = None,
+    stage: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    q: Optional[str] = None,
+    sort: str = "newest",
+    mark: Optional[str] = None,
+    source: Optional[str] = None,
+    platform: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 75,
+    user: V3UserOut = Depends(v3_current_user),
+):
+    """One page of the Pre Sales desk's leads, with the counts the stage cards show.
+
+    `date_from` / `date_to` are instants (the browser's toISOString), both ends inclusive,
+    on created_at. `stage` empty is All Stages. Returns {leads, total, counts, sources}:
+    total is how many match with the stage applied, counts is per stage without it (and
+    All), sources is every Source on the desk's book, for the Source dropdown.
+    """
+    skip = max(0, skip)
+    limit = min(max(1, limit), 2000)
+
+    query: Dict[str, object] = {}
+    _scope_to_branch(query, user, None)
+    # Decided before the picked branch is added, as GET /leads with no branch_id decides it:
+    # the board used to read every branch and narrow afterwards.
+    if not query.get("branch_id"):
+        query = without_past_moves(query)
+    picked_branch = str(branch_id or "")
+    if picked_branch and "branch_id" not in query:
+        query["branch_id"] = picked_branch
+
+    rows = await v3_col("leads").find(query, _VIEW_FIELDS).to_list(20000)
+    control_by_branch = await lead_control.branch_control_map()
+    # The Pre Sales desk's half of the book, as load() keeps it: anything not handed to a branch.
+    rows = [r for r in rows if lead_control.control_for_lead(r, control_by_branch) != lead_control.BRANCH_ADMIN]
+
+    sources = sorted({s for s in (_view_source(r) for r in rows) if s})
+
+    if picked_branch:
+        rows = [r for r in rows if str(r.get("branch_id") or "") == picked_branch]
+    if source:
+        rows = [r for r in rows if _view_source(r) == source]
+        if source == "Meta" and platform:
+            rows = [r for r in rows if _view_platform(r) == platform]
+    if mark == "vip":
+        rows = [r for r in rows if r.get("is_vip")]
+    elif mark == "attention":
+        rows = [r for r in rows if r.get("needs_attention")]
+    lo, hi = _stamp_ms(date_from), _stamp_ms(date_to)
+    if lo or hi:
+        kept = []
+        for r in rows:
+            ts = _stamp_ms(r.get("created_at"))
+            if not ts or (lo and ts < lo) or (hi and ts > hi):
+                continue
+            kept.append(r)
+        rows = kept
+
+    counts: Dict[str, int] = {"All": len(rows)}
+    for r in rows:
+        name = r.get("stage")
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+
+    if stage:
+        rows = [r for r in rows if r.get("stage") == stage]
+    if q:
+        needle = q.lower()
+        rows = [
+            r for r in rows
+            if needle in str(r.get("name") or "").lower()
+            or needle in str(r.get("phone") or "")
+            or needle in str(r.get("email") or "").lower()
+        ]
+
+    rows.sort(key=lambda r: (str(r.get("created_at") or ""), str(r.get("id") or "")), reverse=(sort != "oldest"))
+    page_ids = [r["id"] for r in rows[skip:skip + limit] if r.get("id")]
+
+    leads = []
+    if page_ids:
+        full = await v3_col("leads").find({"id": {"$in": page_ids}}, {"_id": 0}).to_list(len(page_ids))
+        by_id = {row["id"]: row for row in full}
+        leads = [
+            V3LeadOut(**lead_as_read_by({**by_id[i], "lead_control": lead_control.control_for_lead(by_id[i], control_by_branch)}, user.role))
+            for i in page_ids if i in by_id
+        ]
+    return {"leads": leads, "total": len(rows), "counts": counts, "sources": sources}
 
 
 def _manual_created_at(day: Optional[str]) -> str:

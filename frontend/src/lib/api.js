@@ -168,6 +168,9 @@ export const addDoctorSlots = async (doctorId, payload) => (await api.post(`/doc
 export const getAvailableDoctors = async (params) => (await api.get("/doctors/available", { params })).data;
 
 export const getLeads = async (params) => (await api.get("/leads", { params })).data;
+// The Business Development Executive's Pre Sales View, a page at a time: { leads, total,
+// counts, sources }. Filtered, sorted and counted on the server; see v3_pre_sales_view_leads.
+export const getPreSalesViewLeads = async (params) => (await api.get("/leads/pre-sales-view", { params })).data;
 export const createManualLead = async (payload) => (await api.post("/leads/manual", payload)).data;
 export const updateLead = async (leadId, payload) => (await api.put(`/leads/${leadId}`, payload)).data;
 export const deleteLead = async (leadId) => (await api.delete(`/leads/${leadId}`)).data;
