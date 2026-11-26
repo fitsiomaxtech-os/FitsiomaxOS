@@ -2157,23 +2157,23 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-details-name"
-        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-[4px] bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] [&_button]:rounded-[4px]"
       >
-        {/* The name band, in the same blue as the other popups. */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sky-700 bg-[#0284C7] px-5 py-3.5">
-          <div className="min-w-0">
-            <h3 id="payment-details-name" className="truncate text-base font-semibold text-white">
-              {head.client_name || "Unknown"}
-              {head.old_client && <OldClientTag />}
-            </h3>
-            <p className="mt-0.5 truncate text-xs font-medium text-sky-100">{[displayPhone(head.phone), head.branch].filter(Boolean).join(" · ") || "—"}</p>
-          </div>
+        {/* One row, one size, on grey: whose payments, then the popup's name just before
+            the X. The client line gives way first; a phone drops the popup's name. */}
+        <div className="flex shrink-0 items-center gap-4 bg-slate-500 px-5 py-3 text-[12px] font-semibold uppercase leading-5 text-white [font-family:Inter,sans-serif]" data-testid="payment-details-header">
+          <h3 id="payment-details-name" className="min-w-0 flex-1 truncate">
+            {head.client_name || "Unknown"}
+            {head.old_client && <OldClientTag />}
+            {[displayPhone(head.phone), head.branch].filter(Boolean).map((x) => ` · ${x}`).join("")}
+          </h3>
+          <p className="hidden shrink-0 whitespace-nowrap sm:block">Payment Details</p>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close"
-            className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/80 transition hover:bg-white/15 hover:text-white"
+            className="shrink-0 text-white hover:opacity-80"
             data-testid="payment-details-close"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
         {/* The total and its count on one line with Send all / Undo all, so the whole
@@ -2204,7 +2204,7 @@ const PaymentDetails = ({ head, payments, verify, busy, onUndoPayment, onReceipt
             const canMove = verify && stage !== "approved";
             const canUndoPayment = onUndoPayment && stage === "collected";
             return (
-              <div key={t.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3" data-testid={`payment-details-row-${t.id}`}>
+              <div key={t.id} className="rounded-[4px] border border-slate-200 bg-white px-4 py-3" data-testid={`payment-details-row-${t.id}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800">
