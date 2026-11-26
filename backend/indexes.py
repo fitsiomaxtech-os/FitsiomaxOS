@@ -97,6 +97,11 @@ CORE_INDEXES = [
     ("appointments", [("id", 1)], "id"),
     ("appointments", [("branch_id", 1), ("slot_time", 1)], "branch_slot"),
     ("appointments", [("lead_id", 1)], "lead_id"),
+    # The booking popups' Consultant availability (available-experts / available-dates):
+    # every live appointment on a day or a month, across all branches — a Consultant's
+    # calendar is shared by every branch they work. Status equality, then the slot_time
+    # prefix as a range on the same key.
+    ("appointments", [("status", 1), ("slot_time", 1)], "status_slot"),
     ("lead_activity", [("lead_id", 1), ("created_at", -1)], "lead_recent"),
     # A patient's documents, and the one question the Consultation Fee is gated on: the
     # consultations board asks "which of these leads has a prescription" once per load, and

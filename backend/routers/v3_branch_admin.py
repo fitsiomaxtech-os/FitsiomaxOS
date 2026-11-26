@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Optional
 from datetime import date, datetime, timedelta, timezone
 from calendar import monthrange
+import asyncio
 import logging
 import os
 import re
@@ -1638,38 +1639,56 @@ async def v3_available_experts(
     """
     if not date:
         raise HTTPException(status_code=400, detail="date is required")
+    # The reads below do not depend on one another, so they go out together rather than
+    # one round trip after another — the booking popups sat on "Checking availability..."
+    # for the sum of them.
+    #
+    # Every consultant record, then narrowed to the ones posted here. Two steps because the
+    # answer is not on the record — it is the branch list on the login behind it, and the
+    # record itself stays branchless so one person keeps one calendar. See
+    # consultants_serving_branch in deps.py.
+    #
+    # Availability is decided per slot, not per day: an expert with a 9:30 booking is
+    # still free at 10:00. So a same-day booking no longer hides them — only being
+    # genuinely full does (every slot they published for this date is taken). An expert
+    # who published nothing stays listed, so the booking popup can say so and point at
+    # the Consultant Calendar instead of silently offering no one.
+    #
+    # Reviews sent to a Consultant hold their hour too. The review being reassigned
+    # (review_id) is left out, so the slot it already sits in can be picked again.
+    #
+    # Slot length is this branch's Consultation Duration, fetched fresh on every open. Off
+    # in Developer Access, a booked time blocks nobody: every consultant stays on offer at
+    # every time, and the popup lists the bookings without refusing a clash.
+    leave_branch, branch_experts, booked_rows, review_rows, slot_minutes, duration_rule = await asyncio.gather(
+        v3_col("branches").find_one({"id": branch_id}, {"_id": 0}),
+        v3_col("doctors").find(
+            active_doctor_query({"profile_type": "head_physio"}),
+            {"_id": 0, "auto_days": 0, "days_off": 0},
+        ).to_list(500),
+        v3_col("appointments").find(
+            {"status": "new_appointment", "slot_time": {"$regex": f"^{date}T"}},
+            {"_id": 0, "doctor_id": 1, "slot_time": 1, "lead_id": 1, "lead_name": 1, "duration": 1},
+        ).to_list(2000),
+        review_bookings(date, review_id),
+        consultation_slot_minutes(branch_id),
+        duration_rule_enabled(),
+    )
     # Nobody is offered on a day this branch is on leave (Monthly Calendar).
-    leave_branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0})
     if leave_branch and is_leave(leave_branch, date):
         return {
             "date": date, "time": time, "slot_minutes": None, "branch_id": branch_id,
             "total_branch_experts": 0, "available_count": 0, "busy_count": 0, "experts": [],
             "branch_leave": True,
         }
-    # Every consultant record, then narrowed to the ones posted here. Two steps because the
-    # answer is not on the record — it is the branch list on the login behind it, and the
-    # record itself stays branchless so one person keeps one calendar. See
-    # consultants_serving_branch in deps.py.
-    branch_experts = await v3_col("doctors").find(active_doctor_query({"profile_type": "head_physio"}), {"_id": 0}).to_list(500)
     branch_experts = await consultants_serving_branch(branch_experts, branch_id)
 
-    # Availability is decided per slot, not per day: an expert with a 9:30 booking is
-    # still free at 10:00. So a same-day booking no longer hides them — only being
-    # genuinely full does (every slot they published for this date is taken). An expert
-    # who published nothing stays listed, so the booking popup can say so and point at
-    # the Consultant Calendar instead of silently offering no one.
-    booked_rows = await v3_col("appointments").find(
-        {"status": "new_appointment", "slot_time": {"$regex": f"^{date}T"}},
-        {"_id": 0, "doctor_id": 1, "slot_time": 1, "lead_id": 1, "lead_name": 1, "duration": 1},
-    ).to_list(2000)
     # Who holds each taken slot and for how long, so the picker can name them and a
     # booking blocks every slot it runs across. lead_id rides along because the grid's
     # pencil moves a taken slot with a POST against the lead holding it.
     bookings_by_doc: Dict[str, list] = {}
     own_by_doc: Dict[str, dict] = {}
-    # Reviews sent to a Consultant hold their hour too. The review being reassigned
-    # (review_id) is left out, so the slot it already sits in can be picked again.
-    for r in await review_bookings(date, review_id):
+    for r in review_rows:
         bookings_by_doc.setdefault(r["doctor_id"], []).append(r)
     for r in booked_rows:
         # A slot this same lead already holds isn't "taken" as far as they're concerned —
@@ -1683,31 +1702,29 @@ async def v3_available_experts(
     # Each booked patient's own branch, for the Already Booked This Day list. Two lookups
     # for the whole day rather than one per row: leads -> branch_id -> branch_name.
     booked_lead_ids = {b.get("lead_id") for rows in bookings_by_doc.values() for b in rows if b.get("lead_id")}
-    lead_branch_ids: Dict[str, str] = {}
-    if booked_lead_ids:
+
+    async def _lead_branch_names() -> Dict[str, str]:
+        if not booked_lead_ids:
+            return {}
         lead_branch_ids = {
             l["id"]: l.get("branch_id") or ""
             async for l in v3_col("leads").find({"id": {"$in": list(booked_lead_ids)}}, {"_id": 0, "id": 1, "branch_id": 1})
         }
-    branch_name_by_id: Dict[str, str] = {}
-    if any(lead_branch_ids.values()):
+        wanted = list({v for v in lead_branch_ids.values() if v})
+        if not wanted:
+            return {}
         branch_name_by_id = {
             b["id"]: b.get("branch_name") or ""
-            async for b in v3_col("branches").find({"id": {"$in": list({v for v in lead_branch_ids.values() if v})}}, {"_id": 0, "id": 1, "branch_name": 1})
+            async for b in v3_col("branches").find({"id": {"$in": wanted}}, {"_id": 0, "id": 1, "branch_name": 1})
         }
-    for rows in bookings_by_doc.values():
-        for b in rows:
-            b["lead_branch"] = branch_name_by_id.get(lead_branch_ids.get(b.get("lead_id") or "", ""), "")
-
-    # Slot length is this branch's Consultation Duration, fetched fresh on every open.
-    slot_minutes = await consultation_slot_minutes(branch_id)
-    # Off in Developer Access, a booked time blocks nobody: every consultant stays on offer
-    # at every time, and the popup lists the bookings without refusing a clash.
-    duration_rule = await duration_rule_enabled()
+        return {lid: branch_name_by_id.get(bid, "") for lid, bid in lead_branch_ids.items()}
 
     # Faces for the picker's Consultant column, resolved once for the whole branch list
-    # rather than per row. See _expert_photos.
-    photo_by_expert = await _expert_photos(branch_experts)
+    # rather than per row (see _expert_photos) — alongside the branch names, not after.
+    lead_branch_name, photo_by_expert = await asyncio.gather(_lead_branch_names(), _expert_photos(branch_experts))
+    for rows in bookings_by_doc.values():
+        for b in rows:
+            b["lead_branch"] = lead_branch_name.get(b.get("lead_id") or "", "")
 
     available = []
     for d in branch_experts:
@@ -1724,7 +1741,12 @@ async def v3_available_experts(
         elif day["published_slot_count"] and not day["free_slots"]:
             continue  # fully booked for the day
         available.append({
-            **d,
+            # The record without its calendar. `slots` / `slot_details` are every hour the
+            # Consultant has open for the next two months and the last one — thousands of
+            # rows each — and the popups read only this date's, which free_slots,
+            # booked_slots and day_blocks below already carry. Shipped whole, they made the
+            # answer hundreds of KB per Consultant.
+            **{k: v for k, v in d.items() if k not in ("slots", "slot_details")},
             # The expert's own headshot where HR has one on file, "" where they do not --
             # the picker draws their initial in the same circle either way, so this never
             # has to be present for the row to render.
@@ -1773,21 +1795,31 @@ async def v3_available_dates(
     # does — the two are read together by the booking calendar, and a day lit up here that
     # the expert column then cannot fill is worse than the day simply not being offered.
     # user_id is projected because that is what the narrowing reads.
-    branch_experts = await v3_col("doctors").find(
-        active_doctor_query({"profile_type": "head_physio"}),
-        {"_id": 0, "id": 1, "slots": 1, "slot_details": 1, "user_id": 1, "profile_type": 1, "branch_id": 1},
-    ).to_list(500)
+    #
+    # Independent reads, sent together — see available-experts. Reviews sent to a
+    # Consultant take their hour as well; the day counts are cut at the same Consultation
+    # Duration available-experts uses, so a day's number here is the number of tiles its
+    # slot grid will draw.
+    branch_experts, booked_rows, review_rows, slot_minutes, duration_rule, branch = await asyncio.gather(
+        v3_col("doctors").find(
+            active_doctor_query({"profile_type": "head_physio"}),
+            {"_id": 0, "id": 1, "slots": 1, "slot_details": 1, "user_id": 1, "profile_type": 1, "branch_id": 1},
+        ).to_list(500),
+        v3_col("appointments").find(
+            {"status": "new_appointment", "slot_time": {"$regex": f"^{month}-"}},
+            {"_id": 0, "doctor_id": 1, "slot_time": 1, "lead_id": 1, "duration": 1},
+        ).to_list(5000),
+        review_bookings(month, review_id),
+        consultation_slot_minutes(branch_id),
+        duration_rule_enabled(),
+        v3_col("branches").find_one({"id": branch_id}, {"_id": 0}),
+    )
     branch_experts = await consultants_serving_branch(branch_experts, branch_id)
 
-    booked_rows = await v3_col("appointments").find(
-        {"status": "new_appointment", "slot_time": {"$regex": f"^{month}-"}},
-        {"_id": 0, "doctor_id": 1, "slot_time": 1, "lead_id": 1, "duration": 1},
-    ).to_list(5000)
     # This lead's own bookings don't count against it — the day it already sits on has to
     # stay reachable so the appointment can be seen and moved.
     bookings: Dict[tuple, list] = {}
-    # Reviews sent to a Consultant take their hour as well — see available-experts.
-    for r in await review_bookings(month, review_id):
+    for r in review_rows:
         bookings.setdefault((r["doctor_id"], r["slot_time"].split("T")[0]), []).append(r)
     for r in booked_rows:
         if lead_id and r.get("lead_id") == lead_id:
@@ -1795,26 +1827,28 @@ async def v3_available_dates(
         key = (r.get("doctor_id"), (r.get("slot_time") or "").split("T")[0])
         bookings.setdefault(key, []).append(r)
 
-    # Counted off the same cut as available-experts, so a day's number here is the number
-    # of tiles its slot grid will draw.
-    slot_minutes = await consultation_slot_minutes(branch_id)
-    duration_rule = await duration_rule_enabled()
     dates: Dict[str, int] = {}
     for d in branch_experts:
-        days = {
-            s.split("T")[0]
-            for s in (d.get("slots") or [])
-            if isinstance(s, str) and s.startswith(f"{month}-") and "T" in s
-        }
-        for day in days:
+        # The month's slots sorted into days once. Handed the whole record, every day's
+        # _consultant_day re-read all of the Consultant's ~90 days of slots to find its own,
+        # thirty times over for one month.
+        by_day: Dict[str, dict] = {}
+        for s in d.get("slots") or []:
+            if isinstance(s, str) and s.startswith(f"{month}-") and "T" in s:
+                by_day.setdefault(s.split("T")[0], {"slots": [], "slot_details": []})["slots"].append(s)
+        for x in d.get("slot_details") or []:
+            st = x.get("slot_time") if isinstance(x, dict) else None
+            part = by_day.get(st.split("T")[0]) if isinstance(st, str) else None
+            if part is not None:
+                part["slot_details"].append(x)
+        for day, part in by_day.items():
             free = len(_consultant_day(
-                d, day, bookings.get((d["id"], day), []), slot_minutes, blocking=duration_rule,
+                part, day, bookings.get((d["id"], day), []), slot_minutes, blocking=duration_rule,
             )["free_slots"])
             if free:
                 dates[day] = dates.get(day, 0) + free
     # A day this branch is on leave (Monthly Calendar) is not offered, even where a
     # Consultant shared with another branch still has hours published on it.
-    branch = await v3_col("branches").find_one({"id": branch_id}, {"_id": 0})
     if branch:
         dates = {day: n for day, n in dates.items() if not is_leave(branch, day)}
     return {"month": month, "branch_id": branch_id, "dates": dates}
