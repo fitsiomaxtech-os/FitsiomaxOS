@@ -330,6 +330,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
   // figure nobody recorded, and the book would disagree with the count under it from the
   // moment it was written.
   const unsavedCount = !!saved && Math.abs(totalCounted - (saved.total || 0)) >= 0.01;
+  const bookDiffers = !!saved && !book && Math.abs(totalCounted - totalExpected) >= 0.01;
 
   const signOff = async () => {
     if (unsavedCount) {
@@ -402,7 +403,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
         <Figure
           label="Yesterday's close"
           value={fmt(yesterday?.total || 0)}
-          sub={yesterday ? `Cash ${fmt(yesterday.cash_total)} · counted by ${yesterday.counted_by || "—"}` : "No count recorded for the day before"}
+          sub={yesterday ? `Cash ${fmt(yesterday.cash_total)} · counted by ${yesterday.counted_by || "—"}` : null}
           icon={Wallet}
           color="#475569"
           testid="closing-balance-yesterday"
@@ -439,10 +440,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
                 </span>
                 <Variance counted={counted[m.key]} expected={expected[m.key]} testid={`closing-balance-variance-${m.key}`} />
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">
-                Expected {fmt(expected[m.key])}
-                {m.key === "cash" ? " — today's cash, less what was paid out in cash" : " — today's takings, less what was refunded or paid by it"}
-              </p>
+              <p className="mt-1 text-[11px] text-slate-400">Expected {fmt(expected[m.key])}</p>
 
               {m.key === "cash" ? (
                 <div className="mt-3 space-y-2">
@@ -517,7 +515,6 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
                     <Input
                       value={m.key === "upi" ? upiId : cardRef}
                       onChange={(e) => (m.key === "upi" ? setUpiId : setCardRef)(e.target.value)}
-                      placeholder={m.key === "upi" ? "name@bank" : "Terminal batch / txn no."}
                       disabled={locked}
                       className="h-9 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                       data-testid={`closing-balance-ref-${m.key}`}
@@ -548,11 +545,10 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
             <Variance counted={totalCounted} expected={totalExpected} testid="closing-balance-variance-total" />
           </div>
           <label className="min-w-[12rem] flex-1">
-            <span className="mb-0.5 block text-[10px] font-medium text-slate-400">Note (what explains a difference)</span>
+            <span className="mb-0.5 block text-[10px] font-medium text-slate-400">Note</span>
             <Input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Banked Rs.10,000 at 6pm"
               disabled={locked}
               className="h-9 text-sm disabled:bg-slate-50 disabled:text-slate-500"
               data-testid="closing-balance-note"
@@ -568,13 +564,6 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
             {saving ? "Saving..." : saved ? "Update count" : "Record closing balance"}
           </Button>
         </div>
-        {/* Said plainly rather than left for a branch to find out by trying: this is a
-            record that can be corrected right up until the book on it is closed. */}
-        <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
-          {locked
-            ? "This day's book is closed, so the count is fixed. Undo the close below to count it again."
-            : "A count can be corrected by counting again — saving this day a second time replaces it and keeps who first counted it."}
-        </p>
       </div>
 
       {/* Close Book — the day signed off, immediately under the count it is signed on.
@@ -635,21 +624,18 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
             </p>
             {book.note ? <p className="text-[11px] italic text-slate-500">“{book.note}”</p> : null}
           </div>
-        ) : (
+        ) : (unsavedCount || bookDiffers || book) ? (
           <div className="mt-2 space-y-0.5">
-            {/* Said before it is pressed, because it is the one action on this screen that
-                cannot be undone by the person taking it. */}
-            <p className="text-[11px] text-slate-500" data-testid="closing-balance-book-hint">
-              {!saved
-                ? "Count this day first — a book cannot be signed off over a drawer nobody counted."
-                : unsavedCount
-                  ? "The count on screen has changed and not been saved. Update it, then close the book on what was recorded."
-                  : "Signing off records what was counted against what the day says it took, with your name and the time on it, and fixes the count until the close is undone."}
-            </p>
+            {/* Kept: it says why Close the book is greyed out. */}
+            {unsavedCount && (
+              <p className="text-[11px] text-slate-500" data-testid="closing-balance-book-hint">
+                The count on screen has changed and not been saved. Update it, then close the book on what was recorded.
+              </p>
+            )}
             {/* A book is closed on a difference as readily as on a match. A branch that
                 cannot sign off a short evening either stops closing its books or makes the
                 drawer say what the system wants, and the second is the worse failure. */}
-            {saved && !book && Math.abs(totalCounted - totalExpected) >= 0.01 && (
+            {bookDiffers && (
               <p className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700" data-testid="closing-balance-book-differs">
                 <AlertTriangle className="h-3 w-3" />
                 This day does not balance. It can still be closed — the difference is recorded with it.
@@ -662,7 +648,7 @@ const DayCount = ({ branchId, day, refreshKey, onBusy }) => {
               </p>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -1028,11 +1014,6 @@ const ClosingBalanceHistory = ({ branchId, start, end, refreshKey, onBusy, onOpe
           </tbody>
         </table>
       </div>
-
-      <p className="text-[11px] text-slate-400">
-        A range lists its evenings rather than adding them up: cash carries from one night into the next, so a month
-        of counts summed together would be the same drawer counted thirty times.
-      </p>
     </div>
   );
 };
