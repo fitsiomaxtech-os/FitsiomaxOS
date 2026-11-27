@@ -60,8 +60,10 @@ export const PrescriptionPdf = ({ lead, branch, actionsSlot }) => {
     tab.opener = null;
     printPrescription(tab, built.result.pages);
   };
+  // On a phone (under 640px) the five are icons only, in one row spread evenly across the
+  // footer; the names come back from sm up. Each keeps its name in title / aria-label.
   const actions = (
-    <div className={`flex flex-wrap gap-2 ${actionsSlot ? "mr-auto" : ""}`} data-testid="prescription-actions">
+    <div className={`flex w-full flex-nowrap gap-2 sm:w-auto sm:flex-wrap ${actionsSlot ? "sm:mr-auto" : ""}`} data-testid="prescription-actions">
       {[
         ["View PDF", Eye, view, "view"],
         ["Download", Download, () => downloadPdf(pdf, filename), "download"],
@@ -72,11 +74,11 @@ export const PrescriptionPdf = ({ lead, branch, actionsSlot }) => {
         // Icon and name in violet, 4px corners. The button itself does not change on hover;
         // only its icon does (grows on hover, dips on press).
         <Button key={id} type="button" size="sm" variant="outline"
-          className="group rounded-[4px] border-slate-200 bg-white px-2 text-[11px] text-[#8b5cf6] shadow-sm hover:bg-white hover:text-[#8b5cf6] sm:px-3 sm:text-xs"
+          className="group min-w-0 flex-1 rounded-[4px] border-slate-200 bg-white px-0 text-[11px] text-[#8b5cf6] shadow-sm hover:bg-white hover:text-[#8b5cf6] sm:flex-none sm:px-3 sm:text-xs"
           disabled={!ready} onClick={onClick}
           title={label} aria-label={label} data-testid={`prescription-${id}`}>
-          <Icon className="mr-1 h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-125 group-active:translate-y-0 group-active:scale-90" />
-          {label}
+          <Icon className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-125 group-active:translate-y-0 group-active:scale-90 sm:mr-1" />
+          <span className="hidden sm:inline">{label}</span>
         </Button>
       ))}
     </div>
