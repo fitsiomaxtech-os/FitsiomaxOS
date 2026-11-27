@@ -33,6 +33,9 @@ export const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, test
 
 // The ranges under the grid, one row of six; anything else is the toolbar's calendar.
 const PHONE_RANGE_KEYS = ["all", "today", "yesterday", "this_week", "this_month", "last_90"];
+// Branch Admin > Consultation's six: its own range row's (Tomorrow in, 90d out), so the
+// phone offers the same ranges as the tab does from sm up.
+export const PHONE_CONSULT_RANGE_KEYS = ["all", "yesterday", "today", "tomorrow", "this_week", "this_month"];
 const PHONE_RANGE_PILL = "h-10 w-full min-w-0 truncate rounded-md px-0.5 text-[11px] font-medium transition";
 const phoneRangeTone = (on) => (on ? "bg-sky-600 text-white" : "border border-slate-200 bg-white text-slate-600 active:bg-slate-50");
 
@@ -45,10 +48,11 @@ const phoneRangeTone = (on) => (on ? "bg-sky-600 text-white" : "border border-sl
  *    not lit while it is, so the lit button always names what the list is cut to.
  *  - onChange(next): the range pressed, null for All. Both boards clear their calendar
  *    there, so a range pressed replaces a picked date rather than overlapping it.
+ *  - keys: which six ranges, in order (PHONE_RANGE_KEYS unless given).
  */
-export const PhoneRangeRow = ({ value, calendarSet = false, onChange, testid }) => (
+export const PhoneRangeRow = ({ value, calendarSet = false, onChange, keys = PHONE_RANGE_KEYS, testid }) => (
   <div className="grid grid-cols-6 gap-1" data-testid={testid}>
-    {PHONE_RANGE_KEYS.map((key) => {
+    {keys.map((key) => {
       const p = QUICK_DATE_PRESETS.find((x) => x.key === key);
       const on = key === "all" ? !value && !calendarSet : value?.key === key;
       return (

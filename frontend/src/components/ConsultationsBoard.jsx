@@ -20,6 +20,7 @@ import { ProgressionTab } from "@/components/ProgressionTab";
 import { LeadMarks, OnlineTag, PreBookTag, RescheduledTag, TransferredTag } from "@/components/ui/lead-marks";
 import { advanceForLabel, preBookConsultOwed, preBookOf, preBookWhen } from "@/lib/preBook";
 import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
+import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import {
   getConsultationsBoard, moveBranchStage, moveConsultationStage, listStoreItems, collectRehabFee,
   collectPackagePayment, collectTreatmentFee, applyPreBookConsultation, applyPreBookAdvance, setSessionPackageAmount, setSessionPackageTotal, markInstallmentPaid, addExtraDue, savePhysioDiagnosis, unlockPhysioDiagnosis,
@@ -3001,7 +3002,7 @@ export const ConsultationRescheduleDialog = ({ lead, branchId, initialDraft, onC
   );
 };
 
-const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, squareTable = false, compactTable = false, branchColumn = false, consultantBranchColumn = false, exportRef }) => {
+const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief = false, externalStageFilter, showOwnStageBar = true, autoOpenLeadId, autoOpenFee = null, onAutoOpened, popupOnly = false, onPopupClosed, externalDate, hideDateFilter = false, onCountChange, onRowsChange, externalSearch, externalDateFilter, externalMarkFilter, reloadToken, mobileCards = false, phoneLeadCards = false, onlineArm = false, dateScope = "appointment", externalSortOrder = "oldest", homeVisitScope = null, rowArrow = false, oneLineRows = false, squareTable = false, compactTable = false, branchColumn = false, consultantBranchColumn = false, exportRef }) => {
   // Whether the board this is mounted on runs an arm with no room in it — one of the two
   // online admins. It gates one thing: whether a physio with no video room recorded is
   // worth remarking on when they are assigned. Passed in rather than worked out here for
@@ -7875,9 +7876,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
       {showMobileCards && (
         // Branch Admin's rows sit in one box with a line between each (see ui/lead-row-card);
         // Head Physio's stacked cards, and the empty note, keep their own space.
-        <div className={`${viewerRole === "branch_admin" && filtered.length > 0 ? LEAD_ROW_LIST : "space-y-2"} sm:hidden`} data-testid="cons-mobile-cards">
+        // phoneLeadCards: Branch Admin > Consultation draws Branch Leads' phone cards
+        // instead (ui/phone-lead-card), separate white cards with a gap between.
+        <div className={`${phoneLeadCards ? PHONE_LEAD_LIST : viewerRole === "branch_admin" && filtered.length > 0 ? LEAD_ROW_LIST : "space-y-2"} sm:hidden`} data-testid="cons-mobile-cards">
           {filtered.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-10 text-center text-sm text-slate-400">
+            <p className={`border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400 ${phoneLeadCards ? "rounded-xl px-4" : "rounded-lg px-3"}`}>
               {/* Head Physio browses this a day at a time; Branch Admin arrives filtered
                   by stage, where "on this day" would be describing a filter it isn't using.
                   A fee tab that has emptied says so first either way: on the phone as on the
@@ -7895,9 +7898,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             const hex = stageColor(rowStage);
             const wa = waNumber(l.phone);
             const openCard = () => { if (selectMode) toggleSelectOne(l.id); else { setSelectedLead(l); setDetailTab("overview"); } };
-            // Branch Admin's Consultation and House Visit tabs draw the same one-row card as
-            // its Branch Leads list (see ui/lead-row-card), so the three read as one list
-            // split three ways. Head Physio, the other board with phone cards, keeps the
+            // Branch Admin > Consultation (asked 2026-11-27): Branch Leads' phone card
+            // exactly -- initials, the name with the phone under it, the stage in the
+            // orange box, a chevron. Nothing else on the row; the rest is in the popup.
+            if (phoneLeadCards) {
+              return (
+                <PhoneLeadCard
+                  key={l.id}
+                  id={l.id}
+                  name={l.name}
+                  subLine={[displayPhone(l.phone)]}
+                  stage={l[stageField] || "—"}
+                  onOpen={openCard}
+                  testid="cons-card"
+                />
+              );
+            }
+            // Branch Admin's House Visit tab draws the one-row inbox card (see
+            // ui/lead-row-card). Head Physio, the other board with phone cards, keeps the
             // stacked card below.
             if (viewerRole === "branch_admin") {
               const picked = selectMode && selectedIds.has(l.id);

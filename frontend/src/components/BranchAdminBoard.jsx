@@ -70,7 +70,7 @@ import { BulkDeleteLeadsModal } from "@/components/branch/BulkDeleteLeadsModal";
 import { PRE_BOOK_PLANS, advanceForLabel, planDate, preBookConsultOwed, preBookFixedByPreSales, preBookOf, preBookPaid, preBookWhen, rupees, todayIso } from "@/lib/preBook";
 import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import { NotifyCard } from "@/components/ui/notify-card";
-import { PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
+import { PHONE_CONSULT_RANGE_KEYS, PhoneRangeRow, PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import {
   scheduleBranchAppointment,
   getBranches,
@@ -1464,16 +1464,18 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const onHomeVisitTab = activeView === "branch_home_visit";
   const onConsultationTab = activeView === "branch_consultation" || onHomeVisitTab;
 
-  // On a phone the Consultation tab opens on its stages as a stack of cards, the Review
+  // On a phone the House Visit tab opens on its stages as a stack of cards, the Review
   // tab's (see ui/notify-card), and tapping one opens that stage's list with a back bar
-  // above it. Nine stages as full-width rows fill the screen, so the list goes on a screen
-  // of its own rather than under them. House Visit wears the same stack and back bar, since
-  // it is the same board over the same stages; every width from sm keeps the strip.
+  // above it, on a screen of its own; every width from sm keeps the strip.
   //
   // Branch Leads below sm wears Pre Sales' phone grid instead (see ui/phone-stage-grid):
   // the stages three across as summary tiles, the ranges under them, and the open stage's
   // list right below on the same screen. A tap on a tile narrows that list, and tapping
   // the open tile again goes back to All Stages. From sm up the strip is still there.
+  //
+  // The Consultation tab below sm wears the same grid (asked 2026-11-27), minus All
+  // Stages -- the tab never sits on no stage (see selectStage), so tapping the open tile
+  // again leaves it open -- with its own six ranges (Tomorrow in, 90d out).
   //
   // Holds the tab the list is open on rather than a bare flag, so that leaving the tab
   // closes it -- coming back to Consultation lands on the cards again -- while a lead popup
@@ -1508,12 +1510,14 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
     phoneStageList !== null || !!selectedLead || profileOpen || showMoreMenu || !!timeMgmtFor || showCreateLead || activeView === CONSULT_FORMS_VIEW,
     phoneBack,
   );
-  // Both tabs hide the strip on a phone. Only the Consultation tabs open a stage's list on
-  // a screen of its own with the back bar; Branch Leads' grid keeps its list underneath.
+  // All three tabs hide the strip on a phone. Only House Visit opens a stage's list on a
+  // screen of its own with the back bar; the Branch Leads and Consultation grids keep
+  // their list underneath.
   const onPhoneCardTab = onConsultationTab || activeView === "pipeline";
-  const phoneStageCards = onConsultationTab && phoneStageList !== activeView;
+  const phoneStageCards = onHomeVisitTab && phoneStageList !== activeView;
   const phoneLeadGrid = activeView === "pipeline";
-  const phoneStageListOpen = onConsultationTab && phoneStageList === activeView;
+  const phoneConsultGrid = activeView === "branch_consultation";
+  const phoneStageListOpen = onHomeVisitTab && phoneStageList === activeView;
   // The Management tab answers the same way on a phone: its nine sub-tabs as the same
   // stack, one tap opening the chosen panel on a screen of its own with the way back
   // above it — Consultant Calendar alone reads as its Select Consultant, not as a card
@@ -3049,8 +3053,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               the bar above and, on the Consultation tab, the ConsultationsBoard underneath
               too — so a pill's number always describes the list that pill opens.
 
-              Not on Branch Leads' phone, which has its own six under the stage grid. */}
-          <div className={`lg:hidden ${phoneLeadGrid ? "max-sm:hidden" : ""}`}>
+              Not on the Branch Leads or Consultation phone, which have their own six under
+              the stage grid. */}
+          <div className={`lg:hidden ${phoneLeadGrid || phoneConsultGrid ? "max-sm:hidden" : ""}`}>
             <QuickDateFilterBar
               value={quickDate}
               onChange={setQuickDate}
@@ -3062,11 +3067,11 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             />
           </div>
 
-          {/* Phone, Consultation tab: the stages as the Review tab's cards, one to a row,
+          {/* Phone, House Visit tab: the stages as the Review tab's cards, one to a row,
               under the toolbar and ranges, which still narrow every count here. A tap opens
               that stage's list on its own screen (see phoneStageList), at the top of it.
               The card itself is the shared grey — only the corner notification badge keeps
-              the stage's colour, the same rule Branch Leads' stack follows. */}
+              the stage's colour. */}
           {phoneStageCards && (
             <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-consult-phone-cards">
               {consultationOnlyStages.map((s) => (
@@ -3128,6 +3133,35 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             </div>
           )}
 
+          {/* Phone, Consultation tab: the same grid as Branch Leads' above (asked
+              2026-11-27) -- its stages three across as summary tiles, then its six ranges,
+              and the stage's list right below on this same screen. No All Stages tile, and
+              the open tile tapped again stays open (selectStage), as the strip does. */}
+          {phoneConsultGrid && (
+            <div className="space-y-3 sm:hidden" data-testid="branch-consult-phone-summary">
+              <div className="grid auto-rows-fr grid-cols-3 gap-2" data-testid="branch-consult-phone-grid">
+                {consultationOnlyStages.map((s) => (
+                  <PhoneStageTile
+                    key={s.id}
+                    icon={consultationStageIcon(s.name)}
+                    label={s.name}
+                    count={consultationCounts[s.name] || 0}
+                    active={stageFilter === s.name}
+                    onClick={() => selectStage(s.name)}
+                    testid={`branch-consult-phone-tile-${s.name}`}
+                  />
+                ))}
+              </div>
+              <PhoneRangeRow
+                value={quickDate}
+                calendarSet={!!dateFilter}
+                onChange={(next) => { setDateFilter(null); setQuickDate(next); }}
+                keys={PHONE_CONSULT_RANGE_KEYS}
+                testid="branch-consult-phone-quick-date"
+              />
+            </div>
+          )}
+
           {onConsultationTab ? (
             // Still mounted under the phone cards, only hidden: this board is what counts
             // them (onCountChange), so unmounting it would leave every card at 0.
@@ -3182,6 +3216,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
               // Eight columns can't be read on a phone — without this the consultation
               // stages fall back to the desk table and every field arrives truncated.
               mobileCards
+              // Consultation's phone rows as Branch Leads' (ui/phone-lead-card). House
+              // Visit keeps its inbox rows.
+              phoneLeadCards={!onHomeVisitTab}
             />
             </div>
           ) : (
@@ -3795,7 +3832,8 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
             setActiveView(view);
             setStageFilter(stage);
             // On a phone, straight to that stage's list rather than to the cards above it.
-            setPhoneStageList(view);
+            // House Visit only: Consultation's grid already has its list under it.
+            if (view === "branch_home_visit") setPhoneStageList(view);
           }}
           onMoved={() => {
             // Close first, then refresh the list in the background via loadBoard directly
