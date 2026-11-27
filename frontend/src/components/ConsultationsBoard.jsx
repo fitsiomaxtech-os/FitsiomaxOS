@@ -8851,8 +8851,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 })() : null;
 
                 return (
+              // Hidden on a phone (under 640px) in the narrow popup: the Consultation Record /
+              // View Details row only pushed the payment panel down there.
               <section
-                className={isConsultant ? "space-y-3" : "order-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"}
+                className={isConsultant ? "space-y-3" : `order-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm${compactDetail ? " hidden sm:block" : ""}`}
                 data-testid="cons-case-record"
               >
                 {!isConsultant && (() => {
