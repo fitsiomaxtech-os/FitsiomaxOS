@@ -49,7 +49,7 @@ import {
   Building2,
   ArrowDown,
   ArrowUp,
-  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock, MapPin,
+  Download, FileSpreadsheet, Menu, LayoutGrid, CalendarClock, MessageSquareText, Ban, Lock, MapPin, MessageCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -125,7 +125,6 @@ import { LeadEditModal } from "@/components/LeadEditModal";
 import { MilkCalendar, MilkDateInput, MilkTimeInput } from "@/components/ui/milk-calendar";
 import { isCourseComplete } from "@/lib/leadStage";
 import { displayPhone, telNumber } from "@/lib/phone";
-import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { leadPlatform, leadSource, leadSourceLabel } from "@/lib/leadSource";
 
 
@@ -4168,6 +4167,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   const [transferring, setTransferring] = useState(false);
   // Header's Form: the Consultation Form's steps, filled from this lead (or its saved form).
   const [fillingForm, setFillingForm] = useState(false);
+  // Overview's Form Report View: the lead's Consultation Form as the paper (its report).
+  // Held as the lead it opened on, so the dialog gets one object, not a new one per render.
+  const [formReportLead, setFormReportLead] = useState(null);
 
   const [apptDraft, setApptDraft] = useState(null); // { appointment_date, appointment_time, physio_id, notes, final_stage, duration, visit_type, visit_package_id, step } | null
   // Days before today are greyed out on the Appointment calendar unless Developer Access >
@@ -5175,7 +5177,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               )}
               {/* Icon only, the same square as Branch Transfer beside it. Not in the header
                   on a phone, which holds only the name, Form, Transfer and Close (asked
-                  2026-11-20): there it sits in the Contact card, beside Call and WhatsApp. */}
+                  2026-11-20): there it sits in Overview's Actions row, beside Call. */}
               <button
                 onClick={() => setEditing(true)}
                 title="Edit"
@@ -5212,48 +5214,85 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
         <div className={`min-h-0 flex-1 overflow-y-auto bg-slate-50/30 ${activeTab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
           {activeTab === "overview" && (
             <div className="space-y-3">
-              <div className="overflow-hidden rounded-[3px] border border-sky-100 bg-white shadow-sm">
-                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600"><Phone className="h-4 w-4" /></span>
-                  <p className="text-xs font-bold uppercase tracking-wider text-sky-700">Contact</p>
-                  {/* Phone only, as Pre Sales' popup has them (asked 2026-11-20): the list's
-                      cards carry no Call or WhatsApp, and the header no Edit on a phone. */}
-                  <div className="ml-auto flex items-center gap-2 sm:hidden" data-testid="branch-lead-contact-actions">
-                    <button
-                      type="button"
-                      onClick={() => setEditing(true)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition active:bg-slate-200"
-                      title="Edit"
-                      aria-label="Edit"
-                      data-testid="branch-lead-contact-edit"
-                    >
-                      <Pencil className="h-[18px] w-[18px]" />
-                    </button>
-                    {waNumber(lead.phone) && (<>
-                      <a
-                        href={`https://wa.me/${waNumber(lead.phone)}`}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition active:bg-emerald-100"
-                        title="WhatsApp"
-                        aria-label={`WhatsApp ${lead.name || "patient"}`}
-                        data-testid="branch-lead-whatsapp"
-                      >
-                        <WhatsAppIcon className="h-5 w-5" />
-                      </a>
+              {/* One card with no heading (asked 2026-11-27): Phone, Source, Follow-Up and
+                  Actions as label / value rows split by a line, the reference's layout in
+                  the OS theme's colours. Email is not on it. */}
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-[10px] border border-slate-200 bg-white" data-testid="branch-lead-contact">
+                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <span className="shrink-0 text-sm text-slate-500">Phone</span>
+                  <span className="min-w-0 truncate text-right text-sm font-semibold text-slate-800" data-testid="branch-lead-phone">{displayPhone(lead.phone) || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <span className="shrink-0 text-sm text-slate-500">Source</span>
+                  <span className="min-w-0 truncate text-right text-sm font-semibold text-slate-800" data-testid="branch-lead-source">{leadSourceLabel(lead) || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <span className="shrink-0 text-sm text-slate-500">Follow-Up</span>
+                  {/* The follow-up the lead is on (the Follow-Up tab's rule): green while it
+                      is ahead, rose once it has passed; orange Not Scheduled without one. */}
+                  {activeFollowUp ? (() => {
+                    const dt = new Date(`${activeFollowUp.date}T${activeFollowUp.time}:00`);
+                    const valid = !Number.isNaN(dt.getTime());
+                    const upcoming = valid && dt.getTime() > Date.now();
+                    return (
+                      <span className={`min-w-0 truncate text-right text-sm font-medium ${upcoming ? "text-emerald-600" : "text-rose-600"}`} data-testid="branch-lead-followup-row">
+                        {valid ? dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : activeFollowUp.date}
+                        {activeFollowUp.time ? ` · ${to12h(activeFollowUp.time)}` : ""}
+                      </span>
+                    );
+                  })() : (
+                    <span className="text-right text-sm font-medium text-orange-600" data-testid="branch-lead-followup-row">Not Scheduled</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <span className="shrink-0 text-sm text-slate-500">Actions</span>
+                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-2" data-testid="branch-lead-contact-actions">
+                    {/* Call and Edit on a phone only: the header has no Edit there, and Call
+                        is a desk phone's job on a computer. */}
+                    {waNumber(lead.phone) && (
                       <a
                         href={`tel:${telNumber(lead.phone)}`}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition active:bg-sky-100"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-sky-50 text-sky-600 transition active:bg-sky-100 sm:hidden"
                         title="Call"
                         aria-label={`Call ${lead.name || "patient"}`}
                         data-testid="branch-lead-call"
                       >
-                        <Phone className="h-5 w-5" />
+                        <Phone className="h-4 w-4" />
                       </a>
-                    </>)}
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-slate-100 text-slate-600 transition active:bg-slate-200 sm:hidden"
+                      title="Edit"
+                      aria-label="Edit"
+                      data-testid="branch-lead-contact-edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    {waNumber(lead.phone) && (
+                      <a
+                        href={`https://wa.me/${waNumber(lead.phone)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+                        title="WhatsApp"
+                        aria-label={`WhatsApp ${lead.name || "patient"}`}
+                        data-testid="branch-lead-whatsapp"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />WhatsApp
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setFormReportLead({ ...lead, city: cityAnswer(lead) || lead.city })}
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-sky-50 px-3 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
+                      title="The lead's Consultation Form, as the paper"
+                      data-testid="branch-lead-form-report"
+                    >
+                      <FileText className="h-3.5 w-3.5" />Form Report View
+                    </button>
                   </div>
-                </div>
-                <div className="space-y-2 px-4 py-3">
-                  <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Phone</span><span className="font-medium text-slate-800">{displayPhone(lead.phone) || "—"}</span></div>
-                  <div className="flex items-center justify-between text-sm"><span className="text-xs font-medium text-slate-500">Email</span><span className="font-medium text-slate-800">{lead.email || "—"}</span></div>
                 </div>
               </div>
 
@@ -7199,6 +7238,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           // City as the Lead Details tab reads it: the mapped field or the sheet's own column.
           lead={{ ...lead, city: cityAnswer(lead) || lead.city }}
           onClose={() => setFillingForm(false)}
+        />
+      )}
+      {/* Overview's Form Report View: the lead's saved Consultation Form as the paper, or a
+          new one filled from the lead -- what the Consultant's patient card opens. */}
+      {formReportLead && (
+        <ConsultationFormDialog
+          branchId={formReportLead.branch_id || branchId}
+          initialLead={formReportLead}
+          onClose={() => setFormReportLead(null)}
         />
       )}
       {transferring && (
