@@ -836,11 +836,19 @@ const shortTimelineText = (raw) => {
   }
   const call = /call attempt #(\d+)/i.exec(s);
   if (call) return `Not answered (call #${call[1]})`;
+  // "Appointment 2026-11-23 19:00 with X → Stage", and "Appointment moved from ... to
+  // 2026-11-23 19:00 with X": the new slot only.
+  const appt = /^appointment (moved from .*? to )?(\d{4})-(\d{2})-(\d{2}) (\d{1,2}:\d{2})/i.exec(s);
+  if (appt) {
+    const d = new Date(Number(appt[2]), Number(appt[3]) - 1, Number(appt[4]));
+    return `Appointment${appt[1] ? " moved to" : ""} ${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}, ${to12h(appt[5])}`;
+  }
   // "Moved from 'A' to 'B'" and "Branch stage: 'A' -> 'B'".
   const quoted = /(?:\bto\s+|->\s*|→\s*)'([^']+)'/i.exec(s);
   if (quoted) return `Moved to ${quoted[1].trim()}`;
-  // "Consultation: A → B" keeps what moved: "Consultation: B".
-  const arrow = /^([^:]+):\s*.*?(?:->|→)\s*([^·—]+?)\s*(?:[·—]|$)/.exec(s);
+  // "Consultation: A → B" keeps what moved: "Consultation: B". Words only before the
+  // colon, so a time's "19:00" is never read as one.
+  const arrow = /^([A-Za-z ]+):\s*.*?(?:->|→)\s*([^·—]+?)\s*(?:[·—]|$)/.exec(s);
   if (arrow) return `${arrow[1].trim()}: ${arrow[2].trim()}`;
   return s.replace(/'/g, "").split(/\s+[—·]\s+/)[0].trim();
 };
@@ -5256,11 +5264,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               <div className="divide-y divide-slate-100 overflow-hidden rounded-[10px] border border-slate-200 bg-white" data-testid="branch-lead-contact">
                 <div className="flex items-center justify-between gap-3 px-4 py-3.5">
                   <span className="shrink-0 text-sm text-slate-500">Phone</span>
-                  <span className="min-w-0 truncate text-right text-sm font-semibold text-slate-800" data-testid="branch-lead-phone">{displayPhone(lead.phone) || "—"}</span>
+                  <span className="min-w-0 truncate text-right text-sm font-medium text-slate-600" data-testid="branch-lead-phone">{displayPhone(lead.phone) || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 px-4 py-3.5">
                   <span className="shrink-0 text-sm text-slate-500">Source</span>
-                  <span className="min-w-0 truncate text-right text-sm font-semibold text-slate-800" data-testid="branch-lead-source">{leadSourceLabel(lead) || "—"}</span>
+                  <span className="min-w-0 truncate text-right text-sm font-medium text-slate-600" data-testid="branch-lead-source">{leadSourceLabel(lead) || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 px-4 py-3.5">
                   <span className="shrink-0 text-sm text-slate-500">Timeline</span>
@@ -5268,7 +5276,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                       ellipsis inside the card (the whole entry on hover), the day kept. */}
                   {latestTimeline ? (
                     <span className="flex min-w-0 items-center justify-end gap-1.5 text-sm" title={latestTimeline.text} data-testid="branch-lead-timeline-row">
-                      <span className="min-w-0 truncate font-semibold text-slate-800">{shortTimelineText(latestTimeline.text)}</span>
+                      <span className="min-w-0 truncate font-medium text-slate-600">{shortTimelineText(latestTimeline.text)}</span>
                       {latestTimelineDay && <span className="shrink-0 text-xs text-slate-400">· {latestTimelineDay}</span>}
                     </span>
                   ) : (
