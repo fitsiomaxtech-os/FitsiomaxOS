@@ -822,6 +822,29 @@ const waNumber = (raw) => {
   return digits;
 };
 
+/** The Timeline's newest entry as one short line, for the lead popup's Overview row: a
+ *  stage move reads "Moved to <stage>", a follow-up "Follow-up 28 Nov, 10:00 AM", an
+ *  unanswered call "Not answered (call #3)"; anything else as written, without quotes
+ *  and cut before the remarks or notes the backend appends after " — " or " · ". */
+const shortTimelineText = (raw) => {
+  const s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  const fu = /follow-up on (\d{4})-(\d{2})-(\d{2}) at (\d{1,2}:\d{2})/i.exec(s);
+  if (fu) {
+    const d = new Date(Number(fu[1]), Number(fu[2]) - 1, Number(fu[3]));
+    return `Follow-up ${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}, ${to12h(fu[4])}`;
+  }
+  const call = /call attempt #(\d+)/i.exec(s);
+  if (call) return `Not answered (call #${call[1]})`;
+  // "Moved from 'A' to 'B'" and "Branch stage: 'A' -> 'B'".
+  const quoted = /(?:\bto\s+|->\s*|→\s*)'([^']+)'/i.exec(s);
+  if (quoted) return `Moved to ${quoted[1].trim()}`;
+  // "Consultation: A → B" keeps what moved: "Consultation: B".
+  const arrow = /^([^:]+):\s*.*?(?:->|→)\s*([^·—]+?)\s*(?:[·—]|$)/.exec(s);
+  if (arrow) return `${arrow[1].trim()}: ${arrow[2].trim()}`;
+  return s.replace(/'/g, "").split(/\s+[—·]\s+/)[0].trim();
+};
+
 /** The list's column widths, with and without the Follow Up column.
  *
  *  Stated rather than computed because table-fixed divides by the widths written down, and
@@ -4822,8 +4845,12 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     try { setActivityLog(await getLeadActivity(lead.id)); } catch { /* silent */ }
   };
 
+  // Overview reads the Timeline too: its Timeline row is the newest entry.
+  const [timelineReady, setTimelineReady] = useState(false);
   useEffect(() => {
-    if (activeTab === "timeline") { loadRemarks(); loadActivity(); }
+    if (activeTab === "timeline" || activeTab === "overview") {
+      Promise.all([loadRemarks(), loadActivity()]).finally(() => setTimelineReady(true));
+    }
     if (activeTab === "rnr") { loadActivity(); }
   }, [activeTab, lead.id]);
 
@@ -4986,6 +5013,15 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // on, and previewing it would name a date nobody is going to call on.
   const followUps = lead.follow_ups || [];
   const activeFollowUp = followUps.slice().reverse().find((f) => f.status !== "rescheduled") || null;
+  // The Timeline tab's newest entry -- a remark or an activity row -- for Overview's
+  // Timeline row.
+  const latestTimeline = [
+    ...remarks.map((r) => ({ text: r.text, at: r.created_at })),
+    ...activityLog.map((a) => ({ text: a.details, at: a.created_at })),
+  ].filter((e) => hasValue(e.text)).sort((x, y) => new Date(y.at) - new Date(x.at))[0] || null;
+  const latestTimelineDay = latestTimeline?.at && !Number.isNaN(new Date(latestTimeline.at).getTime())
+    ? new Date(latestTimeline.at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })
+    : "";
   // Matched loosely rather than against a literal "Follow Up": these names are editable in
   // Pipeline Stage Management, and a rename there should not silently empty this card.
   const atFollowUpStage = /follow\s*-?\s*up/i.test(headerStageName || "");
@@ -5227,21 +5263,16 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                   <span className="min-w-0 truncate text-right text-sm font-semibold text-slate-800" data-testid="branch-lead-source">{leadSourceLabel(lead) || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <span className="shrink-0 text-sm text-slate-500">Follow-Up</span>
-                  {/* The follow-up the lead is on (the Follow-Up tab's rule): green while it
-                      is ahead, rose once it has passed; orange Not Scheduled without one. */}
-                  {activeFollowUp ? (() => {
-                    const dt = new Date(`${activeFollowUp.date}T${activeFollowUp.time}:00`);
-                    const valid = !Number.isNaN(dt.getTime());
-                    const upcoming = valid && dt.getTime() > Date.now();
-                    return (
-                      <span className={`min-w-0 truncate text-right text-sm font-medium ${upcoming ? "text-emerald-600" : "text-rose-600"}`} data-testid="branch-lead-followup-row">
-                        {valid ? dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : activeFollowUp.date}
-                        {activeFollowUp.time ? ` · ${to12h(activeFollowUp.time)}` : ""}
-                      </span>
-                    );
-                  })() : (
-                    <span className="text-right text-sm font-medium text-orange-600" data-testid="branch-lead-followup-row">Not Scheduled</span>
+                  <span className="shrink-0 text-sm text-slate-500">Timeline</span>
+                  {/* The Timeline tab's newest entry, short, on one line: it cuts with an
+                      ellipsis inside the card (the whole entry on hover), the day kept. */}
+                  {latestTimeline ? (
+                    <span className="flex min-w-0 items-center justify-end gap-1.5 text-sm" title={latestTimeline.text} data-testid="branch-lead-timeline-row">
+                      <span className="min-w-0 truncate font-semibold text-slate-800">{shortTimelineText(latestTimeline.text)}</span>
+                      {latestTimelineDay && <span className="shrink-0 text-xs text-slate-400">· {latestTimelineDay}</span>}
+                    </span>
+                  ) : (
+                    <span className="text-right text-sm text-slate-400" data-testid="branch-lead-timeline-row">{timelineReady ? "No activity yet" : "…"}</span>
                   )}
                 </div>
                 <div className="flex items-center justify-between gap-3 px-4 py-2.5">
