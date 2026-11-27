@@ -91,6 +91,7 @@ import {
   rnrAttempt,
   getLeadAppointmentCard,
   listStoreItems,
+  listConsultationForms,
 } from "@/lib/api";
 import { useFeatureAllowed } from "@/lib/featureVisibility";
 import { to12h, endTime12h, callTimeStamp, callDateStamp, dateStampFull } from "@/lib/time";
@@ -4201,6 +4202,20 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // Overview's Form Report View: the lead's Consultation Form as the paper (its report).
   // Held as the lead it opened on, so the dialog gets one object, not a new one per render.
   const [formReportLead, setFormReportLead] = useState(null);
+  // Report is offered once there is something to read: the lead's Consultation Form
+  // submitted, or the visit done (visitDone -- Quit after the visit included, the patient
+  // was seen). Read off the branch the Report dialog looks in, so the two agree.
+  const formBranchId = lead.branch_id || branchId;
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setFormSubmitted(false);
+    listConsultationForms(formBranchId, "", { leadId: lead.id })
+      .then((r) => { if (live) setFormSubmitted((r.forms || []).some((f) => f.lead_id === lead.id)); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [formBranchId, lead.id]);
+  const reportReady = formSubmitted || visitDone;
 
   const [apptDraft, setApptDraft] = useState(null); // { appointment_date, appointment_time, physio_id, notes, final_stage, duration, visit_type, visit_package_id, step } | null
   // Days before today are greyed out on the Appointment calendar unless Developer Access >
@@ -5332,15 +5347,17 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                         <MessageCircle className="h-3.5 w-3.5" />WhatsApp
                       </a>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setFormReportLead({ ...lead, city: cityAnswer(lead) || lead.city })}
-                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-sky-50 px-3 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
-                      title="The lead's Consultation Form, as the paper"
-                      data-testid="branch-lead-form-report"
-                    >
-                      <FileText className="h-3.5 w-3.5" />Report
-                    </button>
+                    {reportReady && (
+                      <button
+                        type="button"
+                        onClick={() => setFormReportLead({ ...lead, city: cityAnswer(lead) || lead.city })}
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-sky-50 px-3 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
+                        title="The lead's Consultation Form, as the paper"
+                        data-testid="branch-lead-form-report"
+                      >
+                        <FileText className="h-3.5 w-3.5" />Report
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -7286,6 +7303,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           // City as the Lead Details tab reads it: the mapped field or the sheet's own column.
           lead={{ ...lead, city: cityAnswer(lead) || lead.city }}
           onClose={() => setFillingForm(false)}
+          // Submitted: Overview's Report appears at once, without reopening the popup.
+          onSaved={() => setFormSubmitted(true)}
         />
       )}
       {/* Overview's Form Report View: the lead's saved Consultation Form as the paper, or a
