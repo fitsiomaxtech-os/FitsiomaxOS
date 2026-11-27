@@ -5329,7 +5329,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                       title="The lead's Consultation Form, as the paper"
                       data-testid="branch-lead-form-report"
                     >
-                      <FileText className="h-3.5 w-3.5" />Form Report View
+                      <FileText className="h-3.5 w-3.5" />Report
                     </button>
                   </div>
                 </div>
