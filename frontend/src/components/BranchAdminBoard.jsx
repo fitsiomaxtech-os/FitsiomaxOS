@@ -5012,8 +5012,10 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     // Last, and deliberately after the three working tabs. The first four are what
     // somebody DOES with a lead; this one is what the lead already told us, which is
     // read once and then referred back to rather than worked.
-    { key: "lead-details", label: "Lead Details", color: "bg-indigo-500" },
+    { key: "lead-details", label: "Details", color: "bg-indigo-500" },
   ];
+  // One Overview row: label, colon, value pushed right.
+  const OVERVIEW_ROW = "grid grid-cols-[76px_10px_minmax(0,1fr)] items-center gap-x-2 px-2 py-3.5 sm:grid-cols-[140px_16px_minmax(0,1fr)] sm:px-4";
 
   // The follow-up the lead is actually on, for the Overview preview below. Newest first
   // and skipping the rescheduled ones, which is the same rule the Follow-Up tab draws
@@ -5138,7 +5140,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           taller than the window; past that the body below scrolls. A fixed height left a
           short tab -- Overview, with just the contact and the move buttons -- sitting on a
           block of blank card. */}
-      <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl ring-1 ring-slate-200 sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
+      <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[18px] bg-white shadow-lg sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
         {/* Solid #0284C7, the board's own sky-600, with the name, ID and stage in white and
             the Transfer and Edit buttons kept as white tiles so they still read as buttons.
             One flat colour, not the old three-colour gradient: the gradient made this the loudest thing on a screen whose
@@ -5238,40 +5240,47 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           </div>
         </div>
 
-        {/* Pill tabs, left-aligned from sm up so they start on the same edge as the name
-            above and the cards below. On a phone each wrapped row stretches its pills to the full width,
-            so the two rows end on the same edge as the cards below instead of stopping
-            wherever the labels happen to run out. */}
-        <div className="flex flex-wrap justify-start gap-1.5 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5" data-testid="branch-lead-tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`flex-auto whitespace-nowrap rounded-[3px] px-3.5 py-1 text-center text-xs sm:flex-none font-semibold capitalize transition-all ${activeTab === t.key ? `${t.color} text-white shadow-sm` : "bg-white text-slate-600 hover:bg-slate-100"}`}
-              data-testid={`branch-lead-tab-${t.key}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Underline tabs on white (asked 2026-11-27): equal widths from sm up, a thin
+            line between them, the active one in the header's blue with a bar on the
+            baseline. On a phone the five run at their own widths and scroll sideways. */}
+        <div className="overflow-x-auto bg-white px-4 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden" data-testid="branch-lead-tabs">
+          <div className="flex w-max min-w-full border-b border-slate-200 sm:w-full">
+            {TABS.map((t, i) => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`relative flex-auto shrink-0 whitespace-nowrap px-3 py-2.5 text-center text-[13px] transition-colors sm:min-w-0 sm:flex-1 sm:px-2 ${i > 0 ? "before:absolute before:left-0 before:top-1/2 before:h-5 before:w-px before:-translate-y-1/2 before:bg-slate-200" : ""} ${activeTab === t.key ? "font-semibold text-[#0284C7]" : "font-medium text-slate-600 hover:text-slate-900"}`}
+                data-testid={`branch-lead-tab-${t.key}`}
+              >
+                {t.label}
+                {activeTab === t.key && <span aria-hidden className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0284C7]" />}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className={`min-h-0 flex-1 overflow-y-auto bg-slate-50/30 ${activeTab === "overview" ? "p-1.5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
+        <div className={`min-h-0 flex-1 overflow-y-auto bg-white ${activeTab === "overview" ? "px-4 pb-4 pt-1 sm:px-5" : "p-4 sm:p-5"}`} data-testid="branch-lead-content">
           {activeTab === "overview" && (
             <div className="space-y-3">
               {/* One card with no heading (asked 2026-11-27): Phone, Source, Follow-Up and
                   Actions as label / value rows split by a line, the reference's layout in
                   the OS theme's colours. Email is not on it. */}
-              <div className="divide-y divide-slate-100 overflow-hidden rounded-[10px] border border-slate-200 bg-white" data-testid="branch-lead-contact">
-                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <span className="shrink-0 text-sm text-slate-500">Phone</span>
+              {/* No box around it (asked 2026-11-27): the rows on the popup's white, split by
+                  a line, a colon after each label. */}
+              <div className="divide-y divide-slate-100" data-testid="branch-lead-contact">
+                <div className={OVERVIEW_ROW}>
+                  <span className="text-sm text-slate-500">Phone</span>
+                  <span className="text-sm text-slate-400">:</span>
                   <span className="min-w-0 truncate text-right text-sm font-medium text-slate-600" data-testid="branch-lead-phone">{displayPhone(lead.phone) || "—"}</span>
                 </div>
-                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <span className="shrink-0 text-sm text-slate-500">Source</span>
+                <div className={OVERVIEW_ROW}>
+                  <span className="text-sm text-slate-500">Source</span>
+                  <span className="text-sm text-slate-400">:</span>
                   <span className="min-w-0 truncate text-right text-sm font-medium text-slate-600" data-testid="branch-lead-source">{leadSourceLabel(lead) || "—"}</span>
                 </div>
-                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <span className="shrink-0 text-sm text-slate-500">Timeline</span>
+                <div className={OVERVIEW_ROW}>
+                  <span className="text-sm text-slate-500">Timeline</span>
+                  <span className="text-sm text-slate-400">:</span>
                   {/* The Timeline tab's newest entry, short, on one line: it cuts with an
                       ellipsis inside the card (the whole entry on hover), the day kept. */}
                   {latestTimeline ? (
@@ -5283,8 +5292,9 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                     <span className="text-right text-sm text-slate-400" data-testid="branch-lead-timeline-row">{timelineReady ? "No activity yet" : "…"}</span>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <span className="shrink-0 text-sm text-slate-500">Actions</span>
+                <div className={`${OVERVIEW_ROW} !py-2.5`}>
+                  <span className="text-sm text-slate-500">Actions</span>
+                  <span className="text-sm text-slate-400">:</span>
                   <div className="flex min-w-0 flex-wrap items-center justify-end gap-2" data-testid="branch-lead-contact-actions">
                     {/* Call and Edit on a phone only: the header has no Edit there, and Call
                         is a desk phone's job on a computer. */}
@@ -5619,12 +5629,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
               )}
 
               {/* Stage Pipeline */}
-              <div className="overflow-hidden rounded-[3px] border border-violet-100 bg-white shadow-sm" data-testid="branch-lead-pipeline">
-                {/* Three equal columns on a phone, so the six pills sit in two even rows
-                    instead of wrapping wherever their widths happen to break. From sm up
-                    they go back to a wrapping row of natural widths, left-aligned on the
-                    same 16px edge as the CONTACT heading in the card above. */}
-                <div className="grid grid-cols-3 gap-1.5 px-4 py-3 sm:flex sm:flex-wrap sm:justify-start sm:gap-1.5">
+              <div className="border-t border-slate-200" data-testid="branch-lead-pipeline">
+                {/* No box (asked 2026-11-27): a line above, then the buttons. Three equal
+                    columns on a phone, so the six sit in two even rows. From sm up one row
+                    that fills the width, each button growing from its own label. */}
+                <div className="grid grid-cols-3 gap-1.5 pt-3 sm:flex sm:flex-wrap sm:gap-2 sm:pt-4">
                   {(pipelineStages || []).map((s) => {
                     const stage = s.name;
                     // "Appointment Date & Time" is too long for a third of a phone, so
@@ -5730,7 +5739,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                         disabled={isActive || notYetReached || isMirror || blockedFromAppointment || stageLocked}
                         onClick={handleClick}
                         title={blockedFromAppointment ? `${stage} is not reachable from Appointment — the consultation moves the patient on from here` : undefined}
-                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${blockedFromAppointment || (stageLocked && !isActive) ? "disabled:opacity-40" : "disabled:opacity-90"}`}
+                        className={`rounded-[6px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition hover:brightness-95 disabled:cursor-not-allowed sm:flex-auto sm:whitespace-nowrap sm:px-3 sm:text-xs ${blockedFromAppointment || (stageLocked && !isActive) ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid={`branch-stage-btn-${stage}`}
                       >
@@ -5756,7 +5765,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                         disabled={isActive || stageLocked}
                         onClick={() => setQuitDraft(true)}
                         title={`Moves this lead to ${consultationQuitStage.name} in Branch Consultation`}
-                        className={`rounded-[3px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition-all hover:shadow-md disabled:cursor-not-allowed sm:whitespace-nowrap sm:px-3 sm:text-xs ${stageLocked && !isActive ? "disabled:opacity-40" : "disabled:opacity-90"}`}
+                        className={`rounded-[6px] px-1 py-2.5 text-[11px] font-semibold leading-tight transition hover:brightness-95 disabled:cursor-not-allowed sm:flex-auto sm:whitespace-nowrap sm:px-3 sm:text-xs ${stageLocked && !isActive ? "disabled:opacity-40" : "disabled:opacity-90"}`}
                         style={isActive ? { background: tint, color: "#ffffff" } : { background: `${tint}14`, color: tint, border: `1px solid ${tint}33` }}
                         data-testid="branch-stage-btn-consultation-quit"
                       >
@@ -5766,7 +5775,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                   })()}
                 </div>
                 {stageLocked && (
-                  <p className="flex items-center justify-center gap-1.5 border-t border-violet-100 px-4 py-2 text-[11px] font-semibold text-rose-600" data-testid="branch-lead-stage-locked">
+                  <p className="flex items-center justify-center gap-1.5 px-4 pt-3 text-[11px] font-semibold text-rose-600" data-testid="branch-lead-stage-locked">
                     <Lock className="h-3.5 w-3.5" /> {lostStageName} — this lead's stage is locked
                   </p>
                 )}
