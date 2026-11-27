@@ -41,11 +41,15 @@ import {
   Clock,
   FileText,
   History,
+  IdCard,
   KeyRound,
+  Landmark,
   Layers,
   Loader2,
   LogIn,
   LogOut,
+  MapPin,
+  Signature,
   Stethoscope,
   UserRound,
   Users,
@@ -1091,14 +1095,10 @@ const PROFILE_SECTIONS = [
   ["sign", "Sign Upload"],
 ];
 
-// Match the employee view dialog while keeping the profile in its existing page.
-// `withSecurity` adds Security as the last section (the desktop Account tab). The phone
-// leaves it out: its menu has Security as its own "Account" row.
-const ProfileView = ({ data, roleLabel, photo, withSecurity = false, onLogout }) => {
-  const [section, setSection] = useState("personal");
-  const sections = withSecurity ? [...PROFILE_SECTIONS, ["security", "Security"]] : PROFILE_SECTIONS;
+// The read-only rows of each section; Sign and Security draw their own.
+const profileRows = (data, roleLabel) => {
   const account = data.account || {};
-  const rows = {
+  return {
     personal: [["Full Name", data.full_name],
       // The login's Email ID, with the same Verified mark the Security tab shows.
       ["Email", data.email && (
@@ -1121,6 +1121,33 @@ const ProfileView = ({ data, roleLabel, photo, withSecurity = false, onLogout })
       ["Emergency Phone", displayPhone(data.emergency_contact_phone)]],
     bank: [["Bank Name", data.bank_name], ["Account Number", data.bank_account], ["IFSC", data.ifsc]],
   };
+};
+
+// One section's contents: the desktop's right-hand pane, and the whole of a phone screen.
+const ProfileSectionBody = ({ section, data, roleLabel, photo, onLogout }) => (
+  <>
+    {section === "personal" && <div className="mb-3 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+      <PhotoAvatar person={data} size={40} photo={photo} />
+      <PhotoActions person={data} photo={photo} />
+    </div>}
+    {section === "sign" && <MySign />}
+    {section === "security" && <SecurityTab embedded onLogout={onLogout} />}
+    {(profileRows(data, roleLabel)[section] || []).map(([label, value]) => (
+      <div key={label} className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-4">
+        <span className="shrink-0 text-xs font-medium text-slate-500 sm:w-40 sm:text-sm">{label}</span>
+        <span className="min-h-9 min-w-0 flex-1 whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{value || "—"}</span>
+      </div>
+    ))}
+  </>
+);
+
+// Match the employee view dialog while keeping the profile in its existing page.
+// `withSecurity` adds Security as the last section (the desktop Account tab). A phone
+// opens each section as its own screen instead: see PhoneProfileMenu.
+const ProfileView = ({ data, roleLabel, photo, withSecurity = false, onLogout }) => {
+  const [section, setSection] = useState("personal");
+  const sections = withSecurity ? [...PROFILE_SECTIONS, ["security", "Security"]] : PROFILE_SECTIONS;
+  const account = data.account || {};
   return (
     <section className="mx-auto w-full max-w-[860px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid="branch-profile-view">
       {photo.elements}
@@ -1147,18 +1174,7 @@ const ProfileView = ({ data, roleLabel, photo, withSecurity = false, onLogout })
         </nav>
         <div className="min-w-0 flex-1 px-5 py-4 sm:px-6" aria-label={sections.find(([key]) => key === section)[1]}>
           <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{sections.find(([key]) => key === section)[1]}</h3>
-          {section === "personal" && <div className="mb-3 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
-            <PhotoAvatar person={data} size={40} photo={photo} />
-            <PhotoActions person={data} photo={photo} />
-          </div>}
-          {section === "sign" && <MySign />}
-          {section === "security" && <SecurityTab embedded onLogout={onLogout} />}
-          {(rows[section] || []).map(([label, value]) => (
-            <div key={label} className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-4">
-              <span className="shrink-0 text-xs font-medium text-slate-500 sm:w-40 sm:text-sm">{label}</span>
-              <span className="min-h-9 min-w-0 flex-1 whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{value || "\u2014"}</span>
-            </div>
-          ))}
+          <ProfileSectionBody section={section} data={data} roleLabel={roleLabel} photo={photo} onLogout={onLogout} />
         </div>
       </div>
       <footer className="border-t border-slate-200 bg-slate-50/60 px-5 py-3 text-xs text-slate-500">You can update your photo and your sign. For changes to your employee details, contact HR.</footer>
@@ -1166,7 +1182,20 @@ const ProfileView = ({ data, roleLabel, photo, withSecurity = false, onLogout })
   );
 };
 
-const ProfileTab = ({ roleLabel, withSecurity = false, onLogout }) => {
+// A phone's section screen: that one section alone, in a white card under the screen's
+// own title and back arrow.
+const PhoneProfileSection = ({ section, data, roleLabel, photo }) => (
+  <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" data-testid={`my-profile-section-${section}`}>
+    {photo.elements}
+    {!data.linked && <p className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">This login is not linked to an employee record. Ask HR to link it from Credentials.</p>}
+    <div className="px-4 py-3">
+      <ProfileSectionBody section={section} data={data} roleLabel={roleLabel} photo={photo} />
+    </div>
+  </section>
+);
+
+// `only` is a phone section screen: that one section, with no section list.
+const ProfileTab = ({ roleLabel, withSecurity = false, onLogout, only = null }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1192,6 +1221,7 @@ const ProfileTab = ({ roleLabel, withSecurity = false, onLogout }) => {
     );
   }
 
+  if (only) return <PhoneProfileSection section={only} data={data} roleLabel={roleLabel} photo={photo} />;
   return <ProfileView data={data} roleLabel={roleLabel} photo={photo} withSecurity={withSecurity} onLogout={onLogout} />;
 };
 
@@ -1268,6 +1298,33 @@ const MENU_ITEMS = [
   { key: "timeoff", title: "Permission Request", icon: CalendarOff },
 ];
 
+// Profile's own list on a phone: its six sections, each opening a screen of its own.
+const PROFILE_SECTION_ICONS = {
+  personal: UserRound,
+  employment: BriefcaseBusiness,
+  documents: IdCard,
+  address: MapPin,
+  bank: Landmark,
+  sign: Signature,
+};
+const PROFILE_SECTION_PREFIX = "profile:";
+
+// The white rounded list the phone menu draws its rows in.
+const PhoneMenuRow = ({ title, icon: Icon, onClick, testid }) => (
+  <li>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-4 py-3.5 text-left active:bg-slate-50"
+      data-testid={testid}
+    >
+      <Icon className="h-5 w-5 shrink-0 text-slate-600" />
+      <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-800">{title}</span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+    </button>
+  </li>
+);
+
 /**
  * My Profile on a phone, laid out like a messenger's settings: who I am at the top, then
  * one row per section, each opening full-screen with a back arrow. Five segmented tabs
@@ -1282,13 +1339,19 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack, hideTimeOff = fal
 
   if (open) {
     const history = open === "attendance-history";
-    const item = history ? { title: "Attendance History" } : items.find((i) => i.key === open);
+    // A Profile section (profile:personal ...): its own screen, Back returning to the list.
+    const profileSection = open.startsWith(PROFILE_SECTION_PREFIX) ? open.slice(PROFILE_SECTION_PREFIX.length) : null;
+    const sectionLabel = profileSection && PROFILE_SECTIONS.find(([key]) => key === profileSection)?.[1];
+    const item = history ? { title: "Attendance History" }
+      : profileSection ? { title: sectionLabel }
+        : items.find((i) => i.key === open);
+    const back = history ? "attendance" : profileSection ? "profile" : null;
     return (
       <div className="space-y-3" data-testid={`my-profile-screen-${open}`}>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setOpen(history ? "attendance" : null)}
+            onClick={() => setOpen(back)}
             className="-ml-1 rounded-full p-1.5 text-slate-700 active:bg-slate-100"
             aria-label="Back"
             data-testid="my-profile-screen-back"
@@ -1312,7 +1375,19 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack, hideTimeOff = fal
           : history ? <AttendanceTab view="history" />
           : open === "timeoff" && !hideTimeOff ? <TimeOffTab compact />
             : open === "security" ? <SecurityTab />
-              : <ProfileTab roleLabel={roleLabel} />}
+              // Sign Upload needs nothing of the profile, so it does not wait for it.
+              : profileSection === "sign" ? (
+                <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm" data-testid="my-profile-section-sign"><MySign /></section>
+              )
+                : profileSection ? <ProfileTab roleLabel={roleLabel} only={profileSection} />
+                  : (
+                    <ul className="-mx-1 divide-y divide-slate-100 rounded-2xl bg-white px-4 shadow-sm" data-testid="my-profile-sections-list">
+                      {PROFILE_SECTIONS.map(([key, label]) => (
+                        <PhoneMenuRow key={key} title={label} icon={PROFILE_SECTION_ICONS[key]}
+                          onClick={() => setOpen(PROFILE_SECTION_PREFIX + key)} testid={`my-profile-section-row-${key}`} />
+                      ))}
+                    </ul>
+                  )}
       </div>
     );
   }
@@ -1332,19 +1407,8 @@ const PhoneProfileMenu = ({ roleLabel, user, onLogout, onBack, hideTimeOff = fal
       )}
 
       <ul className="divide-y divide-slate-100">
-        {items.map(({ key, title, icon: Icon }) => (
-          <li key={key}>
-            <button
-              type="button"
-              onClick={() => setOpen(key)}
-              className="flex w-full items-center gap-4 py-3.5 text-left active:bg-slate-50"
-              data-testid={`my-profile-menu-${key}`}
-            >
-              <Icon className="h-5 w-5 shrink-0 text-slate-600" />
-              <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-800">{title}</span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-            </button>
-          </li>
+        {items.map(({ key, title, icon }) => (
+          <PhoneMenuRow key={key} title={title} icon={icon} onClick={() => setOpen(key)} testid={`my-profile-menu-${key}`} />
         ))}
         {onLogout && (
           <li>
