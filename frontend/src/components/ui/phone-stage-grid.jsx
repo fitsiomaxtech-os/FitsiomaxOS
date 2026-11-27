@@ -9,8 +9,12 @@ import { QUICK_DATE_PRESETS, quickDatePreset } from "@/components/QuickDateFilte
  * grid reads as the same set as the stage rows elsewhere. The grid gives every tile the
  * same height (auto-rows-fr); the open tile is outlined 2px with its padding 1px less, so
  * it does not grow when picked.
+ *
+ * `count` may be a figure in words too (Zumba's money tiles: "₹12,000"); a long one drops
+ * to 11px so it stays inside the tile. `dot` says whether the red dot shows, for a tile
+ * whose figure is not a headcount; left out, it shows while the count is above 0.
  */
-export const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, testid }) => (
+export const PhoneStageTile = ({ icon: Icon, label, count, dot, active, onClick, testid }) => (
   <button
     type="button"
     onClick={onClick}
@@ -20,12 +24,12 @@ export const PhoneStageTile = ({ icon: Icon, label, count, active, onClick, test
   >
     <span className="flex items-center justify-between gap-1">
       <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500 opacity-70" />
-      <span className="inline-flex h-6 min-w-[2rem] items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-1.5 text-sm font-medium tabular-nums text-orange-700" data-testid={`${testid}-badge`}>
+      <span className={`inline-flex h-6 min-w-[2rem] items-center justify-center rounded-md border border-orange-200 bg-orange-100/35 px-1.5 font-medium tabular-nums text-orange-700 ${String(count).length > 6 ? "text-[11px]" : "text-sm"}`} data-testid={`${testid}-badge`}>
         {count}
       </span>
     </span>
     <span className="truncate text-[11px] font-medium text-slate-900 opacity-75" title={label}>{label}</span>
-    {count > 0 && (
+    {(dot ?? count > 0) && (
       <span aria-hidden className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white motion-safe:animate-dot-pop" />
     )}
   </button>

@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Send, CheckCircle2, Clock, X, Search, RefreshCw, ChevronLeft, ChevronRight, Menu, Calendar as CalendarIcon } from "lucide-react";
+import { Send, CheckCircle2, Clock, X, Search, RefreshCw, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { QuickDateFilterBar, QUICK_DATE_PRESETS, intersectDateFilters, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { StageTab } from "@/components/ui/stage-tab";
-import { NotifyCard } from "@/components/ui/notify-card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PhoneStageTile } from "@/components/ui/phone-stage-grid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LEAD_ROW_LIST, LeadRowCard } from "@/components/ui/lead-row-card";
-import { useStageBack } from "@/components/ui/phone-back";
+import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
 import { branchReviews, branchSendReview, getAvailableExperts, getAvailableDates } from "@/lib/api";
 import { to12h, endTime12h } from "@/lib/time";
 import { todayIso } from "@/lib/dateRange";
-import { displayPhone, waNumber } from "@/lib/phone";
+import { displayPhone } from "@/lib/phone";
 
 // The Send to CONSULTANT popup's time step, as the Appointment popup's: the hour typed in
 // three fields and checked against the consultant's day (PreSalesAppointmentDialog).
@@ -126,16 +124,8 @@ const Empty = ({ children }) => (
  * Branch Admin puts it in front of a named Head Physio for a date, and watches it through
  * to done.
  */
-// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
-// stand its own back bar down while this panel's is showing.
-export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
+export const BranchReviewPanel = ({ branchId }) => {
   const [sub, setSub] = useState("send");
-  // Phone only, as Zumba and Fitness do it: the three stages are a stack of Branch Leads'
-  // rows, and a tap opens that stage's list on a screen of its own with a back bar above
-  // it. From sm up nothing reads this.
-  const [phoneList, setPhoneList] = useState(false);
-  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
-  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   const [data, setData] = useState({ reviews: [], counts: {}, head_physios: [], today: "" });
   const [loading, setLoading] = useState(false);
@@ -356,153 +346,55 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
 
   // Same row as a card, for phones. Seven columns can't hold their width there — the
   // table scrolled sideways and left Physio, Weeks, the Send button and View all
-  // off-screen, so the one thing this tab exists to do couldn't be reached.
+  // off-screen.
   //
-  // Drawn as the one-row card Branch Leads, Consultation and House Visit use (see
-  // ui/lead-row-card): the review's status where they show a stage, Call and WhatsApp
-  // beside the numbers. Tapping the card is View, as tapping a lead opens it; Send and
-  // Reassign stay a button of their own under the details, since sending is the thing
-  // this tab is for.
+  // Drawn as Branch Leads' phone card (ui/phone-lead-card, asked 2026-11-27): initials,
+  // the name over the phone, the review's status in the orange box where a lead shows its
+  // stage. Tapping the card is View, and Send to CONSULTANT and Reassign are in that
+  // popup's footer.
   const ReviewCard = ({ r }) => {
     const overdue = r.status === "sent" && r.review_date && r.review_date < (data.today || "");
-    const status = overdue ? { label: "Overdue", color: "#e11d48" } : REVIEW_STATUS[r.status];
-    // A button inside the card: its own click and key presses must not also open View.
-    const own = (fn) => ({
-      onClick: (e) => { e.stopPropagation(); fn(); },
-      onKeyDown: (e) => e.stopPropagation(),
-    });
+    const status = overdue ? { label: "Overdue" } : REVIEW_STATUS[r.status];
     return (
-      <LeadRowCard
+      <PhoneLeadCard
         id={r.id}
         name={r.lead_name}
-        badge={status?.label}
-        badgeColor={status?.color}
-        // No number beside Call and WhatsApp (see Branch Leads' card).
-        idLine={[r.patient_number, waNumber(r.phone) ? null : r.phone]}
-        wa={waNumber(r.phone)}
+        subLine={[displayPhone(r.phone)]}
+        stage={status?.label || "—"}
         onOpen={() => setViewing(r)}
         testid="branch-review-card"
-        details={(
-          <>
-            <p className="truncate text-[11px] text-slate-500">
-              <span className="font-semibold text-slate-700">{r.treatment_days} treatment days</span>
-              {r.session_package_name && <> · {r.session_package_name}</>}
-            </p>
-            <p className="truncate text-[10px] text-slate-400">Physio: {r.physio_name || "—"}</p>
-            {sub !== "send" && (
-              <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]">
-                <CalendarIcon className={`h-3 w-3 ${overdue ? "text-rose-500" : "text-slate-400"}`} />
-                <span className={`font-semibold ${overdue ? "text-rose-600" : "text-slate-700"}`}>
-                  {dmy(r.review_date)}{r.review_time ? ` · ${to12h(r.review_time)}` : ""}
-                </span>
-                <span className="truncate font-medium text-violet-700">{r.head_physio_name || "—"}</span>
-              </p>
-            )}
-            {r.reason && <p className="text-[10px] text-slate-400">{r.reason}</p>}
-            {r.status === "send_to_review" ? (
-              <div className="pt-1.5">
-                <Button size="sm" className="bg-amber-600 text-xs text-white hover:bg-amber-700" {...own(() => openSend(r))} data-testid={`branch-review-card-send-${r.id}`}>
-                  <Send className="mr-1.5 h-3.5 w-3.5" /> Send to CONSULTANT
-                </Button>
-              </div>
-            ) : r.status === "sent" ? (
-              <div className="pt-1.5">
-                <Button size="sm" variant="outline" className="text-xs" {...own(() => openSend(r))} data-testid={`branch-review-card-reassign-${r.id}`}>
-                  Reassign
-                </Button>
-              </div>
-            ) : null}
-          </>
-        )}
       />
     );
   };
 
-  // A stage picked from the phone's cards or its back-bar menu: the same as tapping the
-  // desk's tile, then its list on its own screen.
+  // A stage picked from the phone's tiles: the same as tapping the desk's tile.
   const openPhoneCard = (key) => {
     setSub(key);
     setDateFilter(null);
-    setPhoneList(true);
-    window.scrollTo({ top: 0 });
   };
 
   return (
     <div className="space-y-4" data-testid="branch-review-panel">
-      {/* Phone, one stage open: the stage being read with its count in a box, the way back
-          to the cards, and a menu to jump to another stage without going back first. */}
-      {phoneList && (() => {
-        const t = SUB_TABS.find((x) => x.key === sub) || SUB_TABS[0];
-        return (
-          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-review-phone-back">
-            <button
-              type="button"
-              onClick={() => setPhoneList(false)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
-              aria-label="Back to the Review cards"
-              data-testid="branch-review-phone-back-btn"
-            >
-              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: t.color }}>
-                {countFor(t.key)}
-              </span>
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{t.label}</span>
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
-                  aria-label="Switch card"
-                  data-testid="branch-review-phone-card-menu"
-                >
-                  <Menu aria-hidden className="h-5 w-5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {SUB_TABS.filter((o) => o.key !== t.key).map((o) => {
-                  const Icon = o.icon;
-                  return (
-                    <DropdownMenuItem
-                      key={o.key}
-                      onSelect={() => openPhoneCard(o.key)}
-                      className="gap-2.5 py-2"
-                      data-testid={`branch-review-phone-card-menu-${o.key}`}
-                    >
-                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
-                      <span className="text-xs font-semibold text-slate-500">{countFor(o.key)}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        );
-      })()}
+      {/* Phone: Branch Leads' summary tiles (ui/phone-stage-grid), the three stages
+          three across, and the stage's list right below on this same screen (asked
+          2026-11-27). */}
+      <div className="grid auto-rows-fr grid-cols-3 gap-2 sm:hidden" data-testid="branch-review-phone-cards">
+        {SUB_TABS.map((t) => (
+          <PhoneStageTile
+            key={t.key}
+            icon={t.icon}
+            label={t.label}
+            count={countFor(t.key)}
+            active={sub === t.key}
+            onClick={() => openPhoneCard(t.key)}
+            testid={`branch-review-phone-card-${t.key}`}
+          />
+        ))}
+      </div>
 
-      {/* Phone: the three stages as Branch Leads' one-line stage rows, one to a row. */}
-      {!phoneList && (
-        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-review-phone-cards">
-          {SUB_TABS.map((t) => (
-            <NotifyCard
-              key={t.key}
-              icon={t.icon}
-              label={t.label}
-              value={countFor(t.key)}
-              active={sub === t.key}
-              onClick={() => openPhoneCard(t.key)}
-              testid={`branch-review-phone-card-${t.key}`}
-              inline
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Phone, one stage open: the toolbar in one row -- search behind an icon, the
+      {/* Phone: the toolbar in one row under the tiles -- search behind an icon, the
           ranges as a dropdown, the calendar, Refresh. Opened, the search box takes the row
           until its close, which also clears it. */}
-      {phoneList && (
         <div className="flex items-center gap-1 sm:hidden" data-testid="branch-review-toolbar-phone">
           {searchOpen ? (
             <>
@@ -573,7 +465,6 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
             </>
           )}
         </div>
-      )}
 
       {/* The Head Physio board's work cards, so both ends of the review chain read the
           same way. These replaced the coloured stage pills the Branch Leads bar uses:
@@ -688,8 +579,7 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
         />
       </div>
 
-      {/* On a phone the list is only shown on its own screen, under the back bar. */}
-      <div className={phoneList ? undefined : "hidden sm:block"}>
+      <div>
       {loading && rows.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-400">Loading reviews...</p>
       ) : rows.length === 0 ? (
@@ -700,7 +590,7 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
         </Empty>
       ) : (
         <>
-        <div className={`${LEAD_ROW_LIST} md:hidden`} data-testid="branch-review-mobile">
+        <div className={`${PHONE_LEAD_LIST} md:hidden`} data-testid="branch-review-mobile">
           {rows.map((r) => <ReviewCard key={r.id} r={r} />)}
         </div>
 
@@ -1059,7 +949,18 @@ export const BranchReviewPanel = ({ branchId, onPhoneListChange }) => {
                 {viewing.head_physio_suggestions && <Block label="Suggestions" text={viewing.head_physio_suggestions} tone="emerald" />}
               </div>
             </div>
-            <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-3.5">
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-3.5">
+              {/* The row's Send and Reassign, here since the phone's rows lost their
+                  buttons (2026-11-27). */}
+              {viewing.status === "send_to_review" ? (
+                <Button className="bg-amber-600 text-white hover:bg-amber-700" onClick={() => { const r = viewing; setViewing(null); openSend(r); }} data-testid="branch-review-view-send">
+                  <Send className="mr-1.5 h-3.5 w-3.5" /> Send to CONSULTANT
+                </Button>
+              ) : viewing.status === "sent" ? (
+                <Button variant="outline" onClick={() => { const r = viewing; setViewing(null); openSend(r); }} data-testid="branch-review-view-reassign">
+                  Reassign
+                </Button>
+              ) : null}
               <Button variant="outline" onClick={() => setViewing(null)} data-testid="branch-review-view-done">Close</Button>
             </div>
           </div>

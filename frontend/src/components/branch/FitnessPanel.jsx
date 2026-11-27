@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PAYMENT_MODE_NAMES, paymentModeOptions, useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
-import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
+import { BadgeCheck, ChevronRight, Clock, IndianRupee, LayoutGrid, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, UserX, X, PlayCircle, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StageTab } from "@/components/ui/stage-tab";
-import { NotifyCard } from "@/components/ui/notify-card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PhoneStageTile } from "@/components/ui/phone-stage-grid";
+import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStageBack } from "@/components/ui/phone-back";
 import { listFitness, addFitness, updateFitness, setFitnessStatus, deleteFitness, collectFitnessPayment, renewFitness, acceptFitnessReferral, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
@@ -125,8 +124,8 @@ const packageTotal = (item) => {
 };
 const packageSessions = (item) => item?.sessions_offline || item?.sessions_online || 0;
 
-// The icon each card wears on a phone, where the cards are Branch Leads' one-line rows
-// (NotifyCard `inline`) and the icon is the only thing telling one grey row from the next.
+// The icon each card wears on a phone, where the cards are Branch Leads' summary tiles
+// (ui/phone-stage-grid), three across.
 const CARD_ICONS = {
   all: LayoutGrid,
   referred: Stethoscope,
@@ -174,9 +173,7 @@ const FormSelect = ({ value, onChange, children, testid }) => (
   </select>
 );
 
-// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
-// stand its own back bar down while this panel's is showing.
-export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
+export const FitnessPanel = ({ branchId }) => {
   const [data, setData] = useState({ registrations: [], counts: {}, totals: {} });
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -195,15 +192,9 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
   const [viewing, setViewing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the roll
-  // Phone only, as Zumba does it: the cards are a stack of Branch Leads' rows, and a tap
-  // opens that card's list on a screen of its own with a back bar above it. From sm up
-  // nothing reads this.
-  const [phoneList, setPhoneList] = useState(false);
-  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
   const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   // The phone toolbar's calendar, so picking Custom from the dates dropdown can open it.
   const phoneCalendar = useRef(null);
-  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
 
   // Rises with every roll fetch started here, so a reply that is no longer the newest is
   // dropped rather than written. Refresh going dead while busy stops two presses racing,
@@ -356,12 +347,9 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
     }
   };
 
-  // A phone card's tap: filter to that card (All is a card of its own) and open its list.
-  const openPhoneCard = (key) => {
-    setCard(key);
-    setPhoneList(true);
-    window.scrollTo({ top: 0 });
-  };
+  // A phone tile's tap: narrow the list right below to that card; the open one tapped
+  // again goes back to All.
+  const openPhoneCard = (key) => setCard(card === key ? "all" : key);
 
   const remove = async (row) => {
     try {
@@ -387,77 +375,21 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
           `arrow` on each tile: no corner disc and no dumbbell, just the ledger card's
           chevron on a 5px corner, matching the Zumba strip beside this one. "desk": the
           chevron is sm-up only, a phone card is label and figure alone. */}
-      {/* Phone, one card open: where the stack sat, the card being read -- its figure in a
-          box, as Zumba's back bar has it -- the way back to the cards, and a menu to jump
-          to another card without going back first. */}
-      {phoneList && (() => {
-        const c = CARDS.find((x) => x.key === card) || CARDS[0];
-        const others = CARDS.filter((x) => x.key !== c.key);
-        return (
-          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="fitness-phone-back">
-            <button
-              type="button"
-              onClick={() => setPhoneList(false)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
-              aria-label="Back to the Fitness cards"
-              data-testid="fitness-phone-back-btn"
-            >
-              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: c.color }}>
-                {c.value ?? 0}
-              </span>
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{c.label}</span>
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
-                  aria-label="Switch card"
-                  data-testid="fitness-phone-card-menu"
-                >
-                  <Menu aria-hidden className="h-5 w-5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {others.map((o) => {
-                  const Icon = CARD_ICONS[o.key];
-                  return (
-                    <DropdownMenuItem
-                      key={o.key}
-                      onSelect={() => openPhoneCard(o.key)}
-                      className="gap-2.5 py-2"
-                      data-testid={`fitness-phone-card-menu-${o.key}`}
-                    >
-                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
-                      <span className="text-xs font-semibold text-slate-500">{o.value ?? 0}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        );
-      })()}
-
-      {/* Phone: the cards as Branch Leads' one-line stage rows, one to a row. */}
-      {!phoneList && (
-        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="fitness-phone-cards">
-          {CARDS.map((c) => (
-            <NotifyCard
-              key={c.key}
-              icon={CARD_ICONS[c.key]}
-              label={c.label}
-              value={c.value ?? 0}
-              active={card === c.key}
-              onClick={() => openPhoneCard(c.key)}
-              testid={`fitness-phone-card-${c.key}`}
-              inline
-            />
-          ))}
-        </div>
-      )}
+      {/* Phone: Branch Leads' summary tiles (ui/phone-stage-grid), three across, and the
+          list right below on this same screen (asked 2026-11-27). */}
+      <div className="grid auto-rows-fr grid-cols-3 gap-2 sm:hidden" data-testid="fitness-phone-cards">
+        {CARDS.map((c) => (
+          <PhoneStageTile
+            key={c.key}
+            icon={CARD_ICONS[c.key]}
+            label={c.label}
+            count={c.value ?? 0}
+            active={card === c.key}
+            onClick={() => openPhoneCard(c.key)}
+            testid={`fitness-phone-card-${c.key}`}
+          />
+        ))}
+      </div>
 
       <div className="hidden rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 p-1 shadow-[0_1px_2px_0_rgb(15_23_42/0.04),0_4px_12px_-4px_rgb(99_102_241/0.12)] sm:block">
         <div className="flex flex-nowrap gap-2">
@@ -476,14 +408,15 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
         </div>
       </div>
 
-      <Card className={phoneList ? undefined : "hidden sm:block"}>
+      {/* On a phone the Card's box goes, so the rows stand as Branch Leads' cards do. */}
+      <Card className="max-sm:border-0 max-sm:bg-transparent max-sm:shadow-none">
         <CardContent className="p-0">
           {/* The Zumba list's toolbar: dates, then payment mode, then search, refresh and
               create at the right. Wraps group by group on a narrow window. */}
           {/* Phone: the Zumba list's one-row toolbar -- search behind an icon, the dates and
               payment modes as dropdowns, the calendar for a range of its own, Refresh and
               Add. Opened, the search box takes the row until its close, which also clears it. */}
-          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2.5 sm:hidden" data-testid="fitness-toolbar-phone">
+          <div className="flex items-center gap-1 pb-1 sm:hidden" data-testid="fitness-toolbar-phone">
             {searchOpen ? (
               <>
                 <div className="relative min-w-0 flex-1">
@@ -664,74 +597,28 @@ export const FitnessPanel = ({ branchId, onPhoneListChange }) => {
             </p>
           ) : (
             <>
-            {/* The phone face of the table below: one row per member -- initial, name over
-                mobile and package, then the one thing to act on (take on a referral,
-                collect a balance) or, with nothing owed, their status. A tap opens the
-                record. sm-up keeps the table. */}
-            <ul className="divide-y divide-slate-100 sm:hidden" data-testid="fitness-phone-rows">
+            {/* The phone face of the table below: Branch Leads' phone card per member
+                (asked 2026-11-27) -- initials, name over mobile and package, and in the
+                orange box Referred, the balance owed, or their status. A tap opens the
+                record, where Take On and Collect are. sm-up keeps the table. */}
+            <div className={`${PHONE_LEAD_LIST} sm:hidden`} data-testid="fitness-phone-rows">
               {visible.map((r) => {
                 const referral = r.origin === "consultation";
-                const paid = Number(r.fee_paid || 0);
                 const due = Number(r.fee_due || 0);
-                const statusKey = r.status || "active";
-                const chip = referral ? REFERRED_META : (STATUS_ROW[statusKey] || STATUS_ROW.active);
+                const chip = referral ? REFERRED_META : (STATUS_ROW[r.status || "active"] || STATUS_ROW.active);
                 return (
-                  <li
+                  <PhoneLeadCard
                     key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setViewing(r)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewing(r); } }}
-                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 active:bg-slate-50"
-                    data-testid={`fitness-card-row-${r.id}`}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-100 text-xs font-bold text-sky-700">
-                      {(r.name || "?").charAt(0).toUpperCase()}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-slate-800">{r.name || "—"}</span>
-                      <span className="block truncate text-[11px] text-slate-500">
-                        {displayPhone(r.phone) || "—"}{r.package_name ? ` · ${r.package_name}` : ""}
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {referral ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1 rounded-[5px] border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
-                          disabled={accepting === r.id}
-                          onClick={() => acceptAndEdit(r)}
-                          data-testid={`fitness-card-accept-${r.id}`}
-                        >
-                          <Stethoscope className="h-3 w-3" />
-                          {accepting === r.id ? "Taking on…" : "Referred"}
-                        </Button>
-                      ) : due > 0 ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className={`h-7 gap-0.5 rounded-[5px] px-2 text-[10px] font-semibold ${paid > 0
-                            ? "border-rose-300 text-rose-700 hover:bg-rose-50"
-                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
-                          onClick={() => setCollecting(r)}
-                          title={paid > 0 ? "Due Collect" : "Collect"}
-                          data-testid={`fitness-card-collect-${r.id}`}
-                        >
-                          <IndianRupee className="h-3 w-3" />
-                          {due.toLocaleString("en-IN")}
-                        </Button>
-                      ) : (
-                        <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
-                          {chip.label}
-                        </span>
-                      )}
-                      <ChevronRight className="h-4 w-4 text-slate-400" onClick={() => setViewing(r)} />
-                    </span>
-                  </li>
+                    id={r.id}
+                    name={r.name}
+                    subLine={[displayPhone(r.phone), r.package_name]}
+                    stage={!referral && due > 0 ? `₹${due.toLocaleString("en-IN")} Due` : chip.label}
+                    onOpen={() => setViewing(r)}
+                    testid="fitness-card-row"
+                  />
                 );
               })}
-            </ul>
+            </div>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[60rem] text-left text-sm">
                 <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">

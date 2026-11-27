@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ChevronLeft, Copy, Dumbbell, HeartPulse, LayoutGrid, Menu, Music, Phone, PhoneCall, RefreshCw, Search,
+  Activity, Copy, Dumbbell, HeartPulse, LayoutGrid, Music, Phone, PhoneCall, RefreshCw, Search,
   Stethoscope, Trash2, User, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,9 @@ import { toast } from "@/components/ui/sonner";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { QuickDateFilterBar, QUICK_DATE_PRESETS, quickDatePreset } from "@/components/QuickDateFilterBar";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
-import { NotifyCard } from "@/components/ui/notify-card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PhoneStageTile } from "@/components/ui/phone-stage-grid";
+import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStageBack } from "@/components/ui/phone-back";
 import {
   getBranchBoard, updateLead, listFitness, listZumba,
   getPortalAccountStatus, createOrResetPortalAccount,
@@ -112,8 +111,8 @@ const CARDS = [
   { key: "zumba", label: "Zumba", color: "#db2777" },
 ];
 
-// The icon each card wears on a phone, where the cards are Branch Leads' one-line rows
-// (NotifyCard `inline`) and the icon is the only thing telling one grey row from the next.
+// The icon each card wears on a phone, where the cards are Branch Leads' summary tiles
+// (ui/phone-stage-grid), three across.
 const CARD_ICONS = {
   all: LayoutGrid,
   consultation: Stethoscope,
@@ -276,9 +275,7 @@ const buildRoll = (leads, gymRows, classRows) => {
   });
 };
 
-// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
-// stand its own back bar down while this panel's is showing.
-export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
+export const PatientsPortalPanel = ({ branchId }) => {
   const [leads, setLeads] = useState([]);
   const [gym, setGym] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -290,12 +287,6 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
   // and null is the shape QuickDateFilterBar already speaks.
   const [dateFilter, setDateFilter] = useState(null);
   const [selected, setSelected] = useState(null);
-  // Phone only, as Zumba, Fitness and Review do it: the cards are a stack of Branch Leads'
-  // rows, and a tap opens that card's list on a screen of its own with a back bar above
-  // it. From sm up nothing reads this.
-  const [phoneList, setPhoneList] = useState(false);
-  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
-  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [searchOpen, setSearchOpen] = useState(false); // the phone toolbar's search box
   // The phone toolbar's calendar, so picking Custom from the dates dropdown can open it.
   const phoneCalendar = useRef(null);
@@ -355,91 +346,33 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
 
   const openLead = (row) => { if (row.lead) setSelected(row.lead); };
 
-  // A phone card's tap: filter to that card (All is a card of its own) and open its list.
-  const openPhoneCard = (key) => {
-    setCard(key);
-    setPhoneList(true);
-    window.scrollTo({ top: 0 });
-  };
+  // A phone tile's tap: narrow the list right below to that card; the open one tapped
+  // again goes back to All.
+  const openPhoneCard = (key) => setCard(card === key ? "all" : key);
 
   const presetKey = !dateFilter ? "all" : PHONE_DATE_PRESETS.some((x) => x.key === dateFilter.key) ? dateFilter.key : "custom";
 
   return (
     <div className="space-y-4" data-testid="branch-patients-panel">
-      {/* Phone, one card open: the card being read with its count in a box, the way back
-          to the cards, and a menu to jump to another card without going back first. */}
-      {phoneList && (() => {
-        const c = CARDS.find((x) => x.key === card) || CARDS[0];
-        return (
-          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="branch-patients-phone-back">
-            <button
-              type="button"
-              onClick={() => setPhoneList(false)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
-              aria-label="Back to the Patients cards"
-              data-testid="branch-patients-phone-back-btn"
-            >
-              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: c.color }}>
-                {counts[c.key] ?? 0}
-              </span>
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{c.label}</span>
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
-                  aria-label="Switch card"
-                  data-testid="branch-patients-phone-card-menu"
-                >
-                  <Menu aria-hidden className="h-5 w-5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {CARDS.filter((o) => o.key !== c.key).map((o) => {
-                  const Icon = CARD_ICONS[o.key];
-                  return (
-                    <DropdownMenuItem
-                      key={o.key}
-                      onSelect={() => openPhoneCard(o.key)}
-                      className="gap-2.5 py-2"
-                      data-testid={`branch-patients-phone-card-menu-${o.key}`}
-                    >
-                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{o.label}</span>
-                      <span className="text-xs font-semibold text-slate-500">{counts[o.key] ?? 0}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        );
-      })()}
+      {/* Phone: Branch Leads' summary tiles (ui/phone-stage-grid), three across, and the
+          list right below on this same screen (asked 2026-11-27). */}
+      <div className="grid auto-rows-fr grid-cols-3 gap-2 sm:hidden" data-testid="branch-patients-phone-cards">
+        {CARDS.map((c) => (
+          <PhoneStageTile
+            key={c.key}
+            icon={CARD_ICONS[c.key]}
+            label={c.label}
+            count={counts[c.key] ?? 0}
+            active={card === c.key}
+            onClick={() => openPhoneCard(c.key)}
+            testid={`branch-patients-phone-card-${c.key}`}
+          />
+        ))}
+      </div>
 
-      {/* Phone: the cards as Branch Leads' one-line stage rows, one to a row. */}
-      {!phoneList && (
-        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="branch-patients-phone-cards">
-          {CARDS.map((c) => (
-            <NotifyCard
-              key={c.key}
-              icon={CARD_ICONS[c.key]}
-              label={c.label}
-              value={counts[c.key] ?? 0}
-              active={card === c.key}
-              onClick={() => openPhoneCard(c.key)}
-              testid={`branch-patients-phone-card-${c.key}`}
-              inline
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Phone, one card open: the toolbar in one row -- search behind an icon, the ranges
+      {/* Phone: the toolbar in one row under the tiles -- search behind an icon, the ranges
           as a dropdown, the calendar for a range of its own, Refresh. Opened, the search
           box takes the row until its close, which also clears it. */}
-      {phoneList && (
         <div className="flex items-center gap-1 sm:hidden" data-testid="branch-patients-toolbar-phone">
           {searchOpen ? (
             <>
@@ -515,7 +448,6 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
             </>
           )}
         </div>
-      )}
 
       {/* Six columns for six cards on a wide screen, so the row finishes flush with the
           page. Written as literal class names because Tailwind reads them out of the
@@ -577,8 +509,8 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
       </div>
 
       {/* No "Patients · N patients" heading here: the active card above already names the
-          list and counts it. On a phone the list is only shown on its own screen. */}
-      <div className={phoneList ? undefined : "hidden sm:block"}>
+          list and counts it. */}
+      <div>
         {visible.length === 0 && !loading ? (
           <div className="py-16 text-center">
             <User className="mx-auto mb-3 h-10 w-10 text-slate-200" />
@@ -594,73 +526,23 @@ export const PatientsPortalPanel = ({ branchId, onPhoneListChange }) => {
           </div>
         ) : (
           <>
-          {/* Phone: one row per patient -- initial, name over mobile and what they are here
-              for, then paid or awaiting, Call and WhatsApp. Tapping the row opens the
-              record; a gym or class member with no lead has none, so theirs is not a button. */}
-          <ul className="divide-y divide-slate-100 overflow-hidden rounded-[5px] border border-slate-200 bg-white md:hidden" data-testid="branch-patients-mobile">
-            {visible.map((r) => {
-              const wa = waNumber(r.phone);
-              const openable = !!r.lead;
-              return (
-                <li
-                  key={r.key}
-                  {...(openable ? {
-                    role: "button",
-                    tabIndex: 0,
-                    onClick: () => openLead(r),
-                    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLead(r); } },
-                  } : {})}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 ${openable ? "cursor-pointer active:bg-slate-50" : ""}`}
-                  data-testid={`branch-patient-card-${r.key}`}
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-sky-100 text-xs font-bold text-sky-700">
-                    {r.name?.charAt(0)?.toUpperCase() || "?"}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
-                    <span className="block truncate text-[11px] text-slate-500">
-                      {displayPhone(r.phone) || "—"}
-                      {r.services.length > 0 && <> · {r.services.map((x) => SERVICE_LABEL[x]).join(", ")}</>}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1">
-                    <span
-                      className={`rounded-[5px] border px-1.5 py-0.5 text-[10px] font-semibold ${r.paid > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
-                      title={`Rs.${r.paid} paid`}
-                    >
-                      {r.paid > 0 ? "Paid" : "Awaiting"}
-                    </span>
-                    {wa && (
-                      <>
-                        <a
-                          href={`tel:${telNumber(wa)}`}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="flex h-7 w-7 items-center justify-center rounded-[5px] border border-slate-200 text-slate-600 active:bg-slate-100"
-                          title="Call"
-                          aria-label="Call"
-                          data-testid={`branch-patient-call-${r.key}`}
-                        >
-                          <Phone className="h-3.5 w-3.5" />
-                        </a>
-                        <a
-                          href={`https://wa.me/${wa}`}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="flex h-7 w-7 items-center justify-center rounded-[5px] border border-[#25D366]/40 bg-[#25D366]/10 text-[#128C7E] active:bg-[#25D366]/20"
-                          title="WhatsApp"
-                          aria-label="WhatsApp"
-                          data-testid={`branch-patient-whatsapp-${r.key}`}
-                        >
-                          <WhatsAppIcon className="h-3.5 w-3.5" />
-                        </a>
-                      </>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          {/* Phone: Branch Leads' phone card per patient (asked 2026-11-27) -- initials,
+              name over mobile and what they are here for, and Paid or Awaiting in the
+              orange box. Tapping it opens the record; a gym or class member with no lead
+              has none to open. Call and WhatsApp are in the record, as on Branch Leads. */}
+          <div className={`${PHONE_LEAD_LIST} md:hidden`} data-testid="branch-patients-mobile">
+            {visible.map((r) => (
+              <PhoneLeadCard
+                key={r.key}
+                id={r.key}
+                name={r.name}
+                subLine={[displayPhone(r.phone), r.services.map((x) => SERVICE_LABEL[x]).join(", ")]}
+                stage={r.paid > 0 ? "Paid" : "Awaiting"}
+                onOpen={() => openLead(r)}
+                testid="branch-patient-card"
+              />
+            ))}
+          </div>
 
           <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
             <table className="min-w-full text-sm">

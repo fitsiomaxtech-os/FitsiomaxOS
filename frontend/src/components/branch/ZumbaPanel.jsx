@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { paymentModeOptions, useKeepLinesShown, useShownPaymentModes } from "@/lib/paymentModes";
-import { BadgeCheck, ChevronLeft, ChevronRight, Clock, IndianRupee, LayoutGrid, Menu, Pencil, Plus, RefreshCw, Search, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
+import { BadgeCheck, ChevronRight, Clock, IndianRupee, LayoutGrid, Pencil, Plus, RefreshCw, Search, Share2, Stethoscope, Trash2, UserCheck, UserPlus, UserX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { toast } from "@/components/ui/sonner";
 import { StageTab } from "@/components/ui/stage-tab";
-import { NotifyCard } from "@/components/ui/notify-card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PhoneStageTile } from "@/components/ui/phone-stage-grid";
+import { PHONE_LEAD_LIST, PhoneLeadCard } from "@/components/ui/phone-lead-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStageBack } from "@/components/ui/phone-back";
 import { listZumba, listZumbaMasters, setZumbaMasterSlot, addZumba, updateZumba, deleteZumba, setZumbaStatus, acceptZumbaReferral, renewZumba, collectZumba, listStoreItems } from "@/lib/api";
 import { displayPhone } from "@/lib/phone";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
@@ -703,8 +702,8 @@ const CARDS = [
   { key: "discontinued", label: "Discontinue", color: "#e11d48", sum: ["discontinued", "leave"] },
 ];
 
-// The icon each card wears on a phone, where the cards are Branch Leads' one-line rows
-// (NotifyCard `inline`) and the icon is the only thing telling one grey row from the next.
+// The icon each card wears on a phone, where the cards are Branch Leads' summary tiles
+// (ui/phone-stage-grid), three across.
 const CARD_ICONS = {
   all: LayoutGrid,
   direct: UserCheck,
@@ -1181,7 +1180,7 @@ const STATUS_ROW = {
  * by whoever works both tabs. What is owed leads, since it is the thing a desk opens a row
  * to find out; who they are and what they bought sit under it, side by side.
  */
-const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, onDelete, onClose, onSaved }) => {
+const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, onDelete, onAccept, accepting = false, onClose, onSaved }) => {
   const [pending, setPending] = useState(null); // "discontinued" | "leave" | null
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1455,6 +1454,14 @@ const ViewRegistrationModal = ({ row, masterNameOf, onEdit, onCollect, onRenew, 
               <Trash2 className="mr-1 h-3.5 w-3.5" /> {ownedElsewhere ? "Remove" : "Delete"}
             </Button>
           </div>
+          {/* A referral's one move: take it onto the branch's books and fill in the form.
+              The row's Referred button did it alone until the phone's rows lost their
+              buttons (2026-11-27); here it is on every width. */}
+          {ownedElsewhere && onAccept && (
+            <Button size="sm" className="bg-sky-600 text-white hover:bg-sky-700" onClick={onAccept} disabled={accepting} data-testid="zumba-view-accept">
+              <Stethoscope className="mr-1 h-3.5 w-3.5" /> {accepting ? "Taking on…" : "Take On"}
+            </Button>
+          )}
           {!ownedElsewhere && (
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={onEdit} data-testid="zumba-view-edit">
@@ -1522,9 +1529,7 @@ const EMPTY = {
  * every stage filter while answering none of them. The cards split by source instead,
  * which is what a branch wants to know about a class it is filling.
  */
-// onPhoneListChange: told whether a card's list is open on a phone, so Activity Care can
-// drop its own back bar and leave this one as the only way back.
-export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
+export const ZumbaPanel = ({ branchId }) => {
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState({});
   const [masters, setMasters] = useState([]);
@@ -1567,12 +1572,6 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
   // than a value of `card`, because the list underneath is left on whatever it was
   // showing: reading the takings is not a reason to lose the view being worked.
   const [paymentDoneOpen, setPaymentDoneOpen] = useState(false);
-  // Phone only: the cards are a stack of Branch Leads' rows, and a tap opens that card's
-  // list on a screen of its own with a back bar above it -- seven rows fill the screen, so
-  // a list left under them would change out of sight. From sm up nothing reads this.
-  const [phoneList, setPhoneList] = useState(false);
-  useStageBack(phoneList); // the phone's Back closes the list -- see ui/phone-back
-  useEffect(() => { onPhoneListChange?.(phoneList); }, [phoneList, onPhoneListChange]);
   const [accepting, setAccepting] = useState(null); // the referral being taken onto the books
   // The Zumba pipeline exactly as Super Admin has it in CI/CD ROOTS. Nothing is hardcoded
   // here: a clinic that has not set the pipeline up has no stages, and the Stage column
@@ -1849,13 +1848,11 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
     };
   };
 
-  // A phone card's tap: Payment Done opens its popup as on desktop; any other card filters
-  // to itself (no toggling back to All -- All is a card of its own) and opens its list.
+  // A phone tile's tap, as the desk strip's: Payment Done opens its popup; any other tile
+  // narrows the list right below, and the open one tapped again goes back to All.
   const openPhoneCard = (key) => {
     if (key === "payment_done") { setPaymentDoneOpen(true); return; }
-    setCard(key);
-    setPhoneList(true);
-    window.scrollTo({ top: 0 });
+    setCard(key === "all" ? "all" : (card === key ? "all" : key));
   };
 
   return (
@@ -1870,86 +1867,27 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
 
           The Fitness tab's card, `arrow` and all: white, a grey label and the figure in the
           card's colour, the picked one ringed in it. */}
-      {/* Phone, one card open: where the stack sat, the card being read -- its figure in a
-          box in the card's colour, as Branch Leads' back bar has it -- the way back to the
-          cards, and a menu to jump to another card without going back first. */}
-      {phoneList && (() => {
-        const c = CARDS.find((x) => x.key === card) || CARDS[0];
-        const p = cardProps(c);
-        const others = CARDS.filter((x) => x.key !== c.key);
-        return (
-          <div className="sticky top-[61px] z-10 -mx-3 -mt-4 flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2 sm:hidden" data-testid="zumba-phone-back">
-            <button
-              type="button"
-              onClick={() => setPhoneList(false)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left active:bg-slate-100"
-              aria-label="Back to the Zumba cards"
-              data-testid="zumba-phone-back-btn"
-            >
-              <ChevronLeft aria-hidden className="h-5 w-5 shrink-0 text-slate-600 motion-safe:animate-nudge-left" />
-              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-[4px] px-2 text-xs font-bold text-white opacity-[0.65]" style={{ background: p.color }}>
-                {p.value}
-              </span>
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{p.label}</span>
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100"
-                  aria-label="Switch card"
-                  data-testid="zumba-phone-card-menu"
-                >
-                  <Menu aria-hidden className="h-5 w-5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {others.map((o) => {
-                  const op = cardProps(o);
-                  const Icon = CARD_ICONS[o.key];
-                  return (
-                    <DropdownMenuItem
-                      key={o.key}
-                      onSelect={() => openPhoneCard(o.key)}
-                      className="gap-2.5 py-2"
-                      data-testid={`zumba-phone-card-menu-${o.key}`}
-                    >
-                      <Icon aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{op.label}</span>
-                      <span className="text-xs font-semibold text-slate-500">{op.value}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        );
-      })()}
-
-      {/* Phone: the cards as Branch Leads' one-line rows, one to a row. The box holds the
+      {/* Phone: Branch Leads' summary tiles (ui/phone-stage-grid), three across, and the
+          list right below on this same screen (asked 2026-11-27). The box holds the
           card's figure -- the amount on the two money cards -- and the red dot pops while
           anybody is behind it. */}
-      {!phoneList && (
-        <div className="grid grid-cols-1 gap-2.5 sm:hidden" data-testid="zumba-phone-cards">
-          {CARDS.map((c) => {
-            const p = cardProps(c);
-            return (
-              <NotifyCard
-                key={c.key}
-                icon={CARD_ICONS[c.key]}
-                label={p.label}
-                value={p.value}
-                count={p.people}
-                display={p.value}
-                active={c.key !== "payment_done" && card === c.key}
-                onClick={() => openPhoneCard(c.key)}
-                testid={`zumba-phone-card-${c.key}`}
-                inline
-              />
-            );
-          })}
-        </div>
-      )}
+      <div className="grid auto-rows-fr grid-cols-3 gap-2 sm:hidden" data-testid="zumba-phone-cards">
+        {CARDS.map((c) => {
+          const p = cardProps(c);
+          return (
+            <PhoneStageTile
+              key={c.key}
+              icon={CARD_ICONS[c.key]}
+              label={p.label}
+              count={p.value}
+              dot={p.people > 0}
+              active={c.key !== "payment_done" && card === c.key}
+              onClick={() => openPhoneCard(c.key)}
+              testid={`zumba-phone-card-${c.key}`}
+            />
+          );
+        })}
+      </div>
 
       {/* Desk: Branch Leads' stage strip -- white cards on the sky -> indigo -> violet
           tray, the name and figure centred, the picked card ringed with the nudging arrow. */}
@@ -1978,12 +1916,13 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
         </div>
       </div>
 
-      {/* The class settings belong with the cards on a phone, not with one card's list. */}
-      <div className={phoneList ? "hidden sm:block" : undefined}>
+      {/* The class settings, under the cards. */}
+      <div>
         <ClassMasters masters={zumbaMasters} onSet={setClassMaster} busy={settingSlot} />
       </div>
 
-      <Card className={phoneList ? undefined : "hidden sm:block"}>
+      {/* On a phone the Card's box goes, so the rows stand as Branch Leads' cards do. */}
+      <Card className="max-sm:border-0 max-sm:bg-transparent max-sm:shadow-none">
         <CardContent className="p-0">
           {/* One toolbar, then the table: dates on the left, payment mode beside them, and
               search, refresh and create at the right. The title row that used to sit above
@@ -1993,7 +1932,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
               payment modes as dropdowns, the calendar for a range of its own, Refresh and
               Add. Opened, the search box takes the row until its ✕, which also clears it,
               so no search is left narrowing the list unseen. */}
-          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2.5 sm:hidden" data-testid="zumba-toolbar-phone">
+          <div className="flex items-center gap-1 pb-1 sm:hidden" data-testid="zumba-toolbar-phone">
             {searchOpen ? (
               <>
                 <div className="relative min-w-0 flex-1">
@@ -2163,72 +2102,28 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
             </p>
           ) : (
             <>
-            {/* Phone: one row per customer -- initial, name over mobile and master, then the
-                one thing to act on (take on a referral, collect a balance) or, with nothing
-                owed, their status. A tap opens the record, as a table row does. */}
-            <ul className="divide-y divide-slate-100 sm:hidden" data-testid="zumba-phone-rows">
+            {/* Phone: Branch Leads' phone card per customer (asked 2026-11-27) -- initials,
+                name over mobile and master, and in the orange box the one thing to know:
+                Referred, the balance owed, or their status. A tap opens the record, where
+                Collect Due and Take On are. */}
+            <div className={`${PHONE_LEAD_LIST} sm:hidden`} data-testid="zumba-phone-rows">
               {visible.map((r) => {
-                const paid = Number(r.fee_paid || 0);
-                const due = Number(r.fee_amount || 0) - paid;
+                const due = Number(r.fee_amount || 0) - Number(r.fee_paid || 0);
                 const master = masterNameOf(r.assigned_master_id);
                 const chip = STATUS_ROW[r.status || "active"] || STATUS_ROW.active;
                 return (
-                  <li
+                  <PhoneLeadCard
                     key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setViewing(r)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewing(r); } }}
-                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 active:bg-slate-50"
-                    data-testid={`zumba-phone-row-${r.id}`}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-violet-100 text-xs font-bold text-violet-700">
-                      {(r.name || "?").charAt(0).toUpperCase()}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-slate-800">{r.name || "—"}</span>
-                      <span className="block truncate text-[11px] text-slate-500">
-                        {displayPhone(r.phone) || "—"}{master ? ` · ${master}` : ""}
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {r.origin === "consultation" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1 rounded-[5px] border-sky-200 px-2 text-[10px] font-semibold text-sky-700 hover:bg-sky-50"
-                          disabled={accepting === r.id}
-                          onClick={() => acceptAndEdit(r)}
-                          data-testid={`zumba-phone-accept-${r.id}`}
-                        >
-                          <Stethoscope className="h-3 w-3" />
-                          {accepting === r.id ? "Taking on…" : "Referred"}
-                        </Button>
-                      ) : due > 0 ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className={`h-7 gap-0.5 rounded-[5px] px-2 text-[10px] font-semibold ${paid > 0
-                            ? "border-rose-300 text-rose-700 hover:bg-rose-50"
-                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"}`}
-                          onClick={() => setCollecting(r)}
-                          title={paid > 0 ? "Due Collect" : "Collect"}
-                          data-testid={`zumba-phone-collect-${r.id}`}
-                        >
-                          <IndianRupee className="h-3 w-3" />
-                          {Number(due).toLocaleString("en-IN")}
-                        </Button>
-                      ) : (
-                        <span className={`inline-flex whitespace-nowrap rounded-[5px] border px-2 py-0.5 text-[10px] font-bold ${chip.classes}`}>
-                          {chip.label}
-                        </span>
-                      )}
-                      <ChevronRight className="h-4 w-4 text-slate-400" onClick={() => setViewing(r)} />
-                    </span>
-                  </li>
+                    id={r.id}
+                    name={r.name}
+                    subLine={[displayPhone(r.phone), master]}
+                    stage={r.origin === "consultation" ? "Referred" : due > 0 ? `${rupees(due)} Due` : chip.label}
+                    onOpen={() => setViewing(r)}
+                    testid="zumba-phone-row"
+                  />
                 );
               })}
-            </ul>
+            </div>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[64rem] text-left text-sm">
                 <thead className="bg-slate-500 text-[10px] font-bold uppercase tracking-wider text-white">
@@ -2625,6 +2520,8 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
           onCollect={() => { const r = viewing; setViewing(null); setCollecting(r); }}
           onRenew={() => { const r = viewing; setViewing(null); setRenewing(r); }}
           onDelete={() => { const r = viewing; setViewing(null); setRemoving(r); }}
+          onAccept={() => { const r = viewing; setViewing(null); acceptAndEdit(r); }}
+          accepting={!!accepting}
           onClose={() => setViewing(null)}
           onSaved={load}
         />
@@ -2634,7 +2531,7 @@ export const ZumbaPanel = ({ branchId, onPhoneListChange }) => {
         <PaymentDoneModal
           rows={paymentDoneRows}
           owed={owedRows}
-          onShowDue={() => { setPaymentDoneOpen(false); setCard("due_payment"); setPhoneList(true); }}
+          onShowDue={() => { setPaymentDoneOpen(false); setCard("due_payment"); }}
           onClose={() => setPaymentDoneOpen(false)}
         />
       )}
