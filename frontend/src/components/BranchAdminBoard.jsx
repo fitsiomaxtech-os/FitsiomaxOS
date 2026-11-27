@@ -5140,7 +5140,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
           taller than the window; past that the body below scrolls. A fixed height left a
           short tab -- Overview, with just the contact and the move buttons -- sitting on a
           block of blank card. */}
-      <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[18px] bg-white shadow-lg sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
+      <div className={`flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-[4px] bg-white shadow-lg sm:w-[590px] sm:max-w-full ${atRnrStage ? "sm:max-h-[min(630px,100%)]" : "sm:max-h-[min(450px,100%)]"}`} data-testid="branch-lead-modal">
         {/* Solid #0284C7, the board's own sky-600, with the name, ID and stage in white and
             the Transfer and Edit buttons kept as white tiles so they still read as buttons.
             One flat colour, not the old three-colour gradient: the gradient made this the loudest thing on a screen whose
