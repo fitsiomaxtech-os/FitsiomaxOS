@@ -273,19 +273,33 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
     finally { setBusy(false); }
   };
 
+  // One row, as Password and Email ID are: the title with its On / Off beside it on the
+  // left, the button on the right. The code step below replaces the button while it runs.
   return (
     <Panel
-      title="Two-factor authentication"
+      title={
+        <>
+          Two-factor authentication
+          <span
+            className={`rounded px-2 py-0.5 text-xs font-semibold ${enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}
+            data-testid="my-security-2fa-status"
+          >
+            {enabled ? "On" : "Off"}
+          </span>
+        </>
+      }
       icon={enabled ? ShieldCheck : ShieldOff}
       testid="my-security-2fa"
-      right={
-        <span
-          className={`rounded px-2 py-0.5 text-xs font-semibold ${enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}
-          data-testid="my-security-2fa-status"
+      right={emailConfigured && !pending && (
+        <Button
+          onClick={() => start(enabled ? "disable" : "enable")}
+          disabled={busy}
+          className={enabled ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}
+          data-testid="my-security-2fa-toggle"
         >
-          {enabled ? "On" : "Off"}
-        </span>
-      }
+          {busy ? "Sending code…" : enabled ? "Turn off two-factor" : "Turn on two-factor"}
+        </Button>
+      )}
     >
       <div className="space-y-4">
         <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -314,18 +328,7 @@ const TwoFactorPanel = ({ state, emailMasked, onChanged }) => {
               </p>
             </div>
           </div>
-        ) : !pending ? (
-          <div className="space-y-2">
-            <Button
-              onClick={() => start(enabled ? "disable" : "enable")}
-              disabled={busy}
-              className={enabled ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}
-              data-testid="my-security-2fa-toggle"
-            >
-              {busy ? "Sending code…" : enabled ? "Turn off two-factor" : "Turn on two-factor"}
-            </Button>
-          </div>
-        ) : (
+        ) : !pending ? null : (
           <div className="max-w-xs space-y-3" data-testid="my-security-2fa-verify">
             <div>
               <Label>Code sent to {pending.email_masked}</Label>
