@@ -25,7 +25,8 @@ import { AttendanceTab, PayrollTab, ApprovalsTab, QuotesTab } from "@/components
 import { ClientReviewsPanel } from "@/components/reviews/ClientReviewsPanel";
 import { EodReportsPanel } from "@/components/eod/EodReportsPanel";
 import { PerformancePanel } from "@/components/hr/PerformancePanel";
-import { displayPhone } from "@/lib/phone";
+import { displayPhone, isValidPhone, phoneDigits } from "@/lib/phone";
+import { PhoneInput } from "@/components/PhoneInput";
 import { clamp, useDismissOutside, useFloatingPosition } from "@/lib/use-floating";
 
 // Matches ALL_BRANCHES in backend/routers/v3_hr.py, which resolves it to a name on the way
@@ -2043,8 +2044,10 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
   // initialDepartment/initialDesignation only seed a brand-new form — editing keeps using
   // the record's own values, and `employee` (not these fields) is what submit() checks to
   // decide create vs. update, so this never risks turning a create into an update.
+  // A stored phone that reads as one Indian mobile ("+91 88255 87322") opens as its 10
+  // digits, so the box below can check it; anything else opens as written.
   const [form, setForm] = useState(() => employee
-    ? { ...blankEmployee, ...employee }
+    ? { ...blankEmployee, ...employee, phone: isValidPhone(phoneDigits(employee.phone)) ? phoneDigits(employee.phone) : (employee.phone || "") }
     : {
       ...blankEmployee,
       department: initialDepartment || "",
@@ -2195,6 +2198,13 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
 
   const submit = async () => {
     if (!form.full_name.trim()) { toast.error("Full name required"); setTab("personal"); return; }
+    // Blank is allowed; anything typed must be a whole 10-digit mobile. A legacy number the
+    // box can't read is let through untouched, so it doesn't block an unrelated edit.
+    if (form.phone && !isValidPhone(form.phone) && form.phone !== (employee?.phone || "")) {
+      toast.error("Enter a valid 10-digit mobile number");
+      setTab(tab === "credentials" ? "credentials" : "personal");
+      return;
+    }
     if (!form.department) { toast.error("Pick a Department"); setTab("structure"); return; }
     if (!form.designation) { toast.error("Pick a Designation"); setTab("structure"); return; }
     // Checked before the employee is written, so a typo in the password does not leave a
@@ -2297,7 +2307,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
             each — the same rows the View popup reads in. The fixed height is the tallest
             tab's (Personal, with the line the Email ID check prints under its box), so no
             tab scrolls and the dialog doesn't jump between them. */}
-        <div className="flex h-[448px] max-h-[70vh] flex-col sm:flex-row">
+        <div className="flex h-[468px] max-h-[70vh] flex-col sm:flex-row">
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 p-2 text-xs sm:w-52 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r" data-testid="hr-emp-modal-tabs">
             {EMP_TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left ${tab === t.key ? "bg-sky-50 font-semibold text-sky-600" : "text-slate-600 hover:bg-white"}`} data-testid={`hr-emp-modal-tab-${t.key}`}>{t.label}</button>
@@ -2376,7 +2386,8 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   testid="hr-emp-email"
                 />
               </FormRow>
-              <FormRow label="Phone"><Input className="h-8" value={form.phone} onChange={(e) => set("phone", e.target.value)} data-testid="hr-emp-phone" /></FormRow>
+              {/* The same Phone Number as Credentials: one field behind both boxes. */}
+              <FormRow label="Phone"><PhoneInput className="h-8" value={form.phone || ""} onChange={(v) => set("phone", v)} testid="hr-emp-phone" /></FormRow>
               {/* Typed, not picked. A birth date is decades back — reaching it in a
                   calendar is twenty-odd clicks through months, where typing it is eight
                   keystrokes. Joining Date keeps its picker; that one is near today. */}
@@ -2536,6 +2547,8 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                       testid="hr-emp-login-email"
                     />
                   </FormRow>
+                  {/* The Personal tab's Phone — the same field, so the two never differ. */}
+                  <FormRow label="Phone Number"><PhoneInput className="h-8" value={form.phone || ""} onChange={(v) => set("phone", v)} testid="hr-emp-login-phone" /></FormRow>
                   <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} autoComplete="new-password" disabled={!emailCheck.allowed} {...armCred} testid="hr-emp-login-pwd" /></FormRow>
                   <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" disabled={!emailCheck.allowed} {...armCred} testid="hr-emp-login-confirm" /></FormRow>
                   <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>

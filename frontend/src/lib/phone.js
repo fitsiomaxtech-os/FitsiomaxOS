@@ -53,3 +53,32 @@ export const displayPhone = (raw) => {
   if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
   return text.replace(/^p:\s*/i, "");
 };
+
+/**
+ * What a mobile-number box keeps of whatever is typed or pasted: digits only, at most 10.
+ * A pasted "+91 88255 87322" or "088255 87322" loses its country code or trunk 0 first,
+ * so the 10 digits that are left are the number, not its first ten characters.
+ */
+export const phoneDigits = (raw) => {
+  let digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length > 10 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits.slice(0, 10);
+};
+
+/**
+ * An Indian mobile number as the forms check it: exactly 10 digits, the first 6, 7, 8 or 9.
+ * Answers { status, reason } with status "empty", "partial" (still being typed),
+ * "invalid" or "valid".
+ */
+export const phoneCheck = (raw) => {
+  const text = String(raw ?? "").trim();
+  if (!text) return { status: "empty", reason: "" };
+  if (!/^\d+$/.test(text)) return { status: "invalid", reason: "Digits only" };
+  if (!/^[6-9]/.test(text)) return { status: "invalid", reason: "A mobile number starts with 6, 7, 8 or 9" };
+  if (text.length < 10) return { status: "partial", reason: `Enter all 10 digits (${text.length}/10)` };
+  if (text.length > 10) return { status: "invalid", reason: "Only 10 digits" };
+  return { status: "valid", reason: "" };
+};
+
+export const isValidPhone = (raw) => phoneCheck(raw).status === "valid";
