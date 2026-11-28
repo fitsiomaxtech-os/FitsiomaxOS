@@ -154,13 +154,15 @@ export const emailBlock = (state) => {
 };
 
 /** The line under the box. `unchangedText` is said of the login's own current address. */
-export const EmailIdStatus = ({ state, unchangedText = "", testid = "email-id" }) => {
+/** `hideValid` leaves the "Valid" line out (Credentials, whose OTP row already says Verified). */
+export const EmailIdStatus = ({ state, unchangedText = "", hideValid = false, testid = "email-id" }) => {
   const line = "mt-1 flex min-w-0 items-start gap-1 text-[11px] leading-4";
   const icon = "mt-0.5 h-3 w-3 shrink-0";
   if (state.status === "checking") {
     return <p className={`${line} text-slate-400`} data-testid={`${testid}-status`}><Loader2 className={`${icon} animate-spin`} /> Checking…</p>;
   }
   if (state.status === "valid") {
+    if (hideValid) return null;
     const name = PROVIDER_NAMES[state.provider];
     return (
       <p className={`${line} font-semibold text-emerald-600`} data-testid={`${testid}-status`}>
@@ -197,7 +199,7 @@ export const EmailIdStatus = ({ state, unchangedText = "", testid = "email-id" }
  *  `provider` is the mark for the login's own (unchanged, verified) address, which is never
  *  re-checked. Any other prop goes to the input. */
 export const EmailIdInput = ({
-  value, onChange, state, unchangedText = "", provider = null, className = "", testid = "email-id", ...rest
+  value, onChange, state, unchangedText = "", provider = null, hideValid = false, className = "", testid = "email-id", ...rest
 }) => (
   <div>
     <div className="relative">
@@ -221,7 +223,7 @@ export const EmailIdInput = ({
         {state.status === "invalid" && <XCircle className="h-4 w-4 text-rose-500" />}
       </span>
     </div>
-    <EmailIdStatus state={state} unchangedText={unchangedText} testid={testid} />
+    <EmailIdStatus state={state} unchangedText={unchangedText} hideValid={hideValid} testid={testid} />
   </div>
 );
 

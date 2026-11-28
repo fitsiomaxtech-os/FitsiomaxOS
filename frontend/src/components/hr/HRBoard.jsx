@@ -2582,6 +2582,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                       onChange={(v) => set("email", v)}
                       state={emailCheck}
                       provider={verifiedProvider(account)}
+                      hideValid
                       name="hr-new-employee-login"
                       {...armCred}
                       testid="hr-emp-login-email"
