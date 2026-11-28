@@ -978,6 +978,7 @@ export const hrDeleteApproval = async (id) => (await api.delete(`/hr/approvals/$
 export const myNotifications = async () => (await api.get("/notifications", QUIET)).data;
 export const readAllNotifications = async () => (await api.post("/notifications/read-all")).data;
 export const clearNotifications = async () => (await api.delete("/notifications")).data;
+export const deleteNotification = async (id) => (await api.delete(`/notifications/${id}`)).data;
 // BDE > Permission: leave and permission requests with the requester's role and branch.
 export const hrStaffRequests = async () => (await api.get("/hr/staff-requests")).data;
 

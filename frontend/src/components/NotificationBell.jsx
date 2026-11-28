@@ -1,9 +1,9 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CheckCircle2, IndianRupee, MessageCircle, XCircle } from "lucide-react";
+import { Bell, CheckCircle2, IndianRupee, MessageCircle, Trash2, XCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/sonner";
 import { SessionPaymentList, useSessionPaymentAlerts } from "@/components/SessionPaymentBell";
-import { clearNotifications, myNotifications, readAllNotifications } from "@/lib/api";
+import { clearNotifications, deleteNotification, myNotifications, readAllNotifications } from "@/lib/api";
 import { duration, prettyTime } from "@/lib/clock";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { dateTimeStamp } from "@/lib/time";
@@ -139,6 +139,15 @@ export function NotificationBell({
     setData({ notifications: [], unread: 0 });
   };
 
+  // Notices stay until their owner deletes them, one at a time or with Clear all.
+  const remove = (n) => {
+    deleteNotification(n.id).catch(() => {});
+    setData((d) => ({
+      notifications: (d.notifications || []).filter((x) => x.id !== n.id),
+      unread: Math.max(0, d.unread - (n.read ? 0 : 1)),
+    }));
+  };
+
   const list = data.notifications || [];
   const active = tabs.some((t) => t.key === tab) ? tab : "notifications";
 
@@ -219,6 +228,16 @@ export function NotificationBell({
                             {n.note && <p className="mt-0.5 text-xs text-slate-500">{n.note}</p>}
                             <p className="mt-0.5 text-[11px] text-slate-400">{n.by ? `${n.by} · ` : ""}{dateTimeStamp(n.created_at)}</p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => remove(n)}
+                            className="h-7 w-7 shrink-0 self-start rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                            title="Delete notification"
+                            aria-label="Delete notification"
+                            data-testid={`notification-delete-${n.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       );
                     })}

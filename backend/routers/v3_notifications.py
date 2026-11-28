@@ -72,7 +72,7 @@ async def notify_request_decision(row: Dict[str, Any], decision: str, by: str, n
 async def my_notifications(user: V3UserOut = Depends(v3_current_user)):
     rows = await v3_col("notifications").find(
         {"user_id": user.id}, {"_id": 0},
-    ).sort("created_at", -1).to_list(50)
+    ).sort("created_at", -1).to_list(None)  # every notice stays until its owner deletes it
     unread = await v3_col("notifications").count_documents({"user_id": user.id, "read": False})
     return {"notifications": rows, "unread": unread}
 
@@ -88,4 +88,10 @@ async def read_all(user: V3UserOut = Depends(v3_current_user)):
 @router.delete("/notifications")
 async def clear_all(user: V3UserOut = Depends(v3_current_user)):
     res = await v3_col("notifications").delete_many({"user_id": user.id})
+    return {"deleted": res.deleted_count}
+
+
+@router.delete("/notifications/{notification_id}")
+async def delete_one(notification_id: str, user: V3UserOut = Depends(v3_current_user)):
+    res = await v3_col("notifications").delete_one({"id": notification_id, "user_id": user.id})
     return {"deleted": res.deleted_count}
