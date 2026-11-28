@@ -874,6 +874,18 @@ const BRANCH_LIST_WIDTHS = {
     painDuration: "", physio: "w-[11%]", appt: "w-[12%]", followUp: "", stage: "w-[11%]",
     reschedule: "w-[10%]", action: "w-[6%]",
   },
+  // RNR: no Assigned Physio and no Appointment (see hidePhysioColumn). Totals 100.
+  lean: {
+    patient: "w-[22%]", phone: "w-[15%]", source: "w-[14%]", painType: "w-[16%]",
+    painDuration: "w-[15%]", physio: "", appt: "", followUp: "", stage: "w-[12%]",
+    action: "w-[6%]",
+  },
+  // Follow Up: the same, with its Follow Up call column. Totals 100.
+  leanWithFollowUp: {
+    patient: "w-[19%]", phone: "w-[13%]", source: "w-[13%]", painType: "w-[13%]",
+    painDuration: "w-[13%]", physio: "", appt: "", followUp: "w-[12%]", stage: "w-[11%]",
+    action: "w-[6%]",
+  },
 };
 
 /** The same, for an online arm — five fixed columns and the form's own questions sharing
@@ -1382,11 +1394,17 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
   const showRescheduleColumn = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_APPOINTMENT)
     && !onArmBoard && !entryStageNames.includes(stageFilter);
   const listQuestions = showRescheduleColumn ? intakeQuestions.filter((q) => q.key !== "pain_duration") : intakeQuestions;
+  // A branch's New Leads, RNR and Follow Up tables drop Appointment; RNR and Follow Up drop
+  // Assigned Physio too (New Leads never drew it). Read by the header and the rows alike.
+  const onRnrStage = !!stageFilter && stageFilter === stageNameForRole(stages, STAGE_ROLE_RNR);
+  const hidePhysioColumn = !onArmBoard && (onRnrStage || showFollowUpColumn);
+  const hideApptColumn = !onArmBoard && (entryStageNames.includes(stageFilter) || hidePhysioColumn);
 
   // The column widths this list is drawn at, chosen once for the header and the rows
   // together — a row that disagreed with the header about how many columns there are
   // slides every cell after it a column across.
   const listWidths = showRescheduleColumn ? BRANCH_LIST_WIDTHS.appointment
+    : hidePhysioColumn ? (showFollowUpColumn ? BRANCH_LIST_WIDTHS.leanWithFollowUp : BRANCH_LIST_WIDTHS.lean)
     : showExtraColumn ? BRANCH_LIST_WIDTHS.withFollowUp : BRANCH_LIST_WIDTHS.base;
   const armWidths = (showExtraColumn ? ARM_LIST_WIDTHS.withFollowUp : ARM_LIST_WIDTHS.base);
   // The fixed columns on an arm's table take their stated share; the questions divide what
@@ -3384,13 +3402,13 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                     </>
                   ) : entryStageNames.includes(stageFilter) ? (
                     <>
-                      <th className="w-[20%] px-4 py-3">Patient</th>
-                      <th className="w-[13%] px-4 py-3">Phone</th>
-                      <th className="w-[12%] px-4 py-3">Source</th>
-                      <th className="w-[13%] px-4 py-3">Pain Type</th>
-                      <th className="w-[13%] px-4 py-3">Pain Duration</th>
-                      <th className="w-[12%] px-4 py-3">Appointment</th>
-                      <th className="w-[11%] px-4 py-3">Stage</th>
+                      {/* No Appointment on New Leads (see hideApptColumn). Totals 100 with Actions. */}
+                      <th className="w-[22%] px-4 py-3">Patient</th>
+                      <th className="w-[15%] px-4 py-3">Phone</th>
+                      <th className="w-[14%] px-4 py-3">Source</th>
+                      <th className="w-[16%] px-4 py-3">Pain Type</th>
+                      <th className="w-[15%] px-4 py-3">Pain Duration</th>
+                      <th className="w-[12%] px-4 py-3">Stage</th>
                     </>
                   ) : (
                     <>
@@ -3409,7 +3427,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                           {!showRescheduleColumn && (
                             <th className={`${listWidths.painDuration} px-4 py-3`}>Pain Duration</th>
                           )}
-                          <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
+                          {!hidePhysioColumn && (
+                            <th className={`${listWidths.physio} px-4 py-3`}>Assigned Physio</th>
+                          )}
                           {showNotProspectColumns ? (
                             <>
                               <th className={`${listWidths.appt} px-4 py-3`}>Moved On</th>
@@ -3417,7 +3437,9 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </>
                           ) : (
                             <>
-                              <th className={`${listWidths.appt} px-4 py-3`}>Appointment</th>
+                              {!hideApptColumn && (
+                                <th className={`${listWidths.appt} px-4 py-3`}>Appointment</th>
+                              )}
                               <FollowUpHeaderCell show={showFollowUpColumn} widthClass={listWidths.followUp} />
                             </>
                           )}
@@ -3442,7 +3464,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                   // Never on an arm's board, and not at the entry stages of a branch's --
                   // the header above draws the same two cases, and a row that disagreed
                   // with it would slide every cell after this one a column to the left.
-                  const showAssignedPhysio = !onArmBoard && !entryStageNames.includes(stageFilter);
+                  const showAssignedPhysio = !onArmBoard && !entryStageNames.includes(stageFilter) && !hidePhysioColumn;
                   // The bin beside each row's arrow: All Stages and the entry stage (New
                   // Leads) only, for the roles the delete endpoint accepts.
                   const showRowDelete = canDeleteLeads && (!stageFilter || entryStageNames.includes(stageFilter));
@@ -3454,7 +3476,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             drawn. It used to read 9/8, one more than the table has ever
                             had, and a fitness arm's nine would have been a third wrong
                             answer to write down. */}
-                        <td colSpan={(showPreBookColumns ? 7 + (showPreBookOption ? 1 : 0) :5 + listQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0) + (showRescheduleColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
+                        <td colSpan={(showPreBookColumns ? 7 + (showPreBookOption ? 1 : 0) : (hideApptColumn ? 4 : 5) + listQuestions.length + (showAssignedPhysio ? 1 : 0) + (showExtraColumn ? 1 : 0) + (showRescheduleColumn ? 1 : 0)) + 1} className="px-4 py-10 text-center text-sm text-slate-400" data-testid="branch-list-empty">
                           No patients {stageFilter ? `in stage "${stageFilter}"` : "yet"}.
                         </td>
                       </tr>
@@ -3621,7 +3643,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                             </>
                           );
                         })() : (<>
-                        <td className="px-4 py-3">
+                        {!hideApptColumn && <td className="px-4 py-3">
                           {(() => {
                             const slot = apptSlotLabel(lead);
                             if (!slot) return <span className="text-slate-400">—</span>;
@@ -3643,7 +3665,7 @@ export const BranchAdminBoard = ({ branchId, embedded = false, branchPicker = nu
                               </div>
                             );
                           })()}
-                        </td>
+                        </td>}
                         {/* The call this patient is waiting on. Drawn only on the Follow Up
                             stage — see showFollowUpColumn, which the header reads too, so
                             the two cannot end up counting different numbers of columns.
