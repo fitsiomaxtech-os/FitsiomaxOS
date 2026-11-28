@@ -5814,14 +5814,11 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                       <dd className="break-words font-medium text-slate-800">{String(value)}</dd>
                     </div>
                   ))}
-                  {/* The answers the enquiry form collected. Stacked, unlike the rows above:
-                      these labels are whole questions -- "What type of pain are you
-                      experiencing?" -- and a label beside its value would leave each of
-                      them a couple of words wide. */}
+                  {/* Keep enquiry answers aligned with the same label and value columns. */}
                   {formAnswers.map(([key, value]) => (
-                    <div key={key} className="px-4 py-2.5" data-testid="branch-lead-form-answer">
-                      <dt className="text-[13px] text-slate-500">{humanKey(key)}</dt>
-                      <dd className="mt-0.5 break-words text-sm font-medium text-slate-800">{String(value)}</dd>
+                    <div key={key} className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-4 px-4 py-2.5 text-sm" data-testid="branch-lead-form-answer">
+                      <dt className="break-words text-slate-500">{humanKey(key)}</dt>
+                      <dd className="break-words font-medium text-slate-800">{String(value)}</dd>
                     </div>
                   ))}
                 </dl>
