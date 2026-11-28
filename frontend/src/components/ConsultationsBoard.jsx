@@ -16403,7 +16403,7 @@ function PaymentModeDropdown({ value, options, onChange, disabled, testId }) {
       disabled={disabled}
       // While the placeholder shows, a thicker orange border on the outer edge only —
       // no focus ring, and nothing orange inside the box or its list.
-      className={`h-9 w-full rounded-[4px] text-sm ${value ? "" : "border-2 border-orange-500 focus:ring-0"}`}
+      className={`h-9 w-full rounded-[4px] text-sm ${value ? "" : "border-2 border-orange-500/25 focus:ring-0"}`}
       testid={testId}
     />
   );
