@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
+from pydantic import BaseModel, Field
 import logging
 import re
 import uuid
 
 import login_guard
 import two_factor
+import mobile_login
+import sms_verify
 from database import v3_col
 from utils import now_iso
 from security import verify_password, hash_password, is_hashed
@@ -118,6 +121,10 @@ async def v3_login(payload: V3LoginRequest):
             {"$set": {"password": hash_password(payload.password)}},
         )
 
+    return await _finish_password_login(user)
+
+
+async def _finish_password_login(user: dict):
     # The gate. No token is minted here for an account with 2FA on — the response carries a
     # challenge instead, and the session is only created once the code comes back verified
     # at /auth/login/verify-2fa. Anything short of that (a token issued now and revoked
@@ -142,6 +149,58 @@ async def v3_login(payload: V3LoginRequest):
             logger.warning("First sign-in email code not sent for user %s: %s", user["id"], exc.detail)
 
     return await _issue_session(user)
+
+
+class MobileLoginRequest(BaseModel):
+    mobile_number: str = Field(min_length=7, max_length=30)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class MobileCodeRequest(BaseModel):
+    challenge_id: str = Field(min_length=36, max_length=36)
+    code: str = Field(pattern=r"^[0-9]{6}$")
+
+
+class MobileResendRequest(BaseModel):
+    challenge_id: str = Field(min_length=36, max_length=36)
+
+
+@router.get("/auth/login/options")
+async def login_options():
+    return {"mobile_sms_enabled": sms_verify.configured()}
+
+
+@router.post("/auth/login/mobile")
+async def login_mobile(payload: MobileLoginRequest, request: Request):
+    sms_verify.require_configured()
+    phone = sms_verify.normalize_phone(payload.mobile_number)
+    # Use the ASGI peer address, never an untrusted forwarded header supplied by a caller.
+    await mobile_login.limit("start-ip:" + (request.client.host if request.client else "unknown"), 30, 3600)
+    key = "staff-mobile:" + phone
+    await login_guard.count_try(key)
+    users = await v3_col("users").find(
+        {"mobile_number": {"$regex": sms_verify.phone_pattern(phone)}, "is_active": True}, {"_id": 0},
+    ).limit(2).to_list(2)
+    if len(users) != 1 or not verify_password(payload.password, users[0].get("password", "")):
+        await login_guard.refuse(key, "Invalid mobile number or password")
+    user = users[0]
+    await login_guard.clear(key)
+    if not is_hashed(user.get("password", "")):
+        user["password"] = hash_password(payload.password)
+        await v3_col("users").update_one({"id": user["id"]}, {"$set": {"password": user["password"]}})
+    return await mobile_login.issue(user, phone)
+
+
+@router.post("/auth/login/verify-mobile")
+async def verify_mobile(payload: MobileCodeRequest):
+    user = await mobile_login.consume(payload.challenge_id, payload.code)
+    # SMS never bypasses an account's existing email two-factor requirement.
+    return await _finish_password_login(user)
+
+
+@router.post("/auth/login/resend-mobile")
+async def resend_mobile(payload: MobileResendRequest):
+    return await mobile_login.resend(payload.challenge_id)
 
 
 @router.post("/auth/login/verify-2fa")

@@ -248,9 +248,9 @@ def test_a_new_login_is_stored_lower_case_not_verified_and_owes_a_code(db):
 
 def test_an_old_test_login_can_still_be_edited_with_its_email_unchanged(db):
     add_user(db, "u1", "Rabi@nomail.test")
-    run(v3_hr.update_user_account("u1", v3_hr.UserAccountUpdate(email="rabi@nomail.test", mobile_number="9"), ADMIN))
+    run(v3_hr.update_user_account("u1", v3_hr.UserAccountUpdate(email="rabi@nomail.test", mobile_number="9876543210"), ADMIN))
     row = db("users").rows[0]
-    assert row["email"] == "Rabi@nomail.test" and row["mobile_number"] == "9"
+    assert row["email"] == "Rabi@nomail.test" and row["mobile_number"] == "+919876543210"
     # The email alone, unchanged: nothing to write, and not an error.
     assert run(v3_hr.update_user_account("u1", v3_hr.UserAccountUpdate(email="Rabi@nomail.test"), ADMIN))["id"] == "u1"
 

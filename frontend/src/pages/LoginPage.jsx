@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Mail } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Mail, Smartphone } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { apiLogin, apiResendLogin2fa, apiVerifyLogin2fa } from "@/lib/api";
+import { apiLogin, apiResendLogin2fa, apiVerifyLogin2fa, apiLoginOptions, apiMobileLogin, apiVerifyMobileLogin, apiResendMobileLogin } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 import { ForgotPasswordModal } from "@/components/ForgotPasswordModal";
 import { LegalLinks } from "@/components/LegalLinks";
@@ -28,6 +28,11 @@ const minutesLeftOf = (detail) => {
 
 export const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [mobileEnabled, setMobileEnabled] = useState(false);
+  const [loginMethod, setLoginMethod] = useState("email");
+  const [resendAt, setResendAt] = useState(0);
+  const [clock, setClock] = useState(Date.now());
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -50,6 +55,29 @@ export const LoginPage = ({ onLogin }) => {
   const [code, setCode] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
+  const isSms = challenge?.channel === "sms";
+  const resendSeconds = Math.max(0, Math.ceil((resendAt - clock) / 1000));
+
+  useEffect(() => {
+    let active = true;
+    apiLoginOptions().then((data) => { if (active) setMobileEnabled(Boolean(data.mobile_sms_enabled)); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!challenge) return undefined;
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [challenge]);
+
+  const showChallenge = (data) => {
+    setChallenge(data);
+    setPassword("");
+    setCode("");
+    setClock(Date.now());
+    setResendAt(Date.now() + (data.resend_after || 60) * 1000);
+    toast.success(`Code sent to ${data.phone_masked || data.email_masked}`);
+  };
 
   const finish = (data) => {
     onLogin(data);
@@ -60,19 +88,16 @@ export const LoginPage = ({ onLogin }) => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     const missing = ["@", "."].filter((mark) => !email.trim().includes(mark));
-    if (missing.length) {
+    if (loginMethod === "email" && missing.length) {
       setLoginError({ kind: "invalid", missing });
       return;
     }
     setLoading(true);
     setLoginError(null);
     try {
-      const data = await apiLogin(email, password);
+      const data = loginMethod === "mobile" ? await apiMobileLogin(mobile, password) : await apiLogin(email, password);
       if (data?.two_factor_required) {
-        setChallenge(data);
-        setPassword("");
-        setCode("");
-        toast.success(`Code sent to ${data.email_masked}`);
+        showChallenge(data);
         return;
       }
       finish(data);
@@ -80,7 +105,7 @@ export const LoginPage = ({ onLogin }) => {
       const status = error?.response?.status;
       const detail = error?.response?.data?.detail;
       if (status === 401) setLoginError({ kind: "invalid" });
-      else if (status === 429) setLoginError({ kind: "locked", minutesLeft: minutesLeftOf(detail) });
+      else if (status === 429 && /wrong passwords|locked/i.test(detail || "")) setLoginError({ kind: "locked", minutesLeft: minutesLeftOf(detail) });
       else toast.error(detail || "Login failed");
     } finally {
       setLoading(false);
@@ -95,7 +120,11 @@ export const LoginPage = ({ onLogin }) => {
     }
     setLoading(true);
     try {
-      finish(await apiVerifyLogin2fa(challenge.challenge_id, code));
+      const data = isSms
+        ? await apiVerifyMobileLogin(challenge.challenge_id, code)
+        : await apiVerifyLogin2fa(challenge.challenge_id, code);
+      if (data?.two_factor_required) showChallenge(data);
+      else finish(data);
     } catch (error) {
       toast.error(error?.response?.data?.detail || "That code did not work");
     } finally {
@@ -106,10 +135,12 @@ export const LoginPage = ({ onLogin }) => {
   const handleResend = async () => {
     setLoading(true);
     try {
-      const data = await apiResendLogin2fa(challenge.challenge_id);
+      const data = isSms ? await apiResendMobileLogin(challenge.challenge_id) : await apiResendLogin2fa(challenge.challenge_id);
       setChallenge((c) => ({ ...c, ...data }));
       setCode("");
-      toast.success(`New code sent to ${data.email_masked}`);
+      setClock(Date.now());
+      setResendAt(Date.now() + (data.resend_after || 60) * 1000);
+      toast.success(`Code sent to ${data.phone_masked || data.email_masked}`);
     } catch (error) {
       toast.error(error?.response?.data?.detail || "Could not send another code");
     } finally {
@@ -170,11 +201,11 @@ export const LoginPage = ({ onLogin }) => {
             {challenge ? (
               <form className="space-y-4" onSubmit={handleVerify} data-testid="screen1-login-2fa-form">
                 <div className="flex items-start gap-3 rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  {isSms ? <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /> : <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />}
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-700">{challenge.email_verify ? "Verify your Email ID" : "Check your email"}</p>
+                    <p className="text-sm font-semibold text-slate-700">{isSms ? "Verify your Mobile Number" : challenge.email_verify ? "Verify your Email ID" : "Check your email"}</p>
                     <p className="text-xs text-slate-500" data-testid="screen1-login-2fa-sent-to">
-                      {challenge.email_verify && "This is your first sign-in. "}We sent a {CODE_LENGTH}-digit code to {challenge.email_masked}. It expires in 5 minutes.
+                      {challenge.email_verify && "This is your first sign-in. "}We sent a {CODE_LENGTH}-digit code {isSms ? "by SMS " : ""}to {challenge.phone_masked || challenge.email_masked}. {isSms ? "Complete verification within 5 minutes of your first request." : "It expires in 5 minutes."}
                     </p>
                   </div>
                 </div>
@@ -199,6 +230,7 @@ export const LoginPage = ({ onLogin }) => {
                   <button
                     type="button"
                     onClick={handleStartOver}
+                    disabled={loading}
                     className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
                     data-testid="screen1-login-2fa-back"
                   >
@@ -208,26 +240,39 @@ export const LoginPage = ({ onLogin }) => {
                   <button
                     type="button"
                     onClick={handleResend}
-                    disabled={loading}
+                    disabled={loading || resendSeconds > 0}
                     className="text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-50"
                     data-testid="screen1-login-2fa-resend"
                   >
-                    Send another code
+                    {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Send another code"}
                   </button>
                 </div>
               </form>
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit} data-testid="screen1-login-form">
+                {mobileEnabled && (
+                  <div className="flex gap-2" aria-label="Sign-in method">
+                    {[['email', 'Email'], ['mobile', 'Mobile + SMS']].map(([method, label]) => (
+                      <button key={method} type="button" disabled={loading} aria-pressed={loginMethod === method}
+                        onClick={() => { setLoginMethod(method); setLoginError(null); setPassword(""); }}
+                        className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${loginMethod === method ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-500"}`}
+                        data-testid={`screen1-login-method-${method}`}>{label}</button>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700" data-testid="screen1-login-email-label">
-                    Email
+                    {loginMethod === "mobile" ? "Mobile number" : "Email"}
                   </label>
                   <Input
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="user@fitsiomax.com"
+                    type={loginMethod === "mobile" ? "tel" : "text"}
+                    autoComplete="username"
+                    value={loginMethod === "mobile" ? mobile : email}
+                    onChange={(event) => loginMethod === "mobile" ? setMobile(event.target.value) : setEmail(event.target.value)}
+                    placeholder={loginMethod === "mobile" ? "+91 98765 43210" : "user@fitsiomax.com"}
+                    maxLength={loginMethod === "mobile" ? 30 : 254}
                     className="h-12 rounded-xl border-slate-200/90 bg-white/90 shadow-sm focus-visible:ring-sky-300"
-                    data-testid="screen1-login-email-input"
+                    data-testid={loginMethod === "mobile" ? "screen1-login-mobile-input" : "screen1-login-email-input"}
                   />
                 </div>
 
@@ -275,7 +320,7 @@ export const LoginPage = ({ onLogin }) => {
                     style={{ fontFamily: "Lexend, sans-serif" }}
                     data-testid="screen1-login-error-invalid"
                   >
-                    Invalid email or password
+                    {loginMethod === "mobile" ? "Invalid mobile number or password" : "Invalid email or password"}
                     {loginError.missing && ` ${loginError.missing.map((mark) => `'${mark}'`).join(" ")}`}
                   </p>
                 )}
@@ -302,14 +347,14 @@ export const LoginPage = ({ onLogin }) => {
                   className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 font-semibold text-white shadow-md shadow-sky-900/15 transition hover:from-sky-700 hover:to-blue-700"
                   data-testid="screen1-login-submit-button"
                 >
-                  {loading ? "Signing in..." : "Continue"}
+                  {loading ? "Please wait..." : loginMethod === "mobile" ? "Send SMS code" : "Continue"}
                 </Button>
               </form>
             )}
 
             <p className="mt-5 text-center text-xs text-slate-400" data-testid="screen1-login-footer-note">
               {challenge
-                ? "Didn't get the code? Check your spam folder, or ask your admin."
+                ? isSms ? "Didn't get the SMS? Check your mobile signal, or ask your admin to check your registered number." : "Didn't get the code? Check your spam folder, or ask your admin."
                 : "Only invited users can login. Contact your admin for access."}
             </p>
           </CardContent>

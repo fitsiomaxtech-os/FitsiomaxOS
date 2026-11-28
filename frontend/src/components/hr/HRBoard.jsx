@@ -4976,10 +4976,11 @@ const UserActionsModal = ({ user, onClose, onDone }) => {
                 {employees.map((e) => <option key={e.id} value={e.id}>{e.employee_code} — {e.full_name} ({e.designation || "—"})</option>)}
               </select>
             </Field>
-            {/* Mobile and Aadhar are gone from here. They belong to the employee record
-                in HR, not to the login account this popup edits, and were the two fields
-                nobody filled in. Still sent unchanged in the payload below, so a value
-                already stored against an account is not wiped by saving this form. */}
+            <Field label="Mobile number for SMS login">
+              <Input type="tel" maxLength={30} placeholder="+91 98765 43210" value={editForm.mobile_number}
+                onChange={(e) => setEditForm({ ...editForm, mobile_number: e.target.value })} data-testid="hr-actions-edit-mobile" />
+              <p className="mt-1 text-xs text-slate-500">Optional. Use the account holder's own number. Leave blank to use email sign-in.</p>
+            </Field>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setMode(null)} className="flex-1" data-testid="hr-actions-edit-back">Back</Button>
               <Button onClick={submitEdit} disabled={busy} className="flex-1 bg-sky-600 hover:bg-sky-700" data-testid="hr-actions-edit-save">Save Changes</Button>
@@ -5129,7 +5130,7 @@ const LockedBranches = ({ ids, branches, testid }) => {
 
 const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
   const [employees, setEmployees] = useState([]);
-  const [form, setForm] = useState({ employee_id: "", full_name: "", email: "", role: "", branch_id: "", branch_ids: [], password: "", confirm: "" });
+  const [form, setForm] = useState({ employee_id: "", full_name: "", email: "", mobile_number: "", role: "", branch_id: "", branch_ids: [], password: "", confirm: "" });
   const isMultiBranchRole = Boolean(multiBranchLabel(form.role));
   // No employee on it: this always makes a new login, so an email the employee already signs
   // in with is taken.
@@ -5190,6 +5191,7 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
       await hrCreateUser({
         full_name: form.full_name || form.email.split("@")[0],
         email: form.email,
+        mobile_number: form.mobile_number,
         password: form.password,
         role: form.role,
         employee_id: form.employee_id || null,
@@ -5229,6 +5231,11 @@ const CreateUserModal = ({ meta, reloadMeta, onClose, onSaved }) => {
             login carrying its own copy is how the two came to disagree. */}
         <Field label="Name"><Input placeholder="Filled from the employee" value={form.full_name} readOnly disabled className="bg-slate-50" data-testid="hr-create-user-name" /></Field>
         <Field label="Email ID *"><EmailIdInput value={form.email} onChange={(v) => setForm((p) => ({ ...p, email: v }))} state={emailCheck} testid="hr-create-user-email" /></Field>
+        <Field label="Mobile number for SMS login">
+          <Input type="tel" maxLength={30} placeholder="+91 98765 43210" value={form.mobile_number}
+            onChange={(e) => setForm({ ...form, mobile_number: e.target.value })} data-testid="hr-create-user-mobile" />
+          <p className="mt-1 text-xs text-slate-500">Optional. Use the account holder's own number.</p>
+        </Field>
         <Field label="Password *"><PasswordInput placeholder="Min 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} disabled={!emailCheck.allowed} testid="hr-create-user-pwd" /></Field>
         <Field label="Confirm Password *"><PasswordInput placeholder="Confirm password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} disabled={!emailCheck.allowed} testid="hr-create-user-confirm" /></Field>
         <div className="flex gap-2 pt-2"><Button variant="outline" onClick={onClose} className="flex-1" data-testid="hr-create-user-cancel">Cancel</Button><Button onClick={submit} className="flex-1 bg-sky-600 hover:bg-sky-700" data-testid="hr-create-user-submit">Create User</Button></div>

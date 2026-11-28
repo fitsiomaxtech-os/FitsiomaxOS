@@ -91,6 +91,13 @@ export const apiVerifyLogin2fa = async (challengeId, code) =>
   (await api.post("/auth/login/verify-2fa", { challenge_id: challengeId, code })).data;
 export const apiResendLogin2fa = async (challengeId) =>
   (await api.post("/auth/login/resend-2fa", { challenge_id: challengeId })).data;
+export const apiLoginOptions = async () => (await api.get("/auth/login/options")).data;
+export const apiMobileLogin = async (mobileNumber, password) =>
+  (await api.post("/auth/login/mobile", { mobile_number: mobileNumber, password })).data;
+export const apiVerifyMobileLogin = async (challengeId, code) =>
+  (await api.post("/auth/login/verify-mobile", { challenge_id: challengeId, code })).data;
+export const apiResendMobileLogin = async (challengeId) =>
+  (await api.post("/auth/login/resend-mobile", { challenge_id: challengeId })).data;
 
 export const apiLogout = async () => {
   const { data } = await api.post("/auth/logout");

@@ -7,6 +7,7 @@ import uuid
 
 import email_check
 import two_factor
+import sms_verify
 from database import v3_col
 from utils import now_iso, clinic_today, live_branch_query
 from deps import v3_require_roles, is_diet_role, is_physio_role, is_rehab_role, is_head_physio_role, is_combined_expert_role, is_branch_admin_role, BRANCH_ADMIN_ROLES, HEAD_PHYSIO_ROLES, LEGACY_CONSULTANT_ROLES, LEGACY_BRANCH_ADMIN_ROLES, COMBINED_EXPERT_ROLES
@@ -1453,6 +1454,19 @@ async def list_users(search: Optional[str] = None, role: Optional[str] = None, _
     return rows
 
 
+async def _validated_login_mobile(value: str, user_id: Optional[str] = None) -> str:
+    if not str(value or "").strip():
+        return ""
+    phone = sms_verify.normalize_phone(value)
+    other = await v3_col("users").find_one({
+        "mobile_number": {"$regex": sms_verify.phone_pattern(phone)},
+        "id": {"$ne": user_id},
+    }, {"_id": 0, "id": 1})
+    if other:
+        raise HTTPException(status_code=400, detail="This mobile number is already registered to another login.")
+    return phone
+
+
 @router.post("/users")
 async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev"))):
     if payload.role == "super_admin":
@@ -1481,7 +1495,7 @@ async def create_user_account(payload: UserAccountCreate, _: V3UserOut = Depends
         "branch_id": payload.branch_id,
         "branch_ids": payload.branch_ids,
         "employee_id": payload.employee_id,
-        "mobile_number": payload.mobile_number,
+        "mobile_number": await _validated_login_mobile(payload.mobile_number),
         "aadhar_number": payload.aadhar_number,
         "is_active": True,
         "created_at": now_iso(),
@@ -1576,6 +1590,10 @@ async def update_user_account(user_id: str, payload: UserAccountUpdate, caller: 
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
+    if "mobile_number" in updates:
+        before_mobile = await v3_col("users").find_one({"id": user_id}, {"_id": 0, "mobile_number": 1})
+        if updates["mobile_number"] != (before_mobile or {}).get("mobile_number", ""):
+            updates["mobile_number"] = await _validated_login_mobile(updates["mobile_number"], user_id)
     if "email" in updates:
         # The form sends the email back on every save. Only a changed one is checked, so a
         # login already in the OS on an address the check would refuse can still be edited.
