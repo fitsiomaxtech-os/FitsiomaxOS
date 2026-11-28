@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
-  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, hrDeleteEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount, hrEmailCheck,
+  hrDashboard, hrAttendanceDay, hrApprovals, hrEmployees, hrCreateEmployee, hrUpdateEmployee, hrDeleteEmployee, hrEmployeeHistory, hrDeleteEmployeeHistory, uploadEmployeePhoto, hrEmployeeAccount, hrSaveEmployeeAccount, hrApplyEmailProof, hrEmailCheck,
   hrUsers, hrCreateUser, hrUpdateUser, hrResetPassword, hrEmailStatus, hrEmailTest, hrDeactivateUser, hrActivateUser, hrDeleteUserPermanent, hrMeta, hrAddCustomRole,
   hrDepartments, hrCreateDepartment, hrRenameDepartment, hrDeleteDepartment, hrAddDesignation, hrRenameDesignation, hrDeleteDesignation, hrReorderDesignations,
   getBranches, getVerticals,
@@ -14,7 +14,7 @@ import {
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
-import { AdminEmailVerify, EmailIdInput, EmailVerifiedTag, MailProviderIcon, emailBlock, useEmailCheck } from "@/components/EmailId";
+import { AdminEmailVerify, EmailIdInput, EmailOtpVerify, EmailVerifiedTag, MailProviderIcon, emailBlock, provesEmail, useEmailCheck } from "@/components/EmailId";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { useStageBack } from "@/components/ui/phone-back";
 import { PhoneBackBar } from "@/components/ui/phone-back-bar";
@@ -2106,6 +2106,13 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
     (email) => hrEmailCheck({ email, employee_id: employee?.id }),
     account?.email,
   );
+  // Credentials' OTP on a new Email ID: { proof_id, email } once its code checks out. A
+  // login is only made (or given a password) on a new address once it is proved; the
+  // Personal tab's box checks validity only and asks for no OTP.
+  const [emailProof, setEmailProof] = useState(null);
+  const emailProven = provesEmail(emailProof, loginEmail);
+  const needsOtp = emailCheck.status !== "unchanged";
+  const credReady = emailCheck.allowed && (!needsOtp || emailProven);
   // Verify Email ID from here: an active login, Not Verified, with its Email unchanged.
   const [verifyOpen, setVerifyOpen] = useState(false);
   const canVerifyEmail = Boolean(
@@ -2239,6 +2246,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
     if (wantsPwd || emailChanged) {
       const block = emailBlock(emailCheck);
       if (block) { toast.error(block); setTab(emailTab); return; }
+      if (wantsPwd && needsOtp && !emailProven) { toast.error("Verify the Email ID with the OTP first"); setTab("credentials"); return; }
       if (wantsPwd && credPwd.length < 6) { toast.error("Password must be at least 6 characters"); setTab("credentials"); return; }
       if (wantsPwd && credPwd !== credConfirm) { toast.error("Passwords do not match"); setTab("credentials"); return; }
     }
@@ -2295,6 +2303,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
       // designation just saved. A refusal here leaves the employee saved and says so, so
       // the login can be tried again from Edit -> Credentials. An Email ID change alone is
       // already done: the employee save above moved it.
+      let loginSaved = Boolean(account);
       if (wantsPwd && savedId) {
         try {
           // Org-wide HR resolves (and if need be mints) the role the way Create User does;
@@ -2306,8 +2315,17 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
             ...(role ? { role } : {}),
           });
           toast.success(account ? "Login updated" : "Login created");
+          loginSaved = true;
         } catch (err) {
           toast.error(`Employee saved, but the login was not: ${err?.response?.data?.detail || "failed"}`);
+        }
+      }
+      // The OTP proved this address: the login on it is Verified.
+      if (savedId && loginSaved && emailProven && needsOtp) {
+        try {
+          await hrApplyEmailProof(savedId, emailProof.proof_id);
+        } catch (err) {
+          toast.error(`Saved, but the Email ID was not marked Verified: ${err?.response?.data?.detail || "failed"}`);
         }
       }
       onSaved();
@@ -2569,10 +2587,25 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                       testid="hr-emp-login-email"
                     />
                   </FormRow>
+                  {/* A new Email ID is proved by OTP before a login is made on it. The login's
+                      own unchanged one is handled by Email Status below. */}
+                  {needsOtp && (
+                    <FormRow label="Email OTP">
+                      <EmailOtpVerify
+                        email={loginEmail}
+                        state={emailCheck}
+                        proof={emailProof}
+                        onProof={setEmailProof}
+                        employeeId={employee?.id}
+                        fullName={form.full_name}
+                        testid="hr-emp-login-otp"
+                      />
+                    </FormRow>
+                  )}
                   {/* The Personal tab's Phone — the same field, so the two never differ. */}
                   <FormRow label="Phone Number"><PhoneInput className="h-8" value={form.phone || ""} onChange={(v) => set("phone", v)} testid="hr-emp-login-phone" /></FormRow>
-                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : "Min 6 characters"} autoComplete="new-password" disabled={!emailCheck.allowed} {...armCred} testid="hr-emp-login-pwd" /></FormRow>
-                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" disabled={!emailCheck.allowed} {...armCred} testid="hr-emp-login-confirm" /></FormRow>
+                  <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : credReady ? "Min 6 characters" : "Verify the Email ID first"} autoComplete="new-password" disabled={!credReady} {...armCred} testid="hr-emp-login-pwd" /></FormRow>
+                  <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" disabled={!credReady} {...armCred} testid="hr-emp-login-confirm" /></FormRow>
                   <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>
                   <FormRow label="Login Status"><Input className="h-8" value={account ? (account.is_active === false ? "Deactivated" : "Active") : login.failed ? "Could not load" : "No login yet"} disabled data-testid="hr-emp-login-status" /></FormRow>
                   {account && "email_verified" in account && (
@@ -2612,7 +2645,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   <p className="my-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
                     {account
                       ? "This Email ID is also their Personal Email — changing either moves their sign-in. A new password signs them out everywhere; leave both boxes blank to keep the current one."
-                      : "This Email ID is also their Personal Email. Set a password to give this employee a sign-in, or leave the password blank to save them without one."}
+                      : "This Email ID is also their Personal Email. Verify it with the OTP, then set a password to give this employee a sign-in — or leave the password blank to save them without one."}
                   </p>
                 </>
               )}

@@ -20,8 +20,11 @@ import { toast } from "@/components/ui/sonner";
 import {
   checkMyEmail,
   finishMyEmailVerify,
+  hrFinishEmailProof,
   hrFinishEmailVerify,
+  hrResendEmailProof,
   hrResendEmailVerify,
+  hrStartEmailProof,
   hrStartEmailVerify,
   MY_EMAIL_CHANGED_EVENT,
   resendMyEmailVerify,
@@ -312,6 +315,107 @@ export const AdminEmailVerify = ({ userId, email, onVerified, testid = "admin-em
           Send another code
         </button>
       </div>
+    </div>
+  );
+};
+
+// ---------- proving a new one before its login exists ----------
+
+/** Whether `proof` ({ proof_id, email }) proves this address. */
+export const provesEmail = (proof, email) => Boolean(proof?.proof_id) && same(proof.email, email);
+
+/**
+ * The OTP row under a new login's Email ID (Add / Edit Employee -> Credentials): Send OTP
+ * once the box says Valid, the code its holder reads out, Verify. `onProof` gets
+ * { proof_id, email } -- held by the form and spent on the login when it is saved.
+ */
+export const EmailOtpVerify = ({ email, state, proof, onProof, employeeId, fullName, testid = "email-otp" }) => {
+  const [pending, setPending] = useState(null); // { challenge_id, email_masked, email }
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const value = String(email || "").trim();
+  // A code sent to an address since typed over is for that one, not this.
+  const live = pending && same(pending.email, value) ? pending : null;
+
+  if (provesEmail(proof, value)) {
+    return (
+      <p className="flex h-8 items-center gap-1.5 text-xs font-semibold text-emerald-600" data-testid={`${testid}-verified`}>
+        <CheckCircle2 className="h-4 w-4" /> Verified
+        {state.provider && <MailProviderIcon provider={state.provider} className="h-4 w-4" />}
+      </p>
+    );
+  }
+
+  const send = async () => {
+    try {
+      setBusy(true);
+      const data = await hrStartEmailProof({ email: value, employee_id: employeeId || undefined, full_name: fullName || undefined });
+      setPending({ ...data, email: value });
+      setCode("");
+      toast.success(`OTP sent to ${data.email_masked}`);
+    } catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+
+  const resend = async () => {
+    try {
+      setBusy(true);
+      const data = await hrResendEmailProof(live.challenge_id);
+      setPending((p) => ({ ...p, ...data }));
+      setCode("");
+      toast.success(`New OTP sent to ${data.email_masked}`);
+    } catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+
+  const verify = async () => {
+    if (code.length !== CODE_LENGTH) { toast.error(`Enter the ${CODE_LENGTH}-digit OTP`); return; }
+    try {
+      setBusy(true);
+      const data = await hrFinishEmailProof(live.challenge_id, code);
+      toast.success(data.message || "Email ID verified");
+      setPending(null);
+      setCode("");
+      onProof?.({ proof_id: data.proof_id, email: data.email || value });
+    } catch (err) { fail(err); }
+    finally { setBusy(false); }
+  };
+
+  const hint = "mt-1 text-[11px] leading-4 text-slate-400";
+  if (!live) {
+    const ready = state.status === "valid";
+    return (
+      <div data-testid={testid}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={send}
+          disabled={!ready || busy}
+          className="h-8 text-xs"
+          data-testid={`${testid}-send`}
+        >
+          <Mail className="mr-1.5 h-3.5 w-3.5" /> {busy ? "Sending OTP…" : "Send OTP"}
+        </Button>
+        <p className={hint}>
+          {ready ? "Sends a 6-digit code to this Email ID — ask them to read it out." : "Enter a valid Email ID first."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid={`${testid}-code-step`}>
+      <div className="flex items-center gap-2">
+        <CodeInput value={code} onChange={setCode} onEnter={verify} testid={`${testid}-code`} autoFocus className="h-8 w-36 text-sm tracking-[0.35em]" />
+        <Button type="button" size="sm" onClick={verify} disabled={busy} className="h-8 bg-sky-600 text-xs hover:bg-sky-700" data-testid={`${testid}-verify`}>
+          {busy ? "Checking…" : "Verify"}
+        </Button>
+        <button type="button" onClick={resend} disabled={busy} className="text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-50" data-testid={`${testid}-resend`}>
+          Resend
+        </button>
+      </div>
+      <p className={hint}>OTP sent to {live.email_masked}. It expires in 5 minutes.</p>
     </div>
   );
 };

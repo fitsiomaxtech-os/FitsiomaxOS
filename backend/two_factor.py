@@ -49,7 +49,14 @@ RESEND_COOLDOWN_SECONDS = 60
 
 # email_verify_admin: an admin (Super Admin, BDE, Branch Admin) verifying somebody else's
 # Email ID from HR -- the code goes to that person, who reads it out to the admin.
-PURPOSES = ("login", "enable", "disable", "email_verify", "email_login", "email_verify_admin")
+# email_proof: an admin proving a new Email ID from Add / Edit Employee -> Credentials BEFORE
+# the login it is for exists. The challenge belongs to the admin ("email-proof:<their id>"),
+# not to a login; a right code leaves a proof the login is marked Verified with once saved.
+EMAIL_PROOF = "email_proof"
+PROOF_OWNER_PREFIX = "email-proof:"
+PROOF_TTL_MINUTES = 30
+
+PURPOSES = ("login", "enable", "disable", "email_verify", "email_login", "email_verify_admin", EMAIL_PROOF)
 
 _SUBJECTS = {
     "login": "FitsiomaxOS — your sign-in code",
@@ -58,6 +65,7 @@ _SUBJECTS = {
     "email_verify": "FitsiomaxOS — verify your Email ID",
     "email_login": "FitsiomaxOS — verify your Email ID to sign in",
     "email_verify_admin": "FitsiomaxOS — verify your Email ID",
+    EMAIL_PROOF: "FitsiomaxOS — verify your Email ID",
 }
 
 _LINES = {
@@ -67,6 +75,7 @@ _LINES = {
     "email_verify": "Enter this code in FitsiomaxOS to verify this Email ID for your login.",
     "email_login": "This is your first sign-in to FitsiomaxOS. Enter this code to verify your Email ID and finish signing in.",
     "email_verify_admin": "Your admin is verifying this Email ID for your FitsiomaxOS login. Tell them this code to finish.",
+    EMAIL_PROOF: "Your admin is setting up your FitsiomaxOS login with this Email ID. Tell them this code to verify it.",
 }
 
 _WARNINGS = {
@@ -76,6 +85,7 @@ _WARNINGS = {
     "email_verify": "If you did not ask for this, ignore this email. Nothing has changed.",
     "email_login": "If this wasn't you, tell your admin.",
     "email_verify_admin": "This code only verifies your Email ID — it does not sign anybody in. If you did not expect it, ignore this email.",
+    EMAIL_PROOF: "This code only verifies your Email ID — it does not sign anybody in. If you did not expect it, ignore this email.",
 }
 
 
@@ -241,7 +251,11 @@ async def resend_challenge(challenge_id: str, purpose: str) -> Dict[str, Any]:
             detail=f"Please wait {int(RESEND_COOLDOWN_SECONDS - elapsed)}s before asking for another code",
         )
 
-    user = await v3_col("users").find_one({"id": row["user_id"], "is_active": True}, {"_id": 0})
+    if purpose == EMAIL_PROOF:
+        # No login behind it yet: the inbox on the row is the whole of who it is for.
+        user = {"id": row["user_id"], "full_name": row.get("full_name", ""), "email": row.get("email", "")}
+    else:
+        user = await v3_col("users").find_one({"id": row["user_id"], "is_active": True}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Account not found or inactive")
 
@@ -292,6 +306,27 @@ async def consume_challenge(
         raise HTTPException(status_code=404, detail="This verification has expired — start again")
     if user_id and row["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="This verification belongs to another account")
+    await _require_right_code(row, challenge_id, code)
+
+    user = await v3_col("users").find_one({"id": row["user_id"], "is_active": True}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found or inactive")
+
+    await v3_col("two_factor_challenges").update_one(
+        {"id": challenge_id}, {"$set": {"consumed": True, "verified_at": now_iso()}}
+    )
+    if same_email(row.get("email"), user.get("email")):
+        verified_at = user.get("email_verified_at") or now_iso()
+        await v3_col("users").update_one(
+            {"id": user["id"]}, {"$set": {"email_verified_at": verified_at, "email_code_due": False}}
+        )
+        user["email_verified_at"] = verified_at
+    user["challenge_email"] = row.get("email") or ""
+    return user
+
+
+async def _require_right_code(row: Dict[str, Any], challenge_id: str, code: str) -> None:
+    """Raises unless `code` is the live answer to this challenge; a wrong one is counted."""
     if row["consumed"]:
         raise HTTPException(status_code=400, detail="This code has already been used")
     if _expired(row):
@@ -311,21 +346,45 @@ async def consume_challenge(
             ),
         )
 
-    user = await v3_col("users").find_one({"id": row["user_id"], "is_active": True}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="Account not found or inactive")
 
-    await v3_col("two_factor_challenges").update_one(
-        {"id": challenge_id}, {"$set": {"consumed": True, "verified_at": now_iso()}}
+# ---------- proving an Email ID before its login exists ----------
+
+
+async def consume_email_proof(challenge_id: str, code: str, owner_id: str) -> Dict[str, Any]:
+    """Check an email_proof code and spend it. Answers { proof_id, email }: the proof stays
+    on the row, unused, until spend_email_proof marks a login Verified with it."""
+    row = await v3_col("two_factor_challenges").find_one(
+        {"id": challenge_id, "purpose": EMAIL_PROOF}, {"_id": 0}
     )
-    if same_email(row.get("email"), user.get("email")):
-        verified_at = user.get("email_verified_at") or now_iso()
-        await v3_col("users").update_one(
-            {"id": user["id"]}, {"$set": {"email_verified_at": verified_at, "email_code_due": False}}
-        )
-        user["email_verified_at"] = verified_at
-    user["challenge_email"] = row.get("email") or ""
-    return user
+    if not row:
+        raise HTTPException(status_code=404, detail="This verification has expired — start again")
+    if row["user_id"] != owner_id:
+        raise HTTPException(status_code=403, detail="This verification belongs to somebody else")
+    await _require_right_code(row, challenge_id, code)
+    await v3_col("two_factor_challenges").update_one(
+        {"id": challenge_id}, {"$set": {"consumed": True, "verified_at": now_iso(), "proof_used": False}}
+    )
+    return {"proof_id": challenge_id, "email": row.get("email", "")}
+
+
+async def spend_email_proof(proof_id: str, owner_id: str, email: str) -> None:
+    """Raises unless `proof_id` is an unused proof of `email` this owner made in the last
+    PROOF_TTL_MINUTES; marks it used, so one code verifies one login."""
+    row = await v3_col("two_factor_challenges").find_one(
+        {"id": proof_id, "purpose": EMAIL_PROOF}, {"_id": 0}
+    )
+    if not row or row.get("user_id") != owner_id or not row.get("consumed") or not row.get("verified_at"):
+        raise HTTPException(status_code=404, detail="This Email ID verification was not found — verify it again")
+    if not same_email(row.get("email"), email):
+        raise HTTPException(status_code=409, detail="The Email ID changed after it was verified — verify it again")
+    age = (now_utc() - datetime.fromisoformat(row["verified_at"])).total_seconds()
+    if age > PROOF_TTL_MINUTES * 60:
+        raise HTTPException(status_code=400, detail="This Email ID verification has expired — verify it again")
+    spent = await v3_col("two_factor_challenges").update_one(
+        {"id": proof_id, "proof_used": False}, {"$set": {"proof_used": True}}
+    )
+    if not spent.modified_count:
+        raise HTTPException(status_code=400, detail="This Email ID verification has already been used")
 
 
 def is_enabled(user: Optional[Dict[str, Any]]) -> bool:

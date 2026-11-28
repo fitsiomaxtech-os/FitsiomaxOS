@@ -1073,6 +1073,15 @@ export const hrResendEmailVerify = async (userId, challengeId) =>
   (await api.post(`/hr/users/${userId}/email-verify/resend`, { challenge_id: challengeId })).data;
 export const hrFinishEmailVerify = async (userId, challengeId, code) =>
   (await api.post(`/hr/users/${userId}/email-verify/finish`, { challenge_id: challengeId, code })).data;
+// Add / Edit Employee -> Credentials: an OTP to a new Email ID before its login exists.
+// finish answers { proof_id, email }; the proof marks the login Verified once it is saved.
+export const hrStartEmailProof = async (payload) => (await api.post("/hr/email-proof/start", payload)).data;
+export const hrResendEmailProof = async (challengeId) =>
+  (await api.post("/hr/email-proof/resend", { challenge_id: challengeId })).data;
+export const hrFinishEmailProof = async (challengeId, code) =>
+  (await api.post("/hr/email-proof/finish", { challenge_id: challengeId, code })).data;
+export const hrApplyEmailProof = async (employeeId, proofId) =>
+  (await api.post(`/hr/employees/${employeeId}/account/email-proof`, { proof_id: proofId })).data;
 export const hrUsers = async (params = {}) => {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });

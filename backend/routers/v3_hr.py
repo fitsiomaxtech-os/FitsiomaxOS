@@ -1994,6 +1994,95 @@ async def finish_user_email_verify(
     return {"email": row.get("email", ""), "email_verified_at": row["email_verified_at"], "message": "Email ID verified"}
 
 
+# ---------- proving a new Email ID before its login exists ----------
+#
+# Add / Edit Employee -> Credentials: the admin types the Email ID, Send OTP mails a code to
+# it, the employee reads it out, the admin types it in. That leaves a proof (held by the
+# browser) which marks the login Verified once it is saved with that same address.
+
+
+class EmailProofStart(BaseModel):
+    email: str
+    employee_id: Optional[str] = None
+    full_name: Optional[str] = None
+
+
+class EmailProofApply(BaseModel):
+    proof_id: str
+
+
+def _proof_owner(caller: V3UserOut) -> str:
+    return f"{two_factor.PROOF_OWNER_PREFIX}{caller.id}"
+
+
+@router.post("/email-proof/start")
+async def start_email_proof(
+    payload: EmailProofStart,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """Mail an OTP to an Email ID a login is about to be made on. Refused unless the address
+    passes the same check the save will (valid, and not another login's)."""
+    own_id = None
+    if payload.employee_id:
+        await _scoped_employee(payload.employee_id, caller)
+        row = await v3_col("users").find_one(
+            {"employee_id": payload.employee_id}, {"_id": 0, "id": 1}, sort=[("created_at", 1)]
+        )
+        own_id = (row or {}).get("id")
+    email = await email_check.require_allowed(payload.email, own_id)
+    owner = _proof_owner(caller)
+    wait = await two_factor.wait_before_resend(owner, two_factor.EMAIL_PROOF)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"Please wait {wait}s before asking for another code")
+    full_name = str(payload.full_name or "").strip()
+    answer = await two_factor.issue_challenge({"id": owner, "full_name": full_name, "email": email}, two_factor.EMAIL_PROOF)
+    # Kept for a resend's greeting: there is no login to read the name off.
+    await v3_col("two_factor_challenges").update_one({"id": answer["challenge_id"]}, {"$set": {"full_name": full_name}})
+    return {**answer, "email": email}
+
+
+@router.post("/email-proof/resend")
+async def resend_email_proof(
+    payload: UserEmailVerifyResend,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    row = await v3_col("two_factor_challenges").find_one(
+        {"id": payload.challenge_id, "purpose": two_factor.EMAIL_PROOF}, {"_id": 0, "user_id": 1},
+    )
+    if not row or row.get("user_id") != _proof_owner(caller):
+        raise HTTPException(status_code=404, detail="This verification has expired — start again")
+    return await two_factor.resend_challenge(payload.challenge_id, two_factor.EMAIL_PROOF)
+
+
+@router.post("/email-proof/finish")
+async def finish_email_proof(
+    payload: UserEmailVerifyFinish,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """The code checks out: answers the proof the login is marked Verified with on save."""
+    proof = await two_factor.consume_email_proof(payload.challenge_id, payload.code, _proof_owner(caller))
+    return {**proof, "message": "Email ID verified"}
+
+
+@router.post("/employees/{emp_id}/account/email-proof")
+async def apply_email_proof(
+    emp_id: str,
+    payload: EmailProofApply,
+    caller: V3UserOut = Depends(v3_require_roles("super_admin", "business_dev", "branch_admin")),
+):
+    """Mark this employee's login Verified with a proof of the address it now has."""
+    await _scoped_employee(emp_id, caller)
+    login = await v3_col("users").find_one({"employee_id": emp_id}, {"_id": 0}, sort=[("created_at", 1)])
+    if not login:
+        raise HTTPException(status_code=404, detail="This employee has no login yet")
+    await two_factor.spend_email_proof(payload.proof_id, _proof_owner(caller), login.get("email", ""))
+    verified_at = login.get("email_verified_at") or now_iso()
+    await v3_col("users").update_one(
+        {"id": login["id"]}, {"$set": {"email_verified_at": verified_at, "email_code_due": False}}
+    )
+    return {"email": login.get("email", ""), "email_verified_at": verified_at, "message": "Email ID verified"}
+
+
 # ---------- email delivery ----------
 #
 # Every code this OS sends — a sign-in code, a password reset link, a reset OTP — leaves

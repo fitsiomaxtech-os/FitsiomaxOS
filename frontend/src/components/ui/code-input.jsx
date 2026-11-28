@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 
 export const CODE_LENGTH = 6;
 
-export const CodeInput = ({ value, onChange, testid = "code-input", onEnter, autoFocus = false }) => (
+export const CodeInput = ({ value, onChange, testid = "code-input", onEnter, autoFocus = false, className = "" }) => (
   <Input
     value={value}
     onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
@@ -29,7 +29,7 @@ export const CodeInput = ({ value, onChange, testid = "code-input", onEnter, aut
     maxLength={CODE_LENGTH}
     autoFocus={autoFocus}
     aria-label="Verification code"
-    className="border-slate-200 bg-white text-center text-lg font-semibold tracking-[0.5em]"
+    className={`border-slate-200 bg-white text-center text-lg font-semibold tracking-[0.5em] ${className}`}
     data-testid={testid}
   />
 );
