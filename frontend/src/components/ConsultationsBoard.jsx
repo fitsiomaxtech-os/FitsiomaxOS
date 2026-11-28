@@ -8556,8 +8556,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     "Treatment Prescription" and the X too. */}
                 <h3 className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${isConsultant ? "text-sm font-medium text-white" : "text-base font-semibold text-white"}`} data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
-                  {selectedLead.patient_number && (
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 ${isConsultant ? "bg-[rgba(255,255,255,0.18)] text-sm font-medium text-white" : "bg-white/15 font-mono text-[11px] font-semibold text-white"}`} data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
+                  {/* Everyone else reads the patient number on the Patient Info tab
+                      (asked 2026-11-28); only the Consultant keeps it in the header. */}
+                  {isConsultant && selectedLead.patient_number && (
+                    <span className="shrink-0 rounded bg-[rgba(255,255,255,0.18)] px-1.5 py-0.5 text-sm font-medium text-white" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
                   )}
                   <span className={`shrink-0 text-sm font-medium ${isConsultant ? "text-white" : "text-white/90"}`} data-testid="cons-detail-phone">{displayPhone(selectedLead.phone) || "—"}</span>
                   {isConsultant && selectedLead.appointment_date && (
@@ -8575,9 +8577,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 className="flex min-w-0 flex-auto items-center gap-2 text-base font-semibold text-white" data-testid="cons-detail-title">
                   <span className="truncate">{selectedLead.name || "Lead"}</span>
-                  {selectedLead.patient_number && (
-                    <span className="shrink-0 rounded bg-white/15 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white" data-testid="cons-detail-patient-number">{selectedLead.patient_number}</span>
-                  )}
                 </h3>
                 {selectedLead.assigned_physio_name && (
                   <p className="flex min-w-0 items-baseline gap-1.5 text-xs sm:ml-auto" data-testid="cons-detail-expert">
@@ -12213,6 +12212,8 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const hasValue = (v) => v !== null && v !== undefined && String(v).trim() !== "";
                 const groups = [
                     ["Contact", [
+                      // Moved here from the header for everyone but the Consultant.
+                      ...(isConsultant ? [] : [["Patient ID", selectedLead.patient_number]]),
                       ["Phone", displayPhone(selectedLead.phone)],
                       ["Alternative Phone", displayPhone(selectedLead.alternative_phone)],
                       ["Email", selectedLead.email],
