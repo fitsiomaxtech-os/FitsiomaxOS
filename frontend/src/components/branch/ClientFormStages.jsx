@@ -214,7 +214,11 @@ const PREVIEW = [
   ["Previous Physiotherapy", (d) => d.previous_physiotherapy],
 ];
 
-const outlineCls = "flex h-10 items-center gap-1.5 rounded-[8px] border bg-white px-5 text-[15px] font-medium transition hover:bg-slate-50 disabled:opacity-60";
+// The foot's buttons stay in one row: on a phone they share its width (smaller text, the
+// icons dropped on the narrowest screens) so Previous / Preview / Submit / Print all fit.
+const btnSizeCls = "flex h-10 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] px-2 text-[13px] min-[420px]:px-3 min-[420px]:text-[14px] sm:flex-none sm:px-5 sm:text-[15px]";
+const btnIconCls = "hidden h-4 w-4 shrink-0 min-[420px]:block";
+const outlineCls = `${btnSizeCls} border bg-white font-medium transition hover:bg-slate-50 disabled:opacity-60`;
 const outlineStyle = { borderColor: ACCENT, color: ACCENT };
 
 export const ClientFormStages = ({ form, branches: liveBranches, sending = false, error = "", onSubmit, onClose, onPrint }) => {
@@ -360,7 +364,7 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
       style={outlineStyle}
       data-testid={preview ? "client-preview-back" : "client-stage-back"}
     >
-      <ArrowLeft className="h-4 w-4" />Previous
+      <ArrowLeft className={btnIconCls} />Previous
     </button>
   );
 
@@ -631,29 +635,29 @@ export const ClientFormStages = ({ form, branches: liveBranches, sending = false
 
         {/* At the foot of the popup, the same gap under the last field on every step. */}
         <div className="shrink-0 px-6 pb-6 pt-3 sm:px-10 sm:pb-7" data-testid="client-stage-footer">
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-nowrap items-center gap-2 sm:gap-4" data-testid="client-stage-buttons">
             {backButton}
             {last && !preview && (
               <button type="button" onClick={() => { if (settled()) go(STAGES); }} disabled={sending} className={outlineCls} style={outlineStyle} data-testid="client-stage-preview">
-                <Eye className="h-4 w-4" />Preview
+                <Eye className={btnIconCls} />Preview
               </button>
             )}
             <button
               type="submit"
               disabled={sending}
-              className="flex h-10 items-center gap-1.5 rounded-[8px] px-6 text-[15px] font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
+              className={`${btnSizeCls} font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60 sm:px-6`}
               style={{ background: ACCENT }}
               data-testid={last ? "client-stage-submit" : "client-stage-continue"}
             >
               {last ? (
-                <>{sending && <Loader2 className="h-4 w-4 animate-spin" />}Submit</>
+                <>{sending && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}Submit</>
               ) : (
-                <>Next<ArrowRight className="h-4 w-4" /></>
+                <>Next<ArrowRight className="h-4 w-4 shrink-0" /></>
               )}
             </button>
             {last && onPrint && (
-              <button type="button" onClick={() => { if (!moving && settled()) onPrint(answers()); }} disabled={sending} className={`${outlineCls} ml-auto`} style={outlineStyle} title="Print" data-testid="client-stage-print">
-                <Printer className="h-4 w-4" />Print
+              <button type="button" onClick={() => { if (!moving && settled()) onPrint(answers()); }} disabled={sending} className={`${outlineCls} sm:ml-auto`} style={outlineStyle} title="Print" data-testid="client-stage-print">
+                <Printer className={btnIconCls} />Print
               </button>
             )}
           </div>
