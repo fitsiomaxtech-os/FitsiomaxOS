@@ -6,7 +6,7 @@ import logging
 
 from database import client
 from indexes import ensure_core_indexes
-from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, merge_employee_login_emails, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_meta_lead_source, backfill_zumba_package_sessions, ensure_rnr_stage, replace_presales_lost_stage, rename_presales_pre_book_stage, restore_presales_pre_book_stage, move_presales_pre_book_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, rename_consultation_cancel_stage, move_unvisited_cancellations_to_lost, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_branch_pre_book_stage, ensure_branch_lost_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources, align_both_desk_stages, move_both_desk_lost_leads
+from seed import ensure_v1_seed_data, v2_seed, v3_seed, migrate_branch_stages, migrate_consultation_stages, migrate_head_consultation_stages, deactivate_legacy_demo_admin, migrate_consultant_roles, migrate_branch_admin_roles, backfill_consultant_branches_from_employees, migrate_designation_roles, retire_aliased_designation_roles, migrate_consultants_to_combined, sync_combined_expert_records, ensure_structure_departments, dedupe_department_designations, sync_head_physio_doctors, consolidate_head_physio_doctors, retire_experts_without_a_login, backfill_login_history_from_sessions, merge_employee_login_emails, flag_manual_session_packages, migrate_course_prices_to_totals, ensure_fitness_packages, repair_flattened_fitness_prices, set_treatment_session_prices, backfill_branch_codes, backfill_patient_numbers, backfill_lead_enquiry_dates, backfill_meta_lead_source, backfill_zumba_package_sessions, ensure_rnr_stage, replace_presales_lost_stage, rename_presales_pre_book_stage, restore_presales_pre_book_stage, move_presales_pre_book_stage, ensure_branch_admin_stages, ensure_branch_cancelled_stage, rename_branch_appointment_stage, rename_consultation_cancel_stage, move_unvisited_cancellations_to_lost, ensure_sales_stage_roles, ensure_sales_arm_split, ensure_branch_not_a_prospect_stage, ensure_branch_pre_book_stage, ensure_branch_lost_stage, ensure_consultation_booked_stage, ensure_rehab_stage, ensure_diet_and_completed_stages, ensure_diet_chart_stage, retire_consultation_completed_stage, undo_branch_leads_stage, ensure_branch_lead_sources, align_both_desk_stages, move_both_desk_lost_leads
 from routers.v3_google_sheets import start_auto_sync_scheduler
 from payment_reminders import start_payment_reminder_scheduler
 from auto_availability import start_auto_availability_scheduler
@@ -204,6 +204,9 @@ async def startup_seed_data():
     # The duplicate desks minted before the alias map existed — BUSINESS DEVELOPMENT
     # EXECUTIVE beside BUSINESS DEV, and the two physiotherapist titles beside their own.
     await retire_aliased_designation_roles()
+    # The consult-only Consultant folds into the combined desk, which takes the
+    # Consultant title. Before the structure pass so that pass sees the settled list.
+    await migrate_consultants_to_combined()
     await ensure_structure_departments()
     # Straight after the structure is filled in, because that pass is the last thing
     # that appends to a department's designations and this is what leaves each list
@@ -219,6 +222,9 @@ async def startup_seed_data():
     # Must follow the sync above: that one creates any missing record, this one collapses
     # every CONSULTANT's records down to the single branchless one they should have.
     await consolidate_head_physio_doctors()
+    # After the branches are restored above: a Consultant moved onto the combined desk
+    # gets the Physio record at each branch they work, or their Physio side is empty.
+    await sync_combined_expert_records()
     # Anyone whose login was switched off or deleted before that followed through to
     # their expert profile. Without this they stay in every consultant list.
     await retire_experts_without_a_login()

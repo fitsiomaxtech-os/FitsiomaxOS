@@ -260,7 +260,7 @@ const MULTI_BRANCH_ROLE_LABELS = {
   online_consultant: "ONLINE CONSULTANT",
   physio: "Physio",
   online_physio: "Online Physio",
-  consultant_physio: "CONSULTANT + PHYSIO",
+  consultant_physio: "CONSULTANT",
   // Retired, still mapped for an account migrate_consultant_roles has not reached.
   head_physio: "CONSULTANT",
   online_head_physio: "ONLINE CONSULTANT",

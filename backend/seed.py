@@ -2572,6 +2572,97 @@ async def retire_aliased_designation_roles() -> None:
         await v3_col("custom_roles").delete_many({"name": minted})
 
 
+# Every spelling the retired combined designation reached a department or an employee in,
+# reduced by structure_key — the title, and the slug some installs store as a designation.
+COMBINED_DESIGNATION_KEYS = {"consultantphysiotherapist", "consultantphysio"}
+
+
+async def migrate_consultants_to_combined() -> None:
+    """Fold the consult-only Consultant into the combined desk, under the name Consultant.
+
+    The offline doctors are two desks now: Consultant, who takes consultations AND treats,
+    and Physiotherapist, who only treats. The combined desk already existed as
+    consultant_physio ("Consultant + Physiotherapist"), so this does not invent a role — it
+    retires the consult-only `consultant` slug onto it, and the combined desk takes the
+    plain Consultant title.
+
+    Three halves move, the same three every role retirement reaches:
+
+    Logins on `consultant` become consultant_physio (through _rename_role_slugs, which also
+    removes a custom role typed under the old name). Their Physio records — the half a
+    consult-only Consultant never had — are made by sync_combined_expert_records, which
+    runs after their branches are settled at startup.
+
+    HR's structure drops "Consultant + Physiotherapist": a department holding it beside
+    "Consultant" loses the duplicate, one holding it alone has it renamed to "Consultant".
+    And every employee on the retired title is rewritten to the surviving spelling, so no
+    record is left pointing at a designation the department no longer lists.
+
+    Online Consultant is untouched — it stays consult-only, a separate vertical.
+
+    Safe to re-run: after the first pass nothing holds the old slug or the old title.
+    """
+    from routers.v3_hr import structure_key, unique_designations
+
+    await _rename_role_slugs({"consultant": "consultant_physio"})
+
+    survivor = "Consultant"
+    for dept in await v3_col("hr_departments").find({}, {"_id": 0}).to_list(500):
+        names = [n for n in (dept.get("designations") or []) if isinstance(n, str) and n.strip()]
+        if not any(structure_key(n) in COMBINED_DESIGNATION_KEYS for n in names):
+            continue
+        plain = next((n for n in names if structure_key(n) == "consultant"), None)
+        if plain:
+            survivor = plain
+            kept = [n for n in names if structure_key(n) not in COMBINED_DESIGNATION_KEYS]
+        else:
+            kept = [survivor if structure_key(n) in COMBINED_DESIGNATION_KEYS else n for n in names]
+        await v3_col("hr_departments").update_one(
+            {"id": dept["id"]}, {"$set": {"designations": unique_designations(kept)}}
+        )
+
+    async for emp in v3_col("employees").find(
+        {"designation": {"$nin": [None, ""]}}, {"_id": 0, "id": 1, "designation": 1}
+    ):
+        if structure_key(emp.get("designation")) in COMBINED_DESIGNATION_KEYS:
+            await v3_col("employees").update_one(
+                {"id": emp["id"]}, {"$set": {"designation": survivor}}
+            )
+
+
+async def sync_combined_expert_records() -> None:
+    """Every Consultant (consultant_physio) holds a Physio record at each branch they work.
+
+    The combined desk needs both kinds of expert record: one branchless consultant record
+    (sync_head_physio_doctors makes that) and a Physio record per branch, which is what the
+    Physio board resolves them by. A Consultant moved here from the consult-only desk has
+    only the first, so without this they would open the Physio side to an empty board.
+
+    Only acts on a login missing a record at one of its branches, and then reconciles
+    through _sync_expert_branches exactly as an edit in Credentials would. A Consultant
+    with no branch yet gets nothing — there is nowhere to treat — and picks it up the day
+    they are posted.
+
+    Safe to re-run: once every branch has its record there is nothing to do.
+    """
+    from routers.v3_hr import ALL_BRANCHES, _sync_expert_branches
+
+    users = await v3_col("users").find(
+        {"role": {"$in": sorted(COMBINED_EXPERT_ROLES)}, "is_active": True}, {"_id": 0}
+    ).to_list(1000)
+    for u in users:
+        at = [b for b in (u.get("branch_ids") or []) if b and b != ALL_BRANCHES]
+        if not at and u.get("branch_id") and u["branch_id"] != ALL_BRANCHES:
+            at = [u["branch_id"]]
+        if not at:
+            continue
+        have = set(await v3_col("doctors").distinct(
+            "branch_id", {"user_id": u["id"], "profile_type": "physio"}
+        ))
+        if set(at) - have:
+            await _sync_expert_branches(u, at)
+
+
 async def ensure_structure_departments() -> None:
     """Make sure HR's structure holds every department and designation the clinic works to.
 

@@ -36,7 +36,9 @@ export const ROLE_META = {
   branch_admin_physio_fitness: { label: "BRANCH ADMIN", classes: "border-emerald-300 bg-emerald-50 text-emerald-700", retired: true },
   // The consultation desk. Amber for the room, and — as the Branch Admin family does from
   // emerald to teal — the neighbouring hue for the online arm of it.
-  consultant: { label: "CONSULTANT", classes: "border-amber-300 bg-amber-50 text-amber-700" },
+  // Retired: the consult-only desk. The offline Consultant is consultant_physio now —
+  // migrate_consultants_to_combined in backend/seed.py moves the logins.
+  consultant: { label: "CONSULTANT", classes: "border-amber-300 bg-amber-50 text-amber-700", retired: true },
   online_consultant: { label: "ONLINE CONSULTANT", classes: "border-yellow-300 bg-yellow-50 text-yellow-700" },
   // Retired slugs, rewritten by migrate_consultant_roles in backend/seed.py. Kept only so
   // an account the migration has not reached still wears a name rather than a raw slug.
@@ -52,7 +54,8 @@ export const ROLE_META = {
   online_physio: { label: "ONLINE PHYSIOTHERAPIST", classes: "border-blue-300 bg-blue-50 text-blue-700" },
   // Both desks in one person, so it wears both: the Physio's cyan edge on the Consultant's
   // amber. See COMBINED_EXPERT_ROLES in backend/deps.py.
-  consultant_physio: { label: "CONSULTANT + PHYSIOTHERAPIST", classes: "border-cyan-400 bg-amber-50 text-amber-700" },
+  // Called just Consultant: it is the one offline Consultant desk now (consults and treats).
+  consultant_physio: { label: "CONSULTANT", classes: "border-cyan-400 bg-amber-50 text-amber-700" },
   // Fixed slugs now rather than whatever was typed into Credentials — see DEFAULT_ROLES.
   nutritionist: { label: "NUTRITIONIST", classes: "border-lime-300 bg-lime-50 text-lime-700" },
   zumba: { label: "ZUMBA", classes: "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700" },

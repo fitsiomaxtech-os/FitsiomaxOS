@@ -131,8 +131,13 @@ DEFAULT_ROLES = [
     "sales_head", "pre_sales",
     # Admins
     "branch_admin", "online_physio_admin", "online_fitness_admin",
-    # Doctors
-    "consultant", "physio", "consultant_physio", "nutritionist", "online_consultant", "online_physio", "zumba",
+    # Doctors. Two offline desks: Consultant (consultant_physio — consults AND treats) and
+    # Physiotherapist (physio — treats only). Plain `consultant`, a consult-only desk, is
+    # retired: migrate_consultants_to_combined() in seed.py moves its logins onto
+    # consultant_physio, and the slug stays recognised in CONSULTANT_ROLES in deps.py so
+    # nothing is locked out in the meantime. The slug keeps its old name on purpose — every
+    # board and query already branches on it — and only its label is "Consultant".
+    "consultant_physio", "physio", "nutritionist", "online_consultant", "online_physio", "zumba",
 ]
 
 # The structure HR works to: every department, and the designations under it. Seeded
@@ -147,7 +152,7 @@ STRUCTURE = {
     "Admins": ["Branch Admin", "Online Physio Admin", "Online Fitness Admin"],
     "Sales Department": ["Sales Head", "Pre- Sales"],
     "Doctors ( Dr.'s )": [
-        "Consultant", "Physiotherapist", "Consultant + Physiotherapist", "Nutritionist",
+        "Consultant", "Physiotherapist", "Nutritionist",
         "Online Consultant", "Online Physiotherapist", "Zumba",
     ],
 }
@@ -317,6 +322,9 @@ DESIGNATION_ROLE_ALIASES = {
     "physiotherapist": "physio",
     "online_physiotherapist": "online_physio",
     "consultant_physiotherapist": "consultant_physio",
+    # The Consultant designation is the combined desk now — consults and treats — so the
+    # title resolves to consultant_physio rather than the retired consult-only slug.
+    "consultant": "consultant_physio",
 }
 
 

@@ -275,6 +275,9 @@ def vertical_names_an_arm(vertical: str) -> bool:
 # Listed rather than matched loosely for the reason above: "sales_consultant" is a
 # different job, and a rule on the bare "consultant" token would hand it the consultation
 # pipeline.
+# `consultant` (consult-only) is retired — the offline Consultant is consultant_physio now,
+# see DEFAULT_ROLES in routers/v3_hr.py. Still recognised so an account
+# migrate_consultants_to_combined() has not reached yet is not locked out.
 CONSULTANT_ROLES = frozenset({"consultant", "online_consultant"})
 LEGACY_CONSULTANT_ROLES = frozenset({"head_physio", "online_head_physio"})
 # Somebody who takes consultations AND treats — Consultant + Physiotherapist. One login,

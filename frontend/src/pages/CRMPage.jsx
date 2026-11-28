@@ -163,7 +163,7 @@ const ROLE_META = {
   online_head_physio: { label: "Online Consultant", icon: Stethoscope },
   physio: { label: "Physiotherapist", icon: Activity },
   online_physio: { label: "Online Physiotherapist", icon: Activity },
-  consultant_physio: { label: "Consultant + Physiotherapist", icon: Stethoscope },
+  consultant_physio: { label: "Consultant", icon: Stethoscope },
   accountant: { label: "Accountant", icon: BadgeIndianRupee },
   hr_admin: { label: "HR Admin", icon: UserPlus },
   // Retired wording, rewritten by migrate_designation_roles in backend/seed.py. Kept so an

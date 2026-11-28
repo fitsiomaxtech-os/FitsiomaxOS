@@ -190,7 +190,7 @@ const OperationsConsultantTab = ({ branches, actingUser }) => {
   // list_users in backend/routers/v3_hr.py. Kept in step with HEAD_PHYSIO_ROLES in
   // backend/deps.py.
   useEffect(() => {
-    hrUsers({ role: "consultant,online_consultant,head_physio,online_head_physio" })
+    hrUsers({ role: "consultant_physio,consultant,online_consultant,head_physio,online_head_physio" })
       .then(setAllConsultants)
       .catch(() => setAllConsultants([]));
   }, []);
