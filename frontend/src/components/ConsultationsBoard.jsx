@@ -15179,7 +15179,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </div>
 
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600" data-testid="cons-physio-package-context">
-                    <p className="font-semibold text-slate-700">{courseName}{totalSessionsNeeded ? ` · ${totalSessionsNeeded} ${dayNoun}s` : ""}</p>
+                    <p>
+                      <span className="font-semibold text-slate-700">{courseName}{totalSessionsNeeded ? ` · ${totalSessionsNeeded} ${dayNoun}s` : ""}</span>
+                      {" - "}
+                      {assignFeeLabel}: {assignFeePaid != null ? (
+                        <span className="font-semibold text-emerald-700">Rs.{Number(assignFeePaid).toLocaleString("en-IN")} paid ({assignFeeMode || "—"})</span>
+                      ) : (
+                        <span className="text-amber-600">not paid</span>
+                      )}
+                    </p>
                     {swapMode && swapDraft?.quote && (
                       <p className="mt-0.5 font-medium text-sky-700" data-testid="cons-physio-swap-note">
                         Swapping to {swapMode === "online" ? "Online" : "Offline"} from Day {swapDraft.quote.done_days + 1} · New total Rs.{Number(swapDraft.quote.new_total).toLocaleString("en-IN")}
@@ -15191,13 +15199,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         {selectedLead.assigned_physio_name ? ` by ${selectedLead.assigned_physio_name}` : ""} — only the remaining {totalSessionsNeeded} need dates.
                       </p>
                     )}
-                    <p className="mt-0.5">
-                      {assignFeeLabel}: {assignFeePaid != null ? (
-                        <span className="font-semibold text-emerald-700">Rs.{Number(assignFeePaid).toLocaleString("en-IN")} paid ({assignFeeMode || "—"})</span>
-                      ) : (
-                        <span className="text-amber-600">not paid</span>
-                      )}
-                    </p>
                   </div>
 
                   {selectedLead?.visit_type === "home" && (
