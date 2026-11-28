@@ -15166,7 +15166,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
             {showPhysioModal && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-physio-modal">
-                <div className="w-full max-w-md space-y-3 rounded-[4px] bg-white p-4 shadow-2xl">
+                <div className="flex min-h-[450px] w-full max-w-[500px] flex-col gap-3 rounded-[4px] bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                       {/* Cyan and the Activity mark on rehab, the same pair the Rehab panel
@@ -15228,7 +15228,14 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       ? `2. Choose the physio${physioBranchId ? ` from ${branchNames[physioBranchId] || "this branch"}` : ""} — then their ${isRehabAssign ? "rehab days" : "treatment dates"}`
                       : swapMode === "online"
                         ? "Online Physios — pick one to choose the online days"
-                        : `Available physios in this branch — pick one to choose their ${isRehabAssign ? "rehab days" : "treatment dates"}`}
+                        : (
+                          <>
+                            Available physios in this branch -{" "}
+                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700" data-testid="cons-physio-available-count">
+                              Available {loadingPhysioOptions ? "…" : physioOptions.length}
+                            </span>
+                          </>
+                        )}
                   </p>
 
                   {selectedLead?.visit_type === "home" && !physioBranchId ? (
@@ -15338,7 +15345,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   )}
 
                   <Button
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-xs"
+                    className="mt-auto w-full bg-emerald-600 hover:bg-emerald-700 text-xs"
                     onClick={() => (allSessionsPicked ? submitPhysioAssign() : setShowSlotPicker(true))}
                     disabled={assigningPhysio || !physioPick}
                     data-testid="cons-physio-submit"
