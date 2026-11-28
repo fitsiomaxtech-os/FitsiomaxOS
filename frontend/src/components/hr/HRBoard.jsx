@@ -620,7 +620,7 @@ const DASH_COLUMNS = {
   ],
   users: [
     { h: "User", cell: (u) => <TwoLine strong top={u.full_name} sub={u.linked_employee?.employee_code} /> },
-    { h: "Role", cell: (u) => <TwoLine top={roleLabel(u.role)} sub={u.linked_employee?.designation} />, text: (u) => roleLabel(u.role) },
+    { h: "Designation", cell: (u) => u.linked_employee?.designation || roleLabel(u.role) || "—", text: (u) => u.linked_employee?.designation || roleLabel(u.role) },
     { h: "Contact", cell: (u) => <TwoLine top={u.email} sub={displayPhone(u.phone)} />, text: (u) => u.email },
     { h: "Department", cell: (u) => u.linked_employee?.department || "—", text: (u) => u.linked_employee?.department },
     { h: "Status", cell: (u) => <DashPill>{u.is_active === false ? "Inactive" : "Active"}</DashPill> },
@@ -1705,7 +1705,6 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, d
                   <ViewRow label="Email ID" value={acct.email} />
                   {"email_verified" in acct && <ViewRow label="Email Status" value={<EmailStatusValue acct={acct} />} />}
                   <ViewRow label="Password" value="••••••••" />
-                  <ViewRow label="Role" value={acct.role ? roleLabel(acct.role) : ""} />
                   <ViewRow label="Login Status" value={acct.is_active === false ? "Deactivated" : "Active"} />
                   {acct.branches && <ViewRow label="Branches" value={acct.branches.map((b) => b.name).join(", ")} />}
                   {"last_login_at" in acct && <ViewRow label="Last Login" value={acct.last_login_at ? dashDate(acct.last_login_at) : ""} />}
@@ -1729,7 +1728,6 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, d
             <ViewSection>
               <ViewRow label="Department" value={e.department} />
               <ViewRow label="Designation" value={e.designation} />
-              <ViewRow label="Access Role" value={acct?.role ? roleLabel(acct.role) : login?.designation_role ? roleLabel(login.designation_role) : ""} />
             </ViewSection>
           )}
         </div>
@@ -2607,7 +2605,6 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   <FormRow label="Phone Number"><PhoneInput className="h-8" value={form.phone || ""} onChange={(v) => set("phone", v)} testid="hr-emp-login-phone" /></FormRow>
                   <FormRow label={account ? "New Password" : "Password"}><PasswordInput className="h-8" value={credPwd} onChange={(e) => setCredPwd(e.target.value)} placeholder={account ? "Leave blank to keep it" : credReady ? "Min 6 characters" : "Verify the Email ID first"} autoComplete="new-password" disabled={!credReady} {...armCred} testid="hr-emp-login-pwd" /></FormRow>
                   <FormRow label="Confirm Password"><PasswordInput className="h-8" value={credConfirm} onChange={(e) => setCredConfirm(e.target.value)} placeholder="Confirm password" autoComplete="new-password" disabled={!credReady} {...armCred} testid="hr-emp-login-confirm" /></FormRow>
-                  <FormRow label="Role"><Input className="h-8" value={account?.role ? roleLabel(account.role) : (form.designation || "From the designation")} disabled data-testid="hr-emp-login-role" /></FormRow>
                   <FormRow label="Login Status"><Input className="h-8" value={account ? (account.is_active === false ? "Deactivated" : "Active") : login.failed ? "Could not load" : "No login yet"} disabled data-testid="hr-emp-login-status" /></FormRow>
                   {account && "email_verified" in account && (
                     <FormRow label="Email Status">
