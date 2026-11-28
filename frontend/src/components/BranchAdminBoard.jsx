@@ -5070,6 +5070,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   const leadDetailRows = [
     // Moved here from the header (asked 2026-11-28), as on the Consultation popup.
     ["Patient ID", lead.patient_number],
+    ["Patient Name", lead.name],
     ["Source", leadSourceLabel(lead)],
     // "offline_physiotherapy" -> "Offline Physiotherapy"; free text off a sheet as it was.
     ["Department", serviceTypeTitle(lead.department)],

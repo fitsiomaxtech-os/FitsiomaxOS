@@ -12213,7 +12213,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 const groups = [
                     ["Contact", [
                       // Moved here from the header for everyone but the Consultant.
-                      ...(isConsultant ? [] : [["Patient ID", selectedLead.patient_number]]),
+                      ...(isConsultant ? [] : [
+                        ["Patient ID", selectedLead.patient_number],
+                        ["Patient Name", selectedLead.name],
+                      ]),
                       ["Phone", displayPhone(selectedLead.phone)],
                       ["Alternative Phone", displayPhone(selectedLead.alternative_phone)],
                       ["Email", selectedLead.email],
