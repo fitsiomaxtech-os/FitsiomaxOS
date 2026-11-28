@@ -8650,7 +8650,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 equal widths from sm up, a thin line between them, the open one in the
                 header's blue with a bar on the baseline; on a phone they scroll sideways.
                 Four tabs: Overview, Reports View (Documents, then Progression, on one page),
-                Timeline, and Details (the old Profile). No Follow up tab: Reschedule is on
+                Timeline, and Patient Info (the old Profile). No Follow up tab: Reschedule is on
                 the Overview. */}
             <div className={isConsultant
               ? "flex shrink-0 flex-nowrap items-center gap-x-2 overflow-x-auto border-b border-slate-200 px-4 py-1.5 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-[184px] sm:flex-col sm:items-stretch sm:gap-1 sm:overflow-y-auto sm:overflow-x-hidden sm:border-b-0 sm:border-r sm:bg-white sm:px-2 sm:py-3 sm:[justify-content:flex-start]"
@@ -8679,7 +8679,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                     { key: "overview", label: "Overview" },
                     { key: "reports", label: "Reports View" },
                     { key: "timeline", label: "Timeline" },
-                    { key: "profile", label: "Details" },
+                    { key: "profile", label: "Patient Info" },
                   ].map((t, i) => (
                     <button
                       key={t.key}
@@ -12209,11 +12209,9 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 </div>
               )}
 
-              {detailTab === "profile" && (
-                // Two framed cards, one under the other, each a label column and a value column,
-                // so every value starts on one line down the card instead of the far edge.
-                <div className="flex flex-col gap-3" data-testid="cons-lead-profile">
-                  {[
+              {detailTab === "profile" && (() => {
+                const hasValue = (v) => v !== null && v !== undefined && String(v).trim() !== "";
+                const groups = [
                     ["Contact", [
                       ["Phone", displayPhone(selectedLead.phone)],
                       ["Alternative Phone", displayPhone(selectedLead.alternative_phone)],
@@ -12229,24 +12227,42 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       ["Condition", selectedLead.condition],
                       ["Months of Pain", selectedLead.months_of_pain],
                     ]],
-                  ].map(([heading, rows]) => (
-                    <section key={heading} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                      <h4 className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{heading}</h4>
-                      <dl className="divide-y divide-slate-100">
-                        {rows.map(([label, value]) => {
-                          const has = value !== null && value !== undefined && String(value).trim() !== "";
-                          return (
-                            <div key={label} className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-4 px-4 py-2.5 text-sm">
-                              <dt className="text-slate-500">{label}</dt>
-                              <dd className={`break-words ${has ? "font-medium text-slate-800" : "text-slate-400"}`}>{has ? value : "—"}</dd>
-                            </div>
-                          );
-                        })}
-                      </dl>
-                    </section>
-                  ))}
-                </div>
-              )}
+                ];
+                const rowEl = ([label, value]) => {
+                  const has = hasValue(value);
+                  return (
+                    <div key={label} className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-4 px-4 py-2.5 text-sm">
+                      <dt className="text-slate-500">{label}</dt>
+                      <dd className={`break-words ${has ? "font-medium text-slate-800" : "text-slate-400"}`}>{has ? value : "—"}</dd>
+                    </div>
+                  );
+                };
+                // Patient Info (everyone but the Consultant, asked 2026-11-28): one card, no
+                // Contact / Profile headings, and only the fields that hold something -- no
+                // rows of dashes.
+                if (!isConsultant) {
+                  const filled = groups.flatMap(([, rows]) => rows).filter(([, value]) => hasValue(value));
+                  return filled.length ? (
+                    <dl className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white" data-testid="cons-lead-profile">
+                      {filled.map(rowEl)}
+                    </dl>
+                  ) : (
+                    <p className="py-8 text-center text-sm text-slate-400" data-testid="cons-lead-profile">No patient info yet</p>
+                  );
+                }
+                // The Consultant's Profile: two framed cards, one under the other, each a label
+                // column and a value column, so every value starts on one line down the card.
+                return (
+                  <div className="flex flex-col gap-3" data-testid="cons-lead-profile">
+                    {groups.map(([heading, rows]) => (
+                      <section key={heading} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <h4 className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{heading}</h4>
+                        <dl className="divide-y divide-slate-100">{rows.map(rowEl)}</dl>
+                      </section>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
             </div>
 
