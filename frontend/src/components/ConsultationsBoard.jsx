@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/sonner";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { StageTabBar } from "@/components/ui/stage-tab";
+import { PaymentDetailsStrip } from "@/components/ui/payment-details-strip";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { DateFilterPopover } from "@/components/DateFilterPopover";
 import { LeadDocuments } from "@/components/LeadDocuments";
@@ -15413,7 +15414,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {/* Short status strip: PAID, UNPAID, and the due date. Scrolls sideways
                       on a narrow screen rather than wrapping. */}
                   <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 sm:px-4 sm:py-2" data-testid="cons-slot-picker-payment">
-                    <div className="flex items-stretch gap-2 overflow-x-auto whitespace-nowrap sm:gap-2.5">
+                    <PaymentDetailsStrip>
                       <span className="shrink-0 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 sm:px-3 sm:text-[12px]" data-testid="cons-payment-paid">
                         PAID
                         {sessionPayment.paidAmount > 0 && <span className="ml-2 font-semibold text-emerald-600">Rs.{sessionPayment.paidAmount}</span>}
@@ -15490,7 +15491,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                           FULLY PAID
                         </span>
                       )}
-                    </div>
+                    </PaymentDetailsStrip>
                   </div>
 
                   {loadingPhysioCalendar ? (
