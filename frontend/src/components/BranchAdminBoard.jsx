@@ -5289,7 +5289,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                       ellipsis inside the card (the whole entry on hover), the day kept. */}
                   {latestTimeline ? (
                     <span className="flex min-w-0 items-center justify-end gap-1.5 text-sm" title={latestTimeline.text} data-testid="branch-lead-timeline-row">
-                      <span className="min-w-0 truncate font-medium text-slate-600">{shortTimelineText(latestTimeline.text)}</span>
+                      <span className="min-w-0 truncate font-medium text-emerald-600">{shortTimelineText(latestTimeline.text)}</span>
                       {latestTimelineDay && <span className="shrink-0 text-xs text-slate-400">· {latestTimelineDay}</span>}
                     </span>
                   ) : (
