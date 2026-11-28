@@ -41,7 +41,6 @@ import {
   PhoneOff,
   Video,
   HeartPulse,
-  IdCard,
   Pencil,
   Repeat,
   Eye,
@@ -680,16 +679,6 @@ const normaliseAdKey = (key) =>
 /** Whether a lead actually carries an answer. Explicit rather than falsiness, because 0 is
  *  one: "months_of_pain: 0" is somebody who started hurting this month. */
 const hasValue = (v) => v !== null && v !== undefined && String(v).trim() !== "";
-
-/** A label and its value hard against the other edge, for the read-only cards below.
- *  Aligned to the top rather than centred so the label stays level with the first line of
- *  an address that wraps, and break-words so an ad id with nowhere to break still does. */
-const DetailRow = ({ label, value }) => (
-  <div className="flex items-start justify-between gap-3 text-sm" data-testid={`branch-lead-row-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
-    <span className="shrink-0 text-xs font-medium text-slate-500">{label}</span>
-    <span className="break-words text-right font-medium text-slate-800">{value}</span>
-  </div>
-);
 
 /** "2026-08-05" -> "Wednesday, 5 August" */
 const weekdayLabel = (d) => (d
@@ -5027,7 +5016,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
     // Last, and deliberately after the three working tabs. The first four are what
     // somebody DOES with a lead; this one is what the lead already told us, which is
     // read once and then referred back to rather than worked.
-    { key: "lead-details", label: "Details", color: "bg-indigo-500" },
+    { key: "lead-details", label: "Patient Info", color: "bg-indigo-500" },
   ];
   // One Overview row: label, colon, value pushed right.
   const OVERVIEW_ROW = "grid grid-cols-[76px_10px_minmax(0,1fr)] items-center gap-x-2 px-2 py-3.5 sm:grid-cols-[140px_16px_minmax(0,1fr)] sm:px-4";
@@ -5079,6 +5068,8 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
   // these and a sheet import carries fifteen, and a fixed list would show the first as a
   // page of dashes — which is close to how the popup already read.
   const leadDetailRows = [
+    // Moved here from the header (asked 2026-11-28), as on the Consultation popup.
+    ["Patient ID", lead.patient_number],
     ["Source", leadSourceLabel(lead)],
     // "offline_physiotherapy" -> "Offline Physiotherapy"; free text off a sheet as it was.
     ["Department", serviceTypeTitle(lead.department)],
@@ -5181,9 +5172,7 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
                 {/* Not on a phone, where the header is one row: the name, Form, Transfer and
                     Close (asked 2026-11-20). */}
                 <div className="col-span-2 col-start-1 row-start-2 hidden flex-wrap items-center gap-1.5 sm:flex">
-                  {lead.patient_number && (
-                    <span className="rounded-[5px] bg-white/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white sm:px-2" data-testid="branch-lead-patient-number">{lead.patient_number}</span>
-                  )}
+                  {/* No patient number here: it is the first row of Patient Info. */}
                   <span className="rounded-[5px] border border-white/40 bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white sm:px-2.5" data-testid="branch-lead-stage">
                     {/* Named the same way the row that opened this popup was: opened from
                         Leads it reads Leads, and the pipeline below highlights Leads too. */}
@@ -5814,35 +5803,28 @@ function BranchLeadModal({ lead, branchId, stages, consultationQuitStage = null,
             <div className="space-y-3" data-testid="branch-lead-details-tab">
               {/* Who the patient is and what they came in saying, read back off the record.
                   The lead's own fields first, then the answers it arrived with. */}
+              {/* Patient Info (asked 2026-11-28), drawn as the Consultation popup's: one card,
+                  no headings, a label column and a value column split by a line, and only
+                  the fields that hold something. */}
               {(leadDetailRows.length > 0 || formAnswers.length > 0) && (
-                <div className="overflow-hidden rounded-[3px] border border-indigo-100 bg-white shadow-sm" data-testid="branch-lead-details">
-                  <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700"><IdCard className="h-4 w-4" /></span>
-                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Lead Details</p>
-                  </div>
-                  <div className="space-y-2 px-4 py-3">
-                    {leadDetailRows.map(([label, value]) => (
-                      <DetailRow key={label} label={label} value={String(value)} />
-                    ))}
-                    {formAnswers.length > 0 && (
-                      <div className="space-y-2 border-t border-slate-100 pt-2.5" data-testid="branch-lead-form-answers">
-                        {/* Named for where they came from rather than "Custom Fields": on
-                            this board they are the questions the patient answered, not
-                            columns somebody added to a form. */}
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Enquiry Form</p>
-                        {/* Stacked, unlike the rows above. These labels are whole questions
-                            — "What type of pain are you experiencing?" — and a label beside
-                            its value would leave each of them a couple of words wide. */}
-                        {formAnswers.map(([key, value]) => (
-                          <div key={key}>
-                            <p className="text-[11px] font-medium text-slate-500">{humanKey(key)}</p>
-                            <p className="break-words text-sm font-medium text-slate-800">{String(value)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <dl className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white" data-testid="branch-lead-details">
+                  {leadDetailRows.map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-4 px-4 py-2.5 text-sm" data-testid={`branch-lead-row-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+                      <dt className="text-slate-500">{label}</dt>
+                      <dd className="break-words font-medium text-slate-800">{String(value)}</dd>
+                    </div>
+                  ))}
+                  {/* The answers the enquiry form collected. Stacked, unlike the rows above:
+                      these labels are whole questions -- "What type of pain are you
+                      experiencing?" -- and a label beside its value would leave each of
+                      them a couple of words wide. */}
+                  {formAnswers.map(([key, value]) => (
+                    <div key={key} className="px-4 py-2.5" data-testid="branch-lead-form-answer">
+                      <dt className="text-[13px] text-slate-500">{humanKey(key)}</dt>
+                      <dd className="mt-0.5 break-words text-sm font-medium text-slate-800">{String(value)}</dd>
+                    </div>
+                  ))}
+                </dl>
               )}
 
               {/* A walk-in typed in at the desk has a name and a number and nothing
