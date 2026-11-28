@@ -3048,6 +3048,11 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // its patient triggers. See openRowFee, which parks it, and the effect that picks it up.
   const pendingRowFeeRef = useRef(null);
   const [detailTab, setDetailTab] = useState("overview");
+  // Reports View (everyone but the Consultant) holds Documents and Progression as two sub
+  // tabs. bodyTab is the panel the body draws: the sub tab while Reports View is open, the
+  // tab itself otherwise -- the Consultant's Documents and Progression are tabs of their own.
+  const [reportsSub, setReportsSub] = useState("documents");
+  const bodyTab = detailTab === "reports" ? reportsSub : detailTab;
   // On the Branch Admin's Consultation Visit stage the Documents tab is the Prescription
   // tab: the generated prescription's View PDF / Download / WhatsApp / Print / Share in
   // the footer, the uploaded pages, and Camera / Choose File to add more.
@@ -8642,31 +8647,24 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                 rail down the left of the card, the open tab on a pale blue fill with a blue
                 bar at its left edge. No icons, so no Collapse: a rail folded to nothing but
                 icons would have nothing left to show. */}
+            {/* Everyone else (asked 2026-11-28): the Branch Leads popup's underline tabs --
+                equal widths from sm up, a thin line between them, the open one in the
+                header's blue with a bar on the baseline; on a phone they scroll sideways.
+                Four tabs: Overview, Reports View (Documents and Progression as sub tabs),
+                Timeline, and Details (the old Profile). No Follow up tab: Reschedule is on
+                the Overview. */}
             <div className={isConsultant
               ? "flex shrink-0 flex-nowrap items-center gap-x-2 overflow-x-auto border-b border-slate-200 px-4 py-1.5 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-[184px] sm:flex-col sm:items-stretch sm:gap-1 sm:overflow-y-auto sm:overflow-x-hidden sm:border-b-0 sm:border-r sm:bg-white sm:px-2 sm:py-3 sm:[justify-content:flex-start]"
-              : "flex shrink-0 flex-nowrap items-center gap-x-4 overflow-x-auto border-b border-slate-200 px-4 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-5 [&::-webkit-scrollbar]:hidden"} data-testid="cons-detail-tabs">
-              {[
+              : "shrink-0 overflow-x-auto bg-white px-4 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden"} data-testid="cons-detail-tabs">
+              {isConsultant ? [
+                // No Timeline for the Consultant: it is the branch's working record of how the
+                // patient got here, and a Consultant opening this popup is here to write a
+                // diagnosis. Progression they only read; the Branch Admin verifies it.
                 { key: "overview", label: "Overview" },
-                // Not for the Consultant, for the same reason the Timeline is not: chasing
-                // a patient who did not pick up is the branch's errand, and scheduling the
-                // next call is theirs to schedule. A Consultant is here to write up the
-                // consultation in front of them.
-                ...(isConsultant ? [] : [{ key: "followup", label: "Follow up" }]),
-                { key: "documents", label: prescriptionTab ? "Prescription" : "Documents" },
-                // The four uploads a case sheet closes on, and the only screen that can
-                // verify them -- the Branch Admin's; the Consultant only reads it. The
-                // physio delivering the course gathers the clips, and checking their own
-                // work would make the requirement prove nothing.
+                { key: "documents", label: "Documents" },
                 { key: "progression", label: "Progression" },
-                // Not for the Consultant. The timeline is every stage move, call attempt
-                // and save on the lead — a branch's working record of how the patient got
-                // here, and the people who wrote it are the ones who read it back. A
-                // Consultant opening this popup is here to write a diagnosis, and eight
-                // rows of "Branch stage: 'Branch Assign' -> 'RNR'" is not the case they
-                // are being asked about.
-                ...(isConsultant ? [] : [{ key: "timeline", label: "Timeline" }]),
                 { key: "profile", label: "Profile" },
-              ].map((t) => isConsultant ? (
+              ].map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setDetailTab(t.key)}
@@ -8676,16 +8674,26 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   {detailTab === t.key && <span aria-hidden="true" className="absolute inset-y-0 left-0 hidden w-[3px] rounded-l-md bg-blue-600 sm:block" />}
                   {t.label}
                 </button>
-              ) : (
-                <button
-                  key={t.key}
-                  onClick={() => setDetailTab(t.key)}
-                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 py-2.5 text-xs font-semibold transition-colors ${detailTab === t.key ? "border-sky-600 text-sky-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-                  data-testid={`cons-detail-tab-${t.key}`}
-                >
-                  {t.label}
-                </button>
-              ))}
+              )) : (
+                <div className="flex w-max min-w-full border-b border-slate-200 sm:w-full">
+                  {[
+                    { key: "overview", label: "Overview" },
+                    { key: "reports", label: "Reports View" },
+                    { key: "timeline", label: "Timeline" },
+                    { key: "profile", label: "Details" },
+                  ].map((t, i) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setDetailTab(t.key)}
+                      className={`relative flex-auto shrink-0 whitespace-nowrap px-3 py-2.5 text-center text-[13px] transition-colors sm:min-w-0 sm:flex-1 sm:px-2 ${i > 0 ? "before:absolute before:left-0 before:top-1/2 before:h-5 before:w-px before:-translate-y-1/2 before:bg-slate-200" : ""} ${detailTab === t.key ? "font-semibold text-[#0284C7]" : "font-medium text-slate-600 hover:text-slate-900"}`}
+                      data-testid={`cons-detail-tab-${t.key}`}
+                    >
+                      {t.label}
+                      {detailTab === t.key && <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0284C7]" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* The only part of the card that scrolls. Its own padding, because the
@@ -12054,59 +12062,31 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               </div>
               )}
 
-              {detailTab === "followup" && (
-                <div className="space-y-1.5" data-testid="cons-followups-list">
-                  {(selectedLead.consultation_follow_ups || []).length === 0 ? (
-                    <p className="py-6 text-center text-sm text-slate-400">No follow-ups scheduled yet.</p>
-                  ) : (
-                    selectedLead.consultation_follow_ups.slice().reverse().map((f) => {
-                      const isActive = f.status !== "rescheduled";
-                      return (
-                        <div
-                          key={f.id}
-                          className={`flex items-start justify-between gap-3 rounded-lg border p-2.5 text-xs ${isActive ? "border-orange-200 bg-orange-50/60" : "border-slate-200 bg-slate-50 text-slate-400"}`}
-                          data-testid={`cons-followup-row-${f.id}`}
-                        >
-                          <div>
-                            <p className={`font-semibold ${isActive ? "text-orange-700" : "text-slate-400 line-through"}`}>{f.date} at {f.time}</p>
-                            {f.consultant_name && (
-                              <p className="mt-0.5 text-[11px] font-medium text-slate-500" data-testid={`cons-followup-consultant-${f.id}`}>
-                                with {f.consultant_name}
-                              </p>
-                            )}
-                            {f.remarks && <p className="mt-0.5 text-slate-600">{f.remarks}</p>}
-                            {f.status === "rescheduled" && f.reschedule_reason && (
-                              <p className="mt-0.5 italic text-slate-400">Rescheduled: {f.reschedule_reason}</p>
-                            )}
-                          </div>
-                          {isActive && !isConsultant && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 shrink-0 text-[11px]"
-                              onClick={() => setRescheduleDraft({
-                                followupId: f.id,
-                                fromDate: f.date,
-                                fromTime: f.time,
-                                currentConsultant: f.consultant_name || selectedLead.assigned_physio_name || "",
-                                date: "", time: "", physio_id: "", duration: null,
-                              })}
-                              data-testid={`cons-followup-reschedule-${f.id}`}
-                            >
-                              Reschedule
-                            </Button>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
+              {/* Reports View's two sub tabs, names only, a segmented pair across the top of
+                  the body. */}
+              {detailTab === "reports" && (
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" data-testid="cons-reports-subtabs">
+                  {[
+                    { key: "documents", label: "Documents" },
+                    { key: "progression", label: "Progression" },
+                  ].map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setReportsSub(s.key)}
+                      className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${reportsSub === s.key ? "bg-white font-semibold text-[#0284C7] shadow-sm" : "font-medium text-slate-600 hover:text-slate-900"}`}
+                      data-testid={`cons-reports-subtab-${s.key}`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
                 </div>
               )}
 
               {/* Physio and Nutrition Coach can read a patient's documents but not add or
                   remove them — a report is ordered and filed by the branch or the Head
                   Physio, and a treating clinician deleting one is not a workflow. */}
-              {detailTab === "documents" && prescriptionTab && (
+              {bodyTab === "documents" && prescriptionTab && (
                 <div className="flex flex-col gap-3 [&>[data-testid=prescription-pdf]]:mt-0" data-testid="cons-prescription-tab">
                   {/* The same tools as the Overview's Prescription (optional) view: the
                       generated prescription's actions go to the footer band. */}
@@ -12129,27 +12109,29 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </div>
                 </div>
               )}
-              {detailTab === "documents" && !prescriptionTab && (
-                <div className="space-y-4">
+              {bodyTab === "documents" && !prescriptionTab && (
+                <div className="space-y-3">
                 {/* The prescription is filed from the stage panel's Collect a Payment step
                     under a kind of its own, so the general list below never showed it —
                     the one page the fee waits on was the one page missing from Documents.
-                    Listed here to read and remove; filed only from the step. */}
-                <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3" data-testid="cons-documents-tab-prescription">
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-sky-800">
-                    <FileText className="h-3.5 w-3.5" />Prescription
-                  </p>
+                    Listed here to read and remove; filed only from the step. No heading
+                    and no empty line (asked 2026-11-28): each row is already named
+                    Prescription, and with none on file it takes no room. */}
+                <div data-testid="cons-documents-tab-prescription">
                   <LeadDocuments
                     leadId={selectedLead.id}
                     kind="prescription"
                     fixedLabel="Prescription"
                     canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
                     canUpload={false}
+                    hideEmpty
                     onChanged={notePrescriptionCount}
                   />
                 </div>
                 <LeadDocuments
                   leadId={selectedLead.id}
+                  /* compact: the uploader's title and buttons on one row, no hint line. */
+                  compact
                   canEdit={["branch_admin", "super_admin", "head_physio"].includes(viewerRole)}
                   /* Read here, filed elsewhere. The Consultant's card is where a
                      consultation is written up, and the reports and scans on a patient's
@@ -12167,7 +12149,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {/* canVerify carries the same list the backend gates on, so a role that cannot
                   verify is not shown a button that would come back refused. The physio's own
                   page renders this tab with canVerify off for the same reason. */}
-              {detailTab === "progression" && (
+              {bodyTab === "progression" && (
                 <ProgressionTab
                   leadId={selectedLead.id}
                   /* The Branch Admin verifies but does not gather. The clips and the review

@@ -106,7 +106,9 @@ const fmtWhen = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice
 // caller that never mentions it keeps the panel it always had. Separate because a screen
 // can want the list, the share flag and the bin while having no business adding pages:
 // the Consultant reads a patient's file, the branch that ordered the reports files them.
-export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kind = "general", fixedLabel = "", hint, onChanged, compact = false }) => {
+// `hideEmpty` draws nothing while loading or with nothing on file, for a list that sits
+// above another one and should take no room until it has a page.
+export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kind = "general", fixedLabel = "", hint, onChanged, compact = false, hideEmpty = false }) => {
   const [docs, setDocs] = useState([]);
   const [sharing, setSharing] = useState(null); // the doc whose share flag is in flight
   const [loading, setLoading] = useState(true);
@@ -419,13 +421,13 @@ export const LeadDocuments = ({ leadId, canEdit = true, canUpload = canEdit, kin
       )}
 
       {loading ? (
-        <p className="py-4 text-center text-sm text-slate-400">Loading documents…</p>
+        hideEmpty ? null : <p className="py-4 text-center text-sm text-slate-400">Loading documents…</p>
       ) : docs.length === 0 ? (
         // Nothing at all when there is a way to add one on screen: the panel above is both
         // the instruction and the action, and a box under it repeating that the list is
         // empty is a hole in the middle of the step. Callers with no uploader on screen
         // still get a line, since for them an empty list is the whole answer.
-        canUpload ? null : (
+        canUpload || hideEmpty ? null : (
           <p className="py-3 text-center text-xs text-slate-400">
             {fixedLabel ? `No ${fixedLabel.toLowerCase()} pages uploaded yet.` : "No documents yet."}
           </p>
