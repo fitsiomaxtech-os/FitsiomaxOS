@@ -3048,11 +3048,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
   // its patient triggers. See openRowFee, which parks it, and the effect that picks it up.
   const pendingRowFeeRef = useRef(null);
   const [detailTab, setDetailTab] = useState("overview");
-  // Reports View (everyone but the Consultant) holds Documents and Progression as two sub
-  // tabs. bodyTab is the panel the body draws: the sub tab while Reports View is open, the
-  // tab itself otherwise -- the Consultant's Documents and Progression are tabs of their own.
-  const [reportsSub, setReportsSub] = useState("documents");
-  const bodyTab = detailTab === "reports" ? reportsSub : detailTab;
+  // Reports View (everyone but the Consultant) draws Documents and Progression one under
+  // the other, no sub tabs (asked 2026-11-28). The Consultant's are tabs of their own.
+  const showDocuments = detailTab === "documents" || detailTab === "reports";
+  const showProgression = detailTab === "progression" || detailTab === "reports";
   // On the Branch Admin's Consultation Visit stage the Documents tab is the Prescription
   // tab: the generated prescription's View PDF / Download / WhatsApp / Print / Share in
   // the footer, the uploaded pages, and Camera / Choose File to add more.
@@ -8650,7 +8649,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
             {/* Everyone else (asked 2026-11-28): the Branch Leads popup's underline tabs --
                 equal widths from sm up, a thin line between them, the open one in the
                 header's blue with a bar on the baseline; on a phone they scroll sideways.
-                Four tabs: Overview, Reports View (Documents and Progression as sub tabs),
+                Four tabs: Overview, Reports View (Documents, then Progression, on one page),
                 Timeline, and Details (the old Profile). No Follow up tab: Reschedule is on
                 the Overview. */}
             <div className={isConsultant
@@ -12062,31 +12061,10 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               </div>
               )}
 
-              {/* Reports View's two sub tabs, names only, a segmented pair across the top of
-                  the body. */}
-              {detailTab === "reports" && (
-                <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" data-testid="cons-reports-subtabs">
-                  {[
-                    { key: "documents", label: "Documents" },
-                    { key: "progression", label: "Progression" },
-                  ].map((s) => (
-                    <button
-                      key={s.key}
-                      type="button"
-                      onClick={() => setReportsSub(s.key)}
-                      className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${reportsSub === s.key ? "bg-white font-semibold text-[#0284C7] shadow-sm" : "font-medium text-slate-600 hover:text-slate-900"}`}
-                      data-testid={`cons-reports-subtab-${s.key}`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {/* Physio and Nutrition Coach can read a patient's documents but not add or
                   remove them — a report is ordered and filed by the branch or the Head
                   Physio, and a treating clinician deleting one is not a workflow. */}
-              {bodyTab === "documents" && prescriptionTab && (
+              {showDocuments && prescriptionTab && (
                 <div className="flex flex-col gap-3 [&>[data-testid=prescription-pdf]]:mt-0" data-testid="cons-prescription-tab">
                   {/* The same tools as the Overview's Prescription (optional) view: the
                       generated prescription's actions go to the footer band. */}
@@ -12109,7 +12087,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   </div>
                 </div>
               )}
-              {bodyTab === "documents" && !prescriptionTab && (
+              {showDocuments && !prescriptionTab && (
                 <div className="space-y-3">
                 {/* The prescription is filed from the stage panel's Collect a Payment step
                     under a kind of its own, so the general list below never showed it —
@@ -12149,7 +12127,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
               {/* canVerify carries the same list the backend gates on, so a role that cannot
                   verify is not shown a button that would come back refused. The physio's own
                   page renders this tab with canVerify off for the same reason. */}
-              {bodyTab === "progression" && (
+              {showProgression && (
                 <ProgressionTab
                   leadId={selectedLead.id}
                   /* The Branch Admin verifies but does not gather. The clips and the review
