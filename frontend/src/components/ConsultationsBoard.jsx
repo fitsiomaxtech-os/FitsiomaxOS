@@ -15166,7 +15166,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
 
             {showPhysioModal && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" data-testid="cons-physio-modal">
-                <div className="flex min-h-[450px] w-full max-w-[500px] flex-col gap-3 rounded-[4px] bg-white p-4 shadow-2xl">
+                <div className="flex h-[550px] max-h-[calc(100vh-2rem)] w-full max-w-[500px] flex-col gap-3 overflow-y-auto rounded-[4px] bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                       {/* Cyan and the Activity mark on rehab, the same pair the Rehab panel
@@ -15246,7 +15246,7 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   ) : physioOptions.length === 0 ? (
                     <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">No physios found for this branch yet.</p>
                   ) : (
-                    <div className="max-h-40 space-y-1.5 overflow-y-auto">
+                    <div className="min-h-[6rem] flex-1 space-y-1.5 overflow-y-auto">
                       {physioOptions.map((p) => (
                         <button
                           key={p.id}
