@@ -12695,15 +12695,15 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                         disabled={!ready}
                         testId="cons-chennai-collect-mode"
                       />
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {!priced || chennaiPkgEdit !== null
-                          ? "Save the package amount first."
-                          : ready
-                          ? `Pick a payment mode to open its Collect popup.${treatmentDiscount > 0 || agreedDiffers ? " Cheque and Partial Payment are taken at the package rate, without any discount." : ""}`
-                          : dueMissing
-                          ? "Pick the Due Date for Balance first."
-                          : "Enter the sessions and the amount first."}
-                      </p>
+                      {(!ready || !priced || chennaiPkgEdit !== null) && (
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {!priced || chennaiPkgEdit !== null
+                            ? "Save the package amount first."
+                            : dueMissing
+                            ? "Pick the Due Date for Balance first."
+                            : "Enter the sessions and the amount first."}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -16401,7 +16401,9 @@ function PaymentModeDropdown({ value, options, onChange, disabled, testId }) {
       options={shown}
       placeholder="Select Payment Mode"
       disabled={disabled}
-      className="h-9 w-full rounded-[4px] text-sm"
+      // While the placeholder shows, a thicker orange border on the outer edge only —
+      // no focus ring, and nothing orange inside the box or its list.
+      className={`h-9 w-full rounded-[4px] text-sm ${value ? "" : "border-2 border-orange-500 focus:ring-0"}`}
       testid={testId}
     />
   );
