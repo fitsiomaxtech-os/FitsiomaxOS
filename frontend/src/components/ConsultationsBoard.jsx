@@ -8850,11 +8850,13 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                   };
                 })() : null;
 
+                // Not on the Branch Admin's narrow popup: the Consultation Record /
+                // View Details row is not wanted there.
+                if (compactDetail) return null;
+
                 return (
-              // Hidden on a phone (under 640px) in the narrow popup: the Consultation Record /
-              // View Details row only pushed the payment panel down there.
               <section
-                className={isConsultant ? "space-y-3" : `order-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm${compactDetail ? " hidden sm:block" : ""}`}
+                className={isConsultant ? "space-y-3" : "order-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"}
                 data-testid="cons-case-record"
               >
                 {!isConsultant && (() => {
@@ -8931,58 +8933,6 @@ const ConsultationsBoardInner = ({ branchId, viewerRole, mine = false, headChief
                       testid: "cons-case-record-plan",
                     },
                   ];
-
-                  // The narrow popup: closed by default — only the heading — so the payment
-                  // panel sits near the top of the card. View Details unfolds the whole
-                  // record in place, one card under the other — Diagnosis (with the
-                  // Pre-Sales note), Treatment Summary numbered, the Plan service by service
-                  // — and becomes Close, which folds it away again. No arrow rows and no
-                  // popup of its own. Folded again for each patient.
-                  //
-                  // The heading is drawn the way Collect a Payment's is, tile and all, so
-                  // the two sections of this card start on the same line and read as a pair.
-                  if (compactDetail) {
-                    return (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setCaseRecordOpen((open) => !open)}
-                          aria-expanded={caseRecordOpen}
-                          className="group flex w-full items-center gap-2 px-4 py-2.5 text-left transition hover:bg-slate-50"
-                          data-testid="cons-case-record-open"
-                        >
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                            <ClipboardList className="h-4 w-4" />
-                          </span>
-                          <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-slate-600">Consultation Record</span>
-                          {/* Tinted, like the Appointment Card in the header. Grey on white it
-                              read as a switch left off rather than as something to press. */}
-                          {caseRecordOpen ? (
-                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 shadow-sm ring-1 ring-inset ring-sky-200 transition group-hover:bg-sky-100 group-hover:ring-sky-300" data-testid="cons-case-record-close">
-                              <X className="h-3.5 w-3.5" /> Close
-                            </span>
-                          ) : (
-                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-300 group-hover:bg-sky-100" data-testid="cons-case-record-view">
-                              <Eye className="h-3.5 w-3.5" /> View Details
-                            </span>
-                          )}
-                        </button>
-                        {caseRecordOpen && (
-                          <div className="space-y-3 border-t border-slate-100 p-4" data-testid="cons-case-record-details">
-                            {cells.map((c) => (
-                              <div key={c.key} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3" data-testid={c.testid}>
-                                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                  {c.icon && <c.icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
-                                  {c.label}
-                                </p>
-                                {c.full || <p className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs italic text-slate-400">Not written yet</p>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    );
-                  }
 
                   return (
                     <>
