@@ -1807,6 +1807,8 @@ async def get_employee_account(
             {"user_id": row["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)],
         )
         account["last_login_at"] = (last or {}).get("created_at")
+        # Whose mailbox a verified email is on, for the provider mark beside Email Status.
+        account["email_provider"] = await email_check.provider_of(row.get("email")) if account.get("email_verified") else None
     return {"account": account, "designation_role": await _role_for_designation(employee.get("designation"))}
 
 

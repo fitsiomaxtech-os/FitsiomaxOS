@@ -14,7 +14,7 @@ import {
 import { MilkDateInput } from "@/components/ui/milk-calendar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmployeeAvatar } from "@/components/ui/employee-avatar";
-import { AdminEmailVerify, EmailIdInput, EmailVerifiedTag, emailBlock, useEmailCheck } from "@/components/EmailId";
+import { AdminEmailVerify, EmailIdInput, EmailVerifiedTag, MailProviderIcon, emailBlock, useEmailCheck } from "@/components/EmailId";
 import { NotifyCard } from "@/components/ui/notify-card";
 import { useStageBack } from "@/components/ui/phone-back";
 import { PhoneBackBar } from "@/components/ui/phone-back-bar";
@@ -1534,6 +1534,26 @@ const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 // Laid out as the Edit dialog's FormRow — the same label column, then the value in a
 // box the width of the input it was typed into — so every value starts on one line and
 // the read sits field-for-field over the write.
+// Whose mailbox a verified login's email is on (google, outlook, ...), for the mark beside
+// Email Status. The server answers it; a Gmail address is known without asking. null when
+// not verified.
+const verifiedProvider = (acct) => {
+  if (!acct?.email_verified) return null;
+  if (acct.email_provider) return acct.email_provider;
+  return /@(gmail|googlemail)\.com$/i.test(String(acct.email || "").trim()) ? "google" : "other";
+};
+
+// "Verified" with the mailbox's mark at the right, or "Not Verified".
+const EmailStatusValue = ({ acct }) => {
+  const provider = verifiedProvider(acct);
+  if (!provider) return "Not Verified";
+  return (
+    <span className="flex items-center justify-between gap-2">
+      Verified <MailProviderIcon provider={provider} className="h-4 w-4 shrink-0" />
+    </span>
+  );
+};
+
 const ViewRow = ({ label, value }) => (
   <div className="flex items-start gap-3 border-b border-slate-100 py-1 last:border-0">
     <span className="w-36 shrink-0 pt-2 text-xs text-slate-500">{label}</span>
@@ -1683,7 +1703,7 @@ const EmployeeViewModal = ({ employee: e, accounts, onClose, onEdit, onDelete, d
               ) : acct ? (
                 <>
                   <ViewRow label="Email ID" value={acct.email} />
-                  {"email_verified" in acct && <ViewRow label="Email Status" value={acct.email_verified ? "Verified" : "Not Verified"} />}
+                  {"email_verified" in acct && <ViewRow label="Email Status" value={<EmailStatusValue acct={acct} />} />}
                   <ViewRow label="Password" value="••••••••" />
                   <ViewRow label="Role" value={acct.role ? roleLabel(acct.role) : ""} />
                   <ViewRow label="Login Status" value={acct.is_active === false ? "Deactivated" : "Active"} />
@@ -2383,6 +2403,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   value={form.email || ""}
                   onChange={(v) => set("email", v)}
                   state={emailCheck}
+                  provider={verifiedProvider(account)}
                   testid="hr-emp-email"
                 />
               </FormRow>
@@ -2542,6 +2563,7 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                       value={form.email || ""}
                       onChange={(v) => set("email", v)}
                       state={emailCheck}
+                      provider={verifiedProvider(account)}
                       name="hr-new-employee-login"
                       {...armCred}
                       testid="hr-emp-login-email"
@@ -2556,7 +2578,14 @@ const AddEmployeeModal = ({ employee, meta, reloadMeta, initialDepartment, initi
                   {account && "email_verified" in account && (
                     <FormRow label="Email Status">
                       <div className="flex items-center gap-2">
-                        <Input className="h-8" value={account.email_verified ? "Verified" : "Not Verified"} disabled data-testid="hr-emp-login-email-status" />
+                        <div className="relative min-w-0 flex-1">
+                          <Input className="h-8 pr-10" value={account.email_verified ? "Verified" : "Not Verified"} disabled data-testid="hr-emp-login-email-status" />
+                          {verifiedProvider(account) && (
+                            <span className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center" data-testid="hr-emp-login-email-provider">
+                              <MailProviderIcon provider={verifiedProvider(account)} />
+                            </span>
+                          )}
+                        </div>
                         {/* Verified by a code its holder reads out — only on the address the
                             login has now, not one typed above and not saved yet. */}
                         {canVerifyEmail && !verifyOpen && (

@@ -191,9 +191,10 @@ export const EmailIdStatus = ({ state, unchangedText = "", testid = "email-id" }
 };
 
 /** The Email ID box: what is typed, the mark of whose mail it is, and the answer under it.
- *  Any other prop goes to the input. */
+ *  `provider` is the mark for the login's own (unchanged, verified) address, which is never
+ *  re-checked. Any other prop goes to the input. */
 export const EmailIdInput = ({
-  value, onChange, state, unchangedText = "", className = "", testid = "email-id", ...rest
+  value, onChange, state, unchangedText = "", provider = null, className = "", testid = "email-id", ...rest
 }) => (
   <div>
     <div className="relative">
@@ -213,6 +214,7 @@ export const EmailIdInput = ({
       <span className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center" data-testid={`${testid}-icon`}>
         {state.status === "checking" && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
         {state.status === "valid" && <MailProviderIcon provider={state.provider} />}
+        {state.status === "unchanged" && provider && <MailProviderIcon provider={provider} />}
         {state.status === "invalid" && <XCircle className="h-4 w-4 text-rose-500" />}
       </span>
     </div>
