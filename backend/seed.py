@@ -2572,9 +2572,18 @@ async def retire_aliased_designation_roles() -> None:
         await v3_col("custom_roles").delete_many({"name": minted})
 
 
-# Every spelling the retired combined designation reached a department or an employee in,
-# reduced by structure_key — the title, and the slug some installs store as a designation.
-COMBINED_DESIGNATION_KEYS = {"consultantphysiotherapist", "consultantphysio"}
+def _is_combined_title(name) -> bool:
+    """Whether a designation or role is a spelling of the retired combined title.
+
+    Matched on shape, not a fixed list, because the title reached the data in more than
+    one form: "Consultant + Physiotherapist", the consultant_physio slug stored as a
+    designation, and "Consultanttherapist" — the title with "Consultant + Physio" replaced
+    by "Consultant", which a fixed list missed and left on employee rows. Anything that
+    starts with consultant and goes on to name physio or therapy is this desk. Online
+    Consultant starts with "online" and is never caught.
+    """
+    key = re.sub(r"[^a-z0-9]+", "", str(name or "").lower())
+    return key.startswith("consultant") and key != "consultant" and ("physio" in key or "therapist" in key)
 
 
 async def migrate_consultants_to_combined() -> None:
@@ -2604,19 +2613,28 @@ async def migrate_consultants_to_combined() -> None:
     """
     from routers.v3_hr import structure_key, unique_designations
 
-    await _rename_role_slugs({"consultant": "consultant_physio"})
+    # The consult-only slug, plus any role minted from a stray spelling of the combined
+    # title (a "consultanttherapist" custom role holds no permissions at all).
+    renames = {"consultant": "consultant_physio"}
+    for role in await v3_col("users").distinct("role"):
+        if role != "consultant_physio" and _is_combined_title(role):
+            renames[role] = "consultant_physio"
+    async for row in v3_col("custom_roles").find({}, {"_id": 0, "name": 1}):
+        if row.get("name") != "consultant_physio" and _is_combined_title(row.get("name")):
+            renames[row["name"]] = "consultant_physio"
+    await _rename_role_slugs(renames)
 
     survivor = "Consultant"
     for dept in await v3_col("hr_departments").find({}, {"_id": 0}).to_list(500):
         names = [n for n in (dept.get("designations") or []) if isinstance(n, str) and n.strip()]
-        if not any(structure_key(n) in COMBINED_DESIGNATION_KEYS for n in names):
+        if not any(_is_combined_title(n) for n in names):
             continue
         plain = next((n for n in names if structure_key(n) == "consultant"), None)
         if plain:
             survivor = plain
-            kept = [n for n in names if structure_key(n) not in COMBINED_DESIGNATION_KEYS]
+            kept = [n for n in names if not _is_combined_title(n)]
         else:
-            kept = [survivor if structure_key(n) in COMBINED_DESIGNATION_KEYS else n for n in names]
+            kept = [survivor if _is_combined_title(n) else n for n in names]
         await v3_col("hr_departments").update_one(
             {"id": dept["id"]}, {"$set": {"designations": unique_designations(kept)}}
         )
@@ -2624,7 +2642,7 @@ async def migrate_consultants_to_combined() -> None:
     async for emp in v3_col("employees").find(
         {"designation": {"$nin": [None, ""]}}, {"_id": 0, "id": 1, "designation": 1}
     ):
-        if structure_key(emp.get("designation")) in COMBINED_DESIGNATION_KEYS:
+        if _is_combined_title(emp.get("designation")):
             await v3_col("employees").update_one(
                 {"id": emp["id"]}, {"$set": {"designation": survivor}}
             )

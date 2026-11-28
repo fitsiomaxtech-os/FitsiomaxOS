@@ -325,6 +325,9 @@ DESIGNATION_ROLE_ALIASES = {
     # The Consultant designation is the combined desk now — consults and treats — so the
     # title resolves to consultant_physio rather than the retired consult-only slug.
     "consultant": "consultant_physio",
+    # A stray spelling of the old combined title found on employee rows ("Consultant +
+    # Physio" replaced by "Consultant"). Never minted as a role of its own.
+    "consultanttherapist": "consultant_physio",
 }
 
 
